@@ -10,6 +10,8 @@ with Landin.Testing.Fakes;
 with Landin.Testing.Fixes;
 with Landin.Platform.Native;
 with Landin.Platform.Overlays;
+with Landin.Server.Navigation;
+with Landin.Tokens.Spacing;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
@@ -5095,6 +5097,114 @@ package body Landin.Tests.Parser_Suite is
       Check (ASCII.CR & ASCII.LF, False);
    end Late_Import_Moves_Preserve_Bytes;
 
+   procedure Late_Import_Moves_Keep_Documentation_Attached
+     (Item : in out Landin.Testing.Context);
+
+   procedure Late_Import_Moves_Keep_Documentation_Attached
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Newline : String; Existing_Import, Annotated : Boolean);
+      procedure Check
+        (Newline : String; Existing_Import, Annotated : Boolean)
+      is
+         Prelude : constant String :=
+           (if Existing_Import then "import first/module" & Newline else "");
+         Documentation : constant String :=
+           "--- The routine's first line." & Newline
+           & "--- Its second line." & Newline;
+         Declaration : constant String :=
+           (if Annotated then "link(keep)" & Newline else "")
+           & "f: () -> none = end f" & Newline;
+         Import_Line : constant String := "import other/module" & Newline;
+         Text : constant String :=
+           Prelude & Documentation & Declaration & Import_Line;
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add ("docs", Text);
+         Clashed : Boolean;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Restated : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Syntax.Repairs.Restated (Sources.Get (Id), Parsed, Found);
+            Fixed : constant String := Landin.Testing.Fixes.Applied
+              (Restated, Id, Text, Clashed);
+            Fixed_Sources : Landin.Source.Sets.Source_Set;
+            Fixed_Id : constant Landin.Source.Source_Id :=
+              Fixed_Sources.Add ("fixed-docs", Fixed);
+            Fixed_Stream : Landin.Tokens.Token_Stream;
+            Fixed_Reports : Landin.Diagnostics.Diagnostic_List;
+            Spaces : Landin.Tokens.Spacing.Table;
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Fixed, Prelude & Import_Line & Documentation & Declaration,
+               "the move leaves documentation and annotations together");
+            Landin.Testing.Check
+              (Item, not Clashed, "the documentation-preserving move is disjoint");
+            Landin.Tokens.Lexer.Lex
+              (Fixed_Sources.Get (Fixed_Id), Names, Fixed_Stream);
+            Landin.Tokens.Spacing.Add (Spaces, Fixed_Stream);
+            declare
+               Fixed_Parsed : constant Landin.Syntax.Tree :=
+                 Landin.Syntax.Parser.Parse (Fixed_Stream, Names, Fixed_Reports);
+            begin
+               Landin.Testing.Check
+                 (Item, Landin.Diagnostics.Count (Fixed_Reports) = 0
+                    and then Landin.Syntax.Declaration_Count (Fixed_Parsed) = 1,
+                  "the documented annotated declaration still parses");
+            end;
+            Landin.Testing.Check_Equal
+              (Item, Landin.Server.Navigation.Doc_Comment
+                 (Fixed, Landin.Source.Byte_Offset
+                    (Ada.Strings.Fixed.Index
+                       (Fixed, (if Annotated then "link(keep)" else "f:")) - 1),
+                  Spaces, Fixed_Id),
+               "The routine's first line." & ASCII.LF & "Its second line.",
+               "the editor still attaches both documentation lines");
+         end;
+      end Check;
+   begin
+      for Existing_Import in Boolean loop
+         for Annotated in Boolean loop
+            Check ("" & ASCII.LF, Existing_Import, Annotated);
+            Check (ASCII.CR & ASCII.LF, Existing_Import, Annotated);
+         end loop;
+      end loop;
+      declare
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("shared-line-annotation", "import first/module link(keep)" & ASCII.LF
+            & "f: () -> none = end f" & ASCII.LF
+            & "import other/module" & ASCII.LF);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Restated : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Syntax.Repairs.Restated (Sources.Get (Id), Parsed, Found);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Restated), 1,
+               "the shared annotation line still has only the late-import refusal");
+            if Landin.Diagnostics.Count (Restated) = 1 then
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Fix_Count
+                    (Landin.Diagnostics.Get (Restated, 1)), 0,
+                  "an annotation sharing the last import's line gets no move");
+            end if;
+         end;
+      end;
+   end Late_Import_Moves_Keep_Documentation_Attached;
+
    procedure Resource_Refusals_Are_Bounded
      (Item : in out Landin.Testing.Context);
 
@@ -5219,6 +5329,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "late import moves preserve bytes",
          Late_Import_Moves_Preserve_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "parser", "late import moves keep documentation attached",
+         Late_Import_Moves_Keep_Documentation_Attached'Access);
       Landin.Testing.Register
         (Into, "parser", "resource refusals are bounded",
          Resource_Refusals_Are_Bounded'Access);
