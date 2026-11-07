@@ -65,6 +65,12 @@ public main: () -> (code: i32) =
         io.write(host, io.err(host), "\n") else none
         return
     end
+    io.flush(out) else (problem)
+        io.write(host, io.err(host), "standard output: ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
     code = 0
 end main
 ```
@@ -76,8 +82,11 @@ end main
   `else (problem)` names the atom, and `failure.words(problem)` turns it
   into words for a person, such as `not found`.
 - The output goes through a buffered writer over a buffer `main`
-  declares. The deferred `io.flush` writes what waits on every way out,
-  and the deferred `io.close` closes the file however `numbered` ends.
+  declares, so the last of it reaches standard output only when the
+  writer is flushed. `main` flushes it before reporting success, so a
+  write that fails there is reported rather than lost. The deferred
+  `io.flush` still writes what waits on the earlier ways out, and the
+  deferred `io.close` closes the file however `numbered` ends.
 
 Compiled and run over a four-line file:
 
@@ -113,9 +122,10 @@ Which module does what:
 |---|---|---|
 | Get the handle every hosted call takes | `host := blocking.new()` | [hosted/blocking](../hosted/blocking) |
 | Print a formatted line | `io.write_format(host, io.out(host), "{} lines\n", [any(addr count)])` | [core/io](../core/io) |
-| Print many lines | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` for each and `io.flush(out)` | [core/io](../core/io) |
+| Print many lines | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` for each, and `io.flush(out)`, checked, before reporting success | [core/io](../core/io) |
 | Get a command-line argument | `io.argument_at(host, 0)`, and `io.argument_count(host)` | [core/io](../core/io) |
 | Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
+| Read a whole file into memory | `io.open_read(host, path)`, then `io.read(host, file, chunk)` until it gives 0, adding each piece with `text.append(whole, chunk[0..<got])` to a builder `text.over(storage)` makes, which fails with `text.no_space` once the file outgrows `storage`, and `io.close(host, file)`; [reverse-complement](../examples.md#benchmark-game-reverse-complement)'s `read_all` is the same loop over standard input | [core/io](../core/io), [core/text](../core/text) |
 | Write straight to standard error | `io.write(host, io.err(host), bytes)` | [core/io](../core/io) |
 | Turn a failure into words for a person | `failure.words(problem)` | [core/failure](../core/failure) |
 | Turn an errno from `platform/posix` into words | `posix.words(problem)`, which words the library's failures too | [platform/posix](../platform/posix) |
@@ -353,11 +363,20 @@ their slots until then. The representation is the module's own.
 Keep keys and their backing stable while stored, and restart cursors after
 any mutation.
 
-Complete map workloads can exceed the Cortex-M0 test profile of 32 KiB
-flash. The bounded example below checks the empty-map surface; it does
-not demonstrate that a populated map fits that profile.
+[A populated example](../compiler/tests/fixtures/runtime/library-builtin-keys/main.ldn)
+keeps three maps over one arena, keyed by `i32`, `[]u8` and `utf8`. It
+inserts keys, replaces one key's item, reads each back, finds a `[]u8` key
+through equal bytes at another address, and releases every map. A walk
+starts at `map.entries()` and calls `map.next_entry` until it fails with
+`map.end_of_entries`, as the
+[derived container program](../examples/derived_containers/workload/workload.ldn)
+does after removing keys.
 
-[Executable example](../compiler/tests/fixtures/runtime/library-shared-map/main.ldn)
+A complete map workload can exceed the Cortex-M0 test profile of 32 KiB
+flash, so the
+[Cortex-M0 example](../compiler/tests/fixtures/runtime/library-shared-map/main.ldn)
+checks only the empty-map surface; it does not show that a populated map
+fits that profile.
 
 ## core/sort
 
@@ -1315,13 +1334,14 @@ provider refuses, so wrapping an arena counts both injected failures and
 the arena's own.
 
 - Free calls delegate to the parent.
-- In-place growth is refused, so allocation-failure tests remain
-  predictable.
-- A resize is an attempt like an allocation: it spends the budget and is
-  delegated or refused.
-- A growth in place is delegated too, spending a permit, and counted by
-  `growths` rather than `successes`, which counts the blocks the injector
-  gave.
+- An allocation, a resize and a growth in place are each an attempt: each
+  spends the budget, and once it is spent the injector refuses without
+  asking the parent.
+- A refused growth, the injector's or the parent's, leaves the block as it
+  was, and the container moves it instead, so a container tested through
+  an injector takes the in-place path its provider offers.
+- `successes` counts the blocks a delegated allocation or resize gave; a
+  growth in place gives none and is counted by `growths`.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-fault/main.ldn)
 
