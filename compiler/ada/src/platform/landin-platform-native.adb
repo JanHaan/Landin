@@ -363,7 +363,8 @@ package body Landin.Platform.Native is
         with Import, Convention => C,
              External_Name => "landin_private_write_reason";
       Staged : Interfaces.C.int;
-      Said : Interfaces.C.char_array (1 .. 4096) := [others => Interfaces.C.nul];
+      Said : Interfaces.C.char_array (1 .. 4096) :=
+        [others => Interfaces.C.nul];
    begin
       Reason := Unbounded.Null_Unbounded_String;
       Staged := Stage_Write

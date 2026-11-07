@@ -4912,7 +4912,8 @@ package body Landin.Tests.Parser_Suite is
          Names : Landin.Source.Names.Table;
          Stream : Landin.Tokens.Token_Stream;
          Found : Landin.Diagnostics.Diagnostic_List;
-         Id : constant Landin.Source.Source_Id := Sources.Add ("keyword", Text);
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("keyword", Text);
          Clashed : Boolean;
          Codes : Unbounded.Unbounded_String;
          Total, Nodes : Natural;
@@ -4928,11 +4929,14 @@ package body Landin.Tests.Parser_Suite is
               (Restated, Id, Text, Clashed);
          begin
             Landin.Testing.Check_Equal
-              (Item, Fixed, Expected, "insert the keyword before header trivia");
-            Landin.Testing.Check (Item, not Clashed, "the insertion is disjoint");
+              (Item, Fixed, Expected,
+               "insert the keyword before header trivia");
+            Landin.Testing.Check
+              (Item, not Clashed, "the insertion is disjoint");
             Read_And_Parse (Fixed, Codes, Total, Nodes, Held);
             Landin.Testing.Check
-              (Item, Total = 0 and then Held, "the repaired whole routine parses");
+              (Item, Total = 0 and then Held,
+               "the repaired whole routine parses");
          end;
       end Check;
    begin
@@ -4962,7 +4966,8 @@ package body Landin.Tests.Parser_Suite is
          pragma Unreferenced (Parsed);
       begin
          Landin.Testing.Check_Equal
-           (Item, Landin.Diagnostics.Count (Found), 1, "one foreign-form refusal");
+           (Item, Landin.Diagnostics.Count (Found), 1,
+            "one foreign-form refusal");
          for Position in 1 .. Landin.Diagnostics.Count (Found) loop
             declare
                Report : constant Landin.Diagnostics.Diagnostic :=
@@ -5013,14 +5018,17 @@ package body Landin.Tests.Parser_Suite is
             for Node in Landin.Syntax.Node_Id'(1)
               .. Landin.Syntax.Node_Id (Landin.Syntax.Node_Count (Parsed))
             loop
-               if Landin.Syntax.Kind (Parsed, Node) = Landin.Syntax.Slice_Type then
+               if Landin.Syntax.Kind (Parsed, Node)
+                 = Landin.Syntax.Slice_Type
+               then
                   Seen := Seen + 1;
                   Landin.Testing.Check
                     (Item, Landin.Syntax.Is_Referent_Mutable (Parsed, Node)
                        = Writable, "the slice retains its written permission");
                end if;
             end loop;
-            Landin.Testing.Check_Equal (Item, Seen, 1, "one slice type is retained");
+            Landin.Testing.Check_Equal
+              (Item, Seen, 1, "one slice type is retained");
          end;
       end Check;
    begin
@@ -5046,7 +5054,8 @@ package body Landin.Tests.Parser_Suite is
          Names : Landin.Source.Names.Table;
          Stream : Landin.Tokens.Token_Stream;
          Found : Landin.Diagnostics.Diagnostic_List;
-         Id : constant Landin.Source.Source_Id := Sources.Add ("imports", Text);
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("imports", Text);
          Clashed : Boolean;
          Codes : Unbounded.Unbounded_String;
          Total, Nodes : Natural;
@@ -5063,9 +5072,11 @@ package body Landin.Tests.Parser_Suite is
          begin
             Landin.Testing.Check_Equal
               (Item, Fixed, Prelude & "import other/module -- keep me"
-               & Newline & Body_Text, "the move preserves comments and newlines");
+               & Newline & Body_Text,
+               "the move preserves comments and newlines");
             Landin.Testing.Check
-              (Item, not Clashed and then Landin.Diagnostics.Count (Restated) = 1
+              (Item, not Clashed
+               and then Landin.Diagnostics.Count (Restated) = 1
                  and then Landin.Diagnostics.Fix_Count
                    (Landin.Diagnostics.Get (Restated, 1)) = 1
                  and then Landin.Diagnostics.Edit_Count
@@ -5121,7 +5132,8 @@ package body Landin.Tests.Parser_Suite is
                        and then Contains
                          (Landin.Diagnostics.Text.Render (Report, Sources),
                           Positive'Image (Landin.Syntax.Parser.Nesting_Limit)),
-                     "the resource refusal exposes the configured finite bound");
+                     "the resource refusal exposes the configured finite"
+                     & " bound");
                end;
             end if;
          end;

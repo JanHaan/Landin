@@ -154,7 +154,8 @@ package body Landin.Diagnostics.Text is
               or else Character'Pos (Text (Index)) in 127 .. 159
               or else (Text (Index) = Character'Val (194)
                        and then Length = 2
-                       and then Character'Pos (Text (Index + 1)) in 128 .. 159);
+                       and then Character'Pos
+                         (Text (Index + 1)) in 128 .. 159);
          begin
             if Length > 1 and then not Control then
                Unbounded.Append (Result, Text (Index .. Index + Length - 1));

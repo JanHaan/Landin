@@ -366,7 +366,8 @@ package body Landin.Commands is
             Emission : constant C.Emission :=
               (if Result.Command = C.Run then C.Emit_Exe
                elsif US.To_String (Emitted) = "asm" then C.Emit_Asm
-               elsif US.To_String (Emitted) in "ir" | "ir-annotated" then C.Emit_IR
+               elsif US.To_String (Emitted) in "ir" | "ir-annotated"
+               then C.Emit_IR
                elsif US.To_String (Emitted) = "linker-script"
                then C.Emit_Linker_Script
                else C.Emit_Exe);
@@ -995,7 +996,8 @@ package body Landin.Commands is
                         if From in 1 .. Natural (Result.Named.Length)
                           and then Result.Named (From) = Path
                           and then (Path'Length < 4
-                            or else Path (Path'Last - 3 .. Path'Last) /= ".ldn")
+                            or else Path
+                              (Path'Last - 3 .. Path'Last) /= ".ldn")
                         then
                            Landin.Diagnostics.Add_Note
                              (D, "operands before '--' are source inputs; if "
