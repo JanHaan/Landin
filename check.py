@@ -2463,10 +2463,28 @@ def finding_definitions(paths):
     return definitions
 
 
-def check_citations(paths):
+def guide_citation_text(text):
+    """Keep guide prose and line positions, blanking code and links."""
+    lines = text.splitlines(keepends=True)
+    for kind, start, section in sections(lines):
+        if kind != "prose":
+            for index in range(start - 1, start - 1 + len(section)):
+                lines[index] = "\n" if lines[index].endswith("\n") else ""
+    lines = [("\n" if line.endswith("\n") else "")
+             if line.strip().startswith("```") else line for line in lines]
+    text = "".join(lines)
+    #  Preserve newlines for the reported location, including multiline spans.
+    def blank(match):
+        return re.sub(r"[^\n]", " ", match.group())
+    return re.sub(r"(`+)(?s:.*?)\1|\[[^\]\n]*\]\([^\n)]*\)",
+                  blank, text)
+
+
+def check_citations(paths, guide_paths=()):
     """Every construct/finding citation resolves within the selected scope."""
     citation_paths = [path for path in paths
                       if os.path.basename(path) in LANGUAGE_FILES + [ROADMAP]]
+    citation_paths += [path for path in guide_paths if path not in citation_paths]
     if not citation_paths:
         return []
 
@@ -2529,6 +2547,8 @@ def check_citations(paths):
 
     for path in citation_paths:
         text = read_file(path, encoding="utf-8")
+        if path in guide_paths:
+            text = guide_citation_text(text)
         for match in re.finditer(r"(?<![\w])\[(\d{4})\](?![A-Za-z_0-9])", text):
             if match.group(1) not in constructs:
                 line = text.count("\n", 0, match.start()) + 1
@@ -4617,6 +4637,31 @@ def ada_without_comments(text):
                 break
         out.append(line)
     return "\n".join(out)
+
+
+def check_stage_body_dependencies(full_run):
+    """The central context may not depend on its stage children."""
+    if not full_run:
+        return []
+    relative = "compiler/ada/src/stages/landin-stages.adb"
+    path = os.path.join(ROOT, relative)
+    missing = absent([path])
+    if missing:
+        return missing
+    text = ada_without_comments(read_file(path, encoding="utf-8"))
+    text = re.sub(r'"(?:""|[^"\n])*"',
+                  lambda m: " " * len(m.group()), text)
+    context = re.split(r"\bpackage\s+body\s+Landin\s*\.\s*Stages\b",
+                       text, maxsplit=1, flags=re.I)[0]
+    out = []
+    for clause in re.finditer(r"\bwith\s+([^;]+);", context, re.I):
+        for child in re.finditer(r"\bLandin\s*\.\s*Stages\s*\.\s*"
+                                 r"[A-Za-z][A-Za-z0-9_]*",
+                                 clause.group(1), re.I):
+            line = text.count("\n", 0, clause.start(1) + child.start()) + 1
+            out.append((relative, line,
+                        "the central stage body may not depend on a stage"))
+    return out
 
 
 def ada_call_arguments(text, opening):
@@ -9907,8 +9952,17 @@ def check_library_documentation(full_run):
 
 
 def write_generated(relative, text):
-    """Write one of GENERATED's files and say so."""
-    write_file(os.path.join(ROOT, relative), text)
+    """Write one of GENERATED's files when its bytes differ."""
+    path = os.path.join(ROOT, relative)
+    try:
+        previous = read_file(path, "rb")
+    except FileNotFoundError:
+        previous = None
+    if previous == text.encode("utf-8"):
+        print("unchanged " + relative)
+        return
+    with io.open(path, "wb") as stream:
+        stream.write(text.encode("utf-8"))
     print("wrote " + relative)
 
 
@@ -10103,7 +10157,13 @@ def main(argv):
 
     citation_paths = [p for p in paths
                       if os.path.basename(p) in LANGUAGE_FILES + [ROADMAP]]
-    extra = check_citations(citation_paths)
+    if full_run:
+        from docs.site import render_html
+        guide_paths = [g["src"] for g in render_html.GUIDES
+                       if g["src"] not in citation_paths]
+    else:
+        guide_paths = []
+    extra = check_citations(citation_paths, guide_paths)
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
     extra += check_agent_guidance(full_run)
@@ -10155,6 +10215,7 @@ def main(argv):
     extra += check_catalogue(full_run)
     extra += check_catalogue_labels(full_run)
     extra += check_emission_order(full_run)
+    extra += check_stage_body_dependencies(full_run)
     extra += check_diagnostic_matrix(full_run)
     extra += check_explanations(full_run)
     extra += check_citation_table(full_run)

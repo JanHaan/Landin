@@ -470,6 +470,45 @@ class Citations(unittest.TestCase):
         self.assertEqual(self.cited("# Tour\n\nprose only\n"), [])
 
 
+class GuideCitations(unittest.TestCase):
+    def test_prose_only_and_line_numbers(self):
+        from check_controls import tree
+        guide = ("See [9999] and [0010].\n"
+                 "`[9998]` and [1024]array and [9997](other.md).\n"
+                 "```landin\nvalue: [9996]u8\n```\n"
+                 "See [9995].\n")
+        with tree(written={"tour.md": "### [0010] Thing\n",
+                           "spec.md": "# Spec\n",
+                           "docs/from-c.md": guide}) as root:
+            found = checker.check_citations([], [str(root / "docs/from-c.md")])
+        self.assertEqual([(line, why) for _, line, why in found],
+                         [(1, "[9999] is cited and not defined"),
+                          (6, "[9995] is cited and not defined")])
+
+
+class StageBodyDependencies(unittest.TestCase):
+    BODY = "compiler/ada/src/stages/landin-stages.adb"
+
+    def test_stage_children_in_context_are_rejected(self):
+        source = ("-- with Landin.Stages.Syntax;\n"
+                  "limited with Landin.Types,\n"
+                  "  LANDIN . STAGES . Checking.More;\n"
+                  "package body Landin.Stages is end Landin.Stages;\n")
+        found = faults(checker.check_stage_body_dependencies,
+                       written={self.BODY: source})
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0][1], 3)
+
+    def test_representation_and_comment_pass(self):
+        self.assertEqual(faults(checker.check_stage_body_dependencies,
+                                written={self.BODY:
+                                  "with Landin.Types; -- with Landin.Stages.X;\n"
+                                  "package body Landin.Stages is end;\n"}), [])
+
+    def test_missing_body_is_reported(self):
+        self.assertTrue(faults(checker.check_stage_body_dependencies))
+
+
 class SiteDocuments(unittest.TestCase):
     """Every rendered page has a group, a publishing path and, for a
     prototype, a page at all, before the renderer runs."""
