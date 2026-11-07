@@ -20,7 +20,7 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 | EABI compiler | `arm-eabi-gcc` 16.1.0, GNAT's arm-elf archive `16.1.0-1` from the host GNAT's release, pinned in `environments/pins.sh` |
 | Assembler/linker | GNU Binutils 2.46.1, from the same archive |
 | Debugger | `gdb-multiarch` 16.3, Debian `16.3-1`, loopback QEMU remote stub |
-| Probe options | `-mcpu=cortex-m0 -mthumb -mfloat-abi=soft -mabi=aapcs -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
+| Probe options | `-mcpu=cortex-m0 -mthumb -mfloat-abi=soft -mabi=aapcs -fno-short-enums -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
 | RV32 emulator | Espressif's QEMU `esp-develop-9.2.2-20260417`, the release's Linux x86-64 `qemu-system-riscv32` archive, unpacked into the tool root's `qemu-espressif` (D695) |
 | rv32imc corpus lane | `-M esp32c3 -cpu espressif,a=false,zawrs=false,f=false,d=false,zfa=false`: the ESP32-C3 machine with its core's A, F and D removed, which the C3 has not (D696), for the whole corpus at `rv32imc` in `run.py`'s `esp32c3` lane, on the lane description `lanes/descriptions/esp32c3` |
 | rv32imac corpus lane | `-M sifive_e`: a SiFive E31, rv32imac, for the whole corpus at `rv32imac` in `run.py`'s `sifive-e` lane, on the RV32 reference's map, 32 KiB of flash at `0x2040_0000` and the 16 KiB DTIM at `0x8000_0000` |
@@ -645,6 +645,10 @@ reference's. It may instead carry `"lanes": {"mps2-an500": {"mode":
 "execute", "reason": ...}}` where the lane's description gives the program
 what the reference lacks: the lane then builds and runs it at every
 profile and holds it to its oracle, as it does an `execute` row.
+A `lanes` entry may also give an `execute` or `restriction` row `"mode":
+"refuse"` and the codes that lane's target refuses it with: the RV32 lanes
+refuse every row that reaches the C surface, since RV32's ilp32 C ABI is
+not enabled (D920), with L0346, or L0015 for the C aliases module.
 `runtime/assembly-float-square-root` has one: its float operands are L0304
 on the reference and the AN505's map, which have no float unit, and the
 M7's FPv5-D16 holds them (D630). A lane run whose refusal differs names the
@@ -882,14 +886,18 @@ example, whose headers the corpus fetches by hash with
 `scripts/fetch_inputs.py` before compiling.
 
 Before linking, every object's `readelf -A` is read and each must pass
-floats as the lane does: `Tag_ABI_VFP_args: VFP registers` on the AN500 and
-not on the others, apart from GNU ld's own check. `abi/cortex-c-peer` is
+floats as the lane does, `Tag_ABI_VFP_args: VFP registers` on the AN500 and
+not on the others, apart from GNU ld's own check, and none may declare
+`Tag_ABI_enum_size: small`, which the linker only warns of. Every other
+Arm C compilation of the lanes, the probes', `firmware.py`'s and
+`memory.py`'s, passes `-fno-short-enums` too. `abi/cortex-c-peer` is
 also the wrong-convention control, at none/off on every lane: its C is
 compiled for the other variant, an M4F's hard float on a soft lane and the
 M7's `-mfloat-abi=softfp` on the AN500, and that assertion must refuse it,
 and GNU ld must refuse the link with `uses VFP register arguments` with
-the peer before the program and after it. Each result records both under
-`convention_control`.
+the peer before the program and after it; built for the lane's own variant
+with `-fshort-enums`, the assertion must refuse it too. Each result records
+all three under `convention_control`.
 
 A fixture takes one of two routes to its image. The harness route, every
 `execute` ABI row's at every profile: refine writes assembly and the

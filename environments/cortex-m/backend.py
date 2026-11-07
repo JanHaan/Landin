@@ -943,24 +943,25 @@ def fetched_inputs(meta):
     return found
 
 
-def c_compiler(run, meta, base, level, flags=None):
+def c_compiler(run, meta, base, level, flags=None, extra=()):
     """The command an ABI fixture's C is compiled with for LEVEL by the
     lane's C contract (D985), less its source and output: the level's
     flags, or FLAGS for a control that compiles it otherwise, C11 with
     GCC's freestanding headers alone, the fixture directory and each
-    `c-inputs` directory included, and its `c-args` last."""
+    `c-inputs` directory included, then its `c-args` and EXTRA, a
+    control's own, last."""
     flags = level_flags(level) if flags is None else flags
     includes = ['-isystem', str(c_includes(run, level)), '-I', str(base)]
     for directory in fetched_inputs(meta):
         includes += ['-I', str(directory)]
     return [tool(run, level, 'gcc'), *flags, *C_STANDARD, *includes,
-            *meta.c_args_for('cortex-m0')]
+            *meta.c_args_for('cortex-m0'), *extra]
 
 
-def c_objects(run, meta, base, level, flags=None, name='c'):
+def c_objects(run, meta, base, level, flags=None, name='c', extra=()):
     """Each of an ABI fixture's `c-sources` compiled by `c_compiler`, then
     C_RUNTIME by the same command.  Returns the objects."""
-    compiler = c_compiler(run, meta, base, level, flags)
+    compiler = c_compiler(run, meta, base, level, flags, extra)
     objects = []
     for index, source in enumerate(meta.c_sources, start=1):
         obj = run.out / ('%s-%d.o' % (name, index))
@@ -982,23 +983,39 @@ def vfp_arguments(attributes):
     return found.group(1).strip() if found else None
 
 
+def enum_size(attributes):
+    """The enum size an Arm object's `readelf -A` declares, `int` or
+    `small`, or None where it declares none, as refine's objects do."""
+    found = re.search(r'Tag_ABI_enum_size: (\S+)', attributes)
+    return found.group(1) if found else None
+
+
 def conventions(run, objects, level, name='attributes'):
-    """Each object's float-argument convention, held to LEVEL's lane by an
-    assertion of its own, apart from the linker's (D985): every object
-    passes floats in the VFP bank on a hard-float lane and none does on
-    the others.  Returns them by object name and writes them to
+    """Each object's float-argument convention and enum size, held to
+    LEVEL's lane by an assertion of its own, apart from the linker's
+    (D985): every object passes floats in the VFP bank on a hard-float
+    lane and none does on the others, and none declares short enums, since
+    Cortex-M's C boundaries use int-sized ones, which the linker only warns
+    of.  Returns the conventions by object name and writes both to
     NAME.json."""
-    found = {}
+    found, enums = {}, {}
     for obj in objects:
-        found[Path(obj).name] = vfp_arguments(run.command(
-            '%s-%s' % (name, Path(obj).stem), [tool(run, level, 'readelf'), '-A', obj]))
+        said = run.command('%s-%s' % (name, Path(obj).stem),
+                           [tool(run, level, 'readelf'), '-A', obj])
+        found[Path(obj).name] = vfp_arguments(said)
+        enums[Path(obj).name] = enum_size(said)
     wrong = sorted(one for one, said in found.items()
                    if (said == 'VFP registers') != hard_float(level))
-    (run.out / (name + '.json')).write_text(json.dumps(found, indent=2, sort_keys=True) + '\n')
+    short = sorted(one for one, size in enums.items() if size == 'small')
+    (run.out / (name + '.json')).write_text(json.dumps(
+        {'float_arguments': found, 'enum_size': enums}, indent=2, sort_keys=True) + '\n')
     require(not wrong, '%s %s float arguments %s, and the %s lane passes them %s' % (
         ', '.join(wrong), 'passes' if len(wrong) == 1 else 'pass',
         'in core registers' if hard_float(level) else 'in the VFP bank', level,
         'in the VFP bank' if hard_float(level) else 'in core registers'))
+    require(not short, '%s %s short enums (Tag_ABI_enum_size: small), and a Cortex-M C'
+            ' boundary\'s enums are int-sized: build it with -fno-short-enums'
+            % (', '.join(short), 'declares' if len(short) == 1 else 'declare'))
     return found
 
 

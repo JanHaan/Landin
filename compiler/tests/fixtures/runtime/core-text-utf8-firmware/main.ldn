@@ -4,10 +4,12 @@
 --  by scalar into a fixed reply, which refuses what it has no room for.
 import core/text
 
---  The value's scalars and where each begins, `°` two bytes wide.
+--  The value's scalars and where each begins, `°` two bytes wide, as
+--  module data, which a 32 KiB image keeps out of its code.
+scalars: [4]u32 = ['2', '1', '\u{b0}', 'C']
+offsets: [4]usize = [0, 1, 2, 4]
+
 walked: (value: utf8) -> (yes: bool) =
-    scalars: [4]u32 = ['2', '1', '\u{b0}', 'C']
-    offsets: [4]usize = [0, 1, 2, 4]
     yes = false
     mut at := text.start(value)
     mut index: usize = 0

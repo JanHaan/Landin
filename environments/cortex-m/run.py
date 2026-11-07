@@ -33,7 +33,9 @@ def workers():
     require(value.isdigit() and 1 <= int(value) <= 64, 'LANDIN_CORTEX_JOBS must be 1 to 64')
     return int(value)
 
-FLAGS = ['-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft', '-mabi=aapcs',
+#  Every Arm C compilation and link of the lanes: int-sized enums are
+#  Cortex-M's C boundary's (D985), where the pinned GCC defaults to short.
+FLAGS = ['-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft', '-mabi=aapcs', '-fno-short-enums',
          '-ffreestanding', '-fno-builtin', '-fno-omit-frame-pointer', '-g3',
          '-O1', '-Wall', '-Wextra', '-Werror', '-nostdlib']
 

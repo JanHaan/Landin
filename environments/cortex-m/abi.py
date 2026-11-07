@@ -28,6 +28,7 @@ CALL_COUNTS = dict(gap=3, split=5, stack=7, sret=3, small=3, varargs=4, floatpai
 VFP_COUNTS = dict(mixed=5, hfa=3, spill=11, varargs=3, large=2, native=4)
 #  What GCC compiles the VFP control with, and the multilib that selects.
 HARD_FLAGS = ['-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard', '-mfpu=fpv5-d16', '-mabi=aapcs',
+              '-fno-short-enums',
               '-ffreestanding', '-fno-builtin', '-fno-omit-frame-pointer', '-g3', '-O1',
               '-Wall', '-Wextra', '-Werror', '-nostdlib']
 

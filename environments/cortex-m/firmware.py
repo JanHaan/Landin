@@ -238,7 +238,7 @@ def float_unit(parent, refine):
     #  D617: a soft-float object does not link into the hard-float image.
     (out / 'soft.c').write_text('double twice(double x) { return x * 2.0; }\n')
     run.command('soft-object', [run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m7', '-mthumb',
-                '-mfloat-abi=soft', '-O1', '-c', 'soft.c', '-o', 'soft.o'])
+                '-mfloat-abi=soft', '-fno-short-enums', '-O1', '-c', 'soft.c', '-o', 'soft.o'])
     try:
         run.command('mixed-link', [run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m7', '-mthumb',
                     '-mfloat-abi=hard', '-mfpu=fpv5-d16', '-nostdlib', '-nostartfiles',
@@ -461,7 +461,8 @@ def mixed_objects(run, soft, refine):
     gcc, out = run.arm / 'arm-eabi-gcc', run.out
     (out / 'hard.c').write_text('double twice(double x) { return x * 2.0; }\n')
     run.command('hard-object', [gcc, '-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard',
-                                '-mfpu=fpv5-d16', '-O1', '-c', 'hard.c', '-o', 'hard.o'])
+                                '-mfpu=fpv5-d16', '-fno-short-enums', '-O1', '-c', 'hard.c',
+                                '-o', 'hard.o'])
     refine_soft, refine_hard = soft.out / 'firmware.elf.o', out / 'firmware.elf.o'
 
     def floats(name, path):
@@ -822,7 +823,7 @@ def independent(run):
     elf = run.out / 'control.elf'
     run.command('independent-build', [run.arm / 'arm-eabi-gcc',
         '-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft', '-mabi=aapcs',
-        '-Os', '-Wall', '-Wextra', '-Werror', '-ffreestanding',
+        '-Os', '-Wall', '-Wextra', '-Werror', '-ffreestanding', '-fno-short-enums',
         '-fno-builtin', '-ffunction-sections', '-fdata-sections',
         '-nostdlib', '-nostartfiles', '-nodefaultlibs',
         here / 'firmware-control.S', here / 'firmware-control.c',

@@ -147,7 +147,7 @@ class ProbeFailures(unittest.TestCase):
                     Image(path)
 
     def test_freestanding_module_and_linker_closure(self):
-        from freestanding import imports, linker_closure, programs
+        from freestanding import MODULES, imports, linker_closure, programs
         self.assertEqual(imports('import core/mem\nimport platform/cortex_m\n'), {'core/mem', 'platform/cortex_m'})
         self.assertEqual(imports('import core/io'), {'core/io'})
         self.assertEqual(imports('import core/io/fake'), {'core/io/fake'})
@@ -173,10 +173,10 @@ class ProbeFailures(unittest.TestCase):
         self.assertEqual(set(programs()), {
             'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
             'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
-            {'library-shared-'+name for name in
-             ('arena', 'atomic', 'cache', 'cmp', 'diag', 'failure', 'fault', 'fibre',
-              'io', 'line', 'map', 'mem', 'net', 'panic', 'pool', 'random', 'region',
-              'sort', 'spill', 'text', 'time', 'tree', 'vec')})
+            #  One per core module freestanding.py lists, so a new module is
+            #  added there alone.
+            {'library-shared-'+module.split('/')[1] for module in MODULES
+             if module.startswith('core/')})
 
     def test_shared_library_inventory_requires_each_small_consumer(self):
         from freestanding import MODULES, ROOT
@@ -517,6 +517,18 @@ class ProbeFailures(unittest.TestCase):
                 finally:
                     backend_corpus.COUNTERPARTS = original
 
+    def test_a_lane_refuses_what_its_target_does_not_enable(self):
+        import backend_corpus
+        rows = backend_corpus.inventory()
+        row = rows['abi/link-symbol-exports']
+        self.assertEqual((row['mode'], row['lanes']['esp32c3']['codes']), ('execute', ['L0346']))
+        self.assertTrue(backend_corpus.refused_on(row, 'esp32c3'))
+        self.assertFalse(backend_corpus.refused_on(row, 'mps2-an500'))
+        self.assertFalse(backend_corpus.refused_on(row, None))
+        restricted = rows['abi/r440-native-banks']
+        self.assertEqual(restricted['mode'], 'restriction')
+        self.assertTrue(backend_corpus.refused_on(restricted, 'sifive-e'))
+
     def test_a_restriction_is_held_to_where_its_build_stops(self):
         import backend_corpus
         from unittest.mock import patch
@@ -574,7 +586,7 @@ class ProbeFailures(unittest.TestCase):
                         backend_corpus.restriction(run, root / 'refine', 'abi/c-packed-records',
                                                    dict(row, stops='link'), 'none', 'off')
 
-    def test_every_object_of_an_abi_image_passes_floats_as_its_lane_does(self):
+    def test_every_object_of_an_abi_image_passes_floats_and_enums_as_its_lane_does(self):
         import backend
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as directory:
@@ -593,6 +605,14 @@ class ProbeFailures(unittest.TestCase):
                     backend.conventions(run, [root / 'program.o', root / 'peer.o'],
                                         'armv7e-m+fpv5-d16')
                 attributes['attributes-program'] = attributes['attributes-peer']
+                attributes['attributes-peer'] += 'Tag_ABI_enum_size: small\n'
+                with self.assertRaisesRegex(RuntimeError, 'peer.o declares short enums'
+                                            ' \\(Tag_ABI_enum_size: small\\).*'
+                                            '-fno-short-enums'):
+                    backend.conventions(run, [root / 'program.o', root / 'peer.o'],
+                                        'armv7e-m+fpv5-d16')
+                attributes['attributes-peer'] = ('Tag_ABI_VFP_args: VFP registers\n'
+                                                 'Tag_ABI_enum_size: int\n')
                 self.assertEqual(backend.conventions(
                     run, [root / 'program.o', root / 'peer.o'], 'armv7e-m+fpv5-d16'),
                     {'program.o': 'VFP registers', 'peer.o': 'VFP registers'})
