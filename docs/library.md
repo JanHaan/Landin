@@ -363,12 +363,8 @@ their slots until then. The representation is the module's own.
 Keep keys and their backing stable while stored, and restart cursors after
 any mutation.
 
-[A populated example](../compiler/tests/fixtures/runtime/library-builtin-keys/main.ldn)
-keeps three maps over one arena, keyed by `i32`, `[]u8` and `utf8`. It
-inserts keys, replaces one key's item, reads each back, finds a `[]u8` key
-through equal bytes at another address, and releases every map. A walk
-starts at `map.entries()` and calls `map.next_entry` until it fails with
-`map.end_of_entries`, as the
+A walk starts at `map.entries()` and calls `map.next_entry` until it fails
+with `map.end_of_entries`, as the
 [derived container program](../examples/derived_containers/workload/workload.ldn)
 does after removing keys.
 
@@ -377,6 +373,12 @@ flash, so the
 [Cortex-M0 example](../compiler/tests/fixtures/runtime/library-shared-map/main.ldn)
 checks only the empty-map surface; it does not show that a populated map
 fits that profile.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-builtin-keys/main.ldn)
+
+It keeps three maps over one arena, keyed by `i32`, `[]u8` and `utf8`. It
+inserts keys, replaces one key's item, reads each back, finds a `[]u8` key
+through equal bytes at another address, and releases every map.
 
 ## core/sort
 
