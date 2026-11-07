@@ -1510,7 +1510,8 @@ package body Landin.Driver is
                      return "; Cortex-M cores share one target, so for "
                        & Name & " use --target="
                        & Landin.Targets.Name (Landin.Targets.Cortex_M)
-                       & " --level=" & Landin.Targets.Firmware.Level_Name (Core);
+                       & " --level="
+                       & Landin.Targets.Firmware.Level_Name (Core);
                   end if;
                end;
             end if;
