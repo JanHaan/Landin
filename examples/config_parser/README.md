@@ -21,8 +21,9 @@ complete hosted entry with its recorded input:
 ./scripts/dev-test.sh --fixture=runtime/derived-parser
 ```
 
-This is a `FILTERED` run. The harness builds the compiler, stages `input.txt`
-beside the program, and checks the recorded output and expected status 42;
+This is a `FILTERED` run. The harness builds the compiler, passes the
+fixture's `input.txt` as the program argument, and checks the recorded
+output and expected status 42;
 it does not try to run this library directory without an entry point.
 
 The complete derivative and its failure/recovery oracles also run on native
