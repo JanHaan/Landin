@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Make a new fixture known everywhere a fixture has to be known.
 
-    python3 scripts/add_fixture.py CLASS/NAME [--reason=TEXT] [--refine=PATH]
+    python3 scripts/add_fixture.py CLASS/NAME... [--reason=TEXT] [--refine=PATH]
 
 Write the fixture first, `compiler/tests/fixtures/CLASS/NAME/fixture.meta`
-and its files, as compiler/tests/README.md says.  This then
+and its files, as compiler/tests/README.md says.  Several fixtures may be
+named at once; steps 1 to 3 are taken for each in turn, step 4 once for
+them all, and steps 5 and 6 say what is left for each.  `--refuse`,
+`--reason` and `--stops` describe one fixture's row, so they take one
+fixture.  This then
 
 1. reads its metadata as the test program does, and stops on any fault;
 2. for a runtime or ABI fixture without one, adds its row to
@@ -163,6 +167,30 @@ def remaining_steps(meta, expect_written, unformatted=None):
     return steps
 
 
+def combined_steps(each):
+    """Several fixtures' remaining steps as one list in the same order: the
+    recordings in one run of the test program and the cases in another, as
+    the test program takes several selections at once, and every other
+    step once."""
+    test = "./scripts/dev-test.sh "
+    records, cases, others = [], [], []
+    for steps in each:
+        for step in steps:
+            if step.startswith(test):
+                into = records if step.startswith(test + "--record") else cases
+                for part in re.split(r" (?=--)", step[len(test):]):
+                    if part not in into:
+                        into.append(part)
+            elif step not in others:
+                others.append(step)
+    #  A layout fix comes before the test program, and the highlighters and
+    #  check.py after it, as remaining_steps orders them for one fixture.
+    first = [step for step in others if step.startswith("refine fmt")]
+    rest = [step for step in others if step not in first]
+    return (first + ([test + " ".join(records)] if records else [])
+            + ([test + " ".join(cases)] if cases else []) + rest)
+
+
 def restriction_stops():
     """What may stop a `restriction` row's fixture on Cortex-M0, as the
     corpus names it (environments/cortex-m/backend_corpus.py's STOPS)."""
@@ -230,7 +258,7 @@ def corpus_row(meta, refuse, reason, refused=None, stops=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("fixture", metavar="CLASS/NAME")
+    parser.add_argument("fixtures", metavar="CLASS/NAME", nargs="+")
     parser.add_argument("--refuse", metavar="CODES",
                         help="the codes Cortex-M0 refuses a runtime fixture"
                              " with, comma separated, held to refine's own")
@@ -243,50 +271,58 @@ def main(argv=None):
                              " fixture for Cortex-M0; the newest this checkout"
                              " built by default")
     args = parser.parse_args(argv)
+    if len(args.fixtures) > 1 and (args.refuse or args.reason or args.stops):
+        raise SystemExit("--refuse, --reason and --stops describe one"
+                         " fixture's row; add %s in a run of its own each"
+                         % " and ".join(args.fixtures))
 
-    directory = ROOT / "compiler/tests/fixtures" / args.fixture
-    if not (directory / fixture_meta.NAME).is_file():
-        raise SystemExit("%s has no %s; write the fixture first, as"
-                         " compiler/tests/README.md says"
-                         % (directory.relative_to(ROOT), fixture_meta.NAME))
-    try:
-        meta = fixture_meta.read(directory)
-    except fixture_meta.FixtureError as error:
-        raise SystemExit(str(error))
+    added = []
+    for fixture in args.fixtures:
+        directory = ROOT / "compiler/tests/fixtures" / fixture
+        if not (directory / fixture_meta.NAME).is_file():
+            raise SystemExit("%s has no %s; write the fixture first, as"
+                             " compiler/tests/README.md says"
+                             % (directory.relative_to(ROOT), fixture_meta.NAME))
+        try:
+            added.append((directory, fixture_meta.read(directory)))
+        except fixture_meta.FixtureError as error:
+            raise SystemExit(str(error))
 
     refine = args.refine or built_refine()
-    if meta.cls in ("runtime", "abi"):
-        record = json.loads(CORPUS.read_text(encoding="utf-8"))
-        if meta.label in record["fixtures"]:
-            print("%s already has its row in %s" % (
-                meta.label, CORPUS.relative_to(ROOT)), flush=True)
-        else:
-            refused = None
-            if meta.cls in ("runtime", "abi") and not args.stops:
-                if refine is None:
-                    raise SystemExit(
-                        "no refine is built here to compile %s for"
-                        " Cortex-M0; build it with ./scripts/dev-build.sh"
-                        " --compiler-only, or pass --refine=PATH"
-                        % meta.label)
-                refused = cortex_codes(meta, directory, refine)
-            record["fixtures"][meta.label] = corpus_row(
-                meta, args.refuse, args.reason, refused, args.stops)
-            record["fixtures"] = dict(sorted(record["fixtures"].items()))
-            CORPUS.write_text(json.dumps(record, indent=2) + "\n",
-                              encoding="utf-8")
-            print("added %s to %s as %s" % (
-                meta.label, CORPUS.relative_to(ROOT),
-                record["fixtures"][meta.label]["mode"]), flush=True)
+    unformatted = {}
+    for directory, meta in added:
+        if meta.cls in ("runtime", "abi"):
+            record = json.loads(CORPUS.read_text(encoding="utf-8"))
+            if meta.label in record["fixtures"]:
+                print("%s already has its row in %s" % (
+                    meta.label, CORPUS.relative_to(ROOT)), flush=True)
+            else:
+                refused = None
+                if not args.stops:
+                    if refine is None:
+                        raise SystemExit(
+                            "no refine is built here to compile %s for"
+                            " Cortex-M0; build it with ./scripts/dev-build.sh"
+                            " --compiler-only, or pass --refine=PATH"
+                            % meta.label)
+                    refused = cortex_codes(meta, directory, refine)
+                record["fixtures"][meta.label] = corpus_row(
+                    meta, args.refuse, args.reason, refused, args.stops)
+                record["fixtures"] = dict(sorted(record["fixtures"].items()))
+                CORPUS.write_text(json.dumps(record, indent=2) + "\n",
+                                  encoding="utf-8")
+                print("added %s to %s as %s" % (
+                    meta.label, CORPUS.relative_to(ROOT),
+                    record["fixtures"][meta.label]["mode"]), flush=True)
 
-    unformatted = None
-    if held_to_layout(meta):
-        if refine is None:
-            unformatted = str(directory.relative_to(ROOT))
-        else:
-            for path in format_sources(meta, directory, refine):
-                print("put %s in refine fmt's layout"
-                      % path.relative_to(ROOT), flush=True)
+        unformatted[meta.label] = None
+        if held_to_layout(meta):
+            if refine is None:
+                unformatted[meta.label] = str(directory.relative_to(ROOT))
+            else:
+                for path in format_sources(meta, directory, refine):
+                    print("put %s in refine fmt's layout"
+                          % path.relative_to(ROOT), flush=True)
 
     for flag in GENERATED:
         ran = subprocess.run([sys.executable, str(ROOT / "check.py"), flag],
@@ -296,23 +332,27 @@ def main(argv=None):
                              " this again" % flag)
 
     left = []
-    if (meta.cls in ("runtime", "abi")
-            and meta.applies_to("linux-x86-64")
-            and not meta.applies_to("linux-arm64")):
-        parity = json.loads(ARM64_PARITY.read_text(encoding="utf-8"))
-        if meta.label not in parity["differences"]:
+    parity = json.loads(ARM64_PARITY.read_text(encoding="utf-8"))
+    for directory, meta in added:
+        if (meta.cls in ("runtime", "abi")
+                and meta.applies_to("linux-x86-64")
+                and not meta.applies_to("linux-arm64")
+                and meta.label not in parity["differences"]):
             left.append(
-                "name linux-arm64 in its targets, or give it a record in %s"
-                " with the reason it cannot run there and the counterpart"
-                " that does" % ARM64_PARITY.relative_to(ROOT))
+                "%s: name linux-arm64 in its targets, or give it a record in"
+                " %s with the reason it cannot run there and the counterpart"
+                " that does" % (meta.label, ARM64_PARITY.relative_to(ROOT)))
     for one in left:
         print("left to do: " + one)
-    expect_written = bool(meta.get("expect")) and (
-        directory / meta["expect"]).is_file()
-    for one in remaining_steps(meta, expect_written, unformatted):
+    steps = []
+    for directory, meta in added:
+        expect_written = bool(meta.get("expect")) and (
+            directory / meta["expect"]).is_file()
+        steps.append(remaining_steps(meta, expect_written,
+                                     unformatted[meta.label]))
+    for one in combined_steps(steps):
         print("then run: " + one)
     return 1 if left else 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

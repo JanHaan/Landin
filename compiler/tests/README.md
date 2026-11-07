@@ -802,6 +802,13 @@ from `compiler/ada` as the recorded invocation runs, whether or not it also
 names a `program`, so nothing has to be left out of its metadata to keep it
 off the fake filesystem.
 
+`root` names one root. A fixture that needs several, in order, writes them
+and its entry module in `args` instead, each a path from `compiler/ada`, as
+`negative/empty-first-directory-hides-a-later-root` does:
+`--root=../tests/fixtures/negative/NAME/first
+--root=../tests/fixtures/negative/NAME/second
+../tests/fixtures/negative/NAME/entry`.
+
 A rooted fixture's `args` never name its module: the harness passes them
 first and then `--root` and the fixture's directory, and refuses an `args`
 word that does not begin with `-` or that is a `--root=`. So `args` is how a
@@ -990,8 +997,14 @@ missed fails by name.
 Write the fixture directory and its `fixture.meta`, then run
 
 ```sh
-python3 scripts/add_fixture.py CLASS/NAME
+python3 scripts/add_fixture.py CLASS/NAME [CLASS/NAME...]
 ```
+
+Name several new fixtures in one run: each is read and given its row in
+turn, the generated files are regenerated once, and the steps left are one
+recording run and one test run for them all. `--refuse`, `--reason` and
+`--stops` describe one fixture's row, so a fixture that needs them is added
+in a run of its own.
 
 It reads the metadata as the test program does and stops on any fault; gives
 a runtime or ABI fixture its row in `cortex-m/corpus.json`; puts a positive,

@@ -1159,6 +1159,13 @@ python3 environments/cortex-m/freestanding.py --refine PATH_TO_REFINE --output N
 python3 environments/cortex-m/freestanding.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
 ```
 
+`--case` repeats and names a probe: `cpu`, `pool`, `zero`, `vec`,
+`noreturn`, `panic`, `panic-default` and `dma`, the inherited
+`core-mem-allocators`, `core-mem-arena-boundaries` and
+`core-mem-raw-storage`, or a shared module's consumer, `library-shared-NAME` for each `NAME` in its `MODULES`, such as
+`library-shared-text`. An unknown case is refused, naming the cases there
+are.
+
 PRIMASK/WFI premises follow the official Arm architecture and M0 guides cited
 above; argument/result and linker-stub obligations retain the cited AAPCS32,
 AAELF32 and GNU contracts. Actual controls run on ARMv6-M. WFI is not a

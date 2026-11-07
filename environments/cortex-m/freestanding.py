@@ -347,7 +347,9 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
     controls = []
     selected = programs()
     if cases is not None:
-        require(set(cases) <= selected.keys(), 'unknown freestanding case')
+        unknown = sorted(set(cases) - selected.keys())
+        require(not unknown, 'unknown freestanding case %s; the cases are %s'
+                % (', '.join(unknown), ', '.join(sorted(selected))))
         selected = {name: selected[name] for name in cases}
     for optimize, specialize in profiles:
         profile = root / (optimize+'-'+specialize)

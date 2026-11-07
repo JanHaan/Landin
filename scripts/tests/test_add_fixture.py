@@ -198,6 +198,27 @@ class AddFixtureTest(unittest.TestCase):
             add_fixture.main(["runtime/no-such-fixture-here"])
         self.assertIn("write the fixture first", str(raised.exception))
 
+    def test_several_fixtures_share_one_recording_and_one_test_run(self):
+        #  SR-858: several fixtures' steps join, the recordings in one run
+        #  of the test program, the cases in another, every other step once.
+        first = add_fixture.remaining_steps(meta("positive/new"), False)
+        second = add_fixture.remaining_steps(meta("runtime/other"), True)
+        steps = add_fixture.combined_steps([first, second])
+        tests = [step for step in steps if step.startswith("./scripts/dev-test.sh")]
+        self.assertEqual(len(tests), 2)
+        self.assertIn("--record=lowering", tests[0])
+        self.assertIn("--fixture=positive/new", tests[1])
+        self.assertIn("--fixture=runtime/other", tests[1])
+        self.assertEqual(tests[1].count("--case='formatting/the corpus is formatted'"), 1)
+        self.assertEqual(steps.count("python3 check.py"), 1)
+        self.assertEqual(steps[-1], "python3 check.py")
+
+    def test_one_row_options_take_one_fixture(self):
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.main(["runtime/a", "runtime/b", "--stops=link",
+                              "--reason=why"])
+        self.assertIn("in a run of its own", str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
