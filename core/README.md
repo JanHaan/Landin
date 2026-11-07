@@ -276,7 +276,7 @@ with values of any type that has `text.formattable` evidence, checked
 against them when it runs, since nothing runs at compile time. Parsing is
 its mirror for every integer width, and no locale is consulted anywhere. A
 program does not write its own digit loop. Over `utf8` it steps positions a
-whole scalar at a time, with `front`, `step`, `done` and `width`, and its
+whole scalar at a time, with `start`, `step`, `done` and `width`, and its
 searches, `find`, `find_scalar` and their `_from` forms, return where a
 match begins or `not_found`, so the text around a match is a range of the
 source and nothing is copied. `encode` writes a scalar's bytes into the

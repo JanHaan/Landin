@@ -2559,7 +2559,7 @@ On plain `[]u8`, `core/text` counts positions as byte offsets of the
 opaque type `text.position`, with `first`, `at_end`, `next`, `advance`,
 `offset`, `byte` and `slice`. Reading a byte at the end fails with
 `past_end`, and a slice keeps its source's origin.
-On `utf8`, the same positions step a whole scalar with `front`, `step`,
+On `utf8`, the same positions step a whole scalar with `start`, `step`,
 `done` and `width`, and `find` returns where a match begins, so the text
 around it slices out by range with nothing copied.
 

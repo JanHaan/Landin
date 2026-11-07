@@ -9,7 +9,7 @@ walked: (value: utf8) -> (yes: bool) =
     scalars: [4]u32 = ['2', '1', '\u{b0}', 'C']
     offsets: [4]usize = [0, 1, 2, 4]
     yes = false
-    mut at := text.front(value)
+    mut at := text.start(value)
     mut index: usize = 0
     while not text.done(value, at) do
         return when index >= 4 or value[at] <> scalars[index]
@@ -26,7 +26,7 @@ end walked
 encoded: (value: utf8, reply: []mut u8) -> (yes: bool) =
     yes = false
     mut used: usize = 0
-    mut at := text.front(value)
+    mut at := text.start(value)
     while not text.done(value, at) do
         count: usize = text.encode(value[at], reply[used..<lenof reply])
             else begin

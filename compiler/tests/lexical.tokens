@@ -53116,7 +53116,7 @@ file negative/core-text-found-view-escapes/main.ldn tokens 154
   251 255 else
   256 260 text
   260 261 .
-  261 266 front
+  261 266 start
   266 267 (
   267 273 record
   273 274 )
@@ -53191,7 +53191,7 @@ file negative/core-text-found-view-escapes/main.ldn tokens 154
   494 498 else
   499 503 text
   503 504 .
-  504 509 front
+  504 509 start
   509 510 (
   510 516 record
   516 517 )

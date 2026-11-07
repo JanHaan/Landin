@@ -20380,7 +20380,12 @@ instance of a local type in two programs.
 
 **Pinned by** `abi/r440-native-link-namespace`, whose routine `foo` beside
 C's `foo` takes `main.foo.2` once a C function and an exported datum hold
-`main.foo` and `main.foo.1`, and the backend suite's namespace case.
+`main.foo` and `main.foo.1`, and the backend suite's namespace case. The
+firmware entry is an export too: the RV32, Cortex-M and Xtensa backends
+reserved the hosted entry's spelling but not the firmware entry's, so a
+library routine named `start` turned an entry `start` into `main.start`.
+They reserve both now, and the driver suite's `the firmware entry keeps its
+symbol` pins all three.
 
 ### D421 — A generic instance is a symbol named after its routine
 
@@ -29311,9 +29316,9 @@ O(1); D184's traversal yields each scalar and keeps its cursor private. So a
 program that read a scalar and needed the byte offset beside it, to slice
 the text there, counted widths from leading bytes by hand.
 
-**Chosen:** `text.front(source)`, `text.done(source, at)`,
+**Chosen:** `text.start(source)`, `text.done(source, at)`,
 `text.width(source, at)` and `text.step(source, at)` take a `utf8` and the
-existing `text.position`. `front` is offset zero, the end itself for empty
+existing `text.position`. `start` is offset zero, the end itself for empty
 text; `done` holds at or past the byte length; `width` is the one to four
 bytes encoding the scalar at `at`; and `step` is `at` advanced by that
 width. `width` and `step` read the scalar as `source[at]` does, so they trap
@@ -29324,13 +29329,10 @@ end, which are the offsets D183's ranges accept, and `text.offset` gives
 either kind of position's byte offset. The byte cursors keep their names
 and contracts. A scope gives one name to one thing [1850], so the scalar
 forms are four new names, each taking its text first as D269's
-accessors take their subject: `front` beside `first`, `done` beside
+accessors take their subject: `start` beside `first`, `done` beside
 `at_end`, and `step` beside `next`, because it moves by a scalar and needs
-the text to know how far. `front` is not `start` because `start` is the
-firmware entry the corpus, the harnesses and their programs name, and two
-local routines of one name are each given a qualified symbol, so a
-library `start` would rename that entry's in every image importing
-`core/text`.
+the text to know how far. A firmware entry named `start` keeps its own
+symbol beside this one, since an export is never the item D417 qualifies.
 
 **The alternatives:** `past_end` from a step at the end, as `byte`
 declares, which every loop would have to recover from although a loop that
@@ -29358,7 +29360,7 @@ first begins, in all of `source` or at or after `at`, and
 `text.find_scalar(source, scalar)` and `text.find_scalar_from` the position
 of the first scalar equal to `scalar`; each reports the new atom
 `text.not_found` when there is none. Empty text is found where the search
-begins, `front` or `at`, as `contains` finds it. The text searches and
+begins, `start` or `at`, as `contains` finds it. The text searches and
 `contains` share one private Two-Way routine, so `contains` keeps its
 result, its empty-text rule and its linear time, and a search from `at`
 costs the same over what follows it. A search from `at` takes that rest as

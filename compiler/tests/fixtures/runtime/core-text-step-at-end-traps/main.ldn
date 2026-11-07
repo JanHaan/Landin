@@ -4,7 +4,7 @@ import core/text
 
 public main: () -> (code: i32) =
     source: utf8 = "\u{e9}"
-    at := text.step(source, text.front(source))
+    at := text.step(source, text.start(source))
     code = 1
     return when not text.done(source, at)
     past := text.step(source, at)

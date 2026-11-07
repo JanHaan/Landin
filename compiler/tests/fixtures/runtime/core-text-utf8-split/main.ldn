@@ -35,7 +35,7 @@ key_steps: (key: utf8) -> (yes: bool) =
     offsets: [5]usize = [0, 1, 2, 4, 5]
     widths: [5]usize = [1, 1, 2, 1, 1]
     yes = false
-    mut at := text.front(key)
+    mut at := text.start(key)
     mut index: usize = 0
     while not text.done(key, at) do
         return when index >= 5 or key[at] <> scalars[index]
@@ -54,7 +54,7 @@ fields: (value: utf8) -> (yes: bool) =
     begins: [4]usize = [0, 8, 12, 19]
     arrows: [3]usize = [5, 9, 16]
     yes = false
-    mut at := text.front(value)
+    mut at := text.start(value)
     mut index: usize = 0
     loop do
         return when index >= 4

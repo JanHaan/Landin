@@ -45,8 +45,8 @@ widths_hold: () -> (yes: bool) =
         decoded: utf8 = text.from_bytes(buffer[2..<ends]) else begin
             return
         end
-        return when decoded[text.front(decoded)] <> scalars[index]
-          or text.offset(text.step(decoded, text.front(decoded))) <> count
+        return when decoded[text.start(decoded)] <> scalars[index]
+          or text.offset(text.step(decoded, text.start(decoded))) <> count
     end for
     yes = true
 end widths_hold

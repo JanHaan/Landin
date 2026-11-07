@@ -17,7 +17,7 @@ end exercise
 scalars: () -> (ok: bool) ! text.not_found | text.invalid_scalar | text.no_space =
     ok = false
     source: utf8 = "a\u{e9}\u{2192}\u{1f600}"
-    mut at := text.front(source)
+    mut at := text.start(source)
     mut width: usize = 1
     while not text.done(source, at) do
         return when text.width(source, at) <> width

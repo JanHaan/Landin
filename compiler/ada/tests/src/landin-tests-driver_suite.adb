@@ -736,6 +736,57 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Directory_Arguments_Allow_Trailing_Separators;
 
+   procedure Firmware_Entry_Keeps_Its_Symbol
+     (Item : in out Landin.Testing.Context);
+
+   --  D415, D417: the firmware entry is an export, so it keeps its own
+   --  name when a library routine shares it, and only the library's
+   --  routine takes its module-qualified spelling.  Every firmware target
+   --  allocates the same way.
+   procedure Firmware_Entry_Keeps_Its_Symbol
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Target of Landin.Platform.Path_List'(["cortex-m0", "rv32",
+                                                "xtensa"])
+      loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         begin
+            Host.Add_Firmware_Library;
+            Host.Add_Directory ("entry");
+            Host.Add_Directory ("root");
+            Host.Add_Directory ("root/helper");
+            Host.Add_File
+              ("entry/main.ldn", "import helper" & LF
+               & "start: () -> none = helper.start() end start" & LF);
+            Host.Add_File
+              ("root/helper/main.ldn",
+               "public start: () -> none = end start" & LF);
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (["--target=" & Target, "--firmware-entry=start",
+                     "--emit=asm", "--root=root", "-o", "out.s", "entry"],
+                    Host, Tools);
+               Text : constant String :=
+                 (if Host.Exists ("out.s") then Host.Written ("out.s")
+                  else "");
+            begin
+               Landin.Testing.Check
+                 (Item, Result.Status = Landin.Driver.Status_Success
+                  and then Contains (Text, LF & "start:" & LF)
+                  and then Contains (Text, LF & "helper.start:" & LF)
+                  and then not Contains (Text, "main.start"),
+                  Target & " keeps the firmware entry's own symbol beside "
+                  & "a library routine of its name: "
+                  & Unbounded.To_String (Result.Report));
+            end;
+         end;
+      end loop;
+   end Firmware_Entry_Keeps_Its_Symbol;
+
    procedure Reachable_Modules_Are_Loaded
      (Item : in out Landin.Testing.Context);
 
@@ -8235,6 +8286,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "directory arguments allow trailing separators",
          Directory_Arguments_Allow_Trailing_Separators'Access);
+      Landin.Testing.Register
+        (Into, "driver", "the firmware entry keeps its symbol",
+         Firmware_Entry_Keeps_Its_Symbol'Access);
       Landin.Testing.Register
         (Into, "driver", "information validates deferred options",
          Information_Validates_Deferred_Options'Access);

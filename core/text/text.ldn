@@ -425,10 +425,10 @@ end first_match
 --- The position of the first scalar of `source`, or of its end when it is
 --- empty: byte offset zero.  Step through the text with `step` until
 --- `done`, reading each scalar as `source[at]`.
-public front: (source: utf8) -> (at: position) =
+public start: (source: utf8) -> (at: position) =
     _ = source
     at = (offset: 0)
-end front
+end start
 
 --- Whether no scalar begins at `at`: it is at the end of `source`, or past
 --- it.
@@ -454,7 +454,7 @@ end step
 --- text.offset(found) + lenof sought]` is the match and the parts either
 --- side of it are text too, each a view of `source` with nothing copied.
 public find: (source: utf8, sought: utf8) -> (found: position) ! not_found =
-    found = try find_from(source, sought, front(source))
+    found = try find_from(source, sought, start(source))
 end find
 
 --- The position where `sought` first occurs in `source` at or after `at`,
@@ -473,7 +473,7 @@ end find_from
 --- since no text holds one.
 public find_scalar: (source: utf8, scalar: u32) -> (found: position)
                     ! not_found =
-    found = try find_scalar_from(source, scalar, front(source))
+    found = try find_scalar_from(source, scalar, start(source))
 end find_scalar
 
 --- The position of the first scalar of `source` equal to `scalar` at or

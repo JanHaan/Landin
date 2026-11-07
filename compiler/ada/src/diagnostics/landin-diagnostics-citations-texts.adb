@@ -3030,7 +3030,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "`at_end`, `next`, `advance`, `offset`, `byte` and `slice"
                & "`. Reading a byte at the end fails with `past_end`, and "
                & "a slice keeps its source's origin. On `utf8`, the same p"
-               & "ositions step a whole scalar with `front`, `step`, `done"
+               & "ositions step a whole scalar with `start`, `step`, `done"
                & "` and `width`, and `find` returns where a match begins, "
                & "so the text around it slices out by range with nothing c"
                & "opied.",
@@ -30344,9 +30344,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "the left is the one reported, as `number_overflow` or `i"
                & "nvalid_number`.",
             when 945 =>
-               "Chosen: `text.front(source)`, `text.done(source, at)`, `"
+               "Chosen: `text.start(source)`, `text.done(source, at)`, `"
                & "text.width(source, at)` and `text.step(source, at)` take"
-               & " a `utf8` and the existing `text.position`. `front` is o"
+               & " a `utf8` and the existing `text.position`. `start` is o"
                & "ffset zero, the end itself for empty text; `done` holds "
                & "at or past the byte length; `width` is the one to four b"
                & "ytes encoding the scalar at `at`; and `step` is `at` adv"
@@ -30361,14 +30361,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & " names and contracts. A scope gives one name to one thin"
                & "g [1850], so the scalar forms are four new names, each t"
                & "aking its text first as D269's accessors take their subj"
-               & "ect: `front` beside `first`, `done` beside `at_end`, and"
+               & "ect: `start` beside `first`, `done` beside `at_end`, and"
                & " `step` beside `next`, because it moves by a scalar and "
-               & "needs the text to know how far. `front` is not `start` b"
-               & "ecause `start` is the firmware entry the corpus, the har"
-               & "nesses and their programs name, and two local routines o"
-               & "f one name are each given a qualified symbol, so a libra"
-               & "ry `start` would rename that entry's in every image impo"
-               & "rting `core/text`.",
+               & "needs the text to know how far. A firmware entry named `"
+               & "start` keeps its own symbol beside this one, since an ex"
+               & "port is never the item D417 qualifies.",
             when 946 =>
                "Chosen: `text.find(source, sought)` and `text.find_from("
                & "source, sought, at)` return the position at which `sough"
@@ -30377,7 +30374,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "calar_from` the position of the first scalar equal to `s"
                & "calar`; each reports the new atom `text.not_found` when "
                & "there is none. Empty text is found where the search begi"
-               & "ns, `front` or `at`, as `contains` finds it. The text se"
+               & "ns, `start` or `at`, as `contains` finds it. The text se"
                & "arches and `contains` share one private Two-Way routine,"
                & " so `contains` keeps its result, its empty-text rule and"
                & " its linear time, and a search from `at` costs the same "

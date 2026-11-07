@@ -39,7 +39,7 @@ end absent
 --  Each match of `sought` from the start, in order, at `expected`.
 every: (source: utf8, sought: utf8, expected: []usize) -> (yes: bool) =
     yes = false
-    mut at := text.front(source)
+    mut at := text.start(source)
     mut index: usize = 0
     loop do
         found := text.find_from(source, sought, at) else (problem)
@@ -76,12 +76,12 @@ public main: () -> (code: i32) =
     code = 4
     --  The empty text is found where the search begins, the end included.
     return when not found_at(source, "", 0) or not found_at("", "", 0)
-    at_four := text.step(source, text.front(source))
+    at_four := text.step(source, text.start(source))
     from_empty := text.find_from(source, "", at_four) else begin
         return
     end
     return when text.offset(from_empty) <> 1
-    mut ending := text.front(source)
+    mut ending := text.start(source)
     while not text.done(source, ending) do
         ending = text.step(source, ending)
     end while

@@ -391,7 +391,7 @@ Byte cursors, validated UTF-8 views, positions and searches inside them, a scala
 | Call | What it does |
 |---|---|
 | `text.from_bytes`, `text.valid` | Check bytes are UTF-8, as a view or as a yes or no. |
-| `text.front`, `text.step`, `text.done`, `text.width` | Walk text a scalar at a time, keeping each scalar's byte position. |
+| `text.start`, `text.step`, `text.done`, `text.width` | Walk text a scalar at a time, keeping each scalar's byte position. |
 | `text.find`, `text.find_scalar` and their `_from` forms | Find where text or a scalar first occurs. |
 | `text.encode` | Write a scalar's UTF-8 bytes into your buffer. |
 | `text.utf8_over` | Make a builder that only ever holds UTF-8. |
@@ -425,7 +425,7 @@ whole scalar, so each one is where a scalar starts, or the end:
 
 | Call | What it does |
 |---|---|
-| `front(source)` | The first scalar's position, offset zero. |
+| `start(source)` | The first scalar's position, offset zero. |
 | `done(source, at)` | Whether `at` is at the end. |
 | `width(source, at)` | How many bytes, one to four, the scalar at `at` takes. |
 | `step(source, at)` | The position after the scalar at `at`. |
@@ -444,7 +444,7 @@ key_steps: (key: utf8) -> (yes: bool) =
     offsets: [5]usize = [0, 1, 2, 4, 5]
     widths: [5]usize = [1, 1, 2, 1, 1]
     yes = false
-    mut at := text.front(key)
+    mut at := text.start(key)
     mut index: usize = 0
     while not text.done(key, at) do
         return when index >= 5 or key[at] <> scalars[index]
