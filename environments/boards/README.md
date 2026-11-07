@@ -436,8 +436,13 @@ board's boot check stays the cacheless port's. The helper loads it as it
 loads the cacheless image, under the warm contract unchanged, which still
 refuses a chip whose caches are on: the image's own reset enables them
 after the load (D973), and its entry returns at the end of the run, which
-cleans and disables them again, so the board is left as the helper
-requires. The helper and its deployment are unchanged by it.
+cleans and disables them again. The return then ends, as every firmware
+entry's return does, in the compiler-owned `udf` trap, whose handler the
+helper cannot step out of, so a RAM run straight after a cached run is
+refused with "could not retire active exception; use the boot check". The
+leg runs the boot check next, which flashes and restores the fixed image;
+after a manual cached run, run that boot check before another RAM run. The
+helper and its deployment are unchanged by it.
 
 What is physical and what is not:
 
