@@ -2640,6 +2640,9 @@ runtime/thread-stack-past-limit-traps | linux-x86-64, linux-arm64, linux-rv64, d
 runtime/thread-start-refused | linux-x86-64, linux-arm64, linux-rv64
 runtime/thread-storage-holds-its-instance | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/thread-storage-under-libc | linux-x86-64, linux-arm64, linux-rv64
+runtime/tour-line-count | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/tour-line-count-missing | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/tour-printed-values | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/trapping-arm-leaves-a-statement | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/tree-copy | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/try-inferred-in-generic-argument | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
