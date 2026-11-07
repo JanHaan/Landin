@@ -58,8 +58,9 @@ Build settings choose what `--target=`, `--level=`, `--option=` and
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, `linux-arm64`,
-`darwin-arm64`, `freebsd-x86-64`, `freebsd-arm64`, `cortex-m0` or
-`synthetic-32`. Both read one mapping, and
+`darwin-arm64`, `freebsd-x86-64`, `freebsd-arm64`, `linux-rv64`, `cortex-m0`,
+`rv32`, `xtensa` or `synthetic-32`. `refine targets` lists the current names
+and their CPU feature levels. Both read one mapping, and
 both default to the compiler's own host (D257). A server built for a host no
 target describes checks for `synthetic-32` and says, through
 `window/showMessage`, that a target has to be named.
@@ -72,7 +73,8 @@ containing `true`, `false`, or signed decimal integer text that fits the
 declared type. A value the server refuses is reported once, through
 `window/showMessage`, and the rest are used.
 
-`firmwareEntry` is a nonempty routine name for `cortex-m0`. When selected,
+`firmwareEntry` is a nonempty routine name for a firmware target,
+`cortex-m0`, `rv32` or `xtensa`. When selected,
 analysis checks the same entry shape as a firmware build and publishes
 `L0502` at an invalid candidate, or at the first entry-module source if it
 is missing. With no selection, analysis makes no firmware entry claim.

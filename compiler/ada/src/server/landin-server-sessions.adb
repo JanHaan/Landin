@@ -900,8 +900,8 @@ package body Landin.Server.Sessions is
                if J.Text (Message, Named) = "" then
                   Add_Error ("firmwareEntry is empty");
                elsif not Landin.Targets.Is_Firmware (Facts) then
-                  Add_Error ("firmwareEntry requires a firmware target:"
-                             & " cortex-m0 or rv32");
+                  Add_Error ("firmwareEntry requires a firmware target;"
+                             & " see refine targets");
                else
                   Firmware_Entry :=
                     Unbounded.To_Unbounded_String (J.Text (Message, Named));

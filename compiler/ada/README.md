@@ -441,13 +441,15 @@ the selected libgcc member names without host-specific paths.
 
 The outer JSON has `schema: 1`, a `build` object in
 `landin-build-report-1` format, `sources` and `items`; a linked Cortex
-executable also has a `firmware` object. A source entry contains
+executable also has a `firmware` object. The optional outer `link` field
+records the selected link mode, `static` or `libc`. A source entry contains
 `source`, `path_hex`, `sha256`; an item contains `item`, `declaration`, `name`,
 `source`, `first`, `last`, `name` being its symbol's spelling (D421).
 `left_indirect` lists every evidence call the emitted program still makes
 through a table, each with its `routine`, `source`, `line`, `column`, the
 `provider` a concrete table holds and `why`, a sentence. The nested build
-carries the target and both controls, plus
+carries `target`, the selected CPU feature `level`, and the `optimize` and
+`specialize` controls, plus
 `specializations`, `routines`, `layouts`. Every backend fills every field
 of a `routines` row for every routine it emits, with one meaning on every
 target. `frame_bytes` is what the prologue reserves below the frame record

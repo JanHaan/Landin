@@ -2786,6 +2786,12 @@ failures, your own types, loops and matches, arrays and text, modules, and
 the host's files and streams through `hosted/blocking` and `core/io`.
 [`examples.md`](examples.md) has complete programs to read and copy.
 
+For storage whose size is known only at runtime, continue with
+[arenas over caller-supplied storage](#0820-arenas-are-ordinary-allocators-you-give-storage-to)
+and [allocation as a concept](#1360-allocation-is-a-concept), then the
+[growable-vector example](docs/library.md#corevec). These show how an
+allocator is passed to a collection and where its storage is released.
+
 The sections after this one are reference, to read when you need them:
 [Pointers](#pointers); [Lifetime and escape](#lifetime-and-escape);
 [Concepts and generic code](#concepts-and-generic-code);
@@ -4213,8 +4219,10 @@ What works today:
 
 - Every hosted target has the compiler facts, `compiler.assert`,
   `linker.library` ([1590]) and the scalar atomics and barriers ([1620]).
-- Cortex-M0 also has placement annotations ([1640]) and the firmware entry
-  request ([1650]), which hosted targets refuse.
+- Firmware targets also have placement annotations ([1640]) and the firmware
+  entry request ([1650]), which hosted targets refuse. The
+  [capability inventory](docs/capabilities.md) names the supported firmware
+  targets and their limits.
 - `assembler.block` is checked on every target ([1630]).
 - Any other tool operation is refused by name.
 

@@ -141,16 +141,11 @@ Landin's own times are nearly the same on both systems; the multiples differ
 because C's do, fasta's C being two and a half times faster on Darwin and
 binary-trees' twice as fast on Linux.
 
-Seven ordinary programs, each against a straightforward C one: a `core/vec`
-list pushed, read and popped ten million times, a `core/map` of a million
-keys looked up eight million times, a `core/sort` of two million integers
-and records, `text.format` writing three million lines, a lexer over 33
-megabytes, word count over 171, and a hundred million calls through
-`any shape`. After the first of these fixes they ran 1.8 (sort) to 9.5
-(vec) times C's time, from 2.2 (word count) to 13.9, the largest gains in
-vec, map, the lexer and sort; copying small calls then took a further third
-off word count and a fifth off vec, and splitting structs nearly a fifth off
-the lexer.
+Ordinary-program probes also informed these changes, including containers,
+text formatting, a lexer, word count and erased dispatch. Their C comparison
+sources and invocation records were not retained, so this page makes no
+quantitative claim for those probes. The measured comparisons above cover
+the five Benchmark Game workloads whose sources and method are identified.
 
 ## Peak resident memory
 

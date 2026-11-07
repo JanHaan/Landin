@@ -1,6 +1,8 @@
---  What the checker answers about nominal aggregate identity, asked directly.
+--  The checker seam: type agreement and conversions, aggregate identity,
+--  calls and generics, conformances, origins, flow, sink and cleanup rules.
 --
---  Struct values remain contextual, so ordinary expressions cannot expose the
+--  The initial aggregate-identity cases ask the table directly. Struct values
+--  remain contextual, so ordinary expressions cannot expose the
 --  distinction from outside those contexts.  Lowering needs the answer before
 --  it can admit one: this asks the table at that seam rather than pretending
 --  equal layouts prove [0710]'s nominal rule.

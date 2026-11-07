@@ -1,15 +1,23 @@
 # Derived hosted log filter
 
 The complete executable derivative of prototype 4 lives in this directory.
-Build and run it on native Linux x86-64 with the pinned compiler:
+Build and run it from the repository root on native Linux x86-64, in the
+pinned development environment. The Nix shell sets `LANDIN_BUILD_TAG`;
+outside it the default native tag is `linux-amd64`. The build also prints
+the exact `bin/refine` path to use.
 
 ```sh
-./scripts/dev-build.sh
-compiler/ada/build/linux-amd64/debug/bin/refine --root=. --emit=exe \
-  examples/derived_hosted -o compiler/ada/build/log-filter
-compiler/ada/build/log-filter --level INFO --match request --every 2 input.log
-compiler/ada/build/log-filter --out selected.log --level ERROR input.log
+./scripts/dev-build.sh --compiler-only
+refine="compiler/ada/build/${LANDIN_BUILD_TAG:-linux-amd64}/${LANDIN_BUILD_MODE:-debug}/bin/refine"
+demo=$(mktemp -d "${TMPDIR:-/tmp}/landin-log-filter.XXXXXX")
+printf 'INFO request started\nINFO request done\nERROR request failed\n' > "$demo/input.log"
+"$refine" compile --root=. examples/derived_hosted -o "$demo/log-filter"
+"$demo/log-filter" --level INFO --match request --every 2 "$demo/input.log"
+"$demo/log-filter" --out "$demo/selected.log" --level ERROR "$demo/input.log"
 ```
+
+The sample input, executable and selected output are in the private
+directory named by `$demo`, ready to inspect or remove when finished.
 
 User arguments build an ordered heterogeneous filter chain. `--level` accepts
 DEBUG, INFO, WARN, ERROR, or FATAL. A level is a complete leading token followed

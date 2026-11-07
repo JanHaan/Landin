@@ -871,8 +871,9 @@ the generated kept vector image supplies linker relocations to its handlers.
 A convention alone is not a retention root.
 
 Every `assembler.block` lowers to one `Assembly` instruction: its interned
-text, without its comments (D597), and one entry per operand, each a direction, a name, the written integer
-type, a register — the target's canonical full-width name, or empty for
+text, without its comments (D597), and one entry per operand, each a direction,
+a name, the written integer or floating-point type, a register — the target's
+canonical full-width name, or empty for
 `general` — and, for an output, the scalar frame slot it writes. Inputs are
 the instruction's operands in written order, evaluated and kept in slots
 before it; it defines no value, and lowering reads each output slot back
@@ -899,8 +900,9 @@ D248's named operands are checked against `Landin.Targets.Assembly`'s
 register tables on every target. A backend chooses each `general` register
 through the same table, in its written order, passing over every register the
 block holds or its text names, and fills `{name}` at the operand's width.
-Every implemented backend emits ordinary assembly. The naked and positional
-shorthand forms retain their Cortex-only contracts. x86-64's allocator hands
+Every implemented backend emits ordinary assembly. Naked bodies retain their
+no-frame contract and use the selected target's assembly; the positional
+shorthand retains its Cortex register contract. x86-64's allocator hands
 out only rbx and r12-r15 in a routine with assembly, and
 never one a block of the routine declares, which it saves instead, so each
 input moves straight into its register and each output straight to its slot.

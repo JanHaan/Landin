@@ -14,6 +14,17 @@ The hosted entry, recorded input and exact output oracle are in
 `compiler/tests/fixtures/runtime/derived-parser`. `DERIVATION.md` there maps
 the running evidence back to prototype 2's findings.
 
+From the repository root, in the pinned development environment, run the
+complete hosted entry with its recorded input:
+
+```sh
+./scripts/dev-test.sh --fixture=runtime/derived-parser
+```
+
+This is a `FILTERED` run. The harness builds the compiler, stages `input.txt`
+beside the program, and checks the recorded output and expected status 42;
+it does not try to run this library directory without an entry point.
+
 The complete derivative and its failure/recovery oracles also run on native
 Darwin arm64 in the shared six-profile hosted parity runtime matrix. Native GDB and LLDB
 inspect the same complete sources at none/off, size/auto and size/all; see the

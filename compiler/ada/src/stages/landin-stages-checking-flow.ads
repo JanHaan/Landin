@@ -1,3 +1,14 @@
+--  The body-local definite-assignment, sink and cleanup pass. Types and
+--  resolved places are already available when it enforces assignment before
+--  reading [1910] and consumption/reassignment [0910], meeting facts only on
+--  edges that reach a join. Deferred and undo actions participate on their
+--  own exit edges, rather than acting as ordinary fallthrough statements.
+--
+--  Facts track declarations and their fields and array elements. Widest
+--  bounds the field dimension once for the compilation before a routine's
+--  facts are created. Reference origins and escape belong to References;
+--  this pass does not infer storage lifetimes or choose expression types.
+
 with Landin.Diagnostics;
 with Landin.Syntax;
 
