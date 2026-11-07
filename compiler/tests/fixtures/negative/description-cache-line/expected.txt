@@ -1,0 +1,6 @@
+error[L0611]: an armv7-m-l1 cache's lines are 32 bytes, and this says 64
+  --> ../tests/fixtures/negative/description-cache-line/program.ldn:3:30
+  |
+3 | compiler.cache("armv7-m-l1", 64)
+  |                              ^^
+  = note: D971: the line is the core's, which every maintained range is a whole number of; write compiler.cache("armv7-m-l1", 32)

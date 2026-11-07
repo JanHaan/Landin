@@ -4013,6 +4013,7 @@ The compiler supplies these facts:
 | `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d`, `compiler.c_aapcs32`, `compiler.c_riscv_ilp32`, `compiler.c_xtensa_windowed_ilp32` | which C ABI the target uses, each true for its own ABI alone |
 | `compiler.c_runtime` | whether C's runtime starts the program and its library is linked |
 | `compiler.feature.NAME` | whether the selected CPU level has feature NAME |
+| `compiler.cache_line` | the line of the device description's cache, in bytes, or 0 without one |
 
 Ask the C ABI question directly rather than guessing it from the
 architecture: Linux and Apple arm64 share `compiler.arch == arm64` and
@@ -4195,7 +4196,12 @@ build hard-float at `armv7e-m`, its f32 and f64 arithmetic VFP instructions
 and its floats passed in s and d registers, and `compiler.feature.fp` and
 `compiler.feature.fp_dp` say so. A firmware request emits its own
 reset code, vector table and linker script: reset copies initialized data
-and RAM code out of flash and clears BSS before your code runs.
+and RAM code out of flash and clears BSS before your code runs. A
+Cortex-M7's description may also declare its caches,
+`compiler.cache("armv7-m-l1", 32)`; reset then turns them on after those
+copies and off again if the entry returns, `compiler.feature.cache` and
+`compiler.cache_line` say so, and a DMA buffer is kept in step with them
+through `core/cache`.
 
 Exact rules: spec [1990].
 

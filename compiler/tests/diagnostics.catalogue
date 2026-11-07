@@ -104,6 +104,8 @@ L0536  Live     D587: a second boot stage in one description
 L0537  Live     D587: a description whose boot kind begins with a second stage, holding none
 L0545  Live     D615: a float unit refine does not build, or one the description's core cannot have
 L0546  Live     D615: a description with a float unit, built at a level whose architecture lacks it
+L0610  Live     D971: a cache refine does not build, or one the description's core cannot have
+L0611  Live     D971: a described cache whose line is not its core's
 L0560  Live     D653: a vector-table description's stage that does not name compiler-owned reset
 L0561  Live     D653: a vector-table description's stage that uses the stack
 L0576  Live     D681: a boot image kind another family's boot ROM reads

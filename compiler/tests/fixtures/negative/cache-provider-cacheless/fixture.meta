@@ -1,0 +1,9 @@
+class: negative
+summary: D972: the Cortex-M7's cache provider is declared on a cached profile alone, so the constrained reference, which declares no cache, is told it is a cached profile's call and what to do instead
+program: program.ldn
+constructs: 1480, 1990
+targets: cortex-m0
+codes: L0201
+args: --target=cortex-m0 --firmware-entry=start ../tests/fixtures/negative/cache-provider-cacheless/program.ldn
+expect: expected.txt
+status: 1

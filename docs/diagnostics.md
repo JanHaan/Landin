@@ -549,7 +549,11 @@ that name as a likely fix: a local or parameter, a type, a public member of an
 imported module, never a name out of scope or inaccessible. A member a module
 declares only in a `fixed if` arm this target does not select, a Linux call
 written for Darwin among them, is named as one this system does not have,
-since no spelling of it would be found here.
+since no spelling of it would be found here. One declared under an arm that
+reads `compiler.feature.cache`, `platform/cortex_m/l1`'s provider, is named
+as a cached profile's on a firmware profile whose description declares no
+cache, and the note says to import a cached description or to maintain
+through `core/cache`'s cacheless provider (D972).
 
 `core/io` has no `print`, `println`, `printf` or `puts`: one call writes a
 template and its values to a file (D527). Asked for one of those, the note
@@ -2377,3 +2381,61 @@ object would bring. The message names the section. Build the library without
 constructors and call its initialisation from the firmware entry; declare a
 thread-local variable as ordinary static data; and link the library's static
 archive built for the firmware's core.
+
+### L0610
+
+A device description names a cache refine does not build, or one its core
+cannot have (D971). A cache is a fact of the core a chip was built with,
+written in the description's hand-written half as
+`compiler.cache("KIND", LINE)`, and refine builds one kind:
+`armv7-m-l1`, Armv7-M's level 1 instruction and data caches with the
+maintenance operations of the System Control Block, which among the cores
+refine builds for only a `cortex-m7` has. A description that declares it
+is a cached profile: reset enables the caches and the entry's return
+disables them (D973), and `platform/cortex_m` declares its maintenance
+provider there. Write `compiler.cache("armv7-m-l1", 32)` in a
+Cortex-M7's description, or leave the directive out for a cacheless
+profile, whose DMA buffers need no maintenance.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7e-m
+compiler.device("board")
+compiler.core("cortex-m4")
+compiler.cache("armv7-m-l1", 32)
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0, 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 128 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
+
+### L0611
+
+A device description's cache names a line that is not its core's (D971).
+The line is the unit every maintained range is a whole number of, and
+`core/cache` refuses a range that is not, so a description that said
+another would let a program align its DMA buffers to lines the hardware
+does not have. A Cortex-M7's `armv7-m-l1` lines are 32 bytes, as its
+CCSIDR says for both caches; write `compiler.cache("armv7-m-l1", 32)`.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7e-m
+compiler.device("board")
+compiler.core("cortex-m7")
+compiler.cache("armv7-m-l1", 64)
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0, 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 128 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```

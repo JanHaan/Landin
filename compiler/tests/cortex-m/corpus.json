@@ -1885,6 +1885,9 @@
     "runtime/library-shared-atomic": {
       "mode": "execute"
     },
+    "runtime/library-shared-cache": {
+      "mode": "execute"
+    },
     "runtime/library-shared-cmp": {
       "mode": "execute"
     },

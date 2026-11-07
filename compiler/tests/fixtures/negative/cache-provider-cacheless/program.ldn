@@ -1,0 +1,12 @@
+import core/cache
+import platform/cortex_m/l1
+
+link(align: 32)
+mut buffer: [32]u8 = zeroed
+
+start: () -> none =
+    caches := l1.caches()
+    cache.clean(caches, buffer[0..<32]) else (problem)
+        _ = problem
+    end
+end start

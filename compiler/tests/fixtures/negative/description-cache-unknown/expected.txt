@@ -1,0 +1,6 @@
+error[L0610]: this is not a cache refine builds
+  --> ../tests/fixtures/negative/description-cache-unknown/program.ldn:3:16
+  |
+3 | compiler.cache("armv7-m-l2", 32)
+  |                ^^^^^^^^^^^^
+  = note: D971: refine builds "armv7-m-l1", Armv7-M's level 1 instruction and data caches with the SCB's maintenance operations, on a cortex-m7; write compiler.cache("armv7-m-l1", 32), or leave the directive out for a cacheless profile

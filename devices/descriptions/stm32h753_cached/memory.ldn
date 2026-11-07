@@ -1,0 +1,56 @@
+-- The STM32H753's memory with its Cortex-M7's level 1 caches on: the
+-- regions, placements, stack and float unit of devices/descriptions/
+-- stm32h753, the same chip's cacheless profile, and the caches (D974).
+-- Written by hand; see devices/README.md for the sources it was checked
+-- against.
+--
+-- The profile is cached: compiler-owned reset invalidates the 16 KiB data
+-- cache by set and way and the 16 KiB instruction cache, once .data, .bss
+-- and .ramtext are written, and enables both; the entry's return cleans
+-- and invalidates the data cache and disables both (D973).  Each has
+-- 32-byte lines, and the M7's are the only level: the chip has no level 2
+-- cache.  With the MPU off the default memory map applies: the SRAM
+-- region, 0x2000_0000 to 0x3FFF_FFFF, which holds the AXI SRAM and SRAM1
+-- to SRAM4, is normal, write-back and write-allocate; the code region,
+-- flash at 0x0800_0000 among it, is write-through and read-only here;
+-- the ITCM and DTCM are tightly coupled and never cached; and the
+-- peripherals and the System Control Space are device and strongly
+-- ordered memory, never cached.  Data, BSS and the stack are in the AXI
+-- SRAM, which the CPU and both DMA controllers reach at 0x2400_0000 and
+-- no other address; a buffer placed in another SRAM by name is cached as
+-- well, and an alias the chip gives a region is outside this profile.
+-- A buffer a DMA stream reads or writes is therefore cached, and is
+-- maintained through core/cache's provider in platform/cortex_m/l1:
+-- aligned to 32 bytes and a whole number of lines, so that no line it
+-- shares holds a byte it does not own, and cleaned before a transmit,
+-- cleaned and invalidated before a receive is armed and invalidated once
+-- the receive is complete.  A DMA stream
+-- observes memory once the maintenance and the completion barrier after
+-- it have completed.
+--
+-- The STM32H753's Cortex-M7 has a float unit, FPv5-D16, which makes the
+-- build hard-float at --level=armv7e-m (D615).
+--
+-- DMA1 and DMA2 cannot reach the DTCM or the ITCM, which only the CPU and
+-- the MDMA reach, so initialized data, BSS and the stack, where prototype
+-- 1's DMA buffers are, are placed in the AXI SRAM, which both reach. A
+-- declaration placed in DTCM with link(region: "DTCM") must not be a
+-- buffer a DMA stream reads or writes.
+
+linker.region("FLASH", 0x0800_0000, 2 * 1024 * 1024, "rx")
+linker.region("ITCM", 0x0000_0000, 64 * 1024, "rwx")
+linker.region("DTCM", 0x2000_0000, 128 * 1024, "rw")
+linker.region("AXI_SRAM", 0x2400_0000, 512 * 1024, "rwx")
+linker.region("SRAM1", 0x3000_0000, 128 * 1024, "rw")
+linker.region("SRAM2", 0x3002_0000, 128 * 1024, "rw")
+linker.region("SRAM3", 0x3004_0000, 32 * 1024, "rw")
+linker.region("SRAM4", 0x3800_0000, 64 * 1024, "rw")
+compiler.boot("vector-table")
+compiler.float_unit("fpv5-d16")
+compiler.cache("armv7-m-l1", 32)
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "AXI_SRAM")
+linker.place("bss", "AXI_SRAM")
+linker.place("stack", "AXI_SRAM", 16 * 1024)

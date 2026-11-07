@@ -40,6 +40,7 @@ package body Landin.Stages.Configuration is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Configuration.Build_Mode;
    use type Landin.Targets.Endianness;
+   use type Landin.Targets.Firmware.Cache_Kind;
    use type Landin.Tokens.Text.Problem;
    use type Landin.Modules.Module_Id;
    use type Landin.Source.Source_Id;
@@ -101,6 +102,10 @@ package body Landin.Stages.Configuration is
       --  before any option or fixed condition is evaluated.
       Float_Facts : Landin.Targets.Firmware.Float_Unit :=
         Landin.Targets.Firmware.No_Float_Unit;
+      --  D971: its cache, which `compiler.feature.cache` and
+      --  `compiler.cache_line` read, found the same way.
+      Cache_Facts : Landin.Targets.Firmware.Cache_Kind :=
+        Landin.Targets.Firmware.No_Cache;
 
       type Fixed_Kind is
         (Bad_Value, Truth, Number, Machine, Byte_Order, Build_Kind,
@@ -511,7 +516,8 @@ package body Landin.Stages.Configuration is
                              Byte_Order,
                           when Landin.Configuration.Build_Mode_Fact =>
                              Build_Kind,
-                          when Landin.Configuration.Word_Size_Fact => Number,
+                          when Landin.Configuration.Word_Size_Fact
+                             | Landin.Configuration.Cache_Line_Fact => Number,
                           when Landin.Configuration.C_ABI_Fact
                              | Landin.Configuration.C_Runtime_Fact => Truth);
                   else
@@ -562,6 +568,8 @@ package body Landin.Stages.Configuration is
                   if not Landin.Targets.Levels.Is_Feature_Name
                     (Spelled (Syn.Name (Of_Tree, Node)))
                     and then not Firmware.Is_Float_Feature_Name
+                      (Spelled (Syn.Name (Of_Tree, Node)))
+                    and then not Firmware.Is_Cache_Feature_Name
                       (Spelled (Syn.Name (Of_Tree, Node)))
                   then
                      Report_Not_Fixed
@@ -730,6 +738,12 @@ package body Landin.Stages.Configuration is
                        (if Word = "fp"
                         then Firmware.Single_Precision (Float_Facts)
                         else Firmware.Double_Precision (Float_Facts));
+                  elsif Is_Feature_Fact (Of_Tree, Node)
+                    and then Firmware.Is_Cache_Feature_Name (Word)
+                  then
+                     --  D971: whether the description declares a cache.
+                     return Boolean_Result
+                       (Cache_Facts /= Firmware.No_Cache);
                   elsif Is_Feature_Fact (Of_Tree, Node) then
                      return Boolean_Result
                        (Landin.Targets.Levels.Has
@@ -771,6 +785,9 @@ package body Landin.Stages.Configuration is
                            return (Kind => Number, Integer_Value => Ty.Folded
                              (Landin.Targets.Pointer_Width
                                 (Target (Context))));
+                        when Landin.Configuration.Cache_Line_Fact =>
+                           return (Kind => Number, Integer_Value => Ty.Folded
+                             (Firmware.Line_Of (Cache_Facts)));
                         when Landin.Configuration.Byte_Order_Fact =>
                            return (Kind => Byte_Order, Order_Value =>
                              Landin.Targets.Byte_Order (Target (Context)));
@@ -1217,6 +1234,8 @@ package body Landin.Stages.Configuration is
       Device_Site, Core_Site, Vectors_Site, Boot_Site : Site;
       --  D615: the description's compiler.float_unit, if any.
       Float_Site : Site;
+      --  D971: the description's compiler.cache, if any.
+      Cache_Site : Site;
       --  D683: the description's compiler.esp_image, if any.
       ESP_Site : Site;
       --  D587: the description's `link(boot_stage)` routine, if any.
@@ -1426,7 +1445,7 @@ package body Landin.Stages.Configuration is
                               "D542/D587: a description is compiler.device,"
                               & " compiler.core, compiler.vectors,"
                               & " compiler.interrupt, compiler.boot,"
-                              & " compiler.float_unit,"
+                              & " compiler.float_unit, compiler.cache,"
                               & " linker.region and linker.place, and at"
                               & " most one link(boot_stage) naked routine;"
                               & " move this declaration to another module");
@@ -1797,6 +1816,18 @@ package body Landin.Stages.Configuration is
                               Float_Facts := Firmware.Float_Unit_Named
                                 (Text_Argument (Of_Tree.all, Syn.Nth_Argument
                                    (Of_Tree.all, Call, 1)));
+                           elsif Spelled (Syn.Name (Of_Tree.all, Callee))
+                               = "cache"
+                             and then Syn.Argument_Count (Of_Tree.all, Call)
+                               = 2
+                             and then Firmware.Is_Cache_Name
+                               (Text_Argument (Of_Tree.all, Syn.Nth_Argument
+                                  (Of_Tree.all, Call, 1)))
+                           then
+                              --  D971: its cache, read alike.
+                              Cache_Facts := Firmware.Cache_Named
+                                (Text_Argument (Of_Tree.all, Syn.Nth_Argument
+                                   (Of_Tree.all, Call, 1)));
                            end if;
                         end if;
                      end;
@@ -1826,6 +1857,7 @@ package body Landin.Stages.Configuration is
             elsif Member = "interrupt" then "(""NAME"", irq)"
             elsif Member = "boot" then "(""vector-table"")"
             elsif Member = "float_unit" then "(""fpv5-d16"")"
+            elsif Member = "cache" then "(""armv7-m-l1"", 32)"
             elsif Member = "esp_image"
             then "(chip, min_revision, max_revision, flash_offset)"
             elsif Member = "region"
@@ -1881,6 +1913,9 @@ package body Landin.Stages.Configuration is
          elsif Member = "esp_image" then
             Lowest := 4;
             Highest := 4;
+         elsif Member = "cache" then
+            Lowest := 2;
+            Highest := 2;
          else
             Lowest := 1;
             Highest := 1;
@@ -1957,6 +1992,54 @@ package body Landin.Stages.Configuration is
                else
                   Float_Site := Here;
                   Built.Float := Firmware.Float_Unit_Named (Name);
+               end if;
+            end;
+         elsif Member = "cache" then
+            declare
+               Name : constant String := Text_Argument (Of_Tree, Argument (1));
+               Line : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (2));
+            begin
+               if not Firmware.Is_Cache_Name (Name) then
+                  Description_Refused := True;
+                  Report_Configuration_Rule
+                    (Bad.Cache_Unsupported, Of_Tree, Argument (1),
+                     "this is not a cache refine builds",
+                     "D971: refine builds ""armv7-m-l1"", Armv7-M's level 1"
+                     & " instruction and data caches with the SCB's"
+                     & " maintenance operations, on a cortex-m7; write"
+                     & " compiler.cache(""armv7-m-l1"", 32), or leave the"
+                     & " directive out for a cacheless profile");
+               elsif Line = -2 then
+                  null;
+               elsif Line /= Ty.Folded
+                 (Firmware.Line_Of (Firmware.Cache_Named (Name)))
+               then
+                  Description_Refused := True;
+                  Report_Configuration_Rule
+                    (Bad.Cache_Line_Wrong, Of_Tree, Argument (2),
+                     "an " & Name & " cache's lines are "
+                     & Ada.Strings.Fixed.Trim
+                         (Firmware.Line_Of
+                            (Firmware.Cache_Named (Name))'Image,
+                          Ada.Strings.Both)
+                     & " bytes, and this says "
+                     & (if Line < 0 then "something else"
+                        else Ada.Strings.Fixed.Trim
+                          (Line'Image, Ada.Strings.Both)),
+                     "D971: the line is the core's, which every maintained"
+                     & " range is a whole number of; write"
+                     & " compiler.cache(""" & Name & """, "
+                     & Ada.Strings.Fixed.Trim
+                         (Firmware.Line_Of
+                            (Firmware.Cache_Named (Name))'Image,
+                          Ada.Strings.Both)
+                     & ")");
+               elsif Cache_Site /= No_Site then
+                  Repeated (Cache_Site);
+               else
+                  Cache_Site := Here;
+                  Built.Cache := Firmware.Cache_Named (Name);
                end if;
             end;
          elsif Member = "vectors" then
@@ -2579,6 +2662,16 @@ package body Landin.Stages.Configuration is
                & Firmware.Float_Units_Of (Built.Core)
                & "; remove compiler.float_unit or name the core it is"
                & " built into");
+         elsif not Firmware.May_Have (Built.Core, Built.Cache) then
+            Complete := False;
+            Report_At
+              (Bad.Cache_Unsupported, Cache_Site,
+               "this description's core is "
+               & Firmware.A_Core (Built.Core) & ", which refine builds"
+               & " with no " & Firmware.Spelling (Built.Cache) & " cache",
+               "D971: a cache is a fact of the core; refine builds"
+               & " ""armv7-m-l1"" on a cortex-m7 alone; remove"
+               & " compiler.cache or name the core it is built into");
          elsif Built.Float /= Firmware.No_Float_Unit
            and then Landin.Targets.Levels.Name (Level (Context))
              /= Firmware.Float_Level (Built.Float)
@@ -2916,6 +3009,7 @@ package body Landin.Stages.Configuration is
    begin
       if Late then
          Float_Facts := Landin.Configuration.Profile (Activity.all).Float;
+         Cache_Facts := Landin.Configuration.Profile (Activity.all).Cache;
          for Index in 1 .. Source_Count (Context) loop
             declare
                Of_Tree : constant not null access constant Syn.Tree :=

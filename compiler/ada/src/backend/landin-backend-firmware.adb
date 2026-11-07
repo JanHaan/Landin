@@ -7,6 +7,7 @@ package body Landin.Backend.Firmware is
    package US renames Ada.Strings.Unbounded;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Firmware.Float_Unit;
+   use type Landin.Targets.Firmware.Cache_Kind;
    use type Profiles.Layout_Kind;
 
    LF : constant Character := Character'Val (10);
@@ -45,6 +46,86 @@ package body Landin.Backend.Firmware is
    --  The symbols and output sections of a region a placement uses.
    function Region_Symbol (Name, Part : String) return String is
      ("_landin_firmware_region_" & Name & "_" & Part);
+
+   --  D973: one pass over the level 1 data cache by set and way, writing
+   --  each set and way to the SCB operation at OPERATION: DCISW,
+   --  0xE000EF60, at reset and DCCISW, 0xE000EF74, at return.  CSSELR
+   --  selects the level 1 data cache, CCSIDR then gives its last set and
+   --  its last way, and the operand is the way at bit 30 and the set at
+   --  bit 5, the Cortex-M7's four ways and 32-byte lines, as CMSIS's
+   --  core_cm7.h places DCISW's fields.  Registers alone,
+   --  r0 to r7, and no memory but the SCB's: a write here that a cache
+   --  held would be lost or stale.
+   function Set_Way_Pass (Operation : String) return String is
+     ("ldr r0, =0xe000ed84" & LF
+      & "movs r1, #0" & LF
+      & "str r1, [r0]" & LF
+      & "dsb sy" & LF
+      & "ldr r0, =0xe000ed80" & LF
+      & "ldr r1, [r0]" & LF
+      & "lsrs r2, r1, #13" & LF
+      & "ldr r3, =0x7fff" & LF
+      & "ands r2, r3" & LF
+      & "lsrs r5, r1, #3" & LF
+      & "ldr r3, =0x3ff" & LF
+      & "ands r5, r3" & LF
+      & "ldr r0, =" & Operation & LF
+      & "10:" & LF
+      & "mov r3, r5" & LF
+      & "11:" & LF
+      & "lsls r6, r3, #30" & LF
+      & "lsls r7, r2, #5" & LF
+      & "orrs r6, r7" & LF
+      & "str r6, [r0]" & LF
+      & "subs r3, #1" & LF
+      & "bpl 11b" & LF
+      & "subs r2, #1" & LF
+      & "bpl 10b" & LF
+      & "dsb sy" & LF);
+
+   --  D973: a cached profile's reset, once .data, .ramtext and .bss are
+   --  written with the caches still off: the data cache invalidated by
+   --  set and way, the instruction cache by ICIALLU, 0xE000EF50, and then
+   --  CCR's IC and DC, bits 17 and 16 of 0xE000ED14, set, each step
+   --  completed by DSB and the enable by ISB, as the Cortex-M7's
+   --  manual enables them.
+   function Caches_On return String is
+     (Set_Way_Pass ("0xe000ef60")
+      & "ldr r0, =0xe000ef50" & LF
+      & "movs r1, #0" & LF
+      & "str r1, [r0]" & LF
+      & "dsb sy" & LF
+      & "isb sy" & LF
+      & "ldr r0, =0xe000ed14" & LF
+      & "ldr r1, [r0]" & LF
+      & "movs r2, #3" & LF
+      & "lsls r2, r2, #16" & LF
+      & "orrs r1, r2" & LF
+      & "str r1, [r0]" & LF
+      & "dsb sy" & LF
+      & "isb sy" & LF);
+
+   --  D973: when the entry returns, with interrupts masked, the data
+   --  cache cleaned and invalidated by set and way while it is still on,
+   --  so every dirty line reaches memory, then CCR's IC and DC cleared
+   --  and the instruction cache invalidated: the core is left as reset
+   --  leaves it, for a warm loader or a debugger that reads memory.
+   function Caches_Off return String is
+     ("cpsid i" & LF
+      & Set_Way_Pass ("0xe000ef74")
+      & "ldr r0, =0xe000ed14" & LF
+      & "ldr r1, [r0]" & LF
+      & "movs r2, #3" & LF
+      & "lsls r2, r2, #16" & LF
+      & "bics r1, r2" & LF
+      & "str r1, [r0]" & LF
+      & "dsb sy" & LF
+      & "isb sy" & LF
+      & "ldr r0, =0xe000ef50" & LF
+      & "movs r1, #0" & LF
+      & "str r1, [r0]" & LF
+      & "dsb sy" & LF
+      & "isb sy" & LF);
 
    function Startup
      (Entry_Symbol : String;
@@ -166,8 +247,10 @@ package body Landin.Backend.Firmware is
         & US.To_String (Regions)
         & "dsb sy" & LF
         & "isb sy" & LF
+        & (if Profile.Cache = Profiles.No_Cache then "" else Caches_On)
         & "cpsie i" & LF
         & "bl " & Entry_Symbol & "" & LF
+        & (if Profile.Cache = Profiles.No_Cache then "" else Caches_Off)
         & ".globl _landin_firmware_returned" & LF
         & ".thumb_func" & LF
         & "_landin_firmware_returned:" & LF

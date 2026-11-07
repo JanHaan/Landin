@@ -2,8 +2,10 @@
 
 These tools build and exercise eight supported ports: RP2040, RP2350 Arm,
 RP2350 Hazard3, STM32H753, ESP32-C3, ESP32-C5, ESP32 and ESP32-S3. Both RP2350 ports use the
-same physical Pico 2. Other boards on the rig are not selected by these
-commands.
+same physical Pico 2, and the STM32H753's board also runs its cached
+profile, `stm32h753_cached`, from SRAM alone
+([below](#the-stm32h753s-cached-profile)). Other boards on the rig are not
+selected by these commands.
 
 Build on epycmicro in Landin's pinned environment. The tools and physical
 oracles run on rigpi, by hand through `run.py` or in the gate through
@@ -424,6 +426,34 @@ The rig lock spans the whole physical sequence. Recovery records establish
 installation and readiness; only the complete scenario and fixed-image
 restoration produce a passed boot record.
 
+## The STM32H753's cached profile
+
+[`stm32h753_cached/board.py`](stm32h753_cached/README.md) runs
+`compiler/tests/board/stm32h753_cached` on the NUCLEO-H753ZI with its
+Cortex-M7's caches on (D974, D975). It is a RAM run alone: `build.py`
+prepares its RAM bundle and no boot bundle, it has no fixed image, and the
+board's boot check stays the cacheless port's. The helper loads it as it
+loads the cacheless image, under the warm contract unchanged, which still
+refuses a chip whose caches are on: the image's own reset enables them
+after the load (D973), and its entry returns at the end of the run, which
+cleans and disables them again, so the board is left as the helper
+requires. The helper and its deployment are unchanged by it.
+
+What is physical and what is not:
+
+| Evidence | Where |
+|---|---|
+| a read without the invalidate returns the ring's stale lines, and memory holds the bytes sent | the board |
+| a maintained ring reads 1024 bytes across its laps as the host sent them | the board |
+| an invalidate loses a dirty line, and four ranges that are not whole lines are refused, the line under them kept | the board |
+| a transmit without a clean carries memory's stale bytes, and after one the message | the board |
+| CCR's IC and DC set during the run, by the image and over SWD, and clear once the entry returned; CCSIDR's 128 sets, four ways and 32-byte line | the board |
+| the order of every SCB write of reset, the provider and the return, and the refusals | QEMU's mps2-an500, which models no cache (D977) |
+| the image's literals reach only the declared cache registers | `devices/test.py` and the tool's build (D976) |
+
+The oracle refuses a control that does not fail as predicted, so a run on
+a core without caches, or with the maintenance in place, cannot pass.
+
 ## The board gate on the rig
 
 [`gate.py`](gate.py) runs one port of [rig.json](rig.json) on rigpi from
@@ -457,7 +487,9 @@ begin with a cold start of the board's port before they flash. After a
 run that did not end on its passed boot check, the board's state is
 unknown, so the port begins with the boot check of its resting image as
 well. The Pico 2 runs four steps
-([above](#the-pico-2-on-a-power-only-cable)). A RAM run's success never
+([above](#the-pico-2-on-a-power-only-cable)), and the STM32H753 three: its
+RAM run, its cached profile's RAM run, and its boot check
+([below](#the-stm32h753s-cached-profile)). A RAM run's success never
 establishes power-on, ROM loading or fixed-image restoration, so no port
 runs RAM alone.
 

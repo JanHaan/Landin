@@ -384,7 +384,12 @@ package body Landin.Diagnostics.Explanations is
                & "ares only in a `fixed if` arm this target does not selec"
                & "t, a Linux call written for Darwin among them, is named "
                & "as one this system does not have, since no spelling of i"
-               & "t would be found here."
+               & "t would be found here. One declared under an arm that re"
+               & "ads `compiler.feature.cache`, `platform/cortex_m/l1`'s p"
+               & "rovider, is named as a cached profile's on a firmware pr"
+               & "ofile whose description declares no cache, and the note "
+               & "says to import a cached description or to maintain throu"
+               & "gh `core/cache`'s cacheless provider (D972)."
                & LF
                & LF
                & "`core/io` has no `print`, `println`, `printf` or `puts`:"
@@ -1285,6 +1290,31 @@ package body Landin.Diagnostics.Explanations is
                & "at holds `fpv5-d16` is `armv7e-m`. Build with the level "
                & "the note names; a lower level of the same core is accept"
                & "ed only for a description with no float unit.",
+            when Catalogue.Cache_Unsupported =>
+               "A device description names a cache refine does not build"
+               & ", or one its core cannot have (D971). A cache is a fact "
+               & "of the core a chip was built with, written in the descri"
+               & "ption's hand-written half as `compiler.cache(""KIND"", LIN"
+               & "E)`, and refine builds one kind: `armv7-m-l1`, Armv7-M's"
+               & " level 1 instruction and data caches with the maintenanc"
+               & "e operations of the System Control Block, which among th"
+               & "e cores refine builds for only a `cortex-m7` has. A desc"
+               & "ription that declares it is a cached profile: reset enab"
+               & "les the caches and the entry's return disables them (D97"
+               & "3), and `platform/cortex_m` declares its maintenance pro"
+               & "vider there. Write `compiler.cache(""armv7-m-l1"", 32)` in"
+               & " a Cortex-M7's description, or leave the directive out f"
+               & "or a cacheless profile, whose DMA buffers need no mainte"
+               & "nance.",
+            when Catalogue.Cache_Line_Wrong =>
+               "A device description's cache names a line that is not it"
+               & "s core's (D971). The line is the unit every maintained r"
+               & "ange is a whole number of, and `core/cache` refuses a ra"
+               & "nge that is not, so a description that said another woul"
+               & "d let a program align its DMA buffers to lines the hardw"
+               & "are does not have. A Cortex-M7's `armv7-m-l1` lines are "
+               & "32 bytes, as its CCSIDR says for both caches; write `com"
+               & "piler.cache(""armv7-m-l1"", 32)`.",
             when Catalogue.Reset_Stage_Return =>
                "A `vector-table` description's stage does not branch to "
                & "compiler-owned reset (D653). The reset vector enters the"
@@ -2540,6 +2570,64 @@ package body Landin.Diagnostics.Explanations is
                & "compiler.core(""cortex-m7"")"
                & LF
                & "compiler.float_unit(""fpv5-d16"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0, 1024 * 1024, ""rx"")"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 128 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
+            when Catalogue.Cache_Unsupported =>
+               "-- refine: --target=cortex-m0 --level=armv7e-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m4"")"
+               & LF
+               & "compiler.cache(""armv7-m-l1"", 32)"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0, 1024 * 1024, ""rx"")"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 128 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
+            when Catalogue.Cache_Line_Wrong =>
+               "-- refine: --target=cortex-m0 --level=armv7e-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m7"")"
+               & LF
+               & "compiler.cache(""armv7-m-l1"", 64)"
                & LF
                & "compiler.vectors(48)"
                & LF

@@ -25,6 +25,7 @@ package body Landin.Build_Reports.Firmware is
         & Firmware.Spelling (Profile.Device)
         & """,""core"":""" & Firmware.Spelling (Profile.Core)
         & """,""float_unit"":""" & Firmware.Spelling (Profile.Float)
+        & """,""cache"":""" & Firmware.Spelling (Profile.Cache)
         & """,""layout"":""" & Firmware.Spelling (Profile.Layout)
         & """,""described_boot"":"""
         & Firmware.Spelling (Profile.Described_Boot)

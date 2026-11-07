@@ -1,0 +1,83 @@
+--  The Cortex-M7's level 1 caches as `core/cache`'s maintenance provider
+--  (D972): on a cached profile, one whose description declares
+--  `compiler.cache("armv7-m-l1", 32)`, whose reset enabled them and whose
+--  entry's return disables them (D973).  Elsewhere on an M-profile target
+--  it declares nothing, and a call says it is a cached profile's; as a
+--  submodule of `platform/cortex_m` it is imported on an M-profile target
+--  alone (D267).  It is a module apart from `platform/cortex_m`, so that a
+--  program that maintains no cache reaches none of `core/cache`.
+
+import core/cache
+
+fixed if compiler.feature.cache then
+    --- The level 1 caches' handle for `core/cache`'s maintenance, made by
+    --- `caches`. Its line is the description's, 32 bytes.
+    public handle: type = struct
+        line: usize
+    end handle
+
+    --- The maintenance provider of a cached profile's caches, which reset
+    --- enabled. It borrows nothing: the caches are the core's.
+    public caches: () -> (caches: handle) =
+        caches = (line: line_bytes)
+    end caches
+
+    --- CCSIDR for the level 1 data cache, which reset selected in CSSELR
+    --- and nothing else changes: its LineSize, bits 2:0, is the log of the
+    --- line's words less 2, its associativity less one bits 12:3 and its
+    --- sets less one bits 27:13, as CMSIS's core_cm7.h defines its fields.
+    public geometry: () -> (ccsidr: u32) =
+        at: ptr u32 = ptr(ccsidr_address)
+        ccsidr = compiler.volatile_load(at)
+    end geometry
+
+    line_bytes: usize = compiler.cache_line
+    ccsidr_address: usize = 0xe000_ed80
+    -- The SCB's maintenance by address, at the addresses CMSIS's
+    -- core_cm7.h gives the SCB's registers: DCIMVAC invalidates, DCCMVAC
+    -- cleans, and DCCIMVAC cleans and invalidates, the data cache line
+    -- holding the address written to it.
+    dcimvac: usize = 0xe000_ef5c
+    dccmvac: usize = 0xe000_ef68
+    dccimvac: usize = 0xe000_ef70
+
+    -- Each line's address written to OPERATION, between completion
+    -- barriers: the first orders the CPU's earlier accesses to the range
+    -- before its maintenance, the second completes the maintenance before
+    -- anything after it, a device's enable among them, and ISB then
+    -- refetches what follows, as CMSIS's SCB_CleanDCache_by_Addr orders
+    -- them.
+    maintain: (operation: usize, line: usize, range: []u8)
+              -> none ! cache.misaligned =
+        count := try cache.lines(line, range)
+        compiler.completion_barrier()
+        if count > 0 then
+            at: ptr mut u32 = ptr(operation)
+            first := usize(addr range[0])
+            for index in 0..<count do
+                compiler.volatile_store(at, u32(first + index * line))
+            end for
+        end if
+        compiler.completion_barrier()
+        assembler.block("isb sy")
+    end maintain
+
+    handle_line: (self: handle) -> (bytes: usize) = bytes = self.line end handle_line
+
+    handle_clean: (self: handle, range: []u8) -> none ! cache.misaligned =
+        try maintain(dccmvac, self.line, range)
+    end handle_clean
+
+    handle_invalidate: (self: handle, range: []u8) -> none ! cache.misaligned =
+        try maintain(dcimvac, self.line, range)
+    end handle_invalidate
+
+    handle_clean_invalidate: (self: handle, range: []u8)
+                             -> none ! cache.misaligned =
+        try maintain(dccimvac, self.line, range)
+    end handle_clean_invalidate
+
+    handle is cache.maintenance (line: handle_line, clean: handle_clean,
+                                 invalidate: handle_invalidate,
+                                 clean_invalidate: handle_clean_invalidate)
+end if

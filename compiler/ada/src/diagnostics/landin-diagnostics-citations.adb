@@ -2712,6 +2712,29 @@ package body Landin.Diagnostics.Citations is
             when 621 =>
                "The STM32H753 is hard-float, and its consumer's accesses"
                & " are the board's to check",
+            when 970 =>
+               "Cache maintenance is `core/cache`'s concept, over whole "
+               & "lines, with a cacheless provider everywhere",
+            when 971 =>
+               "A cache is a fact of a description, which `compiler.feat"
+               & "ure.cache` and `compiler.cache_line` read",
+            when 972 =>
+               "The Cortex-M7's provider is `platform/cortex_m/l1`, decl"
+               & "ared on a cached profile alone",
+            when 973 =>
+               "Reset enables a described cache once memory is written, "
+               & "and the entry's return disables it",
+            when 974 =>
+               "The STM32H753's cached profile is a description of its o"
+               & "wn, admitted with its evidence",
+            when 975 =>
+               "The cached board run shows each handoff and what leaving"
+               & " its maintenance out does",
+            when 976 =>
+               "A cacheless image reaches no cache register, and a cache"
+               & "d one only those its profile declares",
+            when 977 =>
+               "The emulator shows the cache sequences, never a cache",
             when 281 =>
                "RV64's system call has the standing of `syscall` and `sv"
                & "c`",
@@ -4167,6 +4190,22 @@ package body Landin.Diagnostics.Citations is
             when 620 =>
                "Decisions: The core library and the derived programs",
             when 621 =>
+               "Decisions: The core library and the derived programs",
+            when 970 =>
+               "Decisions: The core library and the derived programs",
+            when 971 =>
+               "Decisions: The core library and the derived programs",
+            when 972 =>
+               "Decisions: The core library and the derived programs",
+            when 973 =>
+               "Decisions: The core library and the derived programs",
+            when 974 =>
+               "Decisions: The core library and the derived programs",
+            when 975 =>
+               "Decisions: The core library and the derived programs",
+            when 976 =>
+               "Decisions: The core library and the derived programs",
+            when 977 =>
                "Decisions: The core library and the derived programs",
             when 281 =>
                "Decisions: The core library and the derived programs",
@@ -6177,6 +6216,37 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d621-the-stm32h753-is-hard"
                & "-float-and-its-consumer-s-accesses-are-the-board-s-to-ch"
                & "eck",
+            when 970 =>
+               "https://www.701.dev/spec.html#d970-cache-maintenance-is-"
+               & "core-cache-s-concept-over-whole-lines-with-a-cacheless-p"
+               & "rovider-everywhere",
+            when 971 =>
+               "https://www.701.dev/spec.html#d971-a-cache-is-a-fact-of-"
+               & "a-description-which-compiler-feature-cache-and-compiler-"
+               & "cache-line-read",
+            when 972 =>
+               "https://www.701.dev/spec.html#d972-the-cortex-m7-s-provi"
+               & "der-is-platform-cortex-m-l1-declared-on-a-cached-profile"
+               & "-alone",
+            when 973 =>
+               "https://www.701.dev/spec.html#d973-reset-enables-a-descr"
+               & "ibed-cache-once-memory-is-written-and-the-entry-s-return"
+               & "-disables-it",
+            when 974 =>
+               "https://www.701.dev/spec.html#d974-the-stm32h753-s-cache"
+               & "d-profile-is-a-description-of-its-own-admitted-with-its-"
+               & "evidence",
+            when 975 =>
+               "https://www.701.dev/spec.html#d975-the-cached-board-run-"
+               & "shows-each-handoff-and-what-leaving-its-maintenance-out-"
+               & "does",
+            when 976 =>
+               "https://www.701.dev/spec.html#d976-a-cacheless-image-rea"
+               & "ches-no-cache-register-and-a-cached-one-only-those-its-p"
+               & "rofile-declares",
+            when 977 =>
+               "https://www.701.dev/spec.html#d977-the-emulator-shows-th"
+               & "e-cache-sequences-never-a-cache",
             when 281 =>
                "https://www.701.dev/spec.html#d281-rv64-s-system-call-ha"
                & "s-the-standing-of-syscall-and-svc",

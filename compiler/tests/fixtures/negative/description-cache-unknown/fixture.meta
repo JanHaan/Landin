@@ -1,0 +1,9 @@
+class: negative
+summary: D971: refine builds one cache, armv7-m-l1, so a description naming another is refused, saying which it builds
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0610
+args: --target=cortex-m0 --level=armv7e-m ../tests/fixtures/negative/description-cache-unknown/program.ldn
+expect: expected.txt
+status: 1

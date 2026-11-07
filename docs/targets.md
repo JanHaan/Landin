@@ -789,6 +789,21 @@ not instruction serialization or a peripheral acknowledgment; posted writes
 can require a device-specific readback. On Arm, DSB waits for architectural
 completion, which also does not imply peripheral-command completion. No portable cache-maintenance builtin is enabled.
 
+Cache maintenance is a library provider's, `core/cache`'s concept over whole
+lines (D970). Its cacheless provider is the completion barrier on every
+target, MFENCE, DSB SY or FENCE IORW,IORW as above, after the range's check.
+The one cached provider, `platform/cortex_m/l1`, on a description that
+declares `compiler.cache("armv7-m-l1", 32)`, writes each line's address to
+the SCB's DCCMVAC, DCIMVAC or DCCIMVAC (0xE000EF68, 0xE000EF5C, 0xE000EF70)
+between DSB SY and DSB SY, then ISB SY (D972). Such a profile's
+compiler-owned reset, once data, RAM code and BSS are written, invalidates
+the data cache by set and way through DCISW, the instruction cache through
+ICIALLU, and sets CCR's DC and IC, and the entry's return cleans and
+invalidates by set and way through DCCISW before clearing them, each step
+completed by DSB SY and each enable or disable by ISB SY, using r0 to r7
+and no memory (D973). A cacheless profile's reset reaches none of these
+registers.
+
 The mappings for x86-64, arm64 and Cortex-M0 are those collected in
 [Sewell's C/C++11 mappings to processors](https://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html),
 x86-TSO's and ARMv8's, and ARMv7's for a core without acquire and release
@@ -807,7 +822,10 @@ The pinned M0 tools execute the supported load/store/barrier and nested PRIMASK
 controls, and independently show GCC's RMW needs an unresolved helper.
 The cache model demonstrates stale reads and destructive maintenance, under an
 explicit two-byte cache-line abstraction; the cacheless emulator cannot test
-physical cache behavior. See the [probe guide](../environments/cortex-m/README.md).
+physical cache behavior. The mps2-an500 lane's `cache-sequence` case traces
+the SCB writes of the cached reset, provider and return in order, which is
+sequencing alone; the STM32H753's cached board run is the behaviour's
+evidence (D975, D977). See the [probe guide](../environments/cortex-m/README.md).
 
 D228 connects `Targets.Packed` to source declarations and neutral field
 geometry. One carrier of 1/2/4/8 bytes uses the selected target's size and
@@ -1106,7 +1124,8 @@ and Cortex. Default checks retain UD2/BRK/UDF termination. A selected handler
 uses the ordinary two-scalar ABI and a four-byte private entry latch, with
 process-wide exchange/exclusive synchronization on hosted targets and ordinary
 single-core word accesses on ARMv6-M. No source atomics, FPU, cache, VTOR or
-interrupt-masking helper are added on Cortex. Compiler startup clears the latch;
+interrupt-masking helper are added on Cortex by it; a cached profile's
+caches are D973's. Compiler startup clears the latch;
 synthetic entry/root violations use site zero. Naked fallthrough and hardware
 faults retain separate machine obligations. `--panic-map` is optional off-target
 mapping, not Cortex source-debugger acceptance.

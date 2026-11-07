@@ -277,7 +277,12 @@ def overviews(root, modules):
             raise ValueError(f'{module}: missing executable example')
         path = example[1]
         target = root / path
-        if not (path.startswith('compiler/tests/fixtures/') or path == 'environments/cortex-m/probes/core-cpu.ldn') or not target.is_file():
+        # A fixture, the Cortex-M probe, or a board's application, the only
+        # program a profile-scoped provider such as platform/cortex_m/l1
+        # runs in (D972).
+        board_app = path.startswith('compiler/tests/board/') and path.endswith('/app/main.ldn')
+        if not (path.startswith('compiler/tests/fixtures/') or board_app
+                or path == 'environments/cortex-m/probes/core-cpu.ldn') or not target.is_file():
             raise ValueError(f'{module}: invalid example {path}')
         if path.startswith('compiler/tests/fixtures/') and not target.with_name('fixture.meta').is_file():
             raise ValueError(f'{module}: example has no fixture metadata')

@@ -1878,7 +1878,8 @@ package body Landin.Tests.Cortex_Suite is
          & """stack_reserved"":4096,""runtime_members"":"
          & "[""_muldi3.o"",""_udivsi3.o""],"
          & """device"":""constrained-reference"",""core"":""cortex-m0"","
-         & """float_unit"":""none"",""layout"":""boot"","
+         & """float_unit"":""none"",""cache"":""none"","
+         & """layout"":""boot"","
          & """described_boot"":""vector-table"","
          & """boot"":""vector-table"",""vector_address"":0,"
          & """vector_words"":48,""boot_prefix"":0,""boot_suffix"":0,"
@@ -3454,6 +3455,90 @@ package body Landin.Tests.Cortex_Suite is
            M7 & "fixed if true then" & LF & Unit & "end if" & LF,
            Plain_Memory, "L0513",
            Extra => "--firmware-entry=start --level=armv7e-m");
+      end;
+      --  D971: a cache is the core's too, at any level its core executes,
+      --  and is what compiler.feature.cache and compiler.cache_line read,
+      --  before any option or fixed condition of the program.
+      declare
+         M7 : constant String :=
+           "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m7"")"
+           & LF & "compiler.vectors(48)" & LF;
+         Caches : constant String :=
+           "compiler.cache(""armv7-m-l1"", 32)" & LF;
+         Facts : constant String :=
+           "option cached: bool = compiler.feature.cache" & LF
+           & "line: usize = compiler.cache_line" & LF
+           & "compiler.assert(cached and compiler.cache_line == 32)" & LF
+           & "fixed if compiler.feature.cache then" & LF
+           & "    picked: u32 = 1" & LF
+           & "end if" & LF;
+      begin
+         Expect ("a cortex-m7 with armv7-m-l1 reads its cache",
+           Facts, M7, Caches & Plain_Memory, "",
+           Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("a cached cortex-m7 builds at armv6-m", "", M7,
+           Caches & Plain_Memory, "");
+         Expect ("a cortex-m7 without a cache reads none",
+           "compiler.assert(not compiler.feature.cache)" & LF
+           & "compiler.assert(compiler.cache_line == 0)",
+           M7, Plain_Memory, "",
+           Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("the reference has no cache",
+           "compiler.assert(not compiler.feature.cache)" & LF
+           & "compiler.assert(compiler.cache_line == 0)",
+           "", "", "", Imports => False);
+         Expect ("an unbuilt cache is L0610", "", M7,
+           "compiler.cache(""armv7-m-l2"", 32)" & LF & Plain_Memory,
+           "L0610");
+         Expect ("armv7-m-l1 on a cortex-m4 is L0610", "",
+           "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
+           & LF & "compiler.vectors(48)" & LF, Caches & Plain_Memory,
+           "L0610");
+         Expect ("a 64-byte armv7-m-l1 line is L0611", "", M7,
+           "compiler.cache(""armv7-m-l1"", 64)" & LF & Plain_Memory,
+           "L0611");
+         Expect ("a second cache is L0513", "", M7 & Caches,
+           Caches & Plain_Memory, "L0513");
+         Expect ("a cache in a fixed arm is L0513", "",
+           M7 & "fixed if true then" & LF & Caches & "end if" & LF,
+           Plain_Memory, "L0513");
+         --  D973: reset enables them once BSS is written, before the
+         --  entry, and the entry's return cleans and disables them; a
+         --  cacheless reset reaches neither CCR nor an operation.
+         declare
+            Code, Cached, Plain : U.Unbounded_String;
+         begin
+            Try ("", M7, Caches & Plain_Memory, Code, Cached);
+            Try ("", M7, Plain_Memory, Code, Plain);
+            declare
+               Text : constant String := U.To_String (Cached);
+               Bss : constant Natural := Ada.Strings.Fixed.Index
+                 (Text, "ldr r1, =_landin_firmware_bss_start");
+               On : constant Natural := Ada.Strings.Fixed.Index
+                 (Text, "ldr r0, =0xe000ef60");
+               Enable : constant Natural := Ada.Strings.Fixed.Index
+                 (Text, "orrs r1, r2" & LF & "str r1, [r0]" & LF
+                  & "dsb sy" & LF & "isb sy" & LF & "cpsie i" & LF
+                  & "bl start" & LF & "cpsid i");
+               Off : constant Natural := Ada.Strings.Fixed.Index
+                 (Text, "ldr r0, =0xe000ef74");
+               Disable : constant Natural := Ada.Strings.Fixed.Index
+                 (Text, "bics r1, r2" & LF & "str r1, [r0]" & LF
+                  & "dsb sy" & LF & "isb sy" & LF & "ldr r0, =0xe000ef50");
+            begin
+               Landin.Testing.Check
+                 (Item, Bss > 0 and then On > Bss and then Enable > On
+                    and then Off > Enable and then Disable > Off
+                    and then Contains (Text (Disable .. Text'Last),
+                      ".globl _landin_firmware_returned"),
+                  "D973: reset invalidates and enables the caches after BSS,"
+                  & " and the return cleans and disables them");
+            end;
+            Landin.Testing.Check
+              (Item, not Contains (U.To_String (Plain), "0xe000ed14")
+                 and then not Contains (U.To_String (Plain), "0xe000ef"),
+               "a cacheless reset reaches neither CCR nor a cache operation");
+         end;
       end;
       Expect ("the reference builds at armv7e-m",
         "link(vector: 20) extern(interrupt) h: () -> none = end h",

@@ -248,6 +248,9 @@ package Landin.Diagnostics.Catalogue is
       --  D615: a description's float unit.  Configuration finds both.
       Float_Unit_Unsupported,
       Float_Unit_Level,
+      --  D971: a description's cache.  Configuration finds both.
+      Cache_Unsupported,
+      Cache_Line_Wrong,
       --  D653: a stage the reset vector enters before compiler-owned reset.
       Reset_Stage_Return,
       Reset_Stage_Stack,
@@ -1121,6 +1124,22 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D615: a description with a float unit, built at a"
                    & " level whose architecture lacks it")),
+      --  D971: the cache a description names and its line, each saying
+      --  what refine builds.
+      Cache_Unsupported =>
+        (Code => "L0610", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D971: a cache refine does not build, or one the"
+                   & " description's core cannot have")),
+      Cache_Line_Wrong =>
+        (Code => "L0611", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D971: a described cache whose line is not its"
+                   & " core's")),
       Reset_Stage_Return =>
         (Code => "L0560", Level => Error, State => Live,
          Source => True, Bytes => True,

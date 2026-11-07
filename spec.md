@@ -17793,9 +17793,13 @@ Maintenance must cover all relevant cache levels and aliases and complete at
 the platform's DMA visibility point. CPU coherence between threads alone does
 not establish device coherence. Cacheless M0 needs no cache operations; this
 is not evidence for cached platforms. Privileged cache operations and hosted
-DMA mapping are not portable user-mode intrinsics; no cache helper is enabled
-on these targets. Platform providers must establish those obligations before
-claiming a cached device profile.
+DMA mapping are not portable user-mode intrinsics; no cache builtin is
+enabled on any target. A platform provider establishes these obligations
+before a cached device profile is claimed: `core/cache` states them as a
+concept over whole lines, refusing a range that would need rounding with
+`cache.misaligned` (D970); its cacheless provider is the barriers alone on
+every target; and the one admitted cached profile, the STM32H753's (D974),
+maintains its Cortex-M7's caches through `platform/cortex_m/l1` (D972).
 
 **Alternatives and rationale:** importing C/C++ race undefined behavior would
 add optimization assumptions unsupported by this unsafe language. Treating
@@ -22995,12 +22999,17 @@ cacheless: compiler-owned startup leaves the M7's caches disabled, as reset
 leaves them. DMA1 and DMA2 reach neither TCM, so initialized data, BSS and
 the stack, where prototype 1's buffers are, are placed in the AXI SRAM,
 which both streams reach; the DTCM is described and holds only what a
-program places there by name.
+program places there by name. This profile stays the board's cacheless one,
+its bytes and checks unchanged, beside the cached profile admitted with its
+provider, `devices/descriptions/stm32h753_cached`, which a program selects
+by importing it instead (D974).
 
 **The alternatives:** the stack in DTCM, which is faster and puts any
 buffer a routine passes to DMA where DMA cannot reach it; enabling the
-caches, which needs the maintenance provider the phase requires first; and
-placing data in SRAM1, which reaches no further and is smaller.
+caches here, which needed the maintenance provider the phase required
+first, and which D974 does in a description of its own so that this one
+and every program built for it are unchanged; and placing data in SRAM1,
+which reaches no further and is smaller.
 
 **Pinned by** `devices/test.py`'s `the hand-written memory against the
 header`, which holds each region to the header and every placement DMA may
@@ -28978,7 +28987,8 @@ kept its profile cacheless.
 so the H753 builds at `armv7e-m` alone and hard-float (D615-D617), and its
 reset grants the unit (D618). The profile stays cacheless under R12's rule
 for noncoherent cached profiles: nothing enables the caches, and D562's
-placements are unchanged. D561's static evaluation is retired, since an
+placements are unchanged; the cached profile beside it, admitted with its
+provider and evidence, is D974's. D561's static evaluation is retired, since an
 ARMv6-M evaluator does not read Armv7E-M code and a board runs the
 consumer; the board run's oracle checks its device accesses. What stays
 static is D561's amendment's: the consumer links where the description
@@ -28998,6 +29008,307 @@ hand-written memory against the header`; and
 `environments/cortex-m/descriptions.py`, which selects the STM32H753 at
 `--level=armv7e-m` and compares its facts, its float unit among them, with
 `descriptions.json`.
+
+### D970 — Cache maintenance is `core/cache`'s concept, over whole lines, with a cacheless provider everywhere
+
+**The tour said** nothing of caches; D227 stated what a cached DMA handoff
+must do and enabled no helper, and R12 admitted a cached profile only with a
+platform's maintenance provider.
+
+**Chosen:** `core/cache` is a shared freestanding module holding one
+concept, `maintenance`, with four entries: `line`, the bytes in one line;
+`clean`, which writes a range's dirty lines to memory and keeps them;
+`invalidate`, which discards a range's lines; and `clean_invalidate`, both.
+Each operation takes a `[]u8` range and returns once its maintenance is
+complete at the point a device observes, its provider's completion barrier
+issued last, so D227's order is the caller's to write and the barrier's to
+keep: clean before a transmit is enabled, clean and invalidate before a
+receive is armed, invalidate once a completion or count observation says
+the device's bytes are written, the device barrier before an enable staying
+the driver's. A range that does not begin on a line, or whose length is
+not a whole number of lines, is refused with the recoverable atom
+`cache.misaligned` and nothing is maintained; it is never rounded out,
+because a rounded line can hold bytes the caller does not own, whose dirty
+copy an invalidate loses or whose stale copy a clean writes over a device's
+data. An empty range is no lines, and its operation is the barriers alone.
+`cache.lines(line, range)` is that check, which every provider calls.
+The generic entries `cache.clean` and its siblings take the provider's
+handle as `core/time`'s do; a handle is a small value passed `in`
+(D269's service convention), and the parameter is `caches`.
+
+The cacheless provider is `cache.cacheless(line)`, a `cache.barriers` handle
+on every target: its operations check the range against LINE and issue the
+completion barrier, which is all memory no cache stands in front of needs,
+and a line that is not a nonzero power of two is `cache.bad_line`. It
+refuses exactly what a cached provider of that line refuses, so a driver
+checked against it on Cortex-M0 or a hosted target takes the cached
+profile's refusals. Both atoms have phrases in `core/failure`.
+
+**The alternatives:** compiler builtins, `compiler.cache_clean` among them,
+which `negative/r630-cache-helper` keeps refused: maintenance is a platform
+provider's, and a builtin would claim one for every target; rounding a
+range out to its lines, which hides the loss D227 names; a provider that
+takes an address and a length, which loses the slice's bound and its view;
+and no cacheless provider, which leaves a portable driver two code paths.
+
+**Pinned by** `runtime/library-shared-cache` on the seven product targets
+and the constrained Cortex-M0 lane, with oracles for each refused line and
+range, the empty range and every byte kept through the barriers; and the
+STM32H753's cached board run, whose refusals keep a dirty line (D975).
+
+### D971 — A cache is a fact of a description, which `compiler.feature.cache` and `compiler.cache_line` read
+
+**The tour said** nothing; D615 made a float unit a fact of a description
+and of its core, and D562 kept the one Cortex-M7 chip refine supported
+cacheless.
+
+**Chosen:** the hand-written half of a description may hold
+`compiler.cache("KIND", LINE)`, once, at module level, as D542's directives
+are. The compiler knows a cache as a fact of a core and names no chip: it
+builds one kind, `armv7-m-l1`, Armv7-M's level 1 instruction and data
+caches with the System Control Block's maintenance operations, which the
+Cortex-M7 alone of its cores implements, with 32-byte lines at both caches.
+Another kind, or one the description's core cannot have, is L0610; a line
+that is not the kind's is L0611, naming the line to write. A cache changes
+no ABI, so it takes any level its core executes. A program reads it as
+`compiler.feature.cache`, true when the selected description declares a
+cache, and `compiler.cache_line`, the declared line in bytes and 0 without
+one, each read as D615's features are, before any option or fixed
+condition. The firmware build report says `cache`.
+
+**The alternatives:** a cached level, which would make a level something a
+chip without caches could select; reading the cache from the core, which
+assumes every Cortex-M7 is built with both caches when their sizes and
+presence are the implementer's choice; a line read only at run time from
+CCSIDR, which no program can align a static buffer by and no fixed arm can
+read; and a profile option inside the cacheless description, which changes
+its bytes and lets one import mean two profiles.
+
+**Pinned by** `negative/description-cache-unknown`,
+`negative/description-cache-core` and `negative/description-cache-line`;
+and the `cortex ABI` case `device descriptions select their profiles`, which
+holds the refusals, the repeated and conditional directive and both facts
+read by an option, a module value, a compiler assertion and a fixed arm,
+for a cached description, a cacheless one and the reference.
+
+### D972 — The Cortex-M7's provider is `platform/cortex_m/l1`, declared on a cached profile alone
+
+**The tour said** nothing; D575 declares `platform/cortex_m`'s operations
+on an M-profile target alone, and D970 leaves cached providers to
+platforms.
+
+**Chosen:** `platform/cortex_m/l1` provides `core/cache`'s maintenance over
+the Cortex-M7's level 1 caches, and declares it under `fixed if
+compiler.feature.cache`: `l1.caches()` makes its `l1.handle`, whose line is
+`compiler.cache_line`, and `l1.geometry()` reads CCSIDR for the level 1
+data cache, which reset selected in CSSELR. Each operation checks its range
+with `cache.lines`, issues a completion barrier, writes each line's address
+to the SCB's DCCMVAC, DCIMVAC or DCCIMVAC, at 0xE000EF68, 0xE000EF5C and
+0xE000EF70, issues a completion barrier and then ISB, as CMSIS's
+by-address operations order them. It is a submodule, imported on an
+M-profile target alone (D267), so that a program that maintains no cache
+reaches none of `core/cache` and its image is the one it was; on an
+M-profile profile without a cache a call is L0201 saying that the member is
+a cached profile's, with the two things to do instead.
+
+**The alternatives:** the provider in `platform/cortex_m` itself, which a
+shared program imports everywhere but which then brings `core/cache` into
+every Cortex-M image and moves every board record's bytes; a provider that
+reads CCSIDR for its line on every call, which a buffer aligned at compile
+time cannot follow; set and way operations exposed to programs, which act
+on every line and so on bytes no caller owns; and L0201's ordinary words,
+which call the cacheless STM32H753 another target.
+
+**Pinned by** `negative/cache-provider-cacheless`; the mps2-an500 lane's
+`cache-sequence` case (D977); `devices/test.py`'s converse check (D976); and
+the cached board run (D975).
+
+### D973 — Reset enables a described cache once memory is written, and the entry's return disables it
+
+**The tour said** that reset copies initialized data and RAM code and
+clears BSS before a program runs; D618 made reset grant a described float
+unit.
+
+**Chosen:** a cached profile's compiler-owned reset, once `.data`,
+`.ramtext`, BSS and every placed region are written with the caches still
+off and their DSB and ISB issued, selects the level 1 data cache in CSSELR,
+reads its sets and ways from CCSIDR and invalidates every set and way
+through DCISW, completes that with DSB, invalidates the instruction cache
+through ICIALLU with DSB and ISB, and sets CCR's DC and IC, bits 16 and 17,
+with DSB and ISB, as the Cortex-M7's manual and CMSIS's `SCB_EnableDCache`
+and `SCB_EnableICache` enable them; then it enables interrupts and calls the
+entry. The data and code it wrote are memory's, so nothing a cache held
+before reset, a warm loader's run among it, can hide them. When the entry
+returns, interrupts are masked, every set and way is cleaned and
+invalidated through DCCISW while the data cache is still on, so no dirty
+line is left, and CCR's DC and IC are cleared and the instruction cache
+invalidated, each with DSB and ISB, before `_landin_firmware_returned`: the
+core is left as reset leaves it, for a warm loader that requires disabled
+caches or a debugger that reads memory. Both sequences use registers alone,
+r0 to r7, and no memory. A cacheless profile's reset is unchanged.
+
+**The alternatives:** a provider operation the program calls to enable the
+caches, which a program can forget and whose own frame a disable would have
+to keep out of the cache it is turning off; enabling before the copies,
+which writes initialized data into dirty lines; and leaving the caches on
+when the entry returns, which leaves memory short of every dirty line.
+
+**Pinned by** the `cortex ABI` case `device descriptions select their
+profiles`, which holds the cached reset's order and a cacheless reset's
+absence of both; the mps2-an500 lane's `cache-sequence` case, which holds
+the linked order and every write QEMU traces (D977); and the cached board
+run, which reads CCR set at the entry and clear once it returned (D975).
+
+### D974 — The STM32H753's cached profile is a description of its own, admitted with its evidence
+
+**The tour said** nothing; D562 kept the STM32H753 cacheless until a
+provider existed, and R12's rule asks a cached profile for its provider and
+evidence of its cache levels, aliases, line ownership and visibility
+points, transmit and receive consumers and failure oracles for stale reads
+and lost dirty bytes.
+
+**Chosen:** `devices/descriptions/stm32h753_cached` is the cached profile,
+beside the cacheless one, which keeps its bytes, checks, records and gate
+leg. Its policy, `devices/policies/stm32h753_cached.json`, is the cacheless
+policy with its identity, `stm32h753-cached`, so `refine svd` writes its
+`interrupts.ldn` and the chip's modules at the same hashes; its
+`supply.ldn` is the cacheless stage's bytes; and its `memory.ldn` is the
+cacheless map, placements, stack and float unit with
+`compiler.cache("armv7-m-l1", 32)`. The evidence, point by point:
+
+- levels: the Cortex-M7's level 1 caches are the only ones, a 16 KiB
+  four-way data cache and a 16 KiB instruction cache, both of 32-byte
+  lines; the chip has no level 2, and the board run reads CCSIDR's 128
+  sets, four ways and 32-byte line;
+- aliases: with the MPU off the default memory map applies, so the SRAM
+  region, 0x2000_0000 to 0x3FFF_FFFF, which holds the AXI SRAM and SRAM1
+  to SRAM4, is normal, write-back and write-allocate; the code region,
+  flash among it, is write-through and read-only here; the TCMs are never
+  cached, and DMA1 and DMA2 do not reach them (D562); the peripherals and
+  the System Control Space are device and strongly ordered memory. Static
+  data, BSS and the stack are in the AXI SRAM, which the CPU and both DMA
+  controllers reach at 0x2400_0000 alone; a buffer placed in another SRAM
+  by name is cached alike, and an alias of a region is outside the profile;
+- line ownership: a buffer a stream reads or writes is aligned to 32 bytes
+  and a whole number of lines, so no line it occupies holds another datum,
+  and D970 refuses a range that is not;
+- visibility points: a stream observes memory once the maintenance and the
+  completion barrier after it have completed, and the CPU observes what a
+  stream wrote once its count or completion said so and the range was
+  invalidated; code copied by reset is fetched through an instruction cache
+  reset invalidated after the copy (D973);
+- consumers and failure oracles: D975's board run.
+
+**The alternatives:** a profile option in the cacheless description, which
+changes its bytes and lets one import mean two profiles; enabling the
+caches in the cacheless profile, which changes every image built for it and
+every record; and an MPU configuration of its own, which this profile does
+not need and which would be a fact refine checks nothing of.
+
+**Pinned by** `devices/test.py`'s `Stm32h753CachedOracles`, which holds the
+policy, the interrupts, the stage and the map to the cacheless ones and the
+one directive beside them, and its regeneration and D542 form checks, which
+regenerate the cached `interrupts.ldn`; and D975 and D976.
+
+### D975 — The cached board run shows each handoff and what leaving its maintenance out does
+
+**The tour said** nothing; D650 and D901 give the STM32H753 its board run
+and its warm entry, and R12 asks a cached profile for transmit and receive
+consumers and failure oracles on its target.
+
+**Chosen:** `compiler/tests/board/stm32h753_cached/app` runs on the
+NUCLEO-H753ZI from SRAM, loaded by the SRAM helper exactly as the cacheless
+RAM run is, under the warm contract unchanged, which requires the caches
+off when it loads; the image's reset enables them (D973). It uses the
+cacheless board's `serial`, `bringup`, `report` and `scs` modules read
+only, the receive ring through `serial.open`, `available`, `read`, `stop`,
+`restart`, `completed` and `idle`, and its maintenance around them through
+`platform/cortex_m/l1`. Over the virtual COM port, in the cacheless board's
+frames: the boot frame reports CCR with IC and DC set and CCSIDR; the
+stale-read control refills the ring with 0x5A, cleans it without the
+invalidate, rearms the stream and reads 64 bytes the host sends, two
+lines, each of which must be the stale 0x5A throughout, or, if the cache
+evicted it in between, the bytes sent, at least one line stale, while
+memory, once invalidated, holds the 64 sent;
+1024 bytes are then read through the ring with each snapshot's lines
+invalidated between the count and a copy no longer than it, and must hash
+as the host's; the lost-dirty control cleans a line holding 0x11, dirties
+it with 0x22 and invalidates it, which must lose all 32 bytes, while four
+ranges that are not whole lines are refused and the line they cover keeps
+its dirty 0x44; a transmit whose buffer's memory holds `o` and whose cached
+copy holds the message is sent without a clean and must carry `o`s, a
+whole line at least and every line either memory's `o`s or, written back
+in between, the message's, and after a clean must carry the message; and the entry returns, so CCR
+must read clear over SWD. The host reads CCR over SWD while the run goes on
+as well. Every prediction is the host's, from what it sent and what a
+write-back cache does, and a control that does not fail as predicted fails
+the run, so an emulator, which models no cache, cannot pass it.
+`environments/boards/stm32h753_cached/board.py` is the oracle, and the
+STM32H753 leg runs it as a RAM step after the cacheless RAM run and before
+the port's final boot check.
+
+**The alternatives:** a boot check of the cached profile, which adds a
+flash and power cycle and proves nothing the RAM run and the cacheless boot
+check do not; changing the helper to clean or disable caches, which would
+weaken the warm contract the cacheless run relies on; and controls checked
+by SWD reads of memory, which a debugger's view of a cached line makes
+another question.
+
+**Pinned by** `scripts/tests/test_board_stm32h753_cached.py`, which holds
+the oracle to a scripted board that behaves as a write-back cache predicts
+and refuses one that does not, phase by phase, and the image check of D976;
+and the physical run, whose record is `ram-record.json` beside the tool.
+
+### D976 — A cacheless image reaches no cache register, and a cached one only those its profile declares
+
+**The tour said** nothing; D561 and D621 keep `the consumer links
+cacheless` static.
+
+**Chosen:** `devices/test.py`'s `the consumer links cacheless` is unchanged
+for every cacheless consumer. Its converse builds
+`devices/consumers/stm32h753_cached`, the transmit consumer with its message
+in the cached AXI SRAM and cleaned before the stream is enabled, and
+requires it to link where its description places it and the SCB registers
+its literal words reach to be the profile's alone: CCR, CCSIDR, CSSELR and
+CPACR, reset's ICIALLU and DCISW, the return's DCCISW, and the provider's
+DCCMVAC, DCIMVAC and DCCIMVAC; no other operation of 0xE000EF50 to
+0xE000EF78. The cached board tool's build holds its image to the same set.
+
+**The alternatives:** disassembly matching, which D561 rejected; and no
+converse, which lets a cached image reach an operation, a set and way clean
+or a branch predictor invalidate, that no decision reviewed.
+
+**Pinned by** `devices/test.py`'s `the cached consumer reaches the declared
+cache registers alone` and `the consumer links cacheless`, and the cached
+board tool's image check.
+
+### D977 — The emulator shows the cache sequences, never a cache
+
+**The tour said** nothing; D619 gives the corpus QEMU's mps2-an500, a
+Cortex-M7 that models no cache.
+
+**Chosen:** the lane description
+`environments/cortex-m/lanes/descriptions/mps2_an500_cached`, the an500's
+map with `compiler.cache`, is no profile refine admits for a chip; it lets
+the firmware lane's `cache-sequence` case link a program through
+`platform/cortex_m/l1` and run it under QEMU with its trace of the System
+Control Space's writes. The case holds the linked reset's steps to D973's
+order and each provider operation's stores between its two completion
+barriers, ISB after them; every write reset, the program and the return
+make to the SCB, in order, with each maintenance write the line address its
+range says and a refused range writing none; and, read by GDB at the
+return, the three refusals, the line and CCR's IC and DC clear. QEMU keeps
+neither enable bit and reads CCSIDR as zero, so the run shows sequencing
+and refusals alone; what a cache does is the board's (D975). The cacheless
+provider runs on Cortex-M0, on QEMU's micro:bit, and on every hosted
+target through `runtime/library-shared-cache`.
+
+**The alternatives:** a cache model in the harness, which would test the
+model; and no emulator run, which leaves the order of the writes to
+reading.
+
+**Pinned by** `environments/cortex-m/firmware.py --case cache-sequence` and
+the freestanding lane's `library-shared-cache`.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 
@@ -31540,10 +31851,10 @@ own table from the atoms to messages.
 
 **Chosen:** `core/failure` is a shared freestanding module of one type and
 one routine. `failure.reason` is the union of every atom a `core` module
-fails with, thirty-two of them from `core/mem`, `core/map`, `core/tree`,
-`core/io`, `core/net` and `core/text`, thirty-four since D946 and D947 added
-`text.not_found` and `text.invalid_scalar`, and `failure.words(problem)` returns
-a fixed phrase for each: lower case with no final stop, so that it reads
+fails with, thirty-six of them from `core/mem`, `core/map`, `core/tree`,
+`core/io`, `core/net`, `core/text` and `core/cache`, and
+`failure.words(problem)` returns a fixed phrase for each: lower case with
+no final stop, so that it reads
 after a subject and a colon, static text that borrows nothing, the same on
 every target and in every locale. A call's failure set widens to
 `failure.reason` whatever subset of it the call declares, so `else
@@ -31556,7 +31867,7 @@ entry's kind or an order, have no words, and `platform/posix`'s errno
 detail stays with its provider (D207); D582 gives its errnos words of
 their own beside these. A program that never calls `words`
 links none of it (D296); one that does carries every phrase, about 6 KB on
-Cortex-M0, which a `match` of thirty-two arms costs there.
+Cortex-M0, which a `match` of thirty-six arms costs there.
 
 **The alternatives:** a `words` in each module, which a failure set mixing
 `io` and `net` atoms, as a socket's does, could not pass to either; a
