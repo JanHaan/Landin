@@ -4945,9 +4945,28 @@ def shared_routine_witnesses():
 def tour_example_witnesses():
     """Tour examples that retain their compiled source witnesses."""
     tour = read_file(os.path.join(ROOT, "tour.md"), encoding="utf-8")
+    out = []
+    for heading, witnesses in (
+            ("Hello, world", ("first-program",)),
+            ("Reading a file", ("tour-line-count", "tour-line-count-missing"))):
+        found = re.search(r"^## " + re.escape(heading)
+                          + r"\n.*?^```landin\n(.*?)^```$", tour, re.M | re.S)
+        for witness in witnesses:
+            where = "compiler/tests/fixtures/runtime/" + witness + "/main.ldn"
+            source = read_file(os.path.join(ROOT, where), encoding="utf-8")
+            if not found or found.group(1) != source:
+                out.append((where, 1, "compiled witness differs from tour "
+                            + heading))
+    where = "compiler/tests/fixtures/runtime/tour-printed-values/main.ldn"
+    source = read_file(os.path.join(ROOT, where), encoding="utf-8")
+    for pattern, name in (
+            (r"^(print_born: \(.*?^end print_born)$", "print_born"),
+            (r"^```landin\n(    print_born\([^\n]*\n)```$", "print_born call")):
+        found = re.search(pattern, tour, re.M | re.S)
+        if not found or found.group(1) not in source:
+            out.append((where, 1, "compiled witness differs from tour " + name))
     where = "compiler/tests/fixtures/positive/r491-tour-allocator-examples/main.ldn"
     source = read_file(os.path.join(ROOT, where), encoding="utf-8")
-    out = []
     for name in ("new_buffers", "make_widget"):
         found = re.search(r"^" + name + r": \(.*?^end " + name + r"$",
                           tour, re.M | re.S)

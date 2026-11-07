@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: the tour line counter reports a missing file and returns one
+constructs: 0400, 0960, 1030, 1100, 1130, 1370, 1650, 1660
+program: main.ldn
+root: ../../../../..
+run_args: tour-line-count-missing-input.txt
+run_expect: output.txt
+status: 1
+stream: merged
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

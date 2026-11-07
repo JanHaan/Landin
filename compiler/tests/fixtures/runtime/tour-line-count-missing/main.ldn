@@ -1,0 +1,34 @@
+import core/failure
+import core/io
+import hosted/blocking
+
+--- How many lines the file named by the first argument has.
+count_file_lines: (host: blocking.host) -> (lines: usize)
+                  ! io.no_argument | io.not_found | io.no_access | io.io_failed
+                  | io.line_too_long =
+    path := try io.argument_at(host, 0)
+    source := try io.open_read(host, path)
+    defer io.close(host, source) else none
+    mut buffer: [4096]u8 = zeroed
+    mut reader := io.lines_over(host, source, buffer)
+    lines = 0
+    loop do
+        line := try io.read_line(reader)
+        break when line.finished
+        inc lines
+    end loop
+end count_file_lines
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    lines := count_file_lines(host) else (problem)
+        words: []u8 = failure.words(problem)
+        io.write_format(host, io.err(host), "error: {}\n", [any(addr words)])
+            else none
+        code = 1
+        return
+    end
+    io.write_format(host, io.out(host), "{} lines\n", [any(addr lines)])
+        else none
+    code = 0
+end main
