@@ -36,12 +36,11 @@ checked source
     -> assembly -> platform assembler and linker
 ```
 
-The same IR feeds four native emitters across seven assembly targets:
-x86-64 emits Linux and FreeBSD hosted executables, shared arm64 emits Linux,
-Darwin and FreeBSD hosted executables, RISC-V emits Linux hosted
-executables on RV64 and firmware on RV32 at XLEN 32, and Cortex-M0 emits
-firmware. The IR is expressed without machine registers,
-stack offsets or instruction encodings. Each backend
+The same IR feeds the native x86-64, arm64, RISC-V, Cortex-M and Xtensa
+emitters for hosted executables and firmware. The
+[capability inventory](capabilities.md) names the supported targets and their
+limits. The IR is expressed without machine registers, stack offsets or
+instruction encodings. Each backend
 translates its operations into machine instructions and supplies the calling
 convention and object-format details.
 
@@ -650,6 +649,19 @@ routine or holds a zero word in its place (D374), as every backend decides
 it for this unit, so a pruning claim can be read here rather than in the
 assembly or `nm`. The recorded corpus dump leaves the word out, because the
 backend, not the lowering, decides it.
+
+For a saved comparison that identifies its request and generic instances,
+use the annotated form:
+
+```sh
+refine compile --emit=ir-annotated --optimize=none --specialize=off program.ldn -o program.ir
+```
+
+Its first line records the target, CPU feature level, optimization and
+specialization settings. Routine names include their module and, for a
+generic instance, its template name and item identity. It also includes the
+reached-type metadata described above. The compact `--emit=ir` form keeps its
+existing spelling for comparisons against recorded fixtures.
 
 The dump has no reader and is not a stable serialization format. Comparing a
 fresh dump with the recorded one detects a change in lowering; it does not
