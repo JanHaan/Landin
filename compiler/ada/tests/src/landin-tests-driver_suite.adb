@@ -4255,6 +4255,146 @@ package body Landin.Tests.Driver_Suite is
          & "    code = 0" & LF & "end main", "", Accepted => True);
    end Tool_Placement_Advice_Is_Accurate;
 
+   procedure Fixed_Name_Advice_Names_Alternatives
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Name_Advice_Names_Alternatives
+     (Item : in out Landin.Testing.Context)
+   is
+      Record_Type : constant String :=
+        "record: type = struct" & LF & "    value: u32" & LF
+        & "end record" & LF;
+
+      procedure Check (Source, Advice : String; Accepted : Boolean := False);
+
+      procedure Check (Source, Advice : String; Accepted : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_File ("fixed.ldn", Source & LF);
+         declare
+            Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
+              (Both ("check", "fixed.ldn"), Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item,
+               (if Accepted then Result.Status = Landin.Driver.Status_Success
+                else Result.Status = Landin.Driver.Status_Reported
+                  and then Contains (Report, "L0305")
+                  and then Contains (Report, Advice)),
+               "fixed name alternatives: " & Report);
+            if not Accepted and then Advice = "module or runtime values"
+            then
+               Landin.Testing.Check
+                 (Item, Contains (Report, "use options, compiler facts")
+                  and then Contains (Report, "sizeof/alignof of scalar")
+                  and then Contains (Report, "compiler.assert also admits")
+                  and then not Contains (Report, "no user routine runs"),
+                  "name lookup refusal explains admitted forms: " & Report);
+            end if;
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "fixed checks invoke no tools");
+         end;
+      end Check;
+   begin
+      Check
+        ("limit: u32 = 4" & LF & "compiler.assert(limit < 3)",
+         "module or runtime values");
+      Check
+        ("limit: u32 = 4" & LF & "option count: u32 = limit",
+         "module or runtime values");
+      Check
+        ("limit: u32 = 4" & LF & "fixed if limit == 4 then" & LF
+         & "end if", "module or runtime values");
+      Check
+        (Record_Type & "option size: usize = sizeof record",
+         "a fixed condition or option default measures scalar types");
+      Check
+        (Record_Type & "fixed if alignof record == 4 then" & LF & "end if",
+         "a fixed condition or option default measures scalar types");
+      Check
+        (Record_Type & "option count: u32 = 4" & LF
+         & "option size: usize = sizeof u32" & LF
+         & "compiler.assert(count == 4)" & LF
+         & "compiler.assert(compiler.word_size == 8 * sizeof usize)" & LF
+         & "compiler.assert(sizeof record == 4)" & LF
+         & "compiler.assert(alignof record == 4)" & LF
+         & "fixed if size == 4 and alignof u32 == 4 then" & LF & "end if",
+         "", Accepted => True);
+   end Fixed_Name_Advice_Names_Alternatives;
+
+   procedure Unknown_Build_Options_Offer_Bounded_Discovery
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unknown_Build_Options_Offer_Bounded_Discovery
+     (Item : in out Landin.Testing.Context)
+   is
+      Pair : constant String := "option bat: bool = false" & LF
+        & "option cat: bool = false" & LF;
+      Many : constant String := Pair & "option zebra: bool = false" & LF
+        & "option verbose: bool = false" & LF;
+
+      procedure Check
+        (Source, Written, Hint : String; Accepted : Boolean := False);
+
+      procedure Check
+        (Source, Written, Hint : String; Accepted : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("options.ldn", Source & LF);
+         Args.Append ("check");
+         Args.Append ("--option=" & Written & "=true");
+         Args.Append ("options.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item,
+               (if Accepted then Result.Status = Landin.Driver.Status_Success
+                else Result.Status in Landin.Driver.Status_Reported
+                    | Landin.Driver.Status_Misuse
+                  and then Contains (Report, "L0002")
+                  and then Contains (Report, "unknown build option: "
+                                     & Written)),
+               "unknown options retain their refusal: " & Report);
+            Landin.Testing.Check
+              (Item,
+               (if Hint = "" then
+                  not Contains (Report, "did you mean")
+                  and then not Contains (Report, "available build options")
+                else Contains (Report, Hint)),
+               "option discovery is bounded and deterministic: " & Report);
+            if Contains (Hint, "available build options") then
+               Landin.Testing.Check
+                 (Item, not Contains (Report, "did you mean"),
+                  "ambiguous names do not select one correction: " & Report);
+            end if;
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "option checks invoke no tools");
+         end;
+      end Check;
+   begin
+      Check ("option verbose: bool = false", "verbos",
+             "did you mean `verbose`?");
+      Check (Many, "vebrose", "did you mean `verbose`?");
+      Check (Pair, "hat", "available build options: `bat`, `cat`");
+      Check
+        ("option zebra: bool = false" & LF & "option bat: bool = false" & LF
+         & "option cat: bool = false", "unknown",
+         "available build options: `bat`, `cat`, `zebra`");
+      Check (Many, "hat", "");
+      Check (Many, "unknown", "");
+      Check ("", "unknown", "");
+      Check (Many, "verbose", "", Accepted => True);
+   end Unknown_Build_Options_Offer_Bounded_Discovery;
+
    procedure Fixed_Options_Are_Deterministic
      (Item : in out Landin.Testing.Context);
 
@@ -8362,6 +8502,12 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "tool placement advice is accurate",
          Tool_Placement_Advice_Is_Accurate'Access);
+      Landin.Testing.Register
+        (Into, "driver", "fixed name advice names alternatives",
+         Fixed_Name_Advice_Names_Alternatives'Access);
+      Landin.Testing.Register
+        (Into, "driver", "unknown build options offer bounded discovery",
+         Unknown_Build_Options_Offer_Bounded_Discovery'Access);
       Landin.Testing.Register
         (Into, "driver", "fixed options are deterministic",
          Fixed_Options_Are_Deterministic'Access);
