@@ -29,6 +29,7 @@ Clone or download the repository, then use the package for the editor in the
 table. Every package associates the `.ldn` suffix with Landin; the structural
 packages also provide editor features such as indentation, folds, text
 objects or an outline where their host supports them.
+
 | editor or tool | package | installation |
 |---|---|---|
 | Zed | `highlight/zed` | Open Extensions, choose **Install Dev Extension**, and select this directory. |
