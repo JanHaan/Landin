@@ -1,0 +1,13 @@
+import core/io
+import hosted/blocking
+
+print_born: (host: blocking.host, name: utf8, year: u32) -> none =
+    io.write_format(host, io.out(host), "{} was born in {}.\n",
+                    [any(addr name), any(addr year)]) else none
+end print_born
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    print_born(host, "Ada", 1815) -- Ada was born in 1815.
+    code = 0
+end main
