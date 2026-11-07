@@ -13731,8 +13731,8 @@ package body Landin.Tests.Checking_Suite is
          Accepted => False);
       Check_Source
         ("zero argument user function",
-         "u8: () -> (r: u8) = r = 41 end u8" & LF
-         & "f: () -> (r: u8) = r = u8() end f" & LF,
+         "u8: () -> (r: i32) = r = 41 end u8" & LF
+         & "f: () -> (r: i32) = r = u8() end f" & LF,
          Accepted => True);
       Check_Source
         ("two argument user function",
