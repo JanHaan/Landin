@@ -5142,27 +5142,32 @@ package body Landin.Tests.Parser_Suite is
             Spaces : Landin.Tokens.Spacing.Table;
          begin
             Landin.Testing.Check_Equal
-              (Item, Fixed, Prelude & Import_Line & Documentation & Declaration,
+              (Item, Fixed,
+               Prelude & Import_Line & Documentation & Declaration,
                "the move leaves documentation and annotations together");
             Landin.Testing.Check
-              (Item, not Clashed, "the documentation-preserving move is disjoint");
+              (Item, not Clashed,
+               "the documentation-preserving move is disjoint");
             Landin.Tokens.Lexer.Lex
               (Fixed_Sources.Get (Fixed_Id), Names, Fixed_Stream);
             Landin.Tokens.Spacing.Add (Spaces, Fixed_Stream);
             declare
                Fixed_Parsed : constant Landin.Syntax.Tree :=
-                 Landin.Syntax.Parser.Parse (Fixed_Stream, Names, Fixed_Reports);
+                 Landin.Syntax.Parser.Parse
+                   (Fixed_Stream, Names, Fixed_Reports);
             begin
                Landin.Testing.Check
                  (Item, Landin.Diagnostics.Count (Fixed_Reports) = 0
-                    and then Landin.Syntax.Declaration_Count (Fixed_Parsed) = 1,
+                    and then Landin.Syntax.Declaration_Count
+                      (Fixed_Parsed) = 1,
                   "the documented annotated declaration still parses");
             end;
             Landin.Testing.Check_Equal
               (Item, Landin.Server.Navigation.Doc_Comment
                  (Fixed, Landin.Source.Byte_Offset
                     (Ada.Strings.Fixed.Index
-                       (Fixed, (if Annotated then "link(keep)" else "f:")) - 1),
+                       (Fixed,
+                        (if Annotated then "link(keep)" else "f:")) - 1),
                   Spaces, Fixed_Id),
                "The routine's first line." & ASCII.LF & "Its second line.",
                "the editor still attaches both documentation lines");
@@ -5181,7 +5186,8 @@ package body Landin.Tests.Parser_Suite is
          Stream : Landin.Tokens.Token_Stream;
          Found : Landin.Diagnostics.Diagnostic_List;
          Id : constant Landin.Source.Source_Id := Sources.Add
-           ("shared-line-annotation", "import first/module link(keep)" & ASCII.LF
+           ("shared-line-annotation",
+            "import first/module link(keep)" & ASCII.LF
             & "f: () -> none = end f" & ASCII.LF
             & "import other/module" & ASCII.LF);
       begin
@@ -5194,7 +5200,8 @@ package body Landin.Tests.Parser_Suite is
          begin
             Landin.Testing.Check_Equal
               (Item, Landin.Diagnostics.Count (Restated), 1,
-               "the shared annotation line still has only the late-import refusal");
+               "the shared annotation line still has only the late-import"
+               & " refusal");
             if Landin.Diagnostics.Count (Restated) = 1 then
                Landin.Testing.Check_Equal
                  (Item, Landin.Diagnostics.Fix_Count
