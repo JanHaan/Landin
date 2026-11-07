@@ -1,4 +1,4 @@
-error[L0301]: this argument has a different array shape
+error[L0301]: this argument has type `[6]u8`, but this parameter requires `[7]u8`
   --> ../tests/fixtures/negative/r470-array-inout-parameter-shape-mismatch/program.ldn:7:13
   |
 7 |     consume(values)

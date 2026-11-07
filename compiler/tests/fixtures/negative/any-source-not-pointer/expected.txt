@@ -7,4 +7,4 @@ error[L0342]: `any` erases a pointer to the represented value
    |
 17 |     erased: any display = any(item)
    |             ^^^^^^^^^^^ the runtime-dispatch type written here
-  = note: [1370]/[1380]: the pair retains the pointee; it never copies an unknown-sized value
+  = note: [1380]: for a conforming value whose storage outlives the erased view, write `any(addr item)`

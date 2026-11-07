@@ -7,4 +7,4 @@ error[L0301]: this is `f64` and `f32` belongs here
   |
 1 | wrong: f32 = f64.infinity
   | ^^^^^^^^^^^^^^^^^^^^^^^^^ the type declared here
-  = note: [1890]: two types that must agree, and [0310] converts nothing between them
+  = note: [1890]: these types must agree, with no implicit conversion; [0310]: write T(value) where an explicit conversion exists

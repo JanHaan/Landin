@@ -7,4 +7,4 @@ error[L0301]: this is `bool` and `i32` belongs here
   |
 2 |     row := [1, true, 3]
   |     ^^^^^^^^^^^^^^^^^^^ the first inferred array element
-  = note: [1890]: two types that must agree, and [0310] converts nothing between them
+  = note: [1890]: these types must agree, with no implicit conversion; [0310]: write T(value) where an explicit conversion exists

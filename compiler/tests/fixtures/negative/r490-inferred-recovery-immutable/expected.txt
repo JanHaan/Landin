@@ -7,4 +7,4 @@ error[L0303]: `error` is not mutable, so it may not be written
   |
 8 |     leaf() else (error)
   |            ^^^^ declared here
-  = note: [1900]: a mutable binding and a named return may be written, and nothing else may
+  = note: [1900]: mutable bindings, named returns and `inout` parameters may be written

@@ -1,4 +1,4 @@
-error[L0301]: this argument has a different struct type
+error[L0301]: this argument has type `right`, but this parameter requires `left`
   --> ../tests/fixtures/negative/returned-struct-argument-nominal-mismatch/program.ldn:17:13
    |
 17 |     consume(make())

@@ -7,4 +7,4 @@ error[L0301]: this is `usize` and `i32` belongs here
   |
 4 |  for i in start..<limit do end for
   |           ^^^^^ the other endpoint of this range
-  = note: [1890]: two types that must agree, and [0310] converts nothing between them
+  = note: [1890]: these types must agree, with no implicit conversion; [0310]: write T(value) where an explicit conversion exists

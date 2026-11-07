@@ -7,5 +7,5 @@ error[L0303]: `space` is not mutable, so it may not be written
   |
 7 |     space: fault.space = zeroed
   |     ^^^^^ declared here
-  = note: [1900]: a mutable binding and a named return may be written, and nothing else may
+  = note: [1900]: mutable bindings, named returns and `inout` parameters may be written
   = help (guess): declare `space` with `mut`

@@ -1,4 +1,4 @@
-error[L0301]: this argument has a different struct type
+error[L0301]: this argument has type `(denied | none_found | ptr mut u32)`, but this parameter requires `(closed | denied | none_found | ptr mut u32)`
   --> ../tests/fixtures/negative/pointer-union-many-inout-is-exact/program.ldn:13:12
    |
 13 |     change(f)

@@ -3,8 +3,8 @@ error[L0341]: this conformance function does not have the concept entry's signat
    |
 19 | bag is iterable (cur: usize, item_type: ptr i32,
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/iterable-retained-item-source/main.ldn:4:5
-  |
-4 |     item: (s: ptr t, c: cur) -> (v: item_type)
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the required entry
-  = note: [1240]: each supplied function has exactly the requirement's concrete shape
+  --> ../tests/fixtures/negative/iterable-retained-item-source/main.ldn:15:1
+   |
+15 | item: (s: ptr bag, c: usize) -> (v: ptr i32 from s) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ supplied `(s: ptr bag, c: usize) -> (v: ptr i32 from s)`
+  = note: [1240]: required `(s: ptr bag, c: usize) -> (v: ptr i32)`

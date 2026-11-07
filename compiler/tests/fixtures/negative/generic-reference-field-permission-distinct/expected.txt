@@ -1,4 +1,4 @@
-error[L0301]: this argument has a different struct type
+error[L0301]: this argument has type `holder(ptr node)`, but this parameter requires `holder(ptr mut node)`
   --> ../tests/fixtures/negative/generic-reference-field-permission-distinct/program.ldn:21:27
    |
 21 |     needs_mutable_pointer(held)

@@ -49,4 +49,4 @@ error[L0303]: `where` is an `in` or `sink` parameter, so its value may not be re
    |
 40 | write_caller: (caller where: site) -> none =
    |                       ^^^^^ declared here
-  = note: [1900]: a mutable binding and a named return may be written, and nothing else may
+  = note: [1900]: to change a copy, copy the value into a `mut` local; to change the caller's place, declare the parameter `inout`
