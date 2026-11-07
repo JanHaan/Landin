@@ -194,6 +194,38 @@ package body Landin.Tests.Commands_Suite is
                             "refine run ""main.ldn"" -- ""notes"""),
          "data parsed as a second source gets the separator route: "
          & US.To_String (Result.Report));
+      declare
+         Structured : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["run", "--diagnostics=json", "--link=libc", "main.ldn",
+               "notes"], Host, Tools, Meter,
+              Built_For => "x86_64-pc-linux-gnu");
+         Found, Rendered : Boolean := False;
+      begin
+         for Index in 1 .. Landin.Diagnostics.Count (Structured.Found) loop
+            declare
+               D : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Structured.Found, Index);
+            begin
+               for N in 1 .. Landin.Diagnostics.Note_Count (D) loop
+                  if Contains
+                    (Landin.Diagnostics.Nth_Note (D, N),
+                     "refine run ""main.ldn"" -- ""notes""")
+                  then
+                     Found := True;
+                     Rendered := Rendered or else Contains
+                       (US.To_String (Structured.Report), Landin.Json.Quoted
+                          (Landin.Diagnostics.Nth_Note (D, N)));
+                  end if;
+               end loop;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Structured.Status = 1 and then Found,
+            "structured diagnostics retain the same separator repair");
+         Landin.Testing.Check
+           (Item, Rendered, "JSON rendering includes the separator repair");
+      end;
       Result := Landin.Commands.Execute
         (["run", "--link=libc", "main.ldn", "--", "notes"],
          Host, Tools, Meter, Built_For => "x86_64-pc-linux-gnu");
