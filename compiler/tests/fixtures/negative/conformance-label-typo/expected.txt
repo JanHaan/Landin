@@ -1,0 +1,11 @@
+error[L0341]: this label is not an input or entry of the named concept
+  --> ../tests/fixtures/negative/conformance-label-typo/program.ldn:9:17
+  |
+9 | i32 is ordered (lss: less_i32)
+  |                 ^^^
+  --> ../tests/fixtures/negative/conformance-label-typo/program.ldn:1:1
+  |
+1 | ordered: type = concept (t: type)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the concept declared here
+  = note: [1240]: conformance labels match the concept declaration
+  = help (guess): did you mean `less`?
