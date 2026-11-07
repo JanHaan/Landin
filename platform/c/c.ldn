@@ -17,7 +17,7 @@ compiler.assert(compiler.c_sysv_lp64 or compiler.c_darwin_lp64
                 or compiler.c_aapcs32)
 
 fixed if compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d
-         or compiler.c_aapcs32 then
+  or compiler.c_aapcs32 then
     --- The selected ABI's plain C char: unsigned under standard AAPCS64,
     --- RISC-V LP64D and AAPCS32, signed under SysV and Darwin LP64. A numeric
     --- byte, not a Unicode scalar.
