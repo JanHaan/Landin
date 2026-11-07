@@ -303,8 +303,7 @@ package body Landin.Tests.X86_Optimization_Suite is
 
    procedure Naked_Bodies (Item : in out Landin.Testing.Context) is
       Source : constant String :=
-        "import landin/assembler" & LF
-        & "extern(naked) first: () -> none =" & LF
+        "extern(naked) first: () -> none =" & LF
         & "    assembler.block(""ret"")" & LF & "end first" & LF
         & "extern(naked) second: () -> none =" & LF
         & "    assembler.block(""ret"")" & LF & "end second" & LF
