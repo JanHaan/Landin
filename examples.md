@@ -1833,6 +1833,10 @@ leaving it untouched. Once it creates the directory, an `undo` attempts
 cleanup if setup or copying fails and reports any cleanup failure with
 the directory to remove.
 
+- The destination must be outside the source. Before creating it, the
+  program compares device and inode identities along its existing ancestors,
+  following symbolic links. Paths must stay put during the copy; this example
+  does not defend against concurrent renames or changing mount arrangements.
 - Each file is written to a temporary file that `io.make_temporary` makes
   beside its destination. `io.synchronize` then puts its bytes on the disk
   and `io.rename` moves it into place, so a program reading the copy sees
@@ -2029,6 +2033,9 @@ end tally
 too_many: atom
 too_long: atom
 
+--- A destination is the source directory or is below it.
+inside_source: atom
+
 --- An entry kept past the read that gave it: a directory lends a name only
 --- until its next read.
 kept: type = struct
@@ -2088,7 +2095,9 @@ parent_of: (path: []u8) -> (parent: []u8 from path) =
     while at > 0 and path[at - 1] <> 47 do
         dec at
     end while
-    parent = if at == 0 then "." else path[0..<at - 1] end if
+    parent = if at == 0 then "."
+             elsif at == 1 then "/"
+             else path[0..<at - 1] end if
 end parent_of
 
 --- Whether the process may read and write any file whatever its
@@ -2121,12 +2130,50 @@ dropped: (host: blocking.host, path: text.host_string) -> none =
     io.remove_file(host, path) else none
 end dropped
 
+--- Refuse a destination in the source before making anything.  Follow
+--- links while walking existing destination ancestors by device and inode;
+--- spelling a path with `..` or a link cannot hide the source.  As with the
+--- copy itself, paths must stay put while the operation runs.
+outside_source: (from_path: []u8, to_path: []u8) -> none ! ... =
+    source_status: posix.status =
+        try posix.status_at(posix.working_directory,
+                             text.host_over(from_path), true)
+    mut room: [256]u8 = zeroed
+    mut path := text.over(room)
+    mut length: usize = lenof to_path
+    while length > 1 and to_path[length - 1] == 47 do
+        dec length
+    end while
+    try text.append(path, to_path[0..<length])
+    mut found: posix.status =
+        posix.status_at(posix.working_directory,
+                         text.host_over(text.used(path)), true) else (problem)
+            fail problem when problem <> posix.enoent
+            text.clear(path)
+            try text.append(path, parent_of(to_path[0..<length]))
+            try posix.status_at(posix.working_directory,
+                                 text.host_over(text.used(path)), true)
+        end
+    loop do
+        fail inside_source when found.device == source_status.device
+                                and found.inode == source_status.inode
+        try text.append(path, "/..")
+        parent: posix.status =
+            try posix.status_at(posix.working_directory,
+                                 text.host_over(text.used(path)), true)
+        break when parent.device == found.device
+                   and parent.inode == found.inode
+        found = parent
+    end loop
+end outside_source
+
 --- Copy the directory the first argument names to the path the second
 --- names, and say what the copy did.
 copy_named: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
             -> none ! ... =
     from_path: []u8 = text.host_bytes(try io.argument_at(host, 0))
     to_path: []u8 = text.host_bytes(try io.argument_at(host, 1))
+    try outside_source(from_path, to_path)
     mut done: tally = (files: 0, links: 0, directories: 0, skipped: 0,
                        replaced: 0)
     try copy_directory(host, from_path, to_path, done)
@@ -2139,11 +2186,13 @@ end copy_named
 
 --- Say on standard error why the copy stopped.  `posix.words` words an
 --- errno and, through `core/failure`, the library's own failures.
-complain: (host: blocking.host, problem: too_many | too_long | differs
+complain: (host: blocking.host, problem: too_many | too_long | inside_source
+           | differs
            | posix.reason) -> none =
     reason: []u8 = match problem
         too_many: "a directory holds more entries than the copy keeps"
         too_long: "a name is longer than the copy keeps"
+        inside_source: "the destination is the source directory or lies inside it"
         differs: "the copy differs from what was copied"
         _ (rest): posix.words(rest)
     end match
@@ -2464,6 +2513,16 @@ same_tree: (host: blocking.host, from_path: []u8, to_path: []u8)
     end for
 end same_tree
 
+--- An unsafe destination is refused before a copy can create it.
+refuses_inside: (from_path: []u8, to_path: []u8) -> none ! ... =
+    mut refused: bool = false
+    outside_source(from_path, to_path) else (problem)
+        fail problem when problem <> inside_source
+        refused = true
+    end
+    fail differs when not refused
+end refuses_inside
+
 --- The edge cases the copy must get right: a read-only file refuses a
 --- write, a read past the end of a sparse file gives nothing, and a file
 --- with two names in the source is two files in the copy.
@@ -2556,6 +2615,13 @@ demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
     try io.make_directory(host, text.host_over(top))
     undo abandon(host)
     try build(host)
+    try refuses_inside(source, source)
+    try refuses_inside(source, "tree-copy-scratch/source/child")
+    try refuses_inside(source, "tree-copy-scratch/source/../source/child")
+    try posix.symbolic_link_at(text.host_over("source"),
+                                posix.working_directory,
+                                text.host_over("tree-copy-scratch/alias"))
+    try refuses_inside(source, "tree-copy-scratch/alias/child")
     mut first: tally = (files: 0, links: 0, directories: 0, skipped: 0,
                         replaced: 0)
     try copy_directory(host, source, copy, first)

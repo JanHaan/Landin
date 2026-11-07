@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the published tree copy builds a scratch tree and copies it twice as cp -a does, each file into a temporary file renamed into place and each symbolic link made under a fresh name and renamed, keeping contents with their holes, permission bits and times and links as links, skipping a socket; the second copy replaces every entry of the first in one step, the listing reports links without following them, a read-only file refuses a write through a read-only descriptor and to an open for writing unless the process is root, a read past the end of a sparse file gives nothing, and a file with two names is two files in the copy
+summary: same-directory and descendant destinations, including dot components and a symbolic-link alias, are refused before writing; the published tree copy builds a scratch tree and copies it twice as cp -a does, each file into a temporary file renamed into place and each symbolic link made under a fresh name and renamed, keeping contents with their holes, permission bits and times and links as links, skipping a socket; the second copy replaces every entry of the first in one step, the listing reports links without following them, a read-only file refuses a write through a read-only descriptor and to an open for writing unless the process is root, a read past the end of a sparse file gives nothing, and a file with two names is two files in the copy
 program: main.ldn
 root: ../../../../..
 run_expect: output.txt
