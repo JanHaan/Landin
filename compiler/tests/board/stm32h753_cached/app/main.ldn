@@ -2,25 +2,36 @@
 -- receive ring and a transmit, each by DMA with the Cortex-M7's data cache
 -- on and its buffers in the cached AXI SRAM, maintained through core/cache
 -- and platform/cortex_m/l1 as D227 orders, and beside each the control
--- that leaves the maintenance out and shows what the cache then does.  The ring is
--- serial's, the prototype-1 receive contract the cacheless board runs,
--- used through its public entries alone; the maintenance around it is
--- this program's.  environments/boards/stm32h753_cached/board.py sends
--- the bytes and checks each frame against its oracle.
+-- that leaves the maintenance out and shows what the cache then does.  The
+-- ring is serial's, the prototype-1 receive contract the cacheless board
+-- runs, which does D227's maintenance itself through the provider it is
+-- given (D978): this program gives it `l1.caches()` and writes no
+-- maintenance of the ring's.  environments/boards/stm32h753_cached/board.py
+-- sends the bytes and checks each frame against its oracle.
+--
+-- The stale-read control leaves the ring's maintenance out by giving the
+-- same routines the cacheless provider, whose operations are the barriers
+-- alone: the module's own `restart` and `read` then run as they do on the
+-- cacheless board, so what the control shows is what that code does on a
+-- cached chip, and nothing of the control is a path the maintained ring
+-- does not take.  Its one maintenance of its own, a clean of the ring's
+-- refill, is the control's setup: it leaves the refill in memory and in
+-- the cache, so a line the stream writes behind it stays stale.
 --
 -- The protocol, in the cacheless board's frames: the host's first byte,
 -- read through the maintained ring, starts the run, and the boot frame
 -- `b` reports CCR, CCSIDR and the line.  Then:
 --
 --   * `c`: the ring is refilled with 0x5a, cleaned but not invalidated,
---     and rearmed, so its lines stay cached; the host sends 64 bytes, two
---     lines, and `C` reports how many the read returned as 0x5a, the stale
---     copy, which lines were 0x5a throughout, and the FNV-1a hashes of
---     what it returned and, once the ring is invalidated, of what memory
---     holds;
---   * the host then sends 1024 bytes, read through the ring with each
---     snapshot's lines invalidated before the copy, and `E` reports their
---     count and hash;
+--     and rearmed through the cacheless provider, so its lines stay
+--     cached; the host sends 64 bytes, two lines, read through the same
+--     provider, and `C` reports how many the read returned as 0x5a, the
+--     stale copy, which lines were 0x5a throughout, and the FNV-1a hashes
+--     of what it returned and, once a maintained restart has cleaned and
+--     invalidated the ring, of what memory holds;
+--   * the host then sends 1024 bytes, read through the maintained ring,
+--     which invalidates its lines between each snapshot and its copy, and
+--     `E` reports their count and hash;
 --   * `d`: a line written to memory as 0x11, then dirtied as 0x22 and
 --     invalidated, loses the 0x22; four ranges that are not whole lines
 --     are refused, and the line they cover keeps its dirty 0x44;
@@ -36,6 +47,7 @@
 -- A failure halts with an `h` frame whose `s` names the step, caches on.
 import bringup
 import core/cache
+import core/line
 import descriptions/stm32h753_cached
 import platform/cortex_m
 import platform/cortex_m/l1
@@ -160,20 +172,6 @@ await: (inout r: serial.rx, wanted: usize, limit: u32)
     end loop
 end await
 
--- D227's receive completion: what a snapshot counts the stream has
--- written, its lines invalidated between the count and the copy, and
--- no more than that copied, so that every byte read was in memory
--- before its line was dropped.
-receive: (inout r: serial.rx, caches: l1.handle, into: []mut u8)
-         -> (count: usize) ! serial.receive_error | cache.misaligned =
-    have := try serial.available(r)
-    count = 0
-    return when have == 0
-    try cache.invalidate(caches, rx_storage[0..<256])
-    limit := if have < lenof into then have else lenof into end if
-    count = try serial.read(r, into[0..<limit])
-end receive
-
 -- One transmit of COUNT bytes of the buffer on DMA1 stream 0, memory to
 -- USART3's TDR, polled to its completion; whether it completed without
 -- an error.  D227's device barrier stands before the enable; the
@@ -209,13 +207,14 @@ start: () -> none =
     geometry := l1.geometry()
     bringup.peripherals()
     caches := l1.caches()
-    ring := rx_storage[0..<256]
-    -- D227's receive handoff before the stream is armed.
-    cache.clean_invalidate(caches, ring) else (problem)
+    -- The control's provider: the maintenance left out.
+    bare := cache.cacheless(32) else (problem)
         _ = problem
         halt(1)
     end
-    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+    ring := rx_storage[0..<256]
+    mut receiver := serial.open(caches, line.default_settings, budget,
+                                rx_storage[0..<256]) else (problem)
         _ = problem
         halt(2)
     end
@@ -226,7 +225,7 @@ start: () -> none =
     mut first: usize = 0
     while first == 0 do
         take_events()
-        first = receive(receiver, caches, scratch[0..<1]) else (problem)
+        first = serial.read(caches, receiver, scratch[0..<1]) else (problem)
             _ = problem
             halt(3)
         end
@@ -240,8 +239,9 @@ start: () -> none =
     report.field(115, u32(scratch[0]))
     report.close_frame()
 
-    -- The stale-read control: the ring's refill left cached and clean,
-    -- the stream rearmed without the invalidate D227 orders.
+    -- The stale-read control: the ring's refill left cached and clean, and
+    -- the stream rearmed and read through the cacheless provider, without
+    -- the invalidates D227 orders.
     serial.stop(receiver) else (problem)
         _ = problem
         halt(4)
@@ -251,7 +251,7 @@ start: () -> none =
         _ = problem
         halt(4)
     end
-    serial.restart(receiver) else (problem)
+    serial.restart(bare, receiver) else (problem)
         _ = problem
         halt(4)
     end
@@ -263,23 +263,27 @@ start: () -> none =
         halt(5)
     end
     if have < control_bytes then halt(5) end if
-    seen := serial.read(receiver, scratch[0..<control_bytes]) else (problem)
+    seen := serial.read(bare, receiver, scratch[0..<control_bytes]) else (problem)
         _ = problem
         halt(5)
     end
     stale := matching(scratch[0..<seen], ring_fill)
     stale_lines := whole_lines(scratch[0..<seen], ring_fill)
     seen_hash := fnv(fnv_basis, scratch[0..<seen])
-    cache.invalidate(caches, ring) else (problem)
+    -- The ring handed back with its maintenance: restart cleans and
+    -- invalidates it, so what is read of it next is memory's, the bytes
+    -- the stream wrote.
+    serial.restart(caches, receiver) else (problem)
         _ = problem
         halt(5)
     end
+    memory_hash := fnv(fnv_basis, rx_storage[0..<control_bytes])
     report.open_frame(67)
     report.field(110, u32(seen))
     report.field(115, stale)
     report.field(107, stale_lines)
     report.field(97, seen_hash)
-    report.field(109, fnv(fnv_basis, rx_storage[0..<control_bytes]))
+    report.field(109, memory_hash)
     report.close_frame()
 
     -- The maintained stream.
@@ -292,7 +296,7 @@ start: () -> none =
         end
         if waiting == 0 then halt(6) end if
         room := if stream_bytes - total < 64 then stream_bytes - total else 64 end if
-        n := receive(receiver, caches, scratch[0..<room]) else (problem)
+        n := serial.read(caches, receiver, scratch[0..<room]) else (problem)
             _ = problem
             halt(6)
         end

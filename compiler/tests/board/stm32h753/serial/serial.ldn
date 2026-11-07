@@ -33,6 +33,24 @@
 -- TRBUFF, DMA_SxCR's bit 20, is set, as RM0433 says it must be for a
 -- stream that serves a USART (15.5.5, p. 662); the SVD omits the field and
 -- the policy adds it (D652).
+--
+-- The ring is memory the stream writes behind the CPU's caches, so every
+-- routine that hands it to the stream or reads it takes `core/cache`
+-- maintenance evidence and does D227's handoff itself (D978): `open`,
+-- `restart` and `configure` clean and invalidate the whole ring before
+-- they arm its first lap, and `read` invalidates it between its snapshot
+-- and its copy, so that every byte it copies was written before the line
+-- it lies in was dropped.  The cacheless profile passes
+-- `cache.cacheless(32)`, whose operations are the barriers alone, and the
+-- cached profile `l1.caches()`.  The contract the caller keeps: the ring
+-- is whole lines of the provider's, which `open` refuses otherwise with
+-- `cache.misaligned`; nothing but the stream writes it while it is open,
+-- so it holds no dirty line once `open` or `restart` cleaned it, and the
+-- laps the completion interrupt arms need no maintenance of their own;
+-- and every call passes the provider `open` was given.  A `read` whose
+-- provider refuses the ring breaks the descriptor, as a transfer error
+-- does.
+import core/cache
 import core/line
 import platform/cortex_m
 import stm32h753/dma1
@@ -196,15 +214,18 @@ public idle: () -> (seen: bool) =
     cortex_m.device_barrier()
 end idle
 
-public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
+public open: (provider: type is cache.maintenance, caches: provider,
+              settings: line.settings, budget: u32, escaping buf: []mut u8)
              -> (r: rx from buf) ! busy | line.unsupported_rate | line.unsupported_format
-                                 | buffer_empty | buffer_too_big | bad_buffer =
+                                 | buffer_empty | buffer_too_big | bad_buffer
+                                 | cache.misaligned =
     size := lenof buf
     fail buffer_empty when size == 0
     fail buffer_too_big when size > 256
     fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
     fail bad_buffer when (usize(addr buf[0]) & (size - 1)) <> 0
     fail bad_buffer when budget < u32(size) or budget > 65535
+    _ = try cache.lines(cache.line(caches), buf)
     images := try line_registers(settings)
     status := dma1.s0cr_read(dma1.base)
     fail busy when (status & enable) <> 0
@@ -225,6 +246,9 @@ public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
     config := dma1.s0cr_encode(stream)
     dma1.s0par_write(dma1.base, u32(usart3.rdr_address))
     dma1.s0cr_write(dma1.base, config)
+    -- D227's receive handoff: no dirty line of the ring left to be
+    -- written over the stream's bytes, and none cached to hide them.
+    try cache.clean_invalidate(caches, buf)
     saved := cortex_m.disable_interrupts()
     stream_config = config
     ring = u32(size)
@@ -279,12 +303,22 @@ public available: (inout r: rx) -> (count: usize) ! receive_error =
     count = try snapshot(r)
 end available
 
-public read: (inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error =
+public read: (provider: type is cache.maintenance, caches: provider,
+              inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error =
     have := try snapshot(r)
     count = have
     if lenof out_buf < count then count = lenof out_buf end if
     backing := r.buf
     capacity := lenof backing
+    -- D227's completion: the snapshot's count says the bytes are written,
+    -- so the ring's lines are dropped before any of them is read.
+    if count > 0 then
+        cache.invalidate(caches, backing) else (problem)
+            _ = problem
+            r.broken = true
+            fail transfer_error
+        end
+    end if
     -- snapshot bounds count by both initialized extents; consumed <= 65535,
     -- i < 256 and capacity is a nonzero power of two. No arithmetic wraps.
     unchecked begin
@@ -315,10 +349,16 @@ public stop: (inout r: rx) -> none ! stop_timeout =
 end stop
 
 -- Discards unread bytes deliberately; may be called after error or exhaustion.
-public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
+public restart: (provider: type is cache.maintenance, caches: provider, inout r: rx)
+                -> none ! stop_timeout | transfer_error =
     try stop(r)
     status := dma1.lisr_read(dma1.base)
     fail transfer_error when (status & errors) <> 0
+    cache.clean_invalidate(caches, r.buf) else (problem)
+        _ = problem
+        r.broken = true
+        fail transfer_error
+    end
     usart3.icr_write(usart3.base, uart_overrun)
     r.consumed = 0
     r.produced = 0
@@ -340,7 +380,8 @@ end restart
 -- p. 2067), the line programmed, and the stream restarted, which discards
 -- what the ring held unread.  A byte arriving meanwhile is lost, so the
 -- caller changes the line only while its peer is waiting for it.
-public configure: (inout r: rx, settings: line.settings)
+public configure: (provider: type is cache.maintenance, caches: provider,
+                   inout r: rx, settings: line.settings)
                   -> none ! line.unsupported_rate | line.unsupported_format
                           | stop_timeout | transfer_error =
     images := try line_registers(settings)
@@ -350,5 +391,5 @@ public configure: (inout r: rx, settings: line.settings)
     try stop(r)
     program(images)
     usart3.icr_write(usart3.base, uart_overrun | uart_idle)
-    try restart(r)
+    try restart(caches, r)
 end configure
