@@ -8408,8 +8408,59 @@ package body Landin.Tests.Driver_Suite is
          "multiple candidates still require explicit selection");
    end Missing_Firmware_Entry_Guidance;
 
+   procedure Cortex_Model_Refusals_Name_Target_And_Level
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Model_Refusals_Name_Target_And_Level
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refused (Core, Level : String);
+
+      procedure Refused (Core, Level : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", "this source must not be read");
+         Host.Raise_On_Read;
+         Tools.Raise_On_Run;
+         Result := Landin.Driver.Execute
+           (["--target=" & Core, "main.ldn"], Host, Tools);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Contains (Unbounded.To_String (Result.Report),
+                               "unknown target: " & Core)
+            and then Contains (Unbounded.To_String (Result.Report),
+                               "--target=cortex-m0 --level=" & Level)
+            and then Host.Write_Count = 0 and then Tools.Run_Count = 0,
+            Core & " stays an unknown target and names its target/level pair: "
+            & Unbounded.To_String (Result.Report));
+      end Refused;
+   begin
+      Refused ("cortex-m0plus", "armv6-m");
+      Refused ("cortex-m3", "armv7-m");
+      Refused ("cortex-m4", "armv7e-m");
+      Refused ("cortex-m7", "armv7e-m");
+      Refused ("cortex-m33", "armv8-m.main");
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
+           (["--target=cortex-m55", "main.ldn"], Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then not Contains (Unbounded.To_String (Result.Report),
+                                   "--level="),
+            "an unrecognized core is not given an invented level");
+      end;
+   end Cortex_Model_Refusals_Name_Target_And_Level;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "Cortex model refusals name target and level",
+         Cortex_Model_Refusals_Name_Target_And_Level'Access);
       Landin.Testing.Register
         (Into, "driver", "missing firmware entry guidance",
          Missing_Firmware_Entry_Guidance'Access);
