@@ -223,7 +223,8 @@ short:
   as a group a routine joins among them; and Linux executables with no C
   library by default.
 - **The C boundary:** each hosted target's C ABI, packed and flexible
-  records, callbacks and variadic calls, and `refine bindings`, a binding
+  records, callbacks and variadic calls, Cortex-M's AAPCS32 with its float
+  unit's variant, without variadic calls, and `refine bindings`, a binding
   generator over Clang.
 - **Code generation:** byte-identical output on every target whatever the
   build environment; register allocation, inlining and simplification at

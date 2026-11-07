@@ -1,6 +1,7 @@
---  Cortex-M0 has no C ABI yet: a layout(c) record whose fields are all C
---  fields and a C signature are each refused naming the target, and a
---  byte-packed layout(c, packed) record stands.
+--  RV32 has no enabled C ABI yet, though Cortex-M's AAPCS32 is (D920): a
+--  layout(c) record whose fields are all C fields and a C signature are
+--  each refused naming the target, and a byte-packed layout(c, packed)
+--  record stands.
 header: type = layout(c) struct
     kind: u8
     length: u32

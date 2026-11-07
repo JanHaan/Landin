@@ -6,6 +6,7 @@ with Landin.Backend.Cortex_M;
 with Landin.Backend.Toolchain;
 with Landin.Build_Reports;
 with Landin.Build_Reports.Firmware;
+with Landin.Configuration;
 with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Driver.Boot_Stage;
@@ -797,16 +798,30 @@ package body Landin.Tests.Cortex_Suite is
          and then T.C_ABI_Of (T.Cortex_M) = T.Arm_AAPCS32_Soft
          and then T.Maximum_Object_Size (T.Cortex_M) = 2 ** 32 - 1,
          "Cortex-M names the selected architecture and ABI");
+      --  D920, D922: AAPCS32's signatures and records, at both variants,
+      --  and no variadic call yet.
       Landin.Testing.Check
-        (Item, not T.Capabilities.C_Signatures (T.Cortex_M)
-         and then not T.Capabilities.C_Records (T.Cortex_M)
+        (Item, T.Capabilities.C_Signatures (T.Cortex_M)
+         and then T.Capabilities.C_Records (T.Cortex_M)
          and then not T.Capabilities.C_Variadic_Calls (T.Cortex_M)
          and then T.Capabilities.Backend_For (T.Cortex_M)
            = T.Capabilities.Cortex_M0_ELF
          and then T.Capabilities.Debug_Format_Of (T.Cortex_M)
            = T.Capabilities.ELF_DWARF_Lines
          and then T.Capabilities.Triplet (T.Cortex_M) = "arm-eabi",
-         "assembly does not advertise C or source debugging");
+         "AAPCS32 takes C signatures and records, no variadic call, and"
+         & " assembly does not advertise source debugging");
+      Landin.Testing.Check
+        (Item, Landin.Configuration.ABI_Of
+                 (Landin.Configuration.C_AAPCS32_Fact) = T.Arm_AAPCS32_Soft
+         and then Landin.Configuration.Fact_Name
+                 (Landin.Configuration.C_AAPCS32_Fact) = "c_aapcs32"
+         and then not T.Capabilities.C_Signatures (T.RV32)
+         and then not T.Capabilities.C_Records (T.RV32)
+         and then not T.Capabilities.C_Signatures (T.Xtensa)
+         and then not T.Capabilities.C_Records (T.Xtensa),
+         "compiler.c_aapcs32 names AAPCS32, and RV32 and Xtensa stay"
+         & " without C signatures and records");
       for Kind in Ty.Scalar_Name loop
          C := ABI.Classify (Unit, Part (Kind), T.Cortex_M, ABI.External_C);
          Landin.Testing.Check
@@ -1009,9 +1024,167 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Source_Carriers;
 
+   --  D920: C signatures written in source reach Backend.Arm32_ABI and
+   --  are planned at both of AAPCS32's variants.  Every location below is
+   --  where arm-eabi-gcc 16.1 at -mcpu=cortex-m0 -mfloat-abi=soft, and at
+   --  -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard, reads or writes the
+   --  same C signature: a record with an i64 at eight split between r2-r3
+   --  and the stack, a double rounded to the stack's eight, floats and a
+   --  record of two floats in s-registers, narrow integers extended, and
+   --  an eight-byte record result through r0 in the base PCS and in s0-s1
+   --  in the VFP one.
+   procedure C_Source_Signatures (Item : in out Landin.Testing.Context);
+   procedure C_Source_Signatures (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation := Landin.Stages.Create (T.Cortex_M);
+      Order : Landin.Stages.Pipeline;
+      Written : constant Landin.Source.Source_Id := Landin.Stages.Add_Source
+        (Work, "c.ldn",
+         "wide: type = layout(c) struct" & LF
+         & "    tag: i32" & LF & "    value: i64" & LF & "end wide" & LF
+         & "floats: type = layout(c) struct" & LF
+         & "    x: f32" & LF & "    y: f32" & LF & "end floats" & LF
+         & "extern(c) mixed: (a: i32, w: wide, d: f64, s: f32,"
+         & " p: floats, n: i32) -> (r: f64)" & LF
+         & "extern(c) narrow: (b: u8, h: i16) -> (r: u8)" & LF
+         & "public extern(c) exported: (a: i64, b: i32, c: i64)"
+         & " -> (r: floats) =" & LF
+         & "    r = floats(x: 1.0, y: 2.0)" & LF & "end exported" & LF
+         & "public use: () -> (r: f64) =" & LF
+         & "    _ = narrow(b: 200, h: -3)" & LF
+         & "    r = mixed(a: 7, w: wide(tag: 1, value: 2), d: 4.0,"
+         & " s: 3.0, p: floats(x: 5.0, y: 6.0), n: 9)" & LF
+         & "end use" & LF);
+      pragma Unreferenced (Written);
+      Found : Natural := 0;
+
+      procedure Expect
+        (Plan : ABI.Plan; Index : Natural;
+         First_Core, Core_Count : Natural;
+         Stack_At, Stack_Bytes : T.Byte_Count;
+         First_VFP, VFP_Count : Natural; Name : String);
+      procedure Expect
+        (Plan : ABI.Plan; Index : Natural;
+         First_Core, Core_Count : Natural;
+         Stack_At, Stack_Bytes : T.Byte_Count;
+         First_VFP, VFP_Count : Natural; Name : String)
+      is
+         Got : constant ABI.Location :=
+           (if Index = 0 then Plan.Result else Plan.Arguments (Index));
+      begin
+         Landin.Testing.Check
+           (Item, Got.First_Core = First_Core
+            and then Got.Core_Count = Core_Count
+            and then Got.Stack_At = Stack_At
+            and then Got.Stack_Bytes = Stack_Bytes
+            and then Got.First_VFP = First_VFP
+            and then Got.VFP_Count = VFP_Count,
+            Name & " is placed as GCC places it:"
+            & Got.First_Core'Image & Got.Core_Count'Image
+            & Got.Stack_At'Image & Got.Stack_Bytes'Image
+            & Got.First_VFP'Image & Got.VFP_Count'Image);
+      end Expect;
+   begin
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Resolver'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Landin.Stages.Append (Order, Lowerer'Access);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Stages.Run (Order, Work), 5,
+         "C signatures reach verified IR on Cortex-M: "
+         & Landin.Stages.Rendered_Report (Work));
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Index in 1 .. IR.Signature_Count (Code) loop
+            declare
+               Signature : constant IR.Signature_Id := IR.Signature_Id (Index);
+               Parameters : IR.Signature_Part_Array
+                 (1 .. IR.Signature_Parameter_Count (Code, Signature));
+               Results : IR.Signature_Part_Array
+                 (1 .. IR.Signature_Result_Count (Code, Signature));
+            begin
+               for Part in Parameters'Range loop
+                  Parameters (Part) :=
+                    IR.Nth_Signature_Parameter (Code, Signature, Part);
+               end loop;
+               for Part in Results'Range loop
+                  Results (Part) :=
+                    IR.Nth_Signature_Result (Code, Signature, Part);
+               end loop;
+               if IR.Signature_Uses_C_ABI (Code, Signature) then
+                  declare
+                     Base : constant ABI.Plan := ABI.Assign
+                       (Code, Parameters, Results, T.Cortex_M,
+                        ABI.External_C);
+                     Hard : constant ABI.Plan := ABI.Assign
+                       (Code, Parameters, Results, T.Cortex_M,
+                        ABI.External_C, VFP => True);
+                  begin
+                     case Parameters'Length is
+                        when 6 =>
+                           Found := Found + 1;
+                           Expect (Base, 0, 0, 2, 0, 0, 16, 0, "mixed's f64");
+                           Expect (Base, 1, 0, 1, 0, 0, 16, 0, "a");
+                           Expect (Base, 2, 2, 2, 0, 8, 16, 0, "split wide");
+                           Expect (Base, 3, 4, 0, 8, 8, 16, 0, "base d");
+                           Expect (Base, 4, 4, 0, 16, 4, 16, 0, "base s");
+                           Expect (Base, 5, 4, 0, 20, 8, 16, 0, "base p");
+                           Expect (Base, 6, 4, 0, 28, 4, 16, 0, "base n");
+                           Landin.Testing.Check
+                             (Item, Base.Stack_Bytes = 32 and then not Base.VFP
+                              and then Hard.VFP,
+                              "the base PCS stacks 32 bytes");
+                           Expect (Hard, 0, 4, 0, 0, 0, 0, 2, "VFP f64");
+                           Expect (Hard, 2, 2, 2, 0, 8, 16, 0, "VFP wide");
+                           Expect (Hard, 3, 4, 0, 0, 0, 0, 2, "VFP d");
+                           Expect (Hard, 4, 4, 0, 0, 0, 2, 1, "VFP s");
+                           Expect (Hard, 5, 4, 0, 0, 0, 3, 2, "VFP p");
+                           Expect (Hard, 6, 4, 0, 8, 4, 16, 0, "VFP n");
+                        when 2 =>
+                           Found := Found + 1;
+                           Landin.Testing.Check
+                             (Item, Base.Arguments (1).Shape.Extend
+                                = ABI.Zero_Extend
+                              and then Base.Arguments (2).Shape.Extend
+                                = ABI.Sign_Extend
+                              and then Base.Result.Shape.Extend
+                                = ABI.Zero_Extend
+                              and then Hard.Arguments (2).First_Core = 1,
+                              "narrow C integers are extended");
+                        when 3 =>
+                           Found := Found + 1;
+                           Landin.Testing.Check
+                             (Item, Base.Result.Shape.Indirect
+                              and then not Hard.Result.Shape.Indirect,
+                              "an eight-byte record returns through r0 in"
+                              & " the base PCS and in s0-s1 in the VFP one");
+                           Expect (Base, 0, 0, 1, 0, 0, 16, 0, "hidden r0");
+                           Expect (Base, 1, 2, 2, 0, 0, 16, 0, "base i64");
+                           Expect (Base, 2, 4, 0, 0, 4, 16, 0, "base b");
+                           Expect (Base, 3, 4, 0, 8, 8, 16, 0, "base c");
+                           Expect (Hard, 0, 4, 0, 0, 0, 0, 2, "VFP record");
+                           Expect (Hard, 1, 0, 2, 0, 0, 16, 0, "VFP i64");
+                           Expect (Hard, 2, 2, 1, 0, 0, 16, 0, "VFP b");
+                           Expect (Hard, 3, 4, 0, 0, 8, 16, 0, "VFP c");
+                        when others =>
+                           null;
+                     end case;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Found, 3, "each C signature of the source is planned");
+   end C_Source_Signatures;
+
    procedure Driver_Boundaries (Item : in out Landin.Testing.Context) is
    begin
-      for Mode in 1 .. 9 loop
+      for Mode in 1 .. 10 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -1025,9 +1198,12 @@ package body Landin.Tests.Cortex_Suite is
                  when 5 => "f: () -> (r: isize) = 2147483648 end f",
                  when 6 =>
                    "f: () -> (r: ptr u8) = ptr(4294967296) end f",
-                 when 7 => "extern(c) f: () -> (r: u32)",
+                 --  D922: a variadic C import, which AAPCS32 does not call.
+                 when 7 => "extern(c) f: (n: u32, ...) -> (r: u32)",
                  when 8 => "big: type = [4294967296]u8",
-                 when 9 => "big: type = [4294967295]u8"));
+                 when 9 => "big: type = [4294967295]u8",
+                 --  D920: a fixed C import, which it does.
+                 when 10 => "extern(c) f: () -> (r: u32)"));
             Args.Append ("--target=cortex-m0");
             Args.Append ("p.ldn");
             if Mode in 2 .. 3 then
@@ -1041,10 +1217,20 @@ package body Landin.Tests.Cortex_Suite is
             begin
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
-                  (if Mode in 1 | 2 | 9 then Landin.Driver.Status_Success
+                  (if Mode in 1 | 2 | 9 | 10
+                   then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "Cortex target boundary " & Mode'Image & ": "
                   & U.To_String (Result.Report));
+               if Mode = 7 then
+                  Landin.Testing.Check
+                    (Item, U.Index (Result.Report, "L0346") > 0
+                     and then U.Index (Result.Report,
+                       "calls no variadic C function") > 0
+                     and then U.Index (Result.Report, "fixed arity") > 0,
+                     "a variadic C import is refused with what to write"
+                     & " instead: " & U.To_String (Result.Report));
+               end if;
                if Mode = 3 then
                   Landin.Testing.Check
                     (Item, U.Index (Result.Report, "L0502") > 0,
@@ -4350,6 +4536,9 @@ package body Landin.Tests.Cortex_Suite is
          Source_Carriers'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "capabilities and refusals", Refusals'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "C signatures from source at both variants",
+         C_Source_Signatures'Access);
    end Register;
 
 end Landin.Tests.Cortex_Suite;

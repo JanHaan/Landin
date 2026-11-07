@@ -260,6 +260,7 @@ negative/c-packed-field-address | linux-x86-64, linux-arm64, darwin-arm64, freeb
 negative/c-record-holds-no-plain-struct | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/c-record-not-layout-c | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/c-symbol-differs-only-in-escaping | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/c-variadic-cortex-m0 | cortex-m0
 negative/call-array-result-dropped-by-omission | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-of-a-non-function | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-result-dropped-by-omission | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -370,7 +371,6 @@ negative/core-vec-used-read-only | linux-x86-64, linux-arm64, darwin-arm64, synt
 negative/core-vec-used-wrong-from | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/cortex-lenof-slice-element-frame-escape | cortex-m0
 negative/cortex-lenof-slice-range-frame-escape | cortex-m0
-negative/cortex-m0-has-no-c-abi | cortex-m0
 negative/cortex-refused-type-named | cortex-m0
 negative/cstring-literal-write | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/cstring-range-slicing-has-no-length | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -655,6 +655,7 @@ negative/lenof-slice-range-frame-escape | linux-x86-64, linux-arm64, linux-rv64,
 negative/lenof-unresolved-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/library-at-live-inout | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/library-evidence-collision | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/library-platform-c-rv32 | rv32
 negative/library-platform-cortex-m-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 negative/library-platform-cortex-m-reference-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 negative/library-platform-riscv-hazard3-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
@@ -1317,6 +1318,7 @@ negative/root-holding-library-module-is-told | linux-x86-64, linux-arm64, darwin
 negative/rooted-module-imports-the-library | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/rooted-negative-selects-its-target | darwin-arm64
 negative/rooted-source-file-reaches-its-roots | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/rv32-has-no-c-abi | rv32
 negative/scalar-selection-derived-origins | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/scalar-selection-operand-escaping | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/scalar-struct-field-is-not-indexable | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1600,6 +1602,7 @@ positive/binding-mutable | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-
 positive/binding-typed | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/borrow-replaced-each-iteration | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/borrow-replaced-on-every-path | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/c-aliases-aapcs32 | cortex-m0
 positive/c-packed-records | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/call-fills-every-parameter | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/caller-parameters | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

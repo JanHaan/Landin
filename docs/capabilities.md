@@ -154,10 +154,16 @@ entry that describes it, and put a new one where a reader would look for it.
   frames (D618), and a fibre's switch keeps d8-d15 and FPSCR (D620). An
   object built with a unit and one built without declare their float
   attributes as GCC's do, so the linker refuses to mix them in either
-  order (D780). The C half of the convention is a planner contract measured against GCC on
-  QEMU's `mps2-an500`; C interoperation stays disabled on Cortex-M. The
-  whole runtime corpus also runs there, on a lane described in Landin
-  source (D619).
+  order (D780). The convention's C half is measured against GCC on
+  QEMU's `mps2-an500`. The whole runtime corpus also runs there, on a lane
+  described in Landin source (D619).
+- **C on Cortex-M** follows AAPCS32, `compiler.c_aapcs32`, at every level
+  (D920): `layout(c)` records, C function types, `extern(c)` imports and
+  `public extern(c)` definitions, in the base PCS without a float unit
+  and in the VFP variant with one. `platform/c` gives ILP32 aliases with an
+  unsigned plain `char` (D921). A variadic C call is refused, naming a
+  fixed-arity C wrapper to import instead (D922). RV32's ilp32 and
+  Xtensa's windowed C ABI stay disabled.
 - **Devices** are learnt from their CMSIS-SVD files: `refine svd` reads a
   vendor's SVD, fetched by its hash, and a reviewed selection policy, and
   writes the register modules and the generated half of the device's
@@ -658,7 +664,8 @@ process ignores SIGPIPE and gives its children the default back.
   before any tool runs, and a library a failed link cannot find is L0509,
   naming every directory searched. The static Linux link and firmware
   refuse all three.
-- `platform/c` supplies aliases for the supported LP64 C ABIs, and
+- `platform/c` supplies aliases for the supported C ABIs, the four LP64
+  ones and Cortex-M's ILP32 AAPCS32, and
   `platform/cortex_m` supplies M-profile CPU operations; it declares nothing
   on another target, so a program for every target imports it and calls it
   from a `fixed if compiler.arch == cortex_m0` arm (D575).

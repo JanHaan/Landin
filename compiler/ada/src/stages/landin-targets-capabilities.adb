@@ -85,20 +85,23 @@ package body Landin.Targets.Capabilities is
          when No_Backend => False);
 
 
+   --  D920: AAPCS32's signatures and records go through
+   --  Backend.Arm32_ABI at either variant.  RV32's ilp32 is planned
+   --  (D677) and Xtensa's windowed ABI described, but neither is enabled.
    function C_Signatures (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 | AAPCS64_LP64
-            | RiscV_LP64D => True,
-         when No_C_ABI | Arm_AAPCS32_Soft | RiscV_ILP32
-            | Xtensa_Windowed_ILP32 => False);
+            | RiscV_LP64D | Arm_AAPCS32_Soft => True,
+         when No_C_ABI | RiscV_ILP32 | Xtensa_Windowed_ILP32 => False);
 
    function C_Records (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 | AAPCS64_LP64
-            | RiscV_LP64D => True,
-         when No_C_ABI | Arm_AAPCS32_Soft | RiscV_ILP32
-            | Xtensa_Windowed_ILP32 => False);
+            | RiscV_LP64D | Arm_AAPCS32_Soft => True,
+         when No_C_ABI | RiscV_ILP32 | Xtensa_Windowed_ILP32 => False);
 
+   --  D922: AAPCS32's planner places a variadic call, but no firmware
+   --  program has needed one, so none is enabled until one does.
    function C_Variadic_Calls (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 | AAPCS64_LP64

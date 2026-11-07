@@ -1,0 +1,5 @@
+import platform/c
+
+public width: () -> (bits: u32) =
+    bits = 8 * u32(sizeof c.c_long)
+end width

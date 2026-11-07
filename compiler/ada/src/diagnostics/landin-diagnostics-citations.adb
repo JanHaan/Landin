@@ -2667,6 +2667,15 @@ package body Landin.Diagnostics.Citations is
             when 780 =>
                "Without a float unit, Arm assembly declares IEEE floats "
                & "passed in core registers",
+            when 920 =>
+               "Cortex-M's C ABI is AAPCS32, named by `compiler.c_aapcs3"
+               & "2` and enabled at both variants",
+            when 921 =>
+               "`platform/c` on AAPCS32 is ILP32 with an unsigned plain "
+               & "char",
+            when 922 =>
+               "AAPCS32 calls no variadic C function until a program nee"
+               & "ds one",
             when 695 =>
                "Espressif's QEMU carries both RV32 corpus lanes, under t"
                & "he Arm lanes' harness",
@@ -4096,6 +4105,12 @@ package body Landin.Diagnostics.Citations is
             when 619 =>
                "Decisions: The core library and the derived programs",
             when 780 =>
+               "Decisions: The core library and the derived programs",
+            when 920 =>
+               "Decisions: The core library and the derived programs",
+            when 921 =>
+               "Decisions: The core library and the derived programs",
+            when 922 =>
                "Decisions: The core library and the derived programs",
             when 695 =>
                "Decisions: The core library and the derived programs",
@@ -6057,6 +6072,16 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d780-without-a-float-unit-"
                & "arm-assembly-declares-ieee-floats-passed-in-core-registe"
                & "rs",
+            when 920 =>
+               "https://www.701.dev/spec.html#d920-cortex-m-s-c-abi-is-a"
+               & "apcs32-named-by-compiler-c-aapcs32-and-enabled-at-both-v"
+               & "ariants",
+            when 921 =>
+               "https://www.701.dev/spec.html#d921-platform-c-on-aapcs32"
+               & "-is-ilp32-with-an-unsigned-plain-char",
+            when 922 =>
+               "https://www.701.dev/spec.html#d922-aapcs32-calls-no-vari"
+               & "adic-c-function-until-a-program-needs-one",
             when 695 =>
                "https://www.701.dev/spec.html#d695-espressif-s-qemu-carr"
                & "ies-both-rv32-corpus-lanes-under-the-arm-lanes-harness",

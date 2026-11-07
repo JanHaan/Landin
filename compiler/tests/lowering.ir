@@ -1230,6 +1230,85 @@ item 2 ROUTINE good result none signature 2 params 1 slots 4 blocks 5 values 21
     13 PLACE_ADDRESS usize
     14 STORE slot 3 <- 13
     15 JUMP target 4
+file positive/c-aliases-aapcs32/main.ldn
+target cortex-m0 level armv6-m
+unit signatures 6 items 10
+nominal 1 sample layout(c) struct (u8,i64,f32)
+signature 1 extern(c) (in u8) -> struct sample
+signature 2 extern(c) (in struct sample, in f64) -> f64
+signature 3 extern(c) (in i32) -> i32
+signature 4 extern(c) (in function signature 3, in i32) -> none
+signature 5 extern(c) (in i32) -> i32
+signature 6 () -> f64
+item 1 DATUM top result u8 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u8 255
+    2 LEAVE <- 1
+item 2 DATUM widest result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 2147483647
+    2 LEAVE <- 1
+item 3 DATUM ordinary result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 LOAD_DATUM i32 datum 2 widest
+    2 LEAVE <- 1
+item 4 DATUM bits result u32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u32 4294967295
+    2 LEAVE <- 1
+item 5 DATUM size result usize params 0 slots 0 blocks 1 values 3
+  block 1 scope 1 PROGRAM length 3
+    1 NUMBER usize 4294967295
+    2 CONVERSION usize <- 1
+    3 LEAVE <- 2
+item 6 ROUTINE sensor_read result struct signature 1 extern(c) link sensor_read params 0 slots 0 blocks 0 values 0
+item 7 ROUTINE sensor_scale result f64 signature 2 extern(c) link sensor_scale params 0 slots 0 blocks 0 values 0
+item 8 ROUTINE sensor_notify result none signature 4 extern(c) link sensor_notify params 0 slots 0 blocks 0 values 0
+item 9 ROUTINE landin_threshold result i32 signature 5 link landin_threshold params 1 slots 3 blocks 4 values 14
+  slot 1 value i32 param 1
+  slot 2 result i32 return
+  slot 3 - i32
+  block 1 scope 13 BLOCK length 8
+    1 NUMBER i32 0
+    2 STORE slot 2 <- 1
+    3 LOAD i32 slot 1
+    4 STORE slot 3 <- 3
+    5 NUMBER i32 100
+    6 LOAD i32 slot 3
+    7 GREATER_THAN bool <- 6 5
+    8 BRANCH target 2 alternative 3 <- 7
+  block 2 scope 14 BLOCK length 3
+    9 NUMBER i32 1
+    10 STORE slot 2 <- 9
+    11 JUMP target 4
+  block 3 scope 13 BLOCK length 1
+    12 JUMP target 4
+  block 4 scope 13 BLOCK length 2
+    13 LOAD i32 slot 2
+    14 LEAVE <- 13
+item 10 ROUTINE read_scaled result f64 signature 6 params 0 slots 4 blocks 1 values 17
+  slot 1 scaled f64 return
+  slot 2 taken aggregate fields u8 i64 f32
+  slot 3 - usize signature 5
+  slot 4 - address of struct (u8,i64,f32)
+  block 1 scope 16 BLOCK length 17
+    1 NUMBER u8 2
+    2 STORAGE_ADDRESS usize storage slot 2
+    3 CALL none callee 6 sensor_read signature 1 <- 2 1
+    4 FUNCTION_ADDRESS usize target 9 landin_threshold signature 5
+    5 STORE slot 3 <- 4
+    6 LOAD_FIELD u8 slot 2 field 1
+    7 CONVERSION i32 <- 6
+    8 LOAD usize slot 3
+    9 CALL none callee 8 sensor_notify signature 4 <- 8 7
+    10 STORAGE_ADDRESS usize storage slot 2
+    11 STORE slot 4 <- 10
+    12 NUMBER f64 4602678819172646912
+    13 LOAD usize slot 4
+    14 CALL f64 callee 7 sensor_scale signature 2 <- 13 12
+    15 STORE slot 1 <- 14
+    16 LOAD f64 slot 1
+    17 LEAVE <- 16
 file positive/c-packed-records/program.ldn
 unit signatures 2 items 3
 nominal 1 header layout(c, packed) struct (u8,u16,u32)

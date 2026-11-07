@@ -322,11 +322,11 @@ D203's C convention and variadic flags follow the complete recursive signature,
 not the bodyless import flag or a concrete callee item. Checking admits only
 [1975]'s selected C subset and lowering promotes unnamed outgoing C arguments;
 verification checks the same signature facts for direct and indirect calls.
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
-and `compiler.c_riscv_lp64d`
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`,
+`compiler.c_riscv_lp64d` and `compiler.c_aapcs32`
 are early fixed configuration bools, with no runtime storage. Ordinary `platform/c`
-accepts any supported LP64 contract; generated bindings assert their selected
-contract. Header
+accepts any supported contract, LP64 or Cortex-M's ILP32 AAPCS32; generated
+bindings assert their selected contract. Header
 parsing and C adapter generation belong to the separate bindings tool, not to
 the scanner, parser, type checker or native backend.
 `compiler.c_runtime` is another early bool: true when C's runtime starts the

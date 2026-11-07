@@ -1,0 +1,9 @@
+class: positive
+summary: D920 D921 on cortex-m0 platform/c's AAPCS32 aliases are ILP32 with an unsigned plain char, and a layout(c) record, a C function type, C imports and a public C definition over them are accepted
+program: main.ldn
+root: ../../../../..
+args: --target=cortex-m0
+expect: expected.txt
+status: 0
+constructs: 0120, 0750, 1500, 1580, 1600, 1795
+targets: cortex-m0

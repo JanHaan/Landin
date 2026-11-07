@@ -2763,7 +2763,7 @@ Four source namespaces belong to the repository:
 |---|---|---|
 | `core` | the shared freestanding library: `core/mem`, `core/text`, `core/vec` | every module and interface on every target |
 | `hosted` | hosted providers such as `hosted/heap`, `hosted/system` and `hosted/blocking` | on hosted systems |
-| `platform` | scoped freestanding interfaces | `platform/c` with an enabled LP64 C ABI; `platform/cortex_m` everywhere, declaring its operations only on M-profile targets, higher feature levels included, and its device descriptions only there |
+| `platform` | scoped freestanding interfaces | `platform/c` with an enabled C ABI, the hosted LP64 ones and Cortex-M's AAPCS32; `platform/cortex_m` everywhere, declaring its operations only on M-profile targets, higher feature levels included, and its device descriptions only there |
 | `landin` | the toolchain modules of [1560]: `landin/compiler`, `landin/assembler`, `landin/linker` | everywhere, without an import |
 
 Fine print:
@@ -4001,7 +4001,7 @@ The compiler supplies these facts:
 | `compiler.word_size` | the width of `usize`, in bits |
 | `compiler.byte_order` | `little` or `big` |
 | `compiler.build_mode` | `debug`, the default, or `release` |
-| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d`, `compiler.c_riscv_ilp32`, `compiler.c_xtensa_windowed_ilp32` | which C ABI the target uses, each true for its own ABI alone |
+| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d`, `compiler.c_aapcs32`, `compiler.c_riscv_ilp32`, `compiler.c_xtensa_windowed_ilp32` | which C ABI the target uses, each true for its own ABI alone |
 | `compiler.c_runtime` | whether C's runtime starts the program and its library is linked |
 | `compiler.feature.NAME` | whether the selected CPU level has feature NAME |
 
@@ -4272,17 +4272,22 @@ end add_at
 Nothing can check that code of that type is there, as nothing checks a C
 cast, and the value is yours to call only while the library stays loaded.
 
-Four C ABIs are supported: SysV AMD64 LP64 on Linux and FreeBSD x86-64,
+Five C ABIs are supported: SysV AMD64 LP64 on Linux and FreeBSD x86-64,
 Apple's arm64 variant of AAPCS64 on macOS, the standard AAPCS64 on Linux
-and FreeBSD arm64, and RV64 LP64D on Linux RV64.
+and FreeBSD arm64, RV64 LP64D on Linux RV64, and AAPCS32 on Cortex-M,
+whose floats travel in the float unit's registers when the device
+description has one and in core registers when it has none.
 
 `platform/c` names C's types: the signed and unsigned integer widths,
 `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. It asserts
 `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64
-or compiler.c_riscv_lp64d`, so it admits exactly those four ABIs; another
-target with the same pointer width is not admitted. Plain `c_char` is the
-ABI's plain `char`, a number and not a Unicode scalar: `i8` under SysV and
-Apple's ABI, `u8` under the standard AAPCS64 and RV64.
+or compiler.c_riscv_lp64d or compiler.c_aapcs32`, so it admits exactly
+those five ABIs; another target with the same pointer width, RV32's or
+Xtensa's, is not admitted. The first four are LP64, with a 64-bit `long`;
+AAPCS32 is ILP32, so there `c_long` is an `i32` and `c_size` a 32-bit
+`usize`. Plain `c_char` is the ABI's plain `char`, a number and not a
+Unicode scalar: `i8` under SysV and Apple's ABI, `u8` under the standard
+AAPCS64, RV64 and AAPCS32.
 
 What crosses the boundary:
 
@@ -4320,6 +4325,8 @@ end say_count
   cannot fill a C callback field or parameter.
 - A Landin definition cannot receive varargs; the generator writes a C
   adapter from an explicit extraction schema instead.
+- Cortex-M declares no variadic C function yet. Write a C function of
+  fixed arity that makes the variadic call, and import that one.
 
 Exact rules: spec [1975].
 
