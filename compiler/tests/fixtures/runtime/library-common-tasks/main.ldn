@@ -38,5 +38,11 @@ public main: () -> (code: i32) =
         io.write(host, io.err(host), "\n") else none
         return
     end
+    io.flush(out) else (problem)
+        io.write(host, io.err(host), "standard output: ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
     code = 0
 end main

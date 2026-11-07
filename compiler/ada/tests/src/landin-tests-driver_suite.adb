@@ -4217,7 +4217,6 @@ package body Landin.Tests.Driver_Suite is
          Args : Landin.Platform.Path_List;
       begin
          Host.Add_File ("placement.ldn", Source & LF);
-         Args.Append ("check");
          Args.Append ("--target=linux-x86-64");
          Args.Append ("placement.ldn");
          declare
@@ -4275,7 +4274,7 @@ package body Landin.Tests.Driver_Suite is
          Host.Add_File ("fixed.ldn", Source & LF);
          declare
             Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
-              (Both ("check", "fixed.ldn"), Host, Tools);
+              (Arguments_Of ("fixed.ldn"), Host, Tools);
             Report : constant String := Unbounded.To_String (Result.Report);
          begin
             Landin.Testing.Check
@@ -4285,7 +4284,7 @@ package body Landin.Tests.Driver_Suite is
                   and then Contains (Report, "L0305")
                   and then Contains (Report, Advice)),
                "fixed name alternatives: " & Report);
-            if not Accepted and then Advice = "module or runtime values"
+            if not Accepted and then Advice = "module or runtime value"
             then
                Landin.Testing.Check
                  (Item, Contains (Report, "use options, compiler facts")
@@ -4301,13 +4300,13 @@ package body Landin.Tests.Driver_Suite is
    begin
       Check
         ("limit: u32 = 4" & LF & "compiler.assert(limit < 3)",
-         "module or runtime values");
+         "module or runtime value");
       Check
         ("limit: u32 = 4" & LF & "option count: u32 = limit",
-         "module or runtime values");
+         "module or runtime value");
       Check
         ("limit: u32 = 4" & LF & "fixed if limit == 4 then" & LF
-         & "end if", "module or runtime values");
+         & "end if", "module or runtime value");
       Check
         (Record_Type & "option size: usize = sizeof record",
          "a fixed condition or option default measures scalar types");
@@ -4347,7 +4346,6 @@ package body Landin.Tests.Driver_Suite is
          Args : Landin.Platform.Path_List;
       begin
          Host.Add_File ("options.ldn", Source & LF);
-         Args.Append ("check");
          Args.Append ("--option=" & Written & "=true");
          Args.Append ("options.ldn");
          declare

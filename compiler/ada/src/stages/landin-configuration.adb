@@ -1,4 +1,3 @@
-with Landin.Memory;
 with Landin.Tokens.Text;
 
 package body Landin.Configuration is

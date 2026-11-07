@@ -3513,6 +3513,24 @@
       "mode": "refuse",
       "reason": "The program asserts compiler.c_runtime, which firmware never has: it is the --link=libc counterpart of runtime/thread-storage-holds-its-instance, which runs on Cortex-M0, where thread storage is ordinary module storage."
     },
+    "runtime/tour-line-count": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/tour-line-count-missing": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/tour-printed-values": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/trapping-arm-leaves-a-statement": {
       "mode": "execute"
     },
