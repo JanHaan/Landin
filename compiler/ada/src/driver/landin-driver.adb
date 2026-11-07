@@ -1507,8 +1507,8 @@ package body Landin.Driver is
                     Landin.Targets.Firmware.Core_Named (Name);
                begin
                   if Core in Landin.Targets.Firmware.Arm_Core then
-                     return "; " & Name & " uses the shared Cortex-M target;"
-                       & " use --target="
+                     return "; Cortex-M cores share one target, so for "
+                       & Name & " use --target="
                        & Landin.Targets.Name (Landin.Targets.Cortex_M)
                        & " --level=" & Landin.Targets.Firmware.Level_Name (Core);
                   end if;
