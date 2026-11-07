@@ -125,6 +125,7 @@ Which module does what:
 | Print many lines | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` for each, and `io.flush(out)`, checked, before reporting success | [core/io](../core/io) |
 | Get a command-line argument | `io.argument_at(host, 0)`, and `io.argument_count(host)` | [core/io](../core/io) |
 | Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
+| Read a whole file into memory | `io.open_read(host, path)`, then `io.read(host, file, chunk)` until it gives 0, adding each piece with `text.append(whole, chunk[0..<got])` to a builder `text.over(storage)` makes, which fails with `text.no_space` once the file outgrows `storage`, and `io.close(host, file)`; [reverse-complement](../examples.md#benchmark-game-reverse-complement)'s `read_all` is the same loop over standard input | [core/io](../core/io), [core/text](../core/text) |
 | Write straight to standard error | `io.write(host, io.err(host), bytes)` | [core/io](../core/io) |
 | Turn a failure into words for a person | `failure.words(problem)` | [core/failure](../core/failure) |
 | Turn an errno from `platform/posix` into words | `posix.words(problem)`, which words the library's failures too | [platform/posix](../platform/posix) |
