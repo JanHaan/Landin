@@ -15,14 +15,10 @@
       "reason": "A C main, its initial stack and the auxiliary vector exist only in a hosted process, and Cortex-M0 starts none."
     },
     "abi/c-function-from-address": {
-      "mode": "restriction",
-      "stops": "defect",
-      "reason": "refine's Cortex-M emission of a C function value made from an address stops on an internal defect, an unclassified check of its CODE_ADDRESS; the program and its C need nothing hosted, so the fixed compiler executes it and the lane then names this row stale."
+      "mode": "execute"
     },
     "abi/c-function-from-zero-address-traps": {
-      "mode": "restriction",
-      "stops": "defect",
-      "reason": "refine's Cortex-M emission of a C function value made from an address stops on an internal defect, an unclassified check of its CODE_ADDRESS; the program and its C need nothing hosted, so the fixed compiler runs it to its trap and the lane then names this row stale."
+      "mode": "execute"
     },
     "abi/c-packed-records": {
       "mode": "execute"

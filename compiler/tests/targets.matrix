@@ -9,8 +9,8 @@ prototype-3 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-6
 prototype-4 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
 abi/auxiliary-from-c | linux-x86-64, linux-arm64, linux-rv64
-abi/c-function-from-address | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-abi/c-function-from-zero-address-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/c-function-from-address | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+abi/c-function-from-zero-address-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 abi/c-packed-records | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 abi/clock-agrees-with-c | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/core-io-file-identity | darwin-arm64, freebsd-x86-64, freebsd-arm64

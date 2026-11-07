@@ -682,9 +682,9 @@ and the failure says to make it `execute`. What stopped it is printed on
 its corpus line and kept in its `result.json` as `stopped_by`, read from
 the build rather than written in the row, so the reason says why rather
 than which header or symbol. `stops: defect` is the one stop a fixed
-compiler clears: the two `abi/c-function-from-*` rows record that
-refine's Cortex-M emission cannot yet make a C function value from an
-address.
+compiler clears, and no row holds it now: the two `abi/c-function-from-*`
+rows held it until refine's Cortex-M emission could make a C function
+value from an address, and they execute.
 
 Firmware gives a program no standard input, arguments, files beside it or
 output, so a fixture whose metadata names `stdin:`, `run_args:`,
@@ -911,16 +911,16 @@ The consumers that execute:
 | `abi/cortex-c-peer` | a hand-written peer and the program call each other with every scalar width, 64-bit values in r2:r3 with r1 skipped and on the stack at eight, floats in core registers or the VFP bank, records of 3, 4, 16 and 32 bytes by value both ways, split between r2-r3 and the stack, and by address, a C function pointer to a program routine, the program's datum by its link name and a C global cleared and one initialised by start-up, an unsigned plain `char`, a 32-bit `long` and an int-sized enum; every value is checked where it arrives, each check its own status | every lane, both routes |
 | `abi/cortex-cmsis-bindings` | the generated RP2040 CMSIS adapters: NVIC enable, disable, pending and priority and `SysTick_Config`, each read back from the NVIC and SysTick registers with interrupts masked, since the harness's table has no handler: a pending interrupt stays pending, ARMv6-M's two priority bits keep 6 as 2 and read 0xff as 0xc0, a disabled interrupt keeps its priority, and a reload past 24 bits is refused with nothing written | the micro:bit; the AN505's M33 keeps more priority bits and the AN500's unit meets the header's `#error`, each a lane restriction |
 | `abi/cortex-vfp-bindings` | the generated STM32H753 adapters and its own `landin-vfp.h`: floats and doubles both ways, back-filled singles, a seventeenth single slot on the stack, a homogeneous aggregate of doubles by value and returned, a record by address, `SCB_GetFPUType` 2 and an NVIC interrupt QEMU's AN500 implements | the AN500 only; the reference refuses it with L0324 (D936) |
-| `abi/c-packed-records`, `abi/link-symbol-exports`, `abi/public-routine-is-local`, `abi/r440-native-dollar-link`, `abi/r490-distinct-c-roundtrip` | shared ABI fixtures whose peers need nothing hosted | every lane |
+| `abi/c-packed-records`, `abi/link-symbol-exports`, `abi/public-routine-is-local`, `abi/r440-native-dollar-link`, `abi/r490-distinct-c-roundtrip`, `abi/c-function-from-address`, `abi/c-function-from-zero-address-traps` | shared ABI fixtures whose peers need nothing hosted | every lane |
 
-Of the 65 rows that were restrictions before D986, 6 execute, the five
-above and `runtime/rv64-indexed-address`; 36 are refusals with their codes,
-27 of them L0015 for hosted imports, 5 L0346 for variadic C calls, and
-L0300, L0324, L0344 and L0347 once each; and 23 stay restrictions, each
-with its stop: 16 `c-headers`, peers that print their oracle through stdio,
-assert, or fork a child, 2 `c-options`, POSIX threads, 2 `c-source`, an
-RV64 or x86-64 observer, 1 `oracle`, an empty `run_expect`, and 2
-`defect`. The 8 `link` restrictions are runtime fixtures that call the C
+Of the 65 rows that were restrictions before D986, 8 execute, the five
+above, the two `abi/c-function-from-*` rows and
+`runtime/rv64-indexed-address`; 36 are refusals with their codes, 27 of
+them L0015 for hosted imports, 5 L0346 for variadic C calls, and L0300,
+L0324, L0344 and L0347 once each; and 21 stay restrictions, each with its
+stop: 16 `c-headers`, peers that print their oracle through stdio, assert,
+or fork a child, 2 `c-options`, POSIX threads, 2 `c-source`, an RV64 or
+x86-64 observer, and 1 `oracle`, an empty `run_expect`. The 8 `link` restrictions are runtime fixtures that call the C
 library. Measured at none/off on the micro:bit's
 32 KiB/16 KiB reference, `abi/cortex-c-peer`'s image is 15,204 bytes of
 flash, 13,772 at the other profiles, with 48 bytes of static RAM and at

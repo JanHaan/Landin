@@ -29109,8 +29109,11 @@ lane requires the stage it reached to be the row's, and records what
 stopped it, read from the build, as an L0015 refusal's modules are read. A
 fixture refine refuses is no restriction but a `refuse` row with its
 codes; one that gets past every stage is stale and must be made `execute`.
-Each of the 65 was decided again by that rule: 6 execute, 36 refuse with
-their codes, and 23 are restrictions with their stops.
+Each of the 65 was decided again by that rule: 8 execute, 36 refuse with
+their codes, and 21 are restrictions with their stops. Two of the eight
+first stopped at `defect`: Cortex-M emission had no trap class for a
+`code_address`, which the integer-to-pointer check gives a C function value
+made from an address, as it gives a pointer's.
 
 **The alternatives:** keeping witnesses, which said what a fixture once
 needed and nothing about what stops it now; requiring every restriction to

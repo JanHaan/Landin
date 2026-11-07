@@ -114,8 +114,8 @@ package body Landin.Panics is
            IR.Load_Element |
            IR.Store_Element | IR.Shift_Left | IR.Shift_Right =>
             return Out_Of_Range;
-         when IR.Conversion | IR.Pointer_Address | IR.Memory_Access |
-           IR.Load_Field |
+         when IR.Conversion | IR.Pointer_Address | IR.Code_Address |
+           IR.Memory_Access | IR.Load_Field |
            IR.Store_Field => return Bad_Conversion;
          when IR.Halt => return Unreachable;
          when others =>
