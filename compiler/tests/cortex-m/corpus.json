@@ -2899,6 +2899,9 @@
     "runtime/insertion-sort": {
       "mode": "execute"
     },
+    "runtime/instance-named-only-as-type-argument": {
+      "mode": "execute"
+    },
     "runtime/integer-conversion-out-of-range-traps": {
       "mode": "execute"
     },

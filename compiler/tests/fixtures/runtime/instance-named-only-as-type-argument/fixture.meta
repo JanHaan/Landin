@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a generic struct's instance named only as a static type argument, `vec.new(item: pair(u8))` and a local generic routine's `item: pair(i16)`, is laid out where the generic body writes `[]`, range slices or walks a slice of it, as it is for a module binding's empty slice of an instance
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 1150, 1300
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
