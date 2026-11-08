@@ -767,7 +767,8 @@ process ignores SIGPIPE and gives its children the default back.
 - Callbacks and variadic calls, and a C function value made from an address
   a loader found.
 - `refine bindings` ([`bindings/`](../bindings/README.md)) generates
-  bindings, packed and flexible-member records among them, from an external
+  bindings, packed and flexible-member records among them and every pointer
+  to a generated record typed to it, from an external
   Clang's view of a header, with nothing but refine and that Clang, for the
   hosted LP64 targets and for Cortex-M's ILP32 AAPCS32 in both procedure call
   standards; two committed Cortex-M bindings come from pinned CMSIS headers

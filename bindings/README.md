@@ -324,8 +324,15 @@ the value: such a record has no opaque form, is no array element and no
 field of another record, and is refused wherever C would copy it by value.
 
 C reaches both kinds, and a record holding either by value, only through a
-pointer (D414). A pointer to such a record that the policy selects is typed
-`ptr` or `ptr mut` to its Landin record rather than an opaque byte pointer.
+pointer (D414). A pointer to any record the policy selects and the
+generator writes as a Landin record, an ordinary `layout(c)` record as much
+as a packed or flexible-member one, is typed `ptr` or `ptr mut` to that
+record rather than an opaque byte pointer (D426): in a function's
+parameters and result, a callback type's, a global's value and address, a
+native record's field and an opaque record's member accessors. A caller
+passes `addr sample` and reads `result.val.gain` without a conversion. A
+pointer to an opaque, incomplete or unselected record is `ptr u8`, since no
+Landin record describes it.
 An imported function taking or returning a packed record by value gets a
 generated wrapper that takes `ptr record` for the argument and writes the
 result through a `ptr mut record` first parameter, as opaque records do; a
@@ -720,9 +727,11 @@ Never edit the four generated outputs by hand. The suite regenerates all four
 into a temporary directory and requires byte equality. The real
 `abi/r440-bindings-generated` fixture additionally calls generated imports from
 Landin and exported Landin definitions from C, including unequal matrix extents,
-unnamed high-bit enum values, direct native reference results, opaque borrowed
-output results, pointer-returning callback invocation (present and absent), and
-a retaining global setter. Its packed and flexible-member records are
+unnamed high-bit enum values, direct native reference results, an ordinary
+record passed by `addr` and read and written through the typed pointers
+generated imports return, a generated callback type given a Landin routine,
+opaque borrowed output results, pointer-returning callback invocation
+(present and absent), and a retaining global setter. Its packed and flexible-member records are
 compared with the C peer's `sizeof`, `_Alignof` and `offsetof`; C fills a
 packed record one byte past an aligned address and Landin reads it, Landin
 writes it and C checks it, the by-value wrappers and a packed global carry

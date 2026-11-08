@@ -109,6 +109,16 @@ extern int binding_words_sum(const BindingWords *record, int count);
 extern BindingFrame binding_frame_global;
 extern void landin_binding_wire_mark(BindingWire *record);
 
+/* An ordinary record by address both ways, and a callback and an export
+   that receive one: each pointer is typed to the Landin record (D426). */
+typedef double (*binding_pair_reader)(const BindingPair *pair);
+extern const BindingPair *binding_pair_larger(const BindingPair *first,
+                                              const BindingPair *second);
+extern BindingPair *binding_pair_bump(BindingPair *pair);
+extern double binding_pair_read(binding_pair_reader reader,
+                                const BindingPair *pair);
+extern double landin_binding_pair_total(const BindingPair *pair);
+
 extern int landin_bindings_check(void);
 
 #endif

@@ -101,6 +101,33 @@
       "variadic": false
     },
     {
+      "c_name": "binding_pair_reader",
+      "kind": "callback",
+      "landin_name": "binding_pair_reader",
+      "nullable_cell": false,
+      "parameters": [
+        {
+          "c_name": "argument_1",
+          "c_type": "const BindingPair *",
+          "landin_name": "argument_1",
+          "landin_type": "ptr binding_pair",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "double",
+        "landin_type": "c.c_double",
+        "policy": null
+      },
+      "selected": true,
+      "variadic": false
+    },
+    {
       "alignment": 8,
       "c_name": "BindingMode",
       "constants": [
@@ -477,6 +504,132 @@
       "variadic": false
     },
     {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_pair_bump",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_pair_bump",
+      "parameters": [
+        {
+          "c_name": "pair",
+          "c_type": "BindingPair *",
+          "landin_name": "pair",
+          "landin_type": "ptr mut binding_pair",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "BindingPair *",
+        "landin_type": "ptr mut binding_pair",
+        "policy": {
+          "from": [
+            "pair"
+          ],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "returned"
+        }
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_pair_larger",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_pair_larger",
+      "parameters": [
+        {
+          "c_name": "first",
+          "c_type": "const BindingPair *",
+          "landin_name": "first",
+          "landin_type": "ptr binding_pair",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        },
+        {
+          "c_name": "second",
+          "c_type": "const BindingPair *",
+          "landin_name": "second",
+          "landin_type": "ptr binding_pair",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "const BindingPair *",
+        "landin_type": "ptr binding_pair",
+        "policy": {
+          "from": [
+            "first",
+            "second"
+          ],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "returned"
+        }
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_pair_read",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_pair_read",
+      "parameters": [
+        {
+          "c_name": "reader",
+          "c_type": "binding_pair_reader",
+          "landin_name": "reader",
+          "landin_type": "binding_pair_reader",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        },
+        {
+          "c_name": "pair",
+          "c_type": "const BindingPair *",
+          "landin_name": "pair",
+          "landin_type": "ptr binding_pair",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "double",
+        "landin_type": "c.c_double",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
       "adapter": "landin_r440_bindings_binding_rotate_value_call",
       "adapter_output_escaping_sources": [],
       "adapter_reasons": [
@@ -757,6 +910,33 @@
       "result": {
         "c_type": "_Bool",
         "landin_type": "c.c_bool",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "c_name": "landin_binding_pair_total",
+      "direction": "export",
+      "kind": "function",
+      "landin_name": "landin_binding_pair_total",
+      "parameters": [
+        {
+          "c_name": "pair",
+          "c_type": "const BindingPair *",
+          "landin_name": "pair",
+          "landin_type": "ptr binding_pair",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "double",
+        "landin_type": "c.c_double",
         "policy": null
       },
       "variadic": false
@@ -1411,14 +1591,14 @@
     "headers": [
       {
         "name": "r440-bindings.h",
-        "sha256": "b2cea09a23a21bc853dc90cb91d3daad25c2a59e70066159b9a2fdec49cc2aa7"
+        "sha256": "625420ee2d2e6626c2c656269f89518eeb0ea05f7ceaacac1f3dbf47d8e76e53"
       }
     ],
-    "policy_sha256": "f23db01474fdde605ee822eee9d15027712abd1e5e9667fd9986418cf822fb3d"
+    "policy_sha256": "e1689ca7897c07ed8a614a4dd3430138fa3f82ac6f968e930817bcd7a5b4c3c7"
   },
   "outputs": {
     "adapters.c": "95df950bd3ea8d5fd6cc5347339430dad2984176c05f0f597b028b0dca126364",
-    "bindings.ldn": "0c7ce260831ea7af1bd7a7025d883d942c2873e217078520feef28df7a68eb60",
+    "bindings.ldn": "dc13094b506e85c96081406eaa37bc6decff7419774ee2074a272bf1c8ca12cb",
     "exports.h": "70ee2f7d0dfedf31855db8aa8ce41da3bb2edf60ea0c07923b94c11052e34777"
   },
   "schema_version": 1

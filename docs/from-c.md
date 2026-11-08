@@ -1064,9 +1064,10 @@ that says it, so the build finds it wherever it runs [1590]. `-L DIR` on
 is searched first. Landin names are lower case, so a C name that is not is
 declared under a Landin name and linked by its own with
 `link(symbol: "GetRandomValue")` [1610]; a C struct passed by value is a
-`layout(c)` struct [1580]. Build it with
-`refine compile --link=libc game.ldn -o game` on Linux. A library the link
-cannot find is named with every directory searched.
+`layout(c)` struct [1580], and `refine bindings` writes a header's pointer
+to one as `ptr color` or `ptr mut color`, which a `color`'s `addr` passes.
+Build it with `refine compile --link=libc game.ldn -o game` on Linux. A
+library the link cannot find is named with every directory searched.
 
 ## Close to the machine
 
