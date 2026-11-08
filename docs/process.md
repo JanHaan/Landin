@@ -119,7 +119,12 @@ Before an item closes:
    runtime or ABI fixture or `core/` changed, and the flake's build when
    `flake.nix`, `flake.lock` or `environments/pins.sh` did. Take each row it
    lists, or restate its activation, in the item; run each pass it names
-   inside `nix develop`, or add `--run` to have it run them.
+   inside `nix develop`, or add `--run` to have it run them. A row counts
+   only the changes made after the commit that added it or last changed its
+   Activation, when that commit is since REV: a change its writer had
+   already seen is what the row was written about. Each listed row names
+   the commits that met it, the rows left out for this are named, and
+   `--whole-window` counts every change since REV for every row.
 
    It is a heuristic and says so: it matches paths an activation writes,
    in backticks or bare, base names of tracked files, Ada unit names and a
@@ -477,7 +482,9 @@ python3 check.py
 
 # Every scripts/tests module at once, check.py's controls in shards, as the
 # gate's scripts job runs them; about two minutes on sixteen workers.
+# Name modules, by path or by name, to run only those in one invocation.
 python3 scripts/script_tests.py
+python3 scripts/script_tests.py test_fuzz_close test_scaling
 
 # Follow HEAD's gate run and return at its first failed job, rather than
 # when its last lane ends; with --all, follow it to its end and name every
@@ -568,7 +575,8 @@ Linux x86-64, Linux arm64 and Darwin host checks run the production C
 publication, private-directory and cancellation controls alongside formatter write
 safety, with cancellation also exercised through actual `compile` and
 `run` commands. Each FreeBSD architecture's first runtime shard compiles
-and executes the same C adapters inside its guest. That is native system
+and executes the same C adapters inside its guest, the attached-program
+runner's signal-forwarding controls among them. That is native system
 call evidence, separate from the Linux-hosted compiler and the generated
 program corpus; it is not a FreeBSD-hosted Ada compiler claim.
 
@@ -628,7 +636,7 @@ still succeed. The linked full run contains the target-test results.
 | `outside-user-stock` | `ubuntu-24.04` | the release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 and RV32 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2`; `build-modes-1` also compares both Xtensa configurations |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
-| `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
+| `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI, then the Neovim LSP preference smoke under the distribution's Neovim |
 | `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, the native and Pi board RAM helpers built (including native Rust controls), every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, a full-scope dispatch included (D585) |
 | `cortex-m` matrix | `ubuntu-24.04` | every Cortex-M and RV32 lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, as `run.py`'s three parts, which together are every lane once: the probes, firmware, device programs and debug evidence in `cortex-m-programs`, which also builds all eight board ports in boot and RAM layouts without hardware and keeps their build/drift evidence and the stack-switch consumer's capacity report (D470); the whole corpus on the M0, the M33 and the M7 in `cortex-m-corpus`; and the RV32 controls and corpora on Espressif's QEMU in `cortex-m-rv32` |
 | `xtensa` matrix | `ubuntu-24.04` | `xtensa-esp32` and `xtensa-esp32s3` each run bounded chip-machine window, scalar, floating, assembly and completion-oracle controls, independent vendor-C layout/carrier probes, strict configured-assembler and baseline compatibility controls, plus the complete freestanding inventory on the pinned Espressif QEMU's `sim` machine with the exact selected CPU and explicitly virtual RAM; logs and per-fixture verdicts are retained |

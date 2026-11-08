@@ -107,6 +107,48 @@ class FetchInputs(unittest.TestCase):
                                                 opener=opener), copy)
             self.assertEqual(opener.calls, 0)
 
+    def test_the_by_hand_refusal_gives_both_reasons(self):
+        #  A publisher that will not serve a script, and a URL that serves
+        #  the current release, are both reasons a pin is by hand.
+        pin = dict(PIN, fetch='by hand')
+        with tempfile.TemporaryDirectory() as cache:
+            with self.assertRaises(fetch_inputs.InputError) as refused:
+                fetch_inputs.fetch('m/manual.pdf', {'m/manual.pdf': pin},
+                                   cache, opener=Opener(GOOD))
+        self.assertIn('does not serve it to a script', str(refused.exception))
+        self.assertIn('serves whatever release is current',
+                      str(refused.exception))
+        self.assertIn('serves whatever release is current',
+                      ' '.join(fetch_inputs.__doc__.split()))
+
+    def test_a_directory_selects_every_input_under_it(self):
+        inputs = {'a/one.h': PIN, 'a/sub/two.h': PIN, 'ab/three.h': PIN,
+                  'a/manual.pdf': dict(PIN, fetch='by hand'), 'b/four.h': PIN}
+        self.assertEqual(fetch_inputs.select(['a/', 'b/four.h', 'a/one.h'],
+                                             inputs),
+                         ['a/manual.pdf', 'a/one.h', 'a/sub/two.h',
+                          'b/four.h'])
+        self.assertEqual(fetch_inputs.select([], inputs),
+                         ['a/one.h', 'a/sub/two.h', 'ab/three.h', 'b/four.h'])
+        self.assertEqual(len(fetch_inputs.select([], inputs, every=True)), 5)
+
+    def test_a_directory_naming_no_input_is_refused(self):
+        with self.assertRaisesRegex(fetch_inputs.InputError,
+                                    'c/: devices/inputs.json pins no input'
+                                    ' under this directory'):
+            fetch_inputs.select(['c/'], {'a/one.h': PIN})
+        with self.assertRaisesRegex(fetch_inputs.InputError,
+                                    'name it as a/ to fetch'):
+            fetch_inputs.select(['a'], {'a/one.h': PIN})
+
+    def test_the_pinned_cmsis_directories_select_headers(self):
+        inputs = fetch_inputs.read_lock()
+        chosen = fetch_inputs.select(['rp2040-cmsis/', 'stm32h753-cmsis/'],
+                                     inputs)
+        self.assertIn('rp2040-cmsis/m-profile/cmsis_gcc_m.h', chosen)
+        self.assertIn('stm32h753-cmsis/core_cm7.h', chosen)
+        self.assertTrue(all(name.endswith('.h') for name in chosen), chosen)
+
     def test_rm0433_is_pinned_and_supplied_by_hand(self):
         pin = fetch_inputs.read_lock()['rm0433/RM0433.pdf']
         self.assertEqual(pin['fetch'], 'by hand')

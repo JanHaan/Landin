@@ -11,6 +11,7 @@ matching no row.
 import importlib.util
 import io
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -80,7 +81,7 @@ class Activations(unittest.TestCase):
         self.assertEqual(status, 0)
         text = out.getvalue()
         return {line.split(" ", 1)[0] for line in text.splitlines()
-                if line.startswith("SR-")}, text
+                if re.match(r"(?:SR-|T)\d+ \(", line)}, text
 
     def test_each_way_of_naming_a_path_is_met(self):
         cases = {
@@ -126,6 +127,62 @@ class Activations(unittest.TestCase):
         git(self.root, "commit", "-q", "-am", "main moves")
         git(self.root, "checkout", "-q", "item")
         self.assertEqual(self.listed()[0], set())
+
+    def commit(self, message, **files):
+        for name, text in files.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", message)
+        return git(self.root, "rev-parse", "HEAD")
+
+    def roadmap_with(self, row):
+        return REGISTER.replace("\n\n## After the register",
+                                "\n" + row + "\n\n## After the register")
+
+    def test_a_change_before_the_row_was_written_does_not_count(self):
+        #  The row's writer had seen the change it names: it is what the
+        #  row was written about, not the next change to the file.
+        self.commit("change setup", **{"environments/cortex-m/setup.py": "a\n"})
+        row = ("| T1 | Usability | late | The next change to"
+               " `environments/cortex-m/setup.py`. | x | open |")
+        stated = self.commit("add the row", **{"ROADMAP.md": self.roadmap_with(row)})
+        listed, text = self.listed()
+        self.assertNotIn("T1", listed)
+        self.assertIn("T1 (stated in %s)" % stated[:12], text)
+        self.assertIn("--whole-window lists them", text)
+        #  The old reading is still asked for by name.
+        self.assertIn("T1", self.listed("--whole-window")[0])
+        #  The next change after the row meets it, and names its commit.
+        met = self.commit("change setup again",
+                          **{"environments/cortex-m/setup.py": "b\n"})
+        listed, text = self.listed()
+        self.assertIn("T1", listed)
+        self.assertIn("met by: " + met[:12], text)
+        self.assertNotIn(stated[:12], text.split("T1 (open)", 1)[1])
+
+    def test_a_restated_activation_starts_the_row_again(self):
+        row = ("| T2 | Usability | restated | The next change to"
+               " `scripts/debug.sh`. | x | open |")
+        self.commit("add the row", **{"ROADMAP.md": self.roadmap_with(row)})
+        self.commit("change debug", **{"scripts/debug.sh": "a\n"})
+        self.assertIn("T2", self.listed()[0])
+        #  Restating its activation after that change starts it again;
+        #  a change to another cell does not.
+        restated = row.replace("`scripts/debug.sh`.", "`scripts/debug.sh` again.")
+        self.commit("restate", **{"ROADMAP.md": self.roadmap_with(restated)})
+        self.assertNotIn("T2", self.listed()[0])
+        reworded = restated.replace("| restated |", "| reworded |")
+        self.commit("reword", **{"ROADMAP.md": self.roadmap_with(reworded)})
+        self.assertNotIn("T2", self.listed()[0])
+        #  An uncommitted change is always after the row.
+        (self.root / "scripts/debug.sh").write_text("b\n")
+        self.assertIn("T2", self.listed()[0])
+
+    def test_a_row_stated_before_the_window_counts_every_change(self):
+        self.commit("change debug", **{"scripts/debug.sh": "a\n"})
+        self.assertEqual(self.listed()[0], {"SR-1"})
 
     def test_the_gate_only_passes_follow_their_inputs(self):
         for path, wanted in (("compiler/tests/fixtures/positive/x/program.ldn", "editor grammar"),

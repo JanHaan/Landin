@@ -331,7 +331,7 @@ class Lane:
                                  str(platform / 'landin_tool_process.c'),
                                  str(root / 'compiler/tests/tool_cancellation.c'),
                                  '-o', 'cancellation'])
-                   + '; ./cancellation --all; '
+                   + '; ./cancellation --all; ./cancellation --attached; '
                    + shlex.join(['cc', '-std=c11', '-Wall', '-Wextra',
                                  '-Werror', '-pedantic', '-pthread',
                                  '-I', str(platform),
@@ -359,11 +359,12 @@ class Lane:
                 + transcript.decode(errors='replace')[-8000:])
         require(b'publication native:' in result.stdout
                 and b'cancellation native: 16 controls passed' in result.stdout
+                and b'attached native: 12 controls passed' in result.stdout
                 and b'runtime ownership native: 7/7 controls passed' in result.stdout
                 and b'native registry threads: 8 workers, 24 rounds, 768 cross-thread handoffs passed'
                 in result.stdout,
                 'native host adapter controls did not report their full scope')
-        print('FreeBSD native publication, cancellation, private-directory and registry-thread controls passed')
+        print('FreeBSD native publication, cancellation, attached-program, private-directory and registry-thread controls passed')
 
     def processor(self, guest):
         probe = self.bundle / 'processor'

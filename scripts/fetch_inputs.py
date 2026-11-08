@@ -10,15 +10,23 @@ the path of each.  A cached file is verified every time it is used; one
 whose bytes differ is fetched again, and a download whose bytes differ is
 refused and never put in the cache.
 
-An input whose pin says `"fetch": "by hand"` is one its publisher will not
-serve to a script, such as ST's RM0433: a person downloads it from its URL
-and puts it at CACHE/NAME.  This verifies a copy put there and never tries
-to download one; without a copy it says where to put it.  Such an input is
-fetched only when named, or with --all.
+An input whose pin says `"fetch": "by hand"` is one a person downloads from
+its URL and puts at CACHE/NAME, for either of two reasons: its publisher
+will not serve it to a script, as ST's RM0433, or its URL serves whatever
+release is current, as the RP2350 datasheet's and the ESP32-C3 and -C5
+manuals' do, so a job that fetched it would fail the day a new release
+appeared and no job may depend on its hash.  This verifies a copy put there
+and never tries to download one; without a copy it says where to put it.
+Such an input is fetched only when named, or with --all.
+
+A name ending in / selects every input under that directory, as
+rp2040-cmsis/ selects the CMSIS headers one binding reads; one naming no
+input is refused.
 
     python3 scripts/fetch_inputs.py                 # every input a script may fetch
     python3 scripts/fetch_inputs.py --all           # and verify those supplied by hand
     python3 scripts/fetch_inputs.py rp2040/RP2040.svd
+    python3 scripts/fetch_inputs.py rp2040-cmsis/ stm32h753-cmsis/
     python3 scripts/fetch_inputs.py --offline NAME  # refuse to download
 
 Standard library only, so it runs wherever check.py does.
@@ -87,7 +95,9 @@ def fetch(name, inputs=None, cache=None, offline=False, opener=None):
         found = (' The copy there has SHA-256 ' + digest(target.read_bytes())
                  + '.') if target.is_file() else ''
         raise InputError(name + ' is supplied by hand: its publisher does not'
-                         ' serve it to a script. Download it from ' + pin['url']
+                         ' serve it to a script, or its URL serves whatever'
+                         ' release is current, so no job may fetch it by its'
+                         ' hash. Download it from ' + pin['url']
                          + ' and put it at ' + str(target) + '; its SHA-256 must be '
                          + pin['sha256'] + '.' + found)
     if offline:
@@ -112,12 +122,41 @@ def fetch(name, inputs=None, cache=None, offline=False, opener=None):
     return target
 
 
+def select(names, inputs, every=False):
+    """The inputs NAMES chooses, in order, each once.
+
+    A name ending in / chooses every input under that directory, those
+    supplied by hand among them; no name chooses every input a script may
+    fetch, or with EVERY each one."""
+    if not names:
+        return sorted(name for name in inputs
+                      if every or inputs[name].get('fetch') != 'by hand')
+    chosen = []
+    for name in names:
+        if name.endswith('/'):
+            under = sorted(each for each in inputs if each.startswith(name))
+            if not under:
+                raise InputError(name + ': devices/inputs.json pins no input'
+                                 ' under this directory; name a directory'
+                                 ' such as rp2040-cmsis/ or an input')
+        else:
+            if name not in inputs and any(each.startswith(name + '/')
+                                          for each in inputs):
+                raise InputError(name + ': a directory of inputs, not one;'
+                                 ' name it as ' + name + '/ to fetch every'
+                                 ' input under it')
+            under = [name]
+        chosen.extend(each for each in under if each not in chosen)
+    return chosen
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('names', nargs='*',
-                        help='inputs to fetch, as devices/inputs.json names them;'
-                        ' every one when none is named')
+                        help='inputs to fetch, as devices/inputs.json names them,'
+                        ' or a directory of them ending in /; every one when'
+                        ' none is named')
     parser.add_argument('--all', action='store_true',
                         help='also verify the inputs supplied by hand')
     parser.add_argument('--offline', action='store_true',
@@ -125,10 +164,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         inputs = read_lock()
-        chosen = args.names or sorted(
-            name for name in inputs
-            if args.all or inputs[name].get('fetch') != 'by hand')
-        for name in chosen:
+        for name in select(args.names, inputs, args.all):
             print(fetch(name, inputs, offline=args.offline))
     except InputError as error:
         print('fetch_inputs: ' + str(error), file=sys.stderr)

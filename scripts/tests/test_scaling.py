@@ -173,7 +173,7 @@ class ScalingMemory(unittest.TestCase):
 class ScalingUnderLoad(unittest.TestCase):
     """A doubling over its limit is measured again before it is a verdict."""
 
-    def run_with(self, timings, load):
+    def run_with(self, timings, load, family=("sample", lambda _: {})):
         """timings maps a size to the frontend seconds each measurement of it
         gives, in order; every other part grows linearly."""
         given = {size: iter(values) for size, values in timings.items()}
@@ -189,7 +189,7 @@ class ScalingUnderLoad(unittest.TestCase):
             report = Path(directory) / "measurements.json"
             with (mock.patch.object(scaling, "build_launcher", return_value=None),
                   mock.patch.object(scaling, "library_declarations", return_value=0),
-                  mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
+                  mock.patch.object(scaling, "FAMILIES", (family,)),
                   mock.patch.object(scaling, "write_program"),
                   mock.patch.object(scaling, "median_of", side_effect=sample),
                   mock.patch.object(scaling, "host_load", return_value=load),
@@ -223,6 +223,24 @@ class ScalingUnderLoad(unittest.TestCase):
                       " and 5.70x, 5.60x measured again", errors)
         self.assertNotIn("contention", errors)
         self.assertEqual(len(record["families"]["sample"][1]["repeats"]), 2)
+
+    def test_a_failure_names_its_shape_and_the_rows_it_judged(self):
+        #  The verdict closes the log, after every later family's rows, so
+        #  it says what the family is and repeats what it judged.
+        def lines(size):
+            """One function holding every declaration as a line: one each."""
+            return {}
+        status, _, errors, _ = self.run_with(
+            {2000: [5800.0, 5700.0, 5600.0]}, self.QUIET, ("lines", lines))
+        self.assertEqual(status, 1)
+        verdict = [line for line in errors.splitlines()
+                   if "more than 2.5x" in line]
+        self.assertEqual(len(verdict), 1, errors)
+        self.assertIn("scaling: lines, one function holding every declaration"
+                      " as a line: frontend 1000 -> 2000 grew 5.80x, more"
+                      " than 2.5x", verdict[0])
+        self.assertTrue(verdict[0].endswith(
+            "; judged on 1000 1000.000 s, 2000 5800.000 s (5.80x)"), verdict[0])
 
     def test_a_doubling_missed_only_under_contention_is_refused(self):
         status, _, errors, record = self.run_with(

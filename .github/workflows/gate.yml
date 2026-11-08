@@ -616,6 +616,23 @@ jobs:
       - name: The committed parser is what the grammar generates
         run: git diff --exit-code -- highlight/tree-sitter
 
+      #  The integration pass runs the Neovim smokes only where nvim is,
+      #  and this runner has none, so the LSP opt-out control never ran
+      #  here.  The distribution's Neovim, 0.9, runs it: it needs only
+      #  `nvim -l` and the plugin's setup.  It is installed after the
+      #  pass, because 0.9 cannot load the generated ABI 15 parser that
+      #  the pass's parser smoke would then try.
+      - name: The Neovim LSP preference smoke
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends neovim
+          nvim --version | head -n 1
+          nvim -n --headless --clean \
+            --cmd "set runtimepath^=$PWD/highlight/nvim" \
+            -l highlight/tests/nvim-opt-out.lua
+          echo "Neovim LSP preference smoke clean"
+
   #  The flake (D585): `nix build .#refine` and `.#refine-bin`, every
   #  output of every system evaluated, and the development shell entered,
   #  on every run that does not reuse a pass, so a change anywhere in the

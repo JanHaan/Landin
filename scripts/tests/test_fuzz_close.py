@@ -163,6 +163,24 @@ class CloseOracleTest(unittest.TestCase):
                     stopped = server.stop()
                 self.assertEqual(stopped, "")
 
+    def test_batch_names_the_repository_import_root(self):
+        #  The command-line oracle checks each mutant with the import root
+        #  the server is given, so a fixture importing outside the library,
+        #  such as examples/derived_server/app, is not refused as L0006.
+        with tempfile.TemporaryDirectory() as temporary:
+            stub = Path(temporary) / "stub"
+            argv = Path(temporary) / "argv"
+            stub.write_text("#!%s\nimport json, sys\n"
+                            "open(%r, 'w').write(json.dumps(sys.argv[1:]))\n"
+                            % (sys.executable, str(argv)))
+            stub.chmod(0o755)
+            self.assertEqual(fuzz.batch_one(str(stub), HANG, "main: x\n"),
+                             "")
+            given = json.loads(argv.read_text())
+            self.assertEqual(given[:3], ["check", "--root", str(fuzz.ROOT)])
+            self.assertEqual(len(given), 4)
+            self.assertTrue(given[3].endswith(".ldn"), given)
+
     def test_a_server_that_never_answers_is_not_left_running(self):
         with tempfile.TemporaryDirectory() as temporary:
             stub = Path(temporary) / "stub"

@@ -8239,7 +8239,7 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Fail
            (Item,
             "the recorded IR is missing; regenerate it with"
-            & " ./scripts/test.sh --record");
+            & " ./scripts/dev-test.sh --record=lowering");
          return;
       end if;
 
@@ -8259,8 +8259,8 @@ package body Landin.Tests.Lowering_Suite is
             Unbounded.To_String (Recorded) = Unbounded.To_String (Built.Text),
             "the recorded IR is what the lowering produces now; it differs"
             & " for" & LF & Moved
-            & "  regenerate it with ./scripts/test.sh --record=lowering and"
-            & " read the difference");
+            & "  regenerate it with ./scripts/dev-test.sh --record=lowering"
+            & " and read the difference");
       end;
    end The_Recorded_Corpus_Is_Current;
 

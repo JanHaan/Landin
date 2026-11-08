@@ -13,9 +13,17 @@ order, with its time, so the log reads as the serial loop's did and says
 which module took the time.  The exit status is 1 if any process failed,
 or printed a ResourceWarning.
 
-    python3 scripts/script_tests.py [--jobs N] [directory]
+    python3 scripts/script_tests.py [--jobs N] [MODULE | DIRECTORY]...
 
+With no operand every test_*.py module in scripts/tests runs.  An operand
+is a directory, whose test_*.py modules run, or one module: its path, or
+its name in scripts/tests with or without .py, such as test_fuzz_close.
+Several operands run together in one invocation, in the order given.
 --jobs defaults to the processor count, at most 16.
+
+Each module reads its standard input from /dev/null, so whether a test
+passes does not depend on what the caller's standard input is: a socket
+there once made bash read its startup files in a test that ran `bash -c`.
 """
 import argparse
 import concurrent.futures
@@ -54,10 +62,44 @@ def case_names(path):
     return names
 
 
-def plan(directory, shards):
+DEFAULT = ROOT / "scripts" / "tests"
+
+
+def modules(operands):
+    """The module paths the operands name, in order, each once.
+
+    A directory names its test_*.py modules; any other operand is one
+    module, as a path or as a name in scripts/tests.  An operand naming
+    nothing raises ValueError with the refusal to print."""
+    paths = []
+    for operand in operands or [str(DEFAULT)]:
+        given = Path(operand)
+        if given.is_dir():
+            found = sorted(given.resolve().glob("test_*.py"))
+            if not found:
+                raise ValueError("%s holds no test_*.py module" % operand)
+        elif given.is_file():
+            found = [given.resolve()]
+        else:
+            name = operand if operand.endswith(".py") else operand + ".py"
+            candidate = DEFAULT / name
+            if "/" in operand or not candidate.is_file():
+                raise ValueError(
+                    "%s is neither a directory, a file nor a module in %s;"
+                    " name a module such as test_fuzz_close or"
+                    " scripts/tests/test_fuzz_close.py"
+                    % (operand, os.path.relpath(DEFAULT, Path.cwd())))
+            found = [candidate]
+        for path in found:
+            if path not in paths:
+                paths.append(path)
+    return paths
+
+
+def plan(paths, shards):
     """The processes to run, each a label and its command, in log order."""
     work = []
-    for path in sorted(directory.glob("test_*.py")):
+    for path in paths:
         label = os.path.relpath(path, ROOT)
         if path.name in SHARDED and shards > 1:
             names = case_names(path)
@@ -72,7 +114,8 @@ def plan(directory, shards):
 
 def run(command, cwd):
     started = time.monotonic()
-    result = subprocess.run(command, cwd=cwd, stdout=subprocess.PIPE,
+    result = subprocess.run(command, cwd=cwd, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     return result.returncode, result.stdout, time.monotonic() - started
 
@@ -81,13 +124,18 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--jobs", type=int,
                         default=min(16, os.cpu_count() or 1))
-    parser.add_argument("directory", nargs="?", type=Path,
-                        default=ROOT / "scripts" / "tests")
+    parser.add_argument("operands", nargs="*", metavar="MODULE | DIRECTORY",
+                        help="a test module, by path or by its name in"
+                        " scripts/tests, or a directory of them;"
+                        " default scripts/tests")
     args = parser.parse_args(argv[1:])
     if args.jobs < 1:
         parser.error("--jobs must be at least 1")
-    directory = args.directory.resolve()
-    work = plan(directory, args.jobs)
+    try:
+        paths = modules(args.operands)
+    except ValueError as refusal:
+        parser.error(str(refusal))
+    work = plan(paths, args.jobs)
     started = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
         futures = [pool.submit(run, command, ROOT) for _, command in work]

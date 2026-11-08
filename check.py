@@ -48,12 +48,6 @@ def read_file(*arguments, **options):
         return stream.read()
 
 
-def write_file(path, text):
-    """Replace a generated file's text, as UTF-8."""
-    with io.open(path, "w", encoding="utf-8") as stream:
-        stream.write(text)
-
-
 def fixture_fields(path):
     """A `fixture.meta`'s keys as compiler/tests/fixture_meta.py reads
     them.  Faults are the test program's to report, so a faulty file still
@@ -2480,6 +2474,33 @@ def guide_citation_text(text):
                   blank, text)
 
 
+#  A guide's link to a construct: its target is tour.md or spec.md, by any
+#  relative path, as Markdown or as the rendered page, and its fragment the
+#  construct's id, which is the anchor the site gives it.
+GUIDE_CONSTRUCT_LINK = re.compile(
+    r"\[[^\]\n]*\]\((?:[^()\s#]*/)?(tour|spec)\.(?:md|html)#(\d{4})\)")
+
+
+def guide_link_citations(path, text, constructs):
+    """A guide's links to constructs name constructs that exist, in the
+    document the link goes to.  guide_citation_text blanks every link so
+    that a link's own text is not read as a citation, which also left a
+    link such as `[9998](tour.md#9998)` unchecked; this reads those."""
+    out = []
+    for match in GUIDE_CONSTRUCT_LINK.finditer(text):
+        document, construct = match.group(1) + ".md", match.group(2)
+        line = text.count("\n", 0, match.start()) + 1
+        defined = {os.path.basename(where)
+                   for where, _ in constructs.get(construct, ())}
+        if not defined:
+            out.append((path, line, "[%s] is cited and not defined"
+                        % construct))
+        elif document not in defined:
+            out.append((path, line, "[%s] is linked in %s and defined in %s"
+                        % (construct, document, ", ".join(sorted(defined)))))
+    return out
+
+
 def check_citations(paths, guide_paths=()):
     """Every construct/finding citation resolves within the selected scope."""
     citation_paths = [path for path in paths
@@ -2548,6 +2569,7 @@ def check_citations(paths, guide_paths=()):
     for path in citation_paths:
         text = read_file(path, encoding="utf-8")
         if path in guide_paths:
+            out += guide_link_citations(path, text, constructs)
             text = guide_citation_text(text)
         for match in re.finditer(r"(?<![\w])\[(\d{4})\](?![A-Za-z_0-9])", text):
             if match.group(1) not in constructs:
@@ -5291,7 +5313,11 @@ def pinned_fixtures():
                     continue
                 at = paragraph.start() + found.start()
                 out.append((relative, text.count("\n", 0, at) + 1,
-                            "this pins %s, which is not a fixture" % named))
+                            "this pins %s, which is not a fixture; a Pinned"
+                            " by or Evidence paragraph names live fixtures"
+                            " only, so name what pins the decision now and"
+                            " a retired fixture in a paragraph of its own"
+                            " after it (docs/documents.md)" % named))
 
     return out
 
@@ -6259,6 +6285,41 @@ def markdown_register(relative, heading, columns):
                           heading, columns)
 
 
+def table_problems(relative, heading, columns):
+    """Why markdown_register found no table, as (path, line, why) rows.
+
+    The generators that read these registers stop on a None; this says
+    which file, heading, header or row it was, so the stop names a cause.
+    """
+    path = os.path.join(ROOT, relative)
+    if not os.path.exists(path):
+        return [(relative, 1, "the file is missing")]
+    lines = read_file(path, encoding="utf-8").splitlines()
+    if heading not in lines:
+        return [(relative, 1, "no heading %r" % heading)]
+    at = lines.index(heading) + 1
+    while at < len(lines) and not lines[at].startswith("|"):
+        at += 1
+    if at + 1 >= len(lines):
+        return [(relative, lines.index(heading) + 1,
+                 "no table follows %r" % heading)]
+
+    def cells(line):
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+    if cells(lines[at]) != list(columns):
+        return [(relative, at + 1, "the table's columns are %s, not %s"
+                 % (" | ".join(cells(lines[at])), " | ".join(columns)))]
+    out = []
+    for number in range(at + 2, len(lines)):
+        if not lines[number].startswith("|"):
+            break
+        if len(cells(lines[number])) != len(columns):
+            out.append((relative, number + 1, "this row has %d cells, not %d"
+                        % (len(cells(lines[number])), len(columns))))
+    return out
+
+
 def fixture_records():
     """The metadata facts the coverage registers are allowed to cite."""
     return _fixture_records(ROOT)
@@ -6487,28 +6548,44 @@ def implemented_constructs():
             if has & {"accepted", "emitted", "executed"}}
 
 
+#  The four registers the coverage reading copies are generated from, each
+#  a file, its exact heading and its table's columns.
+GUARANTEE_REGISTER = (SPEC_NAME, "#### Guarantee coverage",
+                      ("Operation", "Class", "Constructs", "Behaviour",
+                       "Evidence"))
+CONFORMANCE_REGISTER = (SPEC_NAME, "#### Conformance and evidence coverage",
+                        ("Mechanism", "Rules", "Evidence"))
+PROTOTYPE_REGISTER = (REGISTERS, "## Prototype derivation coverage",
+                      ("Fixture", "Prototype", "Findings", "Pressure"))
+TARGET_SCOPE_REGISTER = (REGISTERS, "## Target applicability coverage",
+                         ("Scope", "Targets"))
+
+
 def guarantee_rows():
-    return markdown_register(
-        SPEC_NAME, "#### Guarantee coverage",
-        ("Operation", "Class", "Constructs", "Behaviour", "Evidence"))
+    return markdown_register(*GUARANTEE_REGISTER)
 
 
 def conformance_rows():
-    return markdown_register(
-        SPEC_NAME, "#### Conformance and evidence coverage",
-        ("Mechanism", "Rules", "Evidence"))
+    return markdown_register(*CONFORMANCE_REGISTER)
 
 
 def prototype_rows():
-    return markdown_register(
-        REGISTERS, "## Prototype derivation coverage",
-        ("Fixture", "Prototype", "Findings", "Pressure"))
+    return markdown_register(*PROTOTYPE_REGISTER)
 
 
 def target_scope_rows():
-    return markdown_register(
-        REGISTERS, "## Target applicability coverage",
-        ("Scope", "Targets"))
+    return markdown_register(*TARGET_SCOPE_REGISTER)
+
+
+def coverage_problems():
+    """What stopped coverage_dumps, register by register."""
+    out = []
+    for register in (GUARANTEE_REGISTER, CONFORMANCE_REGISTER,
+                     PROTOTYPE_REGISTER, TARGET_SCOPE_REGISTER):
+        if markdown_register(*register) is None:
+            out += table_problems(*register) or [
+                (register[0], 1, "%r could not be read" % register[1])]
+    return out
 
 
 def construct_applicability_rows():
@@ -7071,6 +7148,7 @@ def diagnostic_matrix_dump():
 
 
 EXPLANATIONS = "docs/diagnostics.md"
+CATALOGUE_ADS = "compiler/ada/src/diagnostics/landin-diagnostics-catalogue.ads"
 EXPLANATIONS_ADA = ("compiler/ada/src/diagnostics"
                     "/landin-diagnostics-explanations.adb")
 EXAMPLE_OPTIONS = "-- refine:"
@@ -7226,6 +7304,20 @@ def explanations_dump():
         body.append("")
     body.append("end Landin.Diagnostics.Explanations;")
     return "\n".join(body) + "\n"
+
+
+def explanation_problems():
+    """What stopped explanations_dump: the catalogue, the page, or a code
+    the page does not explain."""
+    rows = catalogue_rows()
+    sections, problems = explanation_sections()
+    out = list(problems)
+    if rows is None:
+        out.append((CATALOGUE_ADS, 1, "the catalogue table could not be read"))
+    elif sections is not None:
+        out += [(EXPLANATIONS, 1, "%s is not explained" % row["code"])
+                for row in rows if row["code"] not in sections]
+    return out
 
 
 def check_explanations(full_run):
@@ -7986,6 +8078,120 @@ def check_target_lists(full_run):
             continue
         line, named = found[name]
         subset(path, line, name, named, emitting, backend)
+    return out
+
+
+#  The build tags scripts/env.sh gives a host outside the flake's shell,
+#  which the documents, the container and the gate use.
+HOST_BUILD_TAGS = ("linux-amd64", "linux-arm64", "darwin-arm64")
+
+
+def check_build_paths(full_run):
+    """A document's path to a built refine names a tag a build makes.
+
+    compiler/ada/build/TAG/MODE/bin/ is where scripts/build.sh puts a
+    compiler, and a guide that spells TAG by hand goes stale when the tags
+    change: the fuzzer's README once named a tree no build wrote.  TAG is
+    `$LANDIN_BUILD_TAG`, the tag scripts/env.sh gives a host outside the
+    shell, or `nix-SYSTEM` for a system the flake provides, optionally
+    with an experiment's `.NAME`; MODE is debug, release or
+    `$LANDIN_BUILD_MODE`.  ROADMAP.md's history is exempt.
+    """
+    if not full_run:
+        return []
+    flake = os.path.join(ROOT, "flake.nix")
+    out = absent([flake])
+    if out:
+        return out
+    listed = re.search(r"\bsystems = \[([^\]]*)\]",
+                       read_file(flake, encoding="utf-8"))
+    if not listed:
+        return [("flake.nix", 1, "no `systems = [ ... ]` list where"
+                 " check_build_paths looks")]
+    tags = (["$LANDIN_BUILD_TAG", "${LANDIN_BUILD_TAG}"]
+            + list(HOST_BUILD_TAGS)
+            + ["nix-" + system
+               for system in re.findall(r'"([^"]+)"', listed.group(1))])
+    path = re.compile(r"compiler/ada/build/([^/\s`\"')]+)/([^/\s`\"')]+)/bin/")
+    docs = []
+    for here, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs
+                   if d not in (".git", "build", ".scratch", ".claude",
+                                "node_modules", "site", "__pycache__")]
+        docs += [os.path.relpath(os.path.join(here, name), ROOT)
+                 for name in files if name.endswith(".md")]
+    local, _ = git_ignored(sorted(docs))
+    for relative in sorted(set(docs) - set(local or ()) - {ROADMAP}):
+        text = read_file(os.path.join(ROOT, relative), encoding="utf-8")
+        for found in path.finditer(text):
+            tag, mode = found.groups()
+            #  A shell's own spelling of the variables is a tag a build
+            #  makes whatever their defaults say.
+            known = (tag.split(".", 1)[0] in tags
+                     or tag.startswith("${LANDIN_BUILD_TAG"))
+            moded = (mode in ("debug", "release")
+                     or re.match(r"\$\{?LANDIN_BUILD_MODE\b", mode))
+            if known and moded:
+                continue
+            out.append((relative, text.count("\n", 0, found.start()) + 1,
+                        "%s is not a tree a build writes: name"
+                        " compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/,"
+                        " or a tag of %s, and debug or release"
+                        % (found.group(0), ", ".join(tags[2:]))))
+    return out
+
+
+SERVER_GUIDE = "docs/server.md"
+#  The sentences of SERVER_GUIDE that list targets, each its opening words,
+#  and which targets it lists: every described one, or the firmware ones.
+SERVER_TARGET_SENTENCES = (
+    ("`target` is any name `--target=` takes:", "described"),
+    ("`firmwareEntry` is a nonempty routine name for a firmware target:",
+     "firmware"),
+)
+
+
+def check_server_targets(full_run):
+    """The server guide's target lists are the compiler's.
+
+    docs/server.md names every target a client may select and the firmware
+    targets `firmwareEntry` applies to, and nothing read those sentences:
+    a target added to the compiler would be missing from them until a
+    reader noticed.  The first is held to the selection package's names,
+    the second to the firmware corpus's targets in scripts/emit_manifest.py.
+    """
+    if not full_run:
+        return []
+    guide = os.path.join(ROOT, SERVER_GUIDE)
+    manifest = os.path.join(ROOT, EMIT_MANIFEST)
+    out = absent([guide, manifest])
+    if out:
+        return out
+    described, out = described_targets()
+    if out:
+        return out
+    lists = assigned_lists(manifest, ("FIRMWARE_TARGETS",))
+    if "FIRMWARE_TARGETS" not in lists:
+        return [(EMIT_MANIFEST, 1, "has no FIRMWARE_TARGETS where"
+                 " check_server_targets looks")]
+    want = {"described": described, "firmware": lists["FIRMWARE_TARGETS"][1]}
+    text = read_file(guide, encoding="utf-8")
+    for opening, which in SERVER_TARGET_SENTENCES:
+        at = text.find(opening)
+        if at == -1:
+            out.append((SERVER_GUIDE, 1, "no sentence opens %r, which"
+                        " check_server_targets holds to the %s targets"
+                        % (opening, which)))
+            continue
+        line = text.count("\n", 0, at) + 1
+        sentence = text[at + len(opening):].split(". ", 1)[0]
+        sentence = sentence.split(".\n", 1)[0]
+        named = re.findall(r"`([a-z0-9-]+)`", sentence)
+        if set(named) != set(want[which]):
+            out.append((SERVER_GUIDE, line, "this lists %s; the compiler's"
+                        " %s targets are %s"
+                        % (", ".join(named) or "no target", which,
+                           ", ".join(want[which]))))
     return out
 
 
@@ -8813,6 +9019,11 @@ def check_comment_forms(full_run):
             for sign in sorted(spelled - shown)]
 
 
+#  The fences the named-file check still reads: commands name the
+#  repository's scripts.  Every other fence is a listing it skips.
+COMMAND_FENCES = frozenset(("sh", "shell", "bash", "console"))
+
+
 def check_named_files(full_run):
     """A document or source file that names another names one that exists.
 
@@ -8822,6 +9033,14 @@ def check_named_files(full_run):
     filename a live document or an Ada source mentions has to resolve.
     Written after the rename rather than before it, because that is when
     the cost of not having it was obvious.
+
+    A fenced listing -- a program, its output, a grammar or JSON -- is
+    exempt: a file it names is one the example opens or writes, not one in
+    the repository, and requiring it to exist made examples rename a
+    settings file to dodge the check.  A command fence (sh, shell, bash,
+    console) is still read, but only for names with a directory, which name
+    a repository script or file; a bare name there is an operand the
+    example invents, such as `./number missing.txt`.
     """
     if not full_run:
         return []
@@ -8850,6 +9069,7 @@ def check_named_files(full_run):
         if not os.path.exists(path):
             continue
         ada = relative.endswith((".ads", ".adb"))
+        fence = None
         for n, line in enumerate(
                 read_file(path, encoding="utf-8").splitlines(), 1):
             #  In Ada only a comment names a file as a reference; a name in
@@ -8859,9 +9079,23 @@ def check_named_files(full_run):
                 if comment == -1:
                     continue
                 line = line[comment:]
+            else:
+                marker = re.match(r"\s*(`{3,}|~{3,})\s*([^\s`]*)", line)
+                if marker and fence is None:
+                    fence = (marker.group(1), marker.group(2).lower())
+                    continue
+                if (marker and not marker.group(2)
+                        and marker.group(1)[0] == fence[0][0]
+                        and len(marker.group(1)) >= len(fence[0])):
+                    fence = None
+                    continue
+                if fence is not None and fence[1] not in COMMAND_FENCES:
+                    continue
             for found in named.finditer(line):
                 target = found.group(1)
                 if target is None:  # An external URL, including its query/fragment.
+                    continue
+                if fence is not None and "/" not in target:
                     continue
                 if target in NAMED_FILE_ALLOWLIST:
                     continue
@@ -8879,6 +9113,36 @@ def check_named_files(full_run):
                 out.append((relative, n,
                             "this names %s, which is not in the repository"
                             % target))
+    return out
+
+
+def check_record_hints(full_run):
+    """A test's hint to re-record names the developer wrapper.
+
+    `./scripts/test.sh --record` builds from the top before it records;
+    `./scripts/dev-test.sh --record=WHAT` is the route the local recipe
+    names.  The fixture harness's hint moved to it and three suites' hints
+    were left naming the slow one, so every hint in the test program's
+    sources is held to the wrapper.
+    """
+    if not full_run:
+        return []
+    out = []
+    slow = re.compile(r"(?<![\w-])test\.sh --record")
+    base = os.path.join(ROOT, "compiler/ada/tests/src")
+    for here, _, files in os.walk(base):
+        for name in sorted(files):
+            if not name.endswith((".ads", ".adb")):
+                continue
+            path = os.path.join(here, name)
+            relative = os.path.relpath(path, ROOT)
+            for n, line in enumerate(
+                    read_file(path, encoding="utf-8").splitlines(), 1):
+                if slow.search(line):
+                    out.append((relative, n,
+                                "a re-record hint names ./scripts/test.sh,"
+                                " which rebuilds from the top; name"
+                                " ./scripts/dev-test.sh --record=WHAT"))
     return out
 
 
@@ -9989,22 +10253,33 @@ def generate_tokens():
     return 0
 
 
+def print_problems(what, problems):
+    """Say what a generator could not generate and every problem that
+    stopped it, the way generate_tokens names the grammar's."""
+    print("%s could not be generated; fix these first:" % what)
+    for path, line, why in problems or [
+            ("check.py", 1, "no cause was recorded; run python3 check.py")]:
+        print("    %s:%d  %s" % (path, line, why))
+
+
 def generate_catalogue():
     text = catalogue_dump()
     if text is None:
-        print("the catalogue could not be read")
+        print_problems("the catalogue", [
+            (CATALOGUE_ADS, 1, "the catalogue table could not be read")])
         return 2
     matrix = diagnostic_matrix_dump()
     if matrix is None:
-        print("the diagnostic matrix could not be read")
+        print_problems("the diagnostic matrix", [
+            (CATALOGUE_ADS, 1, "the catalogue table could not be read")])
         return 2
     explained = explanations_dump()
     if explained is None:
-        print("the explanations could not be generated; run check.py")
+        print_problems("the explanations", explanation_problems())
         return 2
     cited = citations_dump()
     if cited is None:
-        print("the citations could not be generated; run check.py")
+        print_problems("the citations", citation_entries()[2])
         return 2
     write_generated("compiler/tests/diagnostics.catalogue", text)
     write_generated("compiler/tests/diagnostics.matrix", matrix)
@@ -10017,7 +10292,7 @@ def generate_catalogue():
 def generate_coverage():
     dumps = coverage_dumps()
     if dumps is None:
-        print("the coverage registers could not be read")
+        print_problems("the coverage registers", coverage_problems())
         return 2
     for name, text in dumps.items():
         write_generated("compiler/tests/" + name, text)
@@ -10223,6 +10498,9 @@ def main(argv):
     extra += check_discussion_targets(full_run)
     extra += check_target_lists(full_run)
     extra += check_named_files(full_run)
+    extra += check_record_hints(full_run)
+    extra += check_server_targets(full_run)
+    extra += check_build_paths(full_run)
     extra += check_catalogue(full_run)
     extra += check_catalogue_labels(full_run)
     extra += check_emission_order(full_run)

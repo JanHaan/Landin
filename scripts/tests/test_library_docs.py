@@ -1,7 +1,10 @@
 """Source attachment, coverage and generated-link controls for library docs."""
+import contextlib
+import io
 import json
 from pathlib import Path
 import re
+import os
 import subprocess
 import sys
 import tempfile
@@ -350,6 +353,62 @@ end if
         texts = ['Counts the open files.', 'Says which processes are running now.']
         self.assertEqual(library.merged_documentation(texts), ' / '.join(texts))
         self.assertEqual(library.merged_documentation(['Same.', 'Same.']), 'Same.')
+
+
+class LibraryLinks(unittest.TestCase):
+    """A guide's link into docs/library.md reaches the split page that
+    holds its heading, and the verifier refuses one whose anchor is gone."""
+
+    def test_resolves_split_and_index_fragments(self):
+        saved = dict(render_html.LIBRARY_SECTIONS)
+        self.addCleanup(lambda: (render_html.LIBRARY_SECTIONS.clear(),
+                                 render_html.LIBRARY_SECTIONS.update(saved)))
+        render_html.LIBRARY_SECTIONS.clear()
+        render_html.LIBRARY_SECTIONS["the-buffered-writer"] = (
+            "library-core-io.html", "the-buffered-writer")
+        render_html.LIBRARY_SECTIONS["coreio"] = ("library.html", "core-io")
+        targets = render_html.guide_targets([], "tour.md")
+        self.assertEqual(targets.resolve("docs/library.md#the-buffered-writer"),
+                         "library-core-io.html#the-buffered-writer")
+        self.assertEqual(targets.resolve("docs/library.md#coreio"),
+                         "library.html#core-io")
+        self.assertEqual(targets.resolve("docs/library.md#introduction"),
+                         "library.html#introduction")
+
+    def test_verifier_rejects_a_missing_destination_anchor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "tour.html").write_text(
+                '<a href="library-core-io.html#writer">writer</a>')
+            (out / "library-core-io.html").write_text(
+                '<section id="writer"></section>')
+            docs = [{"out": "tour.html"}]
+            self.assertTrue(render_html.verify_library_links(out, docs))
+            (out / "library-core-io.html").write_text(
+                '<section id="other"></section>')
+            with contextlib.redirect_stdout(io.StringIO()) as said:
+                self.assertFalse(render_html.verify_library_links(out, docs))
+            self.assertIn("missing library destination"
+                          " library-core-io.html#writer", said.getvalue())
+
+
+class DefaultSourceRoot(unittest.TestCase):
+    def test_the_renderer_reads_its_own_checkout_without_from(self):
+        # Without --from the documents are read from the checkout the
+        # renderer is in, wherever it is run from; scripts/site.sh and the
+        # reference test both pass --from, so nothing else ran this.
+        with tempfile.TemporaryDirectory() as elsewhere, \
+                tempfile.TemporaryDirectory() as out:
+            result = subprocess.run(
+                [sys.executable, str(ROOT / 'docs/site/render_html.py'),
+                 '--to', out, 'tour.md'],
+                cwd=elsewhere, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0,
+                             result.stdout + result.stderr)
+            page = Path(out) / 'tour.html'
+            self.assertTrue(page.is_file())
+            self.assertIn('id="0010"', page.read_text(encoding='utf-8'))
+            self.assertEqual(os.listdir(elsewhere), [])
 
 
 class GeneratedReference(unittest.TestCase):
