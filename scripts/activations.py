@@ -26,7 +26,17 @@ The changes are `git diff --name-only BASE...HEAD`, the commits since HEAD
 left BASE, together with the uncommitted ones: staged, unstaged and
 untracked files.  PATH arguments replace all of that.
 
-    python3 scripts/activations.py [--base REV] [--unmatched] [--run] [PATH ...]
+A row counts only the changes made after it was written.  When a commit
+since BASE added the row or changed its Activation cell, a committed
+change meets the row only if that commit is not among the change's
+ancestors: a change the row's writer had already seen is what the row was
+written about, and over a long window about half the matches were such
+changes.  Uncommitted changes always count.  Each listed row names the
+commits that met it, and the rows left out for this are named, so either
+can be read; --whole-window counts every change since BASE for every row.
+
+    python3 scripts/activations.py [--base REV] [--unmatched] [--run]
+                                   [--whole-window] [PATH ...]
 
 BASE defaults to `main`.  The exit status is 0 whatever is listed, unless
 --run was given and a pass failed.
@@ -159,6 +169,78 @@ def activated(rows, tracked, changed):
     return hits, unmatched
 
 
+def cells(line):
+    """A register row's cells, or None for a line that is not one."""
+    if not ROW.match(line):
+        return None
+    found = [cell.strip() for cell in line.strip().strip("|").split(" | ")]
+    return found if len(found) == 6 else None
+
+
+def stated(window, root=ROOT):
+    """{identity: the newest commit in WINDOW that added the row or changed
+    its Activation}, read from one log of ROADMAP.md over the window."""
+    log = git("log", "--format=%x00%H", "-p", "-U0", "--no-renames",
+              "--no-merges", "--no-color", "--no-ext-diff", window, "--",
+              "ROADMAP.md", root=root)
+    since = {}
+    for chunk in log.split("\0")[1:]:
+        commit, _, diff = chunk.partition("\n")
+        removed, added = {}, {}
+        for line in diff.splitlines():
+            if line.startswith(("---", "+++")):
+                continue
+            row = cells(line[1:]) if line[:1] in "+-" else None
+            if row:
+                (added if line[0] == "+" else removed)[row[0]] = row[3]
+        for identity, activation in added.items():
+            if identity not in since and removed.get(identity) != activation:
+                since[identity] = commit.strip()
+    return since
+
+
+def history(base, root=ROOT):
+    """(paths each commit since HEAD left BASE changed, the row statements
+    in that window), for counting a row's changes from its own start."""
+    start = git("merge-base", base, "HEAD", root=root).strip()
+    window = start + "..HEAD"
+    log = git("log", "--format=%x00%H", "--name-only", "--no-renames",
+              window, root=root)
+    commits = {}
+    for chunk in log.split("\0")[1:]:
+        commit, _, names = chunk.partition("\n")
+        commits[commit.strip()] = {name for name in names.splitlines() if name}
+    return commits, stated(window, root)
+
+
+def since_statement(hits, commits, since, uncommitted, root=ROOT):
+    """HITS less the paths only commits the row's own statement had seen
+    changed: (kept hits with the commits that met each, rows left out).
+
+    A hit becomes (identity, status, reached, activation, commits)."""
+    after = {}
+    kept, left = [], []
+    for identity, status, reached, activation in hits:
+        statement = since.get(identity)
+        if statement is None:
+            later = set(commits)
+        else:
+            if statement not in after:
+                after[statement] = set(git(
+                    "rev-list", statement + "..HEAD", root=root).split())
+            later = after[statement] & set(commits)
+        met = [path for path in reached
+               if statement is None or path in uncommitted
+               or any(path in commits[commit] for commit in later)]
+        by = sorted(commit[:12] for commit in later
+                    if any(path in commits[commit] for path in met))
+        if met:
+            kept.append((identity, status, met, activation, by))
+        else:
+            left.append((identity, statement))
+    return kept, left
+
+
 def passes(changed):
     """(description, commands) of each gate-only pass the changes call for."""
     called = []
@@ -169,12 +251,18 @@ def passes(changed):
     return called
 
 
+def uncommitted_changes(root=ROOT):
+    """The paths staged, unstaged or untracked."""
+    lines = git("diff", "--name-only", "--no-renames", "HEAD", root=root)
+    lines += git("ls-files", "--others", "--exclude-standard", root=root)
+    return {line for line in lines.splitlines() if line}
+
+
 def changes(base, root=ROOT):
     """The paths changed since HEAD left BASE, and those not yet committed."""
     lines = git("diff", "--name-only", "--no-renames", base + "...HEAD", root=root)
-    lines += git("diff", "--name-only", "--no-renames", "HEAD", root=root)
-    lines += git("ls-files", "--others", "--exclude-standard", root=root)
-    return sorted({line for line in lines.splitlines() if line})
+    return sorted({line for line in lines.splitlines() if line}
+                  | uncommitted_changes(root))
 
 
 def main(argv=None, root=ROOT, out=sys.stdout):
@@ -188,6 +276,10 @@ def main(argv=None, root=ROOT, out=sys.stdout):
                         help="also list the rows whose activation names no path")
     parser.add_argument("--run", action="store_true",
                         help="run the gate-only passes the changes call for")
+    parser.add_argument("--whole-window", action="store_true",
+                        help="count every change since BASE for every row,"
+                        " even one made before the row was written or its"
+                        " activation last restated")
     parser.add_argument("paths", nargs="*", metavar="PATH",
                         help="changed paths, instead of asking git")
     args = parser.parse_args(argv)
@@ -195,16 +287,33 @@ def main(argv=None, root=ROOT, out=sys.stdout):
     tracked = set(git("ls-files", root=root).splitlines())
     rows = register((root / "ROADMAP.md").read_text(encoding="utf-8"))
     hits, unmatched = activated(rows, tracked, changed)
+    left = []
+    if args.paths or args.whole_window:
+        hits = [hit + ([],) for hit in hits]
+    else:
+        commits, since = history(args.base, root)
+        hits, left = since_statement(hits, commits, since,
+                                     uncommitted_changes(root), root)
     source = "the paths given" if args.paths else "changes since %s" % args.base
     print("%d changed paths (%s)" % (len(changed), source), file=out)
     if hits:
         print("\nRegister rows whose activation names a changed path; take each,"
               "\nor restate its activation, before the item closes:", file=out)
-    for identity, status, reached, activation in hits:
+    for identity, status, reached, activation, by in hits:
         print("\n%s (%s): %s\n    activation: %s"
               % (identity, status, ", ".join(reached), activation), file=out)
+        if by:
+            print("    met by: " + " ".join(by), file=out)
     if not hits:
         print("\nNo open or scheduled row's activation names a changed path.", file=out)
+    if left:
+        print("\n%d rows name a changed path that only commits before their"
+              " own statement changed, so they are not listed"
+              " (--whole-window lists them): %s"
+              % (len(left), ", ".join("%s (stated in %s)"
+                                      % (identity, statement[:12])
+                                      for identity, statement in left)),
+              file=out)
     print("\n%d open or scheduled rows name no path this can match; read their"
           " activations by hand%s." % (len(unmatched),
                                        "" if args.unmatched else " (--unmatched lists them)"),

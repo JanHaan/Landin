@@ -119,7 +119,12 @@ Before an item closes:
    runtime or ABI fixture or `core/` changed, and the flake's build when
    `flake.nix`, `flake.lock` or `environments/pins.sh` did. Take each row it
    lists, or restate its activation, in the item; run each pass it names
-   inside `nix develop`, or add `--run` to have it run them.
+   inside `nix develop`, or add `--run` to have it run them. A row counts
+   only the changes made after the commit that added it or last changed its
+   Activation, when that commit is since REV: a change its writer had
+   already seen is what the row was written about. Each listed row names
+   the commits that met it, the rows left out for this are named, and
+   `--whole-window` counts every change since REV for every row.
 
    It is a heuristic and says so: it matches paths an activation writes,
    in backticks or bare, base names of tracked files, Ada unit names and a
