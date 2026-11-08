@@ -1,0 +1,60 @@
+--  D1042: where the instance's type for a type-formal `from` source holds a
+--  reference, the source binds as written: a writer made over a handle
+--  copied out of a state held `inout` views that state, and passing the
+--  state's other field `inout` while the writer is used is L0315.  A source
+--  passed `inout` lends its storage whatever its type holds, so a result
+--  from one keeps the lock even where that type holds no reference.
+port: type = struct
+    line: ptr u32
+end port
+
+writer: type (handle: type) = struct
+    host: handle
+    buffer: []mut u8
+    used: usize
+end writer
+
+over: (handle: type, host: handle, buffer: []mut u8)
+      -> (out: writer(handle) from buffer, host) =
+    out = (host: host, buffer: buffer, used: 0)
+end over
+
+counter: type = struct
+    seen: u32
+end counter
+
+bump: (inout c: counter) -> none =
+    c.seen +%= 1
+end bump
+
+taker: type = struct
+    receive: counter
+    send: port
+end taker
+
+direct: (inout self: taker) -> (count: u32) =
+    mut room: [4]u8 = zeroed
+    out := over(self.send, room)
+    bump(self.receive)
+    count = u32(out.used) + out.host.line.val
+end direct
+
+lend: (item: type, inout place: item, buffer: []mut u8)
+      -> (out: []mut u8 from buffer, place) =
+    _ = place
+    out = buffer
+end lend
+
+lent: (inout self: taker) -> (count: u32) =
+    mut room: [4]u8 = zeroed
+    out := lend(self.receive, room)
+    bump(self.receive)
+    count = u32(lenof out)
+end lent
+
+line: u32 = 3
+
+public main: () -> (code: i32) =
+    mut state: taker = (receive: (seen: 0), send: (line: addr line))
+    code = i32(direct(state) + lent(state))
+end main

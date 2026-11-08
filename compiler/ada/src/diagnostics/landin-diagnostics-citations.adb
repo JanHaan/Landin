@@ -1698,6 +1698,9 @@ package body Landin.Diagnostics.Citations is
             when 290 =>
                "A generic `from` asks nothing of a source whose instance"
                & " type holds no reference",
+            when 1042 =>
+               "A source D290 asks nothing of lends a call's result no v"
+               & "iew",
             when 291 =>
                "A view taken again through an `inout` call ends the old "
                & "one at its assignment",
@@ -3475,6 +3478,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Lifetime, escape and allocation",
             when 290 =>
                "Decisions: Lifetime, escape and allocation",
+            when 1042 =>
+               "Decisions: Lifetime, escape and allocation",
             when 291 =>
                "Decisions: Lifetime, escape and allocation",
             when 292 =>
@@ -5102,6 +5107,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d290-a-generic-from-asks-n"
                & "othing-of-a-source-whose-instance-type-holds-no-referenc"
                & "e",
+            when 1042 =>
+               "https://www.701.dev/spec.html#d1042-a-source-d290-asks-n"
+               & "othing-of-lends-a-call-s-result-no-view",
             when 291 =>
                "https://www.701.dev/spec.html#d291-a-view-taken-again-th"
                & "rough-an-inout-call-ends-the-old-one-at-its-assignment",

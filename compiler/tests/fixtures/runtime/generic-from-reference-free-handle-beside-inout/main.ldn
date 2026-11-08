@@ -1,0 +1,74 @@
+--  D1042: a generic result whose `from` clause names a parameter typed by a
+--  type formal takes no origin from that argument where the instance's type
+--  holds no reference, so the result locks only its other sources.  A
+--  handle copied out of a state held `inout`, directly or through a local,
+--  makes a writer whose view is of the buffer alone, and the state's other
+--  field may then be passed `inout` while the writer is still in use.
+port: type = struct
+    line: u32
+end port
+
+writer: type (handle: type) = struct
+    host: handle
+    buffer: []mut u8
+    used: usize
+end writer
+
+over: (handle: type, host: handle, buffer: []mut u8)
+      -> (out: writer(handle) from buffer, host) =
+    out = (host: host, buffer: buffer, used: 0)
+end over
+
+put: (handle: type, inout out: writer(handle), byte: u8) -> none =
+    out.buffer[out.used] = byte
+    out.used += 1
+end put
+
+counter: type = struct
+    seen: u32
+end counter
+
+bump: (inout c: counter) -> none =
+    c.seen +%= 1
+end bump
+
+taker: type = struct
+    receive: counter
+    send: port
+end taker
+
+direct: (inout self: taker) -> (count: u32) =
+    mut room: [4]u8 = zeroed
+    mut out := over(self.send, room)
+    bump(self.receive)
+    put(out, 7)
+    count = u32(out.used) + out.host.line + u32(room[0])
+end direct
+
+copied: (inout self: taker) -> (count: u32) =
+    mut room: [4]u8 = zeroed
+    send: port = self.send
+    mut out := over(send, room)
+    bump(self.receive)
+    put(out, 5)
+    put(out, 6)
+    count = u32(out.used) + u32(room[1])
+end copied
+
+local_copy: () -> (count: u32) =
+    mut state: taker = (receive: (seen: 0), send: (line: 2))
+    mut room: [4]u8 = zeroed
+    send: port = state.send
+    mut out := over(send, room)
+    bump(state.receive)
+    put(out, 1)
+    count = u32(out.used) + state.receive.seen + out.host.line
+end local_copy
+
+public main: () -> (code: i32) =
+    mut state: taker = (receive: (seen: 0), send: (line: 3))
+    first := direct(state)
+    second := copied(state)
+    third := local_copy()
+    code = i32(first + second + third + state.receive.seen)
+end main

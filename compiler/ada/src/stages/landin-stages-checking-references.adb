@@ -1162,6 +1162,21 @@ package body Landin.Stages.Checking.References is
          Call : Syn.Node_Id;
          Formal : Positive) return Syn.Node_Id;
 
+      --  D290: whether ROUTINE's parameter at POSITION is written with a
+      --  type formal as its type.
+      function Typed_By_Type_Formal
+        (Routine_Tree : Syn.Tree;
+         Routine      : Syn.Node_Id;
+         Position     : Positive) return Boolean;
+
+      --  D1042: whether the source at FORMAL of CALL's `from` clauses
+      --  supplies no origin in the instance CALL reaches, so the result
+      --  neither derives from nor views its argument.
+      function Supplies_No_Origin
+        (Tree   : Syn.Tree;
+         Call   : Syn.Node_Id;
+         Formal : Positive) return Boolean;
+
       procedure Note_Exposed_Storage (Tree : Syn.Tree; Node : Syn.Node_Id);
 
       function First_Derivation
@@ -1609,6 +1624,67 @@ package body Landin.Stages.Checking.References is
          end loop;
          return Syn.No_Node;
       end Runtime_Argument;
+
+      function Typed_By_Type_Formal
+        (Routine_Tree : Syn.Tree;
+         Routine      : Syn.Node_Id;
+         Position     : Positive) return Boolean
+      is
+         Written : Syn.Node_Id;
+      begin
+         if Position > Syn.Parameter_Count (Routine_Tree, Routine) then
+            return False;
+         end if;
+         Written := Syn.Declared_Type
+           (Routine_Tree, Syn.Nth_Parameter (Routine_Tree, Routine, Position));
+         return Written /= Syn.No_Node
+           and then Syn.Kind (Routine_Tree, Written)
+             in Syn.Type_Reference | Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Routine_Tree, Written)
+             = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all,
+              Res.Bound_To (Meanings.all, Routine_Tree, Written))
+               = Res.Type_Parameter;
+      end Typed_By_Type_Formal;
+
+      function Supplies_No_Origin
+        (Tree   : Syn.Tree;
+         Call   : Syn.Node_Id;
+         Formal : Positive) return Boolean
+      is
+         Target : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Target_Of (Types.all, Tree, Call);
+         Called : constant Landin.Checking.Signature_Id :=
+           Call_Signature (Tree, Call);
+      begin
+         --  D290 lets the instance's body return nothing derived from such
+         --  a source, and a value parameter's own storage is the callee's
+         --  frame, which no result may view.  An `inout` source lends its
+         --  storage whatever its type holds, so it keeps the lock.
+         if Target = Landin.Checking.No_Routine_Instance
+           or else not Landin.Checking.Holds (Types.all, Called)
+           or else Formal > Landin.Checking.Signature_Parameter_Count
+             (Types.all, Called)
+         then
+            return False;
+         end if;
+         declare
+            Part : constant Landin.Checking.Signature_Part :=
+              Landin.Checking.Nth_Signature_Parameter
+                (Types.all, Called, Formal);
+            Template : constant Res.Declaration_Id :=
+              Landin.Checking.Routine_Template_Of (Types.all, Target);
+         begin
+            return Part.Convention /= Syn.Inout_Convention
+              and then not Landin.Checking.Contains_References
+                (Types.all, Part)
+              and then Template /= Res.No_Declaration
+              and then Typed_By_Type_Formal
+                (Tree_For (Res.Source_Of (Meanings.all, Template)).all,
+                 Res.Node_Of (Meanings.all, Template), Formal);
+         end;
+      end Supplies_No_Origin;
 
       procedure Note_Exposed_Storage (Tree : Syn.Tree; Node : Syn.Node_Id) is
          procedure Expose (Place : Syn.Node_Id);
@@ -3299,9 +3375,24 @@ package body Landin.Stages.Checking.References is
                                  --  Keep each independent result separate:
                                  --  another position's `from` bits must not
                                  --  conceal this result's external storage.
-                                 Part.External := Landin.Checking
+                                 --  A result whose every source supplies no
+                                 --  origin (D1042) is as independent as one
+                                 --  that names none.
+                                 Part.External := True;
+                                 for Source in 1 .. Landin.Checking
                                    .Signature_Return_Source_Count
-                                     (Types.all, Called, Returned) = 0;
+                                     (Types.all, Called, Returned)
+                                 loop
+                                    if not Supplies_No_Origin
+                                      (Tree, Node,
+                                       Landin.Checking
+                                         .Nth_Signature_Return_Source
+                                           (Types.all, Called,
+                                            Returned, Source))
+                                    then
+                                       Part.External := False;
+                                    end if;
+                                 end loop;
                                  Part.Writable_External := Part.External;
                                  for Source in 1 .. Landin.Checking
                                    .Signature_Return_Source_Count
@@ -3316,7 +3407,16 @@ package body Landin.Stages.Checking.References is
                                        Argument : constant Syn.Node_Id :=
                                          Runtime_Argument (Tree, Node, Formal);
                                     begin
-                                       if Argument /= Syn.No_Node then
+                                       --  D1042: a source D290 asks nothing
+                                       --  of in this instance lends the
+                                       --  result no origin, so the result
+                                       --  neither derives from the argument
+                                       --  nor locks the place it was copied
+                                       --  from against `inout` and `sink`.
+                                       if Argument /= Syn.No_Node
+                                         and then not Supplies_No_Origin
+                                           (Tree, Node, Formal)
+                                       then
                                           declare
                                              Fact : constant Origin_Fact :=
                                                Known_Fact
@@ -3646,28 +3746,10 @@ package body Landin.Stages.Checking.References is
                          (Types.all,
                           Landin.Checking.Nth_Signature_Parameter
                             (Types.all, Signature, Source))
+                       and then Typed_By_Type_Formal
+                         (Of_Tree, Function_Node, Source)
                      then
-                        declare
-                           Written : constant Syn.Node_Id :=
-                             Syn.Declared_Type
-                               (Of_Tree,
-                                Syn.Nth_Parameter
-                                  (Of_Tree, Function_Node, Source));
-                        begin
-                           if Written /= Syn.No_Node
-                             and then Syn.Kind (Of_Tree, Written)
-                               in Syn.Type_Reference | Syn.Name_Reference
-                             and then Res.Verdict_Of
-                               (Meanings.all, Of_Tree, Written) = Res.Bound
-                             and then Res.Sort_Of
-                               (Meanings.all,
-                                Res.Bound_To
-                                  (Meanings.all, Of_Tree, Written))
-                                 = Res.Type_Parameter
-                           then
-                              Expected (Source) := False;
-                           end if;
-                        end;
+                        Expected (Source) := False;
                      end if;
                   end loop;
                   --  [0790]: a read-only result whose edges also reach
