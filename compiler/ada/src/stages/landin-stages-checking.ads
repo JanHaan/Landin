@@ -63,6 +63,12 @@ package Landin.Stages.Checking is
       Live        : Natural := 0;
       Peak        : Natural := 0;
       Points      : Transfer_Counts := [others => 0];
+      --  The bytes of the largest fact the reference pass kept, which
+      --  does not depend on how many locals its routine has, and of every
+      --  fact it kept and every list of locals one derives from, which
+      --  grows with them and not with their square.
+      Largest_Fact : Natural := 0;
+      Fact_Bytes   : Long_Long_Integer := 0;
    end record;
 
    type Instance is limited new Landin.Stages.Stage with record
