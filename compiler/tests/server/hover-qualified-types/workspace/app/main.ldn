@@ -3,6 +3,6 @@ import lib/shapes
 main: () -> (status: i32) =
     corner: shapes.point = (x: 1, y: 2)
     place := addr corner
-    plane := shapes.origin ()
-    status = i32 (place.val.x + shapes.width (plane))
+    plane := shapes.origin()
+    status = i32(place.val.x + shapes.width(plane))
 end main
