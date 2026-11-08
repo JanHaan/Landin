@@ -7,7 +7,7 @@ committed records rather than asserted beside them, and that decision is only
 true while something refuses a row whose derivation has gone empty, stale or
 unbacked.  The editor grammar drifted precisely because no gate ran, so
 each control here alters one input -- a fixture's record, a golden, a target
-record or the driver's oracle -- and requires `prototype_result_problems` to
+record or a firmware derivation's oracle -- and requires `prototype_result_problems` to
 name the resulting row.  The unaltered repository must produce none.
 
 These controls never run a compiler, an emulator or a debugger.  They check
@@ -28,6 +28,8 @@ SPEC.loader.exec_module(CHECK)
 
 PARSER = "runtime/derived-parser"
 DRIVER = "firmware/derived-driver"
+COUNTERPART = "firmware/derived-counterpart"
+FIRMWARE = [one.name for one in CHECK.FIRMWARE_DERIVATIONS]
 NEGATIVE = "negative/r470-container-entry-live-map"
 
 
@@ -99,6 +101,9 @@ class Derivations(unittest.TestCase):
         self.refused(self.problems(self.altered(
             DRIVER, source=None, driver=None, protocol=None, layout=None)),
             "derivation firmware/derived-driver records no inputs")
+        self.refused(self.problems(self.altered(
+            COUNTERPART, source=None, board=None, tick=None, protocol=None)),
+            "derivation firmware/derived-counterpart records no inputs")
 
     def test_an_input_the_record_stops_naming_leaves_the_column(self):
         inputs, _, _ = CHECK.prototype_row_evidence(
@@ -113,6 +118,8 @@ class Derivations(unittest.TestCase):
             "derivation runtime/derived-parser records no outputs")
         self.refused(self.problems(self.altered(DRIVER, oracle=None)),
                      "derivation firmware/derived-driver records no outputs")
+        self.refused(self.problems(self.altered(COUNTERPART, oracle=None)),
+                     "derivation firmware/derived-counterpart records no outputs")
 
     def test_an_absent_golden_is_refused_rather_than_skipped(self):
         self.refused(self.problems(self.altered(PARSER, run_expect="absent.txt")),
@@ -246,6 +253,92 @@ class Derivations(unittest.TestCase):
         source = (ROOT / fields["runner"]).read_text(encoding="utf-8")
         for oracle in named:
             self.assertIn("\ndef %s(" % oracle, source, oracle)
+
+    #  -------------------------------------------- every firmware derivation
+    def firmware_problems(self, records=None, mandatory=None):
+        """`firmware_derivation_problems` over possibly altered inputs."""
+        records = self.records if records is None else records
+        if mandatory is None:
+            mandatory = (ROOT / "environments/cortex-m/run.py").read_text(
+                encoding="utf-8")
+        return [message for _, _, message
+                in CHECK.firmware_derivation_problems(records, mandatory)]
+
+    def test_the_table_names_both_firmware_derivations(self):
+        """The driver stays registered beside the counterpart, not replaced."""
+        self.assertEqual(FIRMWARE, [DRIVER, COUNTERPART])
+
+    def test_every_firmware_derivation_is_a_record_and_a_row(self):
+        named = {row["Fixture"].strip("`") for _, row in self.rows}
+        for name in FIRMWARE:
+            self.assertIn(name, self.records, name)
+            self.assertIn(name, named, name)
+            self.assertIn("cortex-m0", self.claims.get(name, {}), name)
+
+    def test_the_repository_firmware_derivations_are_complete(self):
+        self.assertEqual(self.firmware_problems(), [])
+
+    def test_a_counterpart_oracle_the_runner_does_not_define_is_refused(self):
+        self.refused(self.problems(self.altered(
+            COUNTERPART, oracle="judge, not_a_routine")),
+            "oracle not_a_routine is not a routine in"
+            " environments/cortex-m/counterpart.py")
+        self.refused(self.problems(self.altered(COUNTERPART, runner="")),
+                     "is not a routine in nothing")
+
+    def test_each_named_firmware_oracle_is_a_routine_today(self):
+        for name in FIRMWARE:
+            fields = self.records[name][1]
+            named = [one.strip() for one in fields["oracle"].split(",")]
+            self.assertTrue(named, name)
+            source = (ROOT / fields["runner"]).read_text(encoding="utf-8")
+            for oracle in named:
+                self.assertIn("\ndef %s(" % oracle, source,
+                              "%s: %s" % (name, oracle))
+
+    def test_the_inputs_column_follows_the_table(self):
+        for one in CHECK.FIRMWARE_DERIVATIONS:
+            fields = self.records[one.name][1]
+            inputs, _, _ = CHECK.prototype_row_evidence(one.name, fields)
+            self.assertEqual(inputs, "; ".join(fields[field]
+                                               for field in one.inputs))
+
+    def test_a_required_file_that_is_gone_is_refused(self):
+        for one in CHECK.FIRMWARE_DERIVATIONS:
+            for field in one.inputs + one.files:
+                self.refused(self.firmware_problems(self.altered(
+                    one.name, **{field: "absent/" + field})),
+                    "%s derivation lacks %s" % (one.what, field))
+                self.refused(self.firmware_problems(self.altered(
+                    one.name, **{field: None})),
+                    "%s derivation lacks %s" % (one.what, field))
+
+    def test_a_lane_run_py_does_not_call_is_refused(self):
+        mandatory = (ROOT / "environments/cortex-m/run.py").read_text(
+            encoding="utf-8")
+        for one in CHECK.FIRMWARE_DERIVATIONS:
+            self.assertIn(one.lane, mandatory)
+            self.refused(self.firmware_problems(
+                mandatory=mandatory.replace(one.lane, "skipped()")),
+                "%s evidence is not in the mandatory lane" % one.what)
+
+    def test_a_mapping_no_live_document_check_reads_is_refused(self):
+        for one in CHECK.FIRMWARE_DERIVATIONS:
+            mapping = self.records[one.name][1]["mapping"]
+            self.assertIn(mapping, CHECK.LIVE_DOCS)
+            live = [doc for doc in CHECK.LIVE_DOCS if doc != mapping]
+            with unittest.mock.patch.object(CHECK, "LIVE_DOCS", live):
+                self.refused(self.firmware_problems(),
+                             "%s derivation's mapping %s is not in"
+                             % (one.what, mapping))
+
+    def test_an_absent_record_is_refused(self):
+        for one in CHECK.FIRMWARE_DERIVATIONS:
+            records = copy.deepcopy(self.records)
+            del records[one.name]
+            self.refused(self.firmware_problems(records),
+                         "%s derivation's record %s is not here"
+                         % (one.what, one.record))
 
 
 if __name__ == "__main__":
