@@ -309,6 +309,150 @@ class CoreModulePlaces(unittest.TestCase):
             self.assertIn(place, said[0])
 
 
+CONSUMED_MODULE = """\
+--- What a fixture calls.
+public used: () -> (count: usize) =
+    count = helper() + reached
+end used
+
+helper: () -> (count: usize) =
+    count = 1
+end helper
+
+--- What only `used` names.
+public reached: usize = 2
+
+--- What only `stranded` names, which nothing reaches.
+public through: () -> none =
+    _ = 0
+end through
+
+--- What nothing outside the library names; `used` mentions it in a
+--- comment alone.
+public stranded: () -> none =
+    through()
+end stranded
+"""
+
+CONSUMER = """\
+import core/mem
+
+-- mem.stranded() would be the call.
+main: () -> (status: i32) =
+    status = i32(mem.used())
+end main
+"""
+
+
+class LibraryConsumersOnTheTree(unittest.TestCase):
+    """The library as it is has a consumer for every routine and value."""
+
+    def test_the_tree_passes(self):
+        self.assertEqual(checker.check_library_consumers(True), [])
+
+
+class LibraryConsumers(unittest.TestCase):
+    """Every public routine and value is reached by a program that runs."""
+
+    def setUp(self):
+        #  A synthetic library has none of the real entry points or tables,
+        #  which would otherwise be reported as stale.
+        for name, value in (("LIBRARY_ENTRY_POINTS", {}),
+                            ("LIBRARY_TABLES", {})):
+            patcher = mock.patch.dict(getattr(checker, name), value,
+                                      clear=True)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def written(self, **extra):
+        files = {"core/mem/mem.ldn": CONSUMED_MODULE,
+                 "compiler/tests/fixtures/runtime/uses-mem/main.ldn":
+                     CONSUMER}
+        files.update(extra)
+        return files
+
+    def test_an_unconsumed_routine_is_named_at_its_declaration(self):
+        said = faults(checker.check_library_consumers,
+                      written=self.written())
+        #  `through` is named only by `stranded`, which nothing reaches,
+        #  and a comment's `mem.stranded()` is not a use.
+        self.assertEqual([(path, line) for path, line, _ in said],
+                         [("core/mem/mem.ldn", 20), ("core/mem/mem.ldn", 14)])
+        stranded, through = (why for _, _, why in said)
+        self.assertIn("public routine stranded of core/mem", stranded)
+        self.assertIn("give it one in a fixture whose oracle checks it,"
+                      " or make it private", stranded)
+        self.assertIn("core/mem's stranded names it, but nothing a program"
+                      " runs reaches that", through)
+
+    def test_an_allow_listed_routine_passes_and_reaches_its_callees(self):
+        with mock.patch.dict(checker.LIBRARY_ENTRY_POINTS,
+                             {"core/mem.stranded": "started by name"},
+                             clear=True):
+            self.assertEqual(faults(checker.check_library_consumers,
+                                    written=self.written()), [])
+
+    def test_a_stale_allow_list_entry_is_reported(self):
+        with mock.patch.dict(checker.LIBRARY_ENTRY_POINTS,
+                             {"core/mem.stranded": "started by name",
+                              "core/mem.gone": "removed since"},
+                             clear=True):
+            said = reasons(checker.check_library_consumers,
+                           written=self.written())
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("LIBRARY_ENTRY_POINTS names gone", said[0])
+
+    def test_a_negative_fixture_is_not_a_consumer(self):
+        refused = CONSUMER.replace("mem.used()", "mem.used() + mem.stranded()")
+        said = reasons(checker.check_library_consumers, written=self.written(
+            **{"compiler/tests/fixtures/negative/refuses-mem/main.ldn":
+               refused}))
+        self.assertTrue(any("stranded of core/mem" in why for why in said),
+                        said)
+        said = reasons(checker.check_library_consumers, written=self.written(
+            **{"compiler/tests/fixtures/runtime/also-mem/main.ldn":
+               refused}))
+        self.assertEqual(said, [])
+
+    def test_a_page_block_is_a_consumer(self):
+        page = "```landin\n%s```\n" % CONSUMER.replace(
+            "mem.used()", "mem.used() + mem.stranded()")
+        self.assertEqual(faults(checker.check_library_consumers,
+                                written=self.written(
+                                    **{"docs/from-c.md": page})), [])
+
+    def test_a_selected_import_is_a_use(self):
+        selected = CONSUMER.replace("import core/mem\n",
+                                    "import core/mem (used, stranded)\n")
+        selected = selected.replace("mem.used()", "used() + stranded()")
+        self.assertEqual(faults(checker.check_library_consumers,
+                                written=self.written(**{
+                                    "examples/uses-mem/main.ldn":
+                                        selected})), [])
+
+    def test_a_table_is_one_facility(self):
+        table = ("--- The first.\npublic one_number: usize = 1\n\n"
+                 "--- The second.\npublic two_number: usize = 2\n")
+        user = CONSUMED_MODULE.replace(
+            "    count = helper() + reached",
+            "    count = helper() + reached + numbers.one_number")
+        files = self.written(**{"platform/linux/numbers/numbers.ldn": table,
+                                "core/mem/mem.ldn":
+                                    "import platform/linux/numbers\n\n"
+                                    + user})
+        with mock.patch.dict(checker.LIBRARY_ENTRY_POINTS,
+                             {"core/mem.stranded": "started by name"}), \
+                mock.patch.dict(checker.LIBRARY_TABLES,
+                                {"platform/linux/numbers": "generated"}):
+            self.assertEqual(faults(checker.check_library_consumers,
+                                    written=files), [])
+            files["core/mem/mem.ldn"] = CONSUMED_MODULE
+            said = faults(checker.check_library_consumers, written=files)
+        self.assertEqual([(path, line) for path, line, _ in said],
+                         [("platform/linux/numbers/numbers.ldn", 2)])
+        self.assertIn("generated table", said[0][2])
+
+
 PINS = ["environments/linux-amd64/Containerfile",
         "compiler/ada/TOOLCHAIN.md",
         "environments/pins.sh",
