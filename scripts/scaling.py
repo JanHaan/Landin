@@ -468,6 +468,25 @@ def library_declarations(refine: str, work: str, timeout: float,
                    launcher)["sizes"]["declarations"] - 1
 
 
+def shape(build) -> str:
+    """What a family's program is, from its generator's first sentence."""
+    words = " ".join((build.__doc__ or "").split())
+    sentence = words.split(": ", 1)[0].split(". ", 1)[0].rstrip(".")
+    return (sentence[0].lower() + sentence[1:]) if sentence else ""
+
+
+def judged(rows: list[dict], part: str) -> str:
+    """The rows a doubling compared, for one part, as its verdict read them."""
+    unit = "MiB" if part == "peak_kib" else "s"
+    shown = []
+    for row in rows:
+        value = (row[part] / 1024 if part == "peak_kib" else row[part])
+        ratio = row["ratios"].get(part)
+        shown.append(f"{row['size']} {value:.3f} {unit}"
+                     + (f" ({ratio:.2f}x)" if ratio is not None else ""))
+    return ", ".join(shown)
+
+
 def write_program(directory: str, files: dict[str, str]) -> None:
     for relative, text in files.items():
         path = os.path.join(directory, relative)
@@ -655,11 +674,19 @@ def main(argv: list[str]) -> int:
                     what = "peak memory" if part == "peak_kib" else part
                     tried = ([ratios[part]]
                              + [one["ratios"][part] for one in repeats])
-                    text = (f"{name}: {what} {rows[-2]['size']} -> {size}"
+                    #  The verdict is printed after every later family's
+                    #  rows, so it names the family's shape and repeats
+                    #  the rows it judged rather than leave them to be
+                    #  found under the family's heading.
+                    described = shape(build)
+                    text = (f"{name}" + (f", {described}" if described
+                                         else "") + f": {what}"
+                            f" {rows[-2]['size']} -> {size}"
                             f" grew {tried[0]:.2f}x, more than {limit}x"
                             + (", and " + ", ".join(f"{value:.2f}x"
                                                     for value in tried[1:])
-                               + " measured again" if repeats else ""))
+                               + " measured again" if repeats else "")
+                            + "; judged on " + judged(rows[-2:], part))
                     if busy and all(busy):
                         text += (f"; every measurement was under contention"
                                  f" ({describe_load(load)}), so this needs a"
