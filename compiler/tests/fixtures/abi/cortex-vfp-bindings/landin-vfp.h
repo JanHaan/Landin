@@ -58,6 +58,14 @@ static inline double vfp_apply(const vfp_sample *sample, double value)
         + (double)sample->stamp;
 }
 
+/* The record's address back: its middle trim moved by `by`, read through
+   the returned pointer. */
+static inline vfp_sample *vfp_retrim(vfp_sample *sample, short by)
+{
+    sample->trim[1] = (short)(sample->trim[1] + by);
+    return sample;
+}
+
 /* The aggregate by value, in d0-d1 both ways, with a float in s4 after it. */
 static inline vfp_pair vfp_turn(vfp_pair z, float scale)
 {

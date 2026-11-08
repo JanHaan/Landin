@@ -953,6 +953,30 @@ package body Landin.Bindings.Generation is
               else T.Sanitize_Landin (Name));
    end Landin_Name_For_Alias;
 
+   --  A pointer to a record the policy selects and the generator writes
+   --  as a Landin record, ordinary, packed or flexible-member alike, is
+   --  typed to that record (D426 as amended).  An opaque, incomplete or
+   --  unselected record has no Landin record to point to, and its pointer
+   --  stays a byte pointer.
+   function Typed_Record_Pointee (S : Handle; Id : Type_Id) return Boolean;
+
+   function Typed_Record_Pointee (S : Handle; Id : Type_Id) return Boolean
+   is
+      Resolved : constant Type_Id := Resolve (S, Id);
+   begin
+      if Kind (S, Resolved) /= Record_Type
+        or else not S.Record_Entries.Contains (Name (S, Resolved))
+      then
+         return False;
+      end if;
+      declare
+         Index : constant Positive := C.Record_Index (S, Name (S, Resolved));
+      begin
+         return C.Record_Complete (S, Index)
+           and then Record_Classification (S, Index) = Native_Layout;
+      end;
+   end Typed_Record_Pointee;
+
    function Address_Type
      (S : Handle; Id : Type_Id; Mutable : Boolean) return String;
 
@@ -1935,13 +1959,10 @@ package body Landin.Bindings.Generation is
                   Pointee : constant Type_Id := Resolve (S, Item.Child);
                   Inner : US.Unbounded_String;
                begin
-                  if Kind (S, Pointee) = Record_Type
-                    and then S.Record_Entries.Contains (Name (S, Pointee))
-                    and then Pointer_Only (S, Pointee)
-                  then
-                     --  D414: C reaches a selected packed or flexible-member
-                     --  record only through a pointer, so the pointer
-                     --  carries its type.
+                  if Typed_Record_Pointee (S, Pointee) then
+                     --  D426 as amended: a pointer to a selected record
+                     --  with a Landin layout carries its type, so its
+                     --  fields are reached without a cast.
                      Inner := US.To_Unbounded_String
                        (Landin_Name_For_Record
                           (S, C.Record_Index (S, Name (S, Pointee))));

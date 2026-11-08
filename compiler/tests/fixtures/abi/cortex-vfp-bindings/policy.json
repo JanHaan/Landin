@@ -121,6 +121,28 @@
     },
     {
       "kind": "function",
+      "name": "vfp_retrim",
+      "landin_name": "vfp_retrim",
+      "direction": "import",
+      "parameters": {
+        "sample": {
+          "ownership": "borrowed",
+          "nullability": "nonnullable",
+          "from": [],
+          "retention": "call"
+        }
+      },
+      "result": {
+        "ownership": "borrowed",
+        "nullability": "nonnullable",
+        "from": [
+          "sample"
+        ],
+        "retention": "returned"
+      }
+    },
+    {
+      "kind": "function",
       "name": "vfp_turn",
       "landin_name": "vfp_turn",
       "direction": "import",
