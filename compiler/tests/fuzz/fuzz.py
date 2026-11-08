@@ -19,8 +19,10 @@ its transcript, OUT/hit-SEED.lsp, and the run fails.
 
 One server serves a batch of mutants, each its own document, closed after
 it, so a defect that only a long session reaches can show, and a hit
-restarts the server.  `--batch` runs the old oracle instead, `refine FILE`
-on each mutant, where any exit but 0 or 1 is a hit.  `--reduce FILE` deletes
+restarts the server.  `--batch` runs the old oracle instead,
+`refine check --root CHECKOUT FILE` on each mutant, the checkout the import
+root as the server's initialization makes it, where any exit but 0 or 1 is
+a hit.  `--reduce FILE` deletes
 lines from a hit, sixteen at a time down to one, for as long as it still
 breaks the server.
 
@@ -404,7 +406,11 @@ def batch_one(refine, seconds, mutant):
     path = Path("/tmp") / ("landin-fuzz-%d.ldn" % os.getpid())
     path.write_bytes(mutant.encode("utf-8", "surrogateescape"))
     try:
-        ran = subprocess.run([refine, str(path)], capture_output=True,
+        #  The checkout is the import root, as the server's initialize
+        #  makes it, so a mutant of a fixture importing outside the
+        #  library is checked rather than refused as L0006.
+        ran = subprocess.run([refine, "check", "--root", str(ROOT),
+                              str(path)], capture_output=True,
                              timeout=seconds)
     except subprocess.TimeoutExpired:
         return "timed out"
@@ -444,7 +450,8 @@ def main():
                         help="address-space bound on the server, in bytes")
     parser.add_argument("--per-server", type=int, default=50)
     parser.add_argument("--batch", action="store_true",
-                        help="run refine FILE on each mutant instead")
+                        help="run refine check --root CHECKOUT FILE on each"
+                        " mutant instead")
     parser.add_argument("--reduce", default="",
                         help="reduce this hit instead of fuzzing")
     arguments = parser.parse_args()

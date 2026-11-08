@@ -68,9 +68,10 @@ The close of the last document is checked when a batch rolls over and at
 final shutdown. A premature exit, failed shutdown response or timeout keeps
 that document's mutant and transcript as a hit.
 
-`--batch` runs the original oracle instead: `refine FILE` on each mutant,
-where an exit other than 0 or 1, a run past the bound or a defect line is a
-hit. `--reduce FILE` deletes runs of lines from a hit, sixteen down to one,
+`--batch` runs the original oracle instead: `refine check --root CHECKOUT
+FILE` on each mutant, with the checkout as the import root as the server
+has it, where an exit other than 0 or 1, a run past the bound or a defect
+line is a hit. `--reduce FILE` deletes runs of lines from a hit, sixteen down to one,
 for as long as a fresh server given the text still breaks. Each trial is
 opened in its own temporary module under `OUT`, so other saved hits cannot
 affect it; the checkout remains the import root. The result is written to
