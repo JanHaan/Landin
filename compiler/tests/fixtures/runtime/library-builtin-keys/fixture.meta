@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the library's own evidence keys maps by integer scalars, byte slices and utf8 and sorts utf8 and signed scalars with no evidence in the program
+summary: the library's own evidence keys maps by integer scalars, byte slices and utf8, a walk visits a map's entries in insertion order, and the library sorts utf8 and signed scalars with no evidence in the program
 program: main.ldn
 root: ../../../../..
 status: 42

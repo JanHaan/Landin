@@ -364,9 +364,9 @@ Keep keys and their backing stable while stored, and restart cursors after
 any mutation.
 
 A walk starts at `map.entries()` and calls `map.next_entry` until it fails
-with `map.end_of_entries`, as the
+with `map.end_of_entries`, as the executable example below does; the
 [derived container program](../examples/derived_containers/workload/workload.ldn)
-does after removing keys.
+also walks after removing keys.
 
 A complete map workload can exceed the Cortex-M0 test profile of 32 KiB
 flash, so the
@@ -378,7 +378,8 @@ fits that profile.
 
 It keeps three maps over one arena, keyed by `i32`, `[]u8` and `utf8`. It
 inserts keys, replaces one key's item, reads each back, finds a `[]u8` key
-through equal bytes at another address, and releases every map.
+through equal bytes at another address, walks the `utf8` map's entries in
+insertion order until `map.end_of_entries`, and releases every map.
 
 ## core/sort
 
