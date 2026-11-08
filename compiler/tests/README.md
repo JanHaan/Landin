@@ -594,7 +594,10 @@ single-construct probes. Twenty-three of them are collected in `examples.md`,
 which a reader copies from, so each prints what it computes and returns 0,
 and its `run_expect` holds that output. `check.py`'s `RUNNING_EXAMPLES`
 names them, and the page's listings are held to their sources byte for
-byte.
+byte. Each example's section has exactly one `landin` fence, its program,
+and the page has no other, so `check.py` and the formatting test refuse a
+shorter snippet beside it; a `c-shared` source the program loads appears
+byte for byte in a `c` fence of the same section.
 
 | group | fixtures |
 | --- | --- |
