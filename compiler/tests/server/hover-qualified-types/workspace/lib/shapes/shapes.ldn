@@ -1,0 +1,20 @@
+public point: type = struct
+    x: u32
+    y: u32
+end point
+
+grid_value: type = struct
+    corner: point
+end grid_value
+
+--- A grid, by its public name.
+public grid: type = grid_value
+
+public origin: () -> (result: grid) =
+    result = (corner: (x: 0, y: 0))
+end origin
+
+public width: (of: grid) -> (count: u32) =
+    near := of.corner
+    count = near.x
+end width

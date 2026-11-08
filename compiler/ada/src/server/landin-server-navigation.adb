@@ -423,9 +423,12 @@ package body Landin.Server.Navigation is
 
    --  A type, as the checker spells one, from what the checking table
    --  holds for a node or a declaration; "" when it decided nothing a
-   --  person could read.
+   --  person could read.  WITHIN is the hovered source, so a type of
+   --  another module is written as that source writes it, `shapes.point`
+   --  and a private type by its public alias, as its refusals spell it.
    function Type_Text
      (Spelt     : Landin.Checking.Spelling.Tables;
+      Within    : Landin.Source.Source_Id;
       Kind      : Ty.Type_Kind;
       Nominal   : Landin.Checking.Nominal_Type_Id;
       Reference : Landin.Checking.Reference_Id;
@@ -434,6 +437,7 @@ package body Landin.Server.Navigation is
 
    function Type_Text
      (Spelt     : Landin.Checking.Spelling.Tables;
+      Within    : Landin.Source.Source_Id;
       Kind      : Ty.Type_Kind;
       Nominal   : Landin.Checking.Nominal_Type_Id;
       Reference : Landin.Checking.Reference_Id;
@@ -450,13 +454,14 @@ package body Landin.Server.Navigation is
               and then Landin.Checking.Holds (Types, Reference)
             then
                return Landin.Checking.Spelling.Reference_Text
-                 (Spelt, Reference);
+                 (Spelt, Reference, Within);
             end if;
          when Ty.Aggregate | Ty.Fixed_Array =>
             if Nominal /= Landin.Checking.No_Nominal_Type
               and then Landin.Checking.Holds (Types, Nominal)
             then
-               return Landin.Checking.Spelling.Nominal_Text (Spelt, Nominal);
+               return Landin.Checking.Spelling.Nominal_Text
+                 (Spelt, Nominal, Within);
             end if;
          when Ty.Atom_Value =>
             if Atoms /= Landin.Checking.No_Atom_Set
@@ -535,6 +540,7 @@ package body Landin.Server.Navigation is
              = Landin.Checking.Settled
          then Type_Text
            (Spelt,
+            Syn.Source_Of (Of_Tree),
             Landin.Checking.Type_Of (Types, Id),
             Landin.Checking.Nominal_Of (Types, Id),
             Landin.Checking.Reference_Of (Types, Id),
@@ -646,7 +652,7 @@ package body Landin.Server.Navigation is
             Kind : constant Ty.Type_Kind :=
               Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node);
             Text : constant String := Type_Text
-              (Spelt, Kind,
+              (Spelt, Source, Kind,
                Landin.Checking.Nominal_Of (Types.all, Of_Tree.all, Node),
                Landin.Checking.Reference_Of (Types.all, Of_Tree.all, Node),
                Landin.Checking.Atom_Set_Of (Types.all, Of_Tree.all, Node),
