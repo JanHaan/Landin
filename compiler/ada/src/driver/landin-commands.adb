@@ -19,6 +19,7 @@ with Landin.Source;
 with Landin.Source.Sets;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 
 package body Landin.Commands is
@@ -685,7 +686,87 @@ package body Landin.Commands is
       procedure List_Targets;
       procedure List_Targets is
          package Caps renames Landin.Targets.Capabilities;
+         package FW renames Landin.Targets.Firmware;
          B : J.Builder;
+
+         --  The cores that execute each of a target's levels, from
+         --  the firmware core table the --target and --level refusals
+         --  read, so a reader with a Cortex-M4 learns it is cortex-m0's
+         --  armv7e-m without being refused first.  Each core is listed at
+         --  its own level; a build at a lower level the core holds runs
+         --  there too.  Every listed level is the target's own.
+         procedure Each_Core
+           (Facts : Landin.Targets.Target_Facts;
+            Visit : not null access procedure (Core : FW.Core_Kind));
+         procedure Each_Core
+           (Facts : Landin.Targets.Target_Facts;
+            Visit : not null access procedure (Core : FW.Core_Kind))
+         is
+            Levels : constant String :=
+              Landin.Targets.Levels.Levels_Of (Facts) & ", ";
+            From : Positive := Levels'First;
+            Comma : Natural;
+         begin
+            loop
+               exit when From > Levels'Last;
+               Comma := Ada.Strings.Fixed.Index (Levels, ", ", From);
+               exit when Comma = 0;
+               for Core in FW.Core_Kind loop
+                  if Landin.Targets."=" (FW.Family (Core),
+                                         Landin.Targets.Architecture_Of
+                                           (Facts))
+                    and then FW.Level_Name (Core) = Levels (From .. Comma - 1)
+                  then
+                     Visit (Core);
+                  end if;
+               end loop;
+               From := Comma + 2;
+            end loop;
+         end Each_Core;
+
+         function Core_Line (Facts : Landin.Targets.Target_Facts)
+            return String;
+         function Core_Line (Facts : Landin.Targets.Target_Facts)
+            return String
+         is
+            Line : US.Unbounded_String;
+            Level : US.Unbounded_String;
+            procedure Add (Core : FW.Core_Kind);
+            procedure Add (Core : FW.Core_Kind) is
+            begin
+               if US.To_String (Level) = FW.Level_Name (Core) then
+                  US.Append (Line, ", " & FW.Spelling (Core));
+               else
+                  US.Append
+                    (Line, (if US.Length (Line) = 0 then "" else "; ")
+                     & FW.Level_Name (Core) & ": " & FW.Spelling (Core));
+                  Level := US.To_Unbounded_String (FW.Level_Name (Core));
+               end if;
+            end Add;
+         begin
+            Each_Core (Facts, Add'Access);
+            return (if US.Length (Line) = 0 then ""
+                    else "  cores by level: " & US.To_String (Line) & LF);
+         end Core_Line;
+
+         procedure Write_Cores (Facts : Landin.Targets.Target_Facts);
+         procedure Write_Cores (Facts : Landin.Targets.Target_Facts) is
+            procedure Add (Core : FW.Core_Kind);
+            procedure Add (Core : FW.Core_Kind) is
+            begin
+               J.Begin_Object (B);
+               J.Name (B, "name");
+               J.Write_String (B, FW.Spelling (Core));
+               J.Name (B, "level");
+               J.Write_String (B, FW.Level_Name (Core));
+               J.End_Object (B);
+            end Add;
+         begin
+            J.Name (B, "cores");
+            J.Begin_Array (B);
+            Each_Core (Facts, Add'Access);
+            J.End_Array (B);
+         end Write_Cores;
       begin
          if Asked.Structured then
             J.Begin_Object (B);
@@ -722,13 +803,15 @@ package body Landin.Commands is
                   J.Write_String (B, Landin.Targets.Levels.Name
                     (Landin.Targets.Levels.Default_Level
                        (Facts)));
+                  Write_Cores (Facts);
                   J.End_Object (B);
                else
                   US.Append (Result.Output, Name
                     & (if Caps.Emits (Facts)
                        then "" else " (checking only)")
                     & ": " & Landin.Targets.Levels.Levels_Of
-                      (Facts) & "; debug: " & Debug & LF);
+                      (Facts) & "; debug: " & Debug & LF
+                    & Core_Line (Facts));
                end if;
             end;
          end loop;

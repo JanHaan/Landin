@@ -321,8 +321,13 @@ package body Landin.Tests.Driver_Suite is
          Landin.Driver.Status_Reported);
       Refuse
         ("linux-x86-64", "--firmware-entry=start",
-         "--firmware-entry requires a firmware target: --target=cortex-m0"
-         & " or --target=rv32",
+         "--firmware-entry requires a firmware target: --target=cortex-m0,"
+         & " --target=rv32 or --target=xtensa",
+         Landin.Driver.Status_Misuse);
+      Refuse
+        ("linux-x86-64", "--firmware-layout=ram",
+         "--firmware-layout requires a firmware target: --target=cortex-m0,"
+         & " --target=rv32 or --target=xtensa",
          Landin.Driver.Status_Misuse);
       Refuse
         ("linux-x86-64", "--debug=lines",
@@ -3997,6 +4002,11 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check
            (Item, Contains (Report, "internal compiler defect"),
             "and says so where a reader is looking");
+         Landin.Testing.Check
+           (Item, Contains (Report, "compiler/ada/README.md, ""Debugging an"
+              & " internal defect"", shows how a debug build under gdb's"
+              & " catch assert finds the caller"),
+            "and names where to learn to find its caller: " & Report);
       end;
    end A_Defect_Is_A_Status_And_Not_An_Escape;
 

@@ -724,6 +724,45 @@ package body Landin.Driver is
          and then (Natural (Arguments.Length) = 1
                    or else Arguments.Element (2) = "--stdio"));
 
+   --  Where a contributor learns to find the defect's caller: the
+   --  compiler guide's section on debugging one, which the published site
+   --  renders from the same file.
+   Defect_Route : constant String :=
+     "refine: compiler/ada/README.md, ""Debugging an internal defect"","
+     & " shows how a debug build under gdb's catch assert finds the caller";
+
+   --  Every described firmware target as --target options, in the
+   --  selection's order: "--target=cortex-m0, --target=rv32 or
+   --  --target=xtensa".  Read from the targets, so a new one is listed.
+   function Firmware_Targets (From : Positive := 1) return String;
+   function Firmware_Targets (From : Positive := 1) return String is
+   begin
+      for Index in From .. Landin.Targets.Selection.Described_Count loop
+         declare
+            Name : constant String :=
+              Landin.Targets.Selection.Described_Name (Index);
+         begin
+            if Landin.Targets.Is_Firmware
+                 (Landin.Targets.Selection.Described (Name))
+            then
+               declare
+                  Rest : constant String :=
+                    (if Index = Landin.Targets.Selection.Described_Count
+                     then "" else Firmware_Targets (Index + 1));
+               begin
+                  if Rest = "" then
+                     return "--target=" & Name;
+                  elsif Ada.Strings.Fixed.Index (Rest, " or ") = 0 then
+                     return "--target=" & Name & " or " & Rest;
+                  end if;
+                  return "--target=" & Name & ", " & Rest;
+               end;
+            end if;
+         end;
+      end loop;
+      return "";
+   end Firmware_Targets;
+
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
       and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
@@ -5392,15 +5431,15 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "--firmware-layout requires a firmware target:"
-                     & " --target=cortex-m0 or --target=rv32");
+                     "--firmware-layout requires a firmware target: "
+                     & Firmware_Targets);
                   Target_Option_Refused := True;
                elsif Firmware_Seen and then not On_Firmware then
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "--firmware-entry requires a firmware target:"
-                     & " --target=cortex-m0 or --target=rv32");
+                     "--firmware-entry requires a firmware target: "
+                     & Firmware_Targets);
                   Target_Option_Refused := True;
                elsif Emit = Emit_Linker_Script and then not On_Firmware then
                   Bad_Use := True;
@@ -5409,8 +5448,8 @@ package body Landin.Driver is
                      "--emit=linker-script writes a firmware profile's"
                      & " derived linker script, and "
                      & Landin.Targets.Name (Facts) & " has no firmware"
-                     & " profile: it needs --target=cortex-m0 or"
-                     & " --target=rv32 (D589)");
+                     & " profile: it needs " & Firmware_Targets
+                     & " (D589)");
                   Target_Option_Refused := True;
                elsif Script_Seen
                  and then (not On_Firmware or else Emit /= Emit_Executable
@@ -5813,7 +5852,7 @@ package body Landin.Driver is
                  & (if Ada.Exceptions.Exception_Message (Defect) = ""
                     then ""
                     else ": " & Ada.Exceptions.Exception_Message (Defect))
-                 & LF);
+                 & LF & Defect_Route & LF);
             Result.Status := Status_Defect;
             Keep_Report;
       end;

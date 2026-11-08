@@ -88,7 +88,8 @@ package body Landin.Commands.Catalogue is
          when Verbose => "Describe the request; repeat to trace tool commands",
          when Quiet => "Suppress progress, retaining warnings and errors",
          when Color => "Diagnostic color: auto (default), always, never",
-         when Diagnostics => "Diagnostic format: human (default), short, json",
+         when Diagnostics =>
+           "Diagnostic format on standard error: human (default), short, json",
          when Target => "Select a target; default is this compiler's host",
          when Level =>
            "CPU feature level whose instructions to use; default the baseline",
@@ -387,10 +388,51 @@ package body Landin.Commands.Catalogue is
               (Offered, Stem, Name (Flag));
          end if;
       end loop;
-      if Landin.Diagnostics.Suggestions.Count (Offered) = 0 then
-         return "";
+      if Landin.Diagnostics.Suggestions.Count (Offered) > 0 then
+         return Landin.Diagnostics.Suggestions.Nth (Offered, 1);
       end if;
-      return Landin.Diagnostics.Suggestions.Nth (Offered, 1);
+      --  An option written as one word of a longer one, `--firmware` for
+      --  `--firmware-entry` or `--entry` for it, is too far from it for an
+      --  edit distance, and is offered every option it is a whole word of.
+      declare
+         Word : constant String :=
+           (if Stem'Length > 2 and then Stem (Stem'First .. Stem'First + 1)
+                 = "--"
+            then Stem (Stem'First + 2 .. Stem'Last) else "");
+         Found : Natural := 0;
+         Text : US.Unbounded_String;
+         Last : US.Unbounded_String;
+      begin
+         if Word'Length < 3 or else Ada.Strings.Fixed.Index (Word, "=") > 0
+         then
+            return "";
+         end if;
+         for Flag in Option loop
+            declare
+               Spelled : constant String := "-" & Name (Flag) & "-";
+            begin
+               if Compilation_Option (Flag) and then Found < 3
+                 and then Spelled'Length > Word'Length + 4
+                 and then Ada.Strings.Fixed.Index
+                   (Spelled, "-" & Word & "-") > 0
+               then
+                  Found := Found + 1;
+                  if Found > 1 then
+                     US.Append
+                       (Text, (if Found > 2 then ", " else "")
+                        & US.To_String (Last));
+                  end if;
+                  Last := US.To_Unbounded_String (Name (Flag));
+               end if;
+            end;
+         end loop;
+         if Found = 0 then
+            return "";
+         elsif Found = 1 then
+            return US.To_String (Last);
+         end if;
+         return US.To_String (Text) & " or " & US.To_String (Last);
+      end;
    end Nearest_Option;
 
    function Informational_Problem (Asked : String) return String is
@@ -483,6 +525,8 @@ package body Landin.Commands.Catalogue is
               & LF & "and an instance whose address is taken, or a call"
               & LF & "through any, stays indirect. --build-report lists each"
               & LF & "call left indirect, under left_indirect, and why."
+              & LF & "The build report's fields are listed under ""The build"
+              & LF & "report"" in compiler/ada/README.md."
               & LF & "Example: refine " & Name (Command)
               & " program.ldn"
               & (if Command = Compile then " -o program" else "") & LF);
