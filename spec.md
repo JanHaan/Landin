@@ -32921,8 +32921,9 @@ overlapping answers through turns, which puts two operations in flight on one
 core and makes the trace's order depend on the requests' timing. Both were
 declined.
 
-**Pinned by** nothing that runs yet: prototype 5's V13 records the pressure,
-and the derived firmware's trace oracle will pin it.
+**Pinned by** the `counterpart` lane of the Cortex-M lanes, which runs
+prototype 5's derived firmware on QEMU's micro:bit and holds its trace to
+the oracle D1035 describes; prototype 5's V13 records the pressure.
 
 ### D449 — What the second Io and the atomic wrapper owe fibres
 
@@ -33714,7 +33715,8 @@ more. The same exchange then runs with `--io=events`, over
 child's last line and status 0: the server's signal waiter, not the
 signal's default, ended it. The server's source is the same in both
 children; only `app`'s minting routine differs. The QEMU cross lanes, which cannot start the program's own child without a
-binfmt_misc handler, list the fixture in `compiler/tests/cross-lanes.json`.
+binfmt_misc handler, list the fixture in `compiler/tests/cross-lanes.json`,
+and the gate's RV64 lane registers one (D1037).
 
 **The alternatives:** the prototype's `ask_both` as the client, which
 cannot run over the blocking provider and so leaves that half without a
@@ -33770,6 +33772,155 @@ milliseconds on the clock, and a receive with nobody sleeping timing out
 after one quiet round; and `runtime/derived-server-fake-turns`, the
 derived server and client, which no longer try a timed-out call again,
 over the fake network and a clock beside it.
+
+### D1034 — Prototype 5's firmware counterpart, and where it departs from the sketch
+
+**The tour said** at [1675] that a group's tasks take turns or run one at a
+time as the provider says, and at [1660] that a UART is a writer.
+Prototype 5 sketched a Cortex-M0 counterpart with `firmware/tick`,
+`firmware/board` and `firmware/app`: a round of fixed turns written in the
+application, a taker that waited on prototype 1's `uart.take_events()`, a
+transmit side `uart.tx` that prototype 1 never wrote, an answerer that
+dropped a line it could not parse, and stacks of 640 bytes. D444 since put
+the round in the library and D448 said what the counterpart answers.
+
+**Chosen:** `compiler/tests/counterpart` has the sketch's three modules,
+`firmware/serial` and `firmware/trace`, and shares the hosted server's
+`app/protocol` unchanged and prototype 1's derived receive driver. The
+board is one handle providing `fibre.scheduler`, `fibre.turns` and
+`time.clock`: its turns are `core/fibre/stacks`' round, held as
+`any fibre.turns`, with the application's idler waiting for an interrupt,
+and its sleep yields until the tick count, widened to 64 bits, has moved
+by the span's whole ticks and one more, so it never returns early. SysTick
+counts a millisecond a tick through `atomic.sole_add` (D449). The taker
+reads whatever has arrived at each turn through `uart.read` and yields when
+nothing has, since prototype 1's DMA notifies only at the half and the end
+of its ring. `firmware/serial` is the transmit side, an `io.writer` over
+the UART's data register, in a module of its own so prototype 1's
+derivative is unchanged. A line that is no request, or one longer than the
+queue's 64 bytes, is answered `malformed` through `protocol.refuse`, as the
+hosted session answers it; a line arriving with four waiting is refused
+`busy`; every line is numbered as it arrives. Each fibre's stack is 2,048
+bytes.
+
+**The alternatives:** a round written again in the application, which V8's
+answer made the library's; waiting on DMA notifications, which a short
+line never raises without a timer prototype 5 does not have; the transmit
+side added to prototype 1's driver, which changes that derivation's image
+for a routine it never calls; dropping a malformed line silently, which
+leaves the line unanswered and a client waiting; and the sketch's 640-byte
+stacks, which the answerer's measured 1,568 bytes at `none` would overrun
+into `stack_exhausted` (D471). All were declined.
+
+**Pinned by** the `counterpart` lane of `environments/cortex-m/run.py`,
+`environments/cortex-m/counterpart.py`, at every profile; its map is
+`compiler/tests/counterpart/DERIVATION.md`. Prototype 5's V1, V4, V8, V9,
+V10, V11, V13 and V15 record the pressure.
+
+### D1035 — The counterpart's trace, and what its oracle requires
+
+**The tour said** nothing. D448 says that on one core an operation in
+flight is a request whose answering has begun and not ended, and that a
+trace of the derived firmware shows answers in request order, none begun
+before the previous one ended. It left open what the trace records and
+how a run fails.
+
+**Chosen:** the firmware records, in `firmware/trace`, each line's arrival
+as `received` or `refused`, numbered in arrival order, and each request's
+`started` when it leaves the queue and `finished` when its answer is
+flushed, each with the tick it happened at; a trace that would overflow is
+marked lost. The lane feeds `WAIT 200 a`, then `NOW b` once `a` has begun,
+so the request for two in flight is presented as the hosted client
+presents it, and in two more scenarios a full queue and lines that are no
+request. The oracle, `judge` in `environments/cortex-m/counterpart.py`,
+derives each line's answer from the protocol's rules written again in
+Python and fails a run on a missing answer; an answer begun while another
+was being answered, or out of arrival order; a wait answered in fewer
+ticks than it asked; `busy` with room in the queue, or a fifth request
+queued; a byte the device did not take; a lost trace; a second request
+that did not arrive while the first was being answered; and a trap, a halt
+or a timeout. Four controls build the same source with one mutation each,
+two answerers, a dropped answer, a take past the queue and a SysTick never
+started, and each must fail for its own reason. A tick is a millisecond of
+the emulator's clock, which under the harness's instruction counting
+reaches the next tick across each stop at an access to the synthetic
+device, so the ticks order events and bound waits from below and are no
+measure of the firmware's own time.
+
+**The alternatives:** an oracle reading only what the device wrote, which
+cannot tell an answer begun early from one that merely ended in order;
+the firmware judging itself and reporting a status, which makes the oracle
+the program under test; one fixed sequence of answers per scenario, which
+holds the device to one timing rather than to the rule; and the clock
+measured by the host, which a stopped emulator does not keep. All were
+declined.
+
+**Pinned by** the `counterpart` lane's three scenarios at every profile and
+its four controls, and `CounterpartOracle` in `environments/cortex-m/test.py`,
+which gives `judge` a good trace and each failure it names.
+
+### D1036 — The counterpart runs on a description of the micro:bit's own chip
+
+**The tour said** at [1990] that a firmware program that imports no
+description is given the constrained reference, 32 KiB of flash and 16 KiB
+of RAM. Deriving prototype 5's counterpart found that it takes about
+56 KB of flash at `size` and 66 KB at `none`, all of it code the program
+reaches once the linker has collected the rest: the shared protocol, the
+buffered writer, prototype 1's DMA driver and the fibres, as the Cortex-M0
+backend emits them today. Its RAM, about 5 KiB of static storage with the
+4 KiB main stack, is within the reference's.
+
+**Chosen:** the lane compiles the counterpart with
+`environments/cortex-m/lanes/lane-microbit.ldn`, which imports a lane
+description of QEMU's micro:bit, the nRF51822 the Cortex-M0 lanes run on:
+256 KiB of flash at zero, and the reference's 16 KiB of RAM with its 4 KiB
+stack at 0x2000_0000. `descriptions.json` records it as it records the
+other lane descriptions, and the lane holds every image to it. Each run
+reports its flash and static RAM. That the counterpart misses the
+reference's flash is recorded in the register for the optimization phase
+to answer. The maintainer chose this.
+
+**The alternatives:** a smaller counterpart, with a parser and a polled
+UART of its own, which gives up the protocol the sketch shares with the
+server and prototype 1's driver; holding the item until code generation
+shrinks the image, which holds the concurrency phase's gate with it; and
+linking against an emulator's map larger than the chip, as the AN500's
+4 MiB, which no Cortex-M0 has. All were declined.
+
+**Pinned by** the `counterpart` lane, whose every image is linked to the
+micro:bit description and refused when its derived profile differs from
+`descriptions.json`'s record.
+
+### D1037 — RV64's emulated lane registers a binfmt_misc handler
+
+**The tour said** nothing. D490 runs `runtime/derived-server-two-process`
+by starting the program again by its own name, which QEMU's user
+emulation runs only through a binfmt_misc handler, and
+`compiler/tests/cross-lanes.json` lists it, with the other fixtures that
+start themselves, as an expected failure under `qemu-aarch64` and
+`qemu-riscv64` where none is registered. With RV64's physical runners
+suspended, the gate's `rv64-qemu` lane was the only one running RV64, and
+it had none, so no gate job showed either half of the derived server on
+RV64.
+
+**Chosen:** the `rv64-qemu` job registers the pinned `qemu-riscv64` as the
+riscv64 binfmt_misc handler, under Debian's name for it, which the test
+program looks for, with the flag that opens the interpreter at
+registration. The rows that need a handler then do not apply there, as
+`cross-lanes.json`'s rule already says, and the fixtures run. A host with
+no handler keeps the rows. The maintainer chose this.
+
+**The alternatives:** leaving RV64 without the evidence until its
+physical runners return, which leaves the concurrency phase's gate
+unclaimed; and a fixture that starts its child through the emulator
+explicitly, which tests a launch no RV64 Linux makes. Both were declined.
+
+**Pinned by** the `rv64-qemu` lane's shards, which run
+`runtime/derived-server-two-process`, `runtime/run-no-descriptor-leak` and
+`runtime/thread-spawn-leaks-no-descriptor` under the handler. The two
+`runtime/environment-variables` fixtures keep their rows wherever a
+handler is registered, since the emulator passes the child one entry for
+each name in its environment and they give one name twice.
 
 ### D494 — A program starts threads as a group it joins
 

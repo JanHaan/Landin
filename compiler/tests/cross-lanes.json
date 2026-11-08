@@ -5,16 +5,14 @@
     {
       "fixture": "runtime/environment-variables",
       "runners": ["qemu-aarch64", "qemu-riscv64"],
-      "needs_binfmt": true,
       "failures": ["recorded standard output", "the program's own exit status (expected 42, actual 3)"],
-      "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+      "reason": "the program starts itself again by its own name, which QEMU's user emulation runs only through a binfmt_misc handler, and where one is registered the emulator passes the child one entry for each name in its environment, so the variable the fixture gives twice reads once"
     },
     {
       "fixture": "runtime/environment-variables-libc",
       "runners": ["qemu-aarch64", "qemu-riscv64"],
-      "needs_binfmt": true,
       "failures": ["recorded standard output", "the program's own exit status (expected 42, actual 3)"],
-      "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+      "reason": "the program starts itself again by its own name, which QEMU's user emulation runs only through a binfmt_misc handler, and where one is registered the emulator passes the child one entry for each name in its environment, so the variable the fixture gives twice reads once"
     },
     {
       "fixture": "runtime/derived-server-two-process",

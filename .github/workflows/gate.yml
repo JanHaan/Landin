@@ -1559,7 +1559,7 @@ jobs:
       #  two-process server among them, runs under QEMU's user emulation
       #  only through a binfmt_misc handler, and the runner has none for
       #  riscv64; without one those fixtures are cross-lanes.json's
-      #  expected failures and RV64 shows neither Io's half (D1041).  The
+      #  expected failures and RV64 shows neither Io's half (D1037).  The
       #  pinned emulator is registered under Debian's name for it, which
       #  the test program looks for, with F, so the kernel opens it now.
       #  The kernel reads the \x escapes of the magic and the mask itself.

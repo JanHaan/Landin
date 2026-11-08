@@ -1371,6 +1371,62 @@ invokes it through `run.py`, preserving every earlier mandatory lane. Source
 refusal checks are also safe compiler-host feedback via
 `compiler/tests/driver/check_sources.py`.
 
+## Prototype 5's firmware counterpart
+
+[`compiler/tests/counterpart/DERIVATION.md`](../../compiler/tests/counterpart/DERIVATION.md)
+maps prototype 5's `firmware/tick`, `firmware/board` and `firmware/app` to
+their complete sources. `counterpart.py`, the `counterpart` lane of the
+`programs` part, builds the program at every profile against
+`lanes/descriptions/microbit`, the nRF51822's 256 KiB of flash and the
+reference's 16 KiB of RAM and 4 KiB stack (D1036), since at `size` it takes
+about 56 KB, and holds each image's derived profile to `descriptions.json`.
+It runs on `machine.py`'s micro:bit with prototype 1's `DriverPeripheral`
+as its serial line, the same QEMU the driver lane uses: SysTick's interrupt
+is the emulator's own, and every access to the synthetic device stops it for
+the harness.
+
+Each scenario boots the image, paints the fibres' backing and the main
+stack at `start`, and feeds lines as the run reaches the points the
+scenario names: `two-in-flight` feeds `WAIT 200 a` and then `NOW b` once
+`a` has begun being answered; `queue-full` five more at once, so the fifth
+is refused `busy`; `refusals` a request with no tag, one longer than the
+queue keeps and one ended by `\r\n`. The model takes a byte only while the
+driver's DMA channel is enabled, so a line is fed between the driver's
+reads. A run ends once every line has been answered and 50 ticks pass
+with nothing more written, or 3,000 ticks after the first line; a fault
+reaching `_landin_firmware_unhandled` is a trap, and no stop within five
+seconds of execution a timeout. `judge` then reads the trace
+`firmware/trace` recorded and what the device wrote, and fails the run for
+any departure from D448's answer that D1035 lists. Each run writes
+`trace.json` and `trace.txt`, and `counterpart/traces.txt` gathers them,
+which the gate's `cortex-m-programs` job keeps as the
+`cortex-m-counterpart-traces` artifact beside `result.json`, with each
+image's flash and static RAM and each fibre's painted peak.
+
+A tick is a millisecond of the emulator's clock, and under `machine.py`'s
+`-icount shift=0,align=off,sleep=off` that clock reaches the next tick
+across each stop the harness makes: in one measured run 205 of 247
+consecutive stops were one tick apart and 41 two. An answer that writes
+seven bytes, each a status read and a data write, so lasts about fourteen
+ticks. The ticks order a trace's events and bound each wait from below;
+they do not measure the firmware's own time.
+
+The controls `overlap`, `missing`, `trap` and `timeout` build the same
+source with one exact replacement each, which must match it once, and run
+`two-in-flight` at the first profile: a second answerer, `b`'s answer
+dropped, a take past the queue and SysTick never started. Each passes only
+when the run fails for that reason. `test.py`'s `CounterpartOracle` gives
+`judge` traces with each failure and one with none.
+
+```sh
+python3 environments/cortex-m/counterpart.py --refine PATH_TO_REFINE \
+  --output NEW_DIRECTORY --profile size-auto --scenario two-in-flight
+```
+
+`--all-profiles` runs every scenario at the six profiles with every
+control; `--scenario` and `--control` repeat, and a run that selects any is
+`FILTERED`. On NixOS run it under steam-run as [On NixOS](#on-nixos) says.
+
 ## Freestanding evidence
 
 The mandatory `run.py` entry invokes `evidence.py` after every inherited lane.

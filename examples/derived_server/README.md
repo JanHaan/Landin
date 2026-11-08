@@ -35,7 +35,10 @@ waits, and a fibre that waits for SIGTERM stops the server cleanly and
 prints `stopped after N requests`.
 
 `app/protocol` reads and answers one request and knows nothing of sockets
-or fibres, so the firmware counterpart can share it. `app/session` serves
+or fibres, so the firmware counterpart shares it: prototype 5's device
+half, in [`compiler/tests/counterpart`](../../compiler/tests/counterpart/DERIVATION.md),
+answers the same two requests on one serial line of the Cortex-M0
+emulator, one at a time and in the order they came. `app/session` serves
 one connection; `app/server` serves a listener, stops on SIGTERM, and has
 the prototype's client, `ask_both`, which needs a provider that takes
 turns.

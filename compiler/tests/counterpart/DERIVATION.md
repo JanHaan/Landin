@@ -63,7 +63,7 @@ spelling or the sketch left a choice open; D1034 to D1036 record each.
 | V9 | Each fibre's stack is measured: the lane paints the backing before the group cuts it, reads each fibre's deepest write when the run ends, and fails a run that leaves less than D461's exception frame above the record. |
 | V10 | SysTick's handler is the tick's one writer and adds with `atomic.sole_add`; a fibre reads the count when its turn comes, and the handler never switches (D449). |
 | V11 | Each fibre runs on the process stack and SysTick's handler on the main stack, so every interrupt taken in a fibre stacks one exception frame on that fibre's stack (D447, D461). |
-| V12 | The debugger's view of a switch is R14.20's, `runtime/stack-switch-frames` with the Cortex-M0 evidence lane's `switch` control; this derivative adds none. |
+| V12 | The debugger's view of a switch is `runtime/stack-switch-frames`' sessions (D469), on Cortex-M0 the evidence lane's `switch` control; this derivative adds none. |
 | V13 | The oracle: one answer at a time, in arrival order, `busy` only for a full queue. |
 | V15 | The reset stack starts both fibres only as a group it joins. |
 | V2, V3, V7, V14 | The hosted server's, not this derivative's. |

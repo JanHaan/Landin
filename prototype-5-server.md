@@ -11,9 +11,10 @@
 > [`examples/derived_server/`](examples/derived_server/), over the provider
 > that blocks the thread and over the one that runs fibres alike, with its
 > fixtures `runtime/derived-server-two-process` and
-> `runtime/derived-server-fake-turns`; the firmware counterpart is not
-> derived yet. To learn Landin, read [the
-> tour](tour.md), whose [1675] teaches fibres.
+> `runtime/derived-server-fake-turns`; the firmware counterpart that runs
+> is [`compiler/tests/counterpart/`](compiler/tests/counterpart/DERIVATION.md),
+> on the Cortex-M0 emulator with its trace judged. To learn Landin, read
+> [the tour](tour.md), whose [1675] teaches fibres.
 >
 > The sketch itself begins at its first module heading, `core/fibre`. The
 > notes between this banner and that heading say what it presses on and
@@ -31,8 +32,14 @@ the sketch's (D489). It is the second Io's evidence: the same server, in
 a process of its own, runs over `hosted/blocking`, answering `a` first and
 ended by SIGTERM's default, and over `hosted/events`, answering `b` first
 and stopped cleanly by its signal waiter (D490); and over `core/io/fake`'s
-network on a round of turns in one process (D493). D448's single-core
-answer waits for the firmware counterpart.
+network on a round of turns in one process (D493). The firmware half is
+derived as `compiler/tests/counterpart`, whose `DERIVATION.md` maps
+`firmware/tick`, `firmware/board` and `firmware/app` to their sources and
+says where they depart from the sketch (D1034). It shares `app/protocol`
+with the server unchanged and takes the same two requests on one serial
+line on QEMU's micro:bit, and its trace shows D448's single-core answer:
+`a` answered and then `b`, `b` taken while `a` slept and not begun before
+`a` was answered, which an oracle holds it to (D1035).
 
 A server that answers two kinds of request, one line each:
 
@@ -127,8 +134,8 @@ above it. D447 and D461 replaced V11's sentence that every fibre's stack
 carries the deepest interrupt nesting: on Cortex-M0 a fibre runs on the
 process stack, and its backing holds the one exception frame the core
 pushes. The sketch below keeps its own spellings, and its findings their
-wording. Deriving the firmware counterpart belongs to the roadmap's item
-that runs it.
+wording. The firmware counterpart's derivation says where it departs
+from them.
 
 ## core/fibre  —  the capability this sketch had to invent
 

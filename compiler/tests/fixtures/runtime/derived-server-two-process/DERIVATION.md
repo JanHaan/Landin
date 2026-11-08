@@ -4,9 +4,9 @@ This is the executable derivative of `prototype-5-server.md`'s hosted half:
 its `app/protocol`, `app/session`, `app/server` and `app` modules, complete
 and with no placeholder bodies, in `examples/derived_server/`. The
 prototype remains a historical stress sketch. Its firmware half,
-`firmware/tick`, `firmware/board` and `firmware/app`, is derived by the
-roadmap's firmware item and is not here; `app/protocol` is written so that
-it can be shared with it unchanged. The sketch's `core/fibre` is the
+`firmware/tick`, `firmware/board` and `firmware/app`, is derived in
+`compiler/tests/counterpart/`, mapped by its `DERIVATION.md`, and shares
+`app/protocol` with this server unchanged. The sketch's `core/fibre` is the
 library's, with D464's spellings.
 
 Two fixtures run it. `runtime/derived-server-two-process` is the server in

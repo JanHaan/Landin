@@ -863,8 +863,17 @@ Add `--target=darwin-arm64` for native macOS output, then open
   `hosted/blocking` it answers one request at a time and SIGTERM ends it,
   and over `hosted/events` two requests are in flight and its signal
   waiter stops it cleanly (D490). It also runs in one process over the
-  fake network on a round of turns. The firmware counterpart is not derived
-  yet.
+  fake network on a round of turns. Its firmware counterpart, derived in
+  [`compiler/tests/counterpart`](../compiler/tests/counterpart/DERIVATION.md),
+  takes the same two requests on prototype 1's synthetic serial line on the
+  Cortex-M0 emulator, with a taker and an answerer fibre on `core/fibre`'s
+  round and SysTick counted by `atomic.sole_add`, and answers them one at
+  a time in arrival order; its recorded trace of when each request arrived,
+  began and ended being answered is held to an oracle for that single-core
+  answer at every profile, with controls that overlap, drop, trap and stall
+  (D448, D1034, D1035). It takes about 56 KB of flash at `size`, so it runs
+  on a description of the micro:bit's own 256 KiB nRF51822 rather than the
+  32 KiB reference (D1036).
 - **Example programs.** Every program in [`examples.md`](../examples.md)
   runs on every hosted target against its recorded output: everyday tools,
   the printing and failure lessons, the classic exercises from FizzBuzz to
