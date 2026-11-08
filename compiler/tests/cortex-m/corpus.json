@@ -3676,6 +3676,9 @@
     "runtime/qualified-module-array-copied-and-lent": {
       "mode": "execute"
     },
+    "runtime/qualified-static-type-argument": {
+      "mode": "execute"
+    },
     "runtime/r230-composition": {
       "mode": "execute"
     },

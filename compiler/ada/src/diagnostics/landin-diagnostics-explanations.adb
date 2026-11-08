@@ -438,7 +438,15 @@ package body Landin.Diagnostics.Explanations is
                & "wn name [1450], so `time.duration` written where a resul"
                & "t is called `time` names no type. The diagnostic says so"
                & ", names the local and the import it hides, and points at"
-               & " the local; rename it (D381).",
+               & " the local; rename it (D381)."
+               & LF
+               & LF
+               & "An option is read only in fixed conditions, option defau"
+               & "lts and compiler assertions (D202) [1530], so a module v"
+               & "alue or a routine that reads one is told the option is c"
+               & "onfiguration-only. The note gives the way: declare the v"
+               & "alue in each arm of a module-level `fixed if` whose cond"
+               & "ition reads the option.",
             when Catalogue.Inaccessible_Name =>
                "A declaration of another module is used and it is not `p"
                & "ublic` [1410]. The second label shows the declaration. M"
@@ -448,7 +456,11 @@ package body Landin.Diagnostics.Explanations is
                & "hrough the public routine of the concept's module that c"
                & "alls it [1240], and the note names that routine as this "
                & "file calls it: `memory.alloc(64, 1)` on a `hosted/heap` "
-               & "handle is `mem.allocate(memory, ...)`.",
+               & "handle is `mem.allocate(memory, ...)`. When no public ro"
+               & "utine forwards the entry, evidence still reaches it, and"
+               & " the note writes that call: a routine generic over the c"
+               & "oncept, `(p: type is fibre.turns, value: p)`, calls `p.s"
+               & "tart(value, ...)` and is given the value.",
             when Catalogue.Reserved_Tool_Name =>
                "A tool namespace, `compiler`, `assembler` or `linker`, i"
                & "s bound or used in a way it does not allow [1560] (D202)"
@@ -556,7 +568,11 @@ package body Landin.Diagnostics.Explanations is
                & " the third note names the binding to pass instead, `valu"
                & "es := [...]`, or `values: [N]E = [...]` when an element "
                & "such as `any(addr x)` needs a context, which an inferred"
-               & " binding does not give."
+               & " binding does not give. A struct literal passed to a par"
+               & "ameter takes the parameter's type when its fields are va"
+               & "lues; one with a reference field does not, and the third"
+               & " note writes the binding to make and pass instead, `task"
+               & ": state = (host: host)`."
                & LF
                & LF
                & "An `f32` or `f64` assembly operand [1630] is placed in a"
@@ -679,7 +695,12 @@ package body Landin.Diagnostics.Explanations is
                & "ult has no `from`, such as an allocator's `resize` retur"
                & "ning the block it was given, returns `ptr(usize(block))`"
                & ": an allocation borrows nothing, and [0810]'s conversion"
-               & " says so (D440).",
+               & " says so (D440). When the alternative that derives from "
+               & "no named parameter is a module binding's storage, the no"
+               & "te names the binding: module storage needs no `from`, so"
+               & " return it in a result of its own, or read and write it "
+               & "where it is chosen, and a result that derives from no pa"
+               & "rameter is declared without `from`.",
             when Catalogue.Conformance_Collision =>
                "Two conformances of one type to one concept [1280]. Ther"
                & "e is one register for the whole program; remove one, or "
@@ -771,17 +792,19 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Call_Argument_Match =>
                "A call's arguments do not match what the callee takes [1"
                & "920]. A runtime argument is missing, extra or given twic"
-               & "e; a named argument names no parameter [0980]; a `caller"
-               & "` parameter is filled other than by forwarding another o"
-               & "ne (D186); a static argument is given where the callee h"
-               & "as no static formal [1300], or a static formal is used a"
-               & "s a runtime value [1290]; a generic call gives a differe"
-               & "nt number of arguments than its template (D138); or a co"
-               & "nversion is not given exactly one value [0700]. Supply e"
-               & "very parameter exactly once, in the callee's declared fo"
-               & "rm. The second label points to the signature or paramete"
-               & "r. When a named argument names no parameter, the diagnos"
-               & "tic offers the parameter label near it as a likely fix.",
+               & "e; a named argument names no parameter [0980]; a static "
+               & "type argument names a value, a function or a field rathe"
+               & "r than a type, bare or qualified by its module; a `calle"
+               & "r` parameter is filled other than by forwarding another "
+               & "one (D186); a static argument is given where the callee "
+               & "has no static formal [1300], or a static formal is used "
+               & "as a runtime value [1290]; a generic call gives a differ"
+               & "ent number of arguments than its template (D138); or a c"
+               & "onversion is not given exactly one value [0700]. Supply "
+               & "every parameter exactly once, in the callee's declared f"
+               & "orm. The second label points to the signature or paramet"
+               & "er. When a named argument names no parameter, the diagno"
+               & "stic offers the parameter label near it as a likely fix.",
             when Catalogue.Zero_Image_Unavailable =>
                "`zeroed` or an implicit initializer has no complete zero"
                & " image to supply [0540]. `zeroed`, an implicit module in"
@@ -927,7 +950,10 @@ package body Landin.Diagnostics.Explanations is
                & "hole as the argument of a slice parameter [0570]. A repe"
                & "tition prefix leaves a suffix to fill (D36). Write the v"
                & "alue in the form the note names, at a position that take"
-               & "s it.",
+               & "s it. A whole struct passed where a parameter takes some"
+               & "thing else is named with its type beside the parameter's"
+               & ", and the note names a field of the parameter's type to "
+               & "select when the struct has one.",
             when Catalogue.Pointer_Union_Use =>
                "A union of atoms and one pointer is used as a pointer be"
                & "fore it is matched [0480]. Match it first: the `ptr` arm"
@@ -1011,7 +1037,11 @@ package body Landin.Diagnostics.Explanations is
                & " for what it lacks is reported once: a use that needs it"
                & " is not refused again for want of one. A parameter or lo"
                & "cal named after a concept hides it [0140], and the diagn"
-               & "ostic then names the parameter as the cause (D381).",
+               & "ostic then names the parameter as the cause (D381). A bi"
+               & "nding that holds an anonymous function is a value, not a"
+               & " declared function, and supplies no entry; the diagnosti"
+               & "c names the binding and says to declare it as a function"
+               & ".",
             when Catalogue.Erased_Contract =>
                "An `any` value or its dispatch is used outside the erase"
                & "d contract [1370] [1380] [1390] (D145-D147). `any C` nam"

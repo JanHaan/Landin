@@ -156,8 +156,11 @@ name with no declaration in source, such as a predeclared type, a keyword
 or a literal, has none. Hover shows a routine, type or atom as its first line is
 written, and any other name with its type as the checker's reports spell it,
 then its doc comment: the run of `---` lines directly above a declaration
-that begins its line [2000]. Over an expression, hover shows its type. Inside
-a routine body that does not parse, both answer nothing.
+that begins its line [2000]. Over an expression, hover shows its type. A
+field a selection names, `corner.x` or the `y` of `offsetof pair.y`, has its
+definition at the field in its struct's body, and where the selection has no
+value of its own, as in a measurement, hover shows the field as that body
+declares it. Inside a routine body that does not parse, both answer nothing.
 
 When the only resolution errors are unresolved names, the server keeps the
 bindings of other names and checks for hover types. Definition and hover still

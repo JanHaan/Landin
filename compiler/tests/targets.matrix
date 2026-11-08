@@ -947,6 +947,7 @@ negative/pointer-union-zeroed | linux-x86-64, linux-arm64, darwin-arm64, synthet
 negative/private-alias-constraint-held-at-use | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/public-on-statement | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/qualified-construction-all-fill | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/qualified-static-type-argument-not-a-type | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/quoted-import-path-is-written-bare | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r430-assertion-arity | linux-x86-64, synthetic-32, freebsd-x86-64
 negative/r430-assertion-call | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
@@ -2392,6 +2393,7 @@ runtime/posix-transfer-above-int-max | linux-x86-64, linux-arm64, darwin-arm64, 
 runtime/posix-wait-on-address | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/private-alias-of-constrained-template | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/qualified-module-array-copied-and-lent | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+runtime/qualified-static-type-argument | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/r230-composition | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition-trap | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r250-references | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

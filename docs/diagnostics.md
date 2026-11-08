@@ -591,6 +591,12 @@ A parameter, result or local may hide an import of its own name [1450], so
 diagnostic says so, names the local and the import it hides, and points at
 the local; rename it (D381).
 
+An option is read only in fixed conditions, option defaults and compiler
+assertions (D202) [1530], so a module value or a routine that reads one is
+told the option is configuration-only. The note gives the way: declare the
+value in each arm of a module-level `fixed if` whose condition reads the
+option.
+
 ```landin
 state := nowhere(value: 1)
 ```
@@ -603,7 +609,10 @@ something that module does export. A module-internal type's member that is an
 entry of a concept the type conforms to is reached through the public
 routine of the concept's module that calls it [1240], and the note names
 that routine as this file calls it: `memory.alloc(64, 1)` on a
-`hosted/heap` handle is `mem.allocate(memory, ...)`.
+`hosted/heap` handle is `mem.allocate(memory, ...)`. When no public routine
+forwards the entry, evidence still reaches it, and the note writes that
+call: a routine generic over the concept, `(p: type is fibre.turns, value:
+p)`, calls `p.start(value, ...)` and is given the value.
 
 ### L0203
 
@@ -714,6 +723,9 @@ type names no formal (D419); where the element type is a formal, deduced
 from the arguments, the third note names the binding to pass instead,
 `values := [...]`, or `values: [N]E = [...]` when an element such as
 `any(addr x)` needs a context, which an inferred binding does not give.
+A struct literal passed to a parameter takes the parameter's type when its
+fields are values; one with a reference field does not, and the third note
+writes the binding to make and pass instead, `task: state = (host: host)`.
 
 An `f32` or `f64` assembly operand [1630] is placed in a float register, and
 a profile with no float registers, a Cortex-M with no float unit among them,
@@ -928,7 +940,11 @@ A returned reference must derive from exactly the parameters its `from`
 names [0790]. Name the source, or return something derived from it. A
 provider's entry whose result has no `from`, such as an allocator's `resize`
 returning the block it was given, returns `ptr(usize(block))`: an allocation
-borrows nothing, and [0810]'s conversion says so (D440).
+borrows nothing, and [0810]'s conversion says so (D440). When the
+alternative that derives from no named parameter is a module binding's
+storage, the note names the binding: module storage needs no `from`, so
+return it in a result of its own, or read and write it where it is chosen,
+and a result that derives from no parameter is declared without `from`.
 
 ```landin
 bad: (source: ptr u32) -> (pointer: ptr u32) =
@@ -1053,7 +1069,8 @@ end count_up
 
 A call's arguments do not match what the callee takes [1920]. A runtime
 argument is missing, extra or given twice; a named argument names no
-parameter [0980]; a `caller` parameter is filled other than by forwarding
+parameter [0980]; a static type argument names a value, a function or a
+field rather than a type, bare or qualified by its module; a `caller` parameter is filled other than by forwarding
 another one (D186); a static argument is given where the callee has no static
 formal [1300], or a static formal is used as a runtime value [1290]; a generic
 call gives a different number of arguments than its template (D138); or a
@@ -1239,7 +1256,10 @@ written where its part is the destination [0690] (D76). A whole struct or
 array is copied, passed, returned or discarded whole [0670] [0520], and an
 array is lent whole as the argument of a slice parameter [0570]. A
 repetition prefix leaves a suffix to fill (D36). Write the value in the form
-the note names, at a position that takes it.
+the note names, at a position that takes it. A whole struct passed where a
+parameter takes something else is named with its type beside the
+parameter's, and the note names a field of the parameter's type to select
+when the struct has one.
 
 ```landin
 record: type = struct
@@ -1373,7 +1393,10 @@ each entry with a function of exactly the required signature. A parameterized
 conformance applies its complete binder. Correct the declaration against the
 concept it names. A conformance refused for what it lacks is reported once:
 a use that needs it is not refused again for want of one. A parameter or local named after a concept hides it [0140],
-and the diagnostic then names the parameter as the cause (D381).
+and the diagnostic then names the parameter as the cause (D381). A binding
+that holds an anonymous function is a value, not a declared function, and
+supplies no entry; the diagnostic names the binding and says to declare it
+as a function.
 
 ```landin
 left: type = concept (t: type) is right

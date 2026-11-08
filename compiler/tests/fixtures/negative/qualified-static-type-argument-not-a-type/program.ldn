@@ -1,0 +1,8 @@
+import core/net
+import core/vec
+
+public main: () -> (code: i32) =
+    peers := vec.new(item: net.loopback)
+    _ = peers
+    code = 0
+end main

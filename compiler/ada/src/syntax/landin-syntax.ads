@@ -1484,11 +1484,12 @@ package Landin.Syntax is
           Post => Contains (Of_Tree, Argument_RHS'Result);
 
    --  These are projections, not owned children.  When both are present they
-   --  are the same Node_Id: an identifier, integer, or direct positional
-   --  application has one compact syntax tree and resolution selects how to
-   --  read it.  This preserves the global post-order and prevents a labelled
-   --  argument from duplicating every semantic descendant merely to retain
-   --  two possible views.  No_Node means the RHS cannot have that grammar.
+   --  are the same Node_Id: an identifier, a qualified name, an integer, or
+   --  a positional application of either name has one compact syntax tree
+   --  and resolution selects how to read it.  This preserves the global
+   --  post-order and prevents a labelled argument from duplicating every
+   --  semantic descendant merely to retain two possible views.  No_Node
+   --  means the RHS cannot have that grammar.
    function Expression_Projection (Of_Tree : Tree; Id : Node_Id)
      return Node_Id
      with Pre => Contains (Of_Tree, Id)

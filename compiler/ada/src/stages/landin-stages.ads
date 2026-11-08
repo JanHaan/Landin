@@ -23,10 +23,10 @@
 --  depend on a stage.  Ada enforces that for this specification only, because
 --  a parent's spec may not with its own child -- a parent's *body* may, so
 --  `landin-stages.adb` growing a `with Landin.Stages.Syntax` to build a
---  default pipeline is how the rule would actually be broken, and nothing but
---  this paragraph stops it.  The other half is that nothing here asks which
---  stages exist or what order they run in, and Landin.Driver is what owns
---  that.
+--  default pipeline is how the rule would actually be broken, and check.py
+--  refuses a stage child in that body's context clause.  The other half is
+--  that nothing here asks which stages exist or what order they run in, and
+--  Landin.Driver is what owns that.
 --
 --  The four are reached and not copied, because each is limited and each
 --  means nothing away from the compilation that issued its numbers: a
