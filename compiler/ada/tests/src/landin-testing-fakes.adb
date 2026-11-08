@@ -723,6 +723,31 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Refuses_Removal := True;
    end Refuse_Removals;
 
+   procedure Refuse_Removals
+     (Host : in out Fake_Filesystem;
+      From_Action : Landin.Platform.Publication_Action) is
+   begin
+      Host.Writes.Data.Removal_Refusal_Armed := True;
+      Host.Writes.Data.Removal_Refusal_Action := From_Action;
+   end Refuse_Removals;
+
+   procedure Request_Cancellation (Host : in out Fake_Filesystem) is
+   begin
+      Host.Writes.Data.Cancelled := True;
+   end Request_Cancellation;
+
+   procedure Request_Cancellation
+     (Host : in out Fake_Filesystem;
+      At_Action : Landin.Platform.Publication_Action) is
+   begin
+      Host.Writes.Data.Cancel_Armed := True;
+      Host.Writes.Data.Cancel_Action := At_Action;
+   end Request_Cancellation;
+
+   overriding function Cancellation_Requested
+     (Host : Fake_Filesystem) return Boolean
+     is (Host.Writes.Data.Cancelled);
+
    procedure Fail_Move (Host : in out Fake_Filesystem; At_Move : Positive) is
    begin
       Host.Writes.Data.Fails_Move := True;
@@ -834,6 +859,12 @@ package body Landin.Testing.Fakes is
       Stage := Unbounded.Null_Unbounded_String;
       Reason := Unbounded.Null_Unbounded_String;
       Status := Landin.Platform.Not_Writable;
+      if Host.Writes.Data.Cancelled then
+         Reason := Unbounded.To_Unbounded_String
+           ("cannot prepare " & Path & ": Interrupted system call;"
+            & " choose an ordinary output root");
+         return;
+      end if;
       for Reservation of Host.Writes.Data.Publications loop
          if Arena_Active (Host, Reservation.Arena) then
             declare
@@ -985,14 +1016,41 @@ package body Landin.Testing.Fakes is
       procedure Fail (Text : String) is
       begin
          Status := Landin.Platform.Not_Writable;
+         --  As the native host does, the entries are named only while
+         --  this publication holds them.
          Reason := Unbounded.To_Unbounded_String
-           (Text & "; recovery " & Recovery);
+           (Text & "; recovery directory "
+            & Recovery (Recovery'First .. Ada.Strings.Fixed.Index
+                          (Recovery, "/", Ada.Strings.Backward) - 1)
+            & (if Item.Captured then "; previous entry " & Recovery else "")
+            & (if Item.Rollback_Pending
+               then "; captured new or concurrent entry " & Recovery & ".new"
+               else ""));
          Save;
       end Fail;
    begin
       Status := Landin.Platform.Write_Ok;
       Reason := Unbounded.Null_Unbounded_String;
       if Item.Finished then
+         return;
+      end if;
+      if Host.Writes.Data.Removal_Refusal_Armed
+        and then Host.Writes.Data.Removal_Refusal_Action = Action
+      then
+         Host.Writes.Data.Removal_Refusal_Armed := False;
+         Host.Writes.Data.Refuses_Removal := True;
+      end if;
+      if Host.Writes.Data.Cancel_Armed
+        and then Host.Writes.Data.Cancel_Action = Action
+      then
+         Host.Writes.Data.Cancel_Armed := False;
+         Host.Writes.Data.Cancelled := True;
+      end if;
+      if Host.Writes.Data.Cancelled
+        and then Action in Landin.Platform.Validate_Stage
+                         .. Landin.Platform.Install_Stage
+      then
+         Fail ("publication of " & Path & " failed: Interrupted system call");
          return;
       end if;
       if Host.Writes.Data.Appearance_Armed

@@ -145,6 +145,23 @@ package Landin.Testing.Fakes is
      (Host : in out Fake_Filesystem; Public_Path : String);
 
    procedure Refuse_Removals (Host : in out Fake_Filesystem);
+   --  Refuse removals, and the moves Refuse_Removals refuses, from the
+   --  first time a publication reaches From_Action: a cleanup that fails
+   --  after the steps before it succeeded.
+   procedure Refuse_Removals
+     (Host : in out Fake_Filesystem;
+      From_Action : Landin.Platform.Publication_Action);
+
+   --  A signal asking the invocation to stop, as the native host records
+   --  one: from now, or from the first time a publication reaches At.
+   --  Publication then refuses to prepare or to advance towards
+   --  installation, as the native adapter does, and rollback still runs.
+   procedure Request_Cancellation (Host : in out Fake_Filesystem);
+   procedure Request_Cancellation
+     (Host : in out Fake_Filesystem;
+      At_Action : Landin.Platform.Publication_Action);
+   overriding function Cancellation_Requested
+     (Host : Fake_Filesystem) return Boolean;
 
    --  Make the At_Move'th move from now answer Not_Movable, and only it:
    --  a replacement that fails part way, then puts back what it moved.
@@ -506,6 +523,11 @@ private
       Refuses_Write : Boolean := False;
       Refused_Staged_Writes : Landin.Platform.Path_List;
       Refuses_Removal : Boolean := False;
+      Cancelled, Cancel_Armed, Removal_Refusal_Armed : Boolean := False;
+      Removal_Refusal_Action : Landin.Platform.Publication_Action :=
+        Landin.Platform.Finish_Publication;
+      Cancel_Action : Landin.Platform.Publication_Action :=
+        Landin.Platform.Validate_Stage;
       Write_Attempts : Natural := 0;
       List_Calls     : List_Call_Vectors.Vector;
 

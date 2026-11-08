@@ -181,6 +181,9 @@ package body Landin.Platform.Overlays is
         ("an editor overlay is read-only");
    end Advance_Publication;
 
+   overriding function Cancellation_Requested (Host : Overlay) return Boolean
+     is (Host.Under.Cancellation_Requested);
+
    overriding procedure Read_Snapshot
      (Host : Overlay; Path : String;
       Content : out Unbounded.Unbounded_String;

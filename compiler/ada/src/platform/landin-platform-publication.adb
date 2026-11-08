@@ -85,29 +85,71 @@ package body Landin.Platform.Publication is
       return "";
    end Stage_Path;
 
+   function State (Group : Transaction) return Cleanup_State is
+     (Group.Ended);
+
+   function Cleanup_Reason (Group : Transaction) return String is
+     (To_String (Group.Ended_Reason));
+
+   procedure Reach
+     (Group : in out Transaction; Ended : Cleanup_State;
+      Reason : Unbounded_String);
+   procedure Reach
+     (Group : in out Transaction; Ended : Cleanup_State;
+      Reason : Unbounded_String) is
+   begin
+      if Group.Entries.Is_Empty then
+         return;
+      elsif Ended = Clean then
+         Group.Ended_Reason := Null_Unbounded_String;
+      elsif Ended /= Group.Ended then
+         Group.Ended_Reason := Reason;
+      end if;
+      Group.Ended := Ended;
+   end Reach;
+
+   --  Each call reconsiders every entry it still holds, so a retried step
+   --  that now succeeds no longer counts against the group; a group with
+   --  no entries left keeps the state its last cleanup reached.
    procedure Abort_Transaction
      (Group : in out Transaction; Files : Filesystem'Class;
       Status : out Write_Status; Reason : out Unbounded_String)
    is
       Part_Status : Write_Status;
       Part_Reason : Unbounded_String;
+      Ended : Cleanup_State := Clean;
    begin
       Status := Write_Ok;
       Reason := Null_Unbounded_String;
       for Item of reverse Group.Entries loop
-         Advance_Publication
-           (Files, Item.Handle, Restore_Previous, Group.Protected_Paths,
-            Group.Protected_Identities, Part_Status, Part_Reason);
-         if Part_Status = Write_Ok then
+         Part_Status := Write_Ok;
+         --  A rollback that succeeded is never repeated: the entry now
+         --  holds what it held before, and a second restore could only
+         --  misreport retained staging as an incomplete rollback.
+         if not Item.Restored then
+            Advance_Publication
+              (Files, Item.Handle, Restore_Previous, Group.Protected_Paths,
+               Group.Protected_Identities, Part_Status, Part_Reason);
+            Item.Restored := Part_Status = Write_Ok;
+            if not Item.Restored then
+               Ended := Rollback_Incomplete;
+            end if;
+         end if;
+         if Item.Restored then
             Advance_Publication
               (Files, Item.Handle, Finish_Publication, Group.Protected_Paths,
                Group.Protected_Identities, Part_Status, Part_Reason);
+            if Part_Status /= Write_Ok and then Ended = Clean then
+               Ended := Restored_Stage_Retained;
+            end if;
          end if;
          if Part_Status /= Write_Ok then
             Status := Not_Writable;
-            Append (Reason, To_String (Part_Reason) & "; ");
+            Append (Reason, (if Length (Reason) = 0 then "" else "; ")
+                    & To_String (Part_Reason));
          end if;
       end loop;
+      Reach (Group, Ended, Reason);
       Group.Committed := False;
       if Status = Write_Ok then
          Group.Entries.Clear;
@@ -194,9 +236,14 @@ package body Landin.Platform.Publication is
             Group.Protected_Identities, Part_Status, Part_Reason);
          if Part_Status /= Write_Ok then
             Status := Not_Writable;
-            Append (Reason, To_String (Part_Reason) & "; ");
+            Append (Reason, (if Length (Reason) = 0 then "" else "; ")
+                    & To_String (Part_Reason));
          end if;
       end loop;
+      Reach
+        (Group,
+         (if Status = Write_Ok then Clean else Published_Prior_Retained),
+         Reason);
       Group.Entries.Clear;
    end Finish;
 end Landin.Platform.Publication;

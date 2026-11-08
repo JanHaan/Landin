@@ -38,11 +38,31 @@ package Landin.Platform.Publication is
      (Group : in out Transaction; Files : Filesystem'Class;
       Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String);
+
+   --  Where a group's cleanup left it, so a refusal can say what was
+   --  published and what was put back. Clean: nothing is retained.
+   --  Published_Prior_Retained: the group was committed and its new
+   --  outputs are installed; a replaced copy or private file of it
+   --  remains. Restored_Stage_Retained: the group was not committed and
+   --  every prepared output was put back as it was; private staging
+   --  remains. Rollback_Incomplete: an output's rollback failed, so that
+   --  output may hold the new or the previous version. The state only
+   --  grows more severe over a group's life; Abort_Transaction never
+   --  repeats a rollback that already succeeded.
+   type Cleanup_State is
+     (Clean, Published_Prior_Retained, Restored_Stage_Retained,
+      Rollback_Incomplete);
+   function State (Group : Transaction) return Cleanup_State;
+   --  The host's reason from the cleanup that first reached State, kept
+   --  when a later retry fails the same way: the first failure names the
+   --  cause, and a retry only reports that it is still there.
+   function Cleanup_Reason (Group : Transaction) return String;
 private
    type Publication_Entry is record
       Path, Stage : Ada.Strings.Unbounded.Unbounded_String;
       Handle : Publication_Handle := No_Publication;
       Requires_Absence : Boolean := False;
+      Restored : Boolean := False;
    end record;
    package Entry_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Publication_Entry);
@@ -51,5 +71,7 @@ private
       Protected_Paths : Path_List;
       Protected_Identities : Identity_List;
       Committed : Boolean := False;
+      Ended : Cleanup_State := Clean;
+      Ended_Reason : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 end Landin.Platform.Publication;

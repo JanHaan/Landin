@@ -715,7 +715,25 @@ static void pinned_entry_name_equivalence(void)
     REQUIRE(step(token, 4) == 0); close(fd);
     ++passed;
 }
-static int constructor_failure_child(const char *output)
+/* A foreign entry inside the fresh arena, made at its journal barrier, is
+   what the constructor cannot prove its own: the workspace is retained. */
+static char foreign_parent[4096];
+static void foreign_stage_entry(const char *event, const char *name)
+{
+    (void)name;
+    if (strcmp(event, "journal-building")) return;
+    DIR *directory = opendir(foreign_parent); REQUIRE(directory != NULL);
+    struct dirent *entry;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strncmp(entry->d_name, ".refine-publication-", 20)) continue;
+        char foreign[8192];
+        REQUIRE(snprintf(foreign, sizeof foreign, "%s/%s/stage/foreign",
+                         foreign_parent, entry->d_name) > 0);
+        REQUIRE(mkdir(foreign, 0700) == 0);
+    }
+    closedir(directory);
+}
+static int constructor_failure_child(const char *output, int foreign)
 {
     struct stat before, after;
     struct rlimit original, limited;
@@ -731,11 +749,16 @@ static int constructor_failure_child(const char *output)
     sigemptyset(&ignore.sa_mask);
     REQUIRE(sigaction(SIGXFSZ, &ignore, &previous) == 0);
     limited = original; limited.rlim_cur = 0;
+    if (foreign) {
+        strcpy(foreign_parent, canonical);
+        landin_publication_set_hook(foreign_stage_entry);
+    }
     REQUIRE(setrlimit(RLIMIT_FSIZE, &limited) == 0);
     status = landin_publication_open(output, 0, "", &token, stage,
                                      sizeof stage, why, sizeof why);
     REQUIRE(setrlimit(RLIMIT_FSIZE, &original) == 0
             && sigaction(SIGXFSZ, &previous, NULL) == 0);
+    clear_hook();
     REQUIRE(status != 0 && token == 0 && stat(output, &after) == 0);
     REQUIRE(before.st_dev == after.st_dev && before.st_ino == after.st_ino
             && before.st_mode == after.st_mode && content(output, "original-output"));
@@ -747,6 +770,17 @@ static int constructor_failure_child(const char *output)
         REQUIRE(snprintf(retained, sizeof retained, "%s/%s", canonical, entry->d_name) > 0);
     }
     closedir(directory);
+    if (!foreign) {
+        /* Nothing was captured, and every entry the arena held was this
+           call's own: no workspace is left behind for each attempt. */
+        REQUIRE(count == 0);
+        REQUIRE(strstr(why, strerror(EFBIG)) != NULL
+                && strstr(why, "no publication workspace remains") != NULL
+                && strstr(why, "raise the file-size limit") != NULL
+                && strstr(why, "retained") == NULL);
+        printf("constructor failure removed its workspace; diagnostic: %s\n", why);
+        return 0;
+    }
     REQUIRE(count == 1 && stat(retained, &after) == 0 && S_ISDIR(after.st_mode));
     printf("constructor failure retained: %s; diagnostic: %s\n", retained, why);
     REQUIRE(strstr(why, retained) != NULL && strstr(why, "inspect") != NULL);
@@ -758,16 +792,20 @@ static void constructor_failure_is_discoverable(void)
     path(parent, sizeof parent, "constructor-failure"); REQUIRE(mkdir(parent, 0700) == 0);
     REQUIRE(snprintf(output, sizeof output, "%s/output", parent) > 0);
     put(output, "original-output"); REQUIRE(stat(output, &before) == 0);
-    char *args[] = {(char *)self_program, "--constructor-failure", output, NULL};
-    int nullfd = open("/dev/null", O_RDWR), child, status; REQUIRE(nullfd >= 0);
-    REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd,
-                STDOUT_FILENO, STDERR_FILENO, -1, &child) == 0);
-    close(nullfd);
-    REQUIRE(landin_tool_wait(child, &status, 0) == child);
-    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
-            && before.st_ino == after.st_ino && before.st_mode == after.st_mode
-            && content(output, "original-output"));
-    REQUIRE(status == 0); ++passed;
+    for (int foreign = 0; foreign < 2; ++foreign) {
+        char *args[] = {(char *)self_program,
+                        foreign ? "--constructor-failure-foreign"
+                                : "--constructor-failure", output, NULL};
+        int nullfd = open("/dev/null", O_RDWR), child, status; REQUIRE(nullfd >= 0);
+        REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd,
+                    STDOUT_FILENO, STDERR_FILENO, -1, &child) == 0);
+        close(nullfd);
+        REQUIRE(landin_tool_wait(child, &status, 0) == child);
+        REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+                && before.st_ino == after.st_ino && before.st_mode == after.st_mode
+                && content(output, "original-output"));
+        REQUIRE(status == 0); ++passed;
+    }
 }
 static void unknown_unready_recovery_refuses(void)
 {
@@ -1447,13 +1485,60 @@ static void write_failure_reasons(void)
     passed += 4;
 }
 
+/* A cleanup or rollback refusal says which step failed and names only the
+   recovery entries the publication holds, so a reader is never sent to
+   look for a copy that was never captured. */
+static void cleanup_failure_names_held_entries(void)
+{
+    char output[8192], stage[4096], recovery[8192], aside[8192], save[8192];
+    char parent[4096], *at;
+    /* Each case retains its arena, so each has its own output parent. */
+    path(parent, sizeof parent, "cleanup-captured"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", parent) > 0);
+    put(output, "old-output");
+    int token = prepare(output, 0, "", stage); staged(stage, "new-output");
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    REQUIRE(content(output, "new-output"));
+    at = strstr(stage, "/stage/"); REQUIRE(at != NULL);
+    REQUIRE(snprintf(recovery, sizeof recovery, "%.*s/recovery/.previous-%d",
+                     (int)(at - stage), stage, token) > 0);
+    REQUIRE(snprintf(aside, sizeof aside, "%s-aside", output) > 0);
+    /* The captured copy is no longer the snapshot, so cleanup keeps it. */
+    REQUIRE(rename(recovery, aside) == 0); put(recovery, "old-output");
+    REQUIRE(step(token, 4) != 0);
+    char previous[64];
+    snprintf(previous, sizeof previous, "previous entry .previous-%d", token);
+    REQUIRE(strstr(why, "cleanup of ") && strstr(why, output)
+            && strstr(why, previous) && !strstr(why, "publication of")
+            && !strstr(why, "captured new or concurrent entry"));
+    REQUIRE(content(output, "new-output") && content(recovery, "old-output"));
+    ++passed;
+
+    path(parent, sizeof parent, "rollback-absent"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", parent) > 0);
+    REQUIRE(snprintf(save, sizeof save, "%s/save", parent) > 0);
+    put(save, "editor-save");
+    token = prepare(output, 0, "", stage); staged(stage, "new-output");
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    arm("before-rollback-capture", output, save, 1);
+    REQUIRE(step(token, 3) != 0); clear_hook();
+    REQUIRE(strstr(why, "rollback of ") && strstr(why, output)
+            && strstr(why, "recovery directory")
+            && !strstr(why, "previous entry")
+            && !strstr(why, "captured new or concurrent entry"));
+    REQUIRE(content(output, "editor-save"));
+    ++passed;
+}
+
 int main(int argc, char **argv)
 {
     self_program = argv[0];
     if (argc == 6 && !strcmp(argv[1], "--producer"))
         return producer_child(argv[2], atoi(argv[3]), atoi(argv[4]), (unsigned)atoi(argv[5]));
     if (argc == 3 && !strcmp(argv[1], "--constructor-failure"))
-        return constructor_failure_child(argv[2]);
+        return constructor_failure_child(argv[2], 0);
+    if (argc == 3 && !strcmp(argv[1], "--constructor-failure-foreign"))
+        return constructor_failure_child(argv[2], 1);
     if (argc == 6 && !strcmp(argv[1], "--changing-peer")) {
         changing_path = argv[3];
         changing_ready = atoi(argv[4]); changing_release = atoi(argv[5]);
@@ -1526,6 +1611,11 @@ int main(int argc, char **argv)
         printf("publication native: %u controls passed (identity observation)\n", passed);
         return 0;
     }
+    if (argc == 2 && !strcmp(argv[1], "--cleanup-reasons")) {
+        cleanup_failure_names_held_entries(); constructor_failure_is_discoverable();
+        printf("publication native: %u controls passed (cleanup reasons)\n", passed);
+        return 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "--write-failure-reasons")) {
         write_failure_reasons();
         printf("publication native: %u controls passed (write failure reasons)\n", passed);
@@ -1546,6 +1636,7 @@ int main(int argc, char **argv)
     own_reservations(); live_producer_discovery(); journal_concurrency(); discovery_during_retirement();
     discovery_during_publication(); pinned_entry_name_equivalence();
     unknown_unready_recovery_refuses(); constructor_failure_is_discoverable();
+    cleanup_failure_names_held_entries();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }

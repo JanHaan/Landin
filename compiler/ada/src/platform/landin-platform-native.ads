@@ -90,6 +90,8 @@ package Landin.Platform.Native is
       Action : Publication_Action; Protected_Paths : Path_List;
       Protected_Identities : Identity_List; Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   overriding function Cancellation_Requested
+     (Host : Native_Filesystem) return Boolean;
    --  Both results describe the same actually read object.
    overriding procedure Read_Snapshot
      (Host : Native_Filesystem; Path : String;
