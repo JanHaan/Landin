@@ -1,0 +1,39 @@
+--  A static type argument may name another module's type by its qualified
+--  name, as a type position does: `vec.new(item: net.address)` makes a
+--  list of addresses with no local alias, and `vec.new(item:
+--  vec.list(u8))` an empty list of lists through a qualified
+--  application.
+import core/arena
+import core/mem
+import core/net
+import core/vec
+
+exercise: () -> (ok: bool) ! mem.out_of_memory | mem.out_of_bounds =
+    ok = false
+    mut backing: [1024]u8 = zeroed
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 1024)
+
+    mut peers := vec.new(item: net.address)
+    try vec.push(peers, memory, net.loopback(net.ipv4, 80))
+    try vec.push(peers, memory, net.unspecified(net.ipv6, 443))
+    return when vec.length(peers) <> 2
+    first: net.address = try vec.get(peers, 0)
+    second: net.address = try vec.get(peers, 1)
+    return when first.family <> net.ipv4 or first.port <> 80
+      or first.octets[0] <> 127 or first.octets[3] <> 1
+    return when second.family <> net.ipv6 or second.port <> 443
+
+    rows := vec.new(item: vec.list(u8))
+    return when vec.length(rows) <> 0 or vec.capacity(rows) <> 0
+    ok = true
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else (problem)
+        _ = problem
+        return
+    end
+    code = if ok then 42 else 2 end if
+end main

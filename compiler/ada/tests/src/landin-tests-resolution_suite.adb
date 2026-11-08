@@ -950,6 +950,21 @@ package body Landin.Tests.Resolution_Suite is
                "import scope verdict " & Expected & ": " & Report);
          end;
       end Check;
+
+      Static_Library : constant String :=
+        "public address: type = struct port: u16 end address" & LF
+        & "public cell: type (t: type) = struct value: t end cell" & LF
+        & "public origin: () -> (a: address) = a = (port: 1) end origin"
+        & LF
+        & "public make: (item: type) -> (n: u32) = n = 0 end make" & LF;
+      Private_Library : constant String :=
+        "public turns: type = concept (provider: type)" & LF
+        & "wait: (self: provider) -> none end turns" & LF
+        & "state: type = struct count: u32 end state" & LF
+        & "public round: type = state" & LF
+        & "round_wait: (self: round) -> none = _ = self end round_wait"
+        & LF & "round is turns (wait: round_wait)" & LF
+        & "public make: () -> (r: round) = r = (count: 0) end make" & LF;
    begin
       Check
         ("import lib" & LF & "as: i32 = 2" & LF & "lib: i32 = 3" & LF
@@ -1004,6 +1019,48 @@ package body Landin.Tests.Resolution_Suite is
       Check ("f: () -> none = compiler.atomic_sub() end f",
              "not one of the memory operations");
       Check ("f: () -> none = compiler.assert(true) end f", "module");
+      --  D202 [1530]: the refusal of an option read in a module value
+      --  names the route that reads it, a `fixed if`; the route passes.
+      Check ("option answer: i32 = 1" & LF
+             & "y: bool = answer > 0" & LF,
+             "declare it in each arm of a module-level `fixed if` whose"
+             & " condition reads `answer`");
+      Check ("option answer: i32 = 1" & LF
+             & "fixed if answer > 0 then" & LF & "y: bool = true" & LF
+             & "else" & LF & "y: bool = false" & LF & "end if" & LF
+             & "f: () -> (v: bool) = v = y end f", "");
+      --  A static type argument may name another module's type by its
+      --  qualified name, bare or applied, as a type position does; a
+      --  qualified name of a function is still refused as no type.
+      Check ("import lib" & LF
+             & "f: () -> (n: u32) = n = lib.make(item: lib.address)"
+             & " + lib.make(item: lib.cell(lib.address)) end f", "",
+             Library => Static_Library);
+      Check ("import lib" & LF
+             & "f: () -> (n: u32) = n = lib.make(item: lib.origin) end f",
+             "this static type argument is not a type",
+             Library => Static_Library);
+      --  [1240]/D150: an entry of a conformance on a type whose
+      --  representation is private is reached through evidence.  With no
+      --  public routine forwarding it, the note writes that routine; one
+      --  written so passes, and a forwarding routine is named instead.
+      Check ("import lib" & LF
+             & "f: () -> none = r := lib.make() r.wait() end f",
+             "write a routine generic over the concept, `(p: type is"
+             & " lib.turns, value: p)`, that calls `p.wait(value)`, and"
+             & " pass it `r`",
+             Library => Private_Library);
+      Check ("import lib" & LF
+             & "waiting: (p: type is lib.turns, value: p) -> none ="
+             & " p.wait(value) end waiting" & LF
+             & "f: () -> none = r := lib.make() waiting(r) end f", "",
+             Library => Private_Library);
+      Check ("import lib" & LF
+             & "f: () -> none = r := lib.make() r.wait() end f",
+             "call `lib.waiting(r, ...)`",
+             Library => Private_Library
+               & "public waiting: (p: type is turns, value: p) -> none ="
+               & " p.wait(value) end waiting" & LF);
    end Import_Scopes_And_Refusals;
 
    procedure Options_Collide_Only_In_Their_Declaring_Module

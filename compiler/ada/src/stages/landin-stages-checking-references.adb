@@ -3381,17 +3381,63 @@ package body Landin.Stages.Checking.References is
                  and then Landin.Checking.Contains_Writable_References
                    (Types.all, Part)
                then
-                  Bad.Report
-                    (Item    => Bad.Return_Sources_Disagree,
-                     Source  => Syn.Source_Of (Tree),
-                     Where   => Syn.Where (Tree, At_Node),
-                     Message => "this writable `from` result also carries"
-                                & " an independent storage origin",
-                     Note    => "[0790]/D222: pass each alternative as an"
-                                & " explicit source, or return it separately",
-                     Related => Part.Site,
-                     Because => "the named return and its declared sources",
-                     Into    => Sink.all);
+                  declare
+                     --  The module binding whose storage is the independent
+                     --  alternative, when one is: it is named, and so is
+                     --  the way to write a result that may be it.
+                     Module_Storage : Res.Declaration_Id :=
+                       Res.No_Declaration;
+                     Local : Natural :=
+                       (if Fact.Derives_First = 0 then 0
+                        else Next_Set (Fact.Derives, Fact.Derives_First));
+                  begin
+                     while Local /= 0 and then Local <= Fact.Derives_Last
+                     loop
+                        if Res.Sort_Of (Meanings.all, Global (Local))
+                          = Res.Module_Binding
+                        then
+                           Module_Storage := Global (Local);
+                           exit;
+                        end if;
+                        Local := (if Local = Fact.Derives'Last then 0
+                                  else Next_Set (Fact.Derives, Local + 1));
+                     end loop;
+                     Bad.Report
+                       (Item    => Bad.Return_Sources_Disagree,
+                        Source  => Syn.Source_Of (Tree),
+                        Where   => Syn.Where (Tree, At_Node),
+                        Message => "this writable `from` result also"
+                                   & " carries an independent storage"
+                                   & " origin",
+                        Note    =>
+                          (if Module_Storage = Res.No_Declaration
+                           then "[0790]/D222: pass each alternative as an"
+                                & " explicit source, or return it"
+                                & " separately"
+                           elsif (for some Bit of Fact.From => Bit)
+                           then "[0790]/D222: `"
+                                & Spelled
+                                    (Res.Name_Of
+                                       (Meanings.all, Module_Storage))
+                                & "` is module storage, which needs no"
+                                & " `from`; return it in a result of its"
+                                & " own, apart from the one that derives"
+                                & " from a parameter, or read and write it"
+                                & " where it is chosen instead of"
+                                & " returning it"
+                           else "[0790]/D222: `"
+                                & Spelled
+                                    (Res.Name_Of
+                                       (Meanings.all, Module_Storage))
+                                & "` is module storage, which needs no"
+                                & " `from`; declare the result without"
+                                & " one, or return storage that derives"
+                                & " from the parameters it names"),
+                        Related => Part.Site,
+                        Because => "the named return and its declared"
+                                   & " sources",
+                        Into    => Sink.all);
+                  end;
                elsif not Fact.Untracked and then Fact.Frame then
                   Report_Escape
                     (Tree,

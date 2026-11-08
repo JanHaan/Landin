@@ -15824,6 +15824,25 @@ package body Landin.Tests.Checking_Suite is
          & "    s = buf[0..<4]" & LF & "end f" & LF,
          "this returned reference still has frame origin",
          "caller-supplied storage", Frame_Line => True);
+      --  D222: the independent alternative is a module binding's storage,
+      --  which the note names with the way to return it.  An alternative
+      --  from storage no binding names keeps the general note.
+      Check_Source
+        ("host: type = struct own: ptr mut i32 end host" & LF
+         & "mut cell: i32 = 0" & LF
+         & "f: (self: host, c: bool) -> (r: ptr mut i32 from self) ="
+         & " if c then r = addr cell else r = self.own end if end f",
+         "also carries an independent storage origin",
+         "`cell` is module storage, which needs no `from`; return it in a"
+         & " result of its own");
+      Check_Source
+        ("host: type = struct own: ptr mut i32 end host" & LF
+         & "mut cell: i32 = 0" & LF
+         & "g: () -> (r: ptr mut i32) = r = addr cell end g" & LF
+         & "f: (self: host, c: bool) -> (r: ptr mut i32 from self) ="
+         & " if c then r = g() else r = self.own end if end f",
+         "also carries an independent storage origin",
+         "pass each alternative as an explicit source");
    end Reference_Diagnostic_Repairs;
 
    procedure Ordinary_Diagnostic_Context
@@ -16003,6 +16022,18 @@ package body Landin.Tests.Checking_Suite is
       Provider : constant String :=
         "less_i32: (a: i32, b: i32) -> (yes: bool) = a < b end less_i32"
         & LF;
+      Holder_Prefix : constant String :=
+        "state: type = struct host: ptr i32 end state" & LF
+        & "take: (task: state) -> (v: i32) = v = task.host.val end take"
+        & LF;
+      Settings_Prefix : constant String :=
+        "settings: type = struct rate: u32 bits: u8 end settings" & LF
+        & "defaults: () -> (s: settings) = s.rate = 9600 s.bits = 8"
+        & " end defaults" & LF
+        & "configure: (rate: u32) -> (ok: bool) = ok = rate > 0"
+        & " end configure" & LF;
+      Static_Prefix : constant String :=
+        "make: (item: type) -> (n: u32) = n = 0 end make" & LF;
       Erased_Prefix : constant String :=
         "shape: type = concept (t: type)" & LF
         & "area: (self: ptr t) -> (a: u32) end shape" & LF
@@ -16144,6 +16175,56 @@ package body Landin.Tests.Checking_Suite is
          & LF & "i32 is ordered (other: u8, less: less_i32)", 1,
          "(a: i32, b: u8) -> (yes: bool)", "b: u32",
          At_Parameter => True);
+      --  [1240]: a binding holding an anonymous function is a value, so
+      --  the refusal says so and names the declaration to write; the
+      --  declared function beside it above is the control.
+      Check_Source
+        (Concept_Prefix & "end ordered" & LF
+         & "less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end" & LF
+         & "i32 is ordered (less: less_i32)", 1,
+         "`less_i32` is a binding holding an anonymous function",
+         "declare `less_i32` as a function", Codes => "L0341");
+      --  D241: a literal argument with a reference field takes no type
+      --  from its parameter; the refusal names the binding that does, and
+      --  that binding passes.
+      Check_Source
+        (Holder_Prefix & "f: () -> (v: i32) = x: i32 = 1"
+         & " host: ptr i32 = addr x v = take((host: host)) end f", 1,
+         "a struct literal with a reference field takes no type from"
+         & " parameter `task`",
+         "`task: state = (host: host)`, and pass `task`",
+         Codes => "L0304");
+      Check_Source
+        (Holder_Prefix & "f: () -> (v: i32) = x: i32 = 1"
+         & " host: ptr i32 = addr x task: state = (host: host)"
+         & " v = take(task) end f", 0);
+      --  A whole struct passed where a parameter takes a scalar is named
+      --  beside the parameter and its type, and the note names the field
+      --  of that type; selecting it passes.
+      Check_Source
+        (Settings_Prefix & "f: () -> (ok: bool) = s := defaults()"
+         & " ok = configure(s) end f", 1,
+         "`s` is a `settings` struct, and parameter `rate` requires `u32`",
+         "select the field this parameter takes, `s.rate`",
+         Codes => "L0334", Primary_At => "s) end f",
+         Related_At => "s := defaults()");
+      Check_Source
+        (Settings_Prefix & "f: () -> (ok: bool) = s := defaults()"
+         & " ok = configure(s.rate) end f", 0);
+      --  A static type argument that names a value or a field is one
+      --  refusal at the argument, not a second from type normalization;
+      --  a type there passes.
+      Check_Source
+        (Static_Prefix & "f: () -> (n: u32) = n = make(item: f) end f", 1,
+         "this static type argument is not a type", Codes => "L0327");
+      Check_Source
+        (Static_Prefix & "pair: type = struct x: u32 end pair" & LF
+         & "f: () -> (n: u32) = p: pair = (x: 1)"
+         & " n = make(item: p.x) end f", 1,
+         "this static type argument is not a type", Codes => "L0327");
+      Check_Source
+        (Static_Prefix & "pair: type = struct x: u32 end pair" & LF
+         & "f: () -> (n: u32) = n = make(item: pair) end f", 0);
    end Ordinary_Diagnostic_Context;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

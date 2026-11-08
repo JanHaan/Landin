@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a static type argument names another module's type by its qualified name, `vec.new(item: net.address)`, and applies one, `vec.new(item: vec.list(u8))`, as a type position does, with no local alias, and the list of addresses holds and hands back what was pushed
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1300, 1350, 1420
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

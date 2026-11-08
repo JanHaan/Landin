@@ -2055,7 +2055,11 @@ package body Landin.Stages.Checking is
          Node : Syn.Node_Id;
          Expected_Reference : Landin.Checking.Reference_Id :=
            Landin.Checking.No_Reference;
-         Erased_Context : Boolean := False) return Ty.Type_Kind;
+         Erased_Context : Boolean := False;
+         Taking : Landin.Checking.Signature_Part := (others => <>))
+         return Ty.Type_Kind;
+      --  Taking, when it is named, is the parameter Node is passed to, for
+      --  a refusal of Node itself to name; nothing Node contains is told.
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Admit_Array_Field
@@ -2161,21 +2165,55 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
          return Landin.Checking.Concept_Id;
 
+      --  A module binding whose value is written as an anonymous function,
+      --  `less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end`.
+      function Holds_Anonymous_Function (Id : Res.Declaration_Id)
+        return Boolean;
+
+      function Holds_Anonymous_Function (Id : Res.Declaration_Id)
+        return Boolean
+      is
+      begin
+         if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Binding then
+            return False;
+         end if;
+         declare
+            Its_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Its_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+         begin
+            return Syn.Kind (Its_Tree.all, Its_Node) = Syn.Binding
+              and then Syn.Value_Of (Its_Tree.all, Its_Node) /= Syn.No_Node
+              and then Syn.Kind
+                (Its_Tree.all, Syn.Value_Of (Its_Tree.all, Its_Node))
+                  = Syn.Anonymous_Function;
+         end;
+      end Holds_Anonymous_Function;
+
       --  A selection of a module-internal type's member that is an entry
       --  of a concept the type conforms to: the public routine of the
       --  concept's module that calls that entry, written as this file
       --  calls it, `mem.allocate(memory, ...)`; "" when there is none.
+      --  Evidence is the call through evidence that reaches the entry when
+      --  no public routine forwards it, `p.start(value, ...)` in a routine
+      --  `(p: type is fibre.turns, value: p)`; "" when the member is no
+      --  entry of a concept the type conforms to.
       function Concept_Entry_Route
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         From    : Syn.Node_Id;
-         Wrote   : Landin.Checking.Nominal_Type_Id) return String;
+        (Of_Tree  : Syn.Tree;
+         Node     : Syn.Node_Id;
+         From     : Syn.Node_Id;
+         Wrote    : Landin.Checking.Nominal_Type_Id;
+         Evidence : out Ada.Strings.Unbounded.Unbounded_String)
+         return String;
 
       function Concept_Entry_Route
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         From    : Syn.Node_Id;
-         Wrote   : Landin.Checking.Nominal_Type_Id) return String
+        (Of_Tree  : Syn.Tree;
+         Node     : Syn.Node_Id;
+         From     : Syn.Node_Id;
+         Wrote    : Landin.Checking.Nominal_Type_Id;
+         Evidence : out Ada.Strings.Unbounded.Unbounded_String)
+         return String
       is
          package U renames Ada.Strings.Unbounded;
          Selected : constant Landin.Source.Names.Name_Id :=
@@ -2183,6 +2221,8 @@ package body Landin.Stages.Checking is
          Entry_Concept : Landin.Checking.Concept_Id :=
            Landin.Checking.No_Concept;
          Module : Landin.Modules.Module_Id := Landin.Modules.No_Module;
+         Concept_Name : Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.No_Name;
          --  The routine forwards the entry: it takes what the entry takes,
          --  the provider in the receiver's place.
          Entry_Parameters : Natural := 0;
@@ -2303,24 +2343,58 @@ package body Landin.Stages.Checking is
                            Module := Landin.Modules.Module_Of
                              (Grouped.all,
                               Res.Source_Of (Meanings.all, Declared));
+                           Concept_Name :=
+                             Res.Name_Of (Meanings.all, Declared);
                         end if;
                      end loop;
                   end;
                end if;
             end;
          end loop;
+         Evidence := U.Null_Unbounded_String;
          if Entry_Concept = Landin.Checking.No_Concept then
             return "";
          end if;
          Res.Each_Public_In_Module
            (Meanings.all, Module, Visit_Public'Access);
-         if U.Length (Routine) = 0 then
-            return "";
-         end if;
          Res.Each_Imported_Module
            (Meanings.all,
             Res.File_Scope_Of (Meanings.all, Syn.Source_Of (Of_Tree)),
             Visit_Import'Access);
+         if U.Length (Routine) = 0 then
+            --  D150 keeps the representation private, but evidence for
+            --  the conformance is not: a routine generic over the concept
+            --  calls the entry through its type formal, as `fibre.yield`
+            --  does for `yield`.
+            declare
+               Here : constant Boolean :=
+                 Module = Landin.Modules.Module_Of
+                   (Grouped.all, Syn.Source_Of (Of_Tree));
+               Spelled_Concept : constant String :=
+                 (if not Here and then U.Length (Imported_As) > 0
+                  then U.To_String (Imported_As) & "."
+                       & Spelled (Concept_Name)
+                  else Spelled (Concept_Name));
+            begin
+               Evidence := U.To_Unbounded_String
+                 ("write a routine generic over the concept"
+                  & (if Here or else U.Length (Imported_As) > 0 then ""
+                     else " from `import "
+                          & Landin.Modules.Logical_Path (Grouped.all, Module)
+                          & "`")
+                  & ", `(p: type is "
+                  & Spelled_Concept & ", value: p)`, that calls `p."
+                  & Spelled (Selected)
+                  & (if Entry_Parameters > 1 then "(value, ...)`"
+                     else "(value)`")
+                  & ", and pass it `"
+                  & Landin.Source.Slice
+                      (Source (Context, Syn.Source_Of (Of_Tree)),
+                       Syn.Where (Of_Tree, From))
+                  & "`");
+            end;
+            return "";
+         end if;
          if U.Length (Imported_As) = 0 then
             return "`" & U.To_String (Routine) & "` from `import "
               & Landin.Modules.Logical_Path (Grouped.all, Module) & "`";
@@ -2728,7 +2802,8 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Wanted  : Ty.Type_Kind;
          Site    : Landin.Provenance.Origin;
-         Because : String);
+         Because : String;
+         Taking  : Landin.Checking.Signature_Part := (others => <>));
       --  A nonreturning call is a control edge, never a value of type none.
       --  Synthesis still checks its callee and every argument before flow
       --  removes the continuation.
@@ -11165,6 +11240,27 @@ package body Landin.Stages.Checking is
             function Is_Caller_Forward
               (Argument : Syn.Node_Id) return Boolean;
 
+            --  A name, bare or qualified, that resolution bound to a value,
+            --  a function or anything else that is not a type: the static
+            --  formal's one refusal, rather than a second one from type
+            --  normalization at the same name.
+            function Names_No_Type (Written : Syn.Node_Id) return Boolean
+            is (Syn.Kind (Caller_Tree, Written)
+                  in Syn.Name_Reference | Syn.Member_Selection
+                and then
+                  (if Res.Verdict_Of (Meanings.all, Caller_Tree, Written)
+                        = Res.Bound
+                   then Res.Sort_Of
+                     (Meanings.all,
+                      Res.Bound_To (Meanings.all, Caller_Tree, Written))
+                     not in Res.Module_Type | Res.Module_Atom
+                          | Res.Type_Parameter
+                   --  A field selected from a value, `p.x`.
+                   else Syn.Kind (Caller_Tree, Written)
+                          = Syn.Member_Selection
+                     and then Names_No_Type
+                       (Syn.Target_Of (Caller_Tree, Written))));
+
             procedure Report_Static
               (Argument : Syn.Node_Id; Position : Positive; Message : String)
             is
@@ -11292,7 +11388,9 @@ package body Landin.Stages.Checking is
                                     & " needs a name of its own: declare"
                                     & " it, `name: type = a | b`, and pass"
                                     & " the name");
-                              elsif Written_Type = Syn.No_Node then
+                              elsif Written_Type = Syn.No_Node
+                                or else Names_No_Type (Written_Type)
+                              then
                                  Report_Static
                                    (Argument, Positive (Position),
                                     "this static type argument is not a type");
@@ -14531,7 +14629,8 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Wanted  : Ty.Type_Kind;
          Site    : Landin.Provenance.Origin;
-         Because : String)
+         Because : String;
+         Taking  : Landin.Checking.Signature_Part := (others => <>))
       is
          Got : Ty.Type_Kind;
       begin
@@ -14591,7 +14690,7 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         Got := Synthesise (Of_Tree, Node);
+         Got := Synthesise (Of_Tree, Node, Taking => Taking);
 
          if Needs_Value_Context (Of_Tree, Node, Got)
            and then Wanted in Ty.Scalar_Name
@@ -16421,6 +16520,46 @@ package body Landin.Stages.Checking is
                         Check_Struct_Literal
                           (Of_Tree, Argument, Expected,
                            Static_Image => False);
+                     elsif not Leaf_Only
+                       and then Syn.Kind (Of_Tree, Argument)
+                                  = Syn.Struct_Literal
+                     then
+                        --  D241 gives an untyped literal argument the
+                        --  parameter's type only when every field is a
+                        --  leaf; a reference field's origin needs a
+                        --  binding's.  The binding is the way through.
+                        declare
+                           Snap : Landin.Source.Snapshot renames
+                             Source (Context, Syn.Source_Of (Of_Tree));
+                           Written : constant String := Landin.Source.Slice
+                             (Snap, Syn.Where (Of_Tree, Argument));
+                           Named : constant String :=
+                             (if Parameter.Name = Landin.Source.Names.No_Name
+                              then "value" else Spelled (Parameter.Name));
+                           Spelling : constant String := Type_Spelling
+                             (Part_Descriptor (Parameter),
+                              Syn.Source_Of (Of_Tree));
+                        begin
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Argument);
+                           Bad.Report
+                             (Item    => Bad.Unsupported_Use,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Argument),
+                              Message => "a struct literal with a reference"
+                                         & " field takes no type from"
+                                         & " parameter `" & Named & "`",
+                              Refused => Bad.Struct_Value,
+                              Route   => "instead, bind it to the type"
+                                & " first, `" & Named & ": " & Spelling
+                                & " = "
+                                & (if Written'Length <= 40
+                                     and then Ada.Strings.Fixed.Index
+                                       (Written, "" & ASCII.LF) = 0
+                                   then Written else "(...)")
+                                & "`, and pass `" & Named & "`",
+                              Into    => Found);
+                        end;
                      else
                         Require
                           (Of_Tree, Argument, Wants,
@@ -16571,7 +16710,11 @@ package body Landin.Stages.Checking is
                   Require
                     (Of_Tree, Argument, Wants,
                      Parameter.Site,
-                     "this parameter");
+                     "this parameter",
+                     Taking =>
+                       (if Wants = Ty.Any_Value
+                        then Landin.Checking.Signature_Part'(others => <>)
+                        else Parameter));
                end if;
 
                --  D188: an argument filling a range-subtype parameter is a
@@ -16941,6 +17084,13 @@ package body Landin.Stages.Checking is
          Written : Syn.Node_Id;
          Named   : Landin.Source.Names.Name_Id) return Natural;
 
+      --  The spelling of a scalar field of that struct whose type is the
+      --  scalar Taking wants, the one named as Taking is when there is
+      --  one, else the first; "" when none is.
+      function Field_Taking
+        (Wrote  : Landin.Checking.Nominal_Type_Id;
+         Taking : Landin.Checking.Signature_Part) return String;
+
       function Field_Spelling
         (Template : Res.Declaration_Id; Index : Positive) return String;
 
@@ -17286,6 +17436,37 @@ package body Landin.Stages.Checking is
             Related => Syn.Origin (Of_Tree, Operation),
             Because => Because, Into => Found);
       end Report_Byte_Packed_Place;
+
+      function Field_Taking
+        (Wrote  : Landin.Checking.Nominal_Type_Id;
+         Taking : Landin.Checking.Signature_Part) return String
+      is
+         First : Natural := 0;
+      begin
+         if Wrote = Landin.Checking.No_Nominal_Type
+           or else Taking.Kind not in Ty.Scalar_Name
+           or else not Landin.Checking.Has_Layout (Types.all, Wrote)
+         then
+            return "";
+         end if;
+         for Field in 1 .. Landin.Checking.Layout_Field_Count
+           (Types.all, Wrote)
+         loop
+            if Landin.Checking.Field_Kind_Of (Types.all, Wrote, Field)
+                 = Landin.Checking.Scalar_Field
+              and then Ty.Type_Kind
+                (Landin.Checking.Field_Shape_Of
+                   (Types.all, Wrote, Field).Element) = Taking.Kind
+            then
+               if Field_Named (Wrote, Field) = Spelled (Taking.Name) then
+                  return Field_Named (Wrote, Field);
+               elsif First = 0 then
+                  First := Field;
+               end if;
+            end if;
+         end loop;
+         return (if First = 0 then "" else Field_Named (Wrote, First));
+      end Field_Taking;
 
       function Field_Named
         (Wrote : Landin.Checking.Nominal_Type_Id;
@@ -19654,6 +19835,19 @@ package body Landin.Stages.Checking is
                                          then Res.Bound_To
                                            (Meanings.all, Of_Tree, RHS)
                                          else Res.No_Declaration);
+                                    --  [1240] names a declared function;
+                                    --  a binding holding one is a value,
+                                    --  so say what to declare instead.
+                                    Holds_Anonymous : constant Boolean :=
+                                      Function_Id /= Res.No_Declaration
+                                      and then Holds_Anonymous_Function
+                                        (Function_Id);
+                                    Held : constant String :=
+                                      (if Holds_Anonymous
+                                       then Spelled
+                                         (Res.Name_Of
+                                            (Meanings.all, Function_Id))
+                                       else "");
                                  begin
                                     if Function_Id = Res.No_Declaration
                                       or else Res.Sort_Of
@@ -19665,13 +19859,33 @@ package body Landin.Stages.Checking is
                                           Source  => Syn.Source_Of (Of_Tree),
                                           Where   => Syn.Where
                                             (Of_Tree, RHS),
-                                          Message => "a concept entry must be"
-                                                     & " supplied by a"
-                                                     & " function",
-                                          Note    => "[1240]: conformance"
-                                                     & " entries name the"
-                                                     & " functions that"
-                                                     & " implement them",
+                                          Message =>
+                                            (if Holds_Anonymous
+                                             then "`" & Held & "` is a"
+                                                  & " binding holding an"
+                                                  & " anonymous function,"
+                                                  & " and a concept entry"
+                                                  & " names a declared"
+                                                  & " function"
+                                             else "a concept entry must be"
+                                                  & " supplied by a"
+                                                  & " function"),
+                                          Note    =>
+                                            (if Holds_Anonymous
+                                             then "[1240]: conformance"
+                                                  & " entries name the"
+                                                  & " functions that"
+                                                  & " implement them, and a"
+                                                  & " binding is a value;"
+                                                  & " declare `" & Held
+                                                  & "` as a function, `"
+                                                  & Held & ": (...) -> (...)"
+                                                  & " = ... end " & Held
+                                                  & "`, and name it here"
+                                             else "[1240]: conformance"
+                                                  & " entries name the"
+                                                  & " functions that"
+                                                  & " implement them"),
                                           Related => Syn.Origin
                                             (Concept_Tree.all,
                                              Syn.Nth_Concept_Entry
@@ -22593,16 +22807,19 @@ package body Landin.Stages.Checking is
                              constant Syn.Tree :=
                                Tree_For
                                  (Res.Source_Of (Meanings.all, Template));
+                           Evidence : Ada.Strings.Unbounded.Unbounded_String;
                            Route : constant String :=
                              Concept_Entry_Route
-                               (Of_Tree, Node, From, Wrote);
+                               (Of_Tree, Node, From, Wrote, Evidence);
+                           Through : constant String :=
+                             Ada.Strings.Unbounded.To_String (Evidence);
                         begin
                            Name_Bad.Report
                              (Item    => Name_Bad.Inaccessible_Name,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Anchor (Of_Tree, Node),
                               Message =>
-                                (if Route = ""
+                                (if Route = "" and then Through = ""
                                  then "this type's representation is"
                                       & " module-internal"
                                  else "`" & Spelled (Syn.Name (Of_Tree, Node))
@@ -22611,13 +22828,19 @@ package body Landin.Stages.Checking is
                                       & " representation is"
                                       & " module-internal"),
                               Note    =>
-                                (if Route = ""
-                                 then "D150: a private identity may cross"
-                                      & " a public signature without"
-                                      & " exposing its fields"
-                                 else "[1240]: a concept's entry is reached"
+                                (if Route /= ""
+                                 then "[1240]: a concept's entry is reached"
                                       & " through the operations its module"
-                                      & " makes public; call " & Route),
+                                      & " makes public; call " & Route
+                                 elsif Through /= ""
+                                 then "[1240]: no public routine of the"
+                                      & " concept's module forwards `"
+                                      & Spelled (Syn.Name (Of_Tree, Node))
+                                      & "`, and evidence reaches it: "
+                                      & Through
+                                 else "D150: a private identity may cross"
+                                      & " a public signature without"
+                                      & " exposing its fields"),
                               Related => Syn.Origin
                                 (Template_Tree.all,
                                  Res.Node_Of (Meanings.all, Template)),
@@ -23280,7 +23503,9 @@ package body Landin.Stages.Checking is
          Node : Syn.Node_Id;
          Expected_Reference : Landin.Checking.Reference_Id :=
            Landin.Checking.No_Reference;
-         Erased_Context : Boolean := False) return Ty.Type_Kind
+         Erased_Context : Boolean := False;
+         Taking : Landin.Checking.Signature_Part := (others => <>))
+         return Ty.Type_Kind
       is
          Already : constant Ty.Type_Kind :=
            Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
@@ -23473,14 +23698,48 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Aggregate_Form,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
-                     Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
-                                & "` is a whole struct, and this position"
-                                & " does not take one",
+                     Message =>
+                       (if Taking.Name /= Landin.Source.Names.No_Name
+                        then "`" & Spelled (Syn.Name (Of_Tree, Node))
+                             & "` is a `"
+                             & Type_Spelling
+                                 ((Kind => Ty.Aggregate,
+                                   Nominal => Landin.Checking.Nominal_Of
+                                     (Types.all, Means),
+                                   others => <>),
+                                  Syn.Source_Of (Of_Tree))
+                             & "` struct, and parameter `"
+                             & Spelled (Taking.Name) & "` requires `"
+                             & Type_Spelling
+                                 (Part_Descriptor (Taking),
+                                  Syn.Source_Of (Of_Tree)) & "`"
+                        else "`" & Spelled (Syn.Name (Of_Tree, Node))
+                             & "` is a whole struct, and this position"
+                             & " does not take one"),
                      Note    =>
                        (if Erased_Context
                           and then Erased_Construction_Note
                             (Of_Tree, Node) /= ""
                         then Erased_Construction_Note (Of_Tree, Node)
+                        elsif Taking.Name /= Landin.Source.Names.No_Name
+                          and then Field_Taking
+                            (Landin.Checking.Nominal_Of (Types.all, Means),
+                             Taking) /= ""
+                        then "[0670]: a struct is passed whole only where"
+                             & " its own type is taken; select the field"
+                             & " this parameter takes, `"
+                             & Spelled (Syn.Name (Of_Tree, Node)) & "."
+                             & Field_Taking
+                                 (Landin.Checking.Nominal_Of
+                                    (Types.all, Means), Taking)
+                             & "`"
+                        elsif Taking.Name /= Landin.Source.Names.No_Name
+                        then "[0670]: a struct is passed whole only where"
+                             & " its own type is taken; pass a `"
+                             & Type_Spelling
+                                 (Part_Descriptor (Taking),
+                                  Syn.Source_Of (Of_Tree))
+                             & "` value here"
                         else "[0670]: a struct is copied, passed,"
                              & " returned or discarded whole, and read"
                              & " by selecting a field"),
@@ -24632,16 +24891,19 @@ package body Landin.Stages.Checking is
                              constant Syn.Tree :=
                                Tree_For
                                  (Res.Source_Of (Meanings.all, Template));
+                           Evidence : Ada.Strings.Unbounded.Unbounded_String;
                            Route : constant String :=
                              Concept_Entry_Route
-                               (Of_Tree, Node, From, Wrote);
+                               (Of_Tree, Node, From, Wrote, Evidence);
+                           Through : constant String :=
+                             Ada.Strings.Unbounded.To_String (Evidence);
                         begin
                            Name_Bad.Report
                              (Item    => Name_Bad.Inaccessible_Name,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Anchor (Of_Tree, Node),
                               Message =>
-                                (if Route = ""
+                                (if Route = "" and then Through = ""
                                  then "this type's representation is"
                                       & " module-internal"
                                  else "`" & Spelled (Syn.Name (Of_Tree, Node))
@@ -24650,13 +24912,19 @@ package body Landin.Stages.Checking is
                                       & " representation is"
                                       & " module-internal"),
                               Note    =>
-                                (if Route = ""
-                                 then "D150: a private identity may cross"
-                                      & " a public signature without"
-                                      & " exposing its fields"
-                                 else "[1240]: a concept's entry is reached"
+                                (if Route /= ""
+                                 then "[1240]: a concept's entry is reached"
                                       & " through the operations its module"
-                                      & " makes public; call " & Route),
+                                      & " makes public; call " & Route
+                                 elsif Through /= ""
+                                 then "[1240]: no public routine of the"
+                                      & " concept's module forwards `"
+                                      & Spelled (Syn.Name (Of_Tree, Node))
+                                      & "`, and evidence reaches it: "
+                                      & Through
+                                 else "D150: a private identity may cross"
+                                      & " a public signature without"
+                                      & " exposing its fields"),
                               Related => Syn.Origin
                                 (Template_Tree.all,
                                  Res.Node_Of (Meanings.all, Template)),

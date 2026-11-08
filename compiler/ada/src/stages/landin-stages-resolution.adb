@@ -1743,7 +1743,11 @@ package body Landin.Stages.Resolution is
                                    & "` is configuration-only",
                         Note => "D202 [1530]: an option is available only in"
                                 & " fixed conditions, option defaults and"
-                                & " compiler assertions",
+                                & " compiler assertions; to choose a value"
+                                & " by `" & Spelled (Named) & "`, declare it"
+                                & " in each arm of a module-level `fixed if`"
+                                & " whose condition reads `"
+                                & Spelled (Named) & "`",
                         Into => Found);
                      return;
                   end if;

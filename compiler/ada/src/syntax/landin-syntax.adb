@@ -1009,6 +1009,23 @@ package body Landin.Syntax is
       function Projects_As_Fixed (Node : Node_Id) return Boolean;
       function Projects_As_Static_Argument (Node : Node_Id) return Boolean;
       function Projects_As_Type (Node : Node_Id) return Boolean;
+      function Projects_As_Name (Node : Node_Id) return Boolean;
+
+      --  A name, bare or qualified: `address`, `net.address`.  A type
+      --  position parses the qualified spelling as a Member_Selection over
+      --  a Type_Reference; an argument parses it as the same selection over
+      --  a Name_Reference, and resolution reads it as a module member.
+      function Projects_As_Name (Node : Node_Id) return Boolean is
+      begin
+         case Kind (Of_Tree, Node) is
+            when Name_Reference =>
+               return True;
+            when Member_Selection =>
+               return Projects_As_Name (Target_Of (Of_Tree, Node));
+            when others =>
+               return False;
+         end case;
+      end Projects_As_Name;
 
       function Projects_As_Fixed (Node : Node_Id) return Boolean is
       begin
@@ -1033,12 +1050,11 @@ package body Landin.Syntax is
          case Kind (Of_Tree, Node) is
             when Type_Reference_Kind =>
                return True;
-            when Name_Reference =>
-               return True;
+            when Name_Reference | Member_Selection =>
+               return Projects_As_Name (Node);
             when Call =>
                if Recovery_Of (Of_Tree, Node) /= No_Node
-                 or else Kind (Of_Tree, Callee_Of (Of_Tree, Node))
-                           /= Name_Reference
+                 or else not Projects_As_Name (Callee_Of (Of_Tree, Node))
                then
                   return False;
                end if;
