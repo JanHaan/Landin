@@ -281,7 +281,11 @@ package body Landin.Diagnostics.Explanations is
                & "e first and take the address of the name (D863).",
             when Catalogue.Type_Expected =>
                "A type position holds nothing the kernel enables as a ty"
-               & "pe [1790].",
+               & "pe [1790]. A parameter's mode written after its colon, `"
+               & "x: inout i32` as Swift writes it or `x: in out i32` as A"
+               & "da does, is refused once at the mode, naming `inout x: i"
+               & "32`, and the likely fix moves the mode before the name ["
+               & "1800].",
             when Catalogue.Expression_Expected =>
                "An expression was required and none begins here [1820]: "
                & "an operator with no operand, or a separator where a valu"
@@ -289,7 +293,11 @@ package body Landin.Diagnostics.Explanations is
                & ") else return`, is refused here too, because a recovery "
                & "that leaves holds its `return`, `fail`, `break` or `cont"
                & "inue` in a block [1030]: the likely fix writes `else beg"
-               & "in return end` (D870).",
+               & "in return end` (D870). A `[` that begins a line continue"
+               & "s the line above as an index when that line ends in a na"
+               & "me [1750], so `[]` there is an empty index, and the refu"
+               & "sal says the line was continued and that the name in par"
+               & "entheses, `(name)`, lets the `[` begin a value (D331).",
             when Catalogue.Token_Expected =>
                "A token the grammar requires is absent [1810]. The secon"
                & "d label points at the construct that required it. When a"
@@ -316,7 +324,17 @@ package body Landin.Diagnostics.Explanations is
                & ". `defer` and `undo` register a call, so an assignment a"
                & "fter either is refused as an assignment: write it in a r"
                & "outine of its own that takes the place as `inout`, and r"
-               & "egister a call to that [1100] [1110] (D873).",
+               & "egister a call to that [1100] [1110] (D873). Two text li"
+               & "terals side by side are not joined [0260], so the second"
+               & " is refused as an argument with no `,`, naming one liter"
+               & "al, a raw literal for text over several lines, or a buil"
+               & "der. `mut done = false` declares a binding, and the like"
+               & "ly fix writes `:=` rather than removing `mut`, which wou"
+               & "ld assign a name nobody declared [1790]. A variant case "
+               & "written as a call, `full(n: i32)`, is refused at the `(`"
+               & " naming `full: (...)`, and the likely fix writes the `:`"
+               & " [0680]. A list beginning a line after a name is refused"
+               & " as [1750]'s continued index, as L0102 says.",
             when Catalogue.Unclosed_Construct =>
                "A construct opened and its `end` never arrived [1800]. T"
                & "he second label shows where it opened; close it there.",

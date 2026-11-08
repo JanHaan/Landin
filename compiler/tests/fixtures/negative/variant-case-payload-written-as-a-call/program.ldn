@@ -1,0 +1,7 @@
+cell: type = struct
+    kind: variant full(n: i32) | empty end kind
+end cell
+
+public main: () -> (code: i32) =
+    code = 0
+end main

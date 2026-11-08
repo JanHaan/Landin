@@ -1,0 +1,11 @@
+error[L0103]: a variant case carries its payload after `:`, as `full: (...)`
+  --> ../tests/fixtures/negative/variant-case-payload-written-as-a-call/program.ldn:2:23
+  |
+2 |     kind: variant full(n: i32) | empty end kind
+  |                       ^
+  --> ../tests/fixtures/negative/variant-case-payload-written-as-a-call/program.ldn:2:19
+  |
+2 |     kind: variant full(n: i32) | empty end kind
+  |                   ^^^^ the case named here
+  = note: [0680]: a case is a name, followed by `:` and a parenthesized field list when it carries a payload
+  = help (guess): write `:` after `full`

@@ -1,0 +1,11 @@
+error[L0103]: `mut done` declares a binding, which takes its value after `:=`, not `=`
+  --> ../tests/fixtures/negative/mut-binding-written-with-equals-takes-colon-equals/program.ldn:2:14
+  |
+2 |     mut done = false
+  |              ^
+  --> ../tests/fixtures/negative/mut-binding-written-with-equals-takes-colon-equals/program.ldn:2:9
+  |
+2 |     mut done = false
+  |         ^^^^ declared here
+  = note: [1790]: `mut done := value` takes its type from the value, and `mut done: T = value` names it; `=` alone assigns a name already declared
+  = help (guess): write `:=` here

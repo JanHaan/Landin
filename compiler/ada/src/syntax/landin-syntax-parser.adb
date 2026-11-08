@@ -740,6 +740,9 @@ package body Landin.Syntax.Parser is
                Allow_Operands : Boolean := True) return Node_Id;
             function Parse_Assembly_Operand return Node_Id;
             function Previous return Landin.Source.Span;
+            --  Whether the token in hand is a text literal written right
+            --  after another, which [0260] never joins.
+            function Adjacent_Literals return Boolean;
 
             ------------------------------------------------------------
 
@@ -3318,6 +3321,12 @@ package body Landin.Syntax.Parser is
               is (if Index = 1 then Here
                   else Tok.Where (From, Index - 1));
 
+            function Adjacent_Literals return Boolean
+              is (Index > 1
+                  and then Peek in Tok.Text_Literal | Tok.Raw_Literal
+                  and then Tok.Kind (From, Index - 1)
+                    in Tok.Text_Literal | Tok.Raw_Literal);
+
             function To_List (Items : Slot_Vectors.Vector)
               return Slot_List
             is
@@ -4600,8 +4609,40 @@ package body Landin.Syntax.Parser is
                   if Peek = Tok.Left_Bracket then
                      declare
                         At_Open : constant Landin.Source.Span := Here;
-                        Index   : Node_Id;
+                        --  [1750]: a `[` that begins a line continues the
+                        --  line above as an index of the name it ends
+                        --  with.  An empty index or a list cannot be one,
+                        --  so a refusal there says what the line end did
+                        --  and how to begin a value with `[` (D331).
+                        Opened  : constant Tok.Token_Index := Index;
+                        Leading : constant Boolean := Begins_Line (Index);
+                        Empty   : constant Boolean :=
+                          Leading and then Ahead (1) = Tok.Right_Bracket;
+                        Ended   : constant Landin.Source.Span := Previous;
+                        Route   : constant String :=
+                          "[1750]: a line end ends no statement; to begin"
+                          & " a value with `[`, write the value that ends"
+                          & " the line above in parentheses, as `(name)`,"
+                          & " so nothing indexes it";
+                        Element : Node_Id;
                      begin
+                        if Empty then
+                           Advance;
+                           Complain
+                             (Item    => Syn.Expression_Expected,
+                              Where   => Join (At_Open, Here),
+                              Message => "this line begins with `[`, which"
+                                         & " continues the line above as an"
+                                         & " index, and an index is never"
+                                         & " empty",
+                              Note    => Route,
+                              Related => Ended,
+                              Because => "the line above ends with this");
+                           Advance;
+                           return Add
+                             (Error_Expression, At_Open,
+                              Join (At_Open, After_Previous), [Selected]);
+                        end if;
                         Count_Selector;
                         --  The index is an expression, read recursively,
                         --  and every walk after the parser recurses into
@@ -4614,7 +4655,7 @@ package body Landin.Syntax.Parser is
                         end if;
                         Depth := Depth + 1;
                         Advance;
-                        Index := Parse_Delimited_Expression;
+                        Element := Parse_Delimited_Expression;
 
                         if Peek in Tok.Dot_Dot | Tok.Dot_Dot_Less then
                            declare
@@ -4638,17 +4679,47 @@ package body Landin.Syntax.Parser is
                                    (Form, At_Open,
                                     Extent => Join
                                       (At_Open, After_Previous),
-                                    Children => [Selected, Index, Upper]);
+                                    Children => [Selected, Element, Upper]);
                               end if;
                               if not Truncated then
                                  Selected := Add
                                    (Form, At_Open,
                                     Extent => Join (At_Open, After_Previous),
-                                    Children => [Selected, Index, Upper]);
+                                    Children => [Selected, Element, Upper]);
                               end if;
                            end;
                         else
                            Depth := Depth - 1;
+                           if Leading and then Peek = Tok.Comma then
+                              --  `[1, 2]` beginning a line after a name:
+                              --  an array literal the line end did not
+                              --  separate from the name.
+                              Complain
+                                (Item    => Syn.Token_Expected,
+                                 Where   => Here,
+                                 Message => "this line begins with `[`,"
+                                            & " which continues the line"
+                                            & " above as an index, and an"
+                                            & " index is one expression",
+                                 Note    => Route,
+                                 Related => Ended,
+                                 Because => "the line above ends with this");
+                              --  Resume after the list's own `]`, so its
+                              --  other items are not read as statements.
+                              Prepare_Lookahead;
+                              if Lookahead (Opened).Closing > Natural (Index)
+                                and then Lookahead (Opened).Closing
+                                  < Natural (Wall)
+                              then
+                                 Index := Tok.Token_Index
+                                   (Lookahead (Opened).Closing);
+                                 Advance;
+                              end if;
+                              return Add
+                                (Error_Expression, At_Open,
+                                 Join (At_Open, After_Previous),
+                                 [Selected, Element]);
+                           end if;
                            if not Expect
                                     (Wanted  => Tok.Right_Bracket,
                                      Message => "an index is closed with `]`",
@@ -4660,7 +4731,7 @@ package body Landin.Syntax.Parser is
                               return Add
                                 (Element_Index, At_Open,
                                  Extent   => Join (At_Open, After_Previous),
-                                 Children => [Selected, Index]);
+                                 Children => [Selected, Element]);
                            end if;
 
                            if not Truncated then
@@ -4668,7 +4739,7 @@ package body Landin.Syntax.Parser is
                                 Add (Element_Index, At_Open,
                                      Extent   =>
                                        Join (At_Open, After_Previous),
-                                     Children => [Selected, Index]);
+                                     Children => [Selected, Element]);
                            end if;
                         end if;
                      end;
@@ -6398,8 +6469,15 @@ package body Landin.Syntax.Parser is
                   Scan    : Tok.Token_Index := Index + 3;
                   Nesting : Natural := 0;
                begin
-                  if Ahead (1) /= Tok.Identifier
-                    or else Ahead (2) /= Tok.Colon
+                  if Ahead (1) /= Tok.Identifier then
+                     return False;
+                  elsif Ahead (2) = Tok.Left_Paren then
+                     --  `full(n: i32)`, a payload written as a call.  No
+                     --  field is followed by `(`, so the part is still
+                     --  what was meant, and the case names the `:` it
+                     --  lacks, as a later case does.
+                     Scan := Index + 2;
+                  elsif Ahead (2) /= Tok.Colon
                     or else Ahead (3) /= Tok.Left_Paren
                   then
                      return False;
@@ -6477,8 +6555,41 @@ package body Landin.Syntax.Parser is
                      begin
                         Last_At := At_Case;
 
-                        if Peek = Tok.Colon then
-                           Advance;
+                        if Peek in Tok.Colon | Tok.Left_Paren then
+                           if Peek = Tok.Colon then
+                              Advance;
+                           else
+                              --  [0680]: a payload follows the case's
+                              --  `:`; written as a call it is read as one
+                              --  with the `:` it lacks.
+                              declare
+                                 Spelled : constant String :=
+                                   Landin.Source.Names.Spelling
+                                     (Names, Case_Name);
+                              begin
+                                 Complain
+                                   (Item    => Syn.Token_Expected,
+                                    Where   => Here,
+                                    Message => "a variant case carries its"
+                                               & " payload after `:`, as `"
+                                               & Spelled & ": (...)`",
+                                    Note    => "[0680]: a case is a name,"
+                                               & " followed by `:` and a"
+                                               & " parenthesized field"
+                                               & " list when it carries a"
+                                               & " payload",
+                                    Related => At_Case,
+                                    Because => "the case named here",
+                                    Fixes   =>
+                                      [1 => Landin.Diagnostics.Fixes
+                                              .Insert_Token
+                                                (Origin_Of,
+                                                 (Here.First, Here.First),
+                                                 ": ", ":",
+                                                 Landin.Diagnostics.Likely,
+                                                 Neighbour => Spelled)]);
+                              end;
+                           end if;
                            if Expect
                                 (Wanted  => Tok.Left_Paren,
                                  Message => "a variant payload opens with"
@@ -6901,6 +7012,38 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Colon_Equal then
                   Advance;
                   Value := Parse_Expression;
+               elsif Mutable and then Peek = Tok.Equal and then Later.Is_Empty
+                 and then Named /= Landin.Source.Names.No_Name
+                 and then Pre.Begins_Expression (Ahead (1))
+               then
+                  --  `mut done = false`: `mut` says a name is declared,
+                  --  and a declaration that names no type takes its value
+                  --  after `:=`.  Removing `mut` would mend the line into
+                  --  an assignment to a name nobody declared.
+                  declare
+                     Spelled : constant String :=
+                       Landin.Source.Names.Spelling (Names, Named);
+                  begin
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => Here,
+                        Message => "`mut " & Spelled & "` declares a"
+                                   & " binding, which takes its value after"
+                                   & " `:=`, not `=`",
+                        Note    => "[1790]: `mut " & Spelled & " := value`"
+                                   & " takes its type from the value, and"
+                                   & " `mut " & Spelled & ": T = value`"
+                                   & " names it; `=` alone assigns a name"
+                                   & " already declared",
+                        Related => At_Name,
+                        Because => "declared here",
+                        Fixes   =>
+                          [1 => Landin.Diagnostics.Fixes.Insert_Token
+                                  (Origin_Of, Here, ":=", ":=",
+                                   Landin.Diagnostics.Likely)]);
+                  end;
+                  Advance;
+                  Value := Parse_Expression;
                elsif Expect
                        (Wanted  => Tok.Colon,
                         Message => "a binding names its type after `:`",
@@ -7287,6 +7430,83 @@ package body Landin.Syntax.Parser is
                         Named    => Named);
                   end if;
                end if;
+               --  `x: inout i32`, as Swift writes a mode, or `x: in out T`,
+               --  as Ada does: the mode was written after the colon, and
+               --  [1800] writes it before the name.  Said once at the mode,
+               --  which is read as written, so the type after it is not
+               --  refused again.
+               if not Caller and then Convention = Implicit_In
+                 and then Named /= Landin.Source.Names.No_Name
+                 and then Index > 1
+                 and then Tok.Kind (From, Index - 1) = Tok.Colon
+                 and then Peek in Tok.Kw_In | Tok.Kw_Inout | Tok.Kw_Sink
+               then
+                  declare
+                     Ada_Form : constant Boolean :=
+                       Peek = Tok.Kw_In
+                       and then Ahead (1) = Tok.Identifier
+                       and then Named_Ahead (1) = Out_Id;
+                     Written  : constant Tok.Token_Kind :=
+                       (if Ada_Form then Tok.Kw_Inout else Peek);
+                     Word     : constant String := Tok.Spelling (Written);
+                     At_Mode  : constant Landin.Source.Span :=
+                       (if Ada_Form
+                        then Join (Here, Tok.Where (From, Index + 1))
+                        else Here);
+                     After    : constant Tok.Token_Index :=
+                       (if Ada_Form then 2 else 1);
+                     Simple   : constant Boolean :=
+                       Ahead (After) = Tok.Identifier
+                       and then Ahead (After + 1)
+                         in Tok.Comma | Tok.Right_Paren;
+                     function Spelled return String;
+                     --  The names as written, shared ones included.
+                     function Spelled return String is
+                        Result : Unbounded.Unbounded_String :=
+                          Unbounded.To_Unbounded_String
+                            (Landin.Source.Names.Spelling (Names, Named));
+                     begin
+                        for Each of Later loop
+                           Unbounded.Append
+                             (Result, ", " & Landin.Source.Names.Spelling
+                                (Names, Each.Named));
+                        end loop;
+                        return Unbounded.To_String (Result);
+                     end Spelled;
+                     Example  : constant String :=
+                       Word & " " & Spelled
+                       & (if Simple
+                          then ": " & Landin.Source.Names.Spelling
+                                 (Names, Named_Ahead (After))
+                          else "");
+                  begin
+                     Complain
+                       (Item    => Syn.Type_Expected,
+                        Where   => At_Mode,
+                        Message => "`" & Word & "` is written before the"
+                                   & " parameter's name, as `" & Example
+                                   & "`",
+                        Note    => "[1800]: a parameter's mode precedes"
+                                   & " `name: type`",
+                        Related => At_Name,
+                        Because => "declared here",
+                        Fixes   =>
+                          [1 => Landin.Diagnostics.Fixes.Move_Token
+                                  (Origin_Of, Join (At_Name, At_Mode),
+                                   Word & " " & Spelled & ":", Word,
+                                   Landin.Diagnostics.Likely)]);
+                     Convention :=
+                       (case Written is
+                           when Tok.Kw_Inout => Inout_Convention,
+                           when Tok.Kw_Sink => Sink_Convention,
+                           when others => Explicit_In);
+                     Advance;
+                     if Ada_Form then
+                        Advance;
+                     end if;
+                  end;
+               end if;
+
                --  Insert a missing separator locally. Reading this type
                --  owns its nested delimiters; a forward search for another
                --  colon would consume a different parameter.
@@ -12367,13 +12587,34 @@ package body Landin.Syntax.Parser is
                   end loop;
                end if;
 
-               if not Expect
-                        (Wanted  => Tok.Right_Paren,
-                         Message => "a call's arguments are never closed",
-                         Note    => "[1820]: a call is what it calls and its"
-                                    & " arguments between `(` and `)`",
-                         Related => Starts,
-                         Because => "the value called")
+               --  `f("abc" "def")`: a second literal where the list
+               --  wanted `,` or `)` was meant to continue the first, as
+               --  C and Python join them.  Landin does not, and saying so
+               --  at the second literal is what tells the writer how to
+               --  spell long text.
+               if Adjacent_Literals then
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => Here,
+                     Message => "two text literals side by side are not"
+                                & " joined, so this is a second argument"
+                                & " with no `,` before it",
+                     Note    => "[0260]: write the text as one literal, or"
+                                & " as a raw literal [0280] when it spans"
+                                & " lines; to build text from pieces,"
+                                & " append each to a builder with"
+                                & " `text.append`",
+                     Related => Previous,
+                     Because => "the literal before it");
+               end if;
+               if Adjacent_Literals
+                 or else not Expect
+                   (Wanted  => Tok.Right_Paren,
+                    Message => "a call's arguments are never closed",
+                    Note    => "[1820]: a call is what it calls and its"
+                               & " arguments between `(` and `)`",
+                    Related => Starts,
+                    Because => "the value called")
                then
                   --  The `)` that closes this `(` is known before the list
                   --  is read; a list that went wrong resumes there, so the

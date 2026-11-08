@@ -3231,9 +3231,15 @@ UNSTATED_BY_GRAMMAR = {"L0109"}
 #  derives `(r)` as the `if`'s other branch.  Any other call-site `else`
 #  there divides the `if`, so a value followed by more of the arm is
 #  refused, while the grammar derives the whole as the call's recovery.
+#
+#  [1750]: a line end never ends a statement where the next token can
+#  continue it, so a `[` that begins a line after a name indexes it, and an
+#  empty `[]` there is refused, while the grammar derives `[]` as a value of
+#  its own on that line.
 STATED_IN_PROSE = {
     "parenthesised-name-after-a-call-else-is-its-recovery": "[1820]",
     "recovery-value-before-more-of-an-if-arm": "[1820]",
+    "line-leading-bracket-continues-as-an-index": "[1750]",
 }
 
 

@@ -1,0 +1,10 @@
+class: negative
+summary: [1800] writes a parameter's mode before its name, so `r: inout rec`, as Swift writes it, is refused once at the mode naming `inout r: rec`, with the move offered, and the named type after it is not refused again
+program: program.ldn
+codes: L0101
+fixed: program.fixed
+constructs: 0900, 1800
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/parameter-mode-after-the-colon-goes-first/program.ldn
+status: 1

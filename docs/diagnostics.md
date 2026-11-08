@@ -380,7 +380,10 @@ _: u32 = 1
 
 ### L0101
 
-A type position holds nothing the kernel enables as a type [1790].
+A type position holds nothing the kernel enables as a type [1790]. A
+parameter's mode written after its colon, `x: inout i32` as Swift writes it or
+`x: in out i32` as Ada does, is refused once at the mode, naming
+`inout x: i32`, and the likely fix moves the mode before the name [1800].
 
 ```landin
 empty: type = ()
@@ -392,7 +395,11 @@ An expression was required and none begins here [1820]: an operator with no
 operand, or a separator where a value belongs. An exit written as a call's
 `else` value, `f() else return`, is refused here too, because a recovery that
 leaves holds its `return`, `fail`, `break` or `continue` in a block [1030]:
-the likely fix writes `else begin return end` (D870).
+the likely fix writes `else begin return end` (D870). A `[` that begins a
+line continues the line above as an index when that line ends in a name
+[1750], so `[]` there is an empty index, and the refusal says the line was
+continued and that the name in parentheses, `(name)`, lets the `[` begin a
+value (D331).
 
 ### L0103
 
@@ -415,7 +422,14 @@ is still closed by its own `end`; so are named returns written without their
 parentheses, `-> code: i32` (D861). `defer` and `undo` register a call, so an
 assignment after either is refused as an assignment: write it in a routine of
 its own that takes the place as `inout`, and register a call to that
-[1100] [1110] (D873).
+[1100] [1110] (D873). Two text literals side by side are not joined [0260],
+so the second is refused as an argument with no `,`, naming one literal, a
+raw literal for text over several lines, or a builder. `mut done = false`
+declares a binding, and the likely fix writes `:=` rather than removing
+`mut`, which would assign a name nobody declared [1790]. A variant case
+written as a call, `full(n: i32)`, is refused at the `(` naming
+`full: (...)`, and the likely fix writes the `:` [0680]. A list beginning a
+line after a name is refused as [1750]'s continued index, as L0102 says.
 
 ```landin
 extern(c) bad: (...) -> none
