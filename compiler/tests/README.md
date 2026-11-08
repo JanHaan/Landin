@@ -1526,6 +1526,13 @@ the hosted fixture runner. Its `fixture.json` supplies the explicitly named
 `firmware/derived-driver` prototype-matrix row; `check.py` checks the source/
 mapping paths and mandatory runner connection. Native Linux documents/tooling
 acceptance runs its QEMU evidence through compiler-owned firmware.
+Prototype 5's firmware counterpart lives in
+[`counterpart/`](counterpart/DERIVATION.md) the same way, as the
+`firmware/derived-counterpart` row. Both are entries of `check.py`'s
+`FIRMWARE_DERIVATIONS`, which names each record, its input and file fields
+and the `environments/cortex-m/run.py` call that makes its lane mandatory;
+a new firmware derivation is registered there, and its mapping is added to
+`LIVE_DOCS`.
 The shared `runtime/r690-recovery-loop-context` fixture separately checks
 inferred recovery break/continue and cleanup on both hosted targets and Cortex.
 

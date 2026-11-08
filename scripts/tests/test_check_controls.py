@@ -2260,6 +2260,34 @@ class Registers(unittest.TestCase):
             said = [why for _, _, why in checker.check_catalogue(True)]
         self.assertTrue(said)
 
+    def test_a_target_no_applicability_row_lists_names_the_register(self):
+        #  xtensa is a described target no prototype applies to,
+        #  and the refusal used to call it unknown without saying where
+        #  the targets a fixture may name come from.
+        from check_controls import tree
+        meta = "compiler/tests/fixtures/positive/any-slice-dispatch/fixture.meta"
+        with tree(copied=REGISTERS) as root:
+            target = root / meta
+            text = target.read_text()
+            self.assertIn("targets: ", text)
+            target.write_text(text.replace("targets: ",
+                                           "targets: xtensa, nonesuch, ", 1))
+            said = [(where, why) for where, _, why
+                    in checker.check_coverage_registers(True)]
+        described = [why for where, why in said
+                     if where == meta and "target xtensa" in why]
+        self.assertEqual(len(described), 1, said)
+        self.assertIn("names target xtensa, which no row of"
+                      " compiler/tests/registers.md's \"Target applicability"
+                      " coverage\" table lists", described[0])
+        self.assertNotIn("unknown", described[0])
+        unknown = [why for where, why in said
+                   if where == meta and "nonesuch" in why]
+        self.assertEqual(len(unknown), 1, said)
+        self.assertIn("names unknown target nonesuch: it is no target refine"
+                      " describes", unknown[0])
+        self.assertIn("\"Target applicability coverage\"", unknown[0])
+
     def test_a_stale_construct_inventory_is_reported(self):
         #  The matrix is generated; a hand edit is the drift this exists
         #  for, and regenerating is the only way to change it.

@@ -318,6 +318,7 @@ fixture's own record rather than asserted here.
 | `negative/any-frame-origin-escape` | P4 | W6 | erased state retains pointee origin |
 | `runtime/derived-server-two-process` | P5 | V1, V4, V7 | the complete derived server in a process of its own, started through `io.programs` and asked two requests by a client in another; the same source over the blocking provider answers one at a time and SIGTERM's default disposition ends it, and over the event provider answers the second first and its signal waiter stops it cleanly |
 | `runtime/derived-server-fake-turns` | P5 | V1, V2, V3, V4, V5, V6, V7, V8, V9, V14, V15 | the complete derived server's stopping routine and the prototype's client in one process over the fake network and signals on a round of turns: two requests in flight, the second answered first, and SIGTERM read as an event stopping the server cleanly |
+| `firmware/derived-counterpart` | P5 | V1, V4, V5, V6, V8, V9, V10, V11, V13, V15 | complete firmware counterpart and explicit adaptations in `compiler/tests/counterpart/DERIVATION.md`; on QEMU's micro:bit two fibres over the library's round answer one request at a time in arrival order, the trace held to D448's oracle with failing controls |
 
 ## Target applicability coverage
 
@@ -332,3 +333,4 @@ model used before the Cortex-M backend existed.
 | `prototype-2` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |
 | `prototype-3` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, rv32, synthetic-32 |
 | `prototype-4` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |
+| `prototype-5` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0 |

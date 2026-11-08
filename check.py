@@ -103,12 +103,11 @@ def absent(paths):
 #  docs/site/render_html.py's DOCS, its key in NAV_GROUPS and its letter in
 #  FINDING_LETTERS (check_site_documents, check_finding_letters); a path in
 #  .github/workflows/pages.yml (check_site_documents); a `Current with
-#  specification` line (check_specification_version).  By hand, and held
-#  by nothing: the derivation register in compiler/tests/registers.md
-#  names a prototype by the number this table gives, its target
-#  applicability register has a scope for prototypes 1 to 4 only, which
-#  `wanted_scopes` below transcribes, and AGENTS.md's prototype coverage
-#  describes each in prose.
+#  specification` line (check_specification_version); at least one row in
+#  compiler/tests/registers.md's derivation register, which names a
+#  prototype by the number this table gives, and a scope row in its target
+#  applicability register (check_coverage_registers).  By hand, and held by
+#  nothing: AGENTS.md's prototype coverage describes each in prose.
 PROTOTYPE_FINDINGS = {
     "X": "prototype-1-driver.md",
     "Y": "prototype-2-parser.md",
@@ -139,6 +138,7 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "core/README.md",
                      "devices/README.md",
                      "compiler/tests/driver/DERIVATION.md",
+                     "compiler/tests/counterpart/DERIVATION.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",
                      REGISTERS,
@@ -5789,11 +5789,38 @@ def cortex_probe_problems(titles):
     return problems
 
 
+#  Every firmware derivation: a prototype derived as a complete firmware
+#  image, which the Cortex-M lane builds and runs outside the hosted harness
+#  and which is therefore no fixture.  Each names its record, the record's
+#  fields that are the derivation's Landin inputs, in the order the
+#  derivation register's inputs column shows them, the further fields that
+#  must name files here (its mapping and its runner), the call in
+#  environments/cortex-m/run.py that makes its lane mandatory, and the word
+#  a refusal calls it by.  This table is where one is registered: the
+#  target claims, the derivation register's records, its inputs column, its
+#  oracle routines and the required-file and mandatory-lane rules all read
+#  it, so a derivation added here is held exactly as the first one is.
+FirmwareDerivation = collections.namedtuple(
+    "FirmwareDerivation", ("name", "record", "inputs", "files", "lane", "what"))
+FIRMWARE_DERIVATIONS = (
+    FirmwareDerivation(
+        "firmware/derived-driver", "compiler/tests/driver/fixture.json",
+        ("source", "driver", "protocol", "layout"), ("mapping", "runner"),
+        "driver_execute(self, refine)", "driver"),
+    FirmwareDerivation(
+        "firmware/derived-counterpart",
+        "compiler/tests/counterpart/fixture.json",
+        ("source", "board", "tick", "protocol"), ("mapping", "runner"),
+        "counterpart_execute(self, refine)", "counterpart"),
+)
+FIRMWARE_BY_NAME = {one.name: one for one in FIRMWARE_DERIVATIONS}
+
+
 #  Cached because the prototype derivation register reads it once per
 #  derivation row as well as once per construct, and each call rescans
 #  every fixture record.  Callers only read
-#  the result; `prototype_evidence_records` is what adds the driver row, and
-#  it works from its own copy of `fixture_records`.
+#  the result; `prototype_evidence_records` is what adds the firmware rows,
+#  and it works from its own copy of `fixture_records`.
 @lru_cache(maxsize=1)
 def fixture_target_claims():
     """The strongest claim each product target makes about each fixture.
@@ -5803,7 +5830,7 @@ def fixture_target_claims():
     Darwin's parity manifest swaps four fixtures for native counterparts,
     changes some source verdicts and holds one as a platform limit; the
     Cortex corpus executes, refuses or restricts every runtime/ABI fixture;
-    and the firmware driver runs outside the hosted harness altogether.
+    and each firmware derivation runs outside the hosted harness altogether.
     Reading metadata alone would overstate one target and understate
     another, so this reads all four.  A claim is still a fixture's claim:
     `executed` beats `compiled` beats `refused`, and none is a measurement.
@@ -5827,14 +5854,15 @@ def fixture_target_claims():
     """
     parity_path = os.path.join(ROOT, "compiler/tests/darwin/parity.json")
     corpus_path = os.path.join(ROOT, "compiler/tests/cortex-m/corpus.json")
-    driver_path = os.path.join(ROOT, "compiler/tests/driver/fixture.json")
+    firmware_paths = [os.path.join(ROOT, one.record)
+                      for one in FIRMWARE_DERIVATIONS]
     if not all(os.path.exists(path)
-               for path in (parity_path, corpus_path, driver_path,
-                            os.path.join(ROOT, ARM64_LINUX_PARITY))):
+               for path in [parity_path, corpus_path,
+                            os.path.join(ROOT, ARM64_LINUX_PARITY)]
+               + firmware_paths):
         return None
     parity = json.loads(read_file(parity_path, encoding="utf-8"))
     corpus = json.loads(read_file(corpus_path, encoding="utf-8"))["fixtures"]
-    driver = json.loads(read_file(driver_path, encoding="utf-8"))
     best = {}
 
     def claim(fixture, target, what):
@@ -5888,8 +5916,9 @@ def fixture_target_claims():
                       "compiled" if status == "0" else "refused")
             if "cortex-m0" in targets and selects_cortex_target(fields):
                 claim(name, "cortex-m0", verdict)
-    if driver.get("constructs"):
-        claim("firmware/derived-driver", "cortex-m0", "executed")
+    for one, path in zip(FIRMWARE_DERIVATIONS, firmware_paths):
+        if json.loads(read_file(path, encoding="utf-8")).get("constructs"):
+            claim(one.name, "cortex-m0", "executed")
     return best
 
 
@@ -5898,8 +5927,8 @@ def construct_target_evidence():
 
     This is `fixture_target_claims` folded over what each fixture says it is
     about, plus the firmware lane's own probes, which are built and run on
-    Cortex-M outside the corpus exactly as the driver is and attribute
-    constructs without being fixtures.
+    Cortex-M outside the corpus exactly as the firmware derivations are and
+    attribute constructs without being fixtures.
     """
     claims = fixture_target_claims()
     if claims is None:
@@ -6420,7 +6449,8 @@ def prototype_row_evidence(name, fields):
     kind = name.split("/")[0]
     inputs, outputs = [], []
     if kind == "firmware":
-        for field in ("source", "driver", "protocol", "layout"):
+        known = FIRMWARE_BY_NAME.get(name)
+        for field in (known.inputs if known else ()):
             if fields.get(field):
                 inputs.append(fields[field])
         oracles = [one.strip() for one in
@@ -6519,9 +6549,10 @@ def prototype_result_problems(prototypes, records):
     nothing can refuse rots the same way.  So each row is held to having
     inputs, an oracle and at least one product-target verdict drawn from a
     retained record, to not claiming a product target no record places, and
-    to naming an oracle file that is here.  The firmware driver's oracle is
-    its runner's own assertion groups, so each named group must be a routine
-    that runner defines: a renamed oracle fails rather than going unnoticed.
+    to naming an oracle file that is here.  A firmware derivation's oracle
+    is its runner's own assertion groups, so each named group must be a
+    routine that runner defines: a renamed oracle fails rather than going
+    unnoticed.
     """
     out = []
     claims = fixture_target_claims()
@@ -6541,8 +6572,9 @@ def prototype_result_problems(prototypes, records):
         if "MISSING" in outputs:
             out.append((REGISTERS, line,
                         "derivation %s names an absent oracle file" % name))
-        #  Every derivation but the firmware driver is one Landin program,
-        #  and the driver's own sources are checked field by field below.
+        #  Every derivation but a firmware one is one Landin program, and a
+        #  firmware derivation's sources are checked field by field, from
+        #  FIRMWARE_DERIVATIONS, in check_coverage_registers.
         if name.split("/")[0] != "firmware" and not fields.get("program"):
             out.append((REGISTERS, line,
                         "derivation %s names no program" % name))
@@ -6686,17 +6718,55 @@ def hosted_parity_problems(applicability, static_rows, fixtures):
 
 
 def prototype_evidence_records():
-    """The firmware driver has an external CPU/peripheral execution runner.
+    """The fixtures, and each firmware derivation's explicit record.
 
-    It is not a hosted fixture and must never enter that harness implicitly.
-    The one explicit record joins the same generated prototype reading copy.
+    A firmware derivation has an external CPU/peripheral execution runner;
+    it is not a hosted fixture and must never enter that harness
+    implicitly.  Each record FIRMWARE_DERIVATIONS names joins the same
+    generated prototype reading copy.  A record that is not here is left
+    out, and the coverage check names it.
     """
     records = dict(fixture_records())
-    path = "compiler/tests/driver/fixture.json"
-    with io.open(os.path.join(ROOT, path), encoding="utf-8") as stream:
-        fields = json.load(stream)
-    records["firmware/derived-driver"] = (path, fields)
+    for one in FIRMWARE_DERIVATIONS:
+        path = os.path.join(ROOT, one.record)
+        if not os.path.exists(path):
+            continue
+        with io.open(path, encoding="utf-8") as stream:
+            fields = json.load(stream)
+        records[one.name] = (one.record, fields)
     return records
+
+
+def firmware_derivation_problems(records, mandatory):
+    """Each firmware derivation's record, files and mandatory lane are here.
+
+    `records` is `prototype_evidence_records`' answer and `mandatory` the
+    text of environments/cortex-m/run.py.  A derivation whose record is
+    absent, whose inputs, mapping or runner name no file here, or whose
+    lane run.py does not call, is evidence no gate produces; one whose
+    mapping is no live document is prose no check reads.
+    """
+    out = []
+    for one in FIRMWARE_DERIVATIONS:
+        if one.name not in records:
+            out.append((REGISTERS, 1, "%s derivation's record %s is not here"
+                        % (one.what, one.record)))
+            continue
+        fields = records[one.name][1]
+        for field in one.inputs + one.files:
+            if not os.path.isfile(os.path.join(ROOT, fields.get(field, ""))):
+                out.append((REGISTERS, 1,
+                            "%s derivation lacks %s" % (one.what, field)))
+        #  A mapping outside LIVE_DOCS escapes every live-document check:
+        #  the counterpart's first cited a roadmap item unrefused.
+        if fields.get("mapping") and fields["mapping"] not in LIVE_DOCS:
+            out.append((REGISTERS, 1,
+                        "%s derivation's mapping %s is not in check.py's"
+                        " LIVE_DOCS" % (one.what, fields["mapping"])))
+        if one.lane not in mandatory:
+            out.append((REGISTERS, 1, "%s evidence is not in the mandatory lane"
+                        % one.what))
+    return out
 
 
 def coverage_dumps():
@@ -7002,7 +7072,7 @@ def check_coverage_registers(full_run):
                 out.append((REGISTERS, line,
                             "prototype derivation names missing fixture %s"
                             % fixture))
-            elif (fixture != "firmware/derived-driver" and
+            elif (fixture not in FIRMWARE_BY_NAME and
                   fixture.split("/", 1)[0] not in ("runtime", "abi", "negative")):
                 out.append((REGISTERS, line,
                             "%s is not a complete or negative derivation"
@@ -7031,19 +7101,24 @@ def check_coverage_registers(full_run):
                     out.append((REGISTERS, line,
                                 "%s is not a finding in %s" %
                                 (finding, source)))
+        #  A prototype PROTOTYPE_FINDINGS registers, and a firmware
+        #  derivation FIRMWARE_DERIVATIONS registers, each needs a row.
+        for number in sorted(set(PROTOTYPE_SOURCES)
+                             - {number for _, number in seen}):
+            out.append((REGISTERS, 1,
+                        "prototype %s has no derivation row" % number))
+        for one in FIRMWARE_DERIVATIONS:
+            if not any(fixture == one.name for fixture, _ in seen):
+                out.append((REGISTERS, 1,
+                            "%s has no derivation row" % one.name))
         #  Prototype coverage: the same rows also carry inputs, outputs and
         #  a per-target result, all three derived rather than asserted.
         out += prototype_result_problems(prototypes, fixtures)
         out += prototype_scope_problems(prototypes, scopes, fixtures)
 
-    firmware = fixtures["firmware/derived-driver"][1]
-    for field in ("source", "protocol", "layout", "driver", "mapping", "runner"):
-        if not os.path.isfile(os.path.join(ROOT, firmware.get(field, ""))):
-            out.append((REGISTERS, 1, "driver derivation lacks " + field))
     mandatory = read_file(os.path.join(ROOT, "environments/cortex-m/run.py"),
                         encoding="utf-8")
-    if "driver_execute(self, refine)" not in mandatory:
-        out.append((REGISTERS, 1, "driver evidence is not in the mandatory lane"))
+    out += firmware_derivation_problems(fixtures, mandatory)
     if "evidence_execute(self, refine)" not in mandatory:
         out.append((REGISTERS, 1, "freestanding closure evidence is not in the mandatory lane"))
     for evidence in ("environments/cortex-m/evidence.py",
@@ -7061,8 +7136,7 @@ def check_coverage_registers(full_run):
     if scopes is None:
         out.append((REGISTERS, 1, "the target applicability register is absent"))
     else:
-        wanted_scopes = {"prototype-1", "prototype-2", "prototype-3",
-                         "prototype-4"}
+        wanted_scopes = {"prototype-%s" % n for n in PROTOTYPE_SOURCES}
         got_scopes = set()
         for line, row in scopes:
             scope = row["Scope"].strip("`")
@@ -7090,11 +7164,25 @@ def check_coverage_registers(full_run):
                 out.append((relative, 1,
                             "every fixture must name its targets"))
                 continue
+            #  A fixture may name only a target some applicability row
+            #  lists, so a described target no prototype applies to, such
+            #  as xtensa, is refused too, and the refusal names the table.
             for target in (one.strip() for one in targets.split(",")):
-                if target not in allowed:
-                    out.append((relative, 1,
-                                "%s names unknown target %s" %
-                                (name, target)))
+                if target in allowed:
+                    continue
+                if target in known_targets:
+                    out.append((relative, 1, (
+                        "%s names target %s, which no row of %s's \"Target "
+                        "applicability coverage\" table lists; a fixture may "
+                        "name only a target a row there lists, and a row "
+                        "lists one only when a prototype applies to it")
+                        % (name, target, REGISTERS)))
+                else:
+                    out.append((relative, 1, (
+                        "%s names unknown target %s: it is no target refine "
+                        "describes, and a fixture may name only one that a "
+                        "row of %s's \"Target applicability coverage\" "
+                        "table lists") % (name, target, REGISTERS)))
 
     dumps = coverage_dumps()
     if dumps is not None:
