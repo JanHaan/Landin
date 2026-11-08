@@ -409,6 +409,14 @@ class GeneratedReference(unittest.TestCase):
                       'data-source-href="../core/failure"', page)
         self.assertNotIn('blob/main/core/', page)
 
+    def test_tour_library_links_reach_module_and_subsection(self):
+        tour = (self.destination / 'tour.html').read_text()
+        self.assertIn('href="library.html#core-vec"', tour)
+        self.assertIn('id="core-vec"', (self.destination / 'library.html').read_text())
+        self.assertIn('href="library-core-io.html#the-buffered-writer"', tour)
+        self.assertIn('id="the-buffered-writer"',
+                      (self.destination / 'library-core-io.html').read_text())
+
     def test_front_page_reaches_installation(self):
         # The front page once linked no installation steps.
         anchor = render_html.INSTALL_ANCHOR

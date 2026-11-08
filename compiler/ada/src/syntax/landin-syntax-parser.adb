@@ -257,8 +257,9 @@ package body Landin.Syntax.Parser is
             --  to the end of the file stops there, as it would at the file's
             --  own end.  Taking the wall as a closer clears it.
             Past_Wall : Boolean := False;
-            --  A recursive resource refusal ends this parse. Continuing to
-            --  interpret its unread closers produces only consequences.
+            --  A recursive resource refusal unwinds the current body.
+            --  Its known function closer resumes parsing declarations;
+            --  without one, the refusal ends the parse.
             Nesting_Refused : Boolean := False;
 
             --  Heap-backed, per-parse facts about the immutable token stream.
@@ -2374,8 +2375,8 @@ package body Landin.Syntax.Parser is
             begin
                if Wanted in Tok.Kw_Then | Tok.Kw_Do
                  and then Here_Begins_Line
-                 and then Peek not in Tok.End_Of_Input | Tok.Kw_End
-                   | Tok.Kw_Else | Tok.Kw_Elsif | Tok.Kw_Complete
+                 and then (Pre.Begins_Statement (Peek)
+                           or else Pre.Begins_Expression (Peek))
                then
                   return [1 => Landin.Diagnostics.Fixes.Insert_Token
                     (Origin_Of, After_Previous,
@@ -8074,6 +8075,10 @@ package body Landin.Syntax.Parser is
                         Wall := Tok.Token_Index (Own.Fence);
                      end if;
                      Body_Node := Parse_Body (Context);
+                     if Nesting_Refused and then Own.Fence /= 0 then
+                        Index := Tok.Token_Index (Own.Fence);
+                        Nesting_Refused := False;
+                     end if;
                      Wall := Saved_Wall;
                      Past_Wall := False;
                      Active_Frame := (others => <>);

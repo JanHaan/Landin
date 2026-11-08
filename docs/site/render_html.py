@@ -1768,7 +1768,10 @@ class GuideTargets:
             return href
         target = self.pages.get(source)
         if source == "docs/library.md" and parts.fragment:
-            target = LIBRARY_SECTIONS.get(unquote(parts.fragment), target)
+            destination = LIBRARY_SECTIONS.get(unquote(parts.fragment))
+            if destination:
+                target, fragment = destination
+                return urlunsplit(("", "", target, parts.query, fragment))
         if target is None:
             target = REPO + "/blob/main/" + quote(source, safe="/")
         return urlunsplit(("", "", target, parts.query, parts.fragment))
@@ -3562,9 +3565,13 @@ def main(argv):
     _, overviews = library.overviews(source, modules)
     LIBRARY_SECTIONS.clear()
     for module, (overview, _, _) in overviews.items():
-        LIBRARY_SECTIONS[slug(module)] = library.page_name(module)
+        # GitHub drops slashes in a Markdown heading's fragment; the index
+        # uses hyphens between module components instead.
+        index_anchor = module.replace("/", "-")
+        LIBRARY_SECTIONS[module.replace("/", "").lower()] = ("library.html", index_anchor)
+        LIBRARY_SECTIONS[slug(module)] = ("library.html", index_anchor)
         for heading in re.findall(r"^### (.+)$", overview, re.M):
-            LIBRARY_SECTIONS[slug(heading)] = library.page_name(module)
+            LIBRARY_SECTIONS[slug(heading)] = (library.page_name(module), slug(heading))
     counts = {}
     dangling = []
 

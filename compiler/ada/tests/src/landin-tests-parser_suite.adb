@@ -3753,6 +3753,14 @@ package body Landin.Tests.Parser_Suite is
          Indexed (Landin.Syntax.Parser.Nesting_Limit + 1, "x[0 .. "),
          "L0111", "f,g");
       Check ("recovery contributes to nesting", Recovered, "L0111", "f,g");
+      Check ("independent nesting refusals",
+         Nested (Landin.Syntax.Parser.Nesting_Limit + 1) & " "
+         & Nested (Landin.Syntax.Parser.Nesting_Limit + 1),
+         "L0111,L0111", "f,g,f,g");
+      Check ("a later body retains its report",
+         Nested (Landin.Syntax.Parser.Nesting_Limit + 1)
+         & " h: () -> (r: i32) = r = end h",
+         "L0111,L0102", "f,g,h");
       Check ("recovery restores depth",
          "f: () -> (r: i32) = call(call(0) else 1) else call(2) "
          & "end f g: () -> (r: i32) = call(0) end g", "", "f,g");
@@ -4941,10 +4949,46 @@ package body Landin.Tests.Parser_Suite is
                "the repaired whole routine parses");
          end;
       end Check;
+
+      procedure Refused (Head, Stray, Word, Closer : String);
+
+      procedure Refused (Head, Stray, Word, Closer : String) is
+         Text : constant String := "f: () -> none =" & ASCII.LF
+           & Head & ASCII.LF & Stray & " " & Word & ASCII.LF
+           & "return" & ASCII.LF & Closer & ASCII.LF & "end f";
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("stray-before-keyword", Text);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            pragma Unreferenced (Parsed);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 1,
+               "a stray closer before the keyword remains a refusal");
+            for Position in 1 .. Landin.Diagnostics.Count (Found) loop
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Fix_Count
+                    (Landin.Diagnostics.Get (Found, Position)), 0,
+                  "an insertion cannot repair a stray closer");
+            end loop;
+         end;
+      end Refused;
    begin
       Check ("if true", "then", "end if");
       Check ("while true", "do", "end while");
       Check ("for i in 0 ..< 3", "do", "end for");
+      for Stray of String'(")]") loop
+         Refused ("if true", [1 => Stray], "then", "end if");
+         Refused ("while true", [1 => Stray], "do", "end while");
+         Refused ("for i in 0 ..< 3", [1 => Stray], "do", "end for");
+      end loop;
    end Multiline_Keyword_Repairs_Parse;
 
    procedure Foreign_Forms_Have_Real_Labels
@@ -4953,44 +4997,67 @@ package body Landin.Tests.Parser_Suite is
    procedure Foreign_Forms_Have_Real_Labels
      (Item : in out Landin.Testing.Context)
    is
-      Sources : Landin.Source.Sets.Source_Set;
-      Names : Landin.Source.Names.Table;
-      Stream : Landin.Tokens.Token_Stream;
-      Found : Landin.Diagnostics.Diagnostic_List;
-      Text : constant String := "f: () -> none =" & ASCII.LF
-        & "i++" & ASCII.LF & "end f";
-      Id : constant Landin.Source.Source_Id := Sources.Add ("foreign", Text);
-   begin
-      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
-      declare
-         Parsed : constant Landin.Syntax.Tree :=
-           Landin.Syntax.Parser.Parse (Stream, Names, Found);
-         pragma Unreferenced (Parsed);
+      procedure Check
+        (Text, Code : String; Labels : Natural; Fixes : Natural := 1);
+
+      procedure Check
+        (Text, Code : String; Labels : Natural; Fixes : Natural := 1) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("foreign", Text);
       begin
-         Landin.Testing.Check_Equal
-           (Item, Landin.Diagnostics.Count (Found), 1,
-            "one foreign-form refusal");
-         for Position in 1 .. Landin.Diagnostics.Count (Found) loop
-            declare
-               Report : constant Landin.Diagnostics.Diagnostic :=
-                 Landin.Diagnostics.Get (Found, Position);
-            begin
-               Landin.Testing.Check_Equal
-                 (Item, Landin.Diagnostics.Label_Count (Report), 0,
-                  "a standalone foreign form has no invented neighbour");
-               for Label in 1 .. Landin.Diagnostics.Label_Count (Report) loop
-                  Landin.Testing.Check
-                    (Item, Landin.Diagnostics.Span_Of
-                       (Landin.Diagnostics.Nth_Label (Report, Label))
-                         /= Landin.Source.Empty_Span,
-                     "a neighbour label has a written source span");
-               end loop;
-               Landin.Testing.Check
-                 (Item, Landin.Diagnostics.Fix_Count (Report) > 0,
-                  "the increment repair remains available");
-            end;
-         end loop;
-      end;
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            pragma Unreferenced (Parsed);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 1,
+               "one foreign-form refusal");
+            for Position in 1 .. Landin.Diagnostics.Count (Found) loop
+               declare
+                  Report : constant Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Found, Position);
+               begin
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Code (Report), Code,
+                     "the foreign form retains its parser code");
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Label_Count (Report), Labels,
+                     "a foreign form labels only its written neighbour");
+                  for Label in 1 .. Landin.Diagnostics.Label_Count (Report)
+                  loop
+                     Landin.Testing.Check
+                       (Item, Landin.Diagnostics.Span_Of
+                          (Landin.Diagnostics.Nth_Label (Report, Label)).First
+                            < Landin.Diagnostics.Span_Of
+                              (Landin.Diagnostics.Nth_Label
+                                 (Report, Label)).Last
+                          and then Landin.Diagnostics.Span_Of
+                            (Landin.Diagnostics.Nth_Label (Report, Label))
+                              /= Landin.Diagnostics.Span_Of
+                                (Landin.Diagnostics.Primary (Report)),
+                        "a neighbour label has its own written source span");
+                  end loop;
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Fix_Count (Report), Fixes,
+                     "the foreign form retains its available repair");
+               end;
+            end loop;
+         end;
+      end Check;
+   begin
+      Check ("f: () -> none =" & ASCII.LF
+        & "i++" & ASCII.LF & "end f", "L0103", 0);
+      Check ("f: () -> (r: i32) =" & ASCII.LF
+        & "i++" & ASCII.LF & "end f", "L0102", 0);
+      Check ("f: () -> (r: i32) =" & ASCII.LF
+        & "r = i++" & ASCII.LF & "end f", "L0102", 1, 0);
+      Check ("fn f()", "L0103", 1, 0);
    end Foreign_Forms_Have_Real_Labels;
 
    procedure Named_Slice_Arguments_Keep_Permissions

@@ -1167,9 +1167,10 @@ package body Landin.Stages.Resolution is
          end if;
       end Resolve_Labeled_Application;
 
-      --  Type and value references both use ordinary lexical lookup.
-      --  Unbound scalar and text type references receive their predeclared
-      --  defaults in checking; packed-width Type_Name nodes remain special.
+      --  Scalar and text type references honor declared types and type
+      --  formals, retaining their predeclared meaning beside value names.
+      --  Checking supplies that default; packed-width Type_Name nodes remain
+      --  special.  Other references use ordinary lexical lookup.
       procedure Resolve
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -1877,6 +1878,22 @@ package body Landin.Stages.Resolution is
                         Fixes   => Near_In_Scope (Of_Tree, Node, Inside),
                         Into    => Found);
                   end if;
+               elsif Syn.Kind (Of_Tree, Node) = Syn.Type_Reference
+                 and then Res.Sort_Of (Meanings.all, Meant)
+                   not in Res.Module_Type | Res.Type_Parameter
+                 and then
+                   ((for some Scalar in Landin.Types.Scalar_Name =>
+                       Spelled (Named) = Landin.Types.Spelling (Scalar))
+                    or else
+                      (for some View in Landin.Types.Text_View =>
+                         Spelled (Named) = Landin.Types.Spelling (View)))
+               then
+                  --  Preserve the existing coexistence of a predeclared
+                  --  type and a same-spelled routine or value.  Only a type
+                  --  declaration or formal replaces its type meaning;
+                  --  calls still bind their ordinary resolved declaration.
+                  Res.Leave_Unresolved
+                    (Meanings.all, Of_Tree, Node, Inside);
                else
                   Landin.Resolution.Bind
                     (Meanings.all, Of_Tree, Node, Meant);

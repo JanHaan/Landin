@@ -9183,8 +9183,8 @@ package body Landin.Stages.Checking is
 
          if Res.Verdict_Of (Meanings.all, Of_Tree, Written) /= Res.Bound
          then
-            --  Predeclared names are the default only after lexical
-            --  lookup found no declaration to shadow them [1760].
+            --  Predeclared names remain the default when resolution found
+            --  no type declaration or formal to replace their meaning.
             if Syn.Kind (Of_Tree, Written) = Syn.Type_Reference then
                declare
                   Named : constant Landin.Source.Names.Name_Id :=

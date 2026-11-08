@@ -75,6 +75,8 @@ package body Landin.Tests.Catalogue_Suite is
                       | Rows.Not_Known_At_Compile_Time
                       | Rows.Size_Limit_Exceeded
                       | Rows.Unresolved_Name
+                      | Rows.Expression_Expected
+                      | Rows.Token_Expected
          then
             Landin.Testing.Check_Equal
               (Item, Rows.Minimum_Secondaries (Name),
@@ -93,6 +95,15 @@ package body Landin.Tests.Catalogue_Suite is
            and then Rows.Minimum_Secondaries (Rows.Unsupported_Use) = 0
            and then Rows.Maximum_Secondaries (Rows.Unsupported_Use) = 1,
          "dependent checker reports admit one template label");
+      --  A foreign spelling that fills its line has no neighbour to label.
+      --  When a real neighbour exists, the parser keeps its one label.
+      Landin.Testing.Check
+        (Item,
+         Rows.Minimum_Secondaries (Rows.Expression_Expected) = 0
+           and then Rows.Maximum_Secondaries (Rows.Expression_Expected) = 1
+           and then Rows.Minimum_Secondaries (Rows.Token_Expected) = 0
+           and then Rows.Maximum_Secondaries (Rows.Token_Expected) = 1,
+         "foreign-form parser reports admit one written neighbour");
       --  D381: an unresolved qualified name may point at the local that
       --  hid its import.
       Landin.Testing.Check

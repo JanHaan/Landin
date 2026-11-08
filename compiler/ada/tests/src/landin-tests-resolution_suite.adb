@@ -1414,11 +1414,25 @@ package body Landin.Tests.Resolution_Suite is
            (Name & ": type = i8" & LF & "value: " & Name & " = 200", False);
       end loop;
       Check ("utf8: type = u8" & LF & "value: utf8 = 200", True);
+      --  Preserve the historical predeclared type meaning beside value
+      --  names; extending ordinary shadowing to these cases is deferred.
       Check ("f: () -> none = i32 := 1" & LF
-             & "value: i32 = 2 end f", False);
+             & "value: i32 = 2 end f", True);
+      Check ("u32: type = u8" & LF
+             & "f: () -> none = u32 := 1" & LF
+             & "value: u32 = 300 end f", True);
+      Check ("i32: (v: i32) -> (r: i32) = r = v + 1 end i32" & LF
+             & "f: (v: i32) -> (r: i32) = i32(v) end f", True);
+      Check ("u8: (v: u8) -> (r: u8) = r = v +% 1 end u8" & LF
+             & "f: () -> (r: u8) = u8(1) end f", True);
+      Check ("utf8: (v: utf8) -> (r: utf8 from v) = v end utf8" & LF
+             & "f: (v: utf8) -> (r: utf8 from v) = utf8(v) end f", True);
       Check ("echo: (u32: type, value: u32) -> (r: u32) = value end echo"
              & LF & "public main: () -> (code: i32) ="
              & " code = i32(echo(u32: u8, value: 200)) end main", True);
+      Check ("echo: (u32: type, value: u32) -> (r: u32) = value end echo"
+             & LF & "public main: () -> (code: i32) ="
+             & " code = i32(echo(u32: u8, value: 300)) end main", False);
       Check ("value: u32 = 300" & LF & "text: utf8 = ""hello""", True);
       Check ("image: type = layout(packed) struct"
              & " value: u32 at 0..31 end image", True);

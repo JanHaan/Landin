@@ -159,7 +159,8 @@ name that starts with '_' needs something after it, so the lone
 reserves fifty words; the reserved set of the whole language is larger, and each word joins it when its construct is enabled in the
 language. Once reserved, it is a keyword in every program, even one that
 does not use that construct. Type names are not among them: u32 and bool
-are ordinary declared names [0120] that the kernel happens to predeclare.
+are names the kernel predeclares, and a program may declare the same
+spelling [0120]; [1790] says which of the two a type position names.
 
 Control words cannot name bindings, types, functions, parameters, results,
 fields, atoms, import bindings or loop and block labels. In particular, `begin = 10`
@@ -303,10 +304,22 @@ length. Neither has an all-zero value [0540]. A function type is written with
 [1800]'s signature syntax. Its parameter and return names describe positions and
 declare nothing; only a function declaration opens [1840]'s signature scope.
 The other TYPES YOU DECLARE
-remain deferred. A type position holds a declared name either way, since
-[1760] makes scalar and text-view type names ordinary declared names. The
-kernel predeclares the thirteen scalar names and the three text-view names;
-the grammar spells these out because a program need not declare them itself.
+remain deferred. A type position holds a name either way. The kernel
+predeclares the thirteen scalar names and the three text-view names; the
+grammar spells these out because a program need not declare them itself.
+They are in no scope of [1840] and [1760] does not reserve them, so a program
+may declare the same spelling. A type position that spells one is looked up
+lexically like any name, and the nearest visible declaration of that spelling
+decides: a type declaration or a type formal is what the position names, and
+any other declaration, such as a function, binding or parameter, leaves the
+position naming the predeclared type without the lookup continuing outward.
+Finding no declaration leaves it so too. That fallback is a type position's
+alone. A call or value use of the spelling resolves by ordinary lookup: a
+visible function named `u8` is what `u8(v)` calls, and `u8(v)` converts to the
+predeclared `u8` [0700] only when nothing visible declares `u8`. A non-type
+declaration therefore leaves the predeclared type in every type position it
+could reach, its own signature included, where [0140] would have an inner
+name hide an outer one.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
@@ -372,9 +385,11 @@ fully applied normalized actual tuple a distinct instance of this declaration;
 an alias of either keeps that same identity. Every alias chain has to reach a scalar type, atom set, fixed array, function
 type or struct body. A chain that comes back to an alias in the chain
 reaches no type and is refused at that declaration.
-A type name is an ordinary declared name [1760], so one
+A declared type name is an ordinary declared name, so one
 declaration per name per scope [1850] and a name that names
-nothing is refused [1860] both hold for it unchanged.
+nothing is refused [1860] both hold for it unchanged. A predeclared name is in
+no scope, so declaring its spelling duplicates nothing; [1790] says which
+meaning a type position takes.
 D188 admits [0660]'s range subtype at this one position and nowhere else,
 which is why its base is narrower than `type`: the base must be a name whose
 alias chain reaches an enabled integer scalar, both bounds are D136-folded
@@ -978,7 +993,10 @@ declaration for qualified lookup, and a parameter or local may shadow the
 import. A namespace import leaves an unqualified same-named module value
 visible; a selected declaration shadows the module declaration for ordinary
 unqualified lookup too. Imports do not enter sibling files and are not
-re-exported.
+re-exported. Lookup ends at the module: [1790]'s predeclared type names are
+not a further scope but what a type position names when lookup finds no
+declaration, or finds one nearest that is neither a type declaration nor a
+type formal.
 
 ### [1850] One scope gives one name to one thing
 
