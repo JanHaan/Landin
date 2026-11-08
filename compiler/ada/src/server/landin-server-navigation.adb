@@ -19,6 +19,7 @@ package body Landin.Server.Navigation is
    package Unbounded renames Ada.Strings.Unbounded;
 
    use type Landin.Checking.Atom_Set_Id;
+   use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Reference_Id;
    use type Landin.Checking.Signature_Id;
@@ -27,6 +28,7 @@ package body Landin.Server.Navigation is
    use type Landin.Source.Byte_Offset;
    use type Res.Verdict;
    use type Syn.Node_Id;
+   use type Syn.Node_Kind;
    use type Tok.Space_Kind;
    use type Ty.Type_Kind;
 
@@ -238,6 +240,113 @@ package body Landin.Server.Navigation is
       return Res.No_Declaration;
    end Declaration_For;
 
+   --  The struct field a selection names, `corner.x` or the `y` of
+   --  `offsetof pair.y`: the field the checker recorded the selection
+   --  as, in the body of the struct its target has.  A field is no
+   --  declaration of the resolution table, so this is found through the
+   --  checking table's field index and nominal type.
+   type Field_Site is record
+      Source : Landin.Source.Source_Id;
+      Field  : Syn.Node_Id := Syn.No_Node;
+   end record;
+
+   function Selected_Field
+     (Context : in out Landin.Stages.Compilation;
+      Of_Tree : Syn.Tree;
+      Node    : Syn.Node_Id) return Field_Site;
+
+   function Selected_Field
+     (Context : in out Landin.Stages.Compilation;
+      Of_Tree : Syn.Tree;
+      Node    : Syn.Node_Id) return Field_Site
+   is
+      Types    : constant not null access Landin.Checking.Table :=
+        Landin.Stages.Types (Context);
+      Meanings : constant not null access Res.Table :=
+        Landin.Stages.Meanings (Context);
+      None     : constant Field_Site :=
+        (Source => Syn.Source_Of (Of_Tree), Field => Syn.No_Node);
+
+      --  The struct a selection's target is: its recorded nominal type,
+      --  or, for a field selection of no recorded type, as in a nested
+      --  `offsetof`, the nested struct its own field holds.
+      function Struct_Of (Target : Syn.Node_Id)
+        return Landin.Checking.Nominal_Type_Id;
+
+      function Struct_Of (Target : Syn.Node_Id)
+        return Landin.Checking.Nominal_Type_Id
+      is
+         Recorded : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Of_Tree, Target);
+      begin
+         if Recorded /= Landin.Checking.No_Nominal_Type
+           or else Syn.Kind (Of_Tree, Target) /= Syn.Member_Selection
+         then
+            return Recorded;
+         end if;
+         declare
+            Which : constant Natural :=
+              Landin.Checking.Field_Index (Types.all, Of_Tree, Target);
+            Outer : constant Landin.Checking.Nominal_Type_Id :=
+              (if Which = 0 then Landin.Checking.No_Nominal_Type
+               else Struct_Of (Syn.Target_Of (Of_Tree, Target)));
+         begin
+            if Outer = Landin.Checking.No_Nominal_Type
+              or else not Landin.Checking.Has_Layout (Types.all, Outer)
+              or else Which
+                > Landin.Checking.Layout_Field_Count (Types.all, Outer)
+              or else Landin.Checking.Field_Kind_Of (Types.all, Outer, Which)
+                /= Landin.Checking.Aggregate_Field
+            then
+               return Landin.Checking.No_Nominal_Type;
+            end if;
+            return Landin.Checking.Field_Shape_Of
+              (Types.all, Outer, Which).Nominal;
+         end;
+      end Struct_Of;
+   begin
+      if Syn.Kind (Of_Tree, Node) /= Syn.Member_Selection
+        or else not Landin.Checking.Is_Prepared (Types.all)
+        or else not Landin.Checking.Covers (Types.all, Of_Tree)
+        or else Landin.Checking.Field_Index (Types.all, Of_Tree, Node) = 0
+      then
+         return None;
+      end if;
+      declare
+         Which : constant Positive :=
+           Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
+         Wrote : constant Landin.Checking.Nominal_Type_Id :=
+           Struct_Of (Syn.Target_Of (Of_Tree, Node));
+         Template : constant Res.Declaration_Id :=
+           (if Wrote = Landin.Checking.No_Nominal_Type
+              or else not Landin.Checking.Holds (Types.all, Wrote)
+            then Res.No_Declaration
+            else Landin.Checking.Template_Of (Types.all, Wrote));
+      begin
+         if Template = Res.No_Declaration then
+            return None;
+         end if;
+         declare
+            Home : constant Landin.Source.Source_Id :=
+              Res.Source_Of (Meanings.all, Template);
+            Home_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Context).all, Home);
+            Written : constant Syn.Node_Id := Syn.Declared_Type
+              (Home_Tree.all, Res.Node_Of (Meanings.all, Template));
+         begin
+            if Written = Syn.No_Node
+              or else Syn.Kind (Home_Tree.all, Written) /= Syn.Struct_Body
+              or else Which > Syn.Field_Count (Home_Tree.all, Written)
+            then
+               return None;
+            end if;
+            return (Source => Home,
+                    Field  => Syn.Nth_Field (Home_Tree.all, Written, Which));
+         end;
+      end;
+   end Selected_Field;
+
    function Definition
      (Context : in out Landin.Stages.Compilation;
       Answer  : Landin.Server.Analysis.Result;
@@ -268,7 +377,30 @@ package body Landin.Server.Navigation is
             Sites : constant not null access Landin.Provenance.Table :=
               Landin.Stages.Sites (Context);
          begin
-            if Id = Res.No_Declaration
+            if Id = Res.No_Declaration and then Answer.Checked then
+               declare
+                  Found : constant Field_Site :=
+                    Selected_Field (Context, Of_Tree.all, Node);
+               begin
+                  if Found.Field = Syn.No_Node then
+                     return No_Place;
+                  end if;
+                  declare
+                     Where : constant Landin.Source.Span := Syn.Anchor
+                       (Landin.Syntax.Forest.Tree_Of
+                          (Landin.Stages.Trees (Context).all,
+                           Found.Source).all,
+                        Found.Field);
+                  begin
+                     if Landin.Server.Analysis.Is_Held
+                       (Answer, Found.Source, Where)
+                     then
+                        return No_Place;
+                     end if;
+                     return (Found.Source, Where);
+                  end;
+               end;
+            elsif Id = Res.No_Declaration
               or else not Landin.Provenance.Contains (Sites.all, Id)
             then
                return No_Place;
@@ -520,8 +652,34 @@ package body Landin.Server.Navigation is
                Landin.Checking.Atom_Set_Of (Types.all, Of_Tree.all, Node),
                Landin.Checking.Signature_Of (Types.all, Of_Tree.all, Node));
          begin
-            if Text = "" or else Syn.Kind (Of_Tree.all, Node) not in
-              Syn.Expression_Kind
+            if Text = "" then
+               --  A field a measurement selects has no value and so no
+               --  type of its own: describe the field as it is declared.
+               declare
+                  Found : constant Field_Site :=
+                    Selected_Field (Context, Of_Tree.all, Node);
+               begin
+                  if Found.Field = Syn.No_Node then
+                     return Nothing;
+                  end if;
+                  declare
+                     Home_Tree : constant not null access constant Syn.Tree
+                       := Landin.Syntax.Forest.Tree_Of
+                         (Landin.Stages.Trees (Context).all, Found.Source);
+                     Shown : constant String := "```landin" & ASCII.LF
+                       & Landin.Source.Slice
+                           (Landin.Stages.Source
+                              (Context, Found.Source).Element.all,
+                            Syn.Where (Home_Tree.all, Found.Field))
+                       & ASCII.LF & "```";
+                  begin
+                     return (Length   => Shown'Length,
+                             Range_Of => (Source, Syn.Anchor
+                                            (Of_Tree.all, Node)),
+                             Text     => Shown);
+                  end;
+               end;
+            elsif Syn.Kind (Of_Tree.all, Node) not in Syn.Expression_Kind
             then
                return Nothing;
             end if;
