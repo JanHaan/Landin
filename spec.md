@@ -1498,7 +1498,10 @@ Explicit untracked conversion alone supplies no origin proof, and does not
 erase another alternative's known independent origin. A helper which needs
 parameter and module alternatives passes both as explicit arguments and
 names both in its `from` clause. Calls reconstruct those written sources;
-no body inference is introduced. A live local view records the binding it
+no body inference is introduced. A source a generic instance asks nothing
+of under D290, one not passed `inout`, adds nothing to that
+reconstruction, so the result neither derives from its argument nor is a
+view of it (D1042). A live local view records the binding it
 derives from; an `inout` or `sink` use of that binding is refused when the view
 is read before being replaced. A view replaced by the result of the `inout`
 call itself ends at that assignment, except where the call's recovery can
@@ -11923,6 +11926,46 @@ refuses. Both are declined.
 **Pinned by** `runtime/generic-from-reference-free-source`, with
 `runtime/region-beside-parent` and `negative/region-release-live-handle` for
 a parent of each kind.
+
+D1042 carries the same reading to the call, where the result's view is
+locked to its sources.
+
+### D1042 — A source D290 asks nothing of lends a call's result no view
+
+**The tour said** at [0800] that a result with `from` borrows its source
+just as a view does in [0830], where an `inout` or `sink` use of the
+binding a live view derives from is refused; at [0840] it said that a
+value holding no references has no origin and goes anywhere.
+D290 settled what the instance's body owes a source typed by a type formal
+whose instance type holds no reference, and said nothing of what the
+caller's result takes from it. Deriving prototype 5's firmware counterpart,
+`io.buffered_over(self.send, serial.line(), room)` over a handle that holds
+one `u32` locked the whole of `self`, so a later `uart.read(self.receive,
+...)` was L0315 while the writer lived.
+
+**Chosen:** at a call that reaches a generic instance, a `from` source whose
+parameter is written with a type formal, is not `inout`, and whose instance
+type holds no reference supplies the result no origin: the result neither
+derives from the argument nor locks it, or the place it was copied from,
+against `inout` and `sink`, and a result whose every source is of this kind
+is as independent as one that names none. The instance's body can return
+nothing derived from such an argument (D290), and a value parameter's own
+storage is the callee's frame, which no result may view. An `inout` source
+lends its storage whatever its type holds, so it keeps the lock, and an
+instance type that holds a reference binds as written.
+
+**The alternatives:** keeping the lock, which makes every reference-free
+handle copied out of a state hold the whole state still for as long as the
+result is used, though no reference in the result can reach it; dropping
+any source whose instance type holds no reference, typed by a formal or
+not, which no non-generic signature needs, since D290 keeps naming such a
+parameter there L0316; and relaxing the lock between disjoint fields of the state, a
+wider question this one does not need answered. All three are declined.
+
+**Pinned by** `runtime/generic-from-reference-free-handle-beside-inout`,
+for a handle copied directly and through a local, and
+`negative/generic-from-pointer-handle-beside-inout` for a handle that
+holds a pointer and for a reference-free source passed `inout`.
 
 ### D291 — A view taken again through an `inout` call ends the old one at its assignment
 

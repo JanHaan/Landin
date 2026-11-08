@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a generic from result over a handle holding no reference, copied out of an inout state directly or through a local, locks only its buffer, so the state's other field may be passed inout while the result is used
+program: main.ldn
+status: 25
+constructs: 0790, 0800, 0830, 0840, 1290, 1300
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

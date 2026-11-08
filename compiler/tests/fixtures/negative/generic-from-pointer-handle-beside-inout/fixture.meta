@@ -1,0 +1,9 @@
+class: negative
+summary: a generic from result over a handle holding a pointer, copied out of an inout state, still views that state, so passing its other field inout while the result is used is refused, and a result from a type-formal source passed inout keeps its lock where the type holds no reference
+expect: expected.txt
+program: main.ldn
+args: ../tests/fixtures/negative/generic-from-pointer-handle-beside-inout/main.ldn
+status: 1
+codes: L0315, L0315
+constructs: 0790, 0800, 0830, 1290, 1300
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
