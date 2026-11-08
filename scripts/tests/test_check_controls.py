@@ -169,6 +169,26 @@ class NamedFiles(unittest.TestCase):
         self.assertEqual(len(said), 1)
         self.assertIn('docs/absent.md', said[0])
 
+    def test_a_program_listing_may_name_a_file_the_example_opens(self):
+        #  A listing's file is one the program opens, not one in the tree:
+        #  examples had to rename a settings file to dodge the check.
+        text = ("```landin\n    path := \"settings.txt\"\n```\n"
+                "```text\nsettings.txt: not found\n```\n"
+                "````c\nopen(\"conf/settings.txt\")\n```\n````\n")
+        self.assertEqual(faults(checker.check_named_files,
+                                written={"README.md": text}), [])
+
+    def test_prose_and_command_paths_are_still_checked(self):
+        text = ("Run `settings.txt` first.\n"
+                "```sh\n./number missing.txt\npython3 scripts/absent.py\n```\n"
+                "```landin\n```\nAnd `docs/absent.md`.\n")
+        said = reasons(checker.check_named_files,
+                       written={"README.md": text})
+        self.assertEqual(len(said), 3, said)
+        self.assertIn("settings.txt", said[0])
+        self.assertIn("scripts/absent.py", said[1])
+        self.assertIn("docs/absent.md", said[2])
+
     def test_ada_comment_urls_leave_local_references_checked(self):
         said = reasons(checker.check_named_files, written={
             'compiler/ada/src/sample.ads':

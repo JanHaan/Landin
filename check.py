@@ -8813,6 +8813,11 @@ def check_comment_forms(full_run):
             for sign in sorted(spelled - shown)]
 
 
+#  The fences the named-file check still reads: commands name the
+#  repository's scripts.  Every other fence is a listing it skips.
+COMMAND_FENCES = frozenset(("sh", "shell", "bash", "console"))
+
+
 def check_named_files(full_run):
     """A document or source file that names another names one that exists.
 
@@ -8822,6 +8827,14 @@ def check_named_files(full_run):
     filename a live document or an Ada source mentions has to resolve.
     Written after the rename rather than before it, because that is when
     the cost of not having it was obvious.
+
+    A fenced listing -- a program, its output, a grammar or JSON -- is
+    exempt: a file it names is one the example opens or writes, not one in
+    the repository, and requiring it to exist made examples rename a
+    settings file to dodge the check.  A command fence (sh, shell, bash,
+    console) is still read, but only for names with a directory, which name
+    a repository script or file; a bare name there is an operand the
+    example invents, such as `./number missing.txt`.
     """
     if not full_run:
         return []
@@ -8850,6 +8863,7 @@ def check_named_files(full_run):
         if not os.path.exists(path):
             continue
         ada = relative.endswith((".ads", ".adb"))
+        fence = None
         for n, line in enumerate(
                 read_file(path, encoding="utf-8").splitlines(), 1):
             #  In Ada only a comment names a file as a reference; a name in
@@ -8859,9 +8873,23 @@ def check_named_files(full_run):
                 if comment == -1:
                     continue
                 line = line[comment:]
+            else:
+                marker = re.match(r"\s*(`{3,}|~{3,})\s*([^\s`]*)", line)
+                if marker and fence is None:
+                    fence = (marker.group(1), marker.group(2).lower())
+                    continue
+                if (marker and not marker.group(2)
+                        and marker.group(1)[0] == fence[0][0]
+                        and len(marker.group(1)) >= len(fence[0])):
+                    fence = None
+                    continue
+                if fence is not None and fence[1] not in COMMAND_FENCES:
+                    continue
             for found in named.finditer(line):
                 target = found.group(1)
                 if target is None:  # An external URL, including its query/fragment.
+                    continue
+                if fence is not None and "/" not in target:
                     continue
                 if target in NAMED_FILE_ALLOWLIST:
                     continue

@@ -95,7 +95,15 @@ the nearest thing to a check that the entry still describes the compiler.
 The named-file check resolves repository file references in live documents
 and Ada comments. External URLs, including their queries and fragments,
 are outside that local-file check; local references beside them still have
-to resolve. Network link validation belongs to the link workflow.
+to resolve. Network link validation belongs to the link workflow. A fenced
+listing, whether a program, its output, a grammar or JSON, is exempt: a
+file it names is one the example opens or writes, and needs no other
+ending than the one it would have. A command fence (`sh`, `shell`, `bash`,
+`console`) is read for names with a directory, which name a repository
+script or file, and not for a bare file name, which is an operand the
+example invents. Prose and code spans outside a fence are checked whatever
+they name, so a file an example invents is spelled there with an ending
+the check does not read.
 
 `check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. `check.py` does not parse the corpus with the structural editor grammar in `highlight/tree-sitter`; the gate's `editor-grammar` job does, and `./highlight/test.sh --integration` runs that pass inside `nix develop`, which `python3 scripts/activations.py` names whenever the changes reach the grammar, a positive, runtime or ABI fixture or `core/`. A change to the editor grammar or its queries takes two commits, the second moving the editors' pins with `python3 highlight/grammar_pin.py` (`highlight/README.md`). Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
