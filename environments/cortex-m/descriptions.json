@@ -309,6 +309,29 @@
       "boot_suffix": 0,
       "stack_top": 1070120960,
       "stack_reserved": 4096
+    },
+    "microbit": {
+      "target": "cortex-m0",
+      "sources": {
+        "machine": "QEMU 10.0.13's microbit, the nRF51822 the Cortex-M0 lanes run on: 256 KiB of flash at 0 and 16 KiB of RAM at 0x20000000, the sizes its nrf51 SoC model gives that machine",
+        "capacities": "the chip's flash and the constrained reference's RAM and stack, spec.md [1990], for the firmware counterpart, which does not fit the reference's flash (D1036)"
+      },
+      "module": "microbit",
+      "core": "cortex-m0",
+      "level": "armv6-m",
+      "float_unit": "none",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "FLASH", "origin": 0, "length": 262144, "access": "rx"},
+        {"name": "RAM", "origin": 536870912, "length": 16384, "access": "rwx"}
+      ],
+      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "RAM"},
+      "vector_address": 0,
+      "vector_words": 48,
+      "boot_prefix": 0,
+      "boot_suffix": 0,
+      "stack_top": 536887296,
+      "stack_reserved": 4096
     }
   }
 }

@@ -429,12 +429,16 @@ class Run:
         elif name == 'driver':
             from driver import execute_suite as driver_execute
             driver_execute(self, refine)
+        elif name == 'counterpart':
+            from counterpart import execute_suite as counterpart_execute
+            counterpart_execute(self, refine)
         else:
             from evidence import execute_suite as evidence_execute
             evidence_execute(self, refine)
 
 
-#  Every lane run.py runs, in the order it runs them.  `evidence` compares
+#  Every lane run.py runs, in the order it runs them.  `counterpart` is
+#  prototype 5's firmware counterpart, its trace judged (D448).  `evidence` compares
 #  each debug image with the `driver` lane's, so it needs that lane, and
 #  selecting it alone runs both.  `mps2-an505` and `mps2-an500` are the
 #  whole corpus again on those emulator lanes (backend_corpus.LANES): at
@@ -445,7 +449,7 @@ class Run:
 #  programs on both machines and needs no compiler.
 LANES = ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'rv32-controls', 'packed-native',
          'backend', 'mps2-an505', 'mps2-an500', 'esp32c3', 'sifive-e', 'firmware',
-         'freestanding', 'devices', 'descriptions', 'driver', 'evidence')
+         'freestanding', 'devices', 'descriptions', 'driver', 'counterpart', 'evidence')
 NEEDS = {'evidence': ('driver',), 'esp32c3': ('rv32-controls',),
          'sifive-e': ('rv32-controls',)}
 NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
@@ -463,7 +467,7 @@ NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
 #  one run, which on a four-CPU runner put one job at risk of that hour.
 PARTS = {'programs': ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native',
                       'firmware', 'freestanding', 'devices', 'descriptions', 'driver',
-                      'evidence'),
+                      'counterpart', 'evidence'),
          'corpus': ('backend', 'mps2-an505', 'mps2-an500'),
          'rv32': ('rv32-controls', 'esp32c3', 'sifive-e')}
 

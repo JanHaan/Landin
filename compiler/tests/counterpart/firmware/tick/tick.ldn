@@ -1,0 +1,34 @@
+--  Prototype 5's firmware/tick: time from an interrupt.  SysTick's handler
+--  is the one writer of the count and fibres read it; the handler adds
+--  with core/atomic's sole_add, a load and a store, since Cortex-M0 has no
+--  read-modify-write (D449, D511).  The handler never switches: whoever
+--  waits looks at the count when its turn comes.
+import core/atomic
+
+--- The core clock cycles in one tick: a millisecond at the micro:bit's
+--- 16 MHz, the clock QEMU's SysTick counts on that machine.
+public period: u32 = 16000
+
+mut ticks: atomic.cell(u32) = zeroed
+
+link(vector: 15)
+extern(interrupt) system_tick: () -> none =
+    _ = atomic.sole_add(addr ticks, 1)
+end system_tick
+
+--- The ticks counted since `start_counting`, wrapping at 2^32.
+public now_ticks: () -> (count: u32) =
+    count = atomic.load(addr ticks)
+end now_ticks
+
+--- Start SysTick from the core clock, interrupting every `period` cycles.
+public start_counting: () -> none =
+    control: ptr mut u32 = ptr(0xe000e010)
+    reload: ptr mut u32 = ptr(0xe000e014)
+    current: ptr mut u32 = ptr(0xe000e018)
+    compiler.volatile_store(control, 0)
+    compiler.volatile_store(reload, period - 1)
+    compiler.volatile_store(current, 0)
+    --  ENABLE, TICKINT and CLKSOURCE, the processor clock.
+    compiler.volatile_store(control, 7)
+end start_counting

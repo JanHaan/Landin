@@ -1,0 +1,16 @@
+-- The nRF51822's own capacities, as QEMU 10.0.13's micro:bit gives them:
+-- 256 KiB of flash at zero, with the vector table at its start, and 16
+-- KiB of RAM at 0x2000_0000, the upper 4 KiB of it the stack.  The RAM and
+-- the stack are the constrained reference's; the flash is the chip's,
+-- eight times the reference's, for the firmware counterpart, which does
+-- not fit the reference (D1036).
+
+linker.region("FLASH", 0x0000_0000, 256 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 16 * 1024, "rwx")
+compiler.boot("vector-table")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)

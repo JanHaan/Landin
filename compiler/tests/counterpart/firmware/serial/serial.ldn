@@ -1,0 +1,41 @@
+--  The transmit side of prototype 5's serial line, which prototype 1's
+--  receive driver did not write: the synthetic UART's data register as an
+--  `io.writer`, as [1660] says a UART is.  A byte waits while UARTFR's
+--  TXFF, bit 5, says the transmit FIFO is full; the synthetic device
+--  always has room.
+import core/io
+import drivers/uart
+import rp2040/uart0
+
+--- The line as a writer: a handle with no state, since the device is.
+public port: type = struct
+    reserved: u32
+end port
+
+--- The one file the port writes.
+public line: () -> (opened: io.file) =
+    opened = io.file(0)
+end line
+
+transmit: (byte: u8) -> none =
+    while (uart0.uartfr_read(uart.uart_base) & 0x20) <> 0 do
+        continue
+    end while
+    uart0.uartdr_write(uart.uart_base, u32(byte))
+end transmit
+
+port_write_some: (self: port, opened: io.file, bytes: []u8)
+                 -> (count: usize) ! io.io_failed =
+    _ = self
+    _ = opened
+    for i in 0..<lenof bytes do
+        transmit(bytes[i])
+    end for
+    count = lenof bytes
+end port_write_some
+
+port_write: (self: port, opened: io.file, bytes: []u8) -> none ! io.io_failed =
+    _ = try port_write_some(self, opened, bytes)
+end port_write
+
+port is io.writer (write: port_write, write_some: port_write_some)

@@ -31,7 +31,7 @@ class ProbeFailures(unittest.TestCase):
                ('backend_acceptance','execute_lane'),
                ('firmware','execute_suite'),('freestanding','execute_suite'),
                ('devices','execute_suite'),('descriptions','execute_suite'),
-               ('driver','execute_suite'),
+               ('driver','execute_suite'),('counterpart','execute_suite'),
                ('evidence','execute_suite')]
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root=Path(directory)
@@ -1282,6 +1282,96 @@ class ProbeFailures(unittest.TestCase):
             from unittest.mock import patch
             with patch('run.supported_host'), self.assertRaisesRegex(RuntimeError, 'installed from another tools.lock.json.*install a fresh --tools root'):
                 Run(root, root).execute()
+
+
+class CounterpartOracle(unittest.TestCase):
+    """counterpart.judge, the firmware counterpart's trace oracle (D448),
+    given traces it must pass and each failure it must name."""
+
+    def trace(self, *events, output='a done\nb done\n', outcome='settled',
+              fed=('WAIT 200 a\n', 'NOW b\n')):
+        kinds = {'r': 'received', 's': 'started', 'f': 'finished', 'x': 'refused'}
+        return {'outcome': outcome, 'lost': 0, 'rejected': 0, 'ticks': 300,
+                'fed': [{'at': 0, 'bytes': one} for one in fed], 'output': output,
+                'events': [{'kind': kinds[k], 'request': n, 'at': at} for k, n, at in events]}
+
+    def kinds(self, observed, presented=((1, 2),)):
+        from counterpart import judge
+        return [problem.split(':')[0] for problem in judge(observed, presented)]
+
+    GOOD = (('r', 1, 5), ('s', 1, 10), ('r', 2, 22), ('f', 1, 227), ('s', 2, 227), ('f', 2, 241))
+
+    def test_one_answer_at_a_time_in_request_order_passes(self):
+        self.assertEqual(self.kinds(self.trace(*self.GOOD)), [])
+
+    def test_an_answer_never_written_is_missing(self):
+        self.assertIn('missing answer', self.kinds(self.trace(*self.GOOD, output='a done\n')))
+        self.assertIn('missing answer', self.kinds(self.trace(*self.GOOD[:-1], output='a done\n')))
+        self.assertIn('missing answer', self.kinds(self.trace(*self.GOOD[:2], ('f', 1, 227),
+                                                              output='a done\n')))
+
+    def test_a_second_answer_started_before_the_first_ended_overlaps(self):
+        overlapping = (('r', 1, 5), ('s', 1, 10), ('r', 2, 22), ('s', 2, 23), ('f', 2, 30),
+                       ('f', 1, 227))
+        kinds = self.kinds(self.trace(*overlapping, output='b done\na done\n'))
+        self.assertIn('overlap', kinds)
+
+    def test_answers_out_of_request_order_fail(self):
+        swapped = (('r', 1, 5), ('r', 2, 6), ('s', 2, 10), ('f', 2, 20), ('s', 1, 20),
+                   ('f', 1, 230))
+        self.assertIn('order', self.kinds(self.trace(*swapped, output='b done\na done\n')))
+
+    def test_a_wait_answered_early_fails(self):
+        early = (('r', 1, 5), ('s', 1, 10), ('r', 2, 22), ('f', 1, 150), ('s', 2, 150),
+                 ('f', 2, 160))
+        self.assertIn('early', self.kinds(self.trace(*early)))
+
+    def test_a_trap_a_timeout_and_a_halt_fail(self):
+        self.assertIn('trap', self.kinds(self.trace(*self.GOOD, outcome='trap: unhandled exception')))
+        self.assertIn('timeout', self.kinds(self.trace(*self.GOOD[:2], outcome='timeout',
+                                                       output='')))
+        self.assertIn('stopped', self.kinds(self.trace(*self.GOOD, outcome='stopped: 4')))
+
+    def test_a_lost_trace_or_input_fails(self):
+        lost = self.trace(*self.GOOD)
+        lost['lost'] = 1
+        self.assertIn('lost', self.kinds(lost))
+        refused = self.trace(*self.GOOD)
+        refused['rejected'] = 3
+        self.assertIn('lost', self.kinds(refused))
+
+    def test_two_in_flight_must_be_presented(self):
+        late = (('r', 1, 5), ('s', 1, 10), ('f', 1, 227), ('r', 2, 230), ('s', 2, 230),
+                ('f', 2, 241))
+        self.assertIn('presented', self.kinds(self.trace(*late)))
+        self.assertEqual(self.kinds(self.trace(*late), presented=()), [])
+
+    def test_busy_only_for_a_full_queue(self):
+        fed = ('WAIT 200 a\n', 'NOW b\nNOW c\nNOW d\nNOW e\nNOW f\n')
+        full = (('r', 1, 5), ('s', 1, 10), ('r', 2, 22), ('r', 3, 22), ('r', 4, 27), ('r', 5, 27),
+                ('x', 6, 27), ('f', 1, 230), ('s', 2, 230), ('f', 2, 244), ('s', 3, 244),
+                ('f', 3, 258), ('s', 4, 258), ('f', 4, 272), ('s', 5, 272), ('f', 5, 286))
+        output = 'busy\na done\nb done\nc done\nd done\ne done\n'
+        self.assertEqual(self.kinds(self.trace(*full, output=output, fed=fed)), [])
+        early = tuple(e for e in full if e[:2] != ('r', 5)) [:5] + (('x', 5, 27),)
+        self.assertIn('busy', self.kinds(self.trace(*early, output='busy\n', fed=fed),
+                                         presented=()))
+
+    def test_the_protocol_answers_as_the_hosted_one(self):
+        from counterpart import answer_of
+        self.assertEqual(answer_of(b'WAIT 200 a'), ('a done', 200))
+        self.assertEqual(answer_of(b'NOW b'), ('b done', 0))
+        for line in (b'NOW', b'NOW ', b'NOW a b', b'WAIT x a', b'WAIT 60001 a', b'HELLO a',
+                     b'NOW ' + b'x' * 70):
+            self.assertEqual(answer_of(line), ('malformed', 0), line)
+
+    def test_each_control_mutation_matches_the_source_once(self):
+        from counterpart import CONTROLS, SOURCE
+        text = (SOURCE / 'firmware/app/main.ldn').read_text()
+        for name, control in CONTROLS.items():
+            for old, _ in control['replace']:
+                with self.subTest(control=name):
+                    self.assertEqual(text.count(old), 1, old)
 
 
 class RV32Lanes(unittest.TestCase):

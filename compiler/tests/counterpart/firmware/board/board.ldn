@@ -1,0 +1,75 @@
+--  Prototype 5's firmware/board: the device's one provider, a scheduler
+--  that takes turns and a clock whose sleep takes turns until enough
+--  ticks have passed, in one handle, so a request's `time.sleep` is a
+--  switch point on this device and on no hosted blocking provider.  The
+--  round of fixed turns is the library's, `core/fibre/stacks`' `round`
+--  (D444, V8); the board lends it and adds the clock.
+import core/fibre
+import core/mem
+import core/time
+import firmware/tick
+
+--- What the clock keeps between readings: the last tick count read and
+--- how many times the count has wrapped, so a reading never goes back.
+--- Declare it `zeroed`.
+public reading: type = struct
+    last: u32
+    wraps: u32
+end reading
+
+--- The board: the round it lends as `turns`, and its clock's reading.
+public board: type = struct
+    runs: any fibre.turns
+    clock: ptr mut reading
+end board
+
+board_start: (self: board, escaping record: ptr mut fibre.space,
+              escaping stack: []mut u8, escaping work: any fibre.task)
+             -> none ! mem.out_of_memory =
+    try self.runs.start(record, stack, work)
+end board_start
+
+board_finished: (self: board, record: fibre.space) -> (yes: bool) =
+    yes = self.runs.finished(record)
+end board_finished
+
+board_wait: (self: board) -> none =
+    self.runs.wait()
+end board_wait
+
+board_yield: (self: board) -> none =
+    self.runs.yield()
+end board_yield
+
+board is fibre.scheduler (start: board_start, finished: board_finished,
+                          wait: board_wait)
+board is fibre.turns (yield: board_yield)
+
+--  The ticks since counting began, as 64 bits.  It is read at least once a wrap,
+--  every 49 days, by any fibre that sleeps or reads the clock; the
+--  device's taker reads it at every turn.
+board_ticks: (self: board) -> (count: u64) =
+    current: u32 = tick.now_ticks()
+    if current < self.clock.val.last then
+        self.clock.val.wraps +%= 1
+    end if
+    self.clock.val.last = current
+    count = (u64(self.clock.val.wraps) << 32) | u64(current)
+end board_ticks
+
+board_now: (self: board) -> (at: time.instant) =
+    at = time.instant(board_ticks(self) * 1000000)
+end board_now
+
+--  A sleep counts whole ticks and one more, since it may begin anywhere
+--  within the tick it was called in and must never return sooner than
+--  `span` (D446's switch point: it yields between readings).
+board_sleep: (self: board, span: time.duration) -> none =
+    begin_at: u64 = board_ticks(self)
+    wanted: u64 = (u64(span) + 999999) / 1000000 + 1
+    while board_ticks(self) - begin_at < wanted do
+        self.runs.yield()
+    end while
+end board_sleep
+
+board is time.clock (now: board_now, sleep: board_sleep)

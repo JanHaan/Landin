@@ -1,0 +1,237 @@
+--  Prototype 5's firmware/app: one core, one answer at a time (D448).
+--  Two fibres over the board's round: a taker that takes lines off the
+--  serial line as they arrive, and an answerer that answers them one at
+--  a time, in the order they came.  The taker exists so that `NOW b` is
+--  taken while `WAIT 200 a` sleeps rather than overrunning the receive
+--  buffer; receiving is not an operation in flight, answering is.
+import app/protocol
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/line
+import drivers/uart
+import firmware/board
+import firmware/serial
+import firmware/tick
+import firmware/trace
+import platform/cortex_m
+
+--  Static storage, as prototype 1's receive buffer was.  The receive
+--  ring is the DMA's and must be aligned to its size.
+link(align: 256)
+mut rx_storage: [256]u8 = zeroed
+
+--- The longest request line the queue keeps, without its ending.  A
+--- longer one is answered `malformed`, as the hosted session answers a
+--- line too long for its buffer.
+public longest_line: usize = 64
+
+--- How many requests may wait to be answered.  A request that arrives
+--- when this many wait is refused with `busy`: on one core a request is
+--- refused rather than kept, and the refusal is an answer (D448).
+public depth: usize = 4
+
+--  A line marked too long is kept with this size, and refused.
+too_long: u8 = 255
+
+--  Lines waiting to be answered, written by the taker and read by the
+--  answerer.  No atomics and no critical section: both fibres are one
+--  CPU context, and neither switches inside a push or a take (D446).
+waiting: type = struct
+    lines: [4][64]u8
+    sizes: [4]u8
+    numbers: [4]u8
+    head: usize
+    count: usize
+end waiting
+
+mut queue: waiting = zeroed
+
+--  The requests taken so far, which numbers the next one.
+mut arrived: u8 = 0
+
+--  Where the device stopped when it had to: 0 while it runs, else the
+--  step that failed.  The lane fails a run that sets it.
+mut stopped: u32 = 0
+
+halt: (step: u32) -> noreturn =
+    stopped = step
+    loop do cortex_m.wait_for_interrupt() end loop
+end halt
+
+push: (line: []u8, size: u8) -> none =
+    at: usize = (queue.head + queue.count) % depth
+    for i in 0..<lenof line do
+        queue.lines[at][i] = line[i]
+    end for
+    queue.sizes[at] = size
+    arrived +%= 1
+    queue.numbers[at] = arrived
+    inc queue.count
+    trace.record(trace.received, arrived)
+end push
+
+refuse_busy: (inout out: io.buffered_writer(serial.port)) -> none ! io.io_failed =
+    arrived +%= 1
+    trace.record(trace.refused, arrived)
+    try io.put(out, "busy\n")
+    try io.flush(out)
+end refuse_busy
+
+taker: type = struct
+    receive: uart.rx
+    send: serial.port
+    device: board.board
+end taker
+
+--  Take what has arrived and split it into lines; push each, or answer
+--  `busy` when the queue is full.  Neither fibre ends and neither fails:
+--  there is nobody on the device to tell.  A receive error discards what
+--  was unread and starts the receiver again.
+take_lines: (inout self: taker) -> none ! failure.reason =
+    mut scratch: [16]u8 = zeroed
+    mut line: [64]u8 = zeroed
+    mut used: usize = 0
+    mut long: bool = false
+    mut room: [8]u8 = zeroed
+    mut out := io.buffered_over(self.send, serial.line(), room)
+    loop do
+        n := uart.read(self.receive, scratch[0..<lenof scratch]) else (problem)
+            _ = problem
+            uart.restart(self.receive) else (again)
+                _ = again
+                halt(4)
+            end
+            continue
+        end
+        if n == 0 then
+            fibre.yield(self.device)
+            continue
+        end if
+        for i in 0..<n do
+            byte: u8 = scratch[i]
+            if byte == u8('\n') then
+                if used > 0 and line[used - 1] == u8('\r') then used -= 1 end if
+                if queue.count == depth then
+                    try refuse_busy(out)
+                elsif long then
+                    push(line[0..<0], too_long)
+                else
+                    push(line[0..<used], u8(used))
+                end if
+                used = 0
+                long = false
+            elsif used == longest_line then
+                long = true
+            else
+                line[used] = byte
+                inc used
+            end if
+        end for
+    end loop
+end take_lines
+
+answerer: type = struct
+    send: serial.port
+    device: board.board
+end answerer
+
+--  Answer the oldest waiting line, one at a time: its answering starts
+--  when it leaves the queue and ends when its answer is flushed, and the
+--  next does not leave the queue before then.
+answer_lines: (inout self: answerer) -> none ! failure.reason =
+    mut room: [64]u8 = zeroed
+    mut out := io.buffered_over(self.send, serial.line(), room)
+    mut line: [64]u8 = zeroed
+    loop do
+        if queue.count == 0 then
+            fibre.yield(self.device)
+            continue
+        end if
+        at: usize = queue.head
+        size: u8 = queue.sizes[at]
+        number: u8 = queue.numbers[at]
+        mut used: usize = 0
+        if size <> too_long then
+            used = usize(size)
+            for i in 0..<used do
+                line[i] = queue.lines[at][i]
+            end for
+        end if
+        queue.head = (queue.head + 1) % depth
+        queue.count -= 1
+        trace.record(trace.started, number)
+        if size == too_long then
+            try protocol.refuse(out)
+        else
+            asked := protocol.parse(line[0..<used]) else (problem)
+                _ = problem
+                try protocol.refuse(out)
+                trace.record(trace.finished, number)
+                continue
+            end
+            try protocol.answer(self.device, out, asked)
+        end if
+        trace.record(trace.finished, number)
+    end loop
+end answer_lines
+
+--  The round's idler: after a whole round in which every fibre yielded,
+--  nothing changes before an interrupt, and SysTick's comes every tick.
+waiter: type = struct
+    reserved: u32
+end waiter
+
+waiter_idle: (self: waiter) -> none =
+    _ = self
+    cortex_m.wait_for_interrupt()
+end waiter_idle
+
+waiter is stacks.idler (idle: waiter_idle)
+
+--  The fibres' backing: the group's ledger and two stacks, each with its
+--  record at its base.  The round's table holds the reset stack and both.
+mut fibre_backing: [2 * 2048 + 48]u8 = zeroed
+mut round_entries: [3]usize = zeroed
+mut round_state: stacks.round_space = zeroed
+mut clock_state: board.reading = zeroed
+
+--  The reset stack makes the group and joins it, and joining is what it
+--  does for the rest of the device's life: `join` yields until two
+--  routines that never end have ended.  The group is `turns`, because a
+--  taker that never returns would starve the answerer under a provider
+--  that runs each task to its end.
+start: () -> noreturn =
+    receive := uart.open(line.default_settings, 65535, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(1)
+    end
+    tick.start_counting()
+    idler: waiter = (reserved: 0)
+    round := stacks.round_over(round_state, round_entries, any(addr idler)) else (problem)
+        _ = problem
+        halt(2)
+    end
+    device: board.board = (runs: any(addr round), clock: addr clock_state)
+    runs: any fibre.turns = any(addr device)
+    mut both := fibre.turns_over(runs, fibre_backing, 2) else (problem)
+        _ = problem
+        halt(2)
+    end
+    port: serial.port = (reserved: 0)
+    taking: taker = (receive: receive, send: port, device: device)
+    fibre.admit(both, take_lines, taking) else (problem)
+        _ = problem
+        halt(3)
+    end
+    answering: answerer = (send: port, device: device)
+    fibre.admit(both, answer_lines, answering) else (problem)
+        _ = problem
+        halt(3)
+    end
+    fibre.join(both) else (problem)
+        _ = problem
+    end
+    halt(5)
+end start

@@ -1,0 +1,43 @@
+--  What the firmware counterpart records of its requests, for the trace
+--  oracle (D448): each request's arrival, the start and the end of its
+--  answering, and a refusal for a full queue, each with the tick it
+--  happened at.  Both fibres write it, and they are one context, neither
+--  switching inside `record` (D446).  The lane reads it when the run ends.
+import firmware/tick
+
+--- A request taken off the line and queued.
+public received: u8 = 1
+--- A request's answering began: it left the queue.
+public started: u8 = 2
+--- A request's answering ended: its answer was flushed.
+public finished: u8 = 3
+--- A request refused `busy`, the queue being full.
+public refused: u8 = 4
+
+--- One event: what happened, to which request, numbered from one in the
+--- order the requests arrived, and at which tick.
+public event: type = struct
+    at: u32
+    kind: u8
+    request: u8
+    reserved: u16
+end event
+
+--- How many events the trace holds.  A run that would record more marks
+--- the trace `lost` and records nothing further, which the oracle fails.
+public capacity: usize = 32
+
+mut events: [32]event = zeroed
+mut count: u32 = 0
+mut lost: u32 = 0
+
+--- Record that KIND happened to REQUEST now.
+public record: (kind: u8, request: u8) -> none =
+    if usize(count) == capacity then
+        lost = 1
+        return
+    end if
+    events[usize(count)] = (at: tick.now_ticks(), kind: kind, request: request,
+                            reserved: 0)
+    inc count
+end record

@@ -1,0 +1,11 @@
+{
+  "constructs": "0670, 0780, 0790, 0800, 1100, 1240, 1290, 1620, 1640, 1650, 1660, 1675, 1990",
+  "targets": "cortex-m0",
+  "source": "compiler/tests/counterpart/firmware/app/main.ldn",
+  "board": "compiler/tests/counterpart/firmware/board/board.ldn",
+  "tick": "compiler/tests/counterpart/firmware/tick/tick.ldn",
+  "protocol": "examples/derived_server/app/protocol/protocol.ldn",
+  "mapping": "compiler/tests/counterpart/DERIVATION.md",
+  "runner": "environments/cortex-m/counterpart.py",
+  "oracle": "build, session, judge, scenario_run, control_run"
+}

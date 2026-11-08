@@ -237,7 +237,7 @@ runner, and two more whole corpora would put `corpus` at that risk again.
 
 | part | lanes | gate job |
 |---|---|---|
-| `programs` | `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`, `evidence` | `cortex-m-programs` |
+| `programs` | `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`, `counterpart`, `evidence` | `cortex-m-programs` |
 | `corpus` | `backend`, `mps2-an505`, `mps2-an500` | `cortex-m-corpus` |
 | `rv32` | `rv32-controls`, `esp32c3`, `sifive-e` | `cortex-m-rv32` |
 

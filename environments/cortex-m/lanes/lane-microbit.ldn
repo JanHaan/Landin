@@ -1,0 +1,4 @@
+-- The micro:bit lane's entry-module file: the firmware counterpart is
+-- compiled with this beside its own sources, so the program reaches the
+-- nRF51822's description and its 256 KiB of flash (D1036).
+import descriptions/microbit

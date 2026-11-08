@@ -1,0 +1,10 @@
+-- The firmware counterpart's machine: QEMU's micro:bit, whose nRF51822
+-- Cortex-M0 the lanes run on.  This describes the emulator's map, not a
+-- board refine supports, and only the lane's entry-module file,
+-- lanes/lane-microbit.ldn, imports it.  It names the core and the table's
+-- length, the constrained reference's, and, beside this file, the memory;
+-- no interrupt is named, since the counterpart takes SysTick's alone.
+
+compiler.device("microbit")
+compiler.core("cortex-m0")
+compiler.vectors(48)

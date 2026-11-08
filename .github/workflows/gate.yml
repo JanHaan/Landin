@@ -762,6 +762,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
+      #  Prototype 5's firmware counterpart (D448): each scenario's and
+      #  control's trace, when each request arrived, began and ended being
+      #  answered and what the device wrote, at every profile, with the
+      #  oracle's verdict.  The `counterpart` lane that writes them is
+      #  `programs`'s.
+      - name: Keep the firmware counterpart's traces
+        if: always() && matrix.part == 'programs'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cortex-m-counterpart-traces
+          path: |
+            ${{ runner.temp }}/cortex-m-evidence/counterpart/result.json
+            ${{ runner.temp }}/cortex-m-evidence/counterpart/traces.txt
+            ${{ runner.temp }}/cortex-m-evidence/counterpart/*/*/trace.json
+          if-no-files-found: ignore
+          retention-days: 90
+
       #  If a failed job produced Cortex-M output, upload its logs to help
       #  explain what the emulator or debugger said.
       - name: Keep the evidence of a failed lane
@@ -1537,6 +1554,30 @@ jobs:
           riscv64-linux-gnu-objdump --version | sed -n '1p'
           test -f "$(riscv64-linux-gnu-gcc -print-file-name=libm.a)"
           ls /proc/sys/fs/binfmt_misc 2>/dev/null || echo "no binfmt_misc"
+
+      #  A fixture that starts itself again by its own name, prototype 5's
+      #  two-process server among them, runs under QEMU's user emulation
+      #  only through a binfmt_misc handler, and the runner has none for
+      #  riscv64; without one those fixtures are cross-lanes.json's
+      #  expected failures and RV64 shows neither Io's half (D1041).  The
+      #  pinned emulator is registered under Debian's name for it, which
+      #  the test program looks for, with F, so the kernel opens it now.
+      #  The kernel reads the \x escapes of the magic and the mask itself.
+      - name: Register the pinned qemu-riscv64 as the riscv64 binfmt_misc handler
+        run: |
+          set -eu
+          handlers=/proc/sys/fs/binfmt_misc
+          [ -e "$handlers/register" ] ||
+            sudo mount -t binfmt_misc binfmt_misc "$handlers"
+          if [ -e "$handlers/qemu-riscv64" ]; then
+            echo -1 | sudo tee "$handlers/qemu-riscv64" > /dev/null
+          fi
+          magic='\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xf3\x00'
+          mask='\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff'
+          interpreter=$(readlink -f "$RUNNER_TEMP/qemu-user/bin/qemu-riscv64")
+          printf '%s' ":qemu-riscv64:M::$magic:$mask:$interpreter:F" |
+            sudo tee "$handlers/register" > /dev/null
+          cat "$handlers/qemu-riscv64"
 
       #  Ubuntu's cross executables ask for /lib/ld-linux-riscv64-lp64d.so.1,
       #  which QEMU finds under its prefix.
