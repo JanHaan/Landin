@@ -38,6 +38,21 @@ sys.path.insert(0, os.path.join(ROOT, "compiler", "tests"))
 import fixture_meta  # noqa: E402
 
 
+def site_library():
+    """docs/site/library.py, imported from this checkout.
+
+    The checks are also imported by the script controls, whose search
+    path holds scripts/tests and not this file's directory, so the
+    `docs.site` package is found here rather than through whatever an
+    earlier import left on sys.path.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    from docs.site import library
+    return library
+
+
 #  Every file this reads or writes is closed by the time the call returns.
 #  `io.open(path).read()` left it to the collector, and under unittest
 #  each one printed a ResourceWarning: forty-five thousand lines of them
@@ -10330,7 +10345,7 @@ def _consumer_statements(codes):
     or its last more deeply indented line, and each evidence clause
     `TYPE is CONCEPT (...)`, whose name is the pair.  `fixed if` lines
     only enclose; every other statement is passed over."""
-    from docs.site import library
+    library = site_library()
 
     def indent(line):
         return len(line) - len(line.lstrip())
@@ -10395,7 +10410,7 @@ def library_consumers(root):
     the module declares the type, else with its concept.
     """
     from pathlib import Path
-    from docs.site import library
+    library = site_library()
     try:
         modules, files = library.collect(Path(root))
     except (OSError, ValueError):
@@ -10556,7 +10571,7 @@ def check_library_documentation(full_run):
     if not full_run:
         return []
     from pathlib import Path
-    from docs.site import library
+    library = site_library()
     try:
         modules, _ = library.collect(Path(ROOT))
         library.overviews(Path(ROOT), modules)
