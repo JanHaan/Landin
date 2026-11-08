@@ -20,8 +20,8 @@ import core/time
 --- delivered and `losses` datagrams no socket took.  `moves` counts what
 --- changed something a call may wait for: a connection made or taken,
 --- bytes or a datagram delivered or taken, a shutdown, a close and the
---- advance of a clock made `clock_beside` it; `turns` the turns its calls
---- took while they waited; and `sleepers` the fibres sleeping on such a
+--- advance of a clock `clock_over_beside` made beside it; `turns` the turns
+--- its calls took while they waited; and `sleepers` the fibres sleeping on such a
 --- clock.
 public network_space: type = struct
     next_port: usize
@@ -113,10 +113,10 @@ end network_value
 --- that would wait takes a turn of the scheduler it was given instead, so
 --- that the other fibres run, and looks again; it fails `timed_out` only
 --- after a whole round in which nothing moved anywhere in the network, so
---- nothing it waits for arrived, while no fibre sleeps on a clock made
---- `clock_beside` it, which would move it when it wakes, and a call whose socket was shut for
---- what it waits for, or closed, while it waited fails `io_failed` (D449,
---- D483, D493).  `accept`, `send`, `receive`, `receive_from`, `read`, `write`
+--- nothing it waits for arrived, while no fibre sleeps on a clock
+--- `clock_over_beside` made beside it, which would move it when it wakes,
+--- and a call whose socket was shut for what it waits for, or closed,
+--- while it waited fails `io_failed` (D449, D483, D493).  `accept`, `send`, `receive`, `receive_from`, `read`, `write`
 --- and `write_some` are the calls that may wait and so switch; the others
 --- never do.  A send to a connection whose peer has closed is
 --- `disconnected` at once, where a real one may take one send before it

@@ -89,8 +89,8 @@ fails.
 
 `runtime/derived-server-fake-turns` runs `serve_until_terminated`, the
 routine the event provider serves with, beside `ask_both` in a fibre,
-over `core/io/fake`'s network and signals on one round and a clock made
-`clock_beside` the network, which moves only while every fibre waits and
+over `core/io/fake`'s network and signals on one round and a clock
+`clock_over_beside` made beside the network, which moves only while every fibre waits and
 keeps the network from timing out a call while it sleeps (D493). It
 requires `b` answered before `a`, two requests served, 200 milliseconds
 slept, two connections made, the server stopped by SIGTERM which the

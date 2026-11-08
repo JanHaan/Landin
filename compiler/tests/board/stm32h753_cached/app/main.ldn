@@ -5,7 +5,7 @@
 -- that leaves the maintenance out and shows what the cache then does.  The
 -- ring is serial's, the prototype-1 receive contract the cacheless board
 -- runs, which does D227's maintenance itself through the provider it is
--- given (D978): this program gives it `l1.caches()` and writes no
+-- given (D978): this program gives it `l1.new()` and writes no
 -- maintenance of the ring's.  environments/boards/stm32h753_cached/board.py
 -- sends the bytes and checks each frame against its oracle.
 --
@@ -252,7 +252,7 @@ start: () -> none =
     control := scs.ccr()
     geometry := l1.geometry()
     bringup.peripherals()
-    caches := l1.caches()
+    caches := l1.new()
     -- The control's provider: the maintenance left out.
     bare := cache.cacheless(32) else (problem)
         _ = problem

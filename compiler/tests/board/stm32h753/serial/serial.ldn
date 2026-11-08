@@ -42,7 +42,7 @@
 -- and its copy, so that every byte it copies was written before the line
 -- it lies in was dropped.  The cacheless profile passes
 -- `cache.cacheless(32)`, whose operations are the barriers alone, and the
--- cached profile `l1.caches()`.  The contract the caller keeps: the ring
+-- cached profile `l1.new()`.  The contract the caller keeps: the ring
 -- is whole lines of the provider's, which `open` refuses otherwise with
 -- `cache.misaligned`; nothing but the stream writes it while it is open,
 -- so it holds no dirty line once `open` or `restart` cleaned it, and the

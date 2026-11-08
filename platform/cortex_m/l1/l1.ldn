@@ -11,16 +11,16 @@ import core/cache
 
 fixed if compiler.feature.cache then
     --- The level 1 caches' handle for `core/cache`'s maintenance, made by
-    --- `caches`. Its line is the description's, 32 bytes.
+    --- `new`. Its line is the description's, 32 bytes.
     public handle: type = struct
         line: usize
     end handle
 
     --- The maintenance provider of a cached profile's caches, which reset
     --- enabled. It borrows nothing: the caches are the core's.
-    public caches: () -> (caches: handle) =
+    public new: () -> (caches: handle) =
         caches = (line: line_bytes)
-    end caches
+    end new
 
     --- CCSIDR for the level 1 data cache, which reset selected in CSSELR
     --- and nothing else changes: its LineSize, bits 2:0, is the log of the

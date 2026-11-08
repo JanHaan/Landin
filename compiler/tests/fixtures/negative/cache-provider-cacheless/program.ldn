@@ -5,7 +5,7 @@ link(align: 32)
 mut buffer: [32]u8 = zeroed
 
 start: () -> none =
-    caches := l1.caches()
+    caches := l1.new()
     cache.clean(caches, buffer[0..<32]) else (problem)
         _ = problem
     end
