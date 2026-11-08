@@ -1,0 +1,11 @@
+error[L0101]: `inout` is written before the parameter's name, as `inout r: rec`
+  --> ../tests/fixtures/negative/parameter-mode-after-the-colon-goes-first/program.ldn:5:11
+  |
+5 | bump: (r: inout rec, by: i32) -> none =
+  |           ^^^^^
+  --> ../tests/fixtures/negative/parameter-mode-after-the-colon-goes-first/program.ldn:5:8
+  |
+5 | bump: (r: inout rec, by: i32) -> none =
+  |        ^ declared here
+  = note: [1800]: a parameter's mode precedes `name: type`
+  = help (guess): `inout` goes first

@@ -1,0 +1,5 @@
+public main: () -> (code: i32) =
+    mut done := false
+    done = true
+    code = if done then 0 else 1 end if
+end main

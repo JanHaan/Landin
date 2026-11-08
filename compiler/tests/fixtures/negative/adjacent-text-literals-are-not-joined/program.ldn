@@ -1,0 +1,9 @@
+measure: (a: []u8) -> (n: usize) =
+    n = lenof a
+end measure
+
+public main: () -> (code: i32) =
+    n := measure("a long template, "
+                 "continued on the next line")
+    code = i32(n) - 43
+end main

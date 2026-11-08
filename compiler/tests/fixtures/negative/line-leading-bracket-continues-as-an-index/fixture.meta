@@ -1,0 +1,9 @@
+class: negative
+summary: [1750] lets a `[` that begins a line continue the line above as an index, so `[]` after a line ending in a name is an empty index, and the report says the line above was continued and how to begin a value with `[`
+program: program.ldn
+codes: L0102
+constructs: 1750, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/line-leading-bracket-continues-as-an-index/program.ldn
+status: 1

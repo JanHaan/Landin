@@ -1,0 +1,10 @@
+error[L0103]: two text literals side by side are not joined, so this is a second argument with no `,` before it
+  --> ../tests/fixtures/negative/adjacent-text-literals-are-not-joined/program.ldn:7:18
+  |
+7 |                  "continued on the next line")
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/adjacent-text-literals-are-not-joined/program.ldn:6:18
+  |
+6 |     n := measure("a long template, "
+  |                  ^^^^^^^^^^^^^^^^^^^ the literal before it
+  = note: [0260]: write the text as one literal, or as a raw literal [0280] when it spans lines; to build text from pieces, append each to a builder with `text.append`

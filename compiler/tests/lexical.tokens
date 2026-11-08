@@ -38049,6 +38049,58 @@ file negative/addr-of-a-measure-is-refused-there/program.ldn tokens 39
   307 308 0
   309 312 end
   313 317 main
+file negative/adjacent-text-literals-are-not-joined/program.ldn tokens 51
+  0 7 measure
+  7 8 :
+  9 10 (
+  10 11 a
+  11 12 :
+  13 14 [
+  14 15 ]
+  15 17 u8
+  17 18 )
+  19 21 ->
+  22 23 (
+  23 24 n
+  24 25 :
+  26 31 usize
+  31 32 )
+  33 34 =
+  39 40 n
+  41 42 =
+  43 48 lenof
+  49 50 a
+  51 54 end
+  55 62 measure
+  64 70 public
+  71 75 main
+  75 76 :
+  77 78 (
+  78 79 )
+  80 82 ->
+  83 84 (
+  84 88 code
+  88 89 :
+  90 93 i32
+  93 94 )
+  95 96 =
+  101 102 n
+  103 105 :=
+  106 113 measure
+  113 114 (
+  114 133 "a long template, "
+  151 179 "continued on the next line"
+  179 180 )
+  185 189 code
+  190 191 =
+  192 195 i32
+  195 196 (
+  196 197 n
+  197 198 )
+  199 200 -
+  201 203 43
+  204 207 end
+  208 212 main
 file negative/aggregate-call-result-missing-at-early-exit/program.ldn tokens 62
   0 4 pair
   4 5 :
@@ -71005,6 +71057,79 @@ file negative/library-platform-riscv-hazard3-hosted/main.ldn tokens 9
   31 37 answer
   38 40 :=
   41 48 missing
+file negative/line-leading-bracket-continues-as-an-index/program.ldn tokens 72
+  0 7 missing
+  7 8 :
+  9 13 atom
+  15 18 get
+  18 19 :
+  20 21 (
+  21 22 x
+  22 23 :
+  24 28 bool
+  28 29 )
+  30 32 ->
+  33 34 (
+  34 35 r
+  35 36 :
+  37 38 [
+  38 39 ]
+  39 41 u8
+  41 42 )
+  43 44 !
+  45 52 missing
+  53 54 =
+  59 63 fail
+  64 71 missing
+  72 76 when
+  77 78 x
+  83 84 r
+  85 86 =
+  87 88 [
+  88 89 ]
+  90 93 end
+  94 97 get
+  99 105 public
+  106 110 main
+  110 111 :
+  112 113 (
+  113 114 )
+  115 117 ->
+  118 119 (
+  119 123 code
+  123 124 :
+  125 128 i32
+  128 129 )
+  130 131 =
+  136 137 c
+  137 138 :
+  139 140 [
+  140 141 ]
+  141 143 u8
+  144 145 =
+  146 149 get
+  149 150 (
+  150 154 true
+  154 155 )
+  156 160 else
+  161 162 (
+  162 163 e
+  163 164 )
+  173 174 _
+  175 176 =
+  177 178 e
+  187 188 [
+  188 189 ]
+  194 197 end
+  202 206 code
+  207 208 =
+  209 212 i32
+  212 213 (
+  213 218 lenof
+  219 220 c
+  220 221 )
+  222 225 end
+  226 230 main
 file negative/line-leading-minus-continues-the-value/program.ldn tokens 21
   0 7 lowered
   7 8 :
@@ -76710,6 +76835,38 @@ file negative/multiple-return-unassigned/program.ldn tokens 29
   95 96 2
   97 100 end
   101 104 bad
+file negative/mut-binding-written-with-equals-takes-colon-equals/program.ldn tokens 31
+  0 6 public
+  7 11 main
+  11 12 :
+  13 14 (
+  14 15 )
+  16 18 ->
+  19 20 (
+  20 24 code
+  24 25 :
+  26 29 i32
+  29 30 )
+  31 32 =
+  37 40 mut
+  41 45 done
+  46 47 =
+  48 53 false
+  58 62 done
+  63 64 =
+  65 69 true
+  74 78 code
+  79 80 =
+  81 83 if
+  84 88 done
+  89 93 then
+  94 95 0
+  96 100 else
+  101 102 1
+  103 106 end
+  107 109 if
+  110 113 end
+  114 118 main
 file negative/mut-never-written/program.ldn tokens 102
   370 373 mut
   374 380 shared
@@ -78811,6 +78968,75 @@ file negative/parameter-hides-a-concept/program.ldn tokens 50
   154 157 out
   158 161 end
   162 166 emit
+file negative/parameter-mode-after-the-colon-goes-first/program.ldn tokens 68
+  0 3 rec
+  3 4 :
+  5 9 type
+  10 11 =
+  12 18 struct
+  23 24 n
+  24 25 :
+  26 29 i32
+  30 33 end
+  34 37 rec
+  39 43 bump
+  43 44 :
+  45 46 (
+  46 47 r
+  47 48 :
+  49 54 inout
+  55 58 rec
+  58 59 ,
+  60 62 by
+  62 63 :
+  64 67 i32
+  67 68 )
+  69 71 ->
+  72 76 none
+  77 78 =
+  83 84 r
+  84 85 .
+  85 86 n
+  87 89 +=
+  90 92 by
+  93 96 end
+  97 101 bump
+  103 109 public
+  110 114 main
+  114 115 :
+  116 117 (
+  117 118 )
+  119 121 ->
+  122 123 (
+  123 127 code
+  127 128 :
+  129 132 i32
+  132 133 )
+  134 135 =
+  140 143 mut
+  144 145 v
+  146 148 :=
+  149 152 rec
+  152 153 (
+  153 154 n
+  154 155 :
+  156 157 0
+  157 158 )
+  163 167 bump
+  167 168 (
+  168 169 v
+  169 170 ,
+  171 172 1
+  172 173 )
+  178 182 code
+  183 184 =
+  185 186 v
+  186 187 .
+  187 188 n
+  189 190 -
+  191 192 1
+  193 196 end
+  197 201 main
 file negative/parameterized-alias-arity/program.ldn tokens 26
   0 5 bytes
   5 6 :
@@ -113291,6 +113517,44 @@ file negative/variant-case-payload-disagrees/program.ldn tokens 126
   430 434 pair
   435 438 end
   439 442 bad
+file negative/variant-case-payload-written-as-a-call/program.ldn tokens 37
+  0 4 cell
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 28 kind
+  28 29 :
+  30 37 variant
+  38 42 full
+  42 43 (
+  43 44 n
+  44 45 :
+  46 49 i32
+  49 50 )
+  51 52 |
+  53 58 empty
+  59 62 end
+  63 67 kind
+  68 71 end
+  72 76 cell
+  78 84 public
+  85 89 main
+  89 90 :
+  91 92 (
+  92 93 )
+  94 96 ->
+  97 98 (
+  98 102 code
+  102 103 :
+  104 107 i32
+  107 108 )
+  109 110 =
+  115 119 code
+  120 121 =
+  122 123 0
+  124 127 end
+  128 132 main
 file negative/variant-case-value-not-enabled/program.ldn tokens 32
   0 6 choice
   6 7 :

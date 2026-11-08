@@ -1,0 +1,13 @@
+rec: type = struct
+    n: i32
+end rec
+
+bump: (r: inout rec, by: i32) -> none =
+    r.n += by
+end bump
+
+public main: () -> (code: i32) =
+    mut v := rec(n: 0)
+    bump(v, 1)
+    code = v.n - 1
+end main

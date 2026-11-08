@@ -1,0 +1,9 @@
+class: negative
+summary: [0260] joins no text literals written side by side, so a second literal in a call is an argument with no `,` before it, and the report says so and how to write long text
+program: program.ldn
+codes: L0103
+constructs: 0260, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/adjacent-text-literals-are-not-joined/program.ldn
+status: 1

@@ -1,0 +1,14 @@
+missing: atom
+
+get: (x: bool) -> (r: []u8) ! missing =
+    fail missing when x
+    r = []
+end get
+
+public main: () -> (code: i32) =
+    c: []u8 = get(true) else (e)
+        _ = e
+        []
+    end
+    code = i32(lenof c)
+end main

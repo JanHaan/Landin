@@ -1,0 +1,10 @@
+class: negative
+summary: [0680] a variant case carries its payload after `:`, and a first case written as a call, `full(n: i32)`, is refused at the `(` naming `full: (...)` rather than as a field, with the `:` offered
+program: program.ldn
+codes: L0103
+fixed: program.fixed
+constructs: 0680
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/variant-case-payload-written-as-a-call/program.ldn
+status: 1
