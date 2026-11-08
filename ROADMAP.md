@@ -3335,7 +3335,7 @@ R13.78, and the R13 gate remains open.
 
 ### R13.78 — What the review and the register leave
 
-Status: planned
+Status: complete
 Depends on: R13.20, R13.77
 
 After the library is split, this item takes the second outside review's
@@ -3348,6 +3348,57 @@ a release decision keep their activations.
 Exit evidence: every SR-801 to SR-811 nit corrected or answered with a
 reason, each row settled or restated, and the register's open rows read
 against their activations, on every host the gate runs.
+
+Done: each of the second outside review's 83 nits was confirmed on `main`
+against the code and its tests rather than the review's report, and every
+one is corrected or answered: the eighty the review's session fixed, #85
+by R13.76, and the remainders this item finished, #1, #24, #29, #46, #60,
+#63, #69, #80, #81, #86, #89, #101's early directory refusal, #110's
+cleanup summary, #112 and the controls of #49, #66, #83 and #97. SR-801 and
+SR-803 to SR-811 have left the register; SR-802 keeps #21's non-type
+remainder open, by the maintainer's choice. The 183 other open rows were
+read against the work since R13.72, each from the commit that stated its
+activation, and the rows met were taken or restated: the frontend's
+refusals name what to write (SR-273, SR-289, SR-303, SR-307, SR-321,
+SR-373, SR-382, SR-727, SR-728, SR-866), the server answers `offsetof`
+fields and hovers in the source's spelling (SR-247, SR-732), generated
+record pointers are typed (SR-277, D426 amended), a group's error mapping
+is the way (SR-314, D494), D3's review is written (E3), and the scripts,
+checks and fetcher rows went with them. Four defects found on the way are
+fixed and pinned: Xtensa's `link(align:)` crash, a qualified type refused
+as a type argument, a generic instance first named in a slice crashing
+lowering, and the reference pass's dense facts, which made checking grow
+with the square of a routine's locals and failed the first candidate's
+`scaling` job (SR-380). The library ships comparison evidence for `time`
+and `net` (D1031), `l1.new` replaces `l1.caches` (D1032, D269 amended), an
+unscoped `platform/*` module is refused (D1022), and `check.py` refuses a
+public routine or value no program reaches. The cached STM32H753 RAM record
+was made again on the rig after the rename, and `build.py --records=strict`
+matches all seventeen images. On a native Mac the publication and
+cancellation controls passed and sixty programs emitted on Linux ran as
+their fixtures expect, after one, `posix-poll`, showed that Darwin reports
+urgent data on a regular file; the native Ada build still fails as SR-901
+says. In
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/42503239741)
+on `69333162`, 49 of 53 jobs passed and the board and suspended RV64 legs
+were skipped, and
+[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/42507266743)
+on the same tree passed every port.
+
+The R13 gate holds. The three roots are separate: every `core` module
+checks on all ten targets, each `platform` module only on its declared
+families with the others refused, and a firmware build refuses a hosted
+import by name on Cortex-M0, RV32 and Xtensa. Every public routine and
+value has a consumer a program reaches, which `check.py` now holds. The 23
+`library-shared-*` consumers, `core/line`, `core/cache` and `core/text`'s
+new operations among them, compile, link and return their status on every
+hosted target and execute on the Cortex-M, RV32 and Xtensa corpus lanes,
+with their refusals checked. The library's later facilities follow R13.11's
+conventions, the departures decided as D1031 to D1033 and D269 record. Two
+readers with no project context, sandboxed with only the packaged
+candidate `27ad1087c` and the rendered site, each wrote a UTF-8
+line-statistics module, its hosted tool and a Cortex-M0 build of the module
+from the published documentation alone; what they met is SR-940 to SR-949.
 
 ### R13 gate
 
