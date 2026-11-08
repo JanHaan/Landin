@@ -9,7 +9,8 @@
 #  and repeat to write several in one run.  --record-and-run does
 #  both invocations after one build.  --suite, --case and --fixture, each as
 #  often as wanted, select a visibly FILTERED developer run; none replaces
-#  the no-argument gate.
+#  the no-argument run, the complete local native suite, and neither that
+#  nor any local run replaces the multi-host gate.
 #  --host explicitly excludes native target workload emission/execution and reports
 #  HOST-ONLY scope; it can combine with --suite and --case selections.
 #  --shard=I/N runs shard I of N of the complete (or --host) run; only all N

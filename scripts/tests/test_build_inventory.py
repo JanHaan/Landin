@@ -881,6 +881,11 @@ class DeveloperScripts(unittest.TestCase):
                                  "LANDIN_TEST_JOBS=N splits",
                                  "  parser  ", "  memory  "):
                         self.assertIn(said, result.stdout)
+                    #  What a run's scope is, as the local recipe reports it.
+                    self.assertIn("A no-argument invocation runs the complete"
+                                  " local native suite.\n", result.stdout)
+                    self.assertIn("Selections produce a FILTERED run; --host"
+                                  " produces HOST-ONLY scope.\n", result.stdout)
         source =(ROOT / "compiler/ada/tests/src/landin_tests.adb").read_text()
         declared = source[source.index("Expected_Suites : constant"):]
         declared = declared[:declared.index("];")]
