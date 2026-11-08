@@ -439,38 +439,7 @@ through that platform boundary when an executable report is requested. It
 measures occupied flash and static RAM extents from load segments and lists
 the selected libgcc member names without host-specific paths.
 
-The outer JSON has `schema: 1`, a `build` object in
-`landin-build-report-1` format, `sources` and `items`; a linked Cortex
-executable also has a `firmware` object. The optional outer `link` field
-records the selected link mode, `static` or `libc`. A source entry contains
-`source`, `path_hex`, `sha256`; an item contains `item`, `declaration`, `name`,
-`source`, `first`, `last`, `name` being its symbol's spelling (D421).
-`left_indirect` lists every evidence call the emitted program still makes
-through a table, each with its `routine`, `source`, `line`, `column`, the
-`provider` a concrete table holds and `why`, a sentence. The nested build
-carries `target`, the selected CPU feature `level`, and the `optimize` and
-`specialize` controls, plus
-`specializations`, `routines`, `layouts`. Every backend fills every field
-of a `routines` row for every routine it emits, with one meaning on every
-target. `frame_bytes` is what the prologue reserves below the frame record
-and the registers it pushes: slot cells, spill and save homes and incoming
-register homes, rounded to the stack's alignment. It is not the routine's
-stack: `stack_bytes` is, the figure the depth report gives the routine as
-its `frame_bytes`, from the stack pointer its caller had before the call,
-with the return address, frame record, pushed registers and the largest
-call or push area. `save_bytes` are the callee-saved registers it saves, in
-the frame or pushed beside the frame record, never the record itself;
-`spill_bytes` and `spill_count` its spill homes. `register_count` is the
-distinct registers the allocation holds a value or slot in, saved or not,
-and zero on RISC-V and Cortex-M0, which give every one a home.
-`instructions`, `stack_loads`, `stack_stores`, `direct_calls` and
-`indirect_calls` are static sites in the routine's final text: a load or
-store reaches the stack through the stack or frame pointer or a register
-set from one since the last label or call, and a push, a pop and x86-64's
-call and return are stack traffic too. x86-64 counts them from its
-selected stream and the other backends with `Landin.Backend.Site_Counts`.
-Instruction/stack counts are static emission sites, `estimated_growth` is
-an IR policy score, and neither claims assembled bytes.
+The report's fields are listed under [the build report](#the-build-report).
 
 Frame preflight and emission do not plan a routine twice. Preflight asks
 `Landin.Backend.Frame_Bound`, which needs only the reference frame, and
@@ -1237,6 +1206,45 @@ The stage seam is one interface and one pipeline, contract-tested with fake
 stages. Named per-stage packages arrive as each stage is written, which is
 what keeps the seam a seam rather than an empty directory tree with
 aspirational names in it.
+
+## The build report
+
+`refine check`, `compile` and `run` write this JSON with
+`--build-report=PATH` once the request's outputs and tools have succeeded;
+[package ownership](#package-ownership) says which packages build it.
+
+The outer JSON has `schema: 1`, a `build` object in
+`landin-build-report-1` format, `sources` and `items`; a linked Cortex
+executable also has a `firmware` object. The optional outer `link` field
+records the selected link mode, `static` or `libc`. A source entry contains
+`source`, `path_hex`, `sha256`; an item contains `item`, `declaration`, `name`,
+`source`, `first`, `last`, `name` being its symbol's spelling (D421).
+`left_indirect` lists every evidence call the emitted program still makes
+through a table, each with its `routine`, `source`, `line`, `column`, the
+`provider` a concrete table holds and `why`, a sentence. The nested build
+carries `target`, the selected CPU feature `level`, and the `optimize` and
+`specialize` controls, plus
+`specializations`, `routines`, `layouts`. Every backend fills every field
+of a `routines` row for every routine it emits, with one meaning on every
+target. `frame_bytes` is what the prologue reserves below the frame record
+and the registers it pushes: slot cells, spill and save homes and incoming
+register homes, rounded to the stack's alignment. It is not the routine's
+stack: `stack_bytes` is, the figure the depth report gives the routine as
+its `frame_bytes`, from the stack pointer its caller had before the call,
+with the return address, frame record, pushed registers and the largest
+call or push area. `save_bytes` are the callee-saved registers it saves, in
+the frame or pushed beside the frame record, never the record itself;
+`spill_bytes` and `spill_count` its spill homes. `register_count` is the
+distinct registers the allocation holds a value or slot in, saved or not,
+and zero on RISC-V and Cortex-M0, which give every one a home.
+`instructions`, `stack_loads`, `stack_stores`, `direct_calls` and
+`indirect_calls` are static sites in the routine's final text: a load or
+store reaches the stack through the stack or frame pointer or a register
+set from one since the last label or call, and a push, a pop and x86-64's
+call and return are stack traffic too. x86-64 counts them from its
+selected stream and the other backends with `Landin.Backend.Site_Counts`.
+Instruction/stack counts are static emission sites, `estimated_growth` is
+an IR policy score, and neither claims assembled bytes.
 
 ## Building
 

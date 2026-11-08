@@ -160,15 +160,30 @@ refused conservatively with a path/access route; it is not proof of a source
 collision. Bindings retains its separately specified staged output-tree
 creation behavior.
 
-A late failure can follow successful staging or installation. The diagnostic
-names the previous recovery entry and any captured new or concurrent entry
-that could not be restored safely. Keep those paths: inspect the named
-`.refine-publication-...` directory's `destination-...` records, `stage` and
-`recovery` entries, recover the version you need without overwriting a
-concurrent save, then remove the retained workspace before retrying. An
-unresolved earlier publication is refused rather than discarded. A cleanup
-failure can leave the new output installed and its prior version retained;
-the diagnostic does not promise that nothing changed.
+`-o` names the file to write. An existing directory there is refused
+before anything is compiled, with a file under it as the example: write
+`-o d/main` rather than `-o d`.
+
+A preparation the host refuses for a resource, such as the file-size limit
+or a full disk, says so and removes the publication workspace it made when
+nothing was captured; free the resource and retry. A build cancelled by a
+signal reports no output failure: refine's last line names the signal, and
+nothing it would have replaced was.
+
+A late failure can follow successful staging or installation, and the
+diagnostic says which state publication ended in. "Is published" means the
+new outputs are installed and complete, and the replaced copy remains in the
+recovery directory to inspect and remove; an ESP image is said to have been
+written and read back only when that check ran. "Was not published" means
+every output is back as it was and only the build's private files remain.
+"Rollback ... is incomplete" means an output may hold the new or the
+previous version. The diagnostic names the previous recovery entry and any
+captured new or concurrent entry only when publication holds it. Keep those
+paths: inspect the named `.refine-publication-...` directory's
+`destination-...` records, `stage` and `recovery` entries, recover the
+version you need without overwriting a concurrent save, then remove the
+retained workspace before retrying. An unresolved earlier publication is
+refused rather than discarded.
 
 Formatting retains its original read descriptor and writes into that inode.
 It needs a writable ordinary file and write permission in its directory for
@@ -2314,7 +2329,9 @@ description with `link(region: "NAME")`.
 a key twice, is not schema 1, lacks a key it needs or names one refine does
 not read, gives one of the wrong shape, or binds for another ABI than
 `--target` names, a data model or calling convention among them, which
-`cortex-m0`'s policy must name (D935). The message names the key or the declaration. A policy's
+`cortex-m0`'s policy must name (D935). The message names the key or the declaration,
+and for a function, callback or incoming entry without `parameters` says to
+write `"parameters": {}` when no parameter is a reference. A policy's
 every key is described in the
 [binding policy reference](../bindings/README.md). With an installed compiler,
 run `refine help bindings` for the address of its generated reading copy.
@@ -2345,7 +2362,7 @@ explains.
 A declaration the policy selects cannot be bound (D820), and the message
 names the policy declaration and the position: the header no longer has it
 (a stale policy), a reference position has no policy or a scalar one has
-one, or the declaration uses a form `bindings/README.md` lists as refused,
+one, which names the key to remove, or the declaration uses a form `bindings/README.md` lists as refused,
 such as an extended floating type, a calling convention attribute, an
 anonymous aggregate or a wrapper that would forward a C variadic tail, or,
 on freestanding `cortex-m0`, a nullable callback or a `_Thread_local` object,

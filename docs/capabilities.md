@@ -268,8 +268,17 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   through verification of the whole group, including an ESP image or Darwin
   debug bundle. Unchanged files retain their original inode. Failure or
   cancellation restores prior versions without overwriting a concurrent
-  change, or reports the retained recovery paths. An earlier retained
-  publication is diagnosed before retrying. The group is not an atomic
+  change, or reports the retained recovery paths. A cleanup refusal says
+  which state the group ended in: published, with the replaced copy kept;
+  not published, with every output back and only this build's private files
+  kept; or a rollback that did not finish. It names only the recovery entries
+  it holds, and an ESP image as checked only when it was written and read
+  back. A cancelled build reports no output fault; refine's last line names
+  the signal. A preparation refused for a resource limit, such as the
+  file-size limit, removes the workspace it made when it captured nothing.
+  An earlier retained publication is diagnosed before retrying. `-o` names
+  the file to write: an existing directory there is refused before anything
+  is compiled, with a file under it as the example. The group is not an atomic
   snapshot for readers, and ordinary recovery is not power-loss durability.
   Protected inputs include the source closure, response files, policies,
   selected tools, supplied tool inputs and known resolved libraries; bindings
@@ -297,7 +306,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   and SIGQUIT, so the terminal's Ctrl-C and Ctrl-\ reach the program and
   refine stays to clean up; an interrupt or quit refine's caller ignored
   stays ignored in the program. A termination or hangup sent to refine is
-  passed on to the program, unless refine was started with it ignored. It
+  passed on to the program, unless refine was started with it ignored. So
+  a supervisor that signals refine alone, rather than its process group,
+  sends SIGTERM or SIGHUP: an interrupt sent only to refine is ignored. It
   cleans up its directory after every outcome. If a changed directory or
   cleanup failure prevents safe removal, it retains the entries and reports
   their recovery location and what to do. It takes `compile`'s
@@ -390,9 +401,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   release name or `null` for development. The input digest covers compiler
   sources and build policy, so a prose edit changes dirty state without
   changing that digest.
-- `refine targets` lists described targets, their CPU feature levels and accepted debug modes;
-  `--json` gives structured output, and `--identify` retains the older
-  capability summary.
+- `refine targets` lists described targets, their CPU feature levels and
+  accepted debug modes, and for a firmware target the cores each level is,
+  so a Cortex-M4 reads as `cortex-m0`'s `armv7e-m`; `--json` gives
+  structured output, with a `cores` list of names and levels, and
+  `--identify` retains the older capability summary.
 
 ### Reports and diagnostics
 
@@ -401,8 +414,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   warnings and errors.
 - `--color auto|always|never` controls human diagnostic colour; `auto`
   checks standard error's terminal, `NO_COLOR` and `TERM`.
-- `--diagnostics human|short|json` selects the source report. JSON
-  diagnostics are schema-versioned newline-delimited objects carrying
+- `--diagnostics human|short|json` selects the source report, which is
+  written to standard error in every format: read JSON diagnostics from
+  there, as `2>report.jsonl` does, since standard output carries only what
+  the command itself prints. JSON diagnostics are schema-versioned newline-delimited objects carrying
   labels, notes and fixes; line and byte-column coordinates are one-based,
   spans retain the compiler's byte offsets, and paths also carry a
   hexadecimal encoding of their original bytes.
@@ -772,7 +787,8 @@ process ignores SIGPIPE and gives its children the default back.
   specialization, which are independent switches. The driver selects
   size/auto by default; `--optimize=none --specialize=off` selects the
   reference, and `--build-report=PATH` requests deterministic off-target
-  JSON, whose every routine row counts frame, stack, saves, spills,
+  JSON, [whose fields the compiler guide lists](../compiler/ada/README.md#the-build-report),
+  and whose every routine row counts frame, stack, saves, spills,
   registers, instructions, stack traffic and calls the same way on every
   backend (D791). Build mode remains independent.
 - **The simplifier.** At size and speed it forwards a slot's value across
