@@ -3058,6 +3058,16 @@ package body Landin.Diagnostics.Citations is
             when 493 =>
                "A sleep on a clock beside the fake network is a move to "
                & "come",
+            when 1034 =>
+               "Prototype 5's firmware counterpart, and where it departs"
+               & " from the sketch",
+            when 1035 =>
+               "The counterpart's trace, and what its oracle requires",
+            when 1036 =>
+               "The counterpart runs on a description of the micro:bit's"
+               & " own chip",
+            when 1037 =>
+               "RV64's emulated lane registers a binfmt_misc handler",
             when 494 =>
                "A program starts threads as a group it joins",
             when 495 =>
@@ -4519,6 +4529,14 @@ package body Landin.Diagnostics.Citations is
             when 490 =>
                "Decisions: The core library and the derived programs",
             when 493 =>
+               "Decisions: The core library and the derived programs",
+            when 1034 =>
+               "Decisions: The core library and the derived programs",
+            when 1035 =>
+               "Decisions: The core library and the derived programs",
+            when 1036 =>
+               "Decisions: The core library and the derived programs",
+            when 1037 =>
                "Decisions: The core library and the derived programs",
             when 494 =>
                "Decisions: The core library and the derived programs",
@@ -6747,6 +6765,18 @@ package body Landin.Diagnostics.Citations is
             when 493 =>
                "https://www.701.dev/spec.html#d493-a-sleep-on-a-clock-be"
                & "side-the-fake-network-is-a-move-to-come",
+            when 1034 =>
+               "https://www.701.dev/spec.html#d1034-prototype-5-s-firmwa"
+               & "re-counterpart-and-where-it-departs-from-the-sketch",
+            when 1035 =>
+               "https://www.701.dev/spec.html#d1035-the-counterpart-s-tr"
+               & "ace-and-what-its-oracle-requires",
+            when 1036 =>
+               "https://www.701.dev/spec.html#d1036-the-counterpart-runs"
+               & "-on-a-description-of-the-micro-bit-s-own-chip",
+            when 1037 =>
+               "https://www.701.dev/spec.html#d1037-rv64-s-emulated-lane"
+               & "-registers-a-binfmt-misc-handler",
             when 494 =>
                "https://www.701.dev/spec.html#d494-a-program-starts-thre"
                & "ads-as-a-group-it-joins",

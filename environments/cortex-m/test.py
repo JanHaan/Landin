@@ -1187,7 +1187,7 @@ class ProbeFailures(unittest.TestCase):
 
     def test_only_a_lane_that_compiles_needs_refine(self):
         """--refine is optional, and a run selecting a lane that needs it is
-        refused naming that lane (SR-699)."""
+        refused naming that lane."""
         import run as run_module
         parser_text = (HERE / 'run.py').read_text()
         self.assertNotIn("'--refine', type=Path, required=True", parser_text)
