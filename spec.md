@@ -33554,7 +33554,12 @@ the caller lends and a count; `admit` copies a task's state onto a free stack
 and starts a thread that calls an ordinary routine with that copy, waiting
 for a stack to come free when none is; the group keeps the first failure in
 a ledger the threads share through the atomic wrapper, and `join` fails with
-it once every admitted thread has ended. D445's `escaping into` and the
+it once every admitted thread has ended. A task's error set is `failure.reason`, as
+D444's is, and a task with atoms of its own maps them into it before
+returning. With the fibre group and the thread group both carrying their
+caller's failures so, that mapping is the way a generic facility carries a
+caller's error set, rather than a stopgap until error sets become generic
+parameters. D445's `escaping into` and the
 `defer` that joins are as for fibres. A successful `admit` synchronizes with
 the new thread's first action and a thread's end with the return of the
 `join` that waits for it, as D227 has it; a failed start establishes neither
@@ -33569,8 +33574,10 @@ run a round of fibres of its own; a fibre never moves between threads.
 
 **The alternatives:** a start that returns a handle the caller joins, which
 lets a thread outlive the routine that started it and brings back the pool
-D444 declined for fibres; and threads as one more fibre provider, which D446
-declined. Both were declined.
+D444 declined for fibres; threads as one more fibre provider, which D446
+declined; and a group generic over its tasks' error set, which would make an
+error set a generic parameter, as D444 declined for fibres. All three were
+declined.
 
 **Pinned by** `runtime/thread-creation-and-join-order-writes` and
 `runtime/thread-creation-and-join-order-writes-libc`, two threads reading ordinary data written before
