@@ -2646,6 +2646,9 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 {note}
 The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>;
 questions, bugs and ideas go to <a href="{REPO}/discussions">its discussions</a>.
+For a program reading the site, the same documents are plain text:
+<a href="llms.txt">llms.txt</a>, <a href="llms-primer.txt">the primer</a>
+and <a href="llms-full.txt">everything in one file</a>.
 <br>Copyright &#169; 2026 Jan Haan.
 Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
 <a href="{REPO}/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.
@@ -3708,6 +3711,11 @@ def main(argv):
         print(f"{SITE.name}/index.html")
         (SITE / "404.html").write_text(not_found_page(DOCS + GUIDES))
         print(f"{SITE.name}/404.html")
+        #  Every page's footer links the plain-text files, and the
+        #  library's link check reads the directory, so they come first.
+        for name in llms.write(SITE, source, DOCS + GUIDES, SITE_URL):
+            print(f"{SITE.name}/{name}"
+                  f"{(SITE / name).stat().st_size / 1024:>10.0f} KB")
         library_pages = library.write(source, SITE, SimpleNamespace(
             DOCS=DOCS, GUIDES=GUIDES, WORD=WORD, page=page,
             render_guide=render_guide, guide_targets=guide_targets,
@@ -3717,9 +3725,6 @@ def main(argv):
         print(f"{SITE.name}/library.html  {len(library_pages)} reference and source pages")
         for name in write_resources(DOCS + GUIDES, library_pages):
             print(f"{SITE.name}/{name}")
-        for name in llms.write(SITE, source, DOCS + GUIDES, SITE_URL):
-            print(f"{SITE.name}/{name}"
-                  f"{(SITE / name).stat().st_size / 1024:>10.0f} KB")
         #  The status in the words the page shows: the version, then the
         #  headline and detail; the "Status:" prefix and the period after
         #  the version are the README's punctuation, which status_parts
