@@ -268,6 +268,13 @@ serves an Arm session, an RV32 one and an Arm one again through one GDB,
 the first leaving an internal breakpoint and watchpoint, and requires each
 later session to see none.
 
+A session reads a program's module binding by its symbol,
+`v("*(unsigned*)&refused")`. A binding whose name an imported routine
+also has is linked under its module-qualified spelling, `main.geometry`
+beside `l1.geometry`, and the bare name is then the routine's or no
+symbol at all; the [target guide](../../docs/targets.md#cortex-source-debugging)
+says how GDB answers that and how to find and read the binding's spelling.
+
 ### On NixOS
 
 The locked QEMU and GDB are Debian binaries, and NixOS's own
@@ -784,6 +791,22 @@ says by how much, as a corpus line does; a compile failure gives the
 compiler's first diagnostic; and a stack overrun names its routine. Each
 profile's `observed.json` holds the status, r12 and the stop. The run
 fails only when a profile could not be built or run.
+
+A corpus fixture or a `--program` starts where a hosted program does, at
+`public main: () -> (code: i32)`, the result's name included: the harness
+start, `probes/backend-start.S` here and `probes/rv32-start.S` on the RV32
+lanes, calls `main` and reads `code`. The corpus compiles with
+`--emit=asm` and no `--firmware-entry`, and refine then exports a
+`public main` of exactly that signature as the global `main` and says
+nothing of any other: `public main: () -> (status: i32)` is emitted as a
+routine local to the file, and a program with no `main` at all compiles
+too. Either is met at the harness link, as ``undefined reference to
+`main'``, rather than as the L0502 a hosted target gives (`a hosted
+program needs public main: () -> (code: i32)`), or the one `--emit=exe`
+gives on firmware, which asks for `--firmware-entry=NAME`. When that link
+names `main`, compare the program's `main` with the signature above. The
+Xtensa runner calls `main()` from a Landin source wrapper instead, so
+there a missing `main` is refine's refusal of the wrapper.
 
 `backend-start.S` is small external test support: the vector table,
 bytewise initialized-data and RAM-code copying, BSS clearing, a stack
