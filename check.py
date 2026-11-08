@@ -48,12 +48,6 @@ def read_file(*arguments, **options):
         return stream.read()
 
 
-def write_file(path, text):
-    """Replace a generated file's text, as UTF-8."""
-    with io.open(path, "w", encoding="utf-8") as stream:
-        stream.write(text)
-
-
 def fixture_fields(path):
     """A `fixture.meta`'s keys as compiler/tests/fixture_meta.py reads
     them.  Faults are the test program's to report, so a faulty file still
@@ -6263,6 +6257,41 @@ def markdown_register(relative, heading, columns):
                           heading, columns)
 
 
+def table_problems(relative, heading, columns):
+    """Why markdown_register found no table, as (path, line, why) rows.
+
+    The generators that read these registers stop on a None; this says
+    which file, heading, header or row it was, so the stop names a cause.
+    """
+    path = os.path.join(ROOT, relative)
+    if not os.path.exists(path):
+        return [(relative, 1, "the file is missing")]
+    lines = read_file(path, encoding="utf-8").splitlines()
+    if heading not in lines:
+        return [(relative, 1, "no heading %r" % heading)]
+    at = lines.index(heading) + 1
+    while at < len(lines) and not lines[at].startswith("|"):
+        at += 1
+    if at + 1 >= len(lines):
+        return [(relative, lines.index(heading) + 1,
+                 "no table follows %r" % heading)]
+
+    def cells(line):
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+    if cells(lines[at]) != list(columns):
+        return [(relative, at + 1, "the table's columns are %s, not %s"
+                 % (" | ".join(cells(lines[at])), " | ".join(columns)))]
+    out = []
+    for number in range(at + 2, len(lines)):
+        if not lines[number].startswith("|"):
+            break
+        if len(cells(lines[number])) != len(columns):
+            out.append((relative, number + 1, "this row has %d cells, not %d"
+                        % (len(cells(lines[number])), len(columns))))
+    return out
+
+
 def fixture_records():
     """The metadata facts the coverage registers are allowed to cite."""
     return _fixture_records(ROOT)
@@ -6491,28 +6520,44 @@ def implemented_constructs():
             if has & {"accepted", "emitted", "executed"}}
 
 
+#  The four registers the coverage reading copies are generated from, each
+#  a file, its exact heading and its table's columns.
+GUARANTEE_REGISTER = (SPEC_NAME, "#### Guarantee coverage",
+                      ("Operation", "Class", "Constructs", "Behaviour",
+                       "Evidence"))
+CONFORMANCE_REGISTER = (SPEC_NAME, "#### Conformance and evidence coverage",
+                        ("Mechanism", "Rules", "Evidence"))
+PROTOTYPE_REGISTER = (REGISTERS, "## Prototype derivation coverage",
+                      ("Fixture", "Prototype", "Findings", "Pressure"))
+TARGET_SCOPE_REGISTER = (REGISTERS, "## Target applicability coverage",
+                         ("Scope", "Targets"))
+
+
 def guarantee_rows():
-    return markdown_register(
-        SPEC_NAME, "#### Guarantee coverage",
-        ("Operation", "Class", "Constructs", "Behaviour", "Evidence"))
+    return markdown_register(*GUARANTEE_REGISTER)
 
 
 def conformance_rows():
-    return markdown_register(
-        SPEC_NAME, "#### Conformance and evidence coverage",
-        ("Mechanism", "Rules", "Evidence"))
+    return markdown_register(*CONFORMANCE_REGISTER)
 
 
 def prototype_rows():
-    return markdown_register(
-        REGISTERS, "## Prototype derivation coverage",
-        ("Fixture", "Prototype", "Findings", "Pressure"))
+    return markdown_register(*PROTOTYPE_REGISTER)
 
 
 def target_scope_rows():
-    return markdown_register(
-        REGISTERS, "## Target applicability coverage",
-        ("Scope", "Targets"))
+    return markdown_register(*TARGET_SCOPE_REGISTER)
+
+
+def coverage_problems():
+    """What stopped coverage_dumps, register by register."""
+    out = []
+    for register in (GUARANTEE_REGISTER, CONFORMANCE_REGISTER,
+                     PROTOTYPE_REGISTER, TARGET_SCOPE_REGISTER):
+        if markdown_register(*register) is None:
+            out += table_problems(*register) or [
+                (register[0], 1, "%r could not be read" % register[1])]
+    return out
 
 
 def construct_applicability_rows():
@@ -7075,6 +7120,7 @@ def diagnostic_matrix_dump():
 
 
 EXPLANATIONS = "docs/diagnostics.md"
+CATALOGUE_ADS = "compiler/ada/src/diagnostics/landin-diagnostics-catalogue.ads"
 EXPLANATIONS_ADA = ("compiler/ada/src/diagnostics"
                     "/landin-diagnostics-explanations.adb")
 EXAMPLE_OPTIONS = "-- refine:"
@@ -7230,6 +7276,20 @@ def explanations_dump():
         body.append("")
     body.append("end Landin.Diagnostics.Explanations;")
     return "\n".join(body) + "\n"
+
+
+def explanation_problems():
+    """What stopped explanations_dump: the catalogue, the page, or a code
+    the page does not explain."""
+    rows = catalogue_rows()
+    sections, problems = explanation_sections()
+    out = list(problems)
+    if rows is None:
+        out.append((CATALOGUE_ADS, 1, "the catalogue table could not be read"))
+    elif sections is not None:
+        out += [(EXPLANATIONS, 1, "%s is not explained" % row["code"])
+                for row in rows if row["code"] not in sections]
+    return out
 
 
 def check_explanations(full_run):
@@ -10021,22 +10081,33 @@ def generate_tokens():
     return 0
 
 
+def print_problems(what, problems):
+    """Say what a generator could not generate and every problem that
+    stopped it, the way generate_tokens names the grammar's."""
+    print("%s could not be generated; fix these first:" % what)
+    for path, line, why in problems or [
+            ("check.py", 1, "no cause was recorded; run python3 check.py")]:
+        print("    %s:%d  %s" % (path, line, why))
+
+
 def generate_catalogue():
     text = catalogue_dump()
     if text is None:
-        print("the catalogue could not be read")
+        print_problems("the catalogue", [
+            (CATALOGUE_ADS, 1, "the catalogue table could not be read")])
         return 2
     matrix = diagnostic_matrix_dump()
     if matrix is None:
-        print("the diagnostic matrix could not be read")
+        print_problems("the diagnostic matrix", [
+            (CATALOGUE_ADS, 1, "the catalogue table could not be read")])
         return 2
     explained = explanations_dump()
     if explained is None:
-        print("the explanations could not be generated; run check.py")
+        print_problems("the explanations", explanation_problems())
         return 2
     cited = citations_dump()
     if cited is None:
-        print("the citations could not be generated; run check.py")
+        print_problems("the citations", citation_entries()[2])
         return 2
     write_generated("compiler/tests/diagnostics.catalogue", text)
     write_generated("compiler/tests/diagnostics.matrix", matrix)
@@ -10049,7 +10120,7 @@ def generate_catalogue():
 def generate_coverage():
     dumps = coverage_dumps()
     if dumps is None:
-        print("the coverage registers could not be read")
+        print_problems("the coverage registers", coverage_problems())
         return 2
     for name, text in dumps.items():
         write_generated("compiler/tests/" + name, text)

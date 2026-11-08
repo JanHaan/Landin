@@ -169,11 +169,74 @@ class GeneratedWrite(unittest.TestCase):
                               "wrote generated"])
 
     def test_read_failure_is_not_treated_as_a_missing_file(self):
-        with patch.object(CHECK, "read_file", side_effect=PermissionError), \
-                patch.object(CHECK, "write_file") as write:
+        #  A file that cannot be read is not one to write afresh: the
+        #  error stops the write and nothing is created where it was.
+        import tempfile
+        with tempfile.TemporaryDirectory() as root, \
+                patch.object(CHECK, "ROOT", root), \
+                patch.object(CHECK, "read_file", side_effect=PermissionError), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
             with self.assertRaises(PermissionError):
                 CHECK.write_generated("generated", "x")
-            write.assert_not_called()
+            self.assertEqual(os.listdir(root), [])
+        self.assertEqual(output.getvalue(), "")
+
+
+class GeneratorRefusals(unittest.TestCase):
+    """A generator that cannot generate prints what stopped it."""
+
+    def generate(self, generator):
+        output = io.StringIO()
+        with patch.object(CHECK, "write_generated",
+                          side_effect=AssertionError("nothing is written")), \
+                contextlib.redirect_stdout(output):
+            status = generator()
+        return status, output.getvalue()
+
+    def test_an_unexplained_code_is_named(self):
+        sections, problems = CHECK.explanation_sections()
+        code = next(iter(sections))
+        less = {key: value for key, value in sections.items() if key != code}
+        with patch.object(CHECK, "explanation_sections",
+                          return_value=(less, problems)):
+            status, output = self.generate(CHECK.generate_catalogue)
+        self.assertEqual(status, 2)
+        self.assertIn("the explanations could not be generated; fix these"
+                      " first:", output)
+        self.assertIn("docs/diagnostics.md:1  %s is not explained" % code,
+                      output)
+        self.assertNotIn("run check.py", output)
+
+    def test_a_page_problem_is_named(self):
+        sections, _ = CHECK.explanation_sections()
+        with patch.object(CHECK, "explanation_sections", return_value=(
+                sections, [("docs/diagnostics.md", 40, "two examples")])):
+            status, output = self.generate(CHECK.generate_catalogue)
+        self.assertEqual(status, 2)
+        self.assertIn("docs/diagnostics.md:40  two examples", output)
+
+    def test_an_unreadable_coverage_register_is_named(self):
+        register = (CHECK.SPEC_NAME, "#### No such coverage",
+                    CHECK.GUARANTEE_REGISTER[2])
+        with patch.object(CHECK, "GUARANTEE_REGISTER", register):
+            status, output = self.generate(CHECK.generate_coverage)
+        self.assertEqual(status, 2)
+        self.assertIn("the coverage registers could not be generated", output)
+        self.assertIn("spec.md:1  no heading '#### No such coverage'", output)
+
+    def test_a_register_whose_columns_differ_is_named(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as root, \
+                patch.object(CHECK, "ROOT", root):
+            Path(root, "r.md").write_text(
+                "## R\n\n| A | C |\n|---|---|\n| 1 | 2 |\n")
+            self.assertEqual(CHECK.table_problems("r.md", "## R", ("A", "B")),
+                             [("r.md", 3, "the table's columns are A | C,"
+                               " not A | B")])
+            Path(root, "r.md").write_text(
+                "## R\n\n| A | B |\n|---|---|\n| 1 |\n")
+            self.assertEqual(CHECK.table_problems("r.md", "## R", ("A", "B")),
+                             [("r.md", 5, "this row has 1 cells, not 2")])
 
 
 if __name__ == "__main__":
