@@ -542,6 +542,23 @@ class GuideCitations(unittest.TestCase):
                          [(1, "[9999] is cited and not defined"),
                           (6, "[9995] is cited and not defined")])
 
+    def test_a_link_to_a_construct_is_checked(self):
+        #  A link's text is blanked so it is not read as a citation; a link
+        #  whose fragment is a construct is checked as one.
+        from check_controls import tree
+        guide = ("[0010](../tour.md#0010) and [the rule](../spec.md#1840).\n"
+                 "[9994](../tour.md#9994) and [9993](tour.html#9993).\n"
+                 "[0010](../spec.md#0010) and [a section](../tour.md#control-flow).\n")
+        with tree(written={"tour.md": "### [0010] Thing\n",
+                           "spec.md": "### [1840] Rule\n",
+                           "docs/from-c.md": guide}) as root:
+            found = checker.check_citations([], [str(root / "docs/from-c.md")])
+        self.assertEqual([(line, why) for _, line, why in found],
+                         [(2, "[9993] is cited and not defined"),
+                          (2, "[9994] is cited and not defined"),
+                          (3, "[0010] is linked in spec.md and defined in"
+                              " tour.md")])
+
 
 class StageBodyDependencies(unittest.TestCase):
     BODY = "compiler/ada/src/stages/landin-stages.adb"
@@ -2122,6 +2139,75 @@ class DiscussionTargets(unittest.TestCase):
             said = [why for _, _, why
                     in checker.check_discussion_targets(True)]
         self.assertTrue(any("held to nothing" in why for why in said))
+
+
+class BuildPaths(unittest.TestCase):
+    """A document's path to a built refine names a tree a build writes."""
+
+    def check(self, text):
+        return reasons(checker.check_build_paths, copied=["flake.nix"],
+                       written={"README.md": text})
+
+    def test_the_tags_a_build_makes_pass(self):
+        self.assertEqual(self.check(
+            "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine\n"
+            "compiler/ada/build/$LANDIN_BUILD_TAG.baseline/debug/bin/refine\n"
+            "compiler/ada/build/${LANDIN_BUILD_TAG:-linux-amd64}/"
+            "${LANDIN_BUILD_MODE:-debug}/bin/refine\n"
+            "compiler/ada/build/nix-x86_64-linux/release/bin/refine\n"
+            "compiler/ada/build/linux-amd64/release/bin/refine\n"), [])
+
+    def test_a_tag_no_build_makes_is_reported(self):
+        said = self.check("compiler/ada/build/x86_64-linux/debug/bin/refine\n"
+                          "compiler/ada/build/nix-x86_64-linux/fast/bin/refine\n"
+                          "compiler/ada/build/nix-riscv64-linux/debug/bin/refine\n")
+        self.assertEqual(len(said), 3, said)
+        self.assertIn("x86_64-linux/debug/bin/ is not a tree a build writes",
+                      said[0])
+        self.assertIn("nix-x86_64-linux", said[0])
+
+    def test_the_roadmap_history_is_exempt(self):
+        self.assertEqual(reasons(
+            checker.check_build_paths, copied=["flake.nix"],
+            written={"README.md": "# Root\n", "ROADMAP.md":
+                     "compiler/ada/build/old-tag/debug/bin/refine\n"}), [])
+
+
+class ServerTargets(unittest.TestCase):
+    """The server guide's target sentences are the compiler's targets."""
+
+    INPUTS = [checker.TARGET_SELECTION, checker.EMIT_MANIFEST,
+              checker.SERVER_GUIDE]
+
+    def broken(self, old, new):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            target = root / checker.SERVER_GUIDE
+            text = target.read_text()
+            self.assertIn(old, text)
+            target.write_text(text.replace(old, new, 1))
+            return [why for _, _, why in checker.check_server_targets(True)]
+
+    def test_the_real_guide_agrees(self):
+        self.assertEqual(
+            faults(checker.check_server_targets, copied=self.INPUTS), [])
+
+    def test_a_target_missing_from_the_selection_list_is_reported(self):
+        said = self.broken("`linux-rv64`, ", "")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("the compiler's described targets are", said[0])
+
+    def test_a_firmware_target_missing_is_reported(self):
+        said = self.broken("`cortex-m0`, `rv32` or `xtensa`.",
+                           "`cortex-m0` or `rv32`.")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("firmware targets are cortex-m0, rv32, xtensa", said[0])
+
+    def test_a_reworded_sentence_is_reported_rather_than_skipped(self):
+        said = self.broken("`firmwareEntry` is a nonempty routine name",
+                           "`firmwareEntry` names a routine")
+        self.assertTrue(any("check_server_targets holds" in why
+                            for why in said), said)
 
 
 class TargetLists(unittest.TestCase):

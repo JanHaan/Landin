@@ -2474,6 +2474,33 @@ def guide_citation_text(text):
                   blank, text)
 
 
+#  A guide's link to a construct: its target is tour.md or spec.md, by any
+#  relative path, as Markdown or as the rendered page, and its fragment the
+#  construct's id, which is the anchor the site gives it.
+GUIDE_CONSTRUCT_LINK = re.compile(
+    r"\[[^\]\n]*\]\((?:[^()\s#]*/)?(tour|spec)\.(?:md|html)#(\d{4})\)")
+
+
+def guide_link_citations(path, text, constructs):
+    """A guide's links to constructs name constructs that exist, in the
+    document the link goes to.  guide_citation_text blanks every link so
+    that a link's own text is not read as a citation, which also left a
+    link such as `[9998](tour.md#9998)` unchecked; this reads those."""
+    out = []
+    for match in GUIDE_CONSTRUCT_LINK.finditer(text):
+        document, construct = match.group(1) + ".md", match.group(2)
+        line = text.count("\n", 0, match.start()) + 1
+        defined = {os.path.basename(where)
+                   for where, _ in constructs.get(construct, ())}
+        if not defined:
+            out.append((path, line, "[%s] is cited and not defined"
+                        % construct))
+        elif document not in defined:
+            out.append((path, line, "[%s] is linked in %s and defined in %s"
+                        % (construct, document, ", ".join(sorted(defined)))))
+    return out
+
+
 def check_citations(paths, guide_paths=()):
     """Every construct/finding citation resolves within the selected scope."""
     citation_paths = [path for path in paths
@@ -2542,6 +2569,7 @@ def check_citations(paths, guide_paths=()):
     for path in citation_paths:
         text = read_file(path, encoding="utf-8")
         if path in guide_paths:
+            out += guide_link_citations(path, text, constructs)
             text = guide_citation_text(text)
         for match in re.finditer(r"(?<![\w])\[(\d{4})\](?![A-Za-z_0-9])", text):
             if match.group(1) not in constructs:
@@ -8053,6 +8081,120 @@ def check_target_lists(full_run):
     return out
 
 
+#  The build tags scripts/env.sh gives a host outside the flake's shell,
+#  which the documents, the container and the gate use.
+HOST_BUILD_TAGS = ("linux-amd64", "linux-arm64", "darwin-arm64")
+
+
+def check_build_paths(full_run):
+    """A document's path to a built refine names a tag a build makes.
+
+    compiler/ada/build/TAG/MODE/bin/ is where scripts/build.sh puts a
+    compiler, and a guide that spells TAG by hand goes stale when the tags
+    change: the fuzzer's README once named a tree no build wrote.  TAG is
+    `$LANDIN_BUILD_TAG`, the tag scripts/env.sh gives a host outside the
+    shell, or `nix-SYSTEM` for a system the flake provides, optionally
+    with an experiment's `.NAME`; MODE is debug, release or
+    `$LANDIN_BUILD_MODE`.  ROADMAP.md's history is exempt.
+    """
+    if not full_run:
+        return []
+    flake = os.path.join(ROOT, "flake.nix")
+    out = absent([flake])
+    if out:
+        return out
+    listed = re.search(r"\bsystems = \[([^\]]*)\]",
+                       read_file(flake, encoding="utf-8"))
+    if not listed:
+        return [("flake.nix", 1, "no `systems = [ ... ]` list where"
+                 " check_build_paths looks")]
+    tags = (["$LANDIN_BUILD_TAG", "${LANDIN_BUILD_TAG}"]
+            + list(HOST_BUILD_TAGS)
+            + ["nix-" + system
+               for system in re.findall(r'"([^"]+)"', listed.group(1))])
+    path = re.compile(r"compiler/ada/build/([^/\s`\"')]+)/([^/\s`\"')]+)/bin/")
+    docs = []
+    for here, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs
+                   if d not in (".git", "build", ".scratch", ".claude",
+                                "node_modules", "site", "__pycache__")]
+        docs += [os.path.relpath(os.path.join(here, name), ROOT)
+                 for name in files if name.endswith(".md")]
+    local, _ = git_ignored(sorted(docs))
+    for relative in sorted(set(docs) - set(local or ()) - {ROADMAP}):
+        text = read_file(os.path.join(ROOT, relative), encoding="utf-8")
+        for found in path.finditer(text):
+            tag, mode = found.groups()
+            #  A shell's own spelling of the variables is a tag a build
+            #  makes whatever their defaults say.
+            known = (tag.split(".", 1)[0] in tags
+                     or tag.startswith("${LANDIN_BUILD_TAG"))
+            moded = (mode in ("debug", "release")
+                     or re.match(r"\$\{?LANDIN_BUILD_MODE\b", mode))
+            if known and moded:
+                continue
+            out.append((relative, text.count("\n", 0, found.start()) + 1,
+                        "%s is not a tree a build writes: name"
+                        " compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/,"
+                        " or a tag of %s, and debug or release"
+                        % (found.group(0), ", ".join(tags[2:]))))
+    return out
+
+
+SERVER_GUIDE = "docs/server.md"
+#  The sentences of SERVER_GUIDE that list targets, each its opening words,
+#  and which targets it lists: every described one, or the firmware ones.
+SERVER_TARGET_SENTENCES = (
+    ("`target` is any name `--target=` takes:", "described"),
+    ("`firmwareEntry` is a nonempty routine name for a firmware target:",
+     "firmware"),
+)
+
+
+def check_server_targets(full_run):
+    """The server guide's target lists are the compiler's.
+
+    docs/server.md names every target a client may select and the firmware
+    targets `firmwareEntry` applies to, and nothing read those sentences:
+    a target added to the compiler would be missing from them until a
+    reader noticed.  The first is held to the selection package's names,
+    the second to the firmware corpus's targets in scripts/emit_manifest.py.
+    """
+    if not full_run:
+        return []
+    guide = os.path.join(ROOT, SERVER_GUIDE)
+    manifest = os.path.join(ROOT, EMIT_MANIFEST)
+    out = absent([guide, manifest])
+    if out:
+        return out
+    described, out = described_targets()
+    if out:
+        return out
+    lists = assigned_lists(manifest, ("FIRMWARE_TARGETS",))
+    if "FIRMWARE_TARGETS" not in lists:
+        return [(EMIT_MANIFEST, 1, "has no FIRMWARE_TARGETS where"
+                 " check_server_targets looks")]
+    want = {"described": described, "firmware": lists["FIRMWARE_TARGETS"][1]}
+    text = read_file(guide, encoding="utf-8")
+    for opening, which in SERVER_TARGET_SENTENCES:
+        at = text.find(opening)
+        if at == -1:
+            out.append((SERVER_GUIDE, 1, "no sentence opens %r, which"
+                        " check_server_targets holds to the %s targets"
+                        % (opening, which)))
+            continue
+        line = text.count("\n", 0, at) + 1
+        sentence = text[at + len(opening):].split(". ", 1)[0]
+        sentence = sentence.split(".\n", 1)[0]
+        named = re.findall(r"`([a-z0-9-]+)`", sentence)
+        if set(named) != set(want[which]):
+            out.append((SERVER_GUIDE, line, "this lists %s; the compiler's"
+                        " %s targets are %s"
+                        % (", ".join(named) or "no target", which,
+                           ", ".join(want[which]))))
+    return out
+
+
 def dropdown_options(text):
     """Each `options:` list in a form, as (line, [plain scalar items]).
 
@@ -10357,6 +10499,8 @@ def main(argv):
     extra += check_target_lists(full_run)
     extra += check_named_files(full_run)
     extra += check_record_hints(full_run)
+    extra += check_server_targets(full_run)
+    extra += check_build_paths(full_run)
     extra += check_catalogue(full_run)
     extra += check_catalogue_labels(full_run)
     extra += check_emission_order(full_run)
