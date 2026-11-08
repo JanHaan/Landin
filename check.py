@@ -10242,6 +10242,315 @@ def check_core_module_places(full_run):
     return out
 
 
+#  The public routines and values that run with no library caller and no
+#  consumer's, because the compiler or the linker starts them.  Each is
+#  taken to run, so what it calls is reached as a program's call is.  A
+#  name that does not run has no place here: give it a consumer instead.
+LIBRARY_ENTRY_POINTS = {
+    "platform/linux._landin_start":
+        "the process entry, which Landin.Backend.Entry_Point reaches by name",
+    "platform/linux._landin_start_thread":
+        "called by name from _landin_start's assembly, before main",
+    "platform/linux._landin_start_main":
+        "called by name from _landin_start's assembly, and calls main",
+    "platform/posix._landin_host_initialize_arguments":
+        "Landin.Hosted's argument initializer, which the hosted entry, C's"
+        " main, calls before the program's body",
+}
+
+#  A generated table is one facility, consumed by the module built on it,
+#  rather than a name each (the maintainer's reading of the gate's
+#  "every facility has a consumer"): it is refused only when nothing that
+#  runs reads any of its names.
+LIBRARY_TABLES = {
+    "platform/linux/numbers":
+        "Linux's system-call numbers, which scripts/linux_syscalls.py writes",
+}
+
+#  Where a program that uses the library lives, besides these pages'
+#  `landin` blocks: every `.ldn` outside the library roots except these.
+#  A negative fixture is refused and never runs, so it shows only that a
+#  name exists; highlight/ holds the highlighters' inputs, which nothing
+#  compiles.
+LIBRARY_CONSUMER_PAGES = ("examples.md", "docs/from-c.md", "docs/library.md")
+LIBRARY_NOT_CONSUMERS = ("compiler/tests/fixtures/negative", "highlight")
+
+_CONSUMER_DECLARATION = re.compile(
+    r"(\s*)(?:public\s+)?(?:extern\((?:c|naked)\)\s+)?"
+    r"(?:link\(symbol:[^)]*\)\s+)?(\w+):(?!=)")
+_CONSUMER_EVIDENCE = re.compile(
+    r"\s*([\w.]+)(?:\s*\([^)]*\))?\s+is\s+([\w.]+)")
+_CONSUMER_IMPORT = re.compile(
+    r"\s*import\s+([a-z_][\w/]*)(?:\s+as\s+(\w+))?\s*(\()?")
+_CONSUMER_QUALIFIED = re.compile(r"(?<![\w.])(\w+)\.(\w+)")
+#  A bare name, but not a label: a field, a parameter or a named argument
+#  is followed by its colon.
+_CONSUMER_BARE = re.compile(r"(?<![\w.])(\w+)\b(?!\s*:(?!=))")
+
+
+def _consumer_imports(codes, modules):
+    """A file's library imports: alias -> module, selected name -> module."""
+    aliases, selected = {}, {}
+    i = 0
+    while i < len(codes):
+        found = _CONSUMER_IMPORT.match(codes[i])
+        if found and found.group(1) in modules:
+            if found.group(3):
+                listed = codes[i][found.end():]
+                while ")" not in listed and i + 1 < len(codes):
+                    i += 1
+                    listed += " " + codes[i]
+                for name in re.findall(r"\w+", listed.split(")")[0]):
+                    selected[name] = found.group(1)
+            else:
+                aliases[found.group(2)
+                        or found.group(1).rsplit("/", 1)[-1]] = found.group(1)
+        i += 1
+    return aliases, selected
+
+
+def _consumer_references(text, aliases, selected, module=None, names=()):
+    """The (module, name) pairs TEXT names: through an import, or, inside
+    MODULE, one of its own NAMES written bare."""
+    out = set()
+    for alias, name in _CONSUMER_QUALIFIED.findall(text):
+        if alias in aliases:
+            out.add((aliases[alias], name))
+    for name in _CONSUMER_BARE.findall(text):
+        if name in selected:
+            out.add((selected[name], name))
+        elif name in names:
+            out.add((module, name))
+    return out
+
+
+def _consumer_statements(codes):
+    """A library file's statements outside any body, as (kind, name,
+    first, last) lines: each declaration, public or not, to its `end NAME`
+    or its last more deeply indented line, and each evidence clause
+    `TYPE is CONCEPT (...)`, whose name is the pair.  `fixed if` lines
+    only enclose; every other statement is passed over."""
+    from docs.site import library
+
+    def indent(line):
+        return len(line) - len(line.lstrip())
+    ends = {}
+    for at, code in enumerate(codes):
+        stripped = code.strip()
+        if stripped.startswith("end ") and stripped != "end if":
+            ends.setdefault((indent(code), stripped[4:]), []).append(at)
+    out = []
+    i, count = 0, len(codes)
+    while i < count:
+        code = codes[i]
+        stripped = code.strip()
+        if not stripped or stripped.startswith(
+                ("fixed if ", "elsif ", "end if")) or stripped == "else":
+            i += 1
+            continue
+        level = indent(code)
+        joined, last = code, i
+        if library.ATTRIBUTES.match(code) and i + 1 < count:
+            joined, last = code.rstrip() + " " + codes[i + 1].lstrip(), i + 1
+        found = _CONSUMER_DECLARATION.match(joined)
+        if found and not stripped.startswith("import "):
+            name = found.group(2)
+            closed = next((at for at in ends.get((level, name), ())
+                           if at > i), None)
+            if closed is not None and level and any(
+                    codes[k].strip() and indent(codes[k]) < level
+                    for k in range(i + 1, closed)):
+                closed = None
+            if closed is None:
+                closed = last
+                while closed + 1 < count and (
+                        not codes[closed + 1].strip()
+                        or indent(codes[closed + 1]) > level):
+                    closed += 1
+            out.append(("declaration", name, i, closed))
+            i = closed + 1
+            continue
+        while last + 1 < count and (not codes[last + 1].strip()
+                                    or indent(codes[last + 1]) > level):
+            last += 1
+        evidence = _CONSUMER_EVIDENCE.match(code)
+        if evidence and not stripped.startswith(("import ", "compiler.")):
+            out.append(("evidence", evidence.groups(), i, last))
+        i = last + 1
+    return out
+
+
+def library_consumers(root):
+    """Which library declarations a program reaches, and the collector's
+    public items: (items, reached, callers), or None when the collector
+    refuses the library, which check_library_documentation reports.
+
+    `items` maps (module, name) to the collector's public item; `reached`
+    is every (module, name), public or private, that a consumer names or
+    that a reached declaration names; `callers` maps a declaration to the
+    library declarations that name it, reached or not.  A bounded reader
+    like the collector: comments and literals are blanked, a name is
+    `alias.name` through an import, a selected import, or a module's own
+    name written bare.  An evidence clause is reached with its type when
+    the module declares the type, else with its concept.
+    """
+    from pathlib import Path
+    from docs.site import library
+    try:
+        modules, files = library.collect(Path(root))
+    except (OSError, ValueError):
+        return None
+    items = {(module, item.name): item
+             for module, listed in modules.items() for item in listed}
+    statements = []
+    declared = {}
+    for path, text in files.items():
+        module = os.path.dirname(path).replace(os.sep, "/")
+        codes = library.code_lines(text)
+        imported = _consumer_imports(codes, modules)
+        for kind, name, first, last in _consumer_statements(codes):
+            if kind == "declaration":
+                declared.setdefault(module, set()).add(name)
+            statements.append((module, imported, kind, name,
+                               "\n".join(codes[first:last + 1])))
+    names = {}
+    for module, (aliases, selected), kind, name, text in statements:
+        own = declared.get(module, set())
+        if kind == "declaration":
+            owner = (module, name)
+        else:
+            subject, concept = name
+            qualifier, _, entry = concept.rpartition(".")
+            if "." not in subject and subject in own:
+                owner = (module, subject)
+            elif qualifier in aliases:
+                owner = (aliases[qualifier], entry)
+            elif not qualifier and concept in own:
+                owner = (module, concept)
+            else:
+                owner = None
+        named = _consumer_references(text, aliases, selected, module, own)
+        names.setdefault(owner, set()).update(named - {owner})
+    callers = {}
+    for owner, named in names.items():
+        for one in named:
+            callers.setdefault(one, set()).add(owner)
+
+    reached = set(names.get(None, ()))
+    for key in LIBRARY_ENTRY_POINTS:
+        reached.add(tuple(key.rsplit(".", 1)))
+    sources = []
+    skipped = {".git", "build", ".scratch", ".claude", "node_modules",
+               "__pycache__", "site"}
+    for here, directories, found in os.walk(root):
+        relative = os.path.relpath(here, root).replace(os.sep, "/")
+        directories[:] = sorted(
+            d for d in directories if d not in skipped
+            and (relative != "." or d not in library.ROOTS)
+            and os.path.normpath(os.path.join(relative, d)).replace(
+                os.sep, "/") not in LIBRARY_NOT_CONSUMERS)
+        sources += [os.path.join(here, name) for name in sorted(found)
+                    if name.endswith(".ldn")]
+    texts = []
+    for path in sources:
+        with io.open(path, encoding="utf-8", errors="replace") as stream:
+            texts.append(stream.read())
+    for page in LIBRARY_CONSUMER_PAGES:
+        full = os.path.join(root, page)
+        if os.path.exists(full):
+            texts += re.findall(r"^```landin\n(.*?)^```",
+                                read_file(full, encoding="utf-8"),
+                                re.S | re.M)
+    for text in texts:
+        if "import" not in text:
+            continue
+        try:
+            codes = library.code_lines(text)
+        except ValueError:
+            #  A fixture of an unclosed comment or literal, which uses no
+            #  library: the scanner cannot say what in it is code.
+            continue
+        aliases, selected = _consumer_imports(codes, modules)
+        if aliases or selected:
+            reached |= _consumer_references("\n".join(codes), aliases,
+                                            selected)
+    waiting = list(reached)
+    while waiting:
+        for one in names.get(waiting.pop(), ()):
+            if one not in reached:
+                reached.add(one)
+                waiting.append(one)
+    return items, reached, callers
+
+
+def check_library_consumers(full_run):
+    """Every public routine and value of the library has a consumer.
+
+    The R13 gate's reading: a facility is a public routine or value, and
+    it is consumed when a program outside core/, hosted/ and platform/
+    names it -- a fixture that is not refused, an example, a board port, a
+    device, or a `landin` block of LIBRARY_CONSUMER_PAGES -- or when a
+    library declaration names it that is itself reached so.  A use by
+    another library routine counts only when that routine's own caller
+    runs.  A generated table in LIBRARY_TABLES is one facility, and a
+    routine the compiler starts is in LIBRARY_ENTRY_POINTS.  Measuring
+    this once took scratch scripts outside the tree; this names every
+    name without one, at its declaration, so a later facility cannot add
+    one silently.  It is a bounded reader, not the compiler's resolver:
+    a local that shares a module routine's name can hide a missing
+    consumer, never invent one.
+    """
+    if not full_run:
+        return []
+    measured = library_consumers(ROOT)
+    if measured is None:
+        return []
+    items, reached, callers = measured
+    out = []
+    for key, why in sorted(LIBRARY_ENTRY_POINTS.items()):
+        module, _, name = key.rpartition(".")
+        if (module, name) not in items:
+            out.append(("check.py", 1,
+                        "LIBRARY_ENTRY_POINTS names %s, which is not a public"
+                        " routine or value of %s; remove it" % (name, module)))
+    tables = set()
+    for module in sorted(LIBRARY_TABLES):
+        listed = [item for (owner, _), item in items.items()
+                  if owner == module]
+        if not listed:
+            out.append(("check.py", 1,
+                        "LIBRARY_TABLES names %s, which declares nothing"
+                        " public; remove it" % module))
+            continue
+        tables.add(module)
+        if not any((module, item.name) in reached for item in listed):
+            first = min(listed, key=lambda item: (item.source, item.line))
+            out.append((first.source, first.line,
+                        "%s is a generated table nothing a program runs reads"
+                        " a name of: give the module built on it a consumer,"
+                        " or remove the table" % module))
+    for (module, name), item in sorted(items.items()):
+        if (item.kind not in ("function", "value") or module in tables
+                or (module, name) in reached):
+            continue
+        what = "routine" if item.kind == "function" else "value"
+        users = sorted("%s's %s" % caller for caller in
+                       callers.get((module, name), ()) if caller)
+        if users:
+            through = ("; %s name%s it, but nothing a program runs reaches"
+                       " %s" % (", ".join(users[:3]),
+                                "s" if len(users) == 1 else "",
+                                "that" if len(users) == 1 else "those"))
+        else:
+            through = ""
+        out.append((item.source, item.line,
+                    "public %s %s of %s has no consumer outside core/, hosted/"
+                    " and platform/%s: give it one in a fixture whose oracle"
+                    " checks it, or make it private"
+                    % (what, name, module, through)))
+    return out
+
+
 def check_library_documentation(full_run):
     """Keep source docs and module overviews complete before rendering."""
     if not full_run:
@@ -10512,6 +10821,7 @@ def main(argv):
     extra += check_library_page(full_run)
     extra += check_library_documentation(full_run)
     extra += check_core_module_places(full_run)
+    extra += check_library_consumers(full_run)
     extra += check_failure_words(full_run)
     extra += check_benchmark_game_oracles(full_run)
     extra += check_table_shape(full_run)

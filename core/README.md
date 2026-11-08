@@ -478,6 +478,21 @@ target availability`, and say its scope in the availability inventory and
 in [1480]'s table in `tour.md`. Until then every import of it is L0015,
 whose note says it declares no targets (D1022).
 
+### Adding a facility
+
+A new public routine or value of `core/`, `hosted/` or `platform/` needs
+a consumer outside those three: a fixture that is not a negative one, an
+example, a board port, a device, or a `landin` block of `examples.md`,
+`docs/from-c.md` or `docs/library.md`. A use by another library routine
+counts when a consumer reaches that routine in turn. Give it a consumer in
+a fixture whose oracle checks what it does, or make it private; a full
+`python3 check.py` names each one without, at its declaration, and says
+which library routines name it when nothing reaches them. Two lists in
+`check.py` cover the rest: `LIBRARY_ENTRY_POINTS`, the routines the
+compiler or the linker starts, and `LIBRARY_TABLES`, a generated table
+such as `platform/linux/numbers`, which counts as one facility consumed
+by the module built on it. Each entry says why it is there.
+
 ### Container and diagnostic migration
 
 `mem.clear(storage)` and `vec.clear(values)` discard the initialized prefix

@@ -131,6 +131,20 @@ replaced accepted 114 lines of English as code. Prose is never indented four
 spaces, because Markdown reads that as a code block — an aligned list belongs
 in a table.
 
+The full run holds the library's sources to three more things. Through
+the reference pages' collector, `docs/site/library.py`, every public
+declaration has its `---` documentation and every module an overview in
+`docs/library.md` that links an executable example. Every `core` module is
+known in the places `core/README.md` lists for a new one. And every public
+routine and value of `core/`, `hosted/` and `platform/` has a consumer
+outside them, directly or through library routines a consumer reaches;
+`core/README.md`'s "Adding a facility" says what to do when the check
+refuses one. That check is a bounded reader rather than the compiler's
+resolver: it blanks comments and literals and follows imports and a
+module's own bare names, so a local that shares a routine's name can hide a
+missing consumer but never invent one. Its two lists in `check.py` are the
+routines the compiler starts and the generated tables.
+
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
 The documents selected in `docs/site/render_html.py` are published as reading
