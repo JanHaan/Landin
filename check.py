@@ -2291,9 +2291,16 @@ def check_roadmap_citations(full_run):
             if any(pattern.match(line) for pattern in pointers):
                 continue
             for found in ROADMAP_CITATION.finditer(line):
+                #  The form is refused, not the record: an invented
+                #  identity in a test's register is refused as a real one
+                #  would be, so the refusal names the spellings it leaves.
                 out.append((relative, n,
-                            "%s is cited outside ROADMAP.md, which is the"
-                            " only place a roadmap identity belongs"
+                            "%s has the form of a roadmap identity, which"
+                            " belongs in ROADMAP.md alone, whether or not"
+                            " that item or record exists; text that needs"
+                            " an invented one, such as a test's register,"
+                            " can use a one-digit record such as SR-0 or a"
+                            " letter and a digit such as Q9"
                             % found.group(1)))
     return out
 

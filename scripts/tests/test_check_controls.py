@@ -2066,6 +2066,23 @@ class RoadmapStructure(unittest.TestCase):
                 self.assertTrue(any(where == "docs/ir.md" and cited in why
                                     for where, why in said))
 
+    def test_the_refusal_names_the_spellings_a_test_may_invent(self):
+        #  A test of a register reader invents rows; the refusal says it
+        #  refuses the form, and the spellings it names pass.
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            target = root / "docs/ir.md"
+            target.write_text(target.read_text()
+                              + "\nAn invented SR-%d.\n" % 70)
+            said = [why for _, _, why
+                    in checker.check_roadmap_citations(True)]
+            self.assertTrue(any("form of a roadmap identity" in why
+                                and "SR-0" in why and "Q9" in why
+                                for why in said))
+            target.write_text(target.read_text().replace(
+                "An invented SR-%d." % 70, "An invented SR-0 and Q9."))
+            self.assertEqual(checker.check_roadmap_citations(True), [])
+
     def test_site_sources_are_checked_but_generated_pages_are_not(self):
         from check_controls import tree
         with tree(written={
