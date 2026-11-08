@@ -269,6 +269,100 @@ package body Landin.Tests.Checking_Suite is
              Line => C.Field_Limit + 2);
    end Size_Bounds_Refuse_Past_Their_Limit;
 
+   --  A reference fact names the few locals it derives from, not one
+   --  bit for each of its routine's locals: with the bit array, a routine
+   --  of N locals made facts of N bits, and every copy, join and
+   --  comparison of one cost N, so checking it took N squared time and
+   --  memory.  The probe gives the size of the largest fact kept, which
+   --  grew from 368 to 1120 bytes here when a fact had a bit for each local,
+   --  and the bytes of every fact kept and list of locals made, which grow
+   --  with the locals.  Every other local is reassigned in a branch, so
+   --  facts are joined as well as derived.
+   procedure Reference_Facts_Grow_With_Their_Locals
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reference_Facts_Grow_With_Their_Locals
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Stages.Checking;
+      Probe : aliased C.Transfer_Probe;
+      Tested : C.Instance;
+
+      function Routine (Count : Positive) return String;
+      function Measured (Count : Positive) return C.Transfer_Probe;
+
+      function Routine (Count : Positive) return String is
+         Text : US.Unbounded_String := US.To_Unbounded_String
+           ("side: (x: i32) -> (r: i32) =" & LF & "    r = x" & LF
+            & "end side" & LF
+            & "public main: () -> (code: i32) =" & LF
+            & "    v1: i32 = 0" & LF);
+      begin
+         for Index in 2 .. Count loop
+            if Index mod 2 = 0 then
+               US.Append
+                 (Text, "    mut v" & Image (Index) & ": i32 = side(v"
+                  & Image (Index - 1) & ")" & LF
+                  & "    if v" & Image (Index) & " == 7 then" & LF
+                  & "        v" & Image (Index) & " = 8" & LF
+                  & "    end if" & LF);
+            else
+               US.Append
+                 (Text, "    v" & Image (Index) & ": i32 = side(v"
+                  & Image (Index - 1) & ")" & LF);
+            end if;
+         end loop;
+         US.Append
+           (Text, "    code = v" & Image (Count) & " - v" & Image (Count)
+            & " + 42" & LF & "end main" & LF);
+         return US.To_String (Text);
+      end Routine;
+
+      function Measured (Count : Positive) return C.Transfer_Probe is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "locals.ldn", Routine (Count));
+         Ran : Natural;
+         Outcome : Landin.Stages.Stage_Outcome;
+         pragma Unreferenced (Src);
+      begin
+         Probe := (others => <>);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 3, Image (Count) & " locals reach checking");
+         Tested.Run (Work, Outcome);
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work),
+            Image (Count) & " locals check clean: "
+            & Landin.Stages.Rendered_Report (Work));
+         return Probe;
+      end Measured;
+
+      Fewer : C.Transfer_Probe;
+      More : C.Transfer_Probe;
+   begin
+      Tested.Probe := Probe'Unchecked_Access;
+      Fewer := Measured (1_000);
+      More := Measured (4_000);
+      Landin.Testing.Check
+        (Item, Fewer.Largest_Fact > 0
+           and then More.Largest_Fact = Fewer.Largest_Fact,
+         "a fact's size does not depend on its routine's locals:"
+         & Natural'Image (Fewer.Largest_Fact) & " bytes then"
+         & Natural'Image (More.Largest_Fact));
+      Landin.Testing.Check
+        (Item, Fewer.Fact_Bytes > 0
+           and then More.Fact_Bytes <= 5 * Fewer.Fact_Bytes,
+         "four times the locals keep at most five times the fact bytes,"
+         & " not sixteen:" & Long_Long_Integer'Image (Fewer.Fact_Bytes)
+         & " then" & Long_Long_Integer'Image (More.Fact_Bytes));
+   end Reference_Facts_Grow_With_Their_Locals;
+
    procedure Loop_Transfer_Failures_Release_Exactly_Once
      (Item : in out Landin.Testing.Context);
 
@@ -16313,6 +16407,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "loop transfer failures release exactly once",
          Loop_Transfer_Failures_Release_Exactly_Once'Access);
+      Landin.Testing.Register
+        (Into, "checking", "reference facts grow with their locals",
+         Reference_Facts_Grow_With_Their_Locals'Access);
       Landin.Testing.Register
         (Into, "checking", "large loop frames stay off the host stack",
          Large_Loop_Frames_Stay_Off_The_Host_Stack'Access);

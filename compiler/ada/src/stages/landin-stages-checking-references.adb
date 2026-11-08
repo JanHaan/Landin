@@ -1,9 +1,10 @@
-with Interfaces;
 with Ada.Containers.Ordered_Maps;
+with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
+with System;
 
 with Landin.Checking;
 with Landin.Configuration;
@@ -58,6 +59,10 @@ package body Landin.Stages.Checking.References is
 
    package Local_Maps is new Ada.Containers.Ordered_Maps
      (Key_Type => Res.Declaration_Id, Element_Type => Positive);
+
+   --  Some of a routine's local numbers, in ascending order.
+   package Local_Number_Sets is new Ada.Containers.Ordered_Sets
+     (Element_Type => Positive);
 
    --  The lexical cleanup stack, kept the way
    --  Landin.Stages.Checking.Flow keeps it: `defer` and `undo` register
@@ -135,9 +140,9 @@ package body Landin.Stages.Checking.References is
       --  The declarations this function can name, numbered 1 .. N in the
       --  order of their program identities: its own parameters, returns
       --  and locals, and every module or imported name its body refers
-      --  to.  Every fact below is about one of these, so a fact carries
-      --  one bit for each rather than one for every declaration in the
-      --  program, and a snapshot copies what this function can see.  Every
+      --  to.  Every fact below is about one of these, so a fact names
+      --  local numbers rather than program identities, and a snapshot
+      --  holds a row for what this function can see.  Every
       --  loop over them therefore still visits declarations in identity
       --  order, and the first one a loop finds is the one it found before.
       function Collect_Locals return Local_Vectors.Vector;
@@ -226,45 +231,237 @@ package body Landin.Stages.Checking.References is
 
       type Parameter_Bits is array (Positive range 1 .. Parameters) of Boolean
         with Pack;
+      --  A bit for every local, for what the function holds once, never
+      --  for what a fact or a state holds: every statement makes facts.
       type Declaration_Bits is array (Local_Id) of Boolean
         with Pack;
 
-      --  The first local at or after From whose bit is set, or 0.  A fact
-      --  names few of the function's locals, so a walk over the ones it
-      --  names skips the unset bits a machine word at a time.
-      function Next_Set
-        (Bits : Declaration_Bits; From : Positive) return Natural;
+      --  The locals a fact derives from, ascending and each once.  A fact
+      --  names few of the function's locals, so it holds only those: one
+      --  bit for every local made each fact the size of the function, so
+      --  a function of N locals evaluated, copied, joined and compared
+      --  facts of N bits at each of its statements, and checking it cost N
+      --  squared in time and memory.  A list never changes once it is
+      --  made, so copying a fact copies an access and facts may share one
+      --  list; equality compares what the lists hold, as it compared the
+      --  bits.
+      type Local_List is array (Positive range <>) of Local_Id;
+      type Derived_Node;
+      type Derived_Access is access Derived_Node;
+      type Derived_Node (Length : Positive) is record
+         --  The list the arena owned before this one; see Derived_Arenas.
+         Owned_After : Derived_Access := null;
+         Items : Local_List (1 .. Length);
+      end record;
 
-      function Next_Set
-        (Bits : Declaration_Bits; From : Positive) return Natural
+      --  No list is the empty set; a list holds at least one local.
+      type Local_Set is record
+         List : Derived_Access := null;
+      end record;
+
+      --  Whether two sets name the same locals.  A record holding a set
+      --  compares it with this, so a fact's equality, which a loop's
+      --  convergence and a join's change test read, is about contents.
+      overriding function "=" (Left, Right : Local_Set) return Boolean;
+
+      function "=" (Left, Right : Local_Set) return Boolean
+        is (Left.List = Right.List
+            or else (Left.List /= null and then Right.List /= null
+                     and then Left.List.Items = Right.List.Items));
+
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Object => Derived_Node, Name => Derived_Access);
+
+      --  Every list made for this function, freed when it is done, as the
+      --  table arena below frees the facts that hold them.
+      package Derived_Arenas is
+         type Owner is new Ada.Finalization.Limited_Controlled with record
+            Lists : Derived_Access := null;
+         end record;
+         overriding procedure Finalize (Value : in out Owner);
+      end Derived_Arenas;
+
+      package body Derived_Arenas is
+         overriding procedure Finalize (Value : in out Owner) is
+         begin
+            while Value.Lists /= null loop
+               declare
+                  Item : Derived_Access := Value.Lists;
+               begin
+                  Value.Lists := Item.Owned_After;
+                  Free (Item);
+               end;
+            end loop;
+         end Finalize;
+      end Derived_Arenas;
+
+      Derived_Lists : Derived_Arenas.Owner;
+
+      function Count (Set : Local_Set) return Natural
+        is (if Set.List = null then 0 else Set.List.Length);
+
+      --  The set's Index'th local in ascending order, 1 .. Count (Set).
+      function Nth (Set : Local_Set; Index : Positive) return Local_Id
+        is (Set.List.Items (Index));
+
+      --  The position of the first local of Set not below Local, which
+      --  is Count (Set) + 1 when every one is below it.
+      function Place_Of (Set : Local_Set; Local : Local_Id) return Positive;
+
+      function Place_Of (Set : Local_Set; Local : Local_Id) return Positive
       is
-         --  A packed array of one-bit components keeps locals 8k+1 .. 8k+8
-         --  in byte k+1, in whichever bit order, so a zero byte holds none
-         --  of them.  Which bit is which local is the representation's
-         --  business: a nonzero byte is searched through the array itself.
-         pragma Compile_Time_Error
-           (Declaration_Bits'Component_Size /= 1,
-            "the bit search reads eight locals to a byte");
-         type Byte_View is array (1 .. (Declarations + 7) / 8)
-           of Interfaces.Unsigned_8;
-         View : constant Byte_View
-           with Import, Address => Bits'Address;
-         use type Interfaces.Unsigned_8;
-         Current : Positive := From;
+         Low : Positive := 1;
+         High : Positive := Count (Set) + 1;
+         Middle : Positive;
       begin
-         while Current <= Bits'Last loop
-            if (Current - 1) mod 8 = 0
-              and then View ((Current - 1) / 8 + 1) = 0
-            then
-               Current := Current + 8;
-            elsif Bits (Current) then
-               return Current;
+         while Low < High loop
+            Middle := Low + (High - Low) / 2;
+            if Set.List.Items (Middle) < Local then
+               Low := Middle + 1;
             else
-               Current := Current + 1;
+               High := Middle;
             end if;
          end loop;
-         return 0;
-      end Next_Set;
+         return Low;
+      end Place_Of;
+
+      function Contains (Set : Local_Set; Local : Local_Id) return Boolean
+        is (Place_Of (Set, Local) <= Count (Set)
+            and then Set.List.Items (Place_Of (Set, Local)) = Local);
+
+      --  A list of Length locals for the caller to fill, owned by the
+      --  arena.  The probe counts its bytes with the facts'.
+      function Allocated (Length : Positive) return Derived_Access;
+
+      function Allocated (Length : Positive) return Derived_Access is
+         Made : constant Derived_Access := new Derived_Node (Length);
+      begin
+         Made.Owned_After := Derived_Lists.Lists;
+         Derived_Lists.Lists := Made;
+         if Probe /= null then
+            Probe.Fact_Bytes := Probe.Fact_Bytes
+              + Long_Long_Integer (Made.all'Size / System.Storage_Unit);
+         end if;
+         return Made;
+      end Allocated;
+
+      procedure Include (Set : in out Local_Set; Local : Local_Id);
+
+      procedure Include (Set : in out Local_Set; Local : Local_Id) is
+         Length : constant Natural := Count (Set);
+         Place : constant Positive := Place_Of (Set, Local);
+         Made : Derived_Access;
+      begin
+         if Place <= Length and then Set.List.Items (Place) = Local then
+            return;
+         end if;
+         Made := Allocated (Length + 1);
+         if Length > 0 then
+            Made.Items (1 .. Place - 1) := Set.List.Items (1 .. Place - 1);
+            Made.Items (Place + 1 .. Length + 1) :=
+              Set.List.Items (Place .. Length);
+         end if;
+         Made.Items (Place) := Local;
+         Set := (List => Made);
+      end Include;
+
+      --  Into gains every local of Other.  A union that adds nothing
+      --  keeps Into's list, and one that adds all of Other's takes
+      --  Other's, so a join that changes nothing allocates nothing.
+      procedure Union (Into : in out Local_Set; Other : Local_Set);
+
+      procedure Union (Into : in out Local_Set; Other : Local_Set) is
+         Left_Length : constant Natural := Count (Into);
+         Right_Length : constant Natural := Count (Other);
+         Left, Right : Positive := 1;
+         Length : Natural := 0;
+      begin
+         if Right_Length = 0 or else Into.List = Other.List then
+            return;
+         elsif Left_Length = 0 then
+            Into := Other;
+            return;
+         end if;
+         while Left <= Left_Length and then Right <= Right_Length loop
+            if Into.List.Items (Left) <= Other.List.Items (Right) then
+               if Into.List.Items (Left) = Other.List.Items (Right) then
+                  Right := Right + 1;
+               end if;
+               Left := Left + 1;
+            else
+               Right := Right + 1;
+            end if;
+            Length := Length + 1;
+         end loop;
+         Length := Length + (Left_Length - Left + 1)
+           + (Right_Length - Right + 1);
+         if Length = Left_Length then
+            return;
+         elsif Length = Right_Length then
+            Into := Other;
+            return;
+         end if;
+         declare
+            Made : constant Derived_Access := Allocated (Length);
+            Next : Positive := 1;
+         begin
+            Left := 1;
+            Right := 1;
+            while Left <= Left_Length or else Right <= Right_Length loop
+               if Right > Right_Length
+                 or else (Left <= Left_Length
+                          and then Into.List.Items (Left)
+                            <= Other.List.Items (Right))
+               then
+                  if Right <= Right_Length
+                    and then Into.List.Items (Left) = Other.List.Items (Right)
+                  then
+                     Right := Right + 1;
+                  end if;
+                  Made.Items (Next) := Into.List.Items (Left);
+                  Left := Left + 1;
+               else
+                  Made.Items (Next) := Other.List.Items (Right);
+                  Right := Right + 1;
+               end if;
+               Next := Next + 1;
+            end loop;
+            Into := (List => Made);
+         end;
+      end Union;
+
+      --  Whether two sets name a local in common, other than the two
+      --  Except locals, which are not compared.
+      function Meets
+        (Left, Right : Local_Set;
+         Except_One, Except_Two : Res.Declaration_Id := Res.No_Declaration)
+         return Boolean;
+
+      function Meets
+        (Left, Right : Local_Set;
+         Except_One, Except_Two : Res.Declaration_Id := Res.No_Declaration)
+         return Boolean
+      is
+         Left_Index, Right_Index : Positive := 1;
+      begin
+         while Left_Index <= Count (Left)
+           and then Right_Index <= Count (Right)
+         loop
+            if Nth (Left, Left_Index) < Nth (Right, Right_Index) then
+               Left_Index := Left_Index + 1;
+            elsif Nth (Left, Left_Index) > Nth (Right, Right_Index) then
+               Right_Index := Right_Index + 1;
+            elsif Global (Nth (Left, Left_Index)) /= Except_One
+              and then Global (Nth (Left, Left_Index)) /= Except_Two
+            then
+               return True;
+            else
+               Left_Index := Left_Index + 1;
+               Right_Index := Right_Index + 1;
+            end if;
+         end loop;
+         return False;
+      end Meets;
 
       --  Absence is a value proof, not an origin.  In this finite chain,
       --  No_Edge is the join identity, Empty_Optional proves absence, and
@@ -305,31 +502,17 @@ package body Landin.Stages.Checking.References is
          --  Keep that diagnostic state distinct from raw address origins.
          Invalid    : Boolean := False;
          From       : Parameter_Bits := [others => False];
-         Derives    : Declaration_Bits := [others => False];
-         --  The lowest and highest local Derives names, both 0 when it
-         --  names none.  A fact names few of the function's locals, so a
-         --  join reads only the bytes between them: ORing every byte made
-         --  each join cost the function's size, and a routine of N locals
-         --  cost N squared.  Derive keeps them exact, so they add nothing
-         --  to a fact's equality that its bits do not already say.
-         Derives_First : Natural := 0;
-         Derives_Last  : Natural := 0;
+         Derives    : Local_Set;
          Presence   : Value_Fact := Unknown_Value;
       end record;
 
-      --  Record that a fact derives from LOCAL.  Every bit Derives gains
-      --  is set here, or joined from another fact's.
+      --  Record that a fact derives from LOCAL.  Every local Derives
+      --  gains is added here, or joined from another fact's.
       procedure Derive (Fact : in out Reference_Fact; Local : Local_Id);
 
       procedure Derive (Fact : in out Reference_Fact; Local : Local_Id) is
       begin
-         Fact.Derives (Local) := True;
-         if Fact.Derives_First = 0 or else Local < Fact.Derives_First then
-            Fact.Derives_First := Local;
-         end if;
-         if Local > Fact.Derives_Last then
-            Fact.Derives_Last := Local;
-         end if;
+         Include (Fact.Derives, Local);
       end Derive;
 
       No_Reference : constant Reference_Fact := (others => <>);
@@ -413,32 +596,7 @@ package body Landin.Stages.Checking.References is
                Into_Fact.Untracked := False;
             end if;
          end loop;
-         --  Only the bytes holding Other's locals can add one.  Bits past
-         --  the last local in the final byte are padding, zero in both.
-         if Other.Derives_First /= 0 then
-            declare
-               type Byte_View is array (1 .. (Declarations + 7) / 8)
-                 of Interfaces.Unsigned_8;
-               Into_View : Byte_View
-                 with Import, Address => Into_Fact.Derives'Address;
-               Other_View : constant Byte_View
-                 with Import, Address => Other.Derives'Address;
-               use type Interfaces.Unsigned_8;
-            begin
-               for Byte in (Other.Derives_First - 1) / 8 + 1
-                 .. (Other.Derives_Last - 1) / 8 + 1
-               loop
-                  Into_View (Byte) := Into_View (Byte) or Other_View (Byte);
-               end loop;
-            end;
-            if Into_Fact.Derives_First = 0
-              or else Other.Derives_First < Into_Fact.Derives_First
-            then
-               Into_Fact.Derives_First := Other.Derives_First;
-            end if;
-            Into_Fact.Derives_Last :=
-              Natural'Max (Into_Fact.Derives_Last, Other.Derives_Last);
-         end if;
+         Union (Into_Fact.Derives, Other.Derives);
       end Join;
 
       procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
@@ -582,6 +740,12 @@ package body Landin.Stages.Checking.References is
                             Owned_After => Arena.Facts);
       begin
          Arena.Facts := Made;
+         if Probe /= null then
+            Probe.Largest_Fact := Natural'Max
+              (Probe.Largest_Fact, Made.all'Size / System.Storage_Unit);
+            Probe.Fact_Bytes := Probe.Fact_Bytes
+              + Long_Long_Integer (Made.all'Size / System.Storage_Unit);
+         end if;
          return Made;
       end Kept;
 
@@ -771,8 +935,11 @@ package body Landin.Stages.Checking.References is
       Pattern_Subject_Of : array (Local_Id) of Syn.Node_Id :=
         [others => Syn.No_Node];
       --  The locals a match has given a subject: the payload check visits
-      --  these, in local order, and no others.
-      Has_Pattern_Subject : Declaration_Bits := [others => False];
+      --  these, in local order, and no others.  A set of them rather than
+      --  a bit for every local, because the check runs at every store and
+      --  a search through every local's bit made a routine of N locals
+      --  and N stores cost N squared.
+      Has_Pattern_Subject : Local_Number_Sets.Set;
       Pattern_Block_Of : array (Local_Id) of Syn.Node_Id :=
         [others => Syn.No_Node];
       Falls_Through : Boolean := True;
@@ -799,7 +966,8 @@ package body Landin.Stages.Checking.References is
         is (Local_Of (Id) /= 0 and then Exposed (Local_Of (Id)));
       function Derives
         (Fact : Reference_Fact; Id : Res.Declaration_Id) return Boolean
-        is (Local_Of (Id) /= 0 and then Fact.Derives (Local_Of (Id)));
+        is (Local_Of (Id) /= 0
+            and then Contains (Fact.Derives, Local_Of (Id)));
 
 
       --  The lexical cleanup stack; see Cleanup_Entry.
@@ -1497,13 +1665,12 @@ package body Landin.Stages.Checking.References is
             return Fact.Frame_Witness;
          end if;
          if Fact.Frame then
-            for Local in Local_Id loop
+            for Index in 1 .. Count (Fact.Derives) loop
                declare
+                  Local : constant Local_Id := Nth (Fact.Derives, Index);
                   Id : constant Res.Declaration_Id := Global (Local);
                begin
-                  if Fact.Derives (Local)
-                    and then
-                      (case Res.Sort_Of (Meanings.all, Id) is
+                  if (case Res.Sort_Of (Meanings.all, Id) is
                          when Res.Local_Binding | Res.Named_Return
                             | Res.Result_Binding =>
                            not Runtime_Alias_Of (Local)
@@ -1522,11 +1689,9 @@ package body Landin.Stages.Checking.References is
                end;
             end loop;
          end if;
-         for Local in Local_Id loop
-            if Fact.Derives (Local) then
-               return Global (Local);
-            end if;
-         end loop;
+         if Count (Fact.Derives) > 0 then
+            return Global (Nth (Fact.Derives, 1));
+         end if;
          return Res.No_Declaration;
       end First_Derivation;
 
@@ -1797,18 +1962,12 @@ package body Landin.Stages.Checking.References is
                      --  the frame storage the holder refers to now holds
                      --  what was kept, and an `inout` place holds it too.
                      if Through.Frame then
-                        declare
-                           Stored : Natural := Next_Set (Through.Derives, 1);
-                        begin
-                           while Stored /= 0 loop
-                              if Global (Stored) /= Root then
-                                 Keep (Stored);
-                              end if;
-                              exit when Stored = Local_Id'Last;
-                              Stored := Next_Set
-                                (Through.Derives, Stored + 1);
-                           end loop;
-                        end;
+                        for Index in 1 .. Count (Through.Derives) loop
+                           if Global (Nth (Through.Derives, Index)) /= Root
+                           then
+                              Keep (Nth (Through.Derives, Index));
+                           end if;
+                        end loop;
                      end if;
                      if Landin.Checking.Nth_Signature_Parameter
                        (Types.all, Called, Part.Escaping_Into).Convention
@@ -2337,15 +2496,18 @@ package body Landin.Stages.Checking.References is
                  and then Global (Holder) /= Except
                  and then Has_References (Global (Holder))
                then
-                  for Held in Local_Id loop
-                     if Seen (Held)
-                       and then Origin (Holder).Value.Derives (Held)
-                     then
-                        Seen (Holder) := True;
-                        Grew := True;
-                        exit;
-                     end if;
-                  end loop;
+                  declare
+                     Holds : constant Local_Set :=
+                       Origin (Holder).Value.Derives;
+                  begin
+                     for Index in 1 .. Count (Holds) loop
+                        if Seen (Nth (Holds, Index)) then
+                           Seen (Holder) := True;
+                           Grew := True;
+                           exit;
+                        end if;
+                     end loop;
+                  end;
                end if;
             end loop;
          end loop;
@@ -2456,11 +2618,8 @@ package body Landin.Stages.Checking.References is
             then
                return False;
             end if;
-            for Id in Storage.Derives'Range loop
-               Same_Root := Same_Root or else
-                 (Storage.Derives (Id)
-                  and then Alias_Storage (Pattern).Derives (Id));
-            end loop;
+            Same_Root :=
+              Meets (Storage.Derives, Alias_Storage (Pattern).Derives);
             if not Same_Root then
                return False;
             end if;
@@ -2536,26 +2695,33 @@ package body Landin.Stages.Checking.References is
             --  Selector facts also name the descriptor used to reach their
             --  storage. Rebinding that descriptor does not identify the old
             --  and new pointees. Both sides still need known backing roots.
-            for Id in Storage.Derives'Range loop
-               if Global (Id) /= Left_Descriptor
-                 and then Global (Id) /= Right_Descriptor
+            declare
+               Aliased_Storage : constant Local_Set :=
+                 Alias_Storage (Pattern).Derives;
+
+               function Known (Set : Local_Set) return Boolean
+                 is (for some Index in 1 .. Count (Set) =>
+                       Global (Nth (Set, Index)) /= Left_Descriptor
+                       and then Global (Nth (Set, Index))
+                         /= Right_Descriptor);
+            begin
+               if Meets (Storage.Derives, Aliased_Storage,
+                         Left_Descriptor, Right_Descriptor)
                then
-                  Left_Known := Left_Known or Storage.Derives (Id);
-                  Right_Known := Right_Known
-                    or Alias_Storage (Pattern).Derives (Id);
-                  if Storage.Derives (Id)
-                    and then Alias_Storage (Pattern).Derives (Id)
-                  then
-                     return False;
-                  end if;
+                  return False;
                end if;
-            end loop;
+               Left_Known := Known (Storage.Derives);
+               Right_Known := Known (Aliased_Storage);
+            end;
             return Left_Known and Right_Known;
          end Disjoint_Frame_Storage;
          Used : Res.Declaration_Id;
-         Pattern_Local : Natural := Next_Set (Has_Pattern_Subject, 1);
+         Next_Pattern : Local_Number_Sets.Cursor :=
+           Has_Pattern_Subject.First;
+         Pattern_Local : Local_Id;
       begin
-         while Pattern_Local /= 0 loop
+         while Local_Number_Sets.Has_Element (Next_Pattern) loop
+            Pattern_Local := Local_Number_Sets.Element (Next_Pattern);
             if not Disjoint_Frame_Storage (Pattern_Local)
               and then (Replaces (Pattern_Subject_Of (Pattern_Local))
                         or else Replaces_Aliased_Storage (Pattern_Local))
@@ -2563,8 +2729,9 @@ package body Landin.Stages.Checking.References is
                for Borrower_Local in Local_Id loop
                   if Borrower_Local = Pattern_Local
                     or else (Has_References (Global (Borrower_Local))
-                             and then Origin (Borrower_Local).Value.Derives
-                               (Pattern_Local))
+                             and then Contains
+                               (Origin (Borrower_Local).Value.Derives,
+                                Pattern_Local))
                   then
                      Used := Live_Holder
                        (Global (Borrower_Local), After,
@@ -2590,8 +2757,7 @@ package body Landin.Stages.Checking.References is
                   end if;
                end loop;
             end if;
-            exit when Pattern_Local = Local_Id'Last;
-            Pattern_Local := Next_Set (Has_Pattern_Subject, Pattern_Local + 1);
+            Local_Number_Sets.Next (Next_Pattern);
          end loop;
          return False;
       end Check_Payload_Borrows;
@@ -3387,20 +3553,19 @@ package body Landin.Stages.Checking.References is
                      --  the way to write a result that may be it.
                      Module_Storage : Res.Declaration_Id :=
                        Res.No_Declaration;
-                     Local : Natural :=
-                       (if Fact.Derives_First = 0 then 0
-                        else Next_Set (Fact.Derives, Fact.Derives_First));
                   begin
-                     while Local /= 0 and then Local <= Fact.Derives_Last
-                     loop
-                        if Res.Sort_Of (Meanings.all, Global (Local))
-                          = Res.Module_Binding
-                        then
-                           Module_Storage := Global (Local);
-                           exit;
-                        end if;
-                        Local := (if Local = Fact.Derives'Last then 0
-                                  else Next_Set (Fact.Derives, Local + 1));
+                     for Index in 1 .. Count (Fact.Derives) loop
+                        declare
+                           Named : constant Res.Declaration_Id :=
+                             Global (Nth (Fact.Derives, Index));
+                        begin
+                           if Res.Sort_Of (Meanings.all, Named)
+                             = Res.Module_Binding
+                           then
+                              Module_Storage := Named;
+                              exit;
+                           end if;
+                        end;
                      end loop;
                      Bad.Report
                        (Item    => Bad.Return_Sources_Disagree,
@@ -3726,10 +3891,11 @@ package body Landin.Stages.Checking.References is
          --  A write through that address must update their value facts too;
          --  otherwise returning the local would forget the aliased write.
          if Target.Storage.Frame then
-            declare
-               Stored : Natural := Next_Set (Target.Storage.Derives, 1);
-            begin
-               while Stored /= 0 loop
+            for Index in 1 .. Count (Target.Storage.Derives) loop
+               declare
+                  Stored : constant Local_Id :=
+                    Nth (Target.Storage.Derives, Index);
+               begin
                   if Global (Stored) /= Id then
                      declare
                         Written : Origin_Fact := Origin (Stored);
@@ -3739,10 +3905,8 @@ package body Landin.Stages.Checking.References is
                         Set_Origin (Stored, Written);
                      end;
                   end if;
-                  exit when Stored = Local_Id'Last;
-                  Stored := Next_Set (Target.Storage.Derives, Stored + 1);
-               end loop;
-            end;
+               end;
+            end loop;
          end if;
 
          if Id = Res.No_Declaration or else Local_Of (Id) = 0 then
@@ -4110,9 +4274,15 @@ package body Landin.Stages.Checking.References is
                                    (if Match_Subject_Is_Copied
                                          (Tree, Subject_Node)
                                     then Syn.No_Node else Subject_Node);
-                                 Has_Pattern_Subject (Local_Of (Id)) :=
-                                   Pattern_Subject_Of (Local_Of (Id))
-                                     /= Syn.No_Node;
+                                 if Pattern_Subject_Of (Local_Of (Id))
+                                   /= Syn.No_Node
+                                 then
+                                    Has_Pattern_Subject.Include
+                                      (Local_Of (Id));
+                                 else
+                                    Has_Pattern_Subject.Exclude
+                                      (Local_Of (Id));
+                                 end if;
                                  Pattern_Block_Of (Local_Of (Id)) :=
                                    Syn.Body_Of (Tree, This);
                               end if;
