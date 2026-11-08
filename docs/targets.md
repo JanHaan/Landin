@@ -1145,16 +1145,6 @@ named synthetic model executes the complete program's GPIO/timer/UART/DMA path.
 Its finite count and drain acknowledgment are synthetic premises, not RP2040
 or microbit peripheral behavior. No target layout, MMIO width or ABI changes.
 
-### Loading an image onto your own board
-
-Build the image in the default boot layout and load the ELF with the probe
-or loader the board's vendor documents:
-[probe-rs](https://probe.rs/docs/tools/probe-rs/) with a debug probe, or
-[picotool's `load`](https://github.com/raspberrypi/picotool#load) for a
-Pico. The board tools are not that route: they drive the maintainer's rig,
-its prepared bundles and its probes, and their runs are evidence for the
-gate.
-
 ## RV32 firmware
 
 `Targets.RV32` (`rv32`) is RISC-V microcontroller firmware: little-endian
@@ -1172,6 +1162,8 @@ no `--toolchain`, a link tries `riscv64-elf-gcc` and then
 disabled; D920 enabled Cortex-M's and left RV32's refused. The [RV32 emulator recipe](../environments/cortex-m/README.md)
 locates its controls and corpus in the shared embedded-tool environment;
 [Xtensa has its own runner recipe](../environments/xtensa/README.md).
+[Loading an image onto your own board](#loading-an-image-onto-your-own-board)
+says what an RV32 board is given.
 
 A firmware image is compiler-owned text and the program's routines, laid
 out by `Landin.Backend.Firmware` from the profile (D680, D686). Its first
@@ -1356,3 +1348,23 @@ configured-core controls and the sole freestanding corpus inventory;
 [board tools](../environments/boards/README.md) explain checked transport,
 RAM runs and separate boot checks. An S3 run of an LX6-level build requires
 compatibility evidence for that image and its helpers.
+[Loading an image onto your own board](#loading-an-image-onto-your-own-board)
+says what an ESP32 or ESP32-S3 of your own is given.
+
+## Loading an image onto your own board
+
+This holds for every firmware target, Cortex-M, RV32 and Xtensa. Build the
+image in the default boot layout, `refine compile app --target=TARGET
+--level=LEVEL --firmware-entry=start --emit=exe -o OUT`, and load it with
+the probe or loader the board's vendor documents. What is loaded depends
+on how the chip boots:
+
+| chips | what to load | how |
+|---|---|---|
+| Cortex-M (RP2040, RP2350, STM32H753) and the RP2350's Hazard3 cores | the ELF, `OUT` | [probe-rs](https://probe.rs/docs/tools/probe-rs/)'s `download` with a debug probe, or [picotool's `load`](https://github.com/raspberrypi/picotool#load) for a Pico |
+| ESP chips, RV32 (ESP32-C3, ESP32-C5) and Xtensa (ESP32, ESP32-S3) | `OUT.bin`, the ROM's image that `refine` writes beside the ELF when the description declares `compiler.esp_image` | written to flash at the description's flash offset, the last argument of its `compiler.esp_image`: 0x1000 on the ESP32, 0x2000 on the ESP32-C5 and 0x0 on the ESP32-C3 and ESP32-S3. [esptool](https://docs.espressif.com/projects/esptool/)'s `write-flash OFFSET OUT.bin`, or `probe-rs download --binary-format bin --base-address OFFSET OUT.bin` |
+
+An ESP chip's ROM boots from an application image at that offset, and
+`OUT.bin` is that image of the ELF's loaded segments (D683, D685); the
+ELF is for the debugger. The board tools are not this route: they drive the maintainer's rig, its
+prepared bundles and its probes, and their runs are evidence for the gate.

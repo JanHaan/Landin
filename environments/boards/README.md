@@ -6,7 +6,8 @@ same physical Pico 2, and the STM32H753's board also runs its cached
 profile, `stm32h753_cached`, from SRAM alone
 ([below](#the-stm32h753s-cached-profile)). Other boards on the rig are not
 selected by these commands. The tools serve the maintainer's rig; to load
-an image onto a board of your own, see
+an image onto a board of your own, the ELF on a Cortex-M or RP2350 board
+and `OUT.bin` at the description's flash offset on an ESP chip, see
 [the firmware guide](../../docs/targets.md#loading-an-image-onto-your-own-board).
 
 Build on epycmicro in Landin's pinned environment. The tools and physical
