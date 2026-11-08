@@ -7164,11 +7164,25 @@ def check_coverage_registers(full_run):
                 out.append((relative, 1,
                             "every fixture must name its targets"))
                 continue
+            #  A fixture may name only a target some applicability row
+            #  lists, so a described target no prototype applies to, such
+            #  as xtensa, is refused too, and the refusal names the table.
             for target in (one.strip() for one in targets.split(",")):
-                if target not in allowed:
-                    out.append((relative, 1,
-                                "%s names unknown target %s" %
-                                (name, target)))
+                if target in allowed:
+                    continue
+                if target in known_targets:
+                    out.append((relative, 1, (
+                        "%s names target %s, which no row of %s's \"Target "
+                        "applicability coverage\" table lists; a fixture may "
+                        "name only a target a row there lists, and a row "
+                        "lists one only when a prototype applies to it")
+                        % (name, target, REGISTERS)))
+                else:
+                    out.append((relative, 1, (
+                        "%s names unknown target %s: it is no target refine "
+                        "describes, and a fixture may name only one that a "
+                        "row of %s's \"Target applicability coverage\" "
+                        "table lists") % (name, target, REGISTERS)))
 
     dumps = coverage_dumps()
     if dumps is not None:
