@@ -53,8 +53,11 @@ package body Landin.Modules.Availability is
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.RV32;
       elsif Logical = "platform/xtensa" then
+         --  D1021: as platform/riscv, its operations are declared on
+         --  xtensa alone, so a shared program imports it everywhere.
          return True;
       elsif Under (Logical, "platform/xtensa") then
+         --  Its two reference descriptions, on xtensa alone.
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.Xtensa;
       elsif Under (Logical, "platform/c") then
@@ -69,6 +72,11 @@ package body Landin.Modules.Availability is
                | Landin.Targets.RiscV_ILP32
                | Landin.Targets.Xtensa_Windowed_ILP32 => return False;
          end case;
+      elsif Under (Logical, "platform") then
+         --  D1022: a platform module is available only where a branch
+         --  above scopes it, so one the library ships without a scope is
+         --  available nowhere rather than everywhere.
+         return False;
       end if;
       return True;
    end Permitted;
@@ -86,10 +94,15 @@ package body Landin.Modules.Availability is
          return "D267: " & Logical & " requires the rv32 target";
       elsif Under (Logical, "platform/xtensa") then
          return "D267: " & Logical & " requires the xtensa target";
-      else
+      elsif Under (Logical, "platform/c") then
          return "D267: platform/c requires an enabled C ABI: SysV AMD64"
            & " LP64, Darwin or standard AAPCS64 LP64, RISC-V LP64D, or"
            & " Cortex-M's AAPCS32 (D920)";
+      else
+         return "D1022: " & Logical & " declares no targets, so it is"
+           & " available on none; this is a fault of the library, whose"
+           & " maintainer gives each platform module its scope in"
+           & " Landin.Modules.Availability";
       end if;
    end Requirement;
 

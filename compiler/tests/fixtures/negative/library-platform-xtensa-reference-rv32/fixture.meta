@@ -1,0 +1,9 @@
+class: negative
+summary: D267 D1021 rv32 refuses the Xtensa reference description by its namespace, naming the target it requires: another firmware family's submodule is not this one's
+program: main.ldn
+root: ../../../../..
+args: --target=rv32
+expect: expected.txt
+codes: L0015
+constructs: 1410, 1420, 1480
+targets: rv32

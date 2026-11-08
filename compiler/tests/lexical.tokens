@@ -70928,6 +70928,14 @@ file negative/library-evidence-collision/main.ldn tokens 55
   365 367 42
   368 371 end
   372 376 main
+file negative/library-hosted-system-rv32/main.ldn tokens 7
+  0 6 import
+  7 13 hosted
+  13 14 /
+  14 20 system
+  22 28 answer
+  29 31 :=
+  32 39 missing
 file negative/library-platform-c-rv32/main.ldn tokens 29
   0 6 import
   7 15 platform
@@ -70985,6 +70993,26 @@ file negative/library-platform-cortex-m-hosted/main.ldn tokens 26
   104 105 0
   106 109 end
   110 114 main
+file negative/library-platform-cortex-m-l1-hosted/main.ldn tokens 9
+  0 6 import
+  7 15 platform
+  15 16 /
+  16 24 cortex_m
+  24 25 /
+  25 27 l1
+  29 35 answer
+  36 38 :=
+  39 46 missing
+file negative/library-platform-cortex-m-l1-rv32/main.ldn tokens 9
+  0 6 import
+  7 15 platform
+  15 16 /
+  16 24 cortex_m
+  24 25 /
+  25 27 l1
+  29 35 answer
+  36 38 :=
+  39 46 missing
 file negative/library-platform-cortex-m-reference-hosted/main.ldn tokens 9
   0 6 import
   7 15 platform
@@ -71005,6 +71033,36 @@ file negative/library-platform-riscv-hazard3-hosted/main.ldn tokens 9
   31 37 answer
   38 40 :=
   41 48 missing
+file negative/library-platform-riscv-reference-cortex-m/main.ldn tokens 9
+  0 6 import
+  7 15 platform
+  15 16 /
+  16 21 riscv
+  21 22 /
+  22 31 reference
+  33 39 answer
+  40 42 :=
+  43 50 missing
+file negative/library-platform-xtensa-reference-hosted/main.ldn tokens 9
+  0 6 import
+  7 15 platform
+  15 16 /
+  16 22 xtensa
+  22 23 /
+  23 32 reference
+  34 40 answer
+  41 43 :=
+  44 51 missing
+file negative/library-platform-xtensa-reference-rv32/main.ldn tokens 9
+  0 6 import
+  7 15 platform
+  15 16 /
+  16 22 xtensa
+  22 23 /
+  23 32 reference
+  34 40 answer
+  41 43 :=
+  44 51 missing
 file negative/line-leading-minus-continues-the-value/program.ldn tokens 21
   0 7 lowered
   7 8 :

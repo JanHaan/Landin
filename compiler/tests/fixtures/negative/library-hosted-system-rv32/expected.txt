@@ -1,0 +1,6 @@
+error[L0015]: module unavailable for target: hosted/system
+  --> ../tests/fixtures/negative/library-hosted-system-rv32/main.ldn:1:1
+  |
+1 | import hosted/system
+  | ^^^^^^^^^^^^^^^^^^^^
+  = note: D267: hosted modules require a hosted target

@@ -237,8 +237,14 @@ higher supported feature levels. `platform/cortex_m` itself is available on
 every target and declares its operations only on an M-profile one (D575), so
 a program for every target imports it and calls it from a `fixed if
 compiler.arch == cortex_m0` arm; a call outside one is L0201 on a hosted
-target. Select an applicable target or remove the import. Project-first root
-selection cannot change namespace availability.
+target. `platform/riscv` and `platform/xtensa` are the same for `rv32` and
+`xtensa` (D687, D1021), and the POSIX layer, `platform/posix` with
+`platform/linux`, `platform/libc` and `platform/kqueue`, requires Linux,
+Darwin or FreeBSD. Select an applicable target or remove the import.
+Project-first root selection cannot change namespace availability. A
+`platform` module the compiler gives no scope is refused on every target,
+and the note says it declares no targets (D1022): that is a fault of the
+library, which its maintainer corrects as `core/README.md` describes.
 
 ### L0016
 

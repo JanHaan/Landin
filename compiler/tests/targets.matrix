@@ -667,10 +667,16 @@ negative/lenof-slice-range-frame-escape | linux-x86-64, linux-arm64, linux-rv64,
 negative/lenof-unresolved-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/library-at-live-inout | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/library-evidence-collision | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/library-hosted-system-rv32 | rv32
 negative/library-platform-c-rv32 | rv32
 negative/library-platform-cortex-m-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+negative/library-platform-cortex-m-l1-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+negative/library-platform-cortex-m-l1-rv32 | rv32
 negative/library-platform-cortex-m-reference-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 negative/library-platform-riscv-hazard3-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+negative/library-platform-riscv-reference-cortex-m | cortex-m0
+negative/library-platform-xtensa-reference-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+negative/library-platform-xtensa-reference-rv32 | rv32
 negative/line-leading-minus-continues-the-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-parenthesis-argument-is-not-declared-yet | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-parenthesis-continues-as-a-call | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2237,6 +2243,9 @@ runtime/library-map-reserve-after-removal | linux-x86-64, linux-arm64, linux-rv6
 runtime/library-map-reserve-rollback | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 runtime/library-platform-riscv | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/library-platform-xtensa | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+runtime/library-read-whole-file | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/library-read-whole-file-fits | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/library-read-whole-file-missing | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/library-second-reading | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/library-second-reading-spill | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/library-shared-arena | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
@@ -2364,6 +2373,7 @@ runtime/option-names-stay-in-their-module | linux-x86-64, linux-arm64, darwin-ar
 runtime/parameterized-struct-lazy-value-layout | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/parameterized-struct-values | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/parameterized-type-alias-fixed-array | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/plugin-loading | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-to-small-integer-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-union-atom-comparison | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/pointer-union-many | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

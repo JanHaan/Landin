@@ -17109,11 +17109,14 @@ whose transport is not implemented. Relying only on provider bodies would let
 a harmless project override bypass a firmware refusal. Namespace checking
 preserves root selection while making availability explicit.
 
-**Pinned by** `negative/library-platform-cortex-m-hosted`, the driver case
-`source namespaces enforce target availability` and the separately sized
+**Pinned by** `negative/library-platform-cortex-m-reference-hosted`, the
+driver case `source namespaces enforce target availability`, the firmware
+refusal `negative/library-hosted-system-rv32`, and the separately sized
 shared-library consumers.
 
-D575 makes `platform/cortex_m` itself available on every target.
+D575 makes `platform/cortex_m` itself available on every target, D687
+`platform/riscv` and D1021 `platform/xtensa`; D1022 refuses a `platform`
+module that has no scope.
 
 ### D575 — `platform/cortex_m` declares nothing off an M-profile target
 
@@ -26113,6 +26116,59 @@ operations, which an ESP program would see.
 
 **Pinned by** `negative/library-platform-riscv-hazard3-hosted` and the RV32
 emulator lane's interrupt programs.
+
+### D1021 — `platform/xtensa` declares its CPU operations on xtensa alone
+
+**The tour said** at [1480] that `platform` holds scoped freestanding
+interfaces and named only `platform/c` and `platform/cortex_m`; the Xtensa
+target was built with `platform/xtensa` in D687's shape, and no entry
+recorded its scope. This entry transcribes that behaviour; it changes none.
+
+**Chosen:** `platform/xtensa` is available on every target and declares, on
+`xtensa` alone, `disable_interrupts`, `restore_interrupts`,
+`mask_level_one` and `interrupt_mask` over PS, `set_enabled_lines` and
+`enabled_lines` over INTENABLE, `pending_lines` over INTERRUPT, `cycles`
+over CCOUNT,
+`wait_for_interrupt` and the three barriers, so a shared program imports it
+everywhere and calls it from a `fixed if compiler.arch == xtensa` arm. Its
+submodules, the reference descriptions `platform/xtensa/reference` and
+`platform/xtensa/reference_lx7`, are available on `xtensa` alone and
+refused by name elsewhere, L0015; at the other Xtensa level each is
+L0515, because each describes one chip configuration, the first
+`xtensa-esp32`'s and the second `xtensa-esp32s3`'s (D903).
+
+**The alternatives:** are D687's: the operations in each chip's
+description, which is directives alone, and an Xtensa-only module, which a
+shared program could not import.
+
+**Pinned by** `negative/library-platform-xtensa-reference-hosted`,
+`negative/library-platform-xtensa-reference-rv32` and the driver case
+`source namespaces enforce target availability`.
+
+### D1022 — A platform module with no scope is available nowhere
+
+**The tour said** at [1480] that `platform` holds scoped interfaces, and
+D267 that each library namespace declares its availability. The compiler
+held that by naming each scoped module, and an import of a `platform/*`
+module it did not name was available on every target: a module added to
+the library's `platform` root without a scope was shared everywhere, and
+nothing said so.
+
+**Chosen:** a `platform/*` module is available only where the compiler
+gives it a scope. Any other `platform/*` import is L0015 on every target,
+and its note says that the module declares no targets, which is a fault of
+the library, not of the program. Since D275 these modules come only from
+the compiler's own library, so a program cannot meet this unless its
+library is a maintainer's work in progress.
+
+**The alternatives:** a `check.py` control that every `platform/`
+directory of the checkout has a scope, which a library installed beside
+another compiler would not run; and keeping the fall-through, which
+makes a forgotten scope look like a deliberate shared one.
+
+**Pinned by** the driver case `source namespaces enforce target
+availability`, which refuses an unscoped `platform/foo` on a hosted target
+and on each firmware family.
 
 ### D688 — RAM code runs in a region code runs in, or is refused
 

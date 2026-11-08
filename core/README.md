@@ -455,7 +455,17 @@ A new `core/NAME` directory is known in four other places, and a full
 4. a `## core/NAME` section in `docs/library.md`, the module's overview in the
    library reference.
 
-The availability inventory below then says which targets it serves.
+The [availability inventory](#availability-inventory) above then says which
+targets it serves.
+
+A new `platform/NAME`, or a submodule of one, is available on no target
+until the compiler is told which it serves: add its branch to `Permitted`,
+and its sentence to `Requirement`, in
+`compiler/ada/src/modules/landin-modules-availability.adb`, add a refused
+import of it off its scope to the driver case `source namespaces enforce
+target availability`, and say its scope in the availability inventory and
+in [1480]'s table in `tour.md`. Until then every import of it is L0015,
+whose note says it declares no targets (D1022).
 
 ### Container and diagnostic migration
 

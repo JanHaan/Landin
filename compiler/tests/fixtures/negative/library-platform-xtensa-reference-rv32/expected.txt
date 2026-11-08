@@ -1,0 +1,6 @@
+error[L0015]: module unavailable for target: platform/xtensa/reference
+  --> ../tests/fixtures/negative/library-platform-xtensa-reference-rv32/main.ldn:1:1
+  |
+1 | import platform/xtensa/reference
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D267: platform/xtensa/reference requires the xtensa target
