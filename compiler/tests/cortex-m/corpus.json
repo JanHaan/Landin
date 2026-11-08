@@ -3533,6 +3533,12 @@
     "runtime/parameterized-type-alias-fixed-array": {
       "mode": "execute"
     },
+    "runtime/plugin-loading": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/pointer-to-small-integer-traps": {
       "mode": "execute"
     },

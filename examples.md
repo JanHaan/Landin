@@ -4,10 +4,11 @@ Complete Landin programs you can copy, compile and run. Two short lessons
 on printing and on failures come first, with a small tool that counts the
 lines of the file you name. Then come the classic exercises and a program
 that puts the language's main ideas together, then two small tools that
-read their input, then larger tools that use processes, the network and
-the file system, shortest first. Last come the Benchmark Game ports used
-to compare Landin with other languages. Each section names the tour
-entries it leans on, such as [0570], so you can read up on anything new.
+read their input, then larger tools that load a library or use processes,
+the network and the file system, shortest first. Last come the Benchmark
+Game ports used to compare Landin with other languages. Each section names
+the tour entries it leans on, such as [0570], so you can read up on
+anything new.
 
 ## Compile and run
 
@@ -1053,6 +1054,161 @@ which prints
      3	
      4	last
 ```
+
+## Loading a library
+
+A plugin host: the program loads the shared object it is named, finds two
+C functions in it by name and calls them, handing one a function of its
+own to call back. Read `main`, which loads and looks up, and then
+`report`, which calls.
+
+- `posix.open_library` loads with the system's own loader, which a
+  program has only when C's runtime started it, so on Linux this one is
+  compiled with `--link=libc`; without it `refine` refuses it, naming the
+  flag.
+- `posix.find_symbol` gives an address with no type. The program names
+  the C function type it is, `adder(added)`, and nothing can check that
+  the library's function is one [1580], as a C cast cannot.
+- `doubled` is an `extern(c)` routine [1570], so the plugin can call it
+  through a C function pointer.
+- A symbol the library does not define is `posix.no_symbol`, a failure to
+  recover from [1030]; one that cannot be loaded is `posix.no_library`,
+  and `posix.library_failure` gives the loader's own words for either.
+- A `defer` keeps the library loaded until `main` returns [1100]: every
+  address found in it names nothing once it is closed.
+
+Fixture source: `compiler/tests/fixtures/runtime/plugin-loading/main.ldn`.
+
+```landin
+--  Load the shared object named on the command line, find two functions
+--  in it by name and call them, one with a function of the program's
+--  own, then ask for one it does not define.  When the loader refuses,
+--  say why in its own words.
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+import platform/posix
+
+--  The C types of the functions the program looks for: nothing can check
+--  that the library's are these, as a C cast cannot.
+adder: type = extern(c) (a: i32, b: i32) -> (sum: i32)
+callback: type = extern(c) (value: i32) -> (result: i32)
+applier: type = extern(c) (call: callback, value: i32) -> (result: i32)
+
+--  What the plugin calls back.
+extern(c) doubled: (value: i32) -> (result: i32) =
+    result = value * 2
+end doubled
+
+--- Say on standard error why the loader refused, in its own words, which
+--- name the file or the symbol it could not find.
+refused: (host: blocking.host) -> none =
+    mut room: [1024]u8 = zeroed
+    said: []u8 = posix.library_failure(room[0..<lenof room])
+    io.write(host, io.err(host), "plugin: ") else none
+    io.write(host, io.err(host), said) else none
+    io.write(host, io.err(host), "\n") else none
+end refused
+
+--- Call `add` and `apply`, and print what each gave back and whether the
+--- library has a `subtract`.
+report: (host: blocking.host, add: adder, apply: applier, subtracts: bool)
+        -> none ! ... =
+    sum: i32 = add(40, 2)
+    try io.write_format(host, io.out(host), "add(40, 2) is {}\n",
+                        [any(addr sum)])
+    twice: i32 = apply(doubled, 21)
+    try io.write_format(host, io.out(host), "apply(doubled, 21) is {}\n",
+                        [any(addr twice)])
+    if subtracts then
+        try io.write(host, io.out(host), "the plugin has a subtract\n")
+    else
+        try io.write(host, io.out(host), "the plugin has no subtract\n")
+    end if
+end report
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    path := io.argument_at(host, 0) else (problem)
+        _ = problem
+        io.write(host, io.err(host), "usage: plugin LIBRARY\n") else none
+        return
+    end
+    plugin := posix.open_library(path, posix.local_symbols) else (problem)
+        if problem == posix.no_library then
+            refused(host)
+        else
+            io.write(host, io.err(host), "plugin: ") else none
+            io.write(host, io.err(host), text.host_bytes(path)) else none
+            io.write(host, io.err(host), " is not a path the system takes\n")
+                else none
+        end if
+        return
+    end
+    --  Every address found in the plugin names nothing once it is closed,
+    --  so it stays loaded until `main` returns.
+    defer posix.close_library(plugin) else none
+    added: usize = posix.find_symbol(plugin, "add") else (problem)
+        _ = problem
+        refused(host)
+        return
+    end
+    applied: usize = posix.find_symbol(plugin, "apply") else (problem)
+        _ = problem
+        refused(host)
+        return
+    end
+    --  A symbol the plugin does not define is a failure to recover from;
+    --  asking for the loader's words clears them.
+    mut subtracts: bool = true
+    _ = posix.find_symbol(plugin, "subtract") else (problem)
+        _ = problem
+        subtracts = false
+        mut room: [1024]u8 = zeroed
+        _ = posix.library_failure(room[0..<lenof room])
+        0
+    end
+    report(host, adder(added), applier(applied), subtracts) else (problem)
+        io.write(host, io.err(host), "standard output: ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
+    code = 0
+end main
+```
+
+The plugin, `plugin.c`, beside it:
+
+```c
+/* A plugin: two functions a program finds by name once it has loaded
+   this file's shared object. */
+
+int add(int a, int b) { return a + b; }
+
+int apply(int (*callback)(int), int value) { return callback(value); }
+```
+
+Build the plugin with the system's C compiler, then compile the program
+and give it the plugin's path:
+
+```sh
+cc -fPIC -shared plugin.c -o plugin.so
+refine compile --link=libc main.ldn -o plugin
+./plugin ./plugin.so
+```
+
+```text
+add(40, 2) is 42
+apply(doubled, 21) is 42
+the plugin has no subtract
+```
+
+On macOS and FreeBSD a program always starts in C's runtime, so
+`--link=libc` is not needed there, and on macOS the plugin is built with
+`cc -dynamiclib plugin.c -o plugin.dylib`.
 
 ## Running a shell
 
