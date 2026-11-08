@@ -1,0 +1,98 @@
+--  Load the shared object named on the command line, find two functions
+--  in it by name and call them, one with a function of the program's
+--  own, then ask for one it does not define.  When the loader refuses,
+--  say why in its own words.
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+import platform/posix
+
+--  The C types of the functions the program looks for: nothing can check
+--  that the library's are these, as a C cast cannot.
+adder: type = extern(c) (a: i32, b: i32) -> (sum: i32)
+callback: type = extern(c) (value: i32) -> (result: i32)
+applier: type = extern(c) (call: callback, value: i32) -> (result: i32)
+
+--  What the plugin calls back.
+extern(c) doubled: (value: i32) -> (result: i32) =
+    result = value * 2
+end doubled
+
+--- Say on standard error why the loader refused, in its own words, which
+--- name the file or the symbol it could not find.
+refused: (host: blocking.host) -> none =
+    mut room: [1024]u8 = zeroed
+    said: []u8 = posix.library_failure(room[0..<lenof room])
+    io.write(host, io.err(host), "plugin: ") else none
+    io.write(host, io.err(host), said) else none
+    io.write(host, io.err(host), "\n") else none
+end refused
+
+--- Call `add` and `apply`, and print what each gave back and whether the
+--- library has a `subtract`.
+report: (host: blocking.host, add: adder, apply: applier, subtracts: bool)
+        -> none ! ... =
+    sum: i32 = add(40, 2)
+    try io.write_format(host, io.out(host), "add(40, 2) is {}\n",
+                        [any(addr sum)])
+    twice: i32 = apply(doubled, 21)
+    try io.write_format(host, io.out(host), "apply(doubled, 21) is {}\n",
+                        [any(addr twice)])
+    if subtracts then
+        try io.write(host, io.out(host), "the plugin has a subtract\n")
+    else
+        try io.write(host, io.out(host), "the plugin has no subtract\n")
+    end if
+end report
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    path := io.argument_at(host, 0) else (problem)
+        _ = problem
+        io.write(host, io.err(host), "usage: plugin LIBRARY\n") else none
+        return
+    end
+    plugin := posix.open_library(path, posix.local_symbols) else (problem)
+        if problem == posix.no_library then
+            refused(host)
+        else
+            io.write(host, io.err(host), "plugin: ") else none
+            io.write(host, io.err(host), text.host_bytes(path)) else none
+            io.write(host, io.err(host), " is not a path the system takes\n")
+                else none
+        end if
+        return
+    end
+    --  Every address found in the plugin names nothing once it is closed,
+    --  so it stays loaded until `main` returns.
+    defer posix.close_library(plugin) else none
+    added: usize = posix.find_symbol(plugin, "add") else (problem)
+        _ = problem
+        refused(host)
+        return
+    end
+    applied: usize = posix.find_symbol(plugin, "apply") else (problem)
+        _ = problem
+        refused(host)
+        return
+    end
+    --  A symbol the plugin does not define is a failure to recover from;
+    --  asking for the loader's words clears them.
+    mut subtracts: bool = true
+    _ = posix.find_symbol(plugin, "subtract") else (problem)
+        _ = problem
+        subtracts = false
+        mut room: [1024]u8 = zeroed
+        _ = posix.library_failure(room[0..<lenof room])
+        0
+    end
+    report(host, adder(added), applier(applied), subtracts) else (problem)
+        io.write(host, io.err(host), "standard output: ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
+    code = 0
+end main

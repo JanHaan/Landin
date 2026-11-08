@@ -1,0 +1,9 @@
+class: negative
+summary: D267 D972 rv32 refuses the Cortex-M7's cache provider by its namespace, naming the M-profile scope it requires
+program: main.ldn
+root: ../../../../..
+args: --target=rv32
+expect: expected.txt
+codes: L0015
+constructs: 1410, 1420, 1480
+targets: rv32

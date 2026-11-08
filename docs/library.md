@@ -125,7 +125,7 @@ Which module does what:
 | Print many lines | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` for each, and `io.flush(out)`, checked, before reporting success | [core/io](../core/io) |
 | Get a command-line argument | `io.argument_at(host, 0)`, and `io.argument_count(host)` | [core/io](../core/io) |
 | Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
-| Read a whole file into memory | `io.open_read(host, path)`, then `io.read(host, file, chunk)` until it gives 0, adding each piece with `text.append(whole, chunk[0..<got])` to a builder, and `io.close(host, file)`. A builder `text.over(storage)` makes fails with `text.no_space` once the file outgrows `storage`; one `text.growing(any(addr heap))` makes grows from the allocator until `text.release` gives its storage back. [reverse-complement](../examples.md#benchmark-game-reverse-complement)'s `read_all` is the same loop over standard input | [core/io](../core/io), [core/text](../core/text) |
+| Read a whole file into memory | `io.open_read(host, path)`, then `io.read(host, file, chunk)` until it gives 0, adding each piece with `text.append(whole, chunk[0..<got])` to a builder, and `io.close(host, file)`. A builder `text.over(storage)` makes fails with `text.no_space` once the file outgrows `storage`; one `text.growing(any(addr heap))` makes grows from the allocator until `text.release` gives its storage back, and fails with `text.no_space` too when the allocator refuses. [This program](../compiler/tests/fixtures/runtime/library-read-whole-file/main.ldn) reads a file both ways, and its runs over [a file larger than 64 bytes](../compiler/tests/fixtures/runtime/library-read-whole-file/output.txt), [a smaller one](../compiler/tests/fixtures/runtime/library-read-whole-file-fits/output.txt) and [a missing one](../compiler/tests/fixtures/runtime/library-read-whole-file-missing/output.txt) are the compiler's own tests; [reverse-complement](../examples.md#benchmark-game-reverse-complement)'s `read_all` is the same loop over standard input | [core/io](../core/io), [core/text](../core/text) |
 | Write straight to standard error | `io.write(host, io.err(host), bytes)` | [core/io](../core/io) |
 | Turn a failure into words for a person | `failure.words(problem)` | [core/failure](../core/failure) |
 | Turn an errno from `platform/posix` into words | `posix.words(problem)`, which words the library's failures too | [platform/posix](../platform/posix) |
@@ -364,9 +364,9 @@ Keep keys and their backing stable while stored, and restart cursors after
 any mutation.
 
 A walk starts at `map.entries()` and calls `map.next_entry` until it fails
-with `map.end_of_entries`, as the
+with `map.end_of_entries`, as the executable example below does; the
 [derived container program](../examples/derived_containers/workload/workload.ldn)
-does after removing keys.
+also walks after removing keys.
 
 A complete map workload can exceed the Cortex-M0 test profile of 32 KiB
 flash, so the
@@ -378,7 +378,8 @@ fits that profile.
 
 It keeps three maps over one arena, keyed by `i32`, `[]u8` and `utf8`. It
 inserts keys, replaces one key's item, reads each back, finds a `[]u8` key
-through equal bytes at another address, and releases every map.
+through equal bytes at another address, walks the `utf8` map's entries in
+insertion order until `map.end_of_entries`, and releases every map.
 
 ## core/sort
 

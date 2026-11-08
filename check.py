@@ -141,6 +141,8 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/run-shell/main.ldn"),
     ("Copying a tree",
      "compiler/tests/fixtures/runtime/tree-copy/main.ldn"),
+    ("Loading a library",
+     "compiler/tests/fixtures/runtime/plugin-loading/main.ldn"),
     ("Echo over loopback",
      "compiler/tests/fixtures/runtime/network-echo/main.ldn"),
     ("Printing formatted values",
@@ -8893,6 +8895,28 @@ def check_running_examples(full_run):
                         "%s takes its size as an argument, so its metadata "
                         "names the arguments it is given and the output "
                         "expected" % title))
+
+        #  A program that loads a C library the reader builds shows that
+        #  library's source too, and the outside-user lane builds it from
+        #  the page: each `c-shared` source is a `c` fence of the section,
+        #  byte for byte.
+        shown_c = []
+        at = start + 1
+        while at < end:
+            if lines[at] == "```c":
+                closing = next((n for n in range(at + 1, end)
+                                if lines[n] == "```"), end)
+                shown_c.append("\n".join(lines[at + 1:closing]) + "\n")
+                at = closing
+            at += 1
+        for one in [item.strip() for item in
+                    fields.get("c-shared", "").split(",") if item.strip()]:
+            text = read_file(os.path.join(ROOT, os.path.dirname(source), one),
+                             encoding="utf-8")
+            if text not in shown_c:
+                out.append(("examples.md", start + 1,
+                            "%s loads %s, so the section shows it in a c "
+                            "fence, byte for byte" % (title, one)))
 
     return out
 

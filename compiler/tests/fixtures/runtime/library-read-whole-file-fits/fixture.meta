@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the library reference's whole-file recipe given a file that fits 64 bytes holds all of it in the builder over those bytes as well as in the growing one
+program: ../library-read-whole-file/main.ldn
+run_files: input.txt
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0940, 1030, 1650
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

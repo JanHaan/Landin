@@ -1236,7 +1236,7 @@ that scalar is evaluated once and broadcast, not implicitly converted.
 | `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
 | `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330]; or one distinct type whose base is an unsigned integer, and that distinct type back [0650]. That distinct type also admits `&=`, `^=` and `\|=`, reaching the assigned place once [0390] (D427) |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: an amount at or past it gives zero on every shift, a signed `>>` included, while inside the width a signed `>>` keeps the sign (D13). |
-| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison. Two values of one distinct type whose base is a scalar [0650] have `==` and `<>`, and `<`, `<=`, `>` and `>=` in the base's order, IEEE's comparisons for a floating base with NaN unordered; never with the base or another type without a conversion |
+| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison. A pointer union has none with another union or a pointer, but takes `==` and `<>` with an atom value whose atoms all belong to its set, on either side, answering whether it holds that atom [1870] (D429). Two values of one distinct type whose base has equality, a scalar, an atom or atom set, a pointer or a function value, have `==` and `<>` [0650] (D427), and a scalar base also gives `<`, `<=`, `>` and `>=` in the base's order, IEEE's comparisons for a floating base with NaN unordered; a distinct type over a pointer union, a struct, an array or a slice has none; never with the base or another type without a conversion |
 | `and` `or` `not` | bool, and a bool back [0340] |
 | unary `-` | one integer or float type, and that type back |
 
@@ -17109,11 +17109,14 @@ whose transport is not implemented. Relying only on provider bodies would let
 a harmless project override bypass a firmware refusal. Namespace checking
 preserves root selection while making availability explicit.
 
-**Pinned by** `negative/library-platform-cortex-m-hosted`, the driver case
-`source namespaces enforce target availability` and the separately sized
+**Pinned by** `negative/library-platform-cortex-m-reference-hosted`, the
+driver case `source namespaces enforce target availability`, the firmware
+refusal `negative/library-hosted-system-rv32`, and the separately sized
 shared-library consumers.
 
-D575 makes `platform/cortex_m` itself available on every target.
+D575 makes `platform/cortex_m` itself available on every target, D687
+`platform/riscv` and D1021 `platform/xtensa`; D1022 refuses a `platform`
+module that has no scope.
 
 ### D575 — `platform/cortex_m` declares nothing off an M-profile target
 
@@ -26113,6 +26116,59 @@ operations, which an ESP program would see.
 
 **Pinned by** `negative/library-platform-riscv-hazard3-hosted` and the RV32
 emulator lane's interrupt programs.
+
+### D1021 — `platform/xtensa` declares its CPU operations on xtensa alone
+
+**The tour said** at [1480] that `platform` holds scoped freestanding
+interfaces and named only `platform/c` and `platform/cortex_m`; the Xtensa
+target was built with `platform/xtensa` in D687's shape, and no entry
+recorded its scope. This entry transcribes that behaviour; it changes none.
+
+**Chosen:** `platform/xtensa` is available on every target and declares, on
+`xtensa` alone, `disable_interrupts`, `restore_interrupts`,
+`mask_level_one` and `interrupt_mask` over PS, `set_enabled_lines` and
+`enabled_lines` over INTENABLE, `pending_lines` over INTERRUPT, `cycles`
+over CCOUNT,
+`wait_for_interrupt` and the three barriers, so a shared program imports it
+everywhere and calls it from a `fixed if compiler.arch == xtensa` arm. Its
+submodules, the reference descriptions `platform/xtensa/reference` and
+`platform/xtensa/reference_lx7`, are available on `xtensa` alone and
+refused by name elsewhere, L0015; at the other Xtensa level each is
+L0515, because each describes one chip configuration, the first
+`xtensa-esp32`'s and the second `xtensa-esp32s3`'s (D903).
+
+**The alternatives:** are D687's: the operations in each chip's
+description, which is directives alone, and an Xtensa-only module, which a
+shared program could not import.
+
+**Pinned by** `negative/library-platform-xtensa-reference-hosted`,
+`negative/library-platform-xtensa-reference-rv32` and the driver case
+`source namespaces enforce target availability`.
+
+### D1022 — A platform module with no scope is available nowhere
+
+**The tour said** at [1480] that `platform` holds scoped interfaces, and
+D267 that each library namespace declares its availability. The compiler
+held that by naming each scoped module, and an import of a `platform/*`
+module it did not name was available on every target: a module added to
+the library's `platform` root without a scope was shared everywhere, and
+nothing said so.
+
+**Chosen:** a `platform/*` module is available only where the compiler
+gives it a scope. Any other `platform/*` import is L0015 on every target,
+and its note says that the module declares no targets, which is a fault of
+the library, not of the program. Since D275 these modules come only from
+the compiler's own library, so a program cannot meet this unless its
+library is a maintainer's work in progress.
+
+**The alternatives:** a `check.py` control that every `platform/`
+directory of the checkout has a scope, which a library installed beside
+another compiler would not run; and keeping the fall-through, which
+makes a forgotten scope look like a deliberate shared one.
+
+**Pinned by** the driver case `source namespaces enforce target
+availability`, which refuses an unscoped `platform/foo` on a hosted target
+and on each firmware family.
 
 ### D688 — RAM code runs in a region code runs in, or is refused
 

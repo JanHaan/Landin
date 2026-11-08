@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: Small shared core/text consumer reaches its portable interface: byte cursors, positions over utf8 and their searches, the encoder, and both builders' scalar and number appends, with a refusal of each kind
+summary: Small shared core/text consumer reaches its portable interface: byte cursors, positions over utf8 and their searches, the encoder, and both builders' byte, text and scalar appends, with a refusal of each kind: past_end, not_found, invalid_scalar, and no_space from the encoder and from each builder; the number appends, which do not fit beside these in the Cortex-M0 profile unoptimized, are runtime/core-text-utf8-builder-firmware's
 program: main.ldn
 root: ../../../../..
 status: 42

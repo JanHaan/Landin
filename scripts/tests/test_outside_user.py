@@ -38,10 +38,18 @@ class Documents(unittest.TestCase):
         listed = (ROOT / "examples.md").read_text().count("Fixture source: `")
         self.assertEqual(len(found), listed)
         reading = sized = 0
-        for name, source, expected, status, given, arguments in found:
+        loading = 0
+        for name, source, expected, status, given, arguments, shared in \
+                found:
             fixture = ROOT / "compiler/tests/fixtures/runtime" / name
             self.assertEqual(source, (fixture / "main.ldn").read_text(),
                              name)
+            for one, listing in shared:
+                #  A library the program loads is built from the page's
+                #  listing of it, which is its fixture's source.
+                self.assertEqual(listing, (fixture / one).read_text(),
+                                 "%s: %s" % (name, one))
+                loading += 1
             if expected is not None:
                 self.assertTrue(expected, name)
             if given:
@@ -58,6 +66,20 @@ class Documents(unittest.TestCase):
             self.assertIsNotNone(expected, name)
         self.assertGreaterEqual(reading, 1)
         self.assertGreaterEqual(sized, 1)
+        self.assertGreaterEqual(loading, 1)
+
+    def test_a_loaded_library_the_page_does_not_list_is_found_missing(self):
+        text = "```c\nint add(int a, int b) { return a + b; }\n```\n"
+        self.assertEqual(outside_user.c_listings(text, 0, len(text)),
+                         ["int add(int a, int b) { return a + b; }\n"])
+        self.assertEqual(outside_user.c_listings(text, 1, len(text)), [])
+        with TemporaryDirectory() as scratch:
+            objects, report = outside_user.loaded_libraries(
+                [("plugin.c", None)], Path(scratch), dict(os.environ),
+                "plugin-loading")
+            self.assertIsNone(objects)
+            self.assertIn("no listing of plugin.c", report)
+            self.assertEqual(list(Path(scratch).iterdir()), [])
 
     def test_a_program_reads_the_input_it_is_given(self):
         ran, _ = outside_user.run(

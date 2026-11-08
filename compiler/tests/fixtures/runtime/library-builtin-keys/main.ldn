@@ -49,6 +49,21 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
     two: u32 = try map.get(words, typed)
     return when two <> 2
 
+    --  A walk visits each live entry once, in insertion order, and ends
+    --  with `end_of_entries`; replacing an item kept "one" first.
+    mut position := map.entries()
+    mut walked: u32 = 0
+    mut order: u32 = 0
+    loop do
+        entry: map.entry(utf8, u32) = map.next_entry(words, position) else (problem)
+            _ = problem
+            break
+        end
+        order = order * 100 + entry.item
+        inc walked
+    end loop
+    return when walked <> 2 or order <> 1002
+
     mut texts: [3]utf8 = ["pear", "apple", "fig"]
     sort.sort(texts[0..<3])
     return when not text.equal(texts[0], "apple") or not text.equal(texts[1], "fig")

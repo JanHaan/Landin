@@ -3025,6 +3025,24 @@
     "runtime/library-platform-xtensa": {
       "mode": "execute"
     },
+    "runtime/library-read-whole-file": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/library-read-whole-file-fits": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/library-read-whole-file-missing": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/library-second-reading": {
       "mode": "execute"
     },
@@ -3517,6 +3535,12 @@
     },
     "runtime/placement-alignment-firmware": {
       "mode": "execute"
+    },
+    "runtime/plugin-loading": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
     },
     "runtime/pointer-to-small-integer-traps": {
       "mode": "execute"

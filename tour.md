@@ -2772,13 +2772,16 @@ Four source namespaces belong to the repository:
 |---|---|---|
 | `core` | the shared freestanding library: `core/mem`, `core/text`, `core/vec` | every module and interface on every target |
 | `hosted` | hosted providers such as `hosted/heap`, `hosted/system` and `hosted/blocking` | on hosted systems |
-| `platform` | scoped freestanding interfaces | `platform/c` with an enabled C ABI, the hosted LP64 ones and Cortex-M's AAPCS32; `platform/cortex_m` everywhere, declaring its operations only on M-profile targets, higher feature levels included, and its device descriptions only there |
+| `platform` | interfaces scoped to a target or a system: `platform/c`, the CPU modules `platform/cortex_m`, `platform/riscv` and `platform/xtensa`, and the POSIX layer, `platform/posix` over `platform/linux`, `platform/libc` and `platform/kqueue` | `platform/c` with an enabled C ABI, the hosted LP64 ones and Cortex-M's AAPCS32; each CPU module everywhere, declaring its operations only on its own targets, M-profile with higher feature levels included, `rv32` and `xtensa`, and its submodules and reference descriptions only there; the POSIX layer on the hosted POSIX systems, Linux, Darwin and FreeBSD; a `platform` module the compiler gives no scope, nowhere |
 | `landin` | the toolchain modules of [1560]: `landin/compiler`, `landin/assembler`, `landin/linker` | everywhere, without an import |
 
 Fine print:
 
 - An import outside its target's scope is refused by name when the target
   is checked, for example `hosted/heap` in firmware.
+- The POSIX layer is hosted-only and still under `platform`, not `hosted`:
+  it is the system's own interface, which the `hosted` providers are
+  written over, rather than a provider of its own.
 - A module that declares nothing on some targets can be imported on all of
   them: a program for every target imports `platform/cortex_m` and calls it
   from a `fixed if compiler.arch == cortex_m0` arm ([1500]).

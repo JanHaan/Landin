@@ -1,0 +1,4 @@
+64 bytes of storage: no room for the output
+storage that grows: 121 bytes
+Ada Lovelace wrote the first published program in 1843.
+It computed Bernoulli numbers on an engine that was never built.

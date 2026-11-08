@@ -120,9 +120,10 @@ counts, and the arena's handle holds the base. Giving the state back, as
 `region.release` does, takes it `inout` and is refused while a handle made
 from it is still in use. Process-wide state, the argument root, the last
 errno and the Linux heap's classes, belongs to the process, so
-`hosted.host()` and `heap.host()` make handles that borrow nothing. Code
-that must keep its own last errno, a C thread calling into Landin among
-them, declares a `hosted.space` and takes its handle with `hosted.over`. A
+`system.new()`, `blocking.new()` and `heap.new()` make handles that borrow
+nothing. Code that must keep its own last errno, a C thread calling into
+Landin among them, declares a `system.space` and takes its handle with
+`system.over`, or a `blocking.space` with `blocking.over`. A
 provider stacked on another, a region, an injector, the lent writer or a
 streaming log, holds a copy of its parent's handle. One parameter name serves
 each role: `memory` is an allocator handle, `host` an I/O handle, `state` a
@@ -318,7 +319,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/sort` | Heapsort and selection sort by `cmp.ordered` evidence, and `sort_by`, heapsort by a comparison given a context, with no allocation; `runtime/core-sort-context`, which sorts records into a shared pool of names with `cmp.compare`, is 10.7 KB at size/auto (D387). |
 | `core/failure` | `failure.words`, a phrase for each of the 34 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
-| `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. Over `utf8`, positions, the searches and the encoder with both builders' scalar appends, `runtime/library-shared-text`, are 24.8 KB at size/auto and 29.5 KB at none/off, with 1,048 and 1,480 bytes of stack observed; the Two-Way search shared by `contains` and every `find` is 3.8 KB of it at size/auto and 5.4 KB at none/off. A console line checked, split at a found `=` and arrow and encoded again, `runtime/core-text-utf8-firmware`, is 26.4 KB and 31.4 KB, of which `valid`, which `from_bytes` runs once, is 3.4 KB and 4.3 KB. Static RAM is 20 bytes in each. |
+| `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. Over `utf8`, positions, the searches and the encoder with both builders' scalar appends and a refusal of each, `runtime/library-shared-text`, are 26.1 KB at size/auto and 30.9 KB at none/off, with 1,048 and 1,496 bytes of stack observed; the Two-Way search shared by `contains` and every `find` is 3.8 KB of it at size/auto and 5.4 KB at none/off. A console line checked, split at a found `=` and arrow and encoded again, `runtime/core-text-utf8-firmware`, is 26.4 KB and 31.4 KB, of which `valid`, which `from_bytes` runs once, is 3.4 KB and 4.3 KB. Static RAM is 20 bytes in each. |
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
 | `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
@@ -454,7 +455,17 @@ A new `core/NAME` directory is known in four other places, and a full
 4. a `## core/NAME` section in `docs/library.md`, the module's overview in the
    library reference.
 
-The availability inventory below then says which targets it serves.
+The [availability inventory](#availability-inventory) above then says which
+targets it serves.
+
+A new `platform/NAME`, or a submodule of one, is available on no target
+until the compiler is told which it serves: add its branch to `Permitted`,
+and its sentence to `Requirement`, in
+`compiler/ada/src/modules/landin-modules-availability.adb`, add a refused
+import of it off its scope to the driver case `source namespaces enforce
+target availability`, and say its scope in the availability inventory and
+in [1480]'s table in `tour.md`. Until then every import of it is L0015,
+whose note says it declares no targets (D1022).
 
 ### Container and diagnostic migration
 

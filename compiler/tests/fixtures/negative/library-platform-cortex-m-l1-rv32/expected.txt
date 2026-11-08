@@ -1,0 +1,6 @@
+error[L0015]: module unavailable for target: platform/cortex_m/l1
+  --> ../tests/fixtures/negative/library-platform-cortex-m-l1-rv32/main.ldn:1:1
+  |
+1 | import platform/cortex_m/l1
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D267: platform/cortex_m/l1 requires an M-profile target

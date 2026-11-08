@@ -22,9 +22,14 @@ With `--stock`, the system is a stock distribution with only its own GCC
 installs, never the pinned image's `x86_64-pc-linux-gnu-gcc`, a program
 that traps must report its kind and site (D361) before it ends, and a
 program links a C archive the distribution's `gcc` and `ar` built beside
-it, found through `linker.directory` (D523, D524).  Firmware links with the
-distribution's `arm-none-eabi-gcc` while the pinned `arm-eabi-gcc` is
-unreachable (D532), into a 32-bit Arm ELF.
+it, found through `linker.directory` (D523, D524), and every example that
+loads a C library, as its fixture's `c-shared:` says, is run as its
+section tells a reader to: the library built from the page's `c` listing
+with the distribution's `cc -fPIC -shared`, the program compiled with
+`--link=libc` and given the library's path first.  Without `--stock` those
+examples are skipped, and say so, since that lane assumes no C compiler.
+Firmware links with the distribution's `arm-none-eabi-gcc` while the
+pinned `arm-eabi-gcc` is unreachable (D532), into a 32-bit Arm ELF.
 
 The first program is read from its runtime fixture, not from the README
 that shows it: the gate may skip this lane for an edit confined to the
@@ -61,18 +66,53 @@ def first_program():
             (FIRST_PROGRAM / "output.txt").read_bytes(), 0, b"", [])
 
 
+def c_listings(text, start, end):
+    """The fenced `c` blocks between START and END."""
+    return [found.group(1) for found in
+            re.compile(r"^```c\n(.*?)^```$", re.M | re.S).finditer(
+                text, start, end)]
+
+
 def examples():
     """Each example's source as examples.md shows it, with its oracles, the
-    bytes its standard input reads and the arguments it is given."""
+    bytes its standard input reads, the arguments it is given, and the C
+    libraries it loads: each `c-shared:` source's name with the page's
+    listing of it, the one of the section's `c` listings that is that
+    file, or None when none is."""
     text = (ROOT / "examples.md").read_text(encoding="utf-8")
     for named in re.finditer(r"^Fixture source: `([^`]+)/main\.ldn`\.$", text,
                              re.M):
         fixture = ROOT / named.group(1)
-        source, _ = landin_block(text, named.end())
+        source, after = landin_block(text, named.end())
+        following = re.compile(r"^## ", re.M).search(text, after)
+        listed = c_listings(text, after,
+                            following.start() if following else len(text))
         meta = fixture_meta.read(fixture)
+        shared = []
+        for one in meta.c_shared:
+            wanted = (fixture / one).read_text(encoding="utf-8")
+            shared.append((one, wanted if wanted in listed else None))
         given = pathlib.Path(meta.standard_input(fixture)).read_bytes()
         yield (fixture.name, source, meta.run_expected(fixture), meta.status,
-               given, meta.program_arguments(fixture))
+               given, meta.program_arguments(fixture), shared)
+
+
+def loaded_libraries(shared, project, env, name):
+    """Build each of SHARED, (file, listing) pairs, in PROJECT as the page
+    tells a reader to: the paths of the objects, or a failure's report."""
+    built = []
+    for one, listing in shared:
+        if listing is None:
+            return None, ("%s: examples.md shows no listing of %s"
+                          % (name, one))
+        (project / one).write_text(listing, encoding="utf-8")
+        stem = fixture_meta.shared_stem(one)
+        made, report = run(["cc", "-fPIC", "-shared", one, "-o",
+                            stem + ".so"], project, env, name)
+        if made.returncode != 0:
+            return None, report
+        built.append(str(project / (stem + ".so")))
+    return built, None
 
 
 def run(argv, cwd, env, what, given=b""):
@@ -284,19 +324,30 @@ def main():
             .splitlines()):
         failures.append("refine does not report %r\n%s" % (library, report))
 
-    programs = [("first-program",) + first_program()]
-    programs += list(examples())
-    for name, source, expected, status, given, arguments in programs:
+    programs = [("first-program",) + first_program() + ([],)]
+    for example in examples():
+        if example[6] and not args.stock:
+            #  The lane without --stock assumes no C compiler.
+            print("skip %s: it loads a C library, which --stock builds"
+                  % example[0])
+        else:
+            programs.append(example)
+    for name, source, expected, status, given, arguments, shared in programs:
         project = work / name
         project.mkdir(exist_ok=True)
         (project / "main.ldn").write_text(source, encoding="utf-8")
-        built, report = run([str(refine), "compile", "main.ldn", "-o", "prog"],
-                            project, env, name)
+        objects, report = loaded_libraries(shared, project, env, name)
+        if objects is None:
+            failures.append(report)
+            continue
+        linking = ["--link=libc"] if shared else []
+        built, report = run([str(refine), "compile"] + linking
+                            + ["main.ldn", "-o", "prog"], project, env, name)
         if built.returncode != 0:
             failures.append(report)
             continue
-        ran, report = run([str(project / "prog")] + arguments, project, env,
-                          name, given)
+        ran, report = run([str(project / "prog")] + objects + arguments,
+                          project, env, name, given)
         if ran.returncode != status:
             failures.append("expected status %d\n%s" % (status, report))
         elif expected is not None and ran.stdout != expected:

@@ -2569,6 +2569,11 @@ package body Landin.Diagnostics.Citations is
             when 687 =>
                "`platform/riscv` declares its CPU operations on rv32 alo"
                & "ne",
+            when 1021 =>
+               "`platform/xtensa` declares its CPU operations on xtensa "
+               & "alone",
+            when 1022 =>
+               "A platform module with no scope is available nowhere",
             when 688 =>
                "RAM code runs in a region code runs in, or is refused",
             when 830 =>
@@ -4127,6 +4132,10 @@ package body Landin.Diagnostics.Citations is
             when 686 =>
                "Decisions: The toolchain, C and the machine",
             when 687 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1021 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1022 =>
                "Decisions: The toolchain, C and the machine",
             when 688 =>
                "Decisions: The toolchain, C and the machine",
@@ -6121,6 +6130,12 @@ package body Landin.Diagnostics.Citations is
             when 687 =>
                "https://www.701.dev/spec.html#d687-platform-riscv-declar"
                & "es-its-cpu-operations-on-rv32-alone",
+            when 1021 =>
+               "https://www.701.dev/spec.html#d1021-platform-xtensa-decl"
+               & "ares-its-cpu-operations-on-xtensa-alone",
+            when 1022 =>
+               "https://www.701.dev/spec.html#d1022-a-platform-module-wi"
+               & "th-no-scope-is-available-nowhere",
             when 688 =>
                "https://www.701.dev/spec.html#d688-ram-code-runs-in-a-re"
                & "gion-code-runs-in-or-is-refused",

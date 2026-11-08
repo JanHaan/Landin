@@ -1,0 +1,69 @@
+--  Read the file named on the command line whole, once into 64 bytes of
+--  the program's own storage and once into storage that grows from the
+--  heap, and say what each held or, in words, why it could not.
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+import hosted/heap
+
+--- Add every byte of the file at `path` to `whole`, a chunk at a time.
+read_whole: (host: blocking.host, path: text.host_string,
+             inout whole: text.builder) -> none ! ... =
+    file := try io.open_read(host, path)
+    defer io.close(host, file) else none
+    mut chunk: [32]u8 = zeroed
+    loop do
+        got: usize = try io.read(host, file, chunk)
+        break when got == 0
+        try text.append(whole, chunk[0..<got])
+    end loop
+end read_whole
+
+--- Read `path` into a builder that never grows and then into one that
+--- does, and print how many bytes each holds. The first may run out of
+--- room, which is printed in words; any other failure is the caller's.
+report: (host: blocking.host, path: text.host_string) -> none ! ... =
+    mut storage: [64]u8 = zeroed
+    mut bounded := text.over(storage)
+    mut fits: bool = true
+    read_whole(host, path, bounded) else (problem)
+        fail problem when problem <> text.no_space
+        fits = false
+    end
+    if fits then
+        held: usize = text.length(bounded)
+        try io.write_format(host, io.out(host), "64 bytes of storage: {} bytes\n",
+                            [any(addr held)])
+    else
+        said: []u8 = failure.words(text.no_space)
+        try io.write_format(host, io.out(host), "64 bytes of storage: {}\n",
+                            [any(addr said)])
+    end if
+    memory := heap.new()
+    mut growing := text.growing(any(addr memory))
+    defer text.release(growing)
+    try read_whole(host, path, growing)
+    count: usize = text.length(growing)
+    try io.write_format(host, io.out(host), "storage that grows: {} bytes\n",
+                        [any(addr count)])
+    try io.write(host, io.out(host), text.used(growing))
+end report
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    path := io.argument_at(host, 0) else (problem)
+        _ = problem
+        io.write(host, io.err(host), "usage: whole FILE\n") else none
+        return
+    end
+    report(host, path) else (problem)
+        io.write(host, io.err(host), text.host_bytes(path)) else none
+        io.write(host, io.err(host), ": ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
+    code = 0
+end main

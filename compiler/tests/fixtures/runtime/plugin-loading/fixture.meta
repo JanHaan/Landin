@@ -1,0 +1,12 @@
+class: runtime
+profiles: standard
+summary: examples.md's plugin loader loads the shared object the harness built from plugin.c with platform/posix, makes the two functions it finds by name values of written C function types, calls one and passes the other a Landin callback, and recovers from a symbol the object does not define
+program: main.ldn
+root: ../../../../..
+link: libc
+c-shared: plugin.c
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0940, 1030, 1100, 1580, 1975
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

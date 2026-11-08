@@ -15,9 +15,9 @@ catalogued code to exactly one section here and every citation to a paragraph
 or decision that exists, and generates the compiler's copy of this text.
 
 A section's example, where it has one, is a program the code refuses; the
-test program's `catalogue` case `every code is explained` compiles it, on a
-file system holding the example alone, and requires its report to begin with
-that code. An example is one file, compiled with no option on the default
+test program's `catalogue` case `every code is explained` compiles it beside
+the repository's own library, as `refine` finds its library, and requires
+its report to begin with that code. An example is one file, compiled with no option on the default
 hosted target, unless its first line names the options it needs, as a code
 only a Cortex-M build raises does:
 
@@ -30,8 +30,9 @@ The line is a comment, so the example is still the whole program, and
 begins `--`, with one space before it, and none names a file, since the
 example is the only one it is compiled with (D599); `check.py` and the test
 program refuse any other `-- refine:` line, naming it. A code whose program
-needs a file beside it, the library refine finds, a developer's linker
-script or the object the assembler writes, shows no example.
+needs a file of its own beside it, a description without the library's
+reference, a developer's linker script, a C archive or the object the
+assembler writes, shows no example.
 
 A code whose diagnostic offers a fix says so. A fix is shown as a `help` line
 and handed to an editor as an edit; a likely fix is a guess, an exact one is
@@ -252,8 +253,14 @@ higher supported feature levels. `platform/cortex_m` itself is available on
 every target and declares its operations only on an M-profile one (D575), so
 a program for every target imports it and calls it from a `fixed if
 compiler.arch == cortex_m0` arm; a call outside one is L0201 on a hosted
-target. Select an applicable target or remove the import. Project-first root
-selection cannot change namespace availability.
+target. `platform/riscv` and `platform/xtensa` are the same for `rv32` and
+`xtensa` (D687, D1021), and the POSIX layer, `platform/posix` with
+`platform/linux`, `platform/libc` and `platform/kqueue`, requires Linux,
+Darwin or FreeBSD. Select an applicable target or remove the import.
+Project-first root selection cannot change namespace availability. A
+`platform` module the compiler gives no scope is refused on every target,
+and the note says it declares no targets (D1022): that is a fault of the
+library, which its maintainer corrects as `core/README.md` describes.
 
 ### L0016
 
@@ -1907,6 +1914,11 @@ section, which a region placement chooses itself, or the region's access does
 not hold it: a routine needs a region code runs in, and a mutable datum a
 writable one. On a hosted target placement is refused as L0347 is.
 
+```landin
+-- refine: --target=cortex-m0
+link(region: "NOWHERE") table: u32 = 1
+```
+
 ### L0518
 
 A firmware request, a vector placement or a region placement needs a device
@@ -2358,7 +2370,13 @@ its RAM code with its text instead, which the ROM already loaded into RAM.
 A data region that is `"rw"`, as the ESP32-C3's data-bus alias of its
 SRAM is, would hold bytes the core cannot fetch, and the first call would
 fault. Place the routine in `.text`, or in an executable region of the
-description with `link(region: "NAME")`.
+description with `link(region: "NAME")`. The library's Xtensa reference,
+used when a program imports no description, has such a data region:
+
+```landin
+-- refine: --target=xtensa
+link(section: ".ramtext.fast") fast: () -> none = end fast
+```
 
 ### L0579
 

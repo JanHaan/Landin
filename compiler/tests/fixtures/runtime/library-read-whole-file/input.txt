@@ -1,0 +1,2 @@
+Ada Lovelace wrote the first published program in 1843.
+It computed Bernoulli numbers on an engine that was never built.

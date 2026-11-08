@@ -1,0 +1,9 @@
+class: negative
+summary: D267 rv32 firmware refuses hosted/system by name, as Cortex-M does, and the refusal says hosted modules require a hosted target
+program: main.ldn
+root: ../../../../..
+args: --target=rv32
+expect: expected.txt
+codes: L0015
+constructs: 1410, 1420, 1480
+targets: rv32

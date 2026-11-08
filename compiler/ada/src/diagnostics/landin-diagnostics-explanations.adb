@@ -184,9 +184,17 @@ package body Landin.Diagnostics.Explanations is
                & "nly on an M-profile one (D575), so a program for every t"
                & "arget imports it and calls it from a `fixed if compiler."
                & "arch == cortex_m0` arm; a call outside one is L0201 on a"
-               & " hosted target. Select an applicable target or remove th"
-               & "e import. Project-first root selection cannot change nam"
-               & "espace availability.",
+               & " hosted target. `platform/riscv` and `platform/xtensa` a"
+               & "re the same for `rv32` and `xtensa` (D687, D1021), and t"
+               & "he POSIX layer, `platform/posix` with `platform/linux`, "
+               & "`platform/libc` and `platform/kqueue`, requires Linux, D"
+               & "arwin or FreeBSD. Select an applicable target or remove "
+               & "the import. Project-first root selection cannot change n"
+               & "amespace availability. A `platform` module the compiler "
+               & "gives no scope is refused on every target, and the note "
+               & "says it declares no targets (D1022): that is a fault of "
+               & "the library, which its maintainer corrects as `core/READ"
+               & "ME.md` describes.",
             when Catalogue.Root_Holds_Library_Module =>
                "A warning: an import of `core`, `hosted` or `platform` w"
                & "as read from the compiler's own library, and a `--root=`"
@@ -1444,7 +1452,9 @@ package body Landin.Diagnostics.Explanations is
                & "2-C3's data-bus alias of its SRAM is, would hold bytes t"
                & "he core cannot fetch, and the first call would fault. Pl"
                & "ace the routine in `.text`, or in an executable region o"
-               & "f the description with `link(region: ""NAME"")`.",
+               & "f the description with `link(region: ""NAME"")`. The libra"
+               & "ry's Xtensa reference, used when a program imports no de"
+               & "scription, has such a data region:",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -2454,7 +2464,10 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Boot_Kind_Reserved =>
                "",
             when Catalogue.Region_Placement =>
-               "",
+               "-- refine: --target=cortex-m0"
+               & LF
+               & "link(region: ""NOWHERE"") table: u32 = 1"
+               & LF,
             when Catalogue.No_Description =>
                "",
             when Catalogue.Boot_Stage_Form =>
@@ -2846,7 +2859,11 @@ package body Landin.Diagnostics.Explanations is
                & "linker.place(""stack"", ""SRAM"", 16 * 1024)"
                & LF,
             when Catalogue.RAM_Code_Unplaceable =>
-               "",
+               "-- refine: --target=xtensa"
+               & LF
+               & "link(section: "".ramtext.fast"") fast: () -> none = end fa"
+               & "st"
+               & LF,
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="
                & LF

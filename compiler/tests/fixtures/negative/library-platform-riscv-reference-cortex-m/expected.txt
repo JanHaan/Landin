@@ -1,0 +1,6 @@
+error[L0015]: module unavailable for target: platform/riscv/reference
+  --> ../tests/fixtures/negative/library-platform-riscv-reference-cortex-m/main.ldn:1:1
+  |
+1 | import platform/riscv/reference
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D267: platform/riscv/reference requires the rv32 target

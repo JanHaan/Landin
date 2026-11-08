@@ -33,6 +33,13 @@ scalars: () -> (ok: bool) ! text.not_found | text.invalid_scalar | text.no_space
     mut buffer: [4]u8 = zeroed
     count := try text.encode('\u{e9}', buffer[0..<4])
     return when count <> 2 or buffer[0] <> 0xc3 or buffer[1] <> 0xa9
+    mut tight: [1]u8 = zeroed
+    mut short: bool = false
+    _ = text.encode('\u{e9}', tight[0..<1]) else (full)
+        short = full == text.no_space
+        0
+    end
+    return when not short
     _ = text.find(source, "b") else (absent)
         return when absent <> text.not_found
         _ = text.encode(0xd800, buffer[0..<4]) else (invalid)
@@ -44,19 +51,31 @@ scalars: () -> (ok: bool) ! text.not_found | text.invalid_scalar | text.no_space
 end scalars
 
 --  A scalar into the byte builder, and text and scalars into the builder
---  that holds only text, which cuts back to a scalar's start.
+--  that holds only text, which cuts back to a scalar's start; each refuses
+--  a piece that does not fit and keeps what it held.  The number appends
+--  are runtime/core-text-utf8-builder-firmware's.
 builders: () -> (ok: bool) ! text.no_space | text.invalid_scalar =
     ok = false
     mut bytes: [4]u8 = zeroed
     mut line := text.over(bytes[0..<4])
     try text.append_scalar(line, '\u{2192}')
     return when text.length(line) <> 3
+    mut refused: bool = false
+    text.append(line, "ab") else (full)
+        refused = full == text.no_space
+    end
+    return when not refused or text.length(line) <> 3
     mut storage: [8]u8 = zeroed
     mut valid := text.utf8_over(storage[0..<8])
     try text.utf8_append_text(valid, "a")
     try text.utf8_append_scalar(valid, '\u{e9}')
     return when text.utf8_length(valid) <> 3 or text.utf8_capacity(valid) <> 8
       or not text.equal(text.utf8_used(valid), "a\u{e9}")
+    refused = false
+    text.utf8_append_text(valid, "abcdef") else (full)
+        refused = full == text.no_space
+    end
+    return when not refused or text.utf8_length(valid) <> 3
     text.utf8_truncate(valid, 2)
     held: []u8 = text.utf8_bytes(valid)
     return when lenof held <> 1 or held[0] <> u8('a')

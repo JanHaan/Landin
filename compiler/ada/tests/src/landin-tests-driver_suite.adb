@@ -7948,6 +7948,39 @@ package body Landin.Tests.Driver_Suite is
                & Unbounded.To_String (Result.Report));
          end;
       end Hosted_Accepted;
+      --  D1022: a platform module the library ships with no scope is
+      --  available nowhere, on a hosted target and on firmware alike, and
+      --  the refusal says that it declares no targets.
+      procedure Unscoped_Refused (Target : String);
+      procedure Unscoped_Refused (Target : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/app");
+         Host.Add_Directory ("root/platform");
+         Host.Add_Directory ("root/platform/foo");
+         Host.Add_File ("root/platform/foo/foo.ldn", "public x: u32 = 1");
+         Host.Add_File
+           ("root/app/main.ldn", "import platform/foo" & LF
+            & "read: () -> (x: u32) = x = foo.x end read");
+         Args.Append ("--root=root");
+         Args.Append ("--target=" & Target);
+         Args.Append ("root/app");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Occurrences (Report, Unavailable_Error) = 1
+               and then Occurrences (Report, "error[") = 1
+               and then Contains (Report, "platform/foo declares no targets"),
+               Target & " refuses an unscoped platform module: " & Report);
+         end;
+      end Unscoped_Refused;
       procedure Explicit_Preflight;
       procedure Explicit_Preflight is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -8010,6 +8043,27 @@ package body Landin.Tests.Driver_Suite is
       Hosted_Accepted;
       Refused ("linux-x86-64", "platform/cortex_m/reference", True);
       Refused ("linux-x86-64", "platform/cortex_m/reference", False);
+      --  Each firmware family's submodules stay its own: off their family,
+      --  hosted or on another firmware target, each is refused by name.
+      Refused ("linux-x86-64", "platform/cortex_m/l1", False);
+      Refused ("rv32", "platform/cortex_m/l1", True);
+      Refused ("xtensa", "platform/cortex_m/reference", False);
+      Refused ("linux-x86-64", "platform/riscv/reference", True);
+      Refused ("cortex-m0", "platform/riscv/reference", False);
+      Refused ("xtensa", "platform/riscv/hazard3", True);
+      Refused ("linux-x86-64", "platform/xtensa/reference", False);
+      Refused ("cortex-m0", "platform/xtensa/reference", True);
+      Refused ("rv32", "platform/xtensa/reference_lx7", False);
+      --  Every firmware family refuses the hosted providers by name, not
+      --  only Cortex-M.
+      Refused ("rv32", "hosted/system", False);
+      Refused ("rv32", "hosted/heap", True, True);
+      Refused ("xtensa", "hosted/blocking", True);
+      Refused ("xtensa", "hosted/events", False);
+      Unscoped_Refused ("linux-x86-64");
+      Unscoped_Refused ("cortex-m0");
+      Unscoped_Refused ("rv32");
+      Unscoped_Refused ("xtensa");
    end Namespace_Availability;
 
    procedure Xtensa_Selection_And_Assembly
