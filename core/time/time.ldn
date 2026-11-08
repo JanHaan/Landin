@@ -4,6 +4,8 @@
 --  none of them.  Time is counted in nanoseconds in a `u64`: no floating
 --  point, the same arithmetic on every target, and room for 584 years.
 
+import core/cmp
+
 duration_value: type = distinct u64
 instant_value: type = distinct u64
 
@@ -19,7 +21,8 @@ public duration: type = duration_value
 --- fixes, which is the system's boot on Linux.  Only the difference
 --- between two readings of one provider means anything, `elapsed`; the
 --- count is `u64(at)`.  Two instants compare with `==`, `<>`, `<`, `<=`,
---- `>` and `>=`, as their counts do.
+--- `>` and `>=`, as their counts do, and are `cmp.equatable`,
+--- `cmp.hashable` and `cmp.ordered` the same way.
 public instant: type = instant_value
 
 --- A reading of the wall clock: UTC seconds since 1970-01-01T00:00:00,
@@ -108,3 +111,30 @@ end later
 public in_milliseconds: (span: duration) -> (count: u64) =
     count = u64(span) / 1000000
 end in_milliseconds
+
+--  Spans and instants are equal, hash and order as their counts do: the
+--  hash is the count, as `u64`'s is (D1031).
+equal_duration: (left: duration, right: duration) -> (yes: bool) =
+    yes = left == right
+end equal_duration
+hash_duration: (value: duration) -> (result: u64) =
+    result = u64(value)
+end hash_duration
+less_duration: (left: duration, right: duration) -> (yes: bool) =
+    yes = left < right
+end less_duration
+equal_instant: (left: instant, right: instant) -> (yes: bool) =
+    yes = left == right
+end equal_instant
+hash_instant: (value: instant) -> (result: u64) =
+    result = u64(value)
+end hash_instant
+less_instant: (left: instant, right: instant) -> (yes: bool) =
+    yes = left < right
+end less_instant
+duration is cmp.equatable (equal: equal_duration)
+duration is cmp.hashable (hash: hash_duration)
+duration is cmp.ordered (less: less_duration)
+instant is cmp.equatable (equal: equal_instant)
+instant is cmp.hashable (hash: hash_instant)
+instant is cmp.ordered (less: less_instant)

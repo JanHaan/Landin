@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: Small shared core/time consumer preserves its portable interface and behavior
+summary: Small shared core/time consumer preserves its portable interface and behavior, and reaches the type's shipped cmp evidence through the concepts
 program: main.ldn
 root: ../../../../..
 status: 42

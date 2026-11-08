@@ -4,6 +4,7 @@
 --  without a network, and a firmware image that never asks for one,
 --  carries none of it.  Resolving a name to an address is not here.
 
+import core/cmp
 import core/io
 import core/mem
 import core/text
@@ -61,7 +62,9 @@ public zone_room: usize = 15
 --- system gives the interface when the address is used (D581).  Make one
 --- with `ipv4_address`, `ipv6_address`, `loopback`, `unspecified`,
 --- `parse_ip` or `parse_address`, give it a zone with `with_zone`, and
---- compare two with `same_address`.
+--- compare two with `same_address`.  An address is `cmp.equatable` and
+--- `cmp.hashable` as `same_address` compares, zone included, so a map
+--- keys by it.
 public address: type = struct
     family: address_family
     octets: [16]u8
@@ -240,6 +243,27 @@ public same_address: (left: address, right: address) -> (same: bool) =
         end if
     end for
 end same_address
+
+--  An address is equal as `same_address` says, and hashes the bytes that
+--  equality reads with FNV-1a, as `[]u8` does: the family, the sixteen
+--  octets, the port high byte first and the zone (D1031).
+hash_address: (value: address) -> (result: u64) =
+    mut hash: u64 = 14695981039346656037
+    family: u8 = if value.family == ipv4 then 4 else 6 end if
+    hash = (hash ^ u64(family)) *% 1099511628211
+    for index in usize(0)..<16 do
+        hash = (hash ^ u64(value.octets[index])) *% 1099511628211
+    end for
+    hash = (hash ^ u64(value.port >> 8)) *% 1099511628211
+    hash = (hash ^ u64(value.port & 255)) *% 1099511628211
+    for index in usize(0)..<16 do
+        hash = (hash ^ u64(value.zone[index])) *% 1099511628211
+    end for
+    result = hash
+end hash_address
+
+address is cmp.equatable (equal: same_address)
+address is cmp.hashable (hash: hash_address)
 
 --- Whether an address is its family's unspecified address, whatever its
 --- port.

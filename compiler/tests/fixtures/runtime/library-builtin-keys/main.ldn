@@ -1,14 +1,54 @@
 import core/arena
 import core/map
 import core/mem
+import core/net
 import core/sort
 import core/text
+import core/time
 
 --  No conformance is declared here: every key and ordering is the library's.
 
+--  Spans sort, and maps key by instants and by addresses, a zone telling
+--  two addresses apart as `net.same_address` does.
+timed: (memory: arena.arena) -> (ok: bool)
+       ! mem.out_of_memory | map.missing | net.invalid_address =
+    ok = false
+    mut spans: [4]time.duration = [time.seconds(1), time.nanoseconds(7),
+                                   time.milliseconds(2), time.nanoseconds(0)]
+    sort.sort(spans[0..<4])
+    return when spans[0] <> time.nanoseconds(0) or spans[1] <> time.nanoseconds(7)
+      or spans[2] <> time.milliseconds(2) or spans[3] <> time.seconds(1)
+
+    start: time.instant = time.instant(1000)
+    mut deadlines := map.new(key: time.instant, item: u8)
+    try map.insert(deadlines, memory, start, u8(1))
+    try map.insert(deadlines, memory, time.later(start, time.seconds(1)), u8(2))
+    try map.insert(deadlines, memory, time.instant(1000), u8(3))
+    again: u8 = try map.get(deadlines, start)
+    later: u8 = try map.get(deadlines, time.instant(1000001000))
+    return when again <> 3 or later <> 2 or map.length(deadlines) <> 2
+      or map.contains(deadlines, time.instant(0))
+
+    bare: net.address = net.ipv6_address([0xfe80, 0, 0, 0, 0, 0, 0, 1], 80)
+    zoned: net.address = try net.with_zone(bare, "eth0")
+    mut peers := map.new(key: net.address, item: u8)
+    try map.insert(peers, memory, net.loopback(net.ipv4, 80), u8(4))
+    try map.insert(peers, memory, bare, u8(6))
+    try map.insert(peers, memory, zoned, u8(7))
+    read: net.address = try net.parse_address("127.0.0.1:80")
+    four: u8 = try map.get(peers, read)
+    near: u8 = try map.get(peers, try net.parse_address("[fe80::1%eth0]:80"))
+    return when four <> 4 or near <> 7 or map.length(peers) <> 3
+      or map.contains(peers, net.loopback(net.ipv4, 81))
+
+    map.release(peers, memory)
+    map.release(deadlines, memory)
+    ok = true
+end timed
+
 exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text =
     ok = false
-    mut backing: [1536]u8 = zeroed
+    mut backing: [3072]u8 = zeroed
     mut space: arena.space = zeroed
     memory := arena.over_unchecked(space, addr backing[0], lenof backing)
 
@@ -64,7 +104,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
     map.release(words, memory)
     map.release(names, memory)
     map.release(signed, memory)
-    ok = true
+    ok = timed(memory) else false
 end exercise
 
 public main: () -> (code: i32) =
