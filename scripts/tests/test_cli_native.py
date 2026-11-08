@@ -312,6 +312,26 @@ class NativeCLI(unittest.TestCase):
         self.assertGreater(len(diagnostic['labels']), 1)
         self.assertTrue(any(row['kind'] == 'trace' for row in rows))
 
+    @unittest.skipUnless(os.path.exists('/dev/full'),
+                         'needs /dev/full, which Linux has')
+    def test_the_numbered_output_program_reports_a_full_standard_output(self):
+        # docs/library.md's numbered-output program flushes its writer and
+        # checks the flush; nothing else made that flush fail, so dropping
+        # the check from page and fixture alike passed.  With standard
+        # output on /dev/full the flush fails, and the program says so.
+        checkout = Path(__file__).resolve().parents[2]
+        fixture = checkout / 'compiler/tests/fixtures/runtime/library-common-tasks'
+        program = self.root / 'number'
+        self.run_cli('compile', '--root', str(checkout),
+                     str(fixture / 'main.ldn'), '-o', str(program))
+        with open('/dev/full', 'w') as full:
+            run = subprocess.run([str(program), 'input.txt'], cwd=fixture,
+                                 stdout=full, stderr=subprocess.PIPE,
+                                 text=True, timeout=60)
+        self.assertEqual(run.returncode, 1, run.stderr)
+        self.assertEqual(run.stderr,
+                         'standard output: input or output failed\n')
+
     def test_fmt_check_stdout_and_rewrite(self):
         # D358 and D359 as a user meets them, unprivileged: every
         # line out of the layout is reported with the line it should be,

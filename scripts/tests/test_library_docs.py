@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import re
+import os
 import subprocess
 import sys
 import tempfile
@@ -350,6 +351,25 @@ end if
         texts = ['Counts the open files.', 'Says which processes are running now.']
         self.assertEqual(library.merged_documentation(texts), ' / '.join(texts))
         self.assertEqual(library.merged_documentation(['Same.', 'Same.']), 'Same.')
+
+
+class DefaultSourceRoot(unittest.TestCase):
+    def test_the_renderer_reads_its_own_checkout_without_from(self):
+        # Without --from the documents are read from the checkout the
+        # renderer is in, wherever it is run from; scripts/site.sh and the
+        # reference test both pass --from, so nothing else ran this.
+        with tempfile.TemporaryDirectory() as elsewhere, \
+                tempfile.TemporaryDirectory() as out:
+            result = subprocess.run(
+                [sys.executable, str(ROOT / 'docs/site/render_html.py'),
+                 '--to', out, 'tour.md'],
+                cwd=elsewhere, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0,
+                             result.stdout + result.stderr)
+            page = Path(out) / 'tour.html'
+            self.assertTrue(page.is_file())
+            self.assertIn('id="0010"', page.read_text(encoding='utf-8'))
+            self.assertEqual(os.listdir(elsewhere), [])
 
 
 class GeneratedReference(unittest.TestCase):
