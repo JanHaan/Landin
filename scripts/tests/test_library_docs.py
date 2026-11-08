@@ -1,4 +1,6 @@
 """Source attachment, coverage and generated-link controls for library docs."""
+import contextlib
+import io
 import json
 from pathlib import Path
 import re
@@ -351,6 +353,43 @@ end if
         texts = ['Counts the open files.', 'Says which processes are running now.']
         self.assertEqual(library.merged_documentation(texts), ' / '.join(texts))
         self.assertEqual(library.merged_documentation(['Same.', 'Same.']), 'Same.')
+
+
+class LibraryLinks(unittest.TestCase):
+    """A guide's link into docs/library.md reaches the split page that
+    holds its heading, and the verifier refuses one whose anchor is gone."""
+
+    def test_resolves_split_and_index_fragments(self):
+        saved = dict(render_html.LIBRARY_SECTIONS)
+        self.addCleanup(lambda: (render_html.LIBRARY_SECTIONS.clear(),
+                                 render_html.LIBRARY_SECTIONS.update(saved)))
+        render_html.LIBRARY_SECTIONS.clear()
+        render_html.LIBRARY_SECTIONS["the-buffered-writer"] = (
+            "library-core-io.html", "the-buffered-writer")
+        render_html.LIBRARY_SECTIONS["coreio"] = ("library.html", "core-io")
+        targets = render_html.guide_targets([], "tour.md")
+        self.assertEqual(targets.resolve("docs/library.md#the-buffered-writer"),
+                         "library-core-io.html#the-buffered-writer")
+        self.assertEqual(targets.resolve("docs/library.md#coreio"),
+                         "library.html#core-io")
+        self.assertEqual(targets.resolve("docs/library.md#introduction"),
+                         "library.html#introduction")
+
+    def test_verifier_rejects_a_missing_destination_anchor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "tour.html").write_text(
+                '<a href="library-core-io.html#writer">writer</a>')
+            (out / "library-core-io.html").write_text(
+                '<section id="writer"></section>')
+            docs = [{"out": "tour.html"}]
+            self.assertTrue(render_html.verify_library_links(out, docs))
+            (out / "library-core-io.html").write_text(
+                '<section id="other"></section>')
+            with contextlib.redirect_stdout(io.StringIO()) as said:
+                self.assertFalse(render_html.verify_library_links(out, docs))
+            self.assertIn("missing library destination"
+                          " library-core-io.html#writer", said.getvalue())
 
 
 class DefaultSourceRoot(unittest.TestCase):
