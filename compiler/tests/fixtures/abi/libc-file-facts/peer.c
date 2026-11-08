@@ -18,6 +18,7 @@
 #include <unistd.h>
 #if defined(__linux__)
 #include <asm/termbits.h>
+#include <sys/random.h>
 #else
 #include <termios.h>
 #endif
@@ -57,6 +58,7 @@ static const int64_t terminal[] = {
 static const int64_t kernel[] = {
     TCGETS, TCSETS, TCSETSW, TCSETSF, TIOCSPTLCK, TIOCGPTPEER, TIOCGPTN,
     offsetof(struct termios, c_line), STATX_BASIC_STATS, AT_EMPTY_PATH,
+    STATX_TYPE, STATX_SIZE, GRND_NONBLOCK,
 };
 #endif
 

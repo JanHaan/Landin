@@ -5,7 +5,8 @@
 --  failure oracles are the errno POSIX names, the same atom on Linux,
 --  Darwin and FreeBSD: a directory made twice, a directory removed while
 --  it holds a file, a missing directory, a file opened as a directory and
---  a buffer smaller than `posix.directory_buffer`.
+--  a buffer one byte smaller than `posix.directory_buffer`, which the
+--  listing's own buffer is.
 import core/text
 import platform/posix
 
@@ -58,10 +59,10 @@ listed: () -> (seen: u32) ! posix.errno =
     seen = 0
     mut stream: posix.directory_stream =
         try posix.open_directory(posix.working_directory, text.host_over(top))
-    mut buffer: [1024]u8 = zeroed
+    mut buffer: [posix.directory_buffer]u8 = zeroed
     loop do
         entry: posix.directory_entry =
-            posix.read_directory(stream, buffer[0..<1024]) else (problem)
+            posix.read_directory(stream, buffer) else (problem)
                 posix.close_directory(stream) else none
                 fail problem
             end
@@ -165,8 +166,9 @@ public main: () -> (code: i32) =
             said("open", problem)
             return
         end
-    mut small: [16]u8 = zeroed
-    _ = posix.read_directory(stream, small[0..<16]) else (problem)
+    mut small: [posix.directory_buffer]u8 = zeroed
+    _ = posix.read_directory(stream,
+                             small[0..<posix.directory_buffer - 1]) else (problem)
         said("small", problem)
         return when problem <> posix.einval
         posix.directory_entry(name: text.host_over(""),

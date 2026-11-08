@@ -3,7 +3,8 @@
 --  same report byte for byte, and the memory network's own oracles: a
 --  refused connection, an address already in use, a write to a closed
 --  peer, an unreachable address, a missing IPv6, waits that would never
---  end, a lost datagram, a full buffer and an injected failure.
+--  end, a lost datagram, one too long, a full buffer, a connection's
+--  no-delay flag and an injected failure.
 import core/cmp
 import core/io
 import core/io/fake
@@ -244,14 +245,42 @@ full_buffer: (network: fake.network) -> (yes: bool) ! ... =
     yes = stopped and got == 64
 end full_buffer
 
---  A datagram sent to a port no socket holds is lost, as UDP's may be.
+--  A connection told to send its small writes at once keeps the flag in
+--  its record, and its peer does not.
+no_delay: (network: fake.network, sockets: ptr [3]fake.network_socket)
+          -> (yes: bool) ! ... =
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(network, listener)
+    client: io.file = try net.connect(network, at)
+    server: io.file = try net.accept(network, listener)
+    try net.set_no_delay(network, client, true)
+    yes = sockets.val[usize(client)].no_delay
+          and not sockets.val[usize(server)].no_delay
+    try net.close_socket(network, server)
+    try net.close_socket(network, client)
+    try net.close_socket(network, listener)
+end no_delay
+
+--  The bytes of a datagram one longer than the memory network carries.
+oversized: [fake.longest_datagram + 1]u8 = zeroed
+
+--  A datagram sent to a port no socket holds is lost, as UDP's may be, and
+--  so is the longest the network carries, larger than any socket's
+--  buffer here; one byte longer is refused.
 lost_datagram: (network: fake.network, state: ptr fake.network_space)
                -> (yes: bool) ! ... =
     socket: io.file = try net.open_datagram(network, net.loopback(net.ipv4, 0))
     before: usize = state.val.losses
     try net.send_to(network, socket, "anyone?",
                     net.loopback(net.ipv4, 9))
-    yes = state.val.losses == before + 1
+    try net.send_to(network, socket, oversized[0..<fake.longest_datagram],
+                    try net.local_address(network, socket))
+    mut refused: bool = false
+    net.send_to(network, socket, oversized,
+                try net.local_address(network, socket)) else (problem)
+        refused = problem == io.io_failed
+    end
+    yes = state.val.losses == before + 2 and refused
     try net.close_socket(network, socket)
 end lost_datagram
 
@@ -307,6 +336,12 @@ public main: () -> (code: i32) =
         return
     end
     return when not full
+    code = 9
+    delayed: bool = no_delay(network, addr sockets) else (problem)
+        _ = problem
+        return
+    end
+    return when not delayed
     code = 5
     lost: bool = lost_datagram(network, addr space) else (problem)
         _ = problem

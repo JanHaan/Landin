@@ -1,6 +1,6 @@
 class: abi
 profiles: standard
-summary: every errno atom platform/posix names has the number the system's own C header gives its macro, zero where the header has none, and errno_of gives each defined number's atom back
+summary: every errno atom platform/posix names has the number the system's own C header gives its macro, zero where the header has none, and errno_of gives each defined number's atom back, and the errno numbers platform/libc and, on Linux, platform/linux keep of their own are those
 program: program.ldn
 root: ../../../../..
 c-sources: peer.c

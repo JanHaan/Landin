@@ -4,8 +4,9 @@
 --  fails `mem.out_of_memory`, the group's handle keeps EAGAIN for
 --  `last_errno` and the task never runs.  With the limit back, the same
 --  stack is free and the next `admit` starts the task.  A backing too
---  small for one stack, and one too small for the count asked for, are
---  refused when the group is made.
+--  small for one stack, a byte short of `thread.least_stack()`, and one
+--  too small for the count asked for, are refused when the group is
+--  made.
 import core/failure
 import core/io
 import core/mem
@@ -65,7 +66,9 @@ mut reached: i32 = 0
 
 run: (host: system.host) -> none ! failure.reason =
     reached = 1
-    fail io.io_failed when not refused(host, 1024, 1)
+    least: usize = thread.least_stack()
+    fail io.io_failed when least > lenof backing
+      or not refused(host, least - 1, 1)
     reached = 2
     fail io.io_failed when not refused(host, lenof backing, 16)
     reached = 3

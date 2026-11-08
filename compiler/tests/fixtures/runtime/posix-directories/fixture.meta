@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: platform/posix lists a directory as POSIX does, `.` and `..` among its entries, tells a kind its record lacks with status_at, and fails with the errno POSIX names, the same atom on every system, for a directory made twice, one removed while it holds a file, a missing one, a file opened as one and a buffer too small for an entry
+summary: platform/posix lists a directory as POSIX does, `.` and `..` among its entries, tells a kind its record lacks with status_at, and fails with the errno POSIX names, the same atom on every system, for a directory made twice, one removed while it holds a file, a missing one, a file opened as one and a buffer one byte short of posix.directory_buffer
 program: main.ldn
 root: ../../../../..
 status: 42

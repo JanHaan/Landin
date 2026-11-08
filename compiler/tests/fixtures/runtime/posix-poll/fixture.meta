@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: platform/posix polls standard input from a file, standard error and a closed descriptor through Landin-typed entries, reporting the first two ready and the closed one invalid, and an empty poll waits out its time with none ready
+summary: platform/posix polls standard input from a file, standard error and a closed descriptor through Landin-typed entries, reporting the first two ready, the file with no urgent data though asked for it, and the closed one invalid, and an empty poll waits out its time with none ready
 program: main.ldn
 root: ../../../../..
 stdin: input.txt

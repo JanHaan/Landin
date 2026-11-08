@@ -21600,7 +21600,7 @@ and is not checked against a stack's limit, which on Linux are exactly
 these; `_landin_start_thread` therefore calls nothing but the map routine,
 whose system call it makes itself. For the threads the program starts, the
 module gives `thread_block_bytes`, the bytes a block and room to align it
-take, `thread_block_alignment`, and `thread_block_lay(block)`, which lays
+take, and `thread_block_lay(block)`, which lays
 a block in the caller's memory and returns the value `clone` takes with
 `CLONE_SETTLS`. Under `--link=libc` none of this runs: the C library lays
 every thread's storage and `thread_block_bytes` is zero.
@@ -27936,7 +27936,12 @@ as `core/mem` does with `arena_used`. `core/mem` declares
 storage, the vector, the spill list and the bounded log. Key lookups keep
 `map.missing` and `tree.no_such_node`, because a missing key is not a bad
 index. [1850] admits the same name in different modules; qualification tells
-`vec.new` from `map.new`.
+`vec.new` from `map.new`. The index and emptiness atoms are the containers':
+a provider concept that lends by index or by name keeps an atom of its own,
+so `io.argument_at` fails `io.no_argument`, and `io.variable_at` and
+`io.variable_named` both fail `io.no_variable`, since a provider has no
+initialized prefix to be past and its caller asks one question, whether the
+provider has the thing. D1032 adds the names of handles that borrow nothing.
 
 **The alternatives:** per-module atoms let `small` translate `vec.empty` into
 `small.empty` by hand and gave a caller four atoms for one mistake. Type-named
@@ -27966,7 +27971,8 @@ give different hashes to equal signed zeros. There is one
 register and no override (D2), so a program that re-declares `u32 is
 cmp.hashable` is refused as a collision, and another reading of a shipped key
 goes on a `distinct` wrapper with its own evidence, which is what the
-colliding-hash fixture now does.
+colliding-hash fixture now does. D1031 ships the evidence of `core/time`'s
+and `core/net`'s key types in those modules.
 
 **The alternatives:** leaving scalar evidence to each program kept the
 smallest map use at forty lines. A weak library conformance that a program
@@ -28125,6 +28131,100 @@ and an arena would never get them back.
 `negative/core-text-prefix-frame`,
 `negative/generic-signature-applies-a-parameter` and
 `negative/generic-signature-names-nothing`.
+
+### D1031 — Spans, instants and addresses ship their comparison evidence
+
+**The tour said** [1280] that conformances may be declared anywhere and that
+two for one key are an error. D270 shipped the evidence of the scalars,
+`bool`, `[]u8` and `utf8` and no other. `time.duration` and `time.instant`
+are distinct `u64`s and `net.address` a record, so a sort of spans, and a
+map keyed by an instant or by an address, were L0318 until the program
+declared the evidence itself; and once a program, or two packages, had
+declared it, the library could not add it without making their programs
+D270's collision.
+
+**Chosen:** `core/time` imports `core/cmp` and declares `duration` and
+`instant` `equatable`, `hashable` and `ordered` as their counts compare,
+each hash the count as `u64`'s is. `core/net` declares `address`
+`equatable` by `same_address`, family, octets, port and zone, and
+`hashable` with 64-bit FNV-1a over the bytes that equality reads: a family
+byte, 4 or 6, the sixteen octets, the port high byte first and the sixteen
+zone bytes. An address has no order a program could rely on, so it is not
+`ordered`. Each type's evidence is in its own module, as `utf8`'s is in
+`core/text` (D273), so a program that names the type has its evidence, and
+re-declaring any of it is D270's collision.
+
+**The alternatives:** recording that only D270's types are shipped, which
+leaves every program keyed by time or address its own forty lines and the
+library unable to add them later; an order for addresses, family then
+octets then port, which reads as meaningful and is not; and the evidence
+in `core/cmp`, which would make the comparison concepts import time and
+the network.
+
+**Pinned by** `runtime/library-builtin-keys`, which sorts spans and keys
+maps by instants and by addresses, a zone telling two apart;
+`runtime/library-shared-time` and `runtime/library-shared-net`, which
+reach the evidence through the concepts on every target, Cortex-M0
+included; and `negative/library-evidence-collision-time-net`.
+
+### D1032 — A handle that borrows nothing is `new`, and a second way to make one keeps `over`
+
+**The tour said** nothing of names; D269 has a module's principal type
+constructed with `new` and a handle over caller state made with `over`.
+D972 added `l1.caches()`, a handle that borrows nothing named as an
+adjective, and D493 `fake.clock_beside(state, start, wall, network)`,
+which fills caller state and returns a handle `from` it, beside the same
+module's `network_over_turns`; and D970's `cache.cacheless(line)`
+constructs a handle that borrows nothing.
+
+**Chosen:** `l1.handle` is `platform/cortex_m/l1`'s only type, so its
+constructor is `l1.new()`, as `heap.new()` and `system.new()` are. The fake
+clock beside a network is `fake.clock_over_beside`: `over` because it
+fills the caller's state, and a suffix saying what it adds, as
+`network_over_turns` does. `cache.cacheless(line)` keeps its name, since
+`core/cache`'s principal type is the `maintenance` concept, which nothing
+constructs, and `cacheless` makes a second kind of provider, named for
+what it is, beside the cached ones platforms supply (D970, D972).
+
+**The alternatives:** `cache.new(line)`, which reads as constructing the
+concept and would leave a platform's provider no name of its own;
+`clock_beside` kept, the one constructor over caller state without `over`;
+and `l1.caches()` kept, the one handle that borrows nothing not called
+`new`.
+
+**Pinned by** `negative/cache-provider-cacheless`,
+`runtime/network-fake-turns-sleeper`, `runtime/derived-server-fake-turns`,
+`devices/consumers/stm32h753_cached` and the cached board run (D975).
+
+### D1033 — A library name is public when a program has a use for it
+
+**The tour said** [1410] that everything is private to its module unless it
+is marked `public`. The library had made public a buffer's size, a sanity
+bound and binding declarations no program and no other module used, and
+values and routines whose only use was their own module's.
+
+**Chosen:** a library declaration is public when a program uses it: a
+routine or value a program calls or reads, and a type a program has to
+write to use the facility. Each has a consumer outside the library whose
+oracle checks it, or a module of the library uses it on behalf of a
+caller that has one. `io.format_store`, `write_format`'s 128 bytes, and
+`vdso.largest`, `kernel_image`'s mebibyte, are private, and their doc
+comments say the number; `linux.thread_block_alignment` and Darwin's
+`posix_spawn_file_actions_addinherit_np`, which nothing used since D378,
+are gone. `stacks.prepare` and `stacks.switch` stay public, being how a
+provider of a program's own runs fibres (D463), and the posix layer's
+errno numbers, masks and flags are held to the system's headers by the ABI
+fixtures that compare them.
+
+**The alternatives:** keeping every name public that the library might
+someday want a program to see, which leaves a surface nothing checks;
+and making every name a program does not call today private, which would
+hide types a program names to declare state or match a result.
+
+**Pinned by** `runtime/fibre-turns-interleave`, `runtime/volume-memory`,
+`runtime/network-echo-memory`, `runtime/library-shared-line`,
+`runtime/library-platform-riscv`, `runtime/library-platform-xtensa`,
+`abi/posix-errno-numbers` and `abi/libc-file-facts`.
 
 ### D379 — A reservation counts the tombstones
 
@@ -29437,10 +29537,12 @@ The generic entries `cache.clean` and its siblings take the provider's
 handle as `core/time`'s do; a handle is a small value passed `in`
 (D269's service convention), and the parameter is `caches`.
 
-The cacheless provider is `cache.cacheless(line)`, a `cache.barriers` handle
-on every target: its operations check the range against LINE and issue the
-completion barrier, which is all memory no cache stands in front of needs,
-and a line that is not a nonzero power of two is `cache.bad_line`. It
+The cacheless provider is `cache.cacheless(line)`, named for what it is
+since `maintenance`, the principal type, is a concept (D1032), a
+`cache.barriers` handle on every target: its operations check the range
+against LINE and issue the completion barrier, which is all memory no
+cache stands in front of needs, and a line that is not a nonzero power of
+two is `cache.bad_line`. It
 refuses exactly what a cached provider of that line refuses, so a driver
 checked against it on Cortex-M0 or a hosted target takes the cached
 profile's refusals. Both atoms have phrases in `core/failure`.
@@ -29500,8 +29602,8 @@ platforms.
 
 **Chosen:** `platform/cortex_m/l1` provides `core/cache`'s maintenance over
 the Cortex-M7's level 1 caches, and declares it under `fixed if
-compiler.feature.cache`: `l1.caches()` makes its `l1.handle`, whose line is
-`compiler.cache_line`, and `l1.geometry()` reads CCSIDR for the level 1
+compiler.feature.cache`: `l1.new()`, `l1.caches()` until D1032, makes its
+`l1.handle`, whose line is `compiler.cache_line`, and `l1.geometry()` reads CCSIDR for the level 1
 data cache, which reset selected in CSSELR. Each operation checks its range
 with `cache.lines`, issues a completion barrier, writes each line's address
 to the SCB's DCCMVAC, DCIMVAC or DCCIMVAC, at 0xE000EF68, 0xE000EF5C and
@@ -29623,7 +29725,7 @@ RAM run is, under the warm contract unchanged, which requires the caches
 off when it loads; the image's reset enables them (D973). It uses the
 cacheless board's `serial`, `bringup`, `report` and `scs` modules, the
 receive ring through `serial.open`, `available`, `read`, `stop`,
-`restart`, `completed` and `idle` with `l1.caches()` as the ring's
+`restart`, `completed` and `idle` with `l1.new()` as the ring's
 provider, so the ring does its own maintenance (D978) and the program
 writes none of it. Over the virtual COM port, in the cacheless board's
 frames: the boot frame reports CCR with IC and DC set and CCSIDR; the
@@ -29707,7 +29809,7 @@ line, and a stale copy the CPU fetched meanwhile is dropped by the next
 read's invalidate. A provider that refuses the ring at a later call breaks
 the descriptor, as a transfer error does. The cacheless board passes
 `cache.cacheless(32)`, the barriers alone at the Cortex-M7's line, and the
-cached board `l1.caches()`; `available`, `stop`, `completed` and `idle`
+cached board `l1.new()`; `available`, `stop`, `completed` and `idle`
 read no ring byte and take none.
 
 **The alternatives:** the caller maintaining the ring around the module,
@@ -29721,7 +29823,7 @@ cached ring module, which would let the two drift apart.
 
 **Pinned by** the cached board run, whose stale-read control is the same
 routines given the cacheless provider and whose maintained stream is
-those routines given `l1.caches()` (D975); and the cacheless board run,
+those routines given `l1.new()` (D975); and the cacheless board run,
 which passes the cacheless provider through every routine.
 
 ### D979 — The cached board's transmit raises its request only once its stream has its first byte
@@ -33508,7 +33610,8 @@ waiting through its sleep timed out under D483, so prototype 5's derived
 server and client tried a timed-out call again, which over the hosted
 providers, with no limit set, never happens.
 
-**Chosen:** `clock_beside(state, start, wall, network)` makes
+**Chosen:** `clock_over_beside(state, start, wall, network)`, named
+`clock_beside` until D1032, makes
 `core/io/fake`'s manual clock beside a network, and over a network that
 takes turns its `sleep` takes the network's turns. While it sleeps the
 network counts it in `sleepers`, and a call that waited a round finding

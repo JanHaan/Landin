@@ -14,7 +14,8 @@
 --  zoned connection is `unreachable` as on Linux, and the bare one is
 --  `unreachable` too, Darwin finding no route rather than refusing it.  On every system a zone
 --  that names no interface is `address_unavailable`, whether it is
---  listened at, connected to or bound to for datagrams.
+--  listened at, connected to or bound to for datagrams, and the
+--  loopback's number names it back.
 import core/cmp
 import core/io
 import core/net
@@ -132,6 +133,21 @@ refused_here: (host: blocking.host) -> (yes: bool) ! ... =
     yes = refused
 end refused_here
 
+--  The loopback interface's number names it back, its bytes and zeros
+--  after them, and no interface has the number zero.
+named_back: () -> (yes: bool) ! ... =
+    index: u32 = try posix.interface_index(loopback_name)
+    name: [16]u8 = try posix.interface_name(index)
+    mut unnumbered: bool = false
+    _ = posix.interface_name(0) else (problem)
+        unnumbered = problem == posix.enodev
+        name
+    end
+    yes = unnumbered and name[lenof loopback_name] == 0
+          and cmp.compare(name[0..<lenof loopback_name], loopback_name)
+              == cmp.equal
+end named_back
+
 --  A zone that names no interface, on every system.
 nowhere: (host: blocking.host) -> (yes: bool) ! ... =
     at: net.address = try net.parse_address("[fe80::1%no-such-if9]:9")
@@ -166,6 +182,12 @@ public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
     mut yes: bool = nowhere(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not yes
+    code = 5
+    yes = named_back() else (problem)
         _ = problem
         return
     end

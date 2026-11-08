@@ -1833,12 +1833,6 @@ fixed if compiler.os == linux then
         bytes = thread_block_extent + thread_alignment - 1
     end thread_block_bytes
 
-    --- The alignment `thread_block_lay` gives a thread's storage: the
-    --- executable's TLS segment's, and at least sixteen.
-    public thread_block_alignment: () -> (alignment: usize) =
-        alignment = thread_alignment
-    end thread_block_alignment
-
     --  Lay a thread's storage at `base`, aligned to `thread_alignment`:
     --  every byte of the block zeroed, the initialized image copied to its
     --  start, and on x86-64 the thread pointer's word holding its own

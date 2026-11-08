@@ -57,6 +57,20 @@ looked_up: () -> none ! ... =
         fail mismatched when same.user <> me
     end if
     _ = found
+    --  So may its group, found by its name too when a database names it.
+    mine_group: posix.group_id = posix.real_group()
+    mut grouped: [1024]u8 = zeroed
+    own_group: posix.group_entry =
+        posix.group_with_id(mine_group, grouped[0..<1024]) else (problem)
+        fail problem when problem <> posix.no_account
+        wheel
+    end
+    if own_group.group == mine_group then
+        mut back: [1024]u8 = zeroed
+        same: posix.group_entry =
+            try posix.group_named(own_group.name, back[0..<1024])
+        fail mismatched when same.group <> mine_group
+    end if
     --  What no database holds, a name no database could, and a buffer too
     --  small for an account.
     mut met: bool = false

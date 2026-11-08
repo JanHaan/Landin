@@ -237,6 +237,34 @@ temporaries: (host: fake.volume) -> none ! ... =
     fail wrong when not text.host_equal(here, "/volume")
 end temporaries
 
+--  `volume_find` gives the node a path names, or the node count for none,
+--  and the volume holds `volume_openings` files open at once and refuses
+--  the next until one closes.
+openings: (host: fake.volume, nodes: []fake.volume_node) -> none ! ... =
+    found: usize = fake.volume_find(host, "fresh")
+    fail wrong when found >= lenof nodes
+      or nodes[found].kind <> io.subdirectory
+      or fake.volume_find(host, "absent") <> lenof nodes
+    mut opened: [fake.volume_openings]io.file = zeroed
+    for at in usize(0)..<fake.volume_openings do
+        opened[at] = try io.open_read(host, text.host_over("data"))
+    end for
+    mut met: bool = false
+    extra: io.file = io.open_read(host, text.host_over("data")) else (problem)
+        met = problem == io.io_failed
+        opened[0]
+    end
+    fail wrong when not met
+    first: io.file = opened[0]
+    try io.close(host, first)
+    opened[0] = try io.open_read(host, text.host_over("data"))
+    for at in usize(0)..<fake.volume_openings do
+        held: io.file = opened[at]
+        try io.close(host, held)
+    end for
+    _ = extra
+end openings
+
 --  The call the test chose fails, and the next succeeds.
 injected: (host: fake.volume) -> none ! ... =
     fail wrong when not status_refused(host, "data", io.following, io.io_failed)
@@ -315,6 +343,11 @@ public main: () -> (code: i32) =
         return
     end
     return when state.temporary_tries <> 3
+    code = 9
+    openings(host, nodes[0..<8]) else (problem)
+        _ = problem
+        return
+    end
     code = 7
     state.fail_at = state.calls + 1
     injected(host) else (problem)

@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D903 nested Xtensa masks restore the preceding PS and preserve the selected CPU interrupt enables
+summary: D903 nested Xtensa masks restore the preceding PS and preserve the selected CPU interrupt enables, and the cycle counter advances across a loop
 program: main.ldn
 root: ../../../../..
 status: 42

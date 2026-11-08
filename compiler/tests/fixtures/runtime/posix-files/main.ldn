@@ -136,9 +136,17 @@ public main: () -> (code: i32) =
             said("stat", problem)
             return
         end
+    --  /dev/null, which every hosted system has, is a character device.
+    null: posix.status =
+        posix.status_at(posix.working_directory, text.host_over("/dev/null"),
+                        true) else (problem)
+            said("stat", problem)
+            return
+        end
     return when file.kind <> posix.regular or file.size <> 6
       or file.device <> again.device or file.inode <> again.inode
       or holder.kind <> posix.directory or holder.inode == file.inode
+      or null.kind <> posix.character_device
 
     --  The failure oracles.
     code = 6

@@ -140,6 +140,23 @@ pseudo: (pair: posix.pseudo_terminal) -> (ok: bool) =
     end
     return when posix.reads_lines(taken)
       or not posix.same_terminal_mode(raw, taken)
+    --  The same settings again, at once and once the output has gone.
+    posix.set_terminal_mode(pair.terminal, raw, posix.immediately)
+        else (problem)
+        said("tcsetattr", problem)
+        return
+    end
+    posix.set_terminal_mode(pair.terminal, raw, posix.after_output)
+        else (problem)
+        said("tcsetattr", problem)
+        return
+    end
+    kept: posix.terminal_mode = posix.terminal_mode_of(pair.terminal)
+        else (problem)
+        said("tcgetattr", problem)
+        return
+    end
+    return when not posix.same_terminal_mode(raw, kept)
     mut buffer: [8]u8 = zeroed
     return when not typed(pair, "x\r", "x\r", buffer[0..<8])
     posix.set_terminal_mode(pair.terminal, original, posix.discarding_input)

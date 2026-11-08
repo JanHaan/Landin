@@ -150,11 +150,6 @@ fixed if compiler.os == darwin then
     --- closed on exec.
     public posix_spawn_cloexec_default: i16 = 16384
 
-    --- Add to `actions` that the child keeps `descriptor` as it is, which
-    --- `posix_spawn_cloexec_default` would otherwise close: Darwin's own.
-    public extern(c) posix_spawn_file_actions_addinherit_np:
-        (actions: ptr mut spawn_object, descriptor: i32) -> (error: i32)
-
     --- `socket` domain: IPv6, AF_INET6, which each system numbers its own
     --- way.
     public af_inet6: i32 = 30

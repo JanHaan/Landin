@@ -36,6 +36,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
+    if files[0].state <> io.reading_slot then return end if
     mut chunk: [3]u8 = zeroed
     first_count: usize = world.read(opened, chunk[0..<3]) else (problem)
         _ = problem
@@ -90,6 +91,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
+    if files[1].state <> io.writing_slot then return end if
     world.write(destination_file, bytes) else (problem)
         _ = problem
         return

@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: caller-backed memory world performs bounded reads writes and deterministic failure cleanup
+summary: caller-backed memory world performs bounded reads writes and deterministic failure cleanup, marking a slot open for reading or writing while it is
 program: main.ldn
 root: ../../../../..
 constructs: 0790, 0830, 0940, 0960, 1370, 1380, 1390, 1650, 1660

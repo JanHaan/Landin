@@ -1,5 +1,5 @@
 class: runtime
-summary: D479 D487 a shell child of hosted/events writes a line and waits to read one; one fibre reads its output and errors and waits for its end while another ticks three times on the provider's clock before writing the child its line, so the reader's errors arrive only after the third tick and the child exits 3
+summary: D479 D487 a shell child of hosted/events writes a line and waits to read one; one fibre reads its output and errors and waits for its end while another ticks three times on the provider's clock before writing the child its line, so the reader's errors arrive only after the third tick and the child exits 3; a second child ended by SIGTERM leaves 15 for events.last_signal and a missing file ENOENT for events.last_errno
 program: main.ldn
 root: ../../../../..
 profiles: specialization

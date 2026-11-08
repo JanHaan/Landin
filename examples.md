@@ -2345,6 +2345,10 @@ make_socket: (name: []u8) -> none ! ... =
     at: posix.socket_address =
         try posix.unix_address(text.host_over(text.used(path)))
     try posix.bind(socket, at)
+    named: posix.status = try posix.status_at(posix.working_directory,
+                                              text.host_over(text.used(path)),
+                                              false)
+    fail differs when named.kind <> posix.socket_file
 end make_socket
 
 --- Build the tree the program copies: files of each kind of permission, a
@@ -2561,12 +2565,15 @@ edge_cases: (host: blocking.host) -> none ! ... =
         fail differs
     end if
     --  The copy of the sparse file reads zeros in its hole and nothing past
-    --  its end.
+    --  its end, opened by platform/posix and read as the provider's file
+    --  `system.file_of` makes of its descriptor.
     mut sparse_room: [256]u8 = zeroed
     mut sparse_path := text.over(sparse_room)
     try joined(copy, "sparse.bin", sparse_path)
-    sparse: io.file =
-        try io.open_read(host, text.host_over(text.used(sparse_path)))
+    sparse: io.file = system.file_of(
+        try posix.open_at(posix.working_directory,
+                          text.host_over(text.used(sparse_path)),
+                          posix.reading, 0))
     defer io.close(host, sparse) else none
     size: io.status = try io.status_of_file(host, sparse)
     mut probe: [16]u8 = zeroed

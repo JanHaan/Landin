@@ -4,6 +4,10 @@
 --  of each defined value must give the atom back.  ENOTSUP is the one
 --  alias with an atom of its own: where the header makes it EOPNOTSUPP,
 --  its number is EOPNOTSUPP's and the number gives `eopnotsupp` back.
+--  The errno numbers platform/libc and platform/linux keep of their own
+--  must be the same.
+import platform/libc
+import platform/linux
 import platform/posix
 
 extern(c) posix_errno_count: () -> (count: i32)
@@ -48,6 +52,35 @@ atoms: [154]posix.errno =
      posix.eprocunavail, posix.eprogmismatch, posix.eprogunavail,
      posix.epwroff, posix.eqfull, posix.erpcmismatch, posix.eshlibvers]
 
+--  platform/libc's own errno numbers, which the hosted providers compare
+--  a C call's errno with, are the header's as `posix.number` gives them.
+libc_agrees: () -> (yes: bool) =
+    yes = libc.eperm == posix.number(posix.eperm)
+          and libc.enoent == posix.number(posix.enoent)
+          and libc.eintr == posix.number(posix.eintr)
+          and libc.eacces == posix.number(posix.eacces)
+          and libc.enotdir == posix.number(posix.enotdir)
+          and libc.eexist == posix.number(posix.eexist)
+          and libc.erofs == posix.number(posix.erofs)
+end libc_agrees
+
+fixed if compiler.os == linux then
+    --  So are platform/linux's, which a system call returns negated.
+    linux_agrees: () -> (yes: bool) =
+        yes = linux.eperm == posix.number(posix.eperm)
+              and linux.enoent == posix.number(posix.enoent)
+              and linux.eintr == posix.number(posix.eintr)
+              and linux.eacces == posix.number(posix.eacces)
+              and linux.enotdir == posix.number(posix.enotdir)
+              and linux.eexist == posix.number(posix.eexist)
+              and linux.erofs == posix.number(posix.erofs)
+    end linux_agrees
+else
+    linux_agrees: () -> (yes: bool) =
+        yes = true
+    end linux_agrees
+end if
+
 public main: () -> (code: i32) =
     code = 1
     return when posix_errno_count() <> i32(lenof atoms)
@@ -62,5 +95,9 @@ public main: () -> (code: i32) =
             return when back <> atoms[at] and atoms[at] <> posix.enotsup
         end if
     end for
+    code = 300
+    return when not libc_agrees()
+    code = 301
+    return when not linux_agrees()
     code = 42
 end main

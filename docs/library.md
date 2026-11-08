@@ -319,6 +319,8 @@ The three concepts ship for these types:
 | `bool` | yes | yes | no |
 | `[]u8` | yes | yes | yes, by `compare` |
 | `utf8`, from `core/text` | yes | yes | yes |
+| `time.duration` and `time.instant`, from `core/time` | yes | yes | yes, by their counts |
+| `net.address`, from `core/net` | yes, as `same_address`, zone included | yes | no |
 | floating-point types | no | no | no |
 
 `compare` orders two byte strings as `less`, `equal` or `greater`. The
@@ -1165,7 +1167,9 @@ of nanoseconds, which holds 584 years.
 
 - `u64(at)` is the count.
 - Two of a kind compare with `==`, `<>`, `<`, `<=`, `>` and `>=`, as
-  their counts do.
+  their counts do, and each is `cmp.equatable`, `cmp.hashable` and
+  `cmp.ordered` the same way, so a sort orders spans and a map keys by
+  instants with no evidence of the program's.
 - Neither has arithmetic of its own: `elapsed` is the span between two
   readings taken in order, trapping if the second is the earlier, and
   `later` gives a deadline.
@@ -1184,7 +1188,7 @@ with unpredictable bytes or fails `io_failed`.
 
 | Fake | Made by | Behaviour |
 |---|---|---|
-| `fake.clock` | `clock_over`, over the caller's `clock_space`, or `clock_beside` a fake network | Moves only when a test says: `advance` moves both its clocks, and a `sleep` advances them by exactly what it asks and returns at once. Made `clock_beside` a network that takes turns, a `sleep` takes turns instead and the clock moves only while every other fibre waits. The test may set either reading through the state, and the state counts readings, sleeps and the time slept. |
+| `fake.clock` | `clock_over`, over the caller's `clock_space`, or `clock_over_beside`, beside a fake network | Moves only when a test says: `advance` moves both its clocks, and a `sleep` advances them by exactly what it asks and returns at once. Made by `clock_over_beside` beside a network that takes turns, a `sleep` takes turns instead and the clock moves only while every other fibre waits. The test may set either reading through the state, and the state counts readings, sleeps and the time slept. |
 | `fake.entropy` | `entropy_over`, over the caller's bytes | Gives the bytes in order; a request for more than is left fails. So a program that seeds itself from entropy runs the same in every test. |
 
 Both fakes run on Cortex-M0.
@@ -1247,7 +1251,9 @@ IPv6 address's zone.
 
 - `loopback`, `unspecified`, `ipv4_address`, `ipv6_address` and
   `with_port` make one, and `with_zone` gives an IPv6 one a zone.
-- `same_address` and `is_unspecified` compare.
+- `same_address` and `is_unspecified` compare. An address is
+  `cmp.equatable` as `same_address` compares, zone included, and
+  `cmp.hashable`, so a map keys by addresses.
 - `parse_ip` reads `192.0.2.1`, `2001:db8::1` or `fe80::1%eth0`, and
   `parse_address` reads `192.0.2.1:80`, `[2001:db8::1]:80` or
   `[fe80::1%eth0]:80`. Both refuse a leading zero, an empty zone, one
@@ -1286,7 +1292,7 @@ caller gives it, for a test whose client and server are fibres:
   and looks again;
 - it answers `timed_out` only after a whole round in which nothing moved
   anywhere in the network, so nothing it waits for arrived, and never
-  while a fibre sleeps on a clock made `clock_beside` it;
+  while a fibre sleeps on a clock `clock_over_beside` made beside it;
 - a call whose socket another fibre closed, or shut for what it waits
   for, while it waited fails `io_failed` when it wakes.
 
@@ -1295,7 +1301,7 @@ caller gives it, for a test whose client and server are fibres:
 do. `moves` counts what changed something a call may wait for, `turns`
 the turns its calls took and `sleepers` the fibres sleeping beside it.
 
-`clock_beside` makes a `fake.clock` whose `sleep`, beside a network that
+`clock_over_beside` makes a `fake.clock` whose `sleep`, beside a network that
 takes turns, takes the network's turns: the clock moves only after a whole
 round in which nothing in the network moved, a millisecond at a time, so
 sleepers wake in the order of their deadlines while the other fibres run
@@ -1693,8 +1699,8 @@ The library's own providers of turns switch in fewer:
 | `events.host` | `yield` and `wait`; `read`, `write` and `write_some` when the file is not ready; `read_child` and `write_child` when the pipe is not; the programs' `wait`, for the child's end; `sleep` until its deadline; `accept`, `connect`, `connect_within`, `send`, `receive`, `send_to` and `receive_from` where the socket would wait; and `next_signal` when no arrival waits to be read. Its `start` prepares the fibre and returns, and `close`, `close_socket`, `shutdown`, `close_input` and `stop_watching` wake the fibres waiting on what they end without switching |
 
 A `fake.clock` made by `clock_over` advances the clock in its `sleep`
-and returns, and switches nowhere. One made `clock_beside` a network that
-takes turns switches in `sleep`, taking the network's turns until the
+and returns, and switches nowhere. One `clock_over_beside` made beside a
+network that takes turns switches in `sleep`, taking the network's turns until the
 clock reaches its deadline. A test with no fake network gives its fibres
 a clock that yields, as the example below does.
 
@@ -2554,7 +2560,7 @@ with L0347.
 | `so_nosigpipe` | none | yes | yes |
 | `time_limit`'s microseconds | an `i64` | an `int` | an `i64` |
 | `posix_spawnattr_setsigdefault`, `posix_spawnattr_setsigmask` | not declared | declared | declared |
-| `posix_spawn` extras | none | `posix_spawn_cloexec_default` and `addinherit_np` | `addclosefrom_np` |
+| `posix_spawn` extras | none | `posix_spawn_cloexec_default` | `addclosefrom_np` |
 | `rtld_local`, `rtld_global` | as FreeBSD's | numbered its own way | as Linux's |
 
 [Executable example](../compiler/tests/fixtures/abi/r440-native-hosted/program.ldn)
@@ -2845,7 +2851,7 @@ the STM32H753's `descriptions/stm32h753_cached` among the chips refine
 supports. Reset has enabled the caches and the entry's return disables
 them; a program does neither.
 
-`l1.caches()` is the handle, its line the description's, 32 bytes, and
+`l1.new()` is the handle, its line the description's, 32 bytes, and
 `l1.geometry()` reads CCSIDR, the data cache's sets, ways and line. Each
 operation writes every line's address to the System Control Block's
 by-address register between two completion barriers, then issues ISB.

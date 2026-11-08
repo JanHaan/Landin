@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D687 platform/riscv's critical section on rv32, nested, restores mstatus.MIE to what the program started with; the module declares nothing elsewhere, so every target imports it and only rv32 calls it, which the RV32 lanes run from the Cortex-M inventory
+summary: D687 platform/riscv's critical section on rv32, nested, restores mstatus.MIE to what the program started with, and disable_lines clears the machine timer's mie bit alone and enable_lines gives it back; the module declares nothing elsewhere, so every target imports it and only rv32 calls it, which the RV32 lanes run from the Cortex-M inventory
 program: main.ldn
 root: ../../../../..
 status: 42
