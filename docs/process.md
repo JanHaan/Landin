@@ -575,7 +575,8 @@ Linux x86-64, Linux arm64 and Darwin host checks run the production C
 publication, private-directory and cancellation controls alongside formatter write
 safety, with cancellation also exercised through actual `compile` and
 `run` commands. Each FreeBSD architecture's first runtime shard compiles
-and executes the same C adapters inside its guest. That is native system
+and executes the same C adapters inside its guest, the attached-program
+runner's signal-forwarding controls among them. That is native system
 call evidence, separate from the Linux-hosted compiler and the generated
 program corpus; it is not a FreeBSD-hosted Ada compiler claim.
 
