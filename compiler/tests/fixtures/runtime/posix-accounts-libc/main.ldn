@@ -62,9 +62,9 @@ looked_up: () -> none ! ... =
     mut grouped: [1024]u8 = zeroed
     own_group: posix.group_entry =
         posix.group_with_id(mine_group, grouped[0..<1024]) else (problem)
-        fail problem when problem <> posix.no_account
-        wheel
-    end
+            fail problem when problem <> posix.no_account
+            wheel
+        end
     if own_group.group == mine_group then
         mut back: [1024]u8 = zeroed
         same: posix.group_entry =
