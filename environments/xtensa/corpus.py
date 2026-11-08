@@ -267,6 +267,24 @@ def selected_image_limit(run, row, error, chip, memory_profile):
     return result
 
 
+def compile_advice(text):
+    """What to do about an execute row refine did not compile, from its log.
+
+    A diagnostic is a refusal, which a `targets.xtensa` row may record; an
+    internal compiler defect is no verdict on the fixture, and a refusal
+    row with no codes would only hide it, so it is named as refine's fault."""
+    said = next((line.strip() for line in text.splitlines()
+                 if 'internal compiler defect' in line), None)
+    if said is not None:
+        return ('; refine failed with an internal compiler defect, "%s": that is a'
+                ' compiler fault to fix, not this fixture\'s verdict on Xtensa' % said)
+    codes = sorted(set(re.findall(r'error\[(L\d+)\]', text)))
+    return ('; Xtensa refuses it with %s: if that is its verdict here,'
+            ' give its row "targets": {"xtensa": {"mode": "refuse",'
+            ' "codes": %s, "reason": ...}}'
+            % (', '.join(codes) or 'no code', json.dumps(codes)))
+
+
 def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memory_profile='chip'):
     original = rows()
     if set(selected) - original.keys():
@@ -326,12 +344,7 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memo
                 if limit is None:
                     said = str(error)
                     if isinstance(error, CommandFailed) and error.name == 'compile':
-                        codes = sorted(set(re.findall(r'error\[(L\d+)\]',
-                                                      Path(error.log).read_text())))
-                        said += ('; Xtensa refuses it with %s: if that is its verdict here,'
-                                 ' give its row "targets": {"xtensa": {"mode": "refuse",'
-                                 ' "codes": %s, "reason": ...}}'
-                                 % (', '.join(codes) or 'no code', json.dumps(codes)))
+                        said += compile_advice(Path(error.log).read_text())
                     record.update(status='failed', error=said)
                 else:
                     record.update(status='passed', **limit)

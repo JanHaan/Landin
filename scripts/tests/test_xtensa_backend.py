@@ -9,7 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from environments.xtensa.backend import CommandFailed, configuration, description, stage
-from environments.xtensa.corpus import capacity_only, selected_image_limit
+from environments.xtensa.corpus import capacity_only, compile_advice, selected_image_limit
 
 
 class EntrySources(unittest.TestCase):
@@ -23,6 +23,16 @@ class EntrySources(unittest.TestCase):
                       'relocation truncated to fit', 'unrecognized new linker failure'):
             with self.subTest(error=error):
                 self.assertFalse(capacity_only(pure + '/tools/bin/ld: ' + error + '\n'))
+
+    def test_a_compiler_defect_is_not_offered_as_a_refusal(self):
+        defect = ('refine: internal compiler defect in emission: unsupported'
+                  ' Xtensa word operation \t.balign\n')
+        said = compile_advice(defect)
+        self.assertIn('internal compiler defect', said)
+        self.assertIn('compiler fault to fix', said)
+        self.assertNotIn('"mode": "refuse"', said)
+        refused = compile_advice('error[L0346]: no C ABI\nerror[L0015]: outside\n')
+        self.assertIn('"codes": ["L0015", "L0346"]', refused)
 
     def test_capacity_does_not_hide_assembler_or_undefined_symbol_failures(self):
         with tempfile.TemporaryDirectory() as directory:

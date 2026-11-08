@@ -28,9 +28,13 @@ package body Landin.Tests.Xtensa_Backend_Suite is
      is (Ada.Strings.Fixed.Index (Text, Part) > 0);
 
    function Emitted
-     (Item : in out Landin.Testing.Context; Source : String) return String;
+     (Item : in out Landin.Testing.Context; Source : String;
+      Options : Landin.Optimization.Options :=
+        Landin.Optimization.Reference_Options) return String;
    function Emitted
-     (Item : in out Landin.Testing.Context; Source : String) return String
+     (Item : in out Landin.Testing.Context; Source : String;
+      Options : Landin.Optimization.Options :=
+        Landin.Optimization.Reference_Options) return String
    is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Xtensa);
@@ -57,7 +61,7 @@ package body Landin.Tests.Xtensa_Backend_Suite is
          Landin.Stages.Meanings (Work).all,
          Landin.Stages.Identities (Work).all,
          Landin.Stages.Target (Work),
-         Landin.Optimization.Reference_Options, Text, Report);
+         Options, Text, Report);
       return U.To_String (Text);
    end Emitted;
 
@@ -256,8 +260,57 @@ package body Landin.Tests.Xtensa_Backend_Suite is
          "opaque source assembly retains all logical scratch homes");
    end Assembly_Ranges;
 
+   --  [1640]: a placement's alignment follows the section directive of
+   --  its item, a zeroed datum's, an initialized one's, an immutable
+   --  one's and a routine's, as one more directive line the native
+   --  translation passes through at every profile; that line once
+   --  reached the translator indented and was refused as an operation.
+   procedure Placement_Alignment (Item : in out Landin.Testing.Context);
+   procedure Placement_Alignment (Item : in out Landin.Testing.Context) is
+      package Opt renames Landin.Optimization;
+      HT : constant Character := ASCII.HT;
+      Source : constant String :=
+        "link(align: 256)" & LF & "mut zero_cell: [3]u8 = zeroed" & LF
+        & "link(align: 64)" & LF & "mut data_cell: u32 = 5" & LF
+        & "link(align: 32)" & LF & "table: [3]u8 = [1, 2, 3]" & LF
+        & "link(align: 16)" & LF
+        & "twice: (x: u32) -> (r: u32) =" & LF & "    r = x + x" & LF
+        & "end twice" & LF
+        & "use: () -> (r: u32) =" & LF
+        & "    data_cell = data_cell + u32(table[2]) + u32(zero_cell[1])"
+        & LF & "    r = twice(data_cell)" & LF & "end use" & LF;
+      type Profile_List is array (Positive range <>) of Opt.Options;
+      Profiles : constant Profile_List :=
+        [(Opt.None, Opt.Off), (Opt.Size, Opt.Off), (Opt.Size, Opt.Auto),
+         (Opt.Speed, Opt.Auto)];
+   begin
+      for Options of Profiles loop
+         declare
+            Text : constant String := Emitted (Item, Source, Options);
+            Where : constant String :=
+              " at " & Opt.Spelling (Options.Optimize) & "/"
+              & Opt.Spelling (Options.Specialize);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, """aw"",@nobits" & LF & HT
+                               & ".balign 256" & LF)
+                 and then Contains (Text, """aw"",@progbits" & LF & HT
+                                    & ".balign 64" & LF)
+                 and then Contains (Text, """a"",@progbits" & LF & HT
+                                    & ".balign 32" & LF)
+                 and then Contains (Text, """ax"",@progbits" & LF & HT
+                                    & ".balign 16" & LF),
+               "each placed item's section is followed by its alignment"
+               & Where & LF & Text);
+         end;
+      end loop;
+   end Placement_Alignment;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "xtensa backend", "a placement's alignment is emitted",
+         Placement_Alignment'Access);
       Landin.Testing.Register
         (Into, "xtensa backend", "windowed routines carry paired scalars",
          Windowed_Pairs'Access);

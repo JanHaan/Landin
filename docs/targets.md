@@ -498,6 +498,22 @@ and `lines`, including zero-fill extents, and checks that debug sections neither
 allocate storage nor overlap load payloads. No debugger helper dereferences a
 source device pointer or reads destructive registers to display a value.
 
+A debugger session meets the symbol spellings of D415 and D417, which the
+opening of this guide describes. A module binding of the entry module that
+shares its name with an imported routine, `mut geometry` beside
+`l1.geometry`, is neither's export, so the image holds
+`main.geometry` and `platform.cortex_m.l1.geometry` and no `geometry`. In
+GDB, with `--debug=lines`, `&geometry` is then the routine, whose source
+name the line tables carry, and `*(unsigned*)&geometry` reads its code
+without a word; without debug information it is refused with GDB's own
+`No symbol table is loaded.  Use the "file" command.`, which only means
+that no symbol of that spelling exists. Find the spelling with
+`info variables geometry`, which lists the binding as a non-debugging
+symbol (GDB 16 prints it `main[geometry]`), or `nm IMAGE`, and read it
+quoted, since an unquoted dot is GDB's member operator:
+`print *(unsigned*)&'main.geometry'` or `x/wx &'main.geometry'`. A name no
+other item holds, or an export, keeps its own spelling.
+
 The decisions use [GNU CFI directives](https://sourceware.org/binutils/docs/as/CFI-directives.html),
 [GDB ARM behavior](https://sourceware.org/gdb/current/onlinedocs/gdb.html/ARM.html),
 [DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf),

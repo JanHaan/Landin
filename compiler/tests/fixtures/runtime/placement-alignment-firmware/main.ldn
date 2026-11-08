@@ -1,0 +1,29 @@
+--  A placement's alignment is a minimum the linked image keeps ([1640]):
+--  on every firmware target, Xtensa included, a zeroed datum, an
+--  initialized one, an immutable one and a routine each start at the
+--  boundary their `link(align: N)` asks for.  The data are checked here
+--  by their addresses; a routine has no address a program can count, so
+--  its alignment is held by the backend suites' emitted directives, and
+--  here it is assembled, linked and called.
+link(align: 256)
+mut zero_cell: [3]u8 = zeroed
+link(align: 64)
+mut data_cell: u32 = 5
+link(align: 32)
+table: [3]u8 = [1, 2, 3]
+link(align: 128)
+twice: (x: u32) -> (r: u32) =
+    r = x + x
+end twice
+
+--  42 when every datum is aligned and each was read and written where
+--  it lies; a misaligned one subtracts its own bit.
+public main: () -> (code: i32) =
+    code = 42
+    if usize(addr zero_cell) % 256 <> 0 then code = code - 1 end if
+    if usize(addr data_cell) % 64 <> 0 then code = code - 2 end if
+    if usize(addr table) % 32 <> 0 then code = code - 4 end if
+    zero_cell[1] = 7
+    data_cell = data_cell + u32(table[2]) + u32(zero_cell[1])
+    code = code + i32(twice(data_cell)) - 30
+end main

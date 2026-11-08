@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a placement's alignment reaches the linked image on every firmware target, Xtensa included: a zeroed, an initialized and an immutable datum start at the boundary `link(align: N)` asks for, and a placed routine is emitted, assembled and called
+program: main.ldn
+status: 42
+targets: cortex-m0
+constructs: 1640
