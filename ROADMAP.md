@@ -2016,7 +2016,7 @@ arm64 and physical RV64.
 
 ### R13.20 — The freestanding library
 
-Status: planned
+Status: complete
 Depends on: R13.10, R13.11, R12.30, R12.60
 
 What firmware on the R12 boards needs, each facility driven by a complete
@@ -2031,6 +2031,27 @@ oracles and measured cost on the constrained profiles. For Cortex-M C, this
 includes generating bindings from a pinned device C header for the Cortex-M0
 ABI and running a firmware consumer through those generated declarations and
 adapters.
+
+Done: D920 to D924 enable AAPCS32's C surface on Cortex-M in both
+procedure call standards, with an ILP32 `platform/c` and C archives linked
+into firmware; D935 to D939 bind C for it from pinned CMSIS headers; and
+D985 to D987 run the generated adapters, a hand-written C peer and the VFP
+bindings on QEMU's micro:bit, AN505 and AN500, deciding the corpus's 65
+restrictions again. D945 to D949 give `core/text` positions, searches, an
+encoder and a UTF-8 builder over `utf8`, which finishes without a scan
+through `compiler.utf8_unvalidated` inside `unchecked`. D955 to D965 give
+every board's driver `core/line`'s settings and divisors, and the STM32H753,
+ESP32, ESP32-S3 and ESP32-C5 change line live on the chip. D970 to D979
+admit the cached STM32H753 profile with `core/cache` and
+`platform/cortex_m/l1`, and its stale read, maintained receive, lost dirty
+line and both transmits behaved on the chip as predicted. All seventeen
+board records were made again on the rig. In
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/42453825980)
+on `3b08a061`, which carries the review's corrections for R13.78 beside
+this item's work, 49 of 53 jobs passed and the board and suspended RV64
+legs were skipped, and
+[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/42456830930)
+on the same tree passed every port.
 
 ### R13.17 — Services are handles
 

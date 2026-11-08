@@ -244,7 +244,7 @@ buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
 [`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
 
-**Next roadmap item: R13.20 — The freestanding library (planned).**
+**Next roadmap item: R13.78 — What the review and the register leave (planned).**
 
 ## Questions, bugs and ideas
 

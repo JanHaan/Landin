@@ -251,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R13.20 — The freestanding library (planned).**
+**Next roadmap item: R13.78 — What the review and the register leave (planned).**
 
 ## Versions
 
