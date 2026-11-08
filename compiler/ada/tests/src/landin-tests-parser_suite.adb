@@ -30,6 +30,7 @@ package body Landin.Tests.Parser_Suite is
    package Fixtures renames Landin.Testing.Fixtures;
 
    use type Landin.Platform.Read_Status;
+   use type Landin.Diagnostics.Applicability;
    use type Landin.Source.Byte_Offset;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Source.Source_Id;
@@ -4904,6 +4905,203 @@ package body Landin.Tests.Parser_Suite is
            & "    fro: i32 = 1" & LF & "end f" & LF, "", "");
    end Refusal_Routes_Preserve_Intent;
 
+   --  A form another language writes, or a line end read as continuing
+   --  the line above, is refused once, naming the Landin form.  An offered
+   --  edit is a guess the shared rendering says is one, and the program it
+   --  makes checks clean.
+   procedure Refusals_Name_The_Written_Form
+     (Item : in out Landin.Testing.Context);
+
+   procedure Refusals_Name_The_Written_Form
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Main : constant String := "public main: () -> (code: i32) =" & LF;
+      Tail : constant String := "end main" & LF;
+
+      --  Code "" says Text checks clean.  Fixed "" says no edit is
+      --  offered; otherwise the one offered edit makes Fixed.
+      procedure Check
+        (Label, Text, Code, Message, Note, Fixed : String);
+
+      procedure Check
+        (Label, Text, Code, Message, Note, Fixed : String)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Ran : Landin.Driver.Outcome;
+         Clashed : Boolean;
+      begin
+         Host.Add_File ("main.ldn", Text);
+         Args.Append ("main.ldn");
+         Ran := Landin.Driver.Execute (Args, Host, Tools);
+         if Code = "" then
+            Landin.Testing.Check_Equal
+              (Item, Ran.Status, Landin.Driver.Status_Success,
+               Label & " checks clean: " & Unbounded.To_String (Ran.Report));
+            return;
+         end if;
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Ran.Found), 1,
+            Label & " is said once: " & Unbounded.To_String (Ran.Report));
+         if Landin.Diagnostics.Count (Ran.Found) = 0 then
+            return;
+         end if;
+         declare
+            First : constant Landin.Diagnostics.Diagnostic :=
+              Landin.Diagnostics.Get (Ran.Found, 1);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Code (First), Code,
+               Label & " keeps its code");
+            Landin.Testing.Check
+              (Item, Contains (Landin.Diagnostics.Message
+                 (Landin.Diagnostics.Primary (First)), Message),
+               Label & " names the written form: "
+                 & Landin.Diagnostics.Message
+                     (Landin.Diagnostics.Primary (First)));
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Note_Count (First) > 0
+                 and then Contains
+                   (Landin.Diagnostics.Nth_Note (First, 1), Note),
+               Label & " says what to write instead");
+            if Fixed = "" then
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Fix_Count (First), 0,
+                  Label & " offers no edit");
+               return;
+            end if;
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Fix_Count (First), 1,
+               Label & " offers one edit");
+            if Landin.Diagnostics.Fix_Count (First) /= 1 then
+               return;
+            end if;
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Level
+                 (Landin.Diagnostics.Nth_Fix (First, 1))
+                   = Landin.Diagnostics.Likely,
+               Label & " offers its edit as a guess");
+         end;
+         declare
+            Applied : constant String := Landin.Testing.Fixes.Applied
+              (Ran.Found, 1, Text, Clashed);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Applied, Fixed, Label & " writes the Landin form");
+            Landin.Testing.Check
+              (Item, not Clashed, Label & " has no overlapping edits");
+            Host.Add_File ("main.ldn", Applied);
+            Ran := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check_Equal
+              (Item, Ran.Status, Landin.Driver.Status_Success,
+               Label & " edit checks clean: "
+                 & Unbounded.To_String (Ran.Report));
+         end;
+      end Check;
+
+      Failing : constant String :=
+        "missing: atom" & LF
+        & "get: (x: bool) -> (r: []u8) ! missing =" & LF
+        & "    fail missing when x" & LF & "    r = []" & LF
+        & "end get" & LF & Main
+        & "    c: []u8 = get(true) else (e)" & LF;
+      Counted : constant String :=
+        "    end" & LF & "    code = i32(lenof c)" & LF & Tail;
+      Swapped : constant String :=
+        Main & "    mut x: i32 = 1" & LF & "    mut y: i32 = 2" & LF
+        & "    swap(x, y)" & LF & "    code = x - 2" & LF & Tail;
+      Bumped : constant String :=
+        Main & "    mut v: i32 = 0" & LF & "    bump(v, 1)" & LF
+        & "    code = v - 1" & LF & Tail;
+      Cell : constant String := "end cell" & LF & Main
+        & "    code = 0" & LF & Tail;
+   begin
+      --  `[]` after a line ending in a name is read as its index.
+      Check
+        ("empty index beginning a line",
+         Failing & "        _ = e" & LF & "        []" & LF & Counted,
+         "L0102", "continues the line above as an index",
+         "as `(name)`", "");
+      Check
+        ("list beginning a line",
+         Failing & "        _ = e" & LF & "        [1, 2]" & LF & Counted,
+         "L0103", "continues the line above as an index",
+         "as `(name)`", "");
+      Check
+        ("the parenthesised name the route writes",
+         Failing & "        _ = (e)" & LF & "        []" & LF & Counted,
+         "", "", "", "");
+      --  Adjacent literals are not joined.
+      Check
+        ("adjacent text literals",
+         "f: (a: []u8, b: []u8) -> (n: usize) = n = lenof a end f" & LF
+         & Main & "    code = i32(f(""abc"" ""def""))" & LF & Tail,
+         "L0103", "two text literals side by side are not joined",
+         "write the text as one literal", "");
+      --  A `mut` binding written with `=`.
+      Check
+        ("mut binding written with =",
+         Main & "    mut done = false" & LF & "    done = true" & LF
+         & "    code = if done then 0 else 1 end if" & LF & Tail,
+         "L0103", "takes its value after `:=`, not `=`",
+         "`mut done := value`",
+         Main & "    mut done := false" & LF & "    done = true" & LF
+         & "    code = if done then 0 else 1 end if" & LF & Tail);
+      --  A variant case's payload written as a call, first and later.
+      Check
+        ("first variant case written as a call",
+         "cell: type = struct" & LF
+         & "    kind: variant full(n: i32) | empty end kind" & LF & Cell,
+         "L0103", "carries its payload after `:`, as `full: (...)`",
+         "[0680]",
+         "cell: type = struct" & LF
+         & "    kind: variant full: (n: i32) | empty end kind" & LF & Cell);
+      Check
+        ("later variant case written as a call",
+         "cell: type = struct" & LF
+         & "    kind: variant empty | full(n: i32) end kind" & LF & Cell,
+         "L0103", "carries its payload after `:`, as `full: (...)`",
+         "[0680]",
+         "cell: type = struct" & LF
+         & "    kind: variant empty | full: (n: i32) end kind" & LF & Cell);
+      --  A parameter's mode written after its colon.
+      Check
+        ("mode after the colon",
+         "bump: (x: inout i32, by: i32) -> none = x += by end bump" & LF
+         & Bumped,
+         "L0101", "`inout` is written before the parameter's name, as"
+         & " `inout x: i32`", "[1800]",
+         "bump: (inout x: i32, by: i32) -> none = x += by end bump" & LF
+         & Bumped);
+      Check
+        ("mode after the colon before a named type",
+         "rec: type = struct n: i32 end rec" & LF
+         & "bump: (r: inout rec, by: i32) -> none = r.n += by end bump"
+         & LF & Main & "    mut v := rec(n: 0)" & LF & "    bump(v, 1)"
+         & LF & "    code = v.n - 1" & LF & Tail,
+         "L0101", "as `inout r: rec`", "[1800]",
+         "rec: type = struct n: i32 end rec" & LF
+         & "bump: (inout r: rec, by: i32) -> none = r.n += by end bump"
+         & LF & Main & "    mut v := rec(n: 0)" & LF & "    bump(v, 1)"
+         & LF & "    code = v.n - 1" & LF & Tail);
+      Check
+        ("Ada's mode after the colon",
+         "bump: (x: in out i32, by: i32) -> none = x += by end bump" & LF
+         & Bumped,
+         "L0101", "as `inout x: i32`", "[1800]",
+         "bump: (inout x: i32, by: i32) -> none = x += by end bump" & LF
+         & Bumped);
+      Check
+        ("mode after shared names",
+         "swap: (a, b: inout i32) -> none =" & LF & "    t := a" & LF
+         & "    a = b" & LF & "    b = t" & LF & "end swap" & LF & Swapped,
+         "L0101", "as `inout a, b: i32`", "[1800]",
+         "swap: (inout a, b: i32) -> none =" & LF & "    t := a" & LF
+         & "    a = b" & LF & "    b = t" & LF & "end swap" & LF & Swapped);
+   end Refusals_Name_The_Written_Form;
+
    procedure Multiline_Keyword_Repairs_Parse
      (Item : in out Landin.Testing.Context);
 
@@ -5460,6 +5658,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "refusal routes preserve intent",
          Refusal_Routes_Preserve_Intent'Access);
+      Landin.Testing.Register
+        (Into, "parser", "refusals name the written form",
+         Refusals_Name_The_Written_Form'Access);
       Landin.Testing.Register
         (Into, "parser", "written type prefixes keep their boundaries",
          Written_Type_Prefixes_Keep_Their_Boundaries'Access);
