@@ -943,7 +943,7 @@
           "c_name": "sample",
           "c_type": "const vfp_sample *",
           "landin_name": "sample",
-          "landin_type": "ptr u8",
+          "landin_type": "ptr vfp_sample",
           "policy": {
             "from": [],
             "nullability": "nonnullable",
@@ -1181,6 +1181,51 @@
       "variadic": false
     },
     {
+      "adapter": "landin_cmsis_vfp_vfp_retrim_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "vfp_retrim",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "vfp_retrim",
+      "parameters": [
+        {
+          "c_name": "sample",
+          "c_type": "vfp_sample *",
+          "landin_name": "sample",
+          "landin_type": "ptr mut vfp_sample",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        },
+        {
+          "c_name": "by",
+          "c_type": "short",
+          "landin_name": "by",
+          "landin_type": "c.c_short",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "vfp_sample *",
+        "landin_type": "ptr mut vfp_sample",
+        "policy": {
+          "from": [
+            "sample"
+          ],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "returned"
+        }
+      },
+      "variadic": false
+    },
+    {
       "adapter": "landin_cmsis_vfp_vfp_turn_call",
       "adapter_output_escaping_sources": [],
       "adapter_reasons": [
@@ -1305,15 +1350,15 @@
       },
       {
         "name": "landin-vfp.h",
-        "sha256": "92edd1d35534a92e19d5eca153e8c3ec0e433a6f061a70896f84460a48daa444"
+        "sha256": "838260cf0ebed8451be10f2e4cb9330707c1e40e03d3e1cbc848a28be1950cd7"
       }
     ],
-    "policy_sha256": "d343e3d3413f5a7d55f4b77e21ccd642f1d42e28971ab7acb1fa67b5ffb7c357"
+    "policy_sha256": "a3e42ecd2b0c7a323cd6920a4426c20b4af38853dbc6bf82f3624d9698f0c53e"
   },
   "outputs": {
-    "adapters.c": "f48e9eb8e80219e91424a4b625c4ba80d6898372ce2c14cfd7d254b3d271904a",
-    "bindings.ldn": "0764f975cd39f2ab0774d5040a1e69aa53f7a7527d4507ea31ee5221c0de41ab",
-    "exports.h": "0015a5b7c0f06412f14cb5093a0c3af3bd2918af6c8de28be512bf08c3dab826"
+    "adapters.c": "61f1ce90523e6bae800e14f041a99f40f9491c6fec4b5d1d9576ca0199618058",
+    "bindings.ldn": "1468dca2b6073aab389a0d50ef39720114e84db43a3ce409b46213b686618b76",
+    "exports.h": "3b9b0386d2dde60a2ccd002e84dffa6a37686831efd2d263117a2e774b1b1d60"
   },
   "schema_version": 1
 }

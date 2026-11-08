@@ -38,6 +38,8 @@ public binding_borrow_callback: type = extern(c) (argument_1: ptr c.c_int) -> (r
 
 public binding_callback: type = extern(c) (argument_1: c.c_int) -> (result: c.c_int)
 
+public binding_pair_reader: type = extern(c) (argument_1: ptr binding_pair) -> (result: c.c_double)
+
 public binding_int_pointer: type = ptr c.c_int
 
 public binding_entry: type = layout(c) struct
@@ -202,6 +204,12 @@ public extern(c) link(symbol: "landin_r440_bindings_binding_frame_check_call") b
 public extern(c) link(symbol: "binding_highbit") binding_highbit: () -> (result: binding_small)
 
 public extern(c) link(symbol: "binding_layout") binding_layout: (which: c.c_int) -> (result: c.c_ulong)
+
+public extern(c) link(symbol: "binding_pair_bump") binding_pair_bump: (pair: ptr mut binding_pair) -> (result: ptr mut binding_pair from pair)
+
+public extern(c) link(symbol: "binding_pair_larger") binding_pair_larger: (first: ptr binding_pair, second: ptr binding_pair) -> (result: ptr binding_pair from first, second)
+
+public extern(c) link(symbol: "binding_pair_read") binding_pair_read: (reader: binding_pair_reader, pair: ptr binding_pair) -> (result: c.c_double)
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_rotate_value_call") binding_rotate_value: (result: ptr mut u8, value: ptr u8) -> none
 

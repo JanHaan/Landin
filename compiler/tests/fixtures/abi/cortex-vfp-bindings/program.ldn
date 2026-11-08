@@ -48,8 +48,7 @@ public main: () -> (code: i32) =
     code = 100 + called
     return when called <> 0
     -- The record through its address: 2 * 0.5 + 0.25 + 3 + (1 - 2 + 4) + 100.
-    -- The generated import takes a native record's const pointer as a
-    -- byte pointer, which only an integer address converts to.
+    -- The generated import takes the record's const pointer typed to it.
     mut sample: vfp_sample = zeroed
     sample.gain = 0.5
     sample.offset = 0.25
@@ -59,7 +58,14 @@ public main: () -> (code: i32) =
     sample.trim[2] = 4
     sample.stamp = 100
     code = 4
-    return when vfp_apply(ptr(usize(addr sample)), 2.0) <> 107.25
+    return when vfp_apply(addr sample, 2.0) <> 107.25
+    -- And returns its address, through which a field is read and written.
+    retrimmed := vfp_retrim(addr sample, 5)
+    code = 9
+    return when retrimmed.val.trim[1] <> 3 or retrimmed.val.gain <> 0.5
+    retrimmed.val.stamp = 200
+    code = 10
+    return when sample.stamp <> 200
     -- The aggregate by value: (1.5, -2.25) turned and doubled.
     mut z: vfp_pair = zeroed
     z.re = 1.5

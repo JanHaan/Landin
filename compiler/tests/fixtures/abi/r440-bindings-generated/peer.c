@@ -33,6 +33,25 @@ BindingPair binding_adjust_pair(BindingPair value)
     return value;
 }
 
+/* An ordinary record by address (D426): the larger by its real part, a
+   count bumped in place, and the reader's answer for a pair, doubled. */
+const BindingPair *binding_pair_larger(const BindingPair *first,
+                                       const BindingPair *second)
+{
+    return first->real >= second->real ? first : second;
+}
+
+BindingPair *binding_pair_bump(BindingPair *pair)
+{
+    pair->count += 1;
+    return pair;
+}
+
+double binding_pair_read(binding_pair_reader reader, const BindingPair *pair)
+{
+    return reader(pair) * 2.0;
+}
+
 BindingValue binding_rotate_value(BindingValue value)
 {
     value.signed_value += 7;
@@ -232,6 +251,12 @@ int main(void)
     landin_r440_bindings_binding_global_counter_write(32);
     if (landin_r440_bindings_binding_global_counter_read() != 32) {
         return 8;
+    }
+
+    /* Landin's exported handler reading an ordinary record C owns. */
+    BindingPair owned = { 1.25, 3 };
+    if (landin_binding_pair_total(&owned) != 4.25) {
+        return 45;
     }
 
     /* What Landin left in the packed global, and Landin's exported handler

@@ -61,6 +61,11 @@ float landin_cmsis_vfp_vfp_half_call(float argument_1)
     return vfp_half(argument_1);
 }
 
+vfp_sample * landin_cmsis_vfp_vfp_retrim_call(vfp_sample *argument_1, short argument_2)
+{
+    return vfp_retrim(argument_1, argument_2);
+}
+
 vfp_pair landin_cmsis_vfp_vfp_turn_call(vfp_pair argument_1, float argument_2)
 {
     return vfp_turn(argument_1, argument_2);

@@ -20576,9 +20576,34 @@ through a pointer; typing every record pointer at once, which changes
 every binding generated so far; and implementing each ABI's by-value
 transport, which D414 declined.
 
+**Amended for every record pointer:** keeping `ptr u8` for an ordinary
+`layout(c)` record left its callers converting. The VFP bindings consumer
+passed its own `vfp_sample` to the generated `vfp_apply` as
+`ptr(usize(addr sample))`, through an integer address because `ptr` takes
+no pointer (L0301), and a pointer C returned had to be converted the same
+way before any field could be read. A pointer to any record the policy
+selects and the generator writes as a Landin record, ordinary, packed or
+flexible-member alike, is now `ptr record` or `ptr mut record` wherever the
+generator writes one: an imported function's parameter and result, a
+callback type's, a global's value and its address, a native record's field
+and an opaque record's member accessors. A caller passes `addr sample` and
+reads `result.val.gain`. This gives up, deliberately, the compatibility
+the sentence above kept: every binding whose header passes a pointer to an
+ordinary selected record changes when it is regenerated, and a caller that
+held the byte pointer now holds a typed one. A pointer to an opaque,
+incomplete or unselected record stays `ptr u8`, as an opaque object's own
+handle does, since no Landin record describes it; what this decision
+refuses stays refused. The alternatives were keeping the byte pointer,
+which is the conversion this removes, and typing a pointer to a record the
+policy does not select, which would write a record no policy asked for.
+
 **Pinned by** `abi/r440-bindings-generated`, which the Linux arm64 and
-Darwin bindings runners regenerate for their own ABIs, and `bindings/test.py`'s
-packed, flexible-member and refusal cases.
+Darwin bindings runners regenerate for their own ABIs and whose program
+passes `addr` of an ordinary record to generated imports, reads and writes
+fields through the pointers they return and gives a generated callback
+type a Landin routine; `abi/cortex-vfp-bindings`, which does the same on
+the Cortex-M AN500 lane; and `bindings/test.py`'s packed, flexible-member,
+ordinary-record-pointer and refusal cases.
 
 ### D441 — `escaping` stays part of C-symbol compatibility
 

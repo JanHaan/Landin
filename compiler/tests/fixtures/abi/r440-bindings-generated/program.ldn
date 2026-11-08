@@ -47,6 +47,12 @@ public extern(c) landin_binding_wire_mark: (record: ptr mut binding_wire) -> non
     record.val.wide = record.val.wide + 1
 end landin_binding_wire_mark
 
+--  An ordinary record through a typed pointer (D426): C calls this
+--  through a generated callback type and directly.
+public extern(c) landin_binding_pair_total: (pair: ptr binding_pair) -> (result: c.c_double) =
+    result = pair.val.real + c.c_double(pair.val.count)
+end landin_binding_pair_total
+
 -- Output adapters deliberately require an escaping source: their shallow
 -- stores cannot express a result-from relationship on an output parameter.
 -- The C peer supplies static storage and checks both retained pointer values.
@@ -83,6 +89,23 @@ public extern(c) landin_bindings_check: () -> (result: c.c_int) =
     adjusted := binding_adjust_pair(input)
     if adjusted.real <> 4.5 or adjusted.count <> 5 then
         result = 2
+    end if
+
+    --  An ordinary record by address both ways (D426): C returns the
+    --  larger pair's address, whose fields are read through it, and one it
+    --  bumped in place, which is written through.
+    mut smaller: binding_pair = binding_pair(real: 1.5, count: 2)
+    larger := binding_pair_larger(addr smaller, addr input)
+    if larger.val.real <> 3.5 or larger.val.count <> 4 then
+        result = 50
+    end if
+    bumped := binding_pair_bump(addr smaller)
+    bumped.val.real = 2.25
+    if smaller.count <> 3 or smaller.real <> 2.25 then
+        result = 51
+    end if
+    if binding_pair_read(landin_binding_pair_total, addr smaller) <> 10.5 then
+        result = 52
     end if
 
     if binding_mode_negative <> -1

@@ -185,7 +185,7 @@ public extern(c) link(symbol: "landin_cmsis_vfp___NVIC_GetPriority_call") nvic_g
 
 public extern(c) link(symbol: "landin_cmsis_vfp___NVIC_SetPriority_call") nvic_set_priority: (irqn: irqn_type, priority: uint32_t) -> none
 
-public extern(c) link(symbol: "landin_cmsis_vfp_vfp_apply_call") vfp_apply: (sample: ptr u8, value: c.c_double) -> (result: c.c_double)
+public extern(c) link(symbol: "landin_cmsis_vfp_vfp_apply_call") vfp_apply: (sample: ptr vfp_sample, value: c.c_double) -> (result: c.c_double)
 
 public extern(c) link(symbol: "landin_cmsis_vfp_vfp_backfill_call") vfp_backfill: (first: c.c_float, second: c.c_double, third: c.c_float) -> (result: c.c_double)
 
@@ -196,5 +196,7 @@ public extern(c) link(symbol: "vfp_peer_calls_back") vfp_peer_calls_back: () -> 
 public extern(c) link(symbol: "vfp_peer_check") vfp_peer_check: (a: c.c_float, b: c.c_double, c_: c.c_float, d: c.c_double, e: c.c_double, f: c.c_double, g: c.c_double, h: c.c_double, i: c.c_double, j: c.c_float, count: c.c_int) -> (result: c.c_int)
 
 public extern(c) link(symbol: "vfp_peer_mix") vfp_peer_mix: (total: c.c_double, sample: c.c_float, count: c.c_int) -> (result: c.c_double)
+
+public extern(c) link(symbol: "landin_cmsis_vfp_vfp_retrim_call") vfp_retrim: (sample: ptr mut vfp_sample, by: c.c_short) -> (result: ptr mut vfp_sample from sample)
 
 public extern(c) link(symbol: "landin_cmsis_vfp_vfp_turn_call") vfp_turn: (z: vfp_pair, scale: c.c_float) -> (result: vfp_pair)

@@ -217,6 +217,105 @@
       "parameters": {}
     },
     {
+      "kind": "callback",
+      "landin_name": "binding_pair_reader",
+      "name": "binding_pair_reader",
+      "nullable": false,
+      "parameters": {
+        "argument_1": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_pair_larger",
+      "name": "binding_pair_larger",
+      "parameters": {
+        "first": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        },
+        "second": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      },
+      "result": {
+        "from": [
+          "first",
+          "second"
+        ],
+        "nullability": "nonnullable",
+        "ownership": "borrowed",
+        "retention": "returned"
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_pair_bump",
+      "name": "binding_pair_bump",
+      "parameters": {
+        "pair": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      },
+      "result": {
+        "from": [
+          "pair"
+        ],
+        "nullability": "nonnullable",
+        "ownership": "borrowed",
+        "retention": "returned"
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_pair_read",
+      "name": "binding_pair_read",
+      "parameters": {
+        "pair": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        },
+        "reader": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "direction": "export",
+      "kind": "function",
+      "landin_name": "landin_binding_pair_total",
+      "name": "landin_binding_pair_total",
+      "parameters": {
+        "pair": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
       "direction": "import",
       "kind": "function",
       "landin_name": "binding_rotate_value",

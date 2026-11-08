@@ -1495,6 +1495,116 @@ int main(void) {
 }
 ''')
 
+    def test_ordinary_record_pointers_are_typed(self) -> None:
+        # D426 as amended: every pointer to a selected record the generator
+        # writes as a Landin record is typed to it, in a function, a global,
+        # a callback, a native record's field and an opaque record's member
+        # accessor; an opaque, incomplete or unselected record's pointer
+        # stays a byte pointer.
+        source = self.root / "typed"
+        reference = annotation()
+        returned = annotation(retention="returned", sources=["first", "second"])
+        selected = self.selection(
+            self.record("Pair"),
+            self.record("Node", fields={
+                "next": annotation(nullability="nullable", retention="stored"),
+                "pair": annotation(retention="stored")}),
+            self.record("Slot", fields={"pair": annotation(retention="stored")}),
+            self.record("Holder", fields={"pair": reference}),
+            self.record("Chain", fields={"next": reference}),
+            self.record("Hidden"),
+            {"kind": "callback", "name": "pair_reader", "nullable": False,
+             "parameters": {"argument_1": reference}},
+            self.function("pair_larger", parameters={"first": reference,
+                                                     "second": reference},
+                          result=returned),
+            self.function("pair_find", parameters={"pairs": reference},
+                          result=annotation(nullability="nullable", retention="returned",
+                                            sources=["pairs"])),
+            self.function("pair_read", parameters={"reader": reference, "pair": reference}),
+            self.function("pair_others", parameters={"hidden": reference, "other": reference,
+                                                     "slot": reference}),
+            self.function("holder_value", parameters={"holder": reference}),
+            {"kind": "variable", "name": "current_pair", "storage": "define",
+             "writable": True, "value": annotation(nullability="nullable",
+                                                   retention="stored")})
+        _, output = self.generate(source, selected_policy=selected, header=(
+            "typedef struct Pair { int left; int right; } Pair;\n"
+            "typedef struct Node { struct Node *next; const Pair *pair; int value; } Node;\n"
+            "typedef union Slot { Pair *pair; int tag; } Slot;\n"
+            "typedef struct Holder { const Pair *pair; int value; } Holder;\n"
+            "typedef struct Chain { struct Chain *next; int value; } Chain;\n"
+            "typedef struct Hidden Hidden;\n"
+            "typedef struct Unselected { int value; } Unselected;\n"
+            "typedef int (*pair_reader)(const Pair *pair);\n"
+            "extern const Pair *pair_larger(const Pair *first, const Pair *second);\n"
+            "extern Pair *pair_find(Pair *pairs, int count, int left);\n"
+            "extern int pair_read(pair_reader reader, const Pair *pair);\n"
+            "extern void pair_others(Hidden *hidden, Unselected *other, Slot *slot);\n"
+            "extern Pair *current_pair;\n"
+            "extern int holder_value(const Holder *holder);\n"))
+        text = (output / "bindings.ldn").read_text()
+        for expected in (
+                "public pair_reader: type = extern(c) (argument_1: ptr pair) -> (result: c.c_int)",
+                "public holder: type = layout(c) struct\n    pair: ptr pair\n"
+                "    value: c.c_int\nend holder",
+                "public chain: type = layout(c) struct\n    next: ptr mut chain\n"
+                "    value: c.c_int\nend chain",
+                "pair_larger: (first: ptr pair, second: ptr pair) -> "
+                "(result: ptr pair from first, second)",
+                "pair_find: (pairs: ptr mut pair, count: c.c_int, left: c.c_int) -> "
+                "(result: probe_pair_find_result_optional from pairs)",
+                "public probe_pair_find_result_optional: type = "
+                "probe_pair_find_result_absent | ptr mut pair",
+                "pair_read: (reader: pair_reader, pair_: ptr pair) -> (result: c.c_int)",
+                "holder_value: (holder_: ptr holder) -> (result: c.c_int)",
+                "current_pair_address: () -> (address: ptr mut probe_current_pair_value_optional)",
+                "public probe_current_pair_value_optional: type = "
+                "probe_current_pair_value_absent | ptr mut pair",
+                # A native record pointed to from an opaque record's member.
+                "slot_pair_get: (object: ptr u8) -> (value: ptr mut pair from object)",
+                "slot_pair_set: (object: ptr mut u8, escaping value: ptr mut pair) -> none",
+                "node_pair_get: (object: ptr u8) -> (value: ptr pair from object)",
+                # Opaque (a nullable member keeps Node on the C side),
+                # incomplete and unselected records have no Landin record.
+                "public probe_node_next_optional: type = probe_node_next_absent | ptr mut u8",
+                "pair_others: (hidden: ptr mut u8, other: ptr mut u8, slot: ptr mut u8) -> none"):
+            self.assertIn(expected, text)
+        metadata = json.loads((output / "bindings.json").read_text())
+        functions = {item["c_name"]: item for item in metadata["declarations"]
+                     if item["kind"] == "function"}
+        self.assertEqual([item["landin_type"] for item in
+                          functions["pair_larger"]["parameters"]], ["ptr pair", "ptr pair"])
+        consumer = source / "consumer"
+        consumer.mkdir()
+        (consumer / "main.ldn").write_text(
+            "import generated\n"
+            "import platform/c\n"
+            "extern(c) read_left: (argument_1: ptr generated.pair) -> (result: c.c_int) =\n"
+            "    result = argument_1.val.left\n"
+            "end read_left\n"
+            "main: () -> (status: i32) =\n"
+            "    mut first: generated.pair = generated.pair(left: 20, right: 1)\n"
+            "    second: generated.pair = generated.pair(left: 2, right: 3)\n"
+            "    larger := generated.pair_larger(addr first, addr second)\n"
+            "    holder: generated.holder = generated.holder(pair: larger, value: 1)\n"
+            "    status = i32(larger.val.right + holder.pair.val.left\n"
+            "                 + generated.pair_read(read_left, addr second)\n"
+            "                 + generated.holder_value(addr holder))\n"
+            "    found := generated.pair_find(addr first, 1, 20)\n"
+            "    match found\n"
+            "        generated.probe_pair_find_result_absent: status = 1\n"
+            "        ptr (present): present.val.right = 7\n"
+            "    end match\n"
+            "end main\n", encoding="utf-8")
+        for module in (output, consumer):
+            checked = subprocess.run([
+                refine(), "check", "--target=" + TARGET_NAME, "--link=libc",
+                "--root=" + str(source),
+                "--root=" + str(HERE.parent), str(module),
+            ], capture_output=True, text=True)
+            self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+
     def test_flexible_member_is_last_zero_length_array(self) -> None:
         source = self.root / "flexible"
         reference = annotation()
