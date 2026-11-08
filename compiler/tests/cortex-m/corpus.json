@@ -3515,6 +3515,9 @@
     "runtime/parameterized-type-alias-fixed-array": {
       "mode": "execute"
     },
+    "runtime/placement-alignment-firmware": {
+      "mode": "execute"
+    },
     "runtime/pointer-to-small-integer-traps": {
       "mode": "execute"
     },

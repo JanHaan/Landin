@@ -186,7 +186,7 @@
 1615 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Storage each thread has its own of
 1620 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Atomics
 1630 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | boundary | executed | all | none | none | Inline assembly, for what has no builtin
-1640 | tour | accepted emitted refused | compiled | compiled | compiled | compiled | compiled | compiled | executed | - | executed | cortex-m | none | none | Placing code and data on a microcontroller
+1640 | tour | accepted emitted executed refused | compiled | compiled | compiled | compiled | compiled | compiled | executed | - | executed | cortex-m | none | none | Placing code and data on a microcontroller
 1650 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Where a program starts
 1660 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | Where capabilities come from
 1670 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | When a check fails

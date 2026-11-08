@@ -1,14 +1,21 @@
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Fixed;
 with Ada.Strings.Hash;
+with Ada.Strings.Maps;
 
 package body Landin.Backend.Xtensa_Machine is
    package U renames Ada.Strings.Unbounded;
    LF : constant Character := Character'Val (10);
    HT : constant Character := Character'Val (9);
 
+   --  A line is trimmed of its layout, spaces and tabs alike: a directive
+   --  the backend writes after another in one instruction, as an item's
+   --  section and its placement's `.balign` are, arrives here as a second
+   --  line indented with a tab, and is still a directive.
+   Layout : constant Ada.Strings.Maps.Character_Set :=
+     Ada.Strings.Maps.To_Set (' ' & HT);
    function Trim (Text : String) return String
-     is (Ada.Strings.Fixed.Trim (Text, Ada.Strings.Both));
+     is (Ada.Strings.Fixed.Trim (Text, Layout, Layout));
    function Image (Number : Integer) return String
      is (Trim (Number'Image));
 
