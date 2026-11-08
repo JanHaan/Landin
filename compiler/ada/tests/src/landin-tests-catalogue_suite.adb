@@ -10,6 +10,8 @@ with Landin.Diagnostics.Lexical;
 with Landin.Diagnostics.Text;
 with Landin.Diagnostics;
 with Landin.Driver;
+with Landin.Platform.Native;
+with Landin.Platform.Overlays;
 with Landin.Platform;
 with Landin.Source.Names;
 with Landin.Source.Sets;
@@ -538,14 +540,19 @@ package body Landin.Tests.Catalogue_Suite is
    end Unreadable_Options_Are_Named;
 
    --  Every code is explained, and every example an explanation shows is
-   --  a program whose report begins with that code.  The example is run on
-   --  a fake filesystem holding only itself, as a one-file negative is,
-   --  with the options its first line names (D599).
+   --  a program whose report begins with that code.  The example is run
+   --  with the options its first line names (D599), held in memory beside
+   --  the repository's own library, which `--library` names: a code that
+   --  only a library's module or reference description raises can show
+   --  one.  Reading that library from the checkout, from the test
+   --  program's working directory, compiler/ada, is this case's deliberate
+   --  real-host exception; nothing is written through the overlay.
    procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context);
 
    procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context)
    is
       Examples : Natural := 0;
+      Real     : aliased Landin.Platform.Native.Native_Filesystem;
    begin
       for Name in Rows.Code_Name loop
          declare
@@ -572,11 +579,12 @@ package body Landin.Tests.Catalogue_Suite is
             elsif Example /= "" then
                Examples := Examples + 1;
                declare
-                  Host  : Landin.Testing.Fakes.Fake_Filesystem;
+                  Host  : Landin.Platform.Overlays.Overlay (Real'Access);
                   Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
                   Given : Landin.Platform.Path_List := Options_Of (Example);
                begin
-                  Host.Add_File ("example.ldn", Example);
+                  Host.Hold ("example.ldn", Example);
+                  Given.Append ("--library=../..");
                   Given.Append ("example.ldn");
                   declare
                      Ran : constant Landin.Driver.Outcome :=
