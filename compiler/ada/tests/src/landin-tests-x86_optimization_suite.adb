@@ -68,6 +68,52 @@ package body Landin.Tests.X86_Optimization_Suite is
    function Contains (Text, Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
+   --  A judgement of emitted assembly.  When Condition fails, the failure
+   --  shows Judged, the assembly the condition read, beneath its sentence,
+   --  so a changed selection is read from the failure itself rather than
+   --  by compiling the case's source again with `refine compile
+   --  --emit=asm`.  Labelled names each text of a judgement that compares
+   --  several, such as two objectives' or two levels'.
+   procedure Check_Assembly
+     (Item : in out Landin.Testing.Context; Judged : String;
+      Condition : Boolean; Description : String);
+   function Labelled (Name, Text : String) return String
+     is ("[" & Name & "]" & LF & Text & (if Text'Length > 0
+           and then Text (Text'Last) = LF then "" else [LF]));
+
+   --  Judged, each line indented beneath the failure's sentence, as
+   --  Landin.Testing.Check_Equal indents its expected and actual text.
+   function Indented (Judged : String) return String;
+
+   function Indented (Judged : String) return String is
+      Result : US.Unbounded_String;
+      First : Positive := Judged'First;
+   begin
+      for Index in Judged'Range loop
+         if Judged (Index) = LF or else Index = Judged'Last then
+            US.Append
+              (Result, LF & "        | "
+               & Judged (First .. (if Judged (Index) = LF then Index - 1
+                                   else Index)));
+            First := Index + 1;
+         end if;
+      end loop;
+      return US.To_String (Result);
+   end Indented;
+
+   procedure Check_Assembly
+     (Item : in out Landin.Testing.Context; Judged : String;
+      Condition : Boolean; Description : String) is
+   begin
+      Landin.Testing.Check
+        (Item, Condition,
+         (if Condition then Description
+          else Description & LF & "        judged assembly:"
+            & (if Judged = ""
+               then " none; Routine answers nothing for a missing name"
+               else Indented (Judged))));
+   end Check_Assembly;
+
    --  Text lowered into Work and put through Landin.IR.Pipeline at
    --  Options, as `refine compile` would at those options, so a case that
    --  asks the allocator or the backend about Work's unit directly asks
@@ -114,6 +160,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Choices_Move_Conditionally
      (Item : in out Landin.Testing.Context);
    procedure Speed_Places_Code (Item : in out Landin.Testing.Context);
+   procedure Failures_Show_Assembly (Item : in out Landin.Testing.Context);
 
    --  Source lowered, simplified and if-converted at Objective, as the
    --  driver does, then emitted; and the text of one routine in it.
@@ -313,8 +360,9 @@ package body Landin.Tests.X86_Optimization_Suite is
          declare
             Text : constant String := Converted (Item, Source, Objective);
          begin
-            Landin.Testing.Check
-              (Item, Contains (Routine (Text, "first"), "ret" & LF)
+            Check_Assembly
+              (Item, Text,
+               Contains (Routine (Text, "first"), "ret" & LF)
                and then Contains (Routine (Text, "second"), "ret" & LF)
                and then not Contains (Text, ".set first,")
                and then not Contains (Text, ".set second,"),
@@ -388,8 +436,11 @@ package body Landin.Tests.X86_Optimization_Suite is
                and then New_Counts.Register_Count = Alloc.Held_Count (Plan),
                "loop traffic frame and reports reflect actual allocation");
          end;
-         Landin.Testing.Check
-           (Item, US.To_String (After) = Emitted (Work)
+         Check_Assembly
+           (Item,
+            Labelled ("reference", US.To_String (Before))
+            & Labelled ("default", US.To_String (After)),
+            US.To_String (After) = Emitted (Work)
             and then Contains (US.To_String (Before), "setl %al")
             and then not Contains (US.To_String (After), "setl %al")
             and then Contains (US.To_String (After), "ud2"),
@@ -402,8 +453,11 @@ package body Landin.Tests.X86_Optimization_Suite is
               (Code, Landin.Stages.Meanings (Work).all,
                Landin.Stages.Identities (Work).all, Facts,
                Opt.Default_Options, Again_Text, Again_Report);
-            Landin.Testing.Check
-              (Item, Reports.JSON (Optimized, Facts, Opt.Default_Options)
+            Check_Assembly
+              (Item,
+               Labelled ("first", US.To_String (After))
+               & Labelled ("again", US.To_String (Again_Text)),
+               Reports.JSON (Optimized, Facts, Opt.Default_Options)
                  = Reports.JSON (Again_Report, Facts, Opt.Default_Options)
                and then US.To_String (Again_Text) = US.To_String (After),
                "typed reports and assembly repeat together");
@@ -488,8 +542,11 @@ package body Landin.Tests.X86_Optimization_Suite is
          Landin.Testing.Check
            (Item, Shared,
             "a result may take the register its last operand frees");
-         Landin.Testing.Check
-           (Item, Contains (Emitted (Work), "jbe .L1_3" & LF)
+         Check_Assembly
+           (Item,
+            Labelled ("size", Emitted (Work))
+            & Labelled ("speed", Emitted (Work, Speed)),
+            Contains (Emitted (Work), "jbe .L1_3" & LF)
             and then Contains (Emitted (Work, Speed), "jbe .L1_4" & LF)
             and then not Contains (Emitted (Work, Speed), "jbe .L1_3" & LF),
             "speed branches past a block that only jumps on");
@@ -544,8 +601,9 @@ package body Landin.Tests.X86_Optimization_Suite is
          Landin.Testing.Check
            (Item, Spanned and then Kept,
             "speed spans a single-block variable; size holds it throughout");
-         Landin.Testing.Check
-           (Item, Emitted (Work, Speed) = Emitted (Work, Speed)
+         Check_Assembly
+           (Item, Emitted (Work, Speed),
+            Emitted (Work, Speed) = Emitted (Work, Speed)
             and then Fast.Slot = Alloc.Make (Code, 1, Facts, Speed).Slot,
             "single-block spans repeat");
       end;
@@ -723,8 +781,9 @@ package body Landin.Tests.X86_Optimization_Suite is
             New_Counts : constant Reports.Routine_Statistics :=
               Reports.Nth_Routine (New_Report, 1);
          begin
-            Landin.Testing.Check
-              (Item, New_Counts.Stack_Loads + New_Counts.Stack_Stores
+            Check_Assembly
+              (Item, US.To_String (After),
+               New_Counts.Stack_Loads + New_Counts.Stack_Stores
                  < Old.Stack_Loads + Old.Stack_Stores
                and then New_Counts.Frame_Bytes < Old.Frame_Bytes
                and then New_Counts.Register_Count = Alloc.Held_Count (Plan)
@@ -733,8 +792,9 @@ package body Landin.Tests.X86_Optimization_Suite is
                and then Contains (US.To_String (After), "%xmm8")
                and then Contains (US.To_String (After), "mulsd"),
                "float allocation reduces measured stack traffic and frame");
-            Landin.Testing.Check
-              (Item, Contains (US.To_String (After), "movapd %xmm")
+            Check_Assembly
+              (Item, US.To_String (After),
+               Contains (US.To_String (After), "movapd %xmm")
                and then Merging_Moves (US.To_String (After)) = 0,
                "register float copies move whole registers, not merging");
          end;
@@ -750,8 +810,9 @@ package body Landin.Tests.X86_Optimization_Suite is
               (Code, Landin.Stages.Meanings (Work).all,
                Landin.Stages.Identities (Work).all, Facts, Speed,
                Debug_Text, Debug_Report, Debug => Info'Access);
-            Landin.Testing.Check
-              (Item, Contains (US.To_String (Debug_Text), "working")
+            Check_Assembly
+              (Item, US.To_String (Debug_Text),
+               Contains (US.To_String (Debug_Text), "working")
                and then Contains
                  (US.To_String (Debug_Text), ".byte 105"),
                "promoted float local has an XMM8 DWARF location");
@@ -787,8 +848,9 @@ package body Landin.Tests.X86_Optimization_Suite is
            (Item, Alloc.Save_Count (Plan) = 5 and then Plan.Spill_Homes > 0
             and then Plan.Spill_Homes < Stack_Values,
             "simultaneous arguments pressure all GP homes and reuse spills");
-         Landin.Testing.Check
-           (Item, Contains (Emitted (Work), "call "),
+         Check_Assembly
+           (Item, Emitted (Work),
+            Contains (Emitted (Work), "call "),
             "pressure emission retains the native call");
       end;
       Lower
@@ -830,8 +892,9 @@ package body Landin.Tests.X86_Optimization_Suite is
                end if;
             end;
          end loop;
-         Landin.Testing.Check
-           (Item, Calls = 2 and then Register_Arguments > 0
+         Check_Assembly
+           (Item, Emitted (C_Work),
+            Calls = 2 and then Register_Arguments > 0
             and then Contains (Emitted (C_Work), "foreign_step")
             and then Contains (Emitted (C_Work), "movq %r10, %rdi")
             and then not Contains
@@ -860,8 +923,9 @@ package body Landin.Tests.X86_Optimization_Suite is
                   Text : constant String := Emitted
                     (Work, (Objective, Opt.Off));
                begin
-                  Landin.Testing.Check
-                    (Item, Contains (Text, "subq $4096, %rsp")
+                  Check_Assembly
+                    (Item, Text,
+                     Contains (Text, "subq $4096, %rsp")
                      and then Contains (Text, "orq $0, (%rsp)")
                      and then Contains (Text, "cmpq %r11, %rsp")
                      and then Text'Length < 20000,
@@ -884,8 +948,9 @@ package body Landin.Tests.X86_Optimization_Suite is
       declare
          Text : constant String := Emitted (Empty);
       begin
-         Landin.Testing.Check
-           (Item, not Contains (Text, "subq $112, %rsp")
+         Check_Assembly
+           (Item, Text,
+            not Contains (Text, "subq $112, %rsp")
             and then not Contains (Text, "addq $112, %rsp")
             and then not Contains (Text, "(%rsp)"),
             "an empty C entry does not stage argument registers");
@@ -897,8 +962,9 @@ package body Landin.Tests.X86_Optimization_Suite is
       declare
          Text : constant String := Emitted (Mixed);
       begin
-         Landin.Testing.Check
-           (Item, Contains (Text, "movq %rdi, 0(%rsp)")
+         Check_Assembly
+           (Item, Text,
+            Contains (Text, "movq %rdi, 0(%rsp)")
             and then Contains (Text, "movq %xmm0, 8(%rsp)")
             and then Contains (Text, "movq 8(%rsp), %r10")
             and then not Contains (Text, "movq %rsi, 8(%rsp)")
@@ -922,8 +988,11 @@ package body Landin.Tests.X86_Optimization_Suite is
          Text : constant String := Emitted (Work);
          Reference : constant String := Emitted (Work, Opt.Reference_Options);
       begin
-         Landin.Testing.Check
-           (Item, Contains (Text, ".set ")
+         Check_Assembly
+           (Item,
+            Labelled ("default", Text)
+            & Labelled ("reference", Reference),
+            Contains (Text, ".set ")
             and then not Contains (Reference, ".set ")
             and then Contains (Text, "visible:")
             and then not Contains (Text, ".set visible,")
@@ -942,8 +1011,9 @@ package body Landin.Tests.X86_Optimization_Suite is
          & "mut current: callback = first_observed "
          & "public invoke: (x: i32) -> (r: i32) = "
          & "current = second_observed r = current(x) end invoke");
-      Landin.Testing.Check
-        (Item, not Contains (Emitted (Observed), ".set "),
+      Check_Assembly
+        (Item, Emitted (Observed),
+         not Contains (Emitted (Observed), ".set "),
          "static image and runtime function addresses both prevent folding");
    end Final_Folding;
 
@@ -990,31 +1060,36 @@ package body Landin.Tests.X86_Optimization_Suite is
          function Count (Text, Needle : String) return Natural
            is (Ada.Strings.Fixed.Count (Text, Needle));
       begin
-         Landin.Testing.Check
-           (Item, Base = Emitted (Work) and then Two = Base,
+         Check_Assembly
+           (Item, Labelled ("x86-64-v1", Base) & Labelled ("x86-64-v2", Two),
+            Base = Emitted (Work) and then Two = Base,
             "the baseline and x86-64-v2 select what was always selected");
-         Landin.Testing.Check
-           (Item, Count (Base, "%cl, ") = 5
+         Check_Assembly
+           (Item, Base,
+            Count (Base, "%cl, ") = 5
               and then not Contains (Base, "shlx")
               and then not Contains (Base, "sarx")
               and then not Contains (Base, "shrx"),
             "the baseline shifts all five by %cl");
-         Landin.Testing.Check
-           (Item, Contains (Three, "shlx %eax, ")
+         Check_Assembly
+           (Item, Three,
+            Contains (Three, "shlx %eax, ")
               and then Contains (Three, "sarx %rax, ")
               and then Contains (Three, "shrx %rax, ")
               and then Count (Three, "%cl, ") = 2
               and then Contains (Three, "shlb %cl, %al")
               and then Contains (Three, "sarw %cl, %ax"),
             "x86-64-v3 shifts 32 and 64 bits by BMI2 and narrow ones by %cl");
-         Landin.Testing.Check
-           (Item, Count (Three, "_inrange:") = Count (Base, "_inrange:")
+         Check_Assembly
+           (Item, Labelled ("x86-64-v1", Base) & Labelled ("x86-64-v3", Three),
+            Count (Three, "_inrange:") = Count (Base, "_inrange:")
               and then Count (Three, "_trap_range:")
                 = Count (Base, "_trap_range:")
               and then Count (Three, "ud2") = Count (Base, "ud2"),
             "every width and sign guard is kept at every level");
-         Landin.Testing.Check
-           (Item, Four = Three, "x86-64-v4 shifts as x86-64-v3 does");
+         Check_Assembly
+           (Item, Labelled ("x86-64-v3", Three) & Labelled ("x86-64-v4", Four),
+            Four = Three, "x86-64-v4 shifts as x86-64-v3 does");
       end;
    end Level_Selects_Shifts;
 
@@ -1038,8 +1113,9 @@ package body Landin.Tests.X86_Optimization_Suite is
          begin
             --  Size compares the index where it lives; none loads it
             --  into the accumulator first.  Either compares an immediate.
-            Landin.Testing.Check
-              (Item, Ada.Strings.Fixed.Count
+            Check_Assembly
+              (Item, Text,
+               Ada.Strings.Fixed.Count
                  (Text, (if Reference then "cmpq $4, %rax"
                          else "cmpq $4, %")) = 2
                and then Ada.Strings.Fixed.Count (Text, "_trap_range:") = 2
@@ -1075,15 +1151,17 @@ package body Landin.Tests.X86_Optimization_Suite is
               Ada.Strings.Fixed.Count (Text, "rep stosb");
          begin
             if Objective = Opt.Speed then
-               Landin.Testing.Check
-                 (Item, Copies = 1 and then Clears = 0
+               Check_Assembly
+                 (Item, Text,
+                  Copies = 1 and then Clears = 0
                   and then Contains (Text, "movq 8(%rsi), %rax")
                   and then Contains (Text, "movq $0, 8(%rdi)"),
                   "speed moves sixteen bytes as words, seventy-two as a"
                   & " string");
             else
-               Landin.Testing.Check
-                 (Item, Copies = 2 and then Clears = 1,
+               Check_Assembly
+                 (Item, Text,
+                  Copies = 2 and then Clears = 1,
                   "size and none keep one string operation per transfer");
             end if;
          end;
@@ -1113,8 +1191,9 @@ package body Landin.Tests.X86_Optimization_Suite is
             Guards : constant Natural :=
               Ada.Strings.Fixed.Count (Text, "_trap_range") - Traps;
          begin
-            Landin.Testing.Check
-              (Item, Traps = 1 and then Guards = 1
+            Check_Assembly
+              (Item, Text,
+               Traps = 1 and then Guards = 1
                and then Ada.Strings.Fixed.Count (Text, "ud2") = 1,
                "a slice element keeps its bound trap and no self-comparison");
          end;
@@ -1389,8 +1468,9 @@ package body Landin.Tests.X86_Optimization_Suite is
               - Ada.Strings.Fixed.Count (Text, "_divide");
          begin
             if Objective = Opt.Speed then
-               Landin.Testing.Check
-                 (Item, Divides = 0
+               Check_Assembly
+                 (Item, Text,
+                  Divides = 0
                   and then Ada.Strings.Fixed.Count
                     (Text, ASCII.HT & "mulq %rcx") = 3
                   and then Ada.Strings.Fixed.Count
@@ -1398,8 +1478,9 @@ package body Landin.Tests.X86_Optimization_Suite is
                   and then not Contains (Text, "ud2"),
                   "speed multiplies by six reciprocals and keeps no trap");
             else
-               Landin.Testing.Check
-                 (Item, Divides = 6 and then not Contains (Text, "mulq"),
+               Check_Assembly
+                 (Item, Text,
+                  Divides = 6 and then not Contains (Text, "mulq"),
                   "size and none divide by known divisors");
             end if;
          end;
@@ -1437,14 +1518,16 @@ package body Landin.Tests.X86_Optimization_Suite is
               + Ada.Strings.Fixed.Count (Text, ASCII.HT & "jnp ");
          begin
             if Objective = Opt.None then
-               Landin.Testing.Check
-                 (Item, Ada.Strings.Fixed.Count (Text, "setnp") = 3
+               Check_Assembly
+                 (Item, Text,
+                  Ada.Strings.Fixed.Count (Text, "setnp") = 3
                   and then Ada.Strings.Fixed.Count (Text, "cmpb $0") = 6
                   and then Parity = 0,
                   "the reference profile stores each float verdict");
             else
-               Landin.Testing.Check
-                 (Item, not Contains (Text, ASCII.HT & "set")
+               Check_Assembly
+                 (Item, Text,
+                  not Contains (Text, ASCII.HT & "set")
                   and then not Contains (Text, "cmpb $0")
                   and then Ada.Strings.Fixed.Count (Text, "ucomisd") = 3
                   and then Ada.Strings.Fixed.Count (Text, "ucomiss") = 3
@@ -1477,8 +1560,9 @@ package body Landin.Tests.X86_Optimization_Suite is
             Probe : constant String :=
               Text (Text'First .. Ada.Strings.Fixed.Index (Text, "value:"));
          begin
-            Landin.Testing.Check
-              (Item, not Contains (Probe, ASCII.HT & "set")
+            Check_Assembly
+              (Item, Text,
+               not Contains (Probe, ASCII.HT & "set")
                and then not Contains (Probe, "cmpb $0")
                and then Contains
                  (Text (Probe'Last .. Text'Last), ASCII.HT & "set"),
@@ -1514,16 +1598,18 @@ package body Landin.Tests.X86_Optimization_Suite is
             Text : constant String := Emitted (Work, (Objective, Opt.Off));
          begin
             if Objective = Opt.None then
-               Landin.Testing.Check
-                 (Item, Contains (Text, HT & "movabsq $3, %rax" & LF)
+               Check_Assembly
+                 (Item, Text,
+                  Contains (Text, HT & "movabsq $3, %rax" & LF)
                   and then Contains (Text, HT & "imulq -")
                   and then not Contains (Text, "imulq $")
                   and then not Contains (Text, "movzbl"),
                   "none keeps the accumulator, placed constants and the"
                   & " one-operand multiply");
             else
-               Landin.Testing.Check
-                 (Item, Contains (Text, HT & "addl $3, %")
+               Check_Assembly
+                 (Item, Text,
+                  Contains (Text, HT & "addl $3, %")
                   and then not Contains (Text, "$3, %eax")
                   and then not Contains (Text, "movabsq $3,")
                   and then Contains (Text, HT & "imulq $5, %r")
@@ -1608,18 +1694,21 @@ package body Landin.Tests.X86_Optimization_Suite is
             if Objective = Opt.None then
                Reference_Traps := Traps;
                Reference_Guards := Guards;
-               Landin.Testing.Check
-                 (Item, Contains (Text, "imulq $8, %rax, %rax")
+               Check_Assembly
+                 (Item, Text,
+                  Contains (Text, "imulq $8, %rax, %rax")
                   and then not Contains (Text, "(%rbp,%")
                   and then Traps > 0,
                   "none scales every index with a multiply");
             else
-               Landin.Testing.Check
-                 (Item, Traps = Reference_Traps
+               Check_Assembly
+                 (Item, Text,
+                  Traps = Reference_Traps
                   and then Guards = Reference_Guards,
                   "every element keeps its bounds trap");
-               Landin.Testing.Check
-                 (Item, Indexed (Text, "movq", ",8)") >= 3
+               Check_Assembly
+                 (Item, Text,
+                  Indexed (Text, "movq", ",8)") >= 3
                   and then Contains (Text, "(%rbp,%")
                   and then Indexed (Text, "movzbl", ")") >= 1
                   and then Indexed (Text, "leaq", ")") >= 1
@@ -1665,8 +1754,9 @@ package body Landin.Tests.X86_Optimization_Suite is
                                        and then Place.Register
                                          in Alloc.Caller_Saved));
                end loop;
-               Landin.Testing.Check
-                 (Item, Plan.Slot (Parameter).Kind = Alloc.GP
+               Check_Assembly
+                 (Item, Text,
+                  Plan.Slot (Parameter).Kind = Alloc.GP
                   and then Plan.Slot (Parameter).Register = Alloc.RDI
                   and then Alloc.Save_Count (Plan) = 0
                   and then Caller_Saved
@@ -1674,8 +1764,9 @@ package body Landin.Tests.X86_Optimization_Suite is
                   "a small routine reads its parameter where it arrives"
                   & " and saves no register");
                if Objective = Opt.Speed then
-                  Landin.Testing.Check
-                    (Item, not Contains (Text, "(%rbp)")
+                  Check_Assembly
+                    (Item, Text,
+                     not Contains (Text, "(%rbp)")
                      and then Contains (Text, "(%rdi), %"),
                      "at speed a small routine touches no frame cell");
                end if;
@@ -1782,15 +1873,19 @@ package body Landin.Tests.X86_Optimization_Suite is
          Landin.Testing.Check
            (Item, In_Place = 2,
             "inc and dec compute in the counter's own register");
-         Landin.Testing.Check
-           (Item, not Contains (Text, "%rax") and then not Contains
+         Check_Assembly
+           (Item, Text,
+            not Contains (Text, "%rax") and then not Contains
               (Text, "%eax"),
             "widening and comparing need no accumulator");
          Landin.Testing.Check
            (Item, Shared = 1,
             "a variable shares the register of the value stored into it");
-         Landin.Testing.Check
-           (Item, Contains (Text, ".p2align 4,,10" & LF & HT
+         Check_Assembly
+           (Item,
+            Labelled ("speed", Text)
+            & Labelled ("size", Emitted (Work, (Opt.Size, Opt.Off))),
+            Contains (Text, ".p2align 4,,10" & LF & HT
                             & ".p2align 3" & LF & ".L1_")
             and then not Contains
               (Emitted (Work, (Opt.Size, Opt.Off)), ".p2align 4"),
@@ -1806,8 +1901,9 @@ package body Landin.Tests.X86_Optimization_Suite is
               (Code, Landin.Stages.Meanings (Work).all,
                Landin.Stages.Identities (Work).all, Facts, Speed,
                Debug_Text, Debug_Report, Debug => Info'Access);
-            Landin.Testing.Check
-              (Item, Contains (US.To_String (Debug_Text), """saved""")
+            Check_Assembly
+              (Item, US.To_String (Debug_Text),
+               Contains (US.To_String (Debug_Text), """saved""")
                and then US.Length (Saved_Register) > 0
                and then Contains
                  (US.To_String (Debug_Text),
@@ -1846,8 +1942,9 @@ package body Landin.Tests.X86_Optimization_Suite is
                when others => null;
             end case;
          end loop;
-         Landin.Testing.Check
-           (Item, Callee.Slot (Positive (IR.Nth_Parameter (Code, 1, 1))).Kind
+         Check_Assembly
+           (Item, Emitted (Work, Speed),
+            Callee.Slot (Positive (IR.Nth_Parameter (Code, 1, 1))).Kind
               = Alloc.SSE
             and then Contains (Emitted (Work, Speed), "movq %rdi, %xmm"),
             "a float parameter moves into an XMM register");
@@ -1868,14 +1965,20 @@ package body Landin.Tests.X86_Optimization_Suite is
          "oops: atom" & LF
          & "public pick: (x: u32) -> none ! oops =" & LF
          & "if x > 3 then fail oops end if end pick");
-      Landin.Testing.Check
-        (Item, Contains (Emitted (Work, (Opt.None, Opt.Off)),
-                         "_trap_conversion")
-         and then not Contains
-           (Emitted (Work, (Opt.Speed, Opt.Off)), "_trap_conversion")
-         and then not Contains
-           (Emitted (Work, (Opt.Size, Opt.Off)), "_trap_conversion"),
-         "a stored atom is not checked again where it is loaded");
+      declare
+         None : constant String := Emitted (Work, (Opt.None, Opt.Off));
+         Speed : constant String := Emitted (Work, (Opt.Speed, Opt.Off));
+         Size : constant String := Emitted (Work, (Opt.Size, Opt.Off));
+      begin
+         Check_Assembly
+           (Item,
+            Labelled ("none", None) & Labelled ("speed", Speed)
+            & Labelled ("size", Size),
+            Contains (None, "_trap_conversion")
+            and then not Contains (Speed, "_trap_conversion")
+            and then not Contains (Size, "_trap_conversion"),
+            "a stored atom is not checked again where it is loaded");
+      end;
    end Known_Atoms;
 
    function Converted
@@ -1927,27 +2030,33 @@ package body Landin.Tests.X86_Optimization_Suite is
             Where : constant String :=
               " at " & Opt.Objective'Image (Objective);
          begin
-            Landin.Testing.Check
-              (Item, Contains (Floats, "ucomisd ")
+            Check_Assembly
+              (Item, Floats,
+               Contains (Floats, "ucomisd ")
                      and then Contains
                        (Floats, LF & HT & "setae %al" & LF & HT
                                 & "movzbl %al, %eax" & LF)
                      and then not Contains (Floats, "cmpb $0,")
                      and then Contains (Floats, "jc "),
                "a float count adds setae's flag" & Where);
-            Landin.Testing.Check
-              (Item, Contains
+            Check_Assembly
+              (Item, Signed,
+               Contains
                        (Signed, LF & HT & "setl %al" & LF & HT
                                 & "movzbl %al, %eax" & LF)
                      and then not Contains (Signed, "cmpb $0,"),
                "a signed count adds setl's flag" & Where);
          end;
       end loop;
-      Landin.Testing.Check
-        (Item, not Contains
-           (Routine (Converted (Item, Source, Opt.None), "floats"),
-            "movzbl %al, %eax"),
-         "none counts with a branch");
+      declare
+         None_Floats : constant String :=
+           Routine (Converted (Item, Source, Opt.None), "floats");
+      begin
+         Check_Assembly
+           (Item, None_Floats,
+            not Contains (None_Floats, "movzbl %al, %eax"),
+            "none counts with a branch");
+      end;
    end Counted_Flag_Adds;
 
    --  D338: a choice between two values is a cmov on the flags of the
@@ -1977,29 +2086,37 @@ package body Landin.Tests.X86_Optimization_Suite is
             Where : constant String :=
               " at " & Opt.Objective'Image (Objective);
          begin
-            Landin.Testing.Check
-              (Item, Contains (Least, HT & "cmovl ")
+            Check_Assembly
+              (Item, Least,
+               Contains (Least, HT & "cmovl ")
                      and then Contains (Least, "%rax" & LF)
                      and then not Contains (Least, "setl"),
                "a signed minimum moves on the comparison's flags" & Where);
-            Landin.Testing.Check
-              (Item, Contains (Below, HT & "cmovb ")
+            Check_Assembly
+              (Item, Below,
+               Contains (Below, HT & "cmovb ")
                      and then Contains (Below, ", %eax" & LF),
                "a narrow choice moves at 32 bits" & Where);
-            Landin.Testing.Check
-              (Item, Contains (Float_Least, "ucomisd ")
+            Check_Assembly
+              (Item, Float_Least,
+               Contains (Float_Least, "ucomisd ")
                      and then Contains (Float_Least, HT & "cmova ")
                      and then not Contains (Float_Least, "setp"),
                "a float minimum moves its bits on above" & Where);
-            Landin.Testing.Check
-              (Item, Contains (Pick, "cmpb $0,")
+            Check_Assembly
+              (Item, Pick,
+               Contains (Pick, "cmpb $0,")
                      and then Contains (Pick, HT & "cmovne "),
                "a stored bool is tested before the move" & Where);
          end;
       end loop;
-      Landin.Testing.Check
-        (Item, not Contains (Converted (Item, Source, Opt.None), "cmov"),
-         "none chooses with a branch");
+      declare
+         None_Text : constant String := Converted (Item, Source, Opt.None);
+      begin
+         Check_Assembly
+           (Item, None_Text, not Contains (None_Text, "cmov"),
+            "none chooses with a branch");
+      end;
    end Choices_Move_Conditionally;
 
    --  Speed starts every routine on a cache line and pads a loop's head to
@@ -2020,34 +2137,80 @@ package body Landin.Tests.X86_Optimization_Suite is
       Sections : constant Natural :=
         Ada.Strings.Fixed.Count (Speed, HT & ".section .text.landin_routine_");
    begin
-      Landin.Testing.Check
-        (Item, Sections >= 2
+      Check_Assembly
+        (Item, Speed,
+         Sections >= 2
          and then Ada.Strings.Fixed.Count
            (Speed, ",""ax"",@progbits" & LF & HT & ".p2align 6" & LF)
            = Sections,
          "speed starts every routine on a cache line");
-      Landin.Testing.Check
-        (Item, Contains (Fill, LF & HT & "jmp .L")
+      Check_Assembly
+        (Item, Fill,
+         Contains (Fill, LF & HT & "jmp .L")
          and then Ada.Strings.Fixed.Count (Fill, HT & ".p2align 5" & LF) = 1
          and then not Contains (Fill, ".p2align 4"),
          "a loop head only a jump reaches is padded to 32 bytes");
-      Landin.Testing.Check
-        (Item, Contains (Total, HT & ".p2align 4,,10" & LF & HT
+      Check_Assembly
+        (Item, Total,
+         Contains (Total, HT & ".p2align 4,,10" & LF & HT
                          & ".p2align 3" & LF & ".L")
          and then not Contains (Total, ".p2align 5"),
          "a loop head control falls into keeps bounded padding");
       for Objective in Opt.None .. Opt.Size loop
-         Landin.Testing.Check
-           (Item, not Contains
-              (Converted (Item, Source, Objective), ".p2align 6")
-            and then not Contains
-              (Converted (Item, Source, Objective), ".p2align 5"),
-            Opt.Objective'Image (Objective) & " places no code");
+         declare
+            Text : constant String := Converted (Item, Source, Objective);
+         begin
+            Check_Assembly
+              (Item, Text,
+               not Contains (Text, ".p2align 6")
+               and then not Contains (Text, ".p2align 5"),
+               Opt.Objective'Image (Objective) & " places no code");
+         end;
       end loop;
    end Speed_Places_Code;
 
+   --  The suite's own judgement helper: a failed judgement carries the
+   --  assembly it read, every line of it, and a passing one adds nothing.
+   procedure Failures_Show_Assembly (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+      Judged : constant String :=
+        "probe:" & LF & HT & "movl $1, %eax" & LF & HT & "ret" & LF;
+      Failed, Passed, Missing : Landin.Testing.Context;
+   begin
+      Check_Assembly
+        (Failed, Labelled ("speed", Judged), Contains (Judged, "xorl"),
+         "probe clears with xorl");
+      Check_Assembly
+        (Passed, Judged, Contains (Judged, "ret"), "probe returns");
+      Check_Assembly
+        (Missing, Routine (Judged, "absent"), False, "absent returns");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Failure_Text (Failed),
+         "      failed: probe clears with xorl" & LF
+         & "        judged assembly:" & LF
+         & "        | [speed]" & LF
+         & "        | probe:" & LF
+         & "        | " & HT & "movl $1, %eax" & LF
+         & "        | " & HT & "ret" & LF,
+         "a failed judgement shows the assembly it read");
+      Landin.Testing.Check
+        (Item, Landin.Testing.Failures (Passed) = 0
+         and then Landin.Testing.Checks (Passed) = 1
+         and then Landin.Testing.Failure_Text (Passed) = "",
+         "a passing judgement adds no text");
+      Landin.Testing.Check
+        (Item, Contains
+           (Landin.Testing.Failure_Text (Missing),
+            "judged assembly: none; Routine answers nothing"),
+         "a judgement of a routine Routine did not find says so");
+   end Failures_Show_Assembly;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "x86 opt", "failed judgements show their assembly",
+         Failures_Show_Assembly'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "private naked bodies", Naked_Bodies'Access);
       Landin.Testing.Register
