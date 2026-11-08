@@ -477,7 +477,9 @@ python3 check.py
 
 # Every scripts/tests module at once, check.py's controls in shards, as the
 # gate's scripts job runs them; about two minutes on sixteen workers.
+# Name modules, by path or by name, to run only those in one invocation.
 python3 scripts/script_tests.py
+python3 scripts/script_tests.py test_fuzz_close test_scaling
 
 # Follow HEAD's gate run and return at its first failed job, rather than
 # when its last lane ends; with --all, follow it to its end and name every
