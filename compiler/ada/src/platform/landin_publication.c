@@ -74,6 +74,9 @@ struct arena {
 struct publication {
     int token, absent, deletion, captured, installed, unchanged, finished;
     int rollback_pending, expected_fd, capture_valid, finish_failed;
+    /* 0: no destination record; 1: its building name exists with
+       journal_id; 2: sealed under journal. */
+    int journal_state;
     char journal[64];
     struct stat journal_id;
     struct arena *arena;
@@ -948,6 +951,7 @@ static int write_journal(struct publication *p)
     int fd = openat(p->arena->root_fd, building,
                     O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
+    if (fstat(fd, &p->journal_id) == 0) p->journal_state = 1;
     barrier("journal-building", p->path);
     int result = dprintf(fd, "LANDIN-PUBLICATION-1\n%zu\n%s\nlogical=%s\nstaged=%s\nprevious=%s/%s\ncaptured-new=%s/%s\nexpected=%s device=%ju inode=%ju\nEND-LANDIN-PUBLICATION-1\n",
                          strlen(p->name), p->name, p->path, p->stage,
@@ -972,6 +976,7 @@ static int write_journal(struct publication *p)
         if (flock(p->arena->root_fd, LOCK_EX) != 0) { close(fd); return -1; }
         result = no_replace(p->arena->root_fd, building,
                             p->arena->root_fd, p->journal, 0);
+        if (result == 0) p->journal_state = 2;
         if (result == 0 && fsync(p->arena->root_fd) != 0 && errno != EINVAL) result = -1;
         int error = errno;
         (void)flock(p->arena->root_fd, LOCK_UN); errno = error;
@@ -1016,6 +1021,58 @@ static void free_finished_arena(struct arena *arena)
     close(arena->root_fd); close(arena->parent);
     if (arena->producer_fd >= 0) close(arena->producer_fd);
     free(arena->path); free(arena->name); free(arena->recovery_path); free(arena);
+}
+/* A publication refused while it was being prepared has captured and
+   installed nothing. Its arena holds the empty stage and recovery
+   directories and at most the destination record this call created. Remove
+   exactly those, the record by its identity and each directory by rmdir,
+   which fails if anything else is inside; any doubt retains the workspace
+   for the caller to name. A shared arena only loses this record. */
+static int discard_unprepared(struct publication *p)
+{
+    struct arena *a = p->arena;
+    struct stat st;
+    char building[80];
+    snprintf(building, sizeof building, ".destination-building-%d", p->token);
+    if (p->journal_state) {
+        const char *name = p->journal_state == 2 ? p->journal : building;
+        if (fstatat(a->root_fd, name, &st, AT_SYMLINK_NOFOLLOW) != 0
+            || !same(&st, &p->journal_id) || unlinkat(a->root_fd, name, 0) != 0)
+            return -1;
+    }
+    if (a->refs > 1) { --a->refs; return 0; }
+    if (a->producer_fd >= 0 || flock(a->root_fd, LOCK_EX) != 0) return -1;
+    if (unlinkat(a->root_fd, "stage", AT_REMOVEDIR) != 0
+        || unlinkat(a->root_fd, "recovery", AT_REMOVEDIR) != 0
+        || unlinkat(a->parent, a->name, AT_REMOVEDIR) != 0) {
+        int error = errno;
+        (void)flock(a->root_fd, LOCK_UN); errno = error; return -1;
+    }
+    (void)flock(a->root_fd, LOCK_UN);
+    a->refs = 0;
+    free_finished_arena(a);
+    p->arena = NULL;
+    return 0;
+}
+/* What to do about a preparation refused for ERROR: the cause decides the
+   route, so a full disk is not told to choose another output root. */
+static const char *preparation_route(int error)
+{
+    switch (error) {
+    case EFBIG: case ENOSPC:
+#ifdef EDQUOT
+    case EDQUOT:
+#endif
+        return "free space or raise the file-size limit, then retry";
+    case EACCES: case EPERM: case EROFS:
+        return "make the output directory writable, or choose another output path";
+    case ELOOP: case ENOTDIR:
+        return "choose an ordinary output root";
+    case EINTR:
+        return "the invocation was cancelled";
+    default:
+        return "check the output directory, or choose another output path";
+    }
 }
 static int landin_publication_open_locked(const char *path, int deletion,
     const char *root,
@@ -1082,6 +1139,9 @@ fail:
         if (absence_conflict) {
             reason(why, room, "cannot prepare %s: destination exists but absence was required; choose another output or restart with its existing contents preserved",
                    path);
+        } else if (p && p->arena && discard_unprepared(p) == 0) {
+            reason(why, room, "cannot prepare %s: %s; nothing was replaced and no publication workspace remains; %s",
+                   path, strerror(failure), preparation_route(failure));
         } else if (p && p->arena) {
             quarantine(p->arena);
             char known[PATH_MAX + 80], location[PATH_MAX + 256];
@@ -1095,8 +1155,8 @@ fail:
             reason(why, room, "cannot prepare %s: %s; retained publication workspace %s; inspect its stage, recovery and destination records before retrying",
                    path, strerror(failure), location);
         } else {
-            reason(why, room, "cannot prepare %s: %s; choose an ordinary output root",
-                   path, strerror(failure));
+            reason(why, room, "cannot prepare %s: %s; %s",
+                   path, strerror(failure), preparation_route(failure));
         }
         errno = failure;
     }
@@ -1342,9 +1402,12 @@ static int landin_publication_step_locked(int token, int action,
         /* Only proven ordinary old outputs may be discarded. Exceptional
            captured entries are retained even when the group is abandoned. */
         if (p->captured) {
-            if (fstatat(recovery_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0
-                || p->absent || !p->capture_valid
-                || !same(&st, &p->expected)) goto fail;
+            if (fstatat(recovery_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0)
+                goto fail;
+            /* A captured copy that is not the snapshot is kept, and the
+               reason must not borrow a stale errno for it. */
+            if (p->absent || !p->capture_valid || !same(&st, &p->expected))
+                { errno = EAGAIN; goto fail; }
             if (S_ISDIR(st.st_mode)) {
                 if (!p->expected_tree || discard_tree(recovery_fd, p->recovery,
                                                        p->expected_tree) != 0) goto fail;
@@ -1395,10 +1458,18 @@ fail:
         int error = errno;
         if (action == 3 || action == 4) quarantine(p->arena);
         if (action == 4 && p->finished) p->finish_failed = 1;
-        char location[PATH_MAX + 256];
+        char location[PATH_MAX + 256], previous[96] = "", captured[96] = "";
         describe_recovery(p->arena, location, sizeof location);
-        reason(why, room, "publication of %s failed: %s; recovery directory %s; previous entry %s; captured new or concurrent entry %s",
-               p->path, strerror(error), location, p->recovery, p->rollback);
+        /* Name only the recovery entries this publication holds: a reader
+           told of a previous copy that was never captured looks for it. */
+        if (p->captured)
+            snprintf(previous, sizeof previous, "; previous entry %s", p->recovery);
+        if (p->rollback_pending)
+            snprintf(captured, sizeof captured, "; captured new or concurrent entry %s",
+                     p->rollback);
+        reason(why, room, "%s %s failed: %s; recovery directory %s%s%s",
+               action == 3 ? "rollback of" : action == 4 ? "cleanup of" : "publication of",
+               p->path, strerror(error), location, previous, captured);
         return -1;
     }
 }

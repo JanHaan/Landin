@@ -100,6 +100,36 @@ package body Landin.Tests.Commands_Suite is
          end;
          Landin.Testing.Check
            (Item, Seen_Xtensa, "Xtensa is included in both target queries");
+         --  Which cores each level is, in both queries.
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Human.Output),
+              "cortex-m0: armv6-m, armv7-m, armv7e-m, armv8-m.main;"
+              & " debug: lines" & ASCII.LF
+              & "  cores by level: armv6-m: cortex-m0, cortex-m0plus;"
+              & " armv7-m: cortex-m3; armv7e-m: cortex-m4, cortex-m7;"
+              & " armv8-m.main: cortex-m33" & ASCII.LF)
+            and then Contains (US.To_String (Human.Output),
+              "  cores by level: rv32imc: esp-rv32imc; rv32imac: hazard3,"
+              & " sifive-e31, esp-rv32imac-clic" & ASCII.LF)
+            and then Contains (US.To_String (Human.Output),
+              "  cores by level: xtensa-esp32: xtensa-lx6; xtensa-esp32s3:"
+              & " xtensa-lx7" & ASCII.LF)
+            and then not Contains (US.To_String (Human.Output),
+              "x86-64-v4; debug: full" & ASCII.LF & "  cores"),
+            "the plain query names each firmware level's cores: "
+            & US.To_String (Human.Output));
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Machine.Output),
+              """cores"":[{""name"":""cortex-m0"",""level"":""armv6-m""},"
+              & "{""name"":""cortex-m0plus"",""level"":""armv6-m""},"
+              & "{""name"":""cortex-m3"",""level"":""armv7-m""},"
+              & "{""name"":""cortex-m4"",""level"":""armv7e-m""},"
+              & "{""name"":""cortex-m7"",""level"":""armv7e-m""},"
+              & "{""name"":""cortex-m33"",""level"":""armv8-m.main""}]")
+            and then Contains (US.To_String (Machine.Output),
+              """cores"":[]"),
+            "the structured query lists each core with its level: "
+            & US.To_String (Machine.Output));
       end;
       declare
          Result : constant Landin.Driver.Outcome :=
@@ -167,6 +197,48 @@ package body Landin.Tests.Commands_Suite is
         (Item, Contains (C.Usage (C.Compile), "--color")
          and then Contains (C.Usage (C.Format), "--diagnostics"),
          "other commands retain their presentation options");
+      --  A supervisor's route, which nothing else held the help to.
+      Landin.Testing.Check
+        (Item, Contains (C.Usage (C.Run),
+           "Ctrl-C reaches the program through the terminal's" & ASCII.LF
+           & "foreground process group. A supervisor that signals" & ASCII.LF
+           & "refine alone should send SIGTERM or SIGHUP, which" & ASCII.LF
+           & "refine forwards before it cleans up; SIGINT and" & ASCII.LF
+           & "SIGQUIT sent to refine alone are ignored."),
+         "run help says how a supervisor stops a program");
+      --  Where the build report is described and where diagnostics go,
+      --  in every command that compiles.
+      for Command in C.Check .. C.Run loop
+         Landin.Testing.Check
+           (Item, Contains (C.Usage (Command),
+              "The build report's fields are listed under ""The build"
+              & ASCII.LF & "report"" in compiler/ada/README.md.")
+            and then Contains (C.Usage (Command),
+              "Diagnostic format on standard error: human (default),"
+              & " short, json"),
+            C.Name (Command) & " help names the build report's fields"
+            & " and the diagnostics' stream");
+      end loop;
+      --  An option written as a word of a longer one is offered it.
+      Result := Landin.Commands.Execute
+        (["check", "--target=rv32", "--firmware=start", "main.ldn"],
+         Host, Tools, Meter);
+      Landin.Testing.Check
+        (Item, Result.Status = 2
+         and then Contains (US.To_String (Result.Report),
+           "unknown option: --firmware=start; did you mean --firmware-entry"
+           & " or --firmware-layout?"),
+         "a word of two options offers both: "
+         & US.To_String (Result.Report));
+      Result := Landin.Commands.Execute
+        (["check", "--target=rv32", "--entry=start", "main.ldn"],
+         Host, Tools, Meter);
+      Landin.Testing.Check
+        (Item, Result.Status = 2
+         and then Contains (US.To_String (Result.Report),
+           "unknown option: --entry=start; did you mean --firmware-entry?"),
+         "the last word of an option offers it: "
+         & US.To_String (Result.Report));
       Landin.Testing.Check
         (Item, Contains (Completion, "source <(refine completion bash)")
          and then Contains (Completion, "autoload -Uz compinit; compinit")
@@ -1074,7 +1146,8 @@ package body Landin.Tests.Commands_Suite is
            (Item, Hosted.Status = Landin.Driver.Status_Misuse
                   and then Contains (US.To_String (Hosted.Report),
                     "--firmware-entry requires a firmware target:"
-                    & " --target=cortex-m0 or --target=rv32"),
+                    & " --target=cortex-m0, --target=rv32 or"
+                    & " --target=xtensa"),
             "a hosted target refuses it as compile does");
       end;
       declare

@@ -545,6 +545,18 @@ package body Landin.Platform.Native is
          raise;
    end Advance_Publication;
 
+   overriding function Cancellation_Requested
+     (Host : Native_Filesystem) return Boolean
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Requested return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_cancellation_requested";
+   begin
+      return Requested /= 0;
+   end Cancellation_Requested;
+
    overriding procedure Read_Snapshot
      (Host : Native_Filesystem; Path : String;
       Content : out Unbounded.Unbounded_String;

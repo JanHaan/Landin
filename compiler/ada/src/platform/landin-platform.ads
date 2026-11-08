@@ -178,6 +178,12 @@ package Landin.Platform is
       Action : Publication_Action; Protected_Paths : Path_List;
       Protected_Identities : Identity_List; Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+   --  Whether a signal has asked this invocation to stop. Publication then
+   --  refuses to prepare an output or to advance it towards installation,
+   --  and a caller seeing that refusal reports the cancellation, not a
+   --  fault in the output it named.
+   function Cancellation_Requested (Host : Filesystem) return Boolean
+     is abstract;
    --  Both results describe the same actually read object.
    procedure Read_Snapshot
      (Host : Filesystem; Path : String;

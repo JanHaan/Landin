@@ -724,6 +724,45 @@ package body Landin.Driver is
          and then (Natural (Arguments.Length) = 1
                    or else Arguments.Element (2) = "--stdio"));
 
+   --  Where a contributor learns to find the defect's caller: the
+   --  compiler guide's section on debugging one, which the published site
+   --  renders from the same file.
+   Defect_Route : constant String :=
+     "refine: compiler/ada/README.md, ""Debugging an internal defect"","
+     & " shows how a debug build under gdb's catch assert finds the caller";
+
+   --  Every described firmware target as --target options, in the
+   --  selection's order: "--target=cortex-m0, --target=rv32 or
+   --  --target=xtensa".  Read from the targets, so a new one is listed.
+   function Firmware_Targets (From : Positive := 1) return String;
+   function Firmware_Targets (From : Positive := 1) return String is
+   begin
+      for Index in From .. Landin.Targets.Selection.Described_Count loop
+         declare
+            Name : constant String :=
+              Landin.Targets.Selection.Described_Name (Index);
+         begin
+            if Landin.Targets.Is_Firmware
+                 (Landin.Targets.Selection.Described (Name))
+            then
+               declare
+                  Rest : constant String :=
+                    (if Index = Landin.Targets.Selection.Described_Count
+                     then "" else Firmware_Targets (Index + 1));
+               begin
+                  if Rest = "" then
+                     return "--target=" & Name;
+                  elsif Ada.Strings.Fixed.Index (Rest, " or ") = 0 then
+                     return "--target=" & Name & " or " & Rest;
+                  end if;
+                  return "--target=" & Name & ", " & Rest;
+               end;
+            end if;
+         end;
+      end loop;
+      return "";
+   end Firmware_Targets;
+
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
       and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
@@ -1264,12 +1303,24 @@ package body Landin.Driver is
          Artifacts, Stage_Report : Publication.Transaction;
          Reserved, Known_Inputs, Absent_Tool_Names : Landin.Platform.Path_List;
          Publication_Failed : Boolean := False;
+         --  A signal asked the invocation to stop, and publication refused
+         --  because of it.  The build stops publishing as on any refusal,
+         --  but reports no output fault: the command line names the signal,
+         --  and nothing it names was replaced.
+         Cancelled : Boolean := False;
          Pending_Publication_Failure : Unbounded.Unbounded_String;
          Pending_Write_Reason : Unbounded.Unbounded_String;
          Artifacts_Closed : Boolean := False;
          --  D685: what the build report records of the ESP application
          --  image the link was followed by, once written and read back.
          ESP_Image_Report : Unbounded.Unbounded_String;
+         --  The image that report describes, which a cleanup refusal after
+         --  publication names as written and read back.
+         ESP_Image_Path : Unbounded.Unbounded_String;
+         --  Whether each group's cleanup state has been reported, so the
+         --  exception paths that finish again do not report it twice.
+         Artifacts_Cleanup_Noted, Stage_Report_Cleanup_Noted : Boolean :=
+           False;
          Target_Option_Refused : Boolean := False;
          Policy_Denied : Boolean := False;
 
@@ -1715,6 +1766,27 @@ package body Landin.Driver is
             return False;
          end Is_Absent_Tool_Name;
 
+         --  The host's reason already says what it could not do and what
+         --  to do instead, and the native one begins "cannot prepare PATH";
+         --  only the kind of output is added, so the path is named once and
+         --  the route is the host's.
+         function Preparation_Failure
+           (Kind, Path : String; Reason : Unbounded.Unbounded_String)
+            return String;
+         function Preparation_Failure
+           (Kind, Path : String; Reason : Unbounded.Unbounded_String)
+            return String
+         is
+            Said : constant String := Unbounded.To_String (Reason);
+            Head : constant String := "cannot prepare " & Path & ": ";
+         begin
+            if Starts_With (Said, Head) then
+               return "cannot prepare " & Kind & " " & Path & ": "
+                 & Said (Said'First + Head'Length .. Said'Last);
+            end if;
+            return "cannot prepare " & Kind & " " & Path & ": " & Said;
+         end Preparation_Failure;
+
          procedure Reserve_Output
            (Path : String; Defer_Preparation_Failure : Boolean := False);
          procedure Reserve_Output
@@ -1754,13 +1826,16 @@ package body Landin.Driver is
                end if;
             end loop;
             Publication.Prepare (Artifacts, Host, Path, Status, Reason);
-            if Status /= Landin.Platform.Write_Ok then
+            if Status /= Landin.Platform.Write_Ok
+              and then Host.Cancellation_Requested
+            then
+               Publication_Failed := True;
+               Cancelled := True;
+            elsif Status /= Landin.Platform.Write_Ok then
                Publication_Failed := True;
                declare
                   Message : constant String :=
-                    "cannot prepare output " & Path & ": "
-                    & Unbounded.To_String (Reason)
-                    & "; choose another output path and retry";
+                    Preparation_Failure ("output", Path, Reason);
                begin
                   if Defer_Preparation_Failure then
                      Pending_Publication_Failure :=
@@ -1919,21 +1994,93 @@ package body Landin.Driver is
                Publication.Commit (Artifacts, Host, Status, Reason);
                if Status /= Landin.Platform.Write_Ok then
                   Publication_Failed := True;
-                  Note_Failure
-                    (Code_Unwritable, "cannot publish artifact generation: "
-                     & Unbounded.To_String (Reason));
+                  Cancelled := Host.Cancellation_Requested;
+                  if not Cancelled then
+                     Note_Failure
+                       (Code_Unwritable, "cannot publish artifact generation: "
+                        & Unbounded.To_String (Reason));
+                  end if;
                end if;
             end if;
+            --  A cleanup refusal here is reported once, by
+            --  Finish_Publications, from the state the group ends in.
             if not Publish or else Publication_Failed then
                Publication.Abort_Transaction (Artifacts, Host, Status, Reason);
-               if Status /= Landin.Platform.Write_Ok then
-                  Note_Failure
-                    (Code_Unwritable, "artifact recovery needs attention: "
-                     & Unbounded.To_String (Reason));
-               end if;
             end if;
             Artifacts_Closed := True;
          end Close_Artifacts;
+
+         --  After a cleanup refusal, say which state publication
+         --  ended in, from what the group recorded rather than from the
+         --  host's wording: published with the replaced copy retained, put
+         --  back with only private files retained, or a rollback that did
+         --  not finish.  Only an image that was written and read back is
+         --  said to have been, and the recovery entries are the ones the
+         --  host's reason names, which are the ones it holds.
+         function Cleanup_Summary
+           (Group : Publication.Transaction; Subject : String;
+            Image : String := "")
+            return String;
+         function Cleanup_Summary
+           (Group : Publication.Transaction; Subject : String;
+            Image : String := "")
+            return String
+         is
+            Reason : constant String := Publication.Cleanup_Reason (Group);
+         begin
+            case Publication.State (Group) is
+               when Publication.Clean =>
+                  return "";
+               when Publication.Published_Prior_Retained =>
+                  return Subject & " is published"
+                    & (if Image = "" then ""
+                       else ", and its image " & Image
+                            & " was written and read back")
+                    & ", but cleaning up after it failed: " & Reason
+                    & "; the published outputs are complete, and what the"
+                    & " recovery directory holds may be inspected and"
+                    & " removed";
+               when Publication.Restored_Stage_Retained =>
+                  return Subject & " was not published, and every output"
+                    & " it would have replaced is as it was before; cleaning"
+                    & " up its private files failed: " & Reason
+                    & "; they may be removed";
+               when Publication.Rollback_Incomplete =>
+                  return "rollback of " & Subject & " is incomplete, so an"
+                    & " output named here may hold the new or the previous"
+                    & " version: " & Reason & "; put back what the recovery"
+                    & " directory holds before building again";
+            end case;
+         end Cleanup_Summary;
+
+         procedure Note_Cleanup
+           (Group : Publication.Transaction; Subject : String;
+            Status : Landin.Platform.Write_Status;
+            Reason : Unbounded.Unbounded_String;
+            Noted : in out Boolean;
+            Image : String := "");
+         procedure Note_Cleanup
+           (Group : Publication.Transaction; Subject : String;
+            Status : Landin.Platform.Write_Status;
+            Reason : Unbounded.Unbounded_String;
+            Noted : in out Boolean;
+            Image : String := "")
+         is
+            Summary : constant String :=
+              Cleanup_Summary (Group, Subject, Image);
+         begin
+            if Noted then
+               return;
+            elsif Summary /= "" then
+               Noted := True;
+               Note_Failure (Code_Unwritable, Summary);
+            elsif Status /= Landin.Platform.Write_Ok then
+               Noted := True;
+               Note_Failure
+                 (Code_Unwritable, "cleaning up " & Subject & " failed: "
+                  & Unbounded.To_String (Reason));
+            end if;
+         end Note_Cleanup;
 
          procedure Finish_Publications;
          procedure Finish_Publications is
@@ -1941,17 +2088,17 @@ package body Landin.Driver is
             Reason : Unbounded.Unbounded_String;
          begin
             Publication.Finish (Artifacts, Host, Status, Reason);
-            if Status /= Landin.Platform.Write_Ok then
-               Note_Failure (Code_Unwritable,
-                 "artifact recovery retained: "
-                 & Unbounded.To_String (Reason));
-            end if;
+            Note_Cleanup
+              (Artifacts,
+               (if Emit = Emit_Nothing then "this build"
+                else "this build of " & Artifact_Output),
+               Status, Reason, Artifacts_Cleanup_Noted,
+               Unbounded.To_String (ESP_Image_Path));
             Publication.Finish (Stage_Report, Host, Status, Reason);
-            if Status /= Landin.Platform.Write_Ok then
-               Note_Failure (Code_Unwritable,
-                 "stage report recovery retained: "
-                 & Unbounded.To_String (Reason));
-            end if;
+            Note_Cleanup
+              (Stage_Report,
+               "the stage report " & Unbounded.To_String (Stage_Report_Path),
+               Status, Reason, Stage_Report_Cleanup_Noted);
          end Finish_Publications;
 
          procedure Check_Dependency_Path (Path : String);
@@ -2258,10 +2405,12 @@ package body Landin.Driver is
             Publication.Prepare
               (Stage_Report, Host, Path, Written, Reason);
             if Written /= Landin.Platform.Write_Ok then
-               Note_Failure
-                 (Code_Unwritable, "cannot prepare stage report " & Path
-                  & ": " & Unbounded.To_String (Reason)
-                  & "; choose another report path and retry");
+               Cancelled := Cancelled or else Host.Cancellation_Requested;
+               if not Cancelled then
+                  Note_Failure
+                    (Code_Unwritable,
+                     Preparation_Failure ("stage report", Path, Reason));
+               end if;
                return;
             end if;
             Protect_Tool_Inputs (Planned_Driver);
@@ -2306,18 +2455,17 @@ package body Landin.Driver is
                end if;
             end if;
             if Written /= Landin.Platform.Write_Ok then
-               Note_Failure
-                 (Code_Unwritable, "cannot publish stage report " & Path
-                  & ": " & Unbounded.To_String (Reason));
+               Cancelled := Cancelled or else Host.Cancellation_Requested;
+               if not Cancelled then
+                  Note_Failure
+                    (Code_Unwritable, "cannot publish stage report " & Path
+                     & ": " & Unbounded.To_String (Reason));
+               end if;
                Publication.Abort_Transaction
                  (Stage_Report, Host, Written, Reason);
             end if;
+            --  Finish_Publications reports where its cleanup ended.
             Publication.Finish (Stage_Report, Host, Written, Reason);
-            if Written /= Landin.Platform.Write_Ok then
-               Note_Failure
-                 (Code_Unwritable, "stage report recovery retained: "
-                  & Unbounded.To_String (Reason));
-            end if;
          end Write_Stage_Report;
 
          --  A `public main` in the entry module of a hosted program that
@@ -3233,6 +3381,8 @@ package body Landin.Driver is
                   end if;
                end;
                ESP_Image_Report := Made.Report;
+               ESP_Image_Path :=
+                 Unbounded.To_Unbounded_String (Target_Path & ".bin");
             end;
          end Write_ESP_Image;
 
@@ -5137,6 +5287,65 @@ package body Landin.Driver is
             end if;
          end loop;
 
+         --  -o names the file the artifact is written as.  A
+         --  directory there is refused before anything is compiled, with
+         --  the file under it the request most likely meant; publication
+         --  would refuse it only after the whole build, in words that
+         --  cannot say which option named it.
+         if Emit /= Emit_Nothing and then Unbounded.Length (Output) > 0
+           and then not Bad_Use
+           and then Host.Is_Directory (Unbounded.To_String (Output))
+         then
+            declare
+               Named : constant String := Unbounded.To_String (Output);
+               Last : Natural := Named'Last;
+               function Stem return String;
+               function Stem return String is
+                  Operand : constant String :=
+                    (if Inputs.Is_Empty then "" else Inputs.First_Element);
+                  Slash : Natural := Operand'Last;
+                  Dot : Natural;
+               begin
+                  while Slash >= Operand'First
+                    and then Operand (Slash) = '/'
+                  loop
+                     Slash := Slash - 1;
+                  end loop;
+                  declare
+                     Trimmed : constant String :=
+                       Operand (Operand'First .. Slash);
+                     Base : constant String :=
+                       Trimmed (Ada.Strings.Fixed.Index
+                                  (Trimmed, "/", Ada.Strings.Backward) + 1
+                                .. Trimmed'Last);
+                  begin
+                     Dot := Ada.Strings.Fixed.Index
+                       (Base, ".", Ada.Strings.Backward);
+                     if Dot > Base'First then
+                        return Base (Base'First .. Dot - 1);
+                     elsif Base /= "" and then Base (Base'First) /= '.' then
+                        return Base;
+                     end if;
+                     return "a";
+                  end;
+               end Stem;
+            begin
+               while Last > Named'First and then Named (Last) = '/' loop
+                  Last := Last - 1;
+               end loop;
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unwritable, "-o names the file to write, and "
+                  & Named & " is a directory; name a file under it, for"
+                  & " example -o " & Named (Named'First .. Last) & "/" & Stem
+                  & (case Emit is
+                       when Emit_Assembly => ".s",
+                       when Emit_IR => ".ir",
+                       when Emit_Linker_Script => ".ld",
+                       when others => ""));
+            end;
+         end if;
+
          --  Diagnose unavailable parents before conservative overlap checks
          --  can mistake an unknown identity for a source/output collision.
          if Emit /= Emit_Nothing then
@@ -5222,15 +5431,15 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "--firmware-layout requires a firmware target:"
-                     & " --target=cortex-m0 or --target=rv32");
+                     "--firmware-layout requires a firmware target: "
+                     & Firmware_Targets);
                   Target_Option_Refused := True;
                elsif Firmware_Seen and then not On_Firmware then
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "--firmware-entry requires a firmware target:"
-                     & " --target=cortex-m0 or --target=rv32");
+                     "--firmware-entry requires a firmware target: "
+                     & Firmware_Targets);
                   Target_Option_Refused := True;
                elsif Emit = Emit_Linker_Script and then not On_Firmware then
                   Bad_Use := True;
@@ -5239,8 +5448,8 @@ package body Landin.Driver is
                      "--emit=linker-script writes a firmware profile's"
                      & " derived linker script, and "
                      & Landin.Targets.Name (Facts) & " has no firmware"
-                     & " profile: it needs --target=cortex-m0 or"
-                     & " --target=rv32 (D589)");
+                     & " profile: it needs " & Firmware_Targets
+                     & " (D589)");
                   Target_Option_Refused := True;
                elsif Script_Seen
                  and then (not On_Firmware or else Emit /= Emit_Executable
@@ -5581,11 +5790,6 @@ package body Landin.Driver is
                Reason : Unbounded.Unbounded_String;
             begin
                Publication.Abort_Transaction (Artifacts, Host, Status, Reason);
-               if Status /= Landin.Platform.Write_Ok then
-                  Note_Failure (Code_Unwritable,
-                    "artifact recovery needs attention: "
-                    & Unbounded.To_String (Reason));
-               end if;
             end;
          end if;
          Finish_Publications;
@@ -5611,7 +5815,9 @@ package body Landin.Driver is
 
          if Bad_Use then
             Result.Status := Status_Misuse;
-         elsif Landin.Stages.Failed (Context) or else Policy_Denied then
+         elsif Landin.Stages.Failed (Context) or else Policy_Denied
+           or else Cancelled
+         then
             Result.Status := Status_Reported;
          end if;
 
@@ -5646,7 +5852,7 @@ package body Landin.Driver is
                  & (if Ada.Exceptions.Exception_Message (Defect) = ""
                     then ""
                     else ": " & Ada.Exceptions.Exception_Message (Defect))
-                 & LF);
+                 & LF & Defect_Route & LF);
             Result.Status := Status_Defect;
             Keep_Report;
       end;

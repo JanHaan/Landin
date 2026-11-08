@@ -654,7 +654,8 @@ package body Landin.Bindings.Generation is
                end;
             elsif Policy_Names.Contains (C_Name) then
                Fail (S, Where & " parameter " & T.Repr (C_Name)
-                     & ": stale policy for non-reference value");
+                     & ": a non-reference parameter takes no policy;"
+                     & " remove " & T.Repr (C_Name) & " from ""parameters""");
             end if;
          end;
       end loop;
@@ -690,7 +691,8 @@ package body Landin.Bindings.Generation is
                   & " parameters");
          end if;
       elsif P.Has (S, Raw (S, Choice), "result") then
-         Fail (S, Where & " result: stale policy for non-reference value");
+         Fail (S, Where & " result: a non-reference result takes no"
+               & " policy; remove the ""result"" key");
       end if;
    end Validate_Site_Annotations;
 
@@ -1182,7 +1184,9 @@ package body Landin.Bindings.Generation is
                      then
                         Fail (S, "record " & Display & " field "
                               & T.Repr (Field_Name)
-                              & ": stale policy for non-reference value");
+                              & ": a non-reference field takes no policy;"
+                              & " remove " & T.Repr (Field_Name)
+                              & " from ""fields""");
                      end if;
                   end;
                end;
@@ -2728,7 +2732,8 @@ package body Landin.Bindings.Generation is
                end;
             elsif Policy_Names.Contains (Named) then
                Fail (S, Label & " parameter " & T.Repr (Named)
-                     & ": stale policy for non-reference value");
+                     & ": a non-reference parameter takes no policy;"
+                     & " remove " & T.Repr (Named) & " from ""parameters""");
             end if;
          end;
       end loop;
@@ -2764,7 +2769,8 @@ package body Landin.Bindings.Generation is
                   & " parameters");
          end if;
       elsif Choice /= 0 and then P.Has (S, Raw (S, Choice), "result") then
-         Fail (S, Label & " result: stale policy for non-reference value");
+         Fail (S, Label & " result: a non-reference result takes no"
+               & " policy; remove the ""result"" key");
       end if;
    end Callback_Annotation_Maps;
 

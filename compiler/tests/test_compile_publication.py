@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Native compiler publication controls; every input is in an owned root."""
 import argparse
+import errno
 import hashlib
 import json
 import os
 from pathlib import Path
+import resource
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -208,6 +211,20 @@ def main():
         cases.append((name,
                       [str(malformed), '--toolchain=' + tool_name,
                        '--stage-report=' + str(report)], malformed, False))
+    # -o naming an existing directory is refused before compiling, with a
+    # file under it as the example; the directory's contents stay as they were.
+    output_directory = root / 'output-directory'
+    output_directory.mkdir()
+    directory_sentinel = output_directory / 'keep'
+    directory_sentinel.write_bytes(b'directory sentinel')
+    cases.append(('output-directory', [str(source), '--link=libc', '-o',
+                                       str(output_directory)],
+                  directory_sentinel, False))
+    # A file-size limit refuses the publication record: the workspace that
+    # captured nothing is removed, and the path and the route are said once.
+    file_size_product = root / 'file-size-product'
+    cases.append(('file-size-limit', [str(source), '--link=libc', '-o',
+                                      str(file_size_product)], source, False))
     dsym_parent = root / 'ordinary.dSYM'
     dsym_parent.mkdir()
     assembly = root / 'owned-main.s'
@@ -258,8 +275,15 @@ def main():
         case_env = dict(env)
         if name.startswith('early-'):
             case_env['PATH'] = str(selected_tools) + os.pathsep + env['PATH']
+        limit = None
+        if name == 'file-size-limit':
+            def limit():
+                signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+                hard = resource.getrlimit(resource.RLIMIT_FSIZE)[1]
+                resource.setrlimit(resource.RLIMIT_FSIZE, (0, hard))
         result = subprocess.run([str(refine), 'compile', *operands], cwd=root,
-                                env=case_env, capture_output=True, timeout=45)
+                                env=case_env, capture_output=True, timeout=45,
+                                preexec_fn=limit)
         after = protected.stat()
         expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
         if name in missing_parent_tool_reports:
@@ -285,6 +309,21 @@ def main():
                                 and b'collid' not in result.stderr)
         report_after = (entry_snapshot(refused_report)
                         if refused_report is not None else None)
+        if name == 'output-directory':
+            expected_failure = (result.returncode == 2 and b'L0005' in result.stderr
+                                and b'-o names the file to write' in result.stderr
+                                and (b'for example -o ' + str(output_directory / 'main').encode())
+                                in result.stderr
+                                and sorted(output_directory.iterdir()) == [directory_sentinel])
+        elif name == 'file-size-limit':
+            named = str(file_size_product).encode()
+            expected_failure = (result.returncode == 1 and b'L0005' in result.stderr
+                                and os.strerror(errno.EFBIG).encode() in result.stderr
+                                and b'no publication workspace remains' in result.stderr
+                                and result.stderr.count(b'cannot prepare') == 1
+                                and result.stderr.count(named) == 1
+                                and b'choose another output path' not in result.stderr
+                                and not file_size_product.exists())
         if name == 'missing-parent-budget':
             expected_failure = result.returncode == 1 and b'L0505' in result.stderr
         elif name == 'missing-parent-tool':

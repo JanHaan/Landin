@@ -321,8 +321,13 @@ package body Landin.Tests.Driver_Suite is
          Landin.Driver.Status_Reported);
       Refuse
         ("linux-x86-64", "--firmware-entry=start",
-         "--firmware-entry requires a firmware target: --target=cortex-m0"
-         & " or --target=rv32",
+         "--firmware-entry requires a firmware target: --target=cortex-m0,"
+         & " --target=rv32 or --target=xtensa",
+         Landin.Driver.Status_Misuse);
+      Refuse
+        ("linux-x86-64", "--firmware-layout=ram",
+         "--firmware-layout requires a firmware target: --target=cortex-m0,"
+         & " --target=rv32 or --target=xtensa",
          Landin.Driver.Status_Misuse);
       Refuse
         ("linux-x86-64", "--debug=lines",
@@ -3997,6 +4002,11 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check
            (Item, Contains (Report, "internal compiler defect"),
             "and says so where a reader is looking");
+         Landin.Testing.Check
+           (Item, Contains (Report, "compiler/ada/README.md, ""Debugging an"
+              & " internal defect"", shows how a debug build under gdb's"
+              & " catch assert finds the caller"),
+            "and names where to learn to find its caller: " & Report);
       end;
    end A_Defect_Is_A_Status_And_Not_An_Escape;
 
@@ -4197,8 +4207,11 @@ package body Landin.Tests.Driver_Suite is
                  (Item, Occurrences (Report, "error[") = 1
                     and then Contains (Report, "error[L0005]:")
                     and then Contains (Report, "cannot prepare output")
-                    and then Contains (Report, "choose another output"),
-                  "valid code retains the actionable publication refusal");
+                    and then Contains
+                      (Report, "choose another ordinary output")
+                    and then Occurrences (Report, "choose another") = 1,
+                  "valid code retains the host's one publication route: "
+                  & Report);
                Landin.Testing.Check
                  (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
                   "a pending publication failure stops all writes and tools");
@@ -4252,6 +4265,238 @@ package body Landin.Tests.Driver_Suite is
          end;
       end loop;
    end Failed_Assembly_Does_Not_Write_Source_Map;
+
+   --  After a cleanup refusal, the report says which state
+   --  publication ended in and names only the recovery entries held.
+   procedure Cleanup_Refusals_Say_What_Was_Published
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cleanup_Refusals_Say_What_Was_Published
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario is (Published, Rollback, Restored);
+      Recovery : constant String := "./.refine-publication/1";
+      Previous : constant String := "previous entry " & Recovery
+        & "/.previous-out";
+   begin
+      for Case_Of in Scenario loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Host.Add_File ("out", "old");
+            case Case_Of is
+               when Published =>
+                  --  Installed, then the replaced copy cannot be discarded.
+                  Host.Refuse_Removals
+                    (From_Action => Landin.Platform.Finish_Publication);
+               when Rollback =>
+                  --  An editor saves out after it was captured, so neither
+                  --  the install nor the rollback can take the name.
+                  Host.Replace_On_Publication
+                    (Landin.Platform.Install_Stage, "out", "editor-save");
+               when Restored =>
+                  --  The stage is replaced by a link, so validation fails
+                  --  before anything is captured; its cleanup then fails.
+                  Host.Replace_On_Publication
+                    (Landin.Platform.Validate_Stage, Recovery & "/out", "x",
+                     As_Link => True);
+                  Host.Refuse_Removals
+                    (From_Action => Landin.Platform.Finish_Publication);
+            end case;
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (["main.ldn", "--emit=asm", "--link=libc", "-o", "out"],
+                    Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Host.Read_File ("out", Content, Read);
+               Landin.Testing.Check
+                 (Item, Result.Status = Landin.Driver.Status_Reported
+                    and then Read = Landin.Platform.Read_Ok
+                    and then not Contains (Report, "needs attention")
+                    and then not Contains (Report, "recovery retained")
+                    and then not Contains (Report, "image")
+                    and then not Contains
+                      (Report, "captured new or concurrent entry"),
+                  Case_Of'Image & ": a cleanup refusal is one summary: "
+                  & Report);
+               case Case_Of is
+                  when Published =>
+                     Landin.Testing.Check
+                       (Item, Occurrences (Report, "error[") = 1
+                          and then Contains (Report,
+                            "error[L0005]: this build of out is published,"
+                            & " but cleaning up after it failed: cannot"
+                            & " discard committed previous output; recovery"
+                            & " directory " & Recovery & "; " & Previous
+                            & "; the published outputs are complete")
+                          and then not Contains (Report, "rollback")
+                          and then Contains
+                            (Unbounded.To_String (Content), "main"),
+                        "a published build says so and names the copy it"
+                        & " kept: " & Report);
+                  when Rollback =>
+                     Landin.Testing.Check
+                       (Item, Occurrences (Report, "rollback of this build")
+                          = 1
+                          and then Contains (Report,
+                            "error[L0005]: rollback of this build of out is"
+                            & " incomplete, so an output named here may hold"
+                            & " the new or the previous version: previous"
+                            & " output retained during rollback; recovery"
+                            & " directory " & Recovery & "; " & Previous
+                            & "; put back")
+                          and then not Contains (Report, "is published")
+                          and then Unbounded.To_String (Content)
+                            = "editor-save",
+                        "an incomplete rollback names what it holds: "
+                        & Report);
+                  when Restored =>
+                     Landin.Testing.Check
+                       (Item, Contains (Report,
+                            "error[L0005]: this build of out was not"
+                            & " published, and every output it would have"
+                            & " replaced is as it was before; cleaning up its"
+                            & " private files failed: cannot clean private"
+                            & " stage; recovery directory " & Recovery
+                            & "; they may be removed")
+                          and then not Contains (Report, "previous entry")
+                          and then not Contains (Report, "is published")
+                          and then Unbounded.To_String (Content) = "old",
+                        "a restored build says the outputs are back: "
+                        & Report);
+               end case;
+            end;
+         end;
+      end loop;
+   end Cleanup_Refusals_Say_What_Was_Published;
+
+   --  A signal that stops publication is the command line's to report,
+   --  not an output fault with advice about choosing another path.
+   procedure A_Cancelled_Build_Reports_No_Output_Fault
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Cancelled_Build_Reports_No_Output_Fault
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for During_Commit in Boolean loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Host.Add_File ("out", "old");
+            if During_Commit then
+               Host.Request_Cancellation
+                 (At_Action => Landin.Platform.Validate_Stage);
+            else
+               Host.Request_Cancellation;
+            end if;
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (["main.ldn", "--emit=asm", "--link=libc", "-o", "out"],
+                    Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Host.Read_File ("out", Content, Read);
+               Landin.Testing.Check
+                 (Item, Result.Status = Landin.Driver.Status_Reported
+                    and then not Contains (Report, "L0005")
+                    and then not Contains (Report, "choose another output")
+                    and then not Contains (Report, "Interrupted")
+                    and then Unbounded.To_String (Content) = "old"
+                    and then not Host.Exists (".refine-publication/1/out"),
+                  (if During_Commit then "during commit" else "before")
+                  & ": a cancelled build fails without an output fault and"
+                  & " keeps the previous output: " & Report);
+               if not During_Commit then
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 0,
+                     "nothing is written once cancellation is requested");
+               end if;
+            end;
+         end;
+      end loop;
+   end A_Cancelled_Build_Reports_No_Output_Fault;
+
+   --  -o names a file, and a directory there is refused before
+   --  anything is read or compiled, with the file it most likely meant.
+   procedure An_Output_Directory_Asks_For_A_File_Name
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Output_Directory_Asks_For_A_File_Name
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refused (Emit, Named, Example : String);
+      procedure Refused (Emit, Named, Example : String) is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args  : Landin.Platform.Path_List := Arguments_Of ("src/main.ldn");
+         Content : Unbounded.Unbounded_String;
+         Read : Landin.Platform.Read_Status;
+      begin
+         Host.Add_Directory ("src");
+         Host.Add_File ("src/main.ldn", Entry_Program);
+         Host.Add_Directory ("d");
+         Host.Add_File ("d/keep", "sentinel");
+         if Emit /= "" then
+            Args.Append (Emit);
+         end if;
+         Args.Append ("--link=libc");
+         Args.Append ("-o");
+         Args.Append (Named);
+         Host.Raise_On_Read;
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Misuse
+                 and then Contains (Report,
+                   "error[L0005]: -o names the file to write, and " & Named
+                   & " is a directory; name a file under it, for example -o "
+                   & Example)
+                 and then Host.Write_Count = 0
+                 and then Tools.Run_Count = 0,
+               Emit & " -o " & Named & " asks for a file before compiling: "
+               & Report);
+         end;
+         --  The armed read is still armed: no source was read.
+         declare
+            Fired : Boolean := False;
+         begin
+            begin
+               Host.Read_File ("d/keep", Content, Read);
+            exception
+               when Compiler_Defect => Fired := True;
+            end;
+            Landin.Testing.Check
+              (Item, Fired, "the refusal reads no source");
+         end;
+         Host.Read_File ("d/keep", Content, Read);
+         Landin.Testing.Check
+           (Item, Read = Landin.Platform.Read_Ok
+              and then Unbounded.To_String (Content) = "sentinel"
+              and then Host.Is_Directory ("d"),
+            "the directory is left as it was");
+      end Refused;
+   begin
+      Refused ("--emit=exe", "d", "d/main");
+      Refused ("--emit=asm", "d/", "d/main.s");
+      Refused ("--emit=ir", "d", "d/main.ir");
+   end An_Output_Directory_Asks_For_A_File_Name;
 
    procedure Tool_Placement_Advice_Is_Accurate
      (Item : in out Landin.Testing.Context);
@@ -8919,6 +9164,15 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "failed assembly does not write source map",
          Failed_Assembly_Does_Not_Write_Source_Map'Access);
+      Landin.Testing.Register
+        (Into, "driver", "cleanup refusals say what was published",
+         Cleanup_Refusals_Say_What_Was_Published'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a cancelled build reports no output fault",
+         A_Cancelled_Build_Reports_No_Output_Fault'Access);
+      Landin.Testing.Register
+        (Into, "driver", "an output directory asks for a file name",
+         An_Output_Directory_Asks_For_A_File_Name'Access);
       Landin.Testing.Register
         (Into, "driver", "Darwin emits native code and keeps debug refusal",
          Darwin_Contracts'Access);

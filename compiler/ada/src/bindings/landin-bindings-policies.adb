@@ -198,8 +198,9 @@ package body Landin.Bindings.Policies is
                      Policy_Fault);
             end if;
             if not Is_Object (Within, Field (Within, Raw, "parameters")) then
-               Fail (Within, Context & ": parameters must be an object",
-                     Policy_Fault);
+               Fail (Within, Context & ": parameters must be an object,"
+                     & " one key per reference parameter's policy; write"
+                     & " ""parameters"": {} when none has one", Policy_Fault);
             end if;
             Exact_Keys (Within, Raw, ["nullable", "parameters"],
                         Context, Common & ["result"]);
@@ -212,8 +213,9 @@ package body Landin.Bindings.Policies is
                      Policy_Fault);
             end if;
             if not Is_Object (Within, Field (Within, Raw, "parameters")) then
-               Fail (Within, Context & ": parameters must be an object",
-                     Policy_Fault);
+               Fail (Within, Context & ": parameters must be an object,"
+                     & " one key per reference parameter's policy; write"
+                     & " ""parameters"": {} when none has one", Policy_Fault);
             end if;
             Exact_Keys (Within, Raw, ["direction", "parameters"],
                         Context, Common & ["result"]);
@@ -250,8 +252,9 @@ package body Landin.Bindings.Policies is
                      & " name", Policy_Fault);
             end if;
             if not Is_Object (Within, Field (Within, Raw, "parameters")) then
-               Fail (Within, Context & ": parameters must be an object",
-                     Policy_Fault);
+               Fail (Within, Context & ": parameters must be an object,"
+                     & " one key per reference parameter's policy; write"
+                     & " ""parameters"": {} when none has one", Policy_Fault);
             end if;
             declare
                Schema : constant J.Value := Field (Within, Raw, "schema");

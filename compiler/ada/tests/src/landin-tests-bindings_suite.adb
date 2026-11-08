@@ -738,13 +738,16 @@ package body Landin.Tests.Bindings_Suite is
         (Asked : Landin.Platform.Path_List; Code, Words : String;
          Policy_Text : String := Policy; Marker : String := "";
          Arrange : access procedure
-           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) := null);
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) := null;
+         Probed : Boolean := False);
 
+      --  Probed: the refusal comes after the enum probe, which answers.
       procedure Expect
         (Asked : Landin.Platform.Path_List; Code, Words : String;
          Policy_Text : String := Policy; Marker : String := "";
          Arrange : access procedure
-           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) := null)
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) := null;
+         Probed : Boolean := False)
       is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
          Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -760,6 +763,9 @@ package body Landin.Tests.Bindings_Suite is
          Tools.Add_Result (0, Macros (Unsigned_Char => False));
          Tools.Add_Result (0, Preprocessed (Marker));
          Tools.Add_Result (0, Ast);
+         if Probed then
+            Tools.Add_Result (0, Probe_Answers);
+         end if;
          declare
             Result : constant Landin.Driver.Outcome :=
               Landin.Commands.Execute (Asked, Host, Tools, Meter);
@@ -842,6 +848,19 @@ package body Landin.Tests.Bindings_Suite is
           (Policy, Ada.Strings.Fixed.Index (Policy, """namespace"""),
            Ada.Strings.Fixed.Index (Policy, """namespace""") - 1,
            """namespace"": ""again"", ");
+
+      --  twice(int) with no parameters key, and with a policy for its
+      --  int result: each refusal says what to write instead.
+      Unparameterized : constant String :=
+        Ada.Strings.Fixed.Replace_Slice
+          (Policy, Ada.Strings.Fixed.Index (Policy, ", ""parameters"": {}"),
+           Ada.Strings.Fixed.Index (Policy, ", ""parameters"": {}") + 17,
+           "");
+      Scalar_Result : constant String :=
+        Ada.Strings.Fixed.Replace_Slice
+          (Policy, Ada.Strings.Fixed.Index (Policy, """parameters"": {}"),
+           Ada.Strings.Fixed.Index (Policy, """parameters"": {}") - 1,
+           """result"": null, ");
    begin
       Expect (With_Header ("../api.h=api.h"), "L0002",
               "a header's logical name must be a canonical relative include"
@@ -880,6 +899,15 @@ package body Landin.Tests.Bindings_Suite is
               "policy declaration 3 (function 'gone'): selected function was"
               & " not found in Clang AST (stale policy)",
               Policy_Text => Stale);
+      Expect (Arguments, "L0579",
+              "parameters must be an object, one key per reference"
+              & " parameter's policy; write ""parameters"": {} when none"
+              & " has one",
+              Policy_Text => Unparameterized, Probed => True);
+      Expect (Arguments, "L0581",
+              "result: a non-reference result takes no policy; remove the"
+              & " ""result"" key",
+              Policy_Text => Scalar_Result, Probed => True);
       Expect (Arguments, "L0580",
               "unsupported path-sensitive preprocessing outside explicit"
               & " roots",
