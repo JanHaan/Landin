@@ -1185,6 +1185,15 @@ class ProbeFailures(unittest.TestCase):
         self.assertEqual(run.verdicts['firmware']['status'], 'passed')
         self.assertIn('3 of %d lanes did not pass' % len(LANES), str(failed.exception))
 
+    def test_only_a_lane_that_compiles_needs_refine(self):
+        """--refine is optional, and a run selecting a lane that needs it is
+        refused naming that lane (SR-699)."""
+        import run as run_module
+        parser_text = (HERE / 'run.py').read_text()
+        self.assertNotIn("'--refine', type=Path, required=True", parser_text)
+        self.assertNotIn('rv32-controls', run_module.NEEDS_REFINE)
+        self.assertIn('counterpart', run_module.NEEDS_REFINE)
+
     def test_the_gate_parts_are_every_lane_once(self):
         """The gate's three Cortex-M jobs are not FILTERED only because their
         parts are every lane, each once, and each part holds what its lanes

@@ -356,8 +356,10 @@ class Run:
             ('gdb-version', self.bin / 'gdb-multiarch', '16.3')]:
             require(expected in self.command(name, [tool, '--version']), name + ' mismatch')
         selected = selection(lanes)
-        require(refine is not None or not set(selected) & NEEDS_REFINE,
-                'native Landin compiler is required')
+        needing = [name for name in selected if name in NEEDS_REFINE]
+        require(refine is not None or not needing,
+                'the lanes %s need a native Landin compiler; pass --refine PATH'
+                % ', '.join(needing))
         verdicts = {}
         for name in selected:
             missing = [need for need in NEEDS.get(name, ())
@@ -489,7 +491,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--refine', type=Path, required=True)
+    parser.add_argument('--refine', type=Path,
+                        help='the native Landin compiler; every lane from packed-native on'
+                             ' needs one, and the probes before it do not')
     chosen = parser.add_mutually_exclusive_group()
     chosen.add_argument('--lane', action='append', choices=LANES,
                         help='run only this lane, and the lanes it needs; repeat for more.'
