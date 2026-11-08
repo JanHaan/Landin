@@ -226,6 +226,39 @@ class NamedFiles(unittest.TestCase):
         self.assertIn("scripts/absent.py", said[1])
         self.assertIn("docs/absent.md", said[2])
 
+    def test_a_proposed_path_is_marked_for_its_whole_document(self):
+        #  A proposal names the script it adds before the script exists,
+        #  and its commands name it too; it had to use placeholders.
+        text = ("Add the proposed `scripts/flash_board.py`.\n"
+                "```sh\npython3 scripts/flash_board.py --slot 2\n```\n"
+                "It replaces `scripts/flash_board.py`'s placeholder, and the\n"
+                "proposed\n`scripts/erase_board.py`, wrapped, erases.\n")
+        self.assertEqual(faults(checker.check_named_files,
+                                written={"README.md": text}), [])
+
+    def test_a_proposal_marks_only_the_path_it_names(self):
+        text = ("Add the proposed `scripts/flash_board.py`.\n"
+                "```sh\npython3 scripts/flash_bord.py --slot 2\n```\n")
+        said = reasons(checker.check_named_files,
+                       written={"README.md": text})
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("scripts/flash_bord.py", said[0])
+        self.assertIn("proposed", said[0])
+        #  The mark is the document's own: another document naming the
+        #  path is still held to the tree.
+        said = reasons(checker.check_named_files, written={
+            "README.md": "Add the proposed `scripts/flash_board.py`.\n",
+            "AGENTS.md": "Run `scripts/flash_board.py`.\n"})
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("scripts/flash_board.py", said[0])
+
+    def test_a_path_that_exists_is_not_proposed(self):
+        said = reasons(checker.check_named_files, written={
+            "README.md": "The proposed `docs/guide.md` holds it.\n",
+            "docs/guide.md": "# Guide\n"})
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("drop `proposed`", said[0])
+
     def test_ada_comment_urls_leave_local_references_checked(self):
         said = reasons(checker.check_named_files, written={
             'compiler/ada/src/sample.ads':
