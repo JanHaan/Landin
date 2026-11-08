@@ -47,6 +47,14 @@ something `tour.md` already said, it also gets a register entry, in the
 register section matching its subject — and that entry names the fixture
 that pins it, which `check.py` requires to exist.
 
+A `**Pinned by**` or `**Evidence**` paragraph names live fixtures only, and
+`check.py` refuses one naming a fixture that is not in the tree, whatever
+tense the sentence is in. When a fixture a decision cites is retired, the
+paragraph is reworded to name what pins the decision now, and the retired
+fixture, if its history matters, is named in a paragraph of its own after
+it: the check reads a pinning paragraph up to its blank line and no
+further.
+
 A new construct, a `### [NNNN]` in either document, is held in four more
 places, and `check.py` refuses the tree until each holds it: a row in the
 construct inventory of

@@ -132,6 +132,26 @@ class DocumentReachability(unittest.TestCase):
                          {"AGENTS.md", "draft.md"})
 
 
+class PinnedFixtures(unittest.TestCase):
+    """A decision's pinning paragraph names live fixtures; history follows."""
+
+    def test_a_retired_pin_is_refused_saying_where_it_goes(self):
+        said = reasons(lambda _: checker.pinned_fixtures(), written={"spec.md":
+            "**Pinned by:** `negative/retired-fixture-gone`, which was"
+            " retired.\n"})
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("negative/retired-fixture-gone, which is not a fixture",
+                      said[0])
+        self.assertIn("names live fixtures only", said[0])
+        self.assertIn("in a paragraph of its own after it", said[0])
+
+    def test_a_retired_fixture_in_the_next_paragraph_passes(self):
+        self.assertEqual(faults(lambda _: checker.pinned_fixtures(), written={"spec.md":
+            "**Pinned by:** a live check.\n\n"
+            "`negative/retired-fixture-gone` pinned it until it was"
+            " retired.\n"}), [])
+
+
 class NamedFiles(unittest.TestCase):
     """A document that names a repository file names one that exists."""
 

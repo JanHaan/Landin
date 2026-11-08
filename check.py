@@ -5291,7 +5291,11 @@ def pinned_fixtures():
                     continue
                 at = paragraph.start() + found.start()
                 out.append((relative, text.count("\n", 0, at) + 1,
-                            "this pins %s, which is not a fixture" % named))
+                            "this pins %s, which is not a fixture; a Pinned"
+                            " by or Evidence paragraph names live fixtures"
+                            " only, so name what pins the decision now and"
+                            " a retired fixture in a paragraph of its own"
+                            " after it (docs/documents.md)" % named))
 
     return out
 
