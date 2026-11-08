@@ -1,0 +1,35 @@
+--  A generic struct's instance that a program names only as a static type
+--  argument still has a layout wherever a generic body uses a slice of it.
+--  `vec.new(item: pair(u8))` makes an empty list through
+--  `mem.empty_storage`'s `[]`; `empty_count(item: pair(i16))` writes `[]`,
+--  range slices it and walks it in a local generic routine; and a module
+--  binding holds an empty slice of a third instance.  No other position
+--  names any of the three by value.
+import core/vec
+
+pair: type (t: type) = struct
+    first: t
+    second: t
+end pair
+
+nothing: []pair(u64) = []
+
+empty_count: (item: type) -> (count: usize) =
+    held: []mut item = []
+    count = lenof held
+    for each in held[0..<0] do
+        _ = each
+        count += 1
+    end for
+end empty_count
+
+public main: () -> (code: i32) =
+    code = 1
+    list := vec.new(item: pair(u8))
+    return when vec.length(list) <> 0 or vec.capacity(list) <> 0
+    code = 2
+    return when empty_count(item: pair(i16)) <> 0
+    code = 3
+    return when lenof nothing <> 0
+    code = 42
+end main

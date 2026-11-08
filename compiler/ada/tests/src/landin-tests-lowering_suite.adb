@@ -13640,6 +13640,38 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Stages.Rendered_Report (Work));
    end Generic_Pointees_Materialize_On_Access;
 
+   procedure Generic_Slice_Elements_Materialize_On_Use
+     (Item : in out Landin.Testing.Context);
+
+   --  A slice's element is an identity edge where the slice type is
+   --  written, so an instance a program names only there, or only as a
+   --  static type argument, has no layout until a use asks for one.  `[]`,
+   --  a range slice and a walk each lower the element's stride.
+   procedure Generic_Slice_Elements_Materialize_On_Use
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work, "pair: type (t: type) = struct a: t end pair "
+         & "nothing: []pair(u64) = [] "
+         & "empty: (item: type) -> (n: usize) = "
+         & "held: []mut item = [] n = lenof held end empty "
+         & "part: (s: []pair(u16)) -> (n: usize) = "
+         & "n = lenof s[0..<0] end part "
+         & "walk: (s: []pair(u32)) -> (n: usize) = "
+         & "n = 0 for each in s do _ = each n += 1 end for end walk "
+         & "total: () -> (n: usize) = "
+         & "n = empty(item: pair(u8)) + lenof nothing end total", Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "slices of unnamed instances reach verified IR");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         Landin.Stages.Rendered_Report (Work));
+   end Generic_Slice_Elements_Materialize_On_Use;
+
    procedure Module_Folds_Use_Their_Own_Integer_Range
      (Item : in out Landin.Testing.Context);
 
@@ -14072,6 +14104,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "generic pointees materialize on access",
          Generic_Pointees_Materialize_On_Access'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "generic slice elements materialize on use",
+         Generic_Slice_Elements_Materialize_On_Use'Access);
       Landin.Testing.Register
         (Into, "lowering", "generic pointer fields keep nominal identity",
          Generic_Pointer_Fields_Keep_Nominal_Identity'Access);

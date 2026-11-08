@@ -2153,6 +2153,10 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Reference : Landin.Checking.Reference_Id) return Ty.Type_Kind;
+      function Require_Referent_Layout
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Reference : Landin.Checking.Reference_Id) return Boolean;
 
       function Field_Has_Zero_Image
         (Wrote : Landin.Checking.Nominal_Type_Id;
@@ -17731,6 +17735,39 @@ package body Landin.Stages.Checking is
          return Shape.Element;
       end Note_Struct_Field;
 
+      --  D137: declaring a pointer or a slice needs only its referent's
+      --  identity, which is what lets `ptr node` or `[]node` close a
+      --  recursive definition.  Using one is a value site for the referent:
+      --  reading through a pointer, and indexing, range slicing, walking or
+      --  writing `[]` for a slice, need the field offsets and element
+      --  stride.  A nominal instance that no other position names by value,
+      --  such as `pair(u8)` reached only as a type argument whose generic
+      --  body takes a slice of it, is materialized here, at the use, rather
+      --  than at every mention, where polymorphic recursion through a
+      --  reference would never finish.
+      function Require_Referent_Layout
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Reference : Landin.Checking.Reference_Id) return Boolean
+      is
+         Item : constant Landin.Checking.Reference_Descriptor :=
+           Landin.Checking.Descriptor_Of (Types.all, Reference);
+      begin
+         if Item.Referent = Ty.Fixed_Array
+           or else (Item.Referent = Ty.Aggregate
+             and then Item.Nominal /= Landin.Checking.No_Nominal_Type)
+         then
+            return Require_Value_Layout
+              ((Kind => Item.Referent, Nominal => Item.Nominal,
+                Length => Item.Length, Element => Item.Element,
+                Element_Shape => Item.Element_Shape,
+                Element_Nominal => Item.Element_Nominal, others => <>),
+               Of_Tree, Node, Syn.Origin (Of_Tree, Node)).Kind
+              /= Ty.Ill_Typed;
+         end if;
+         return True;
+      end Require_Referent_Layout;
+
       function Note_Reference_Value
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -17739,25 +17776,8 @@ package body Landin.Stages.Checking is
          Item : constant Landin.Checking.Reference_Descriptor :=
            Landin.Checking.Descriptor_Of (Types.all, Reference);
       begin
-         --  Declaring a pointer needs only identity. Reading its referent
-         --  is a value site: field offsets and element strides need the
-         --  concrete layout before either checking or lowering can use it.
-         if Item.Referent = Ty.Fixed_Array
-           or else (Item.Referent = Ty.Aggregate
-             and then Item.Nominal /= Landin.Checking.No_Nominal_Type)
-         then
-            declare
-               Complete : constant Type_Descriptor := Require_Value_Layout
-                 ((Kind => Item.Referent, Nominal => Item.Nominal,
-                   Length => Item.Length, Element => Item.Element,
-                   Element_Shape => Item.Element_Shape,
-                   Element_Nominal => Item.Element_Nominal, others => <>),
-                  Of_Tree, Node, Syn.Origin (Of_Tree, Node));
-            begin
-               if Complete.Kind = Ty.Ill_Typed then
-                  return Ty.Ill_Typed;
-               end if;
-            end;
+         if not Require_Referent_Layout (Of_Tree, Node, Reference) then
+            return Ty.Ill_Typed;
          end if;
          if Landin.Checking.Type_Of (Types.all, Of_Tree, Node) = Ty.Undecided
          then
@@ -24436,6 +24456,11 @@ package body Landin.Stages.Checking is
                      Made : constant Landin.Checking.Reference_Id :=
                        Landin.Checking.Add_Reference (Types.all, Item);
                   begin
+                     --  The new view's base steps over the element stride.
+                     if not Require_Referent_Layout (Of_Tree, Node, Made)
+                     then
+                        return Kept (Ty.Ill_Typed);
+                     end if;
                      Landin.Checking.Note_Reference
                        (Types.all, Of_Tree, Node, Made);
                      return Kept (Ty.Slice_Value);
@@ -31626,6 +31651,12 @@ package body Landin.Stages.Checking is
                elsif Descriptor.View /= Ty.Ordinary_View then
                   raise Landin.Compiler_Defect with
                     "a pointer-shaped text view reached slice traversal";
+               elsif not Require_Referent_Layout
+                 (Of_Tree, Source,
+                  Landin.Checking.Reference_Of (Types.all, Of_Tree, Source))
+               then
+                  --  Each step's element is an alias at the stride.
+                  Kind := Ty.Ill_Typed;
                else
                   Kind := Descriptor.Referent;
                   Item :=
@@ -35429,6 +35460,14 @@ package body Landin.Stages.Checking is
                   if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                     = Ty.Undecided
                   then
+                     --  The empty view still has a base its element's
+                     --  alignment places.
+                     if not Require_Referent_Layout
+                       (Of_Tree, Node, Expected.Reference)
+                     then
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                        return;
+                     end if;
                      Landin.Checking.Note
                        (Types.all, Of_Tree, Node, Ty.Slice_Value);
                      Landin.Checking.Note_Reference
