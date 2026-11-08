@@ -1,0 +1,22 @@
+import core/cmp
+import core/net
+import core/time
+
+--  core/time already declares time.duration is cmp.ordered, and core/net
+--  net.address is cmp.hashable.  There is no override: a second
+--  declaration for the same key is a collision, and another order or hash
+--  belongs on a distinct wrapper.
+longer_first: (left: time.duration, right: time.duration) -> (yes: bool) =
+    yes = left > right
+end longer_first
+
+port_only: (value: net.address) -> (result: u64) =
+    result = u64(value.port)
+end port_only
+
+time.duration is cmp.ordered (less: longer_first)
+net.address is cmp.hashable (hash: port_only)
+
+public main: () -> (code: i32) =
+    code = 42
+end main

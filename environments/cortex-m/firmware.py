@@ -268,7 +268,7 @@ start: () -> none =
     control: ptr u32 = ptr(0xe000_ed14)
     started = compiler.volatile_load(control)
     sizes = l1.geometry()
-    caches := l1.caches()
+    caches := l1.new()
     cache.clean(caches, buffer[0..<64]) else (problem)
         _ = problem
         return

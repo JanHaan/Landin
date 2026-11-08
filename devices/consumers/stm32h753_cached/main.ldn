@@ -17,7 +17,7 @@ link(align: 32)
 mut message: [32]u8 = zeroed
 
 public start: () -> noreturn =
-    caches := l1.caches()
+    caches := l1.new()
     for index in 0..<lenof message do message[index] = u8(65 + index % 26) end for
     message[31] = 0x0a
     cache.clean(caches, message[0..<32]) else (problem)

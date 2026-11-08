@@ -1,0 +1,8 @@
+class: negative
+summary: D1031 a program re-declaring core/time's time.duration ordered evidence and core/net's net.address hashable evidence is refused as two conformance collisions, as D270 refuses one for u32
+args: --root=../.. ../tests/fixtures/negative/library-evidence-collision-time-net
+status: 1
+expect: expected.txt
+codes: L0317, L0317
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+constructs: 1230, 1240, 1280, 1340

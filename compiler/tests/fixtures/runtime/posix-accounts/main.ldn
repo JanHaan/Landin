@@ -20,7 +20,7 @@ account_line: (inout out: io.buffered_writer(blocking.host), line: []u8)
     mut room: [256]u8 = zeroed
     mut made := text.over(room[0..<256])
     found: posix.account = posix.parse_account(line) else (problem)
-        _ = problem
+        fail mismatched when problem <> posix.malformed_entry
         try io.put(out, "no account\n")
         return
     end
@@ -39,7 +39,7 @@ group_line: (inout out: io.buffered_writer(blocking.host), line: []u8)
     mut room: [256]u8 = zeroed
     mut made := text.over(room[0..<256])
     found: posix.group_entry = posix.parse_group(line) else (problem)
-        _ = problem
+        fail mismatched when problem <> posix.malformed_entry
         try io.put(out, "no group\n")
         return
     end
@@ -119,6 +119,20 @@ looked_up: () -> none ! ... =
         fail mismatched when same.user <> me
     end if
     _ = found
+    --  So may its group, found by its name too when a database names it.
+    mine_group: posix.group_id = posix.real_group()
+    mut grouped: [1024]u8 = zeroed
+    own_group: posix.group_entry =
+        posix.group_with_id(mine_group, grouped[0..<1024]) else (problem)
+        fail problem when problem <> posix.no_account
+        wheel
+    end
+    if own_group.group == mine_group then
+        mut back: [1024]u8 = zeroed
+        same: posix.group_entry =
+            try posix.group_named(own_group.name, back[0..<1024])
+        fail mismatched when same.group <> mine_group
+    end if
     --  What no database holds, a name no database could, and a buffer too
     --  small for an account.
     mut met: bool = false

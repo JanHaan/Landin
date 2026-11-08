@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the network consumer's serve, tcp_echo, udp_echo, quoted and report routines run over core/io's memory network beside a memory world and write the report runtime/network-echo writes; the memory network refuses a port nothing listens on, finds a listened port in use, makes an address of no interface unreachable, reports a send to a closed peer as disconnected after the peer's last bytes and its end, times out a receive and an accept that would wait and a send larger than the peer's buffer after what fits, loses a datagram no socket takes, makes IPv6 missing when told and fails an injected call
+summary: the network consumer's serve, tcp_echo, udp_echo, quoted and report routines run over core/io's memory network beside a memory world and write the report runtime/network-echo writes; the memory network refuses a port nothing listens on, finds a listened port in use, makes an address of no interface unreachable, reports a send to a closed peer as disconnected after the peer's last bytes and its end, times out a receive and an accept that would wait and a send larger than the peer's buffer after what fits, records set_no_delay on the connection it was asked of, loses a datagram no socket takes and the longest it carries, refuses one byte longer, makes IPv6 missing when told and fails an injected call
 program: main.ldn
 root: ../../../../..
 status: 42

@@ -46,9 +46,9 @@ fixed if compiler.os == linux then
     --- the system call itself for a clock it cannot read.
     public clock_gettime: type = extern(c) (clock: i32, into: ptr mut linux.timespec) -> (result: i32)
 
-    --- The most of an image `symbol` believes: the kernel's vDSO is a
-    --- few pages, and a load segment claiming more is not one.
-    public largest: usize = 1048576
+    --  The most of an image `symbol` believes: the kernel's vDSO is a
+    --  few pages, and a load segment claiming more is not one.
+    largest: usize = 1048576
 
     --  The least of any page size Linux uses, which the vDSO's first page,
     --  holding its ELF header and program headers, is at least.
@@ -316,7 +316,7 @@ fixed if compiler.os == linux then
 
     --- The vDSO as the kernel mapped it: whether the auxiliary vector
     --- names one, and its bytes, as far as its first load segment reaches
-    --- and no further than `largest`.  There is none when `auxiliary`
+    --- and no further than a mebibyte.  There is none when `auxiliary`
     --- found no auxiliary vector, as when a C `main` built the tables it
     --- passed the argument initializer itself, or when the image's first
     --- page does not describe a load segment.

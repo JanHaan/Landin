@@ -1,7 +1,9 @@
 --  platform/riscv's critical section, nested, on rv32: masking clears
 --  mstatus.MIE, a nested mask returns it already clear, and restoring in
 --  reverse order gives back exactly the state the program started with,
---  whether reset left interrupts enabled or not.  The module declares
+--  whether reset left interrupts enabled or not; and clearing the machine
+--  timer's line in mie clears that bit alone, and setting it back gives
+--  mie as it was.  The module declares
 --  nothing on the other targets (D687), so the program imports it
 --  everywhere and calls it from the rv32 arm.
 import platform/riscv
@@ -22,15 +24,41 @@ fixed if compiler.arch == rv32 then
         ok = outer == before and inner == 0 and masked == 0 and still == 0
              and after == before
     end nested_masks_restore
+
+    --  mie, read as the program finds it.
+    enabled_lines: () -> (lines: u32) =
+        lines = assembler.block("csrr {bits}, mie", out bits: u32 at general)
+    end enabled_lines
+
+    --  The machine timer's line, 0x80, cleared in mie and read back clear
+    --  with interrupts masked, then given back as the program found it.
+    timer_line_toggles: () -> (ok: bool) =
+        timer: u32 = 0x80
+        outer: u32 = riscv.disable_interrupts()
+        found: u32 = enabled_lines()
+        riscv.disable_lines(timer)
+        cleared: u32 = enabled_lines()
+        riscv.enable_lines(found & timer)
+        restored: u32 = enabled_lines()
+        riscv.restore_interrupts(outer)
+        ok = cleared & timer == 0 and cleared == found & ~timer
+             and restored == found
+    end timer_line_toggles
 else
     nested_masks_restore: () -> (ok: bool) =
         ok = true
     end nested_masks_restore
+
+    timer_line_toggles: () -> (ok: bool) =
+        ok = true
+    end timer_line_toggles
 end if
 
 public main: () -> (code: i32) =
     code = 1
-    if nested_masks_restore() then
+    return when not nested_masks_restore()
+    code = 2
+    if timer_line_toggles() then
         code = 42
     end if
 end main

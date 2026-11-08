@@ -90,16 +90,17 @@ fixed if compiler.os == linux then
     --  The kernel's own requests and flags, and platform/linux's copies of
     --  what platform/libc keeps too.
     kernel_agrees: () -> (yes: bool) =
-        values: [10]i64 = [i64(linux.tcgets), i64(linux.tcsets),
+        values: [13]i64 = [i64(linux.tcgets), i64(linux.tcsets),
                            i64(linux.tcsetsw), i64(linux.tcsetsf),
                            i64(linux.tiocsptlck), i64(linux.tiocgptpeer),
                            i64(linux.tiocgptn),
                            offset_of(usize(addr terminal_probe),
                                      usize(addr terminal_probe.line)),
                            i64(linux.statx_basic_stats),
-                           i64(linux.at_empty_path)]
+                           i64(linux.at_empty_path), i64(linux.statx_type),
+                           i64(linux.statx_size), i64(linux.grnd_nonblock)]
         yes = true
-        for index in usize(0)..<10 do
+        for index in usize(0)..<13 do
             if values[index] <> c_kernel(i32(index)) then yes = false end if
         end for
         yes = yes and linux.lock_sh == libc.lock_sh

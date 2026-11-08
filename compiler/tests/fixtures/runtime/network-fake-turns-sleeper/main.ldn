@@ -70,8 +70,8 @@ run: (runs: any fibre.turns) -> (code: i32) ! failure.reason =
          fake.socket_over(b3), fake.socket_over(b4)]
     network := fake.network_over_turns(space, sockets, runs)
     mut clock_space: fake.clock_space = zeroed
-    clock := fake.clock_beside(clock_space, time.instant(0),
-                               (seconds: 0, nanoseconds: 0), network)
+    clock := fake.clock_over_beside(clock_space, time.instant(0),
+                                    (seconds: 0, nanoseconds: 0), network)
     listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
     defer net.close_socket(network, listener) else none
     to: net.address = try net.local_address(network, listener)

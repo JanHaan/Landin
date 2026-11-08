@@ -5,7 +5,9 @@
 --  clock three times and only then writes the child its line.  The
 --  reader's wait for the child's errors cannot be answered before the
 --  ticker has written, so the program ends only if waiting on the
---  child's pipes and its end let the other fibre run.
+--  child's pipes and its end let the other fibre run.  A second child,
+--  ended by SIGTERM, leaves its number for `events.last_signal`, and a
+--  missing file ENOENT for `events.last_errno`.
 import core/cmp
 import core/failure
 import core/fibre
@@ -97,6 +99,32 @@ run: (host: events.host, inout seen: shared) -> none ! failure.reason =
     try fibre.join(tasks)
 end run
 
+--  A child that ends by SIGTERM leaves its number for `last_signal`, and
+--  a file that is not there leaves ENOENT, 2 on every hosted system, for
+--  `last_errno`.
+ended_by_signal: (host: events.host) -> (yes: bool) ! failure.reason =
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over("kill -TERM $$")]
+    nothing: []io.variable = []
+    child: io.child = try io.spawn(host, text.host_over("/bin/sh"), arguments,
+                                   nothing, io.inheriting)
+    ended: io.ending = try io.wait(host, child)
+    mut signalled: bool = false
+    match ended.how
+        io.exited(status): _ = status
+        io.signalled: signalled = true
+    end match
+    mut missing: bool = false
+    absent: io.file = io.open_read(host, text.host_over("/landin-absent/file"))
+        else (problem)
+        missing = problem == io.not_found
+        io.file(0)
+    end
+    _ = absent
+    yes = signalled and events.last_signal(host) == 15
+          and missing and events.last_errno(host) == 2
+end ended_by_signal
+
 public main: () -> (code: i32) =
     code = 1
     mut state: events.space = zeroed
@@ -119,5 +147,11 @@ public main: () -> (code: i32) =
       <> cmp.equal
     code = 5
     return when seen.ticks_at_errors <> 3 or seen.code <> 3
+    code = 6
+    signalled: bool = ended_by_signal(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not signalled
     code = 42
 end main

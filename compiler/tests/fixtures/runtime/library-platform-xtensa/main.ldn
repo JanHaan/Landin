@@ -21,11 +21,28 @@ fixed if compiler.arch == xtensa then
         ok = masked == 15 and still == 15 and after == before and only_low == 1
              and xtensa.enabled_lines() == enabled
     end nested_masks_restore
+
+    mut counted: u32 = 0
+
+    --  The cycle counter moves across a loop that stores a hundred times,
+    --  measured with wrapping subtraction as `cycles` asks.
+    cycles_advance: () -> (ok: bool) =
+        first := xtensa.cycles()
+        for step in u32(0)..<100 do
+            compiler.volatile_store(addr counted, step)
+        end for
+        second := xtensa.cycles()
+        ok = second -% first <> 0
+    end cycles_advance
 else
     nested_masks_restore: () -> (ok: bool) = ok = true end nested_masks_restore
+
+    cycles_advance: () -> (ok: bool) = ok = true end cycles_advance
 end if
 
 public main: () -> (code: i32) =
     code = 1
-    if nested_masks_restore() then code = 42 end if
+    return when not nested_masks_restore()
+    code = 2
+    if cycles_advance() then code = 42 end if
 end main

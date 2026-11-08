@@ -32,8 +32,8 @@ end manual_value
 --- same answer every run.  Both of its clocks move together.  A provider
 --- of `clock` and `wall_clock`; copies share the state.
 ---
---- Made by `clock_beside` a network that takes turns, `sleep` takes turns
---- of the network's scheduler instead, and the clock moves only after a
+--- Made by `clock_over_beside` beside a network that takes turns, `sleep`
+--- takes turns of the network's scheduler instead, and the clock moves only after a
 --- whole round in which nothing moved in the network: then the sleeper
 --- that saw the round advances it by a millisecond, or by what is left of
 --- its sleep when that is less, and the advance is the network's move.
@@ -56,15 +56,15 @@ end clock_over
 --- Fill `state` for a manual clock as `clock_over` does, whose `sleep`
 --- takes turns beside `network` when the network takes turns, and return
 --- its handle.  It borrows the network for as long as it is used.
-public clock_beside: (inout state: clock_space, start: time.instant,
-                      wall: time.wall_time, beside: network)
-                     -> (host: clock from state, beside) =
+public clock_over_beside: (inout state: clock_space, start: time.instant,
+                           wall: time.wall_time, beside: network)
+                          -> (host: clock from state, beside) =
     state = (monotonic: u64(start), wall_seconds: wall.seconds,
              wall_nanoseconds: wall.nanoseconds, readings: 0, sleeps: 0,
              slept: 0)
     host = (state: addr state, beside: usize(beside.state),
             runs: beside.runs, takes_turns: beside.takes_turns)
-end clock_beside
+end clock_over_beside
 
 --- Move a manual clock's monotonic and wall clocks forward by `span`; it
 --- traps past the monotonic clock's last instant.

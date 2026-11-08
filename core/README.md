@@ -95,8 +95,8 @@ Every module spells the same operations the same way (D269):
 
 | Operation | Spelling | Examples |
 |---|---|---|
-| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)` |
-| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `arena.over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `text.utf8_over(buffer)`, `io.buffered_over`, `io.lines_over` |
+| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)`; a provider's handle that borrows nothing too, `heap.new()`, `system.new()`, `l1.new()` (D1032) |
+| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `arena.over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `text.utf8_over(buffer)`, `io.buffered_over`, `io.lines_over`; a second way to make one keeps `over` and says what it adds, `fake.network_over_turns`, `fake.clock_over_beside` (D1032) |
 | A provider's caller-owned state | `space`, declared `zeroed` | `arena.space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
@@ -141,7 +141,15 @@ abbreviation: `mem`, `vec`, `cmp`, `io`, `diag`, `map`, `sort`, `arena`, `pool`,
 Two atoms serve every core container: `mem.out_of_bounds` for an index past
 the initialized prefix and `mem.empty` for taking from nothing. Key lookups
 keep their own, `map.missing` and `tree.no_such_node`, because a missing key
-is not a bad index. Every atom a `core` module fails with is in
+is not a bad index. These atoms are the containers'; a provider concept
+that lends by index or by name keeps its own, as `io.argument_at` fails
+`io.no_argument` and `io.variable_at` and `io.variable_named` fail
+`io.no_variable`, since a provider has no initialized prefix to be past
+(D269). A second kind of provider in a module whose principal type is a
+concept is named for what it is rather than `new`: `core/cache`'s
+principal type is the `maintenance` concept, and `cache.cacheless(line)`
+makes the provider for memory no cache stands in front of (D1032).
+Every atom a `core` module fails with is in
 `failure.reason` and has a phrase for a person in `failure.words`, lower case
 with no final stop, so a program reports `settings: not found` without a
 table of its own; a new failure atom adds its phrase there (D388).
@@ -301,7 +309,10 @@ names. The comparison concepts
 `equatable`, `hashable` and `ordered` live in `core/cmp`, apart from the map
 and the sort that consume them (D273). It ships `equatable` and `hashable` for the integer
 scalars, `bool` and `[]u8` and `ordered` for the integer scalars, and
-`core/text` all three for `utf8` (D270); another reading goes on a `distinct`
+`core/text` all three for `utf8` (D270), `core/time` all three for
+`time.duration` and `time.instant` and `core/net` `equatable` and
+`hashable` for `net.address` (D1031): a later key type declares its
+evidence in its own module; another reading goes on a `distinct`
 wrapper with its own evidence [1280]. A closed set of named values, such as
 `core/diag`'s severity, is an atom set rather than an integer (D272).
 
@@ -716,7 +727,7 @@ D357). Rename as follows; behaviour is unchanged except where noted.
 | the memory world's `read_calls`, `write_calls`, `open_calls`, `close_calls`; the memory network's `lost` | `reads`, `writes`, `opens`, `closes`; `losses` |
 | `mem.compare`, `mem.less`, `mem.equal`, `mem.greater`, `mem.order` | `cmp.compare` and the rest, from `import core/cmp`; `[]u8` is now `cmp.ordered` too |
 | `import platform/cpu`, `cpu.disable_interrupts()` and the rest | `import platform/cortex_m`, `cortex_m.disable_interrupts()` and the rest |
-| `linux.vdso_symbol`, `vdso_find`, `vdso_image`, `vdso_clock_name`, `vdso_version`, `vdso_clock_gettime`, `vdso_largest` | `import platform/linux/vdso`: `vdso.symbol`, `find`, `kernel_image`, `clock_symbol`, `clock_version`, `clock_gettime`, `largest` |
+| `linux.vdso_symbol`, `vdso_find`, `vdso_image`, `vdso_clock_name`, `vdso_version`, `vdso_clock_gettime`, `vdso_largest` | `import platform/linux/vdso`: `vdso.symbol`, `find`, `kernel_image`, `clock_symbol`, `clock_version`, `clock_gettime`; `largest` is private |
 | `libc.malloc`, `libc.free`, `libc.allocation` | removed; declare them `extern(c)` where a program wants C's heap |
 | `vec.list`'s `values`, `spill.list`'s `storage`, `map.map`'s fields and `map.cursor`'s slot | private; use the modules' operations, `map.removed(value)` for the dead entries a map's `tombstones` counted |
 | `text.write_byte`, `write_u32`, `write_u64`, `write_usize` and `prefix` over a slice and a `used` count | a builder: `mut line := text.over(buffer)`, `text.append_byte`, `append_u32`, `append_u64`, `append_usize` and `text.used(line)`; parsing is all in `core/text`'s `parse_*` |

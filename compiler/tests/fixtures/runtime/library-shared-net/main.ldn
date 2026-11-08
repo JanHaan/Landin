@@ -1,4 +1,15 @@
+import core/cmp
 import core/net
+
+--  The shipped evidence answers through the concepts alone, without a map
+--  to carry it.
+same: (item: type is cmp.equatable, left: item, right: item) -> (yes: bool) =
+    yes = item.equal(left, right)
+end same
+
+digest: (item: type is cmp.hashable, value: item) -> (result: u64) =
+    result = item.hash(value)
+end digest
 
 --  Loopback addresses of both families, a port put in place, which makes
 --  another address, and the unspecified address told from them.
@@ -11,6 +22,15 @@ exercise: () -> (ok: bool) =
     moved: net.address = net.with_port(four, 8080)
     return when moved.port <> 8080 or net.same_address(moved, four)
       or not net.same_address(net.with_port(moved, 80), four)
+    --  Addresses are equal as same_address says, a zone included, and
+    --  equal ones hash alike.
+    zoned: net.address = net.with_zone(six, "lo") else (problem)
+        _ = problem
+        return
+    end
+    return when not same(four, net.with_port(moved, 80)) or same(four, moved)
+      or same(six, zoned) or digest(four) <> digest(net.with_port(moved, 80))
+      or digest(six) == digest(zoned)
     ok = net.is_unspecified(net.unspecified(net.ipv4, 0))
          and not net.is_unspecified(four)
 end exercise

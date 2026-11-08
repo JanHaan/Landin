@@ -1,7 +1,23 @@
+import core/cmp
 import core/time
 
+--  The shipped evidence answers through the concepts alone, without a map
+--  or a sort to carry it.
+same: (item: type is cmp.equatable, left: item, right: item) -> (yes: bool) =
+    yes = item.equal(left, right)
+end same
+
+digest: (item: type is cmp.hashable, value: item) -> (result: u64) =
+    result = item.hash(value)
+end digest
+
+before: (item: type is cmp.ordered, left: item, right: item) -> (yes: bool) =
+    yes = item.less(left, right)
+end before
+
 --  Spans in every unit agree, an instant later by a span is that span
---  after it, and the whole milliseconds round down.
+--  after it, both are cmp evidence as their counts are, and the whole
+--  milliseconds round down.
 exercise: () -> (ok: bool) =
     ok = false
     return when time.seconds(2) <> time.milliseconds(2000)
@@ -11,6 +27,11 @@ exercise: () -> (ok: bool) =
     deadline: time.instant = time.later(start, time.milliseconds(5))
     return when time.elapsed(start, deadline) <> time.milliseconds(5)
       or not (start < deadline)
+    --  Spans and instants are equal, hash and order as their counts do.
+    return when not same(time.seconds(1), time.milliseconds(1000))
+      or same(start, deadline) or digest(time.nanoseconds(9)) <> 9
+      or not before(time.nanoseconds(1), time.nanoseconds(2))
+      or before(deadline, start) or digest(start) <> 1000
     ok = time.in_milliseconds(time.microseconds(2999)) == 2
 end exercise
 

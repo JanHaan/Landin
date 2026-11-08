@@ -1,7 +1,8 @@
 --  platform/posix's `poll`, in Landin types: an entry is made by `watch`
 --  from a descriptor and the events asked about, a set of flags, and
 --  `happened` reads what the call reported.  Standard input is a file here, which is always
---  ready to read, and standard error is always ready to write.  The
+--  ready to read and never has out-of-band data, and standard error is
+--  always ready to write.  The
 --  failure oracles: a closed descriptor is reported `invalid` rather than
 --  failing the call, and nothing to watch waits out its time and reports
 --  none ready.
@@ -32,6 +33,8 @@ end line_of
 public main: () -> (code: i32) =
     code = 1
     reading: posix.poll_events = posix.poll_input
+    --  A file has no out-of-band data: asked for it too, it reports none.
+    urgent: posix.poll_events = posix.poll_input | posix.poll_urgent
     writing: posix.poll_events = posix.poll_output
     closed: posix.descriptor =
         posix.open_at(posix.working_directory,
@@ -45,7 +48,7 @@ public main: () -> (code: i32) =
         return
     end
     mut entries: [3]posix.poll_entry =
-        [posix.watch(posix.standard_input, reading),
+        [posix.watch(posix.standard_input, urgent),
          posix.watch(posix.standard_error, writing),
          posix.watch(closed, reading)]
     ready: usize = posix.poll(entries[0..<3], 1000) else (problem)
@@ -57,6 +60,7 @@ public main: () -> (code: i32) =
     code = 3
     first: posix.poll_events = posix.happened(entries[0])
     return when (first & posix.poll_input) == posix.poll_no_events
+      or (first & posix.poll_urgent) <> posix.poll_no_events
       or (first & posix.poll_invalid) <> posix.poll_no_events
     code = 4
     second: posix.poll_events = posix.happened(entries[1])

@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: Small shared core/line consumer computes every board port's 115200 divisor, refuses a rate out of range, out of tolerance and zero and a frame of four data bits, and matches the host oracle's sweep of eight peripheral clocks
+summary: Small shared core/line consumer computes every board port's 115200 divisor, refuses a rate out of range, out of tolerance and zero and a frame of four data bits, holds every divisor of the host oracle's sweep of eight peripheral clocks within line.tolerance and matches the sweep
 program: main.ldn
 root: ../../../../..
 status: 42

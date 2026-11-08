@@ -2,11 +2,15 @@
 --  each letting the other run before it resumes, so their letters
 --  interleave.  The round's home stack makes the group and goes on past
 --  both admissions before either task has run, and its join takes turns
---  until both have ended.
+--  until both have ended.  Then one task runs by hand on `stacks.prepare`
+--  and `stacks.switch`, as a provider of its own would run it: it marks,
+--  switches home, home marks, and it marks again and ends, its first frame
+--  making its record's status zero and resuming home.
 import core/failure
 import core/fibre
 import core/fibre/stacks
 import core/io
+import core/mem
 import hosted/blocking
 
 mut order: [16]u8 = zeroed
@@ -48,6 +52,38 @@ both: (runs: any fibre.turns) -> none ! failure.reason =
     mark(u8('j'))
 end both
 
+--  A provider of its own over `stacks.prepare` and `stacks.switch`: the
+--  home record and one fibre's, its stack, and the task it runs.
+mut home: fibre.space = zeroed
+mut own: fibre.space = zeroed
+mut own_stack: [8192]u8 = zeroed
+
+bare: type = struct
+    letter: u8
+end bare
+
+--  Mark, switch home, and mark again once home switches back; the first
+--  frame then ends the record and resumes home.
+bare_run: (self: ptr mut bare) -> none =
+    mark(self.val.letter)
+    stacks.switch(addr own, addr home)
+    mark(self.val.letter)
+end bare_run
+
+bare is fibre.task (run: bare_run)
+
+mut task: bare = (letter: u8('r'))
+
+--  Run the task on its stack by hand, home marking between its halves,
+--  and find its record ended after the second switch.
+by_hand: () -> none ! mem.out_of_memory =
+    try stacks.prepare(addr own, own_stack, any(addr task), addr home)
+    stacks.switch(addr home, addr own)
+    mark(u8('m'))
+    stacks.switch(addr home, addr own)
+    mark(if own.status == 0 then u8('e') else u8('?') end if)
+end by_hand
+
 public main: () -> (code: i32) =
     code = 1
     host := blocking.new()
@@ -59,6 +95,10 @@ public main: () -> (code: i32) =
         return
     end
     both(any(addr round)) else (problem)
+        _ = problem
+        return
+    end
+    by_hand() else (problem)
         _ = problem
         return
     end

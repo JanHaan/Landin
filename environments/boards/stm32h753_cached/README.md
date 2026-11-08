@@ -11,7 +11,7 @@ the Cortex-M7's level 1 caches once memory is written and its entry's
 return cleans and disables them (D973). It uses the cacheless board's
 `serial`, `bringup`, `report` and `scs` modules: the receive ring through
 `serial.open`, `available`, `read`, `stop`, `restart`, `completed` and
-`idle`, given `l1.caches()`, so the ring cleans and invalidates itself
+`idle`, given `l1.new()`, so the ring cleans and invalidates itself
 before it is armed and invalidates itself before each copy (D978), and the
 program writes none of its maintenance. The stale-read control gives the
 same routines `cache.cacheless(32)`, which leaves those operations out, so

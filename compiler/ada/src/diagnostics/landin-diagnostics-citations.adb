@@ -2666,6 +2666,14 @@ package body Landin.Diagnostics.Citations is
                "The comparison concepts are a module of their own",
             when 274 =>
                "The library says what it does",
+            when 1031 =>
+               "Spans, instants and addresses ship their comparison evid"
+               & "ence",
+            when 1032 =>
+               "A handle that borrows nothing is `new`, and a second way"
+               & " to make one keeps `over`",
+            when 1033 =>
+               "A library name is public when a program has a use for it",
             when 379 =>
                "A reservation counts the tombstones",
             when 275 =>
@@ -4204,6 +4212,12 @@ package body Landin.Diagnostics.Citations is
             when 273 =>
                "Decisions: The core library and the derived programs",
             when 274 =>
+               "Decisions: The core library and the derived programs",
+            when 1031 =>
+               "Decisions: The core library and the derived programs",
+            when 1032 =>
+               "Decisions: The core library and the derived programs",
+            when 1033 =>
                "Decisions: The core library and the derived programs",
             when 379 =>
                "Decisions: The core library and the derived programs",
@@ -6250,6 +6264,15 @@ package body Landin.Diagnostics.Citations is
             when 274 =>
                "https://www.701.dev/spec.html#d274-the-library-says-what"
                & "-it-does",
+            when 1031 =>
+               "https://www.701.dev/spec.html#d1031-spans-instants-and-a"
+               & "ddresses-ship-their-comparison-evidence",
+            when 1032 =>
+               "https://www.701.dev/spec.html#d1032-a-handle-that-borrow"
+               & "s-nothing-is-new-and-a-second-way-to-make-one-keeps-over",
+            when 1033 =>
+               "https://www.701.dev/spec.html#d1033-a-library-name-is-pu"
+               & "blic-when-a-program-has-a-use-for-it",
             when 379 =>
                "https://www.701.dev/spec.html#d379-a-reservation-counts-"
                & "the-tombstones",

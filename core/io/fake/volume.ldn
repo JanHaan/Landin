@@ -57,7 +57,7 @@ public volume_openings: usize = 8
 public volume_space: type = struct
     now_seconds: i64
     now_nanoseconds: u32
-    openings: [8]volume_opening
+    openings: [volume_openings]volume_opening
     calls: usize
     fail_at: usize
     opens: usize
@@ -100,6 +100,7 @@ public volume_over: (inout state: volume_space, nodes: []mut volume_node,
                     -> (host: volume from state, nodes, working) =
     closed: volume_opening = (node: 0, position: 0, readable: false,
                               writable: false, appending: false, open: false)
+    --  [0560]: a repeat's count is a literal, `volume_openings`.
     state = (now_seconds: 0, now_nanoseconds: 0, openings: [8 of closed],
              calls: 0, fail_at: 0, opens: 0, renames: 0,
              synchronizations: 0, temporary_tries: 0)

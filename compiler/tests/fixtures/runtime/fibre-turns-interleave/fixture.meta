@@ -1,5 +1,5 @@
 class: runtime
-summary: D444 a group over a round of turns interleaves two tasks that yield, the home stack going on past both admissions and its join taking turns until both have ended
+summary: D444 a group over a round of turns interleaves two tasks that yield, the home stack going on past both admissions and its join taking turns until both have ended; then a task run by hand on stacks.prepare and stacks.switch marks, switches home, marks again and ends, its first frame zeroing its record's status and resuming home
 program: main.ldn
 root: ../../../../..
 profiles: specialization
