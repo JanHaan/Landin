@@ -2291,9 +2291,16 @@ def check_roadmap_citations(full_run):
             if any(pattern.match(line) for pattern in pointers):
                 continue
             for found in ROADMAP_CITATION.finditer(line):
+                #  The form is refused, not the record: an invented
+                #  identity in a test's register is refused as a real one
+                #  would be, so the refusal names the spellings it leaves.
                 out.append((relative, n,
-                            "%s is cited outside ROADMAP.md, which is the"
-                            " only place a roadmap identity belongs"
+                            "%s has the form of a roadmap identity, which"
+                            " belongs in ROADMAP.md alone, whether or not"
+                            " that item or record exists; text that needs"
+                            " an invented one, such as a test's register,"
+                            " can use a one-digit record such as SR-0 or a"
+                            " letter and a digit such as Q9"
                             % found.group(1)))
     return out
 
@@ -9086,6 +9093,13 @@ def check_named_files(full_run):
     console) is still read, but only for names with a directory, which name
     a repository script or file; a bare name there is an operand the
     example invents, such as `./number missing.txt`.
+
+    A path a proposal names before it exists is written with the word
+    `proposed` directly before it, "the proposed `scripts/flash.py`", and
+    that marks it for its whole document, command fences included.  The
+    check passes the marked path and refuses the word once the path
+    exists, so a proposal cannot go on saying it is one after it landed;
+    a proposal had to write its commands with placeholders before.
     """
     if not full_run:
         return []
@@ -9109,14 +9123,50 @@ def check_named_files(full_run):
                     roots.append(os.path.relpath(
                         os.path.join(here, name), ROOT))
 
+    proposing = re.compile(r"\bproposed\s+`?$", re.IGNORECASE)
+
+    def resolves(target, path):
+        if target in NAMED_FILE_ALLOWLIST or present(target):
+            return True
+        #  A bare name may sit next to the file that mentions it, or
+        #  anywhere in the tree: a document may name Ada units by their
+        #  file name and not by their path.
+        beside = os.path.relpath(
+            os.path.join(os.path.dirname(path), target), ROOT)
+        if not beside.startswith("..") and present(beside):
+            return True
+        return "/" not in target and target in basenames()
+
     for relative in roots:
         path = os.path.join(ROOT, relative)
         if not os.path.exists(path):
             continue
         ada = relative.endswith((".ads", ".adb"))
+        text = read_file(path, encoding="utf-8").splitlines()
+        #  The paths the document proposes, wherever it marks them.
+        #  The word may end the line before the path, as wrapped prose
+        #  puts it.
+        proposed = set()
+        before = ""
+        for n, line in enumerate(text, 1):
+            if ada:
+                line = line[line.find("--") + 2:] if "--" in line else ""
+            for found in named.finditer(line):
+                target = found.group(1)
+                ahead = line[:found.start()]
+                if not ahead.strip(" \t`"):
+                    ahead = before + " " + ahead
+                if (target is None or not proposing.search(ahead)
+                        or target in proposed):
+                    continue
+                proposed.add(target)
+                if resolves(target, path):
+                    out.append((relative, n,
+                                "this proposes %s, which is in the "
+                                "repository now; drop `proposed`" % target))
+            before = line.rstrip()
         fence = None
-        for n, line in enumerate(
-                read_file(path, encoding="utf-8").splitlines(), 1):
+        for n, line in enumerate(text, 1):
             #  In Ada only a comment names a file as a reference; a name in
             #  a string literal is data a test hands to the compiler.
             if ada:
@@ -9142,22 +9192,12 @@ def check_named_files(full_run):
                     continue
                 if fence is not None and "/" not in target:
                     continue
-                if target in NAMED_FILE_ALLOWLIST:
-                    continue
-                if present(target):
-                    continue
-                #  A bare name may sit next to the file that mentions it,
-                #  or anywhere in the tree: a document may name Ada units
-                #  by their file name and not by their path.
-                beside = os.path.relpath(
-                    os.path.join(os.path.dirname(path), target), ROOT)
-                if not beside.startswith("..") and present(beside):
-                    continue
-                if "/" not in target and target in basenames():
+                if target in proposed or resolves(target, path):
                     continue
                 out.append((relative, n,
-                            "this names %s, which is not in the repository"
-                            % target))
+                            "this names %s, which is not in the repository;"
+                            " correct it, or write `proposed` before a path"
+                            " a proposal adds" % target))
     return out
 
 
