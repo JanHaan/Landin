@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: the library reference's whole-file recipe opens the file named as its first argument with a deferred close and reads it a chunk at a time into a builder over 64 bytes, which reports text.no_space in failure.words' phrase, and then into a builder growing from the heap, which holds every byte and is released
+program: main.ldn
+root: ../../../../..
+run_files: input.txt
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0790, 0900, 0940, 0960, 1030, 1100, 1130, 1150, 1290, 1650, 1660, 1680
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
