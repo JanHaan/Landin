@@ -22576,8 +22576,9 @@ caches bytes of another hash. An input a job must not fetch is pinned
 the same way and marked `"fetch": "by hand"`: one its publisher will not
 serve to a script, ST's RM0433, or one whose URL serves whatever release
 is current, the RP2350 datasheet and the ESP32-C3 and -C5 manuals, so a
-job depending on its hash would fail the day a new release appeared: a person downloads it and puts it in the cache, and the fetcher
-verifies that copy, never downloads one, and without one says where to put
+job depending on its hash would fail the day a new release appeared. A
+person downloads it and puts it in the cache, and the fetcher verifies that
+copy, never downloads one, and without one says where to put
 it. No test reads a manual; the literals reviewed from one stay in the
 tests, each citing its section and page, and its pinned hash names the
 document they were reviewed against. A licence's notice stays in the tree, as a
