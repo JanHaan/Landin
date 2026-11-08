@@ -1068,6 +1068,39 @@ declared under a Landin name and linked by its own with
 `refine compile --link=libc game.ldn -o game` on Linux. A library the link
 cannot find is named with every directory searched.
 
+### C owns `main`
+
+```c
+#include <stdbool.h>
+
+extern char **environ;
+extern void _landin_host_initialize_arguments(int argc, char **argv,
+                                              char **envp);
+extern bool l_root(void);  /* a public extern(c) Landin routine */
+
+int main(int argc, char **argv)
+{
+    _landin_host_initialize_arguments(argc, argv, environ);
+    return l_root() ? 0 : 1;
+}
+```
+
+A program whose `main` is C's can call any public `extern(c)` Landin
+routine [1570], but no Landin entry runs first to keep the process's
+arguments and environment, so C hands them over itself:
+`_landin_host_initialize_arguments(argc, argv, envp)`, from
+`platform/posix`, before the first `system.new()` or `blocking.new()` and
+before it starts a thread that may make one. Without the call, `blocking.new()`
+or `system.new()` stops the program with a trap at a line of
+`platform/posix/processes.ldn`, `trap: unreachable`, which does not name
+the call it lacks. Files, standard streams and the heap work either way.
+[A C `main` that calls Landin](library.md#a-c-main-that-calls-landin) in
+the library reference has the rest: which values the call takes, and that
+nothing is copied, so C keeps `argv` and `envp` alive. The compiler's own
+tests build such a program
+[with the call](../compiler/tests/fixtures/abi/r440-native-startup-initialized/peer.c)
+and [without it](../compiler/tests/fixtures/abi/r440-native-startup-uninitialized/peer.c).
+
 ## Close to the machine
 
 ### Pointer arithmetic
