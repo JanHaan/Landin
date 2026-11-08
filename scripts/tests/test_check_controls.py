@@ -152,6 +152,23 @@ class PinnedFixtures(unittest.TestCase):
             " retired.\n"}), [])
 
 
+class RecordHints(unittest.TestCase):
+    """A test's re-record hint names ./scripts/dev-test.sh --record=."""
+
+    def test_the_wrapper_passes(self):
+        self.assertEqual(faults(checker.check_record_hints, written={
+            "compiler/ada/tests/src/a.adb":
+                '"regenerate it with ./scripts/dev-test.sh --record=layout"\n'
+        }), [])
+
+    def test_the_full_build_route_is_reported(self):
+        said = reasons(checker.check_record_hints, written={
+            "compiler/ada/tests/src/a.adb":
+                '"regenerate it with ./scripts/test.sh --record"\n'})
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("name ./scripts/dev-test.sh --record=WHAT", said[0])
+
+
 class NamedFiles(unittest.TestCase):
     """A document that names a repository file names one that exists."""
 

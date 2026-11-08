@@ -1063,7 +1063,7 @@ package body Landin.Tests.Targets_Suite is
          Landin.Testing.Fail
            (Item,
             "the recorded layout is missing; regenerate it with"
-            & " ./scripts/test.sh --record");
+            & " ./scripts/dev-test.sh --record=layout");
          return;
       end if;
 

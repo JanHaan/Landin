@@ -1265,7 +1265,7 @@ package body Landin.Tests.Server_Suite is
                Landin.Testing.Check_Equal
                  (Item, Unbounded.To_String (Result.Problem), "",
                   Name & " (once the difference is read, re-record it"
-                  & " alone with ./scripts/test.sh --record=server/"
+                  & " alone with ./scripts/dev-test.sh --record=server/"
                   & Name & ")");
             end;
          end if;

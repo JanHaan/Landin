@@ -8974,6 +8974,36 @@ def check_named_files(full_run):
     return out
 
 
+def check_record_hints(full_run):
+    """A test's hint to re-record names the developer wrapper.
+
+    `./scripts/test.sh --record` builds from the top before it records;
+    `./scripts/dev-test.sh --record=WHAT` is the route the local recipe
+    names.  The fixture harness's hint moved to it and three suites' hints
+    were left naming the slow one, so every hint in the test program's
+    sources is held to the wrapper.
+    """
+    if not full_run:
+        return []
+    out = []
+    slow = re.compile(r"(?<![\w-])test\.sh --record")
+    base = os.path.join(ROOT, "compiler/ada/tests/src")
+    for here, _, files in os.walk(base):
+        for name in sorted(files):
+            if not name.endswith((".ads", ".adb")):
+                continue
+            path = os.path.join(here, name)
+            relative = os.path.relpath(path, ROOT)
+            for n, line in enumerate(
+                    read_file(path, encoding="utf-8").splitlines(), 1):
+                if slow.search(line):
+                    out.append((relative, n,
+                                "a re-record hint names ./scripts/test.sh,"
+                                " which rebuilds from the top; name"
+                                " ./scripts/dev-test.sh --record=WHAT"))
+    return out
+
+
 AGENT_GUIDANCE_MAX_BYTES = 24 * 1024
 
 
@@ -10326,6 +10356,7 @@ def main(argv):
     extra += check_discussion_targets(full_run)
     extra += check_target_lists(full_run)
     extra += check_named_files(full_run)
+    extra += check_record_hints(full_run)
     extra += check_catalogue(full_run)
     extra += check_catalogue_labels(full_run)
     extra += check_emission_order(full_run)
