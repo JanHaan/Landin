@@ -9,7 +9,8 @@ macOS and FreeBSD, and firmware builds for Cortex-M, RV32 and windowed Xtensa.**
 
 The language is pre-v1 and still growing. Its compiler, `refine`, runs
 programs on Linux x86-64, arm64 and RV64, FreeBSD x86-64 and arm64 and
-macOS arm64, and
+macOS arm64, and builds firmware for Cortex-M, 32-bit RISC-V and windowed
+Xtensa.
 [Current compiler capabilities](#current-compiler-capabilities) lists what
 works today.
 

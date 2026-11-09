@@ -1928,7 +1928,7 @@ or waits for a signal, mints it instead of `blocking.new()`.
 
 | Call | What it does |
 |---|---|
-| `events.over(space, entries)` | Fill an `events.space` the caller declares `zeroed` and return a `host` over it and over `entries`, the table of fibres that may be unfinished at once, one more than a group's count. |
+| `events.over(state, entries)` | Fill an `events.space` the caller declares `zeroed` and return a `host` over it and over `entries`, the table of fibres that may be unfinished at once, one more than a group's count. |
 | `events.last_errno(host)` | The errno number of the calling thread's last failing call. |
 | `events.last_signal(host)` | The signal that ended the last child waited for. |
 

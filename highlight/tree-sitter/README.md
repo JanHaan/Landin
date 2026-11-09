@@ -9,8 +9,8 @@ identifiers outside their annotated positions. Where the lexer may offer a
 contextual word as its own token, because a declaration, a label or a
 parameter list could begin there, `distinct`, `link`, `option`, `as` and
 `caller` are still read as names: in an expression, as a declaration's name, as a statement's label,
-after `end` and as a field's or an argument's label. `refine` reserves only
-the words [1760] lists. The compiler and normative grammar decide legality.
+after `end` and as a field's or an argument's label. The language reserves
+only the words [1760] lists. The compiler and normative grammar decide legality.
 
 With Node.js available:
 
