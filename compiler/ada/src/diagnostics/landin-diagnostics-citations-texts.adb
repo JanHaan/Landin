@@ -32979,7 +32979,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "n still hold the thread until its other end reads. A chi"
                & "ld's pipe the system leaves blocking stays as it is rath"
                & "er than fail the spawn, since the cap covers it and the "
-               & "child has already started.",
+               & "child has already started. One report wakes every fibre "
+               & "that waits on the descriptor, and the first to run can f"
+               & "ill the room or take the input again, so a woken fibre a"
+               & "sks the descriptor once more before its call and waits a"
+               & "gain when it is no longer ready; a read on a blocking de"
+               & "scriptor is held to the same.",
             when 488 =>
                "Chosen: on Linux one signalfd reads every watched signal"
                & ", its mask growing with each `watch`, and the loop watch"

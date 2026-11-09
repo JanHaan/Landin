@@ -180,8 +180,8 @@ own `landin-grammar` fences, every refused spelling out of the two tables
 the compiler dispatches on, the codes out of the catalogue `check.py`
 generates, the installation steps out of the README's `Installing` section,
 with its links pointed at the published page, and the invocation out of
-`examples.md`. Nothing in it is transcribed by hand, so it cannot drift
-from what it describes. The full file is the primer followed by the tour,
+`examples.md`. Nothing in it is transcribed by hand; each part is
+regenerated from the source it describes. The full file is the primer followed by the tour,
 the specification and the worked programs; it is over a megabyte, mostly
 the specification's decision register, which is why the primer is also
 written on its own.

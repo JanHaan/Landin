@@ -33649,7 +33649,11 @@ terminal or a blocking socket the program hands the provider may report
 room for less than `PIPE_BUF`, and a write to one can still hold the
 thread until its other end reads. A child's pipe the system leaves
 blocking stays as it is rather than fail the spawn, since the cap covers
-it and the child has already started.
+it and the child has already started. One report wakes every fibre that
+waits on the descriptor, and the first to run can fill the room or take the
+input again, so a woken fibre asks the descriptor once more before its call
+and waits again when it is no longer ready; a read on a blocking descriptor
+is held to the same.
 
 **The alternatives:** setting `O_NONBLOCK` on every descriptor the
 provider is handed, which changes the open file a shell or another process
@@ -33665,6 +33669,10 @@ declined.
 blocking, read a thousand bytes at a time by another fibre of the same
 provider, which ends only if no write waits for its reader and compares
 the bytes read with those written; before this decision it never ended.
+`runtime/events-blocking-pipe-two-writers` has two fibres write 128 KiB
+each to one such pipe while a third reads it; before a woken fibre asked
+again, the second writer was handed room the first had taken, and the
+program never ended.
 
 ### D488 — The event provider reads every watched signal through one descriptor, and stopping reads what came
 

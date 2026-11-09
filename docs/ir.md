@@ -77,7 +77,7 @@ backend to interpret.
 A signature records whether its routine returns at all (`noreturn`, D231).
 A direct or indirect call of one that does not is followed at once by `Halt`,
 its block's terminator, which reports `unreachable` if a faulty callee
-returns after all (D232). The call has control and trap effects, and the
+returns after all (D232). That `Halt` has control and trap effects, and the
 verifier refuses a returning body with a nonreturning signature. Generic and erased evidence signatures retain
 the same flag; it never becomes an ordinary IR value type.
 

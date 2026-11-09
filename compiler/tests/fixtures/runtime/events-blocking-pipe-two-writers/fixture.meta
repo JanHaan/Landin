@@ -1,0 +1,8 @@
+class: runtime
+summary: D1045 under hosted/events two fibres each write 128 KiB in one io.write to one pipe the program made and left blocking while a third reads it, so the program ends only if a writer woken with the other re-checks the room before it writes; the reader sees every byte of each
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1380, 1620, 1660, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

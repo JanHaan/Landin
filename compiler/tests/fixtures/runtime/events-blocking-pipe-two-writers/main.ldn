@@ -1,0 +1,109 @@
+--  D1045: two fibres writing to one pipe that is still blocking both
+--  let the provider's reading fibre run.  When the pipe reports room,
+--  the loop wakes both writers; the first can fill the pipe again, so
+--  the second must find the pipe full and wait once more rather than
+--  write.  Each writer sends 128 KiB of its own byte in one `io.write`
+--  while a third fibre reads a little at a time.  The program ends only
+--  if no write is handed room the pipe no longer has, and the reader
+--  must see every byte of each writer.
+import core/failure
+import core/fibre
+import core/io
+import hosted/events
+import hosted/system
+import platform/posix
+
+half: usize = 131072
+
+mut ones: [131072]u8 = zeroed
+mut twos: [131072]u8 = zeroed
+mut taken: [1000]u8 = zeroed
+mut counted_ones: usize = 0
+mut counted_twos: usize = 0
+mut counted_other: usize = 0
+mut writers_left: usize = 2
+
+--  A check that did not hold.
+wrong: atom
+
+writing: type = struct
+    host: events.host
+    into: io.file
+    bytes: []u8
+end writing
+
+--  Write everything in one call; the last writer closes the pipe's end.
+write_all: (inout state: writing) -> none ! failure.reason =
+    try io.write(state.host, state.into, state.bytes)
+    writers_left -= 1
+    if writers_left == 0 then
+        closed: io.file = state.into
+        try io.close(state.host, closed)
+    end if
+end write_all
+
+reading: type = struct
+    host: events.host
+    source: io.file
+end reading
+
+--  Read until the pipe ends, at most 1000 bytes at a time, counting each
+--  writer's bytes.
+read_all: (inout state: reading) -> none ! failure.reason =
+    loop do
+        got: usize = try io.read(state.host, state.source, taken)
+        break when got == 0
+        for at in usize(0)..<got do
+            if taken[at] == 1 then
+                counted_ones += 1
+            elsif taken[at] == 2 then
+                counted_twos += 1
+            else
+                counted_other += 1
+            end if
+        end for
+    end loop
+    closed: io.file = state.source
+    try io.close(state.host, closed)
+end read_all
+
+mut backing: [3 * 32768]u8 = zeroed
+
+run: (host: events.host) -> none ! ... =
+    ends: posix.pipe_ends = try posix.pipe()
+    fail wrong when try posix.non_blocking(ends.writing)
+      or try posix.non_blocking(ends.reading)
+    mut tasks := try fibre.turns_over(any(addr host), backing, 3)
+    defer fibre.join(tasks) else none
+    into: io.file = system.file_of(ends.writing)
+    first: writing = (host: host, into: into, bytes: ones[0..<half])
+    try fibre.admit(tasks, write_all, first)
+    second: writing = (host: host, into: into, bytes: twos[0..<half])
+    try fibre.admit(tasks, write_all, second)
+    reader: reading = (host: host, source: system.file_of(ends.reading))
+    try fibre.admit(tasks, read_all, reader)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    for at in usize(0)..<half do
+        ones[at] = 1
+        twos[at] = 2
+    end for
+    mut state: events.space = zeroed
+    mut entries: [4]usize = zeroed
+    host := events.over(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when counted_ones <> half or counted_twos <> half
+      or counted_other <> 0
+    code = 42
+end main

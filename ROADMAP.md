@@ -3751,15 +3751,15 @@ baseline is recorded:
   target/level pair. A level no runner executes, `x86-64-v4` if the hosted
   runners lack AVX-512, is a `limit` row with its activation, never a
   skipped measurement or a lower level in its place.
-- **Baselines** are committed data keyed by target, level, optimization
-  profile, workload and runner class, with the runner's CPU model and image. A candidate is
+- **Baselines** are committed data keyed by target, level, firmware profile
+  where there is one, optimization profile, workload and runner class, with the runner's CPU model and image. A candidate is
   compared with its base commit's baselines, never its own; a commit that
   changes one names each key it changes, and a changed runner class
   re-baselines rather than fails.
 - **Cost.** Configurations whose emitted bytes are identical are measured
   once and cite the identity. Size runs on every push; time runs on the
-  schedule and on dispatch, whose scopes today run the boards alone and which
-  this item extends to the timing jobs. A pilot over the whole matrix records its minutes, its
+  schedule and on dispatch: the schedule and a `scope=boards` dispatch run
+  the boards alone today, and this item adds the timing jobs to them. A pilot over the whole matrix records its minutes, its
   jobs against the account's concurrent-job limits and its noise before the
   thresholds are enforced.
 

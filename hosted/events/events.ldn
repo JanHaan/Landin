@@ -414,14 +414,20 @@ end await
 
 --  The descriptor ready in the direction asked, waiting for it as a
 --  fibre does: failed when it was shut or closed through the provider.
+--  One report wakes every fibre waiting on the descriptor, and the first
+--  to run can take the room or the input again, so a woken fibre asks
+--  once more before it returns: a blocking descriptor's call would
+--  otherwise hold the thread (D1045).
 until_ready: (self: host, descriptor: posix.descriptor, output: bool)
              -> none ! io.io_failed =
-    return when ready_now(descriptor, output)
-    answer: u8 = await(self, descriptor, output, 0) else (problem)
-        record(self, problem)
-        fail io.io_failed
-    end
-    fail io.io_failed when answer == failed
+    loop do
+        return when ready_now(descriptor, output)
+        answer: u8 = await(self, descriptor, output, 0) else (problem)
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when answer == failed
+    end loop
 end until_ready
 
 --  Write some of `bytes` to `opened`: a send on a socket, a write
