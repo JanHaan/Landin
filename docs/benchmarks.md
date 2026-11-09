@@ -65,12 +65,12 @@ Landin's geometric mean over the five is six times C's time.
 
 ### After the first fixes
 
-The cheapest of the causes below were fixed next: small copies and clears
-written as moves at `speed`, traps moved after each routine's body, `movapd`
-between registers, the slice element's self-comparison dropped, a result
-allowed its dying operand's register, routine-wide registers chosen by loop
-depth, jumps threaded past empty blocks, and `hosted/heap` and
-`core/region` reworked. The same five sources, rebuilt and run the same way
+The cheapest of the causes below were fixed next. At `speed` small copies
+and clears became moves; traps moved after each routine's body; a float
+register is copied with `movapd`; the slice element's self-comparison was
+dropped; a result may take its dying operand's register; routine-wide
+registers are chosen by loop depth; jumps are threaded past empty blocks;
+and `hosted/heap` and `core/region` were reworked. The same five sources, rebuilt and run the same way
 on the same core with no build running beside them, produced the same
 output:
 
@@ -290,6 +290,6 @@ compiler before them:
 | A fifth of the compile in GNAT's runtime: each indexed read of a container built a controlled reference, finalized under abort deferral, accessors returned whole records that the controlled scope kept GCC from eliding, and the checker elaborated about ten container instances for every routine it checked | reads through `Element`, the instances at library level | 1.24 to 0.63 seconds, with byte-identical assembly |
 | The IR verifier's atom-set and encoding duplicate checks quadratic per set, its pointer-provenance trace clearing every block for every slot, and x86-64 emission allocating every routine once to test its frame and again to emit it | linear checks, a trace that clears what it marked, a frame bound that allocates only when the bound fails | lowering a third and emission at speed 30 per cent faster, with byte-identical assembly |
 
-Together they take hello-world from 1.16 to 0.29 seconds and the five ports
-from 1.19 to 1.25 seconds to 0.31 to 0.35 at speed, with each port's output
-unchanged.
+Together they take hello-world's compile at speed from 1.16 to 0.29
+seconds, and each of the five ports' from between 1.19 and 1.25 seconds to
+between 0.31 and 0.35, with each port's output unchanged.

@@ -24,11 +24,12 @@ together.
 ## Write Landin, not C in Landin
 
 C makes you encode things the compiler cannot see: an out pointer for a
-second result, `-1` for "not found", a `typedef` that mixes freely with its
-base, a flag variable to escape two loops, a label to jump to for cleanup,
-a heap every routine reaches for. Landin has a direct form for each. The
-compiler checks the first six; the last two, passing capabilities and
-allocators, are conventions it does not check. Each entry points to the
+second result, `-1` for "not found", a pointer and a length passed apart, a
+`typedef` that mixes freely with its base, a flag variable to escape two
+loops, a label to jump to for cleanup, I/O any routine can reach, and a heap
+every routine reaches for. Landin has a direct form for each. The compiler
+checks the first six; the last two, passing the I/O handle and the
+allocator, are conventions it does not check. Each entry points to the
 tour entry that explains it, and [the tour](../tour.md) is where the rest
 of them are.
 
@@ -430,8 +431,8 @@ from_heap_or_arena: () -> (sum: i32) ! mem.out_of_memory =
 end from_heap_or_arena
 ```
 
-There is no ambient heap. An allocator is a capability passed to whatever
-allocates, so the same code runs on the heap, in an arena over a buffer, or
+There is no ambient heap. Whatever allocates is passed an allocator, so
+the same code runs on the heap, in an arena over a buffer, or
 under a failure injector in a test [1360]. A failed allocation is
 `out_of_memory`, which the caller must handle. Nothing is freed for you:
 there is no garbage collector and no destructor, and `defer` is where a
@@ -471,8 +472,8 @@ and a caller handles them with `else` or passes them on with `try` [0940],
 [1030]. Nothing is set behind your back and nothing can be forgotten: a
 call that can fail and is neither handled nor passed on is a compile error.
 Only what cannot be foreseen is a failure; what can be checked is checked
-first [0950]. The number is still there when a log wants it:
-`blocking.last_errno(host)` gives the errno of the call that failed, and
+first [0950]. The errno is still there when a log wants it:
+`blocking.last_errno(host)` gives the number the failed call set, and
 `platform/posix` names every errno as an atom. For a person,
 `failure.words(problem)` from `core/failure` turns a library failure into
 a short phrase: it is Landin's `strerror`.
@@ -1290,8 +1291,11 @@ takes an hour or two. These parts have the least in common with C:
 | C habit | what to write today |
 | --- | --- |
 | pointer arithmetic that keeps the base's origin | the address as an integer; the result borrows nothing |
-| threads | one thread per process: start another program with `io.spawn` and talk to it over its pipes, or wait on several descriptors at once with `platform/posix`'s `poll` |
 | printing a float, `%f` | scale it to a whole number and print the parts, as [Printing formatted values](../examples.md#printing-formatted-values) does with tenths |
+
+Threads have an answer: `hosted/thread` starts threads as a group the
+starting routine joins, as [the library reference](library.md#hostedthread)
+describes.
 
 Open work belongs to `ROADMAP.md`, whose register says for each gap what
 would close it and when it will be taken up.

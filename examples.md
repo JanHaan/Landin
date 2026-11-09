@@ -21,8 +21,8 @@ refine compile main.ldn -o fizzbuzz
 ./fizzbuzz
 ```
 
-Every program prints what it computes and returns 0. What it prints is
-shown under its listing. A program that reads its standard input or takes
+Each program prints what it computes, shown under its listing, and
+returns 0 when it succeeds. A program that reads its standard input or takes
 an argument says so in its section. `refine` compiles for the computer it
 runs on unless `--target` names another.
 
@@ -32,9 +32,10 @@ says where the program lives in the repository.
 
 ## Printing formatted values
 
-A template's `{}` placeholders take values of any type. One line is one
-call, `io.write_format(host, io.out(host), "{} lines\n", [any(addr
-count)])`, as Counting lines below prints its count. A program that prints
+A template's `{}` placeholders take values of any type that conforms to
+`text.formattable`. One line is one call, `io.write_format(host,
+io.out(host), "{} lines\n", [any(addr lines)])`, as Counting lines below
+prints its count. A program that prints
 many lines, as this one does, gathers them in a buffered writer, which
 writes them in a few large writes:
 
@@ -200,8 +201,9 @@ missing-settings.conf: not found
 
 ## Counting lines in a named file
 
-`wc -l` for one file: the program opens the file its first argument names,
-counts its lines and prints the count. When something fails, it says what
+Like `wc -l` for one file, except that a last line without its newline
+counts too: the program opens the file its first argument names, counts
+its lines and prints the count. When something fails, it says what
 in words on standard error and returns 1.
 
 - `io.argument_at(host, 0)` lends the first argument as a host string, the
@@ -215,10 +217,10 @@ in words on standard error and returns 1.
   buffer is the failure `io.line_too_long`, which the count takes as one
   more line.
 - A `defer` closes the file on every way out of `count_lines` [1100].
-- `complain` writes the program's name, what it was working on and
-  `failure.words` of the failure to `io.err(host)`, and `main` the count
-  to `io.out(host)`, each in one `io.write_format` call: a template whose
-  `{}` take the values in order [1370] [1380].
+- `complain` writes the program's name, what it was working on and the
+  failure's words, `failure.words`, to `io.err(host)`; `main` writes the
+  count to `io.out(host)`. Each is one `io.write_format` call, whose `{}`
+  take the values in order [1370] [1380].
 
 Fixture source: `compiler/tests/fixtures/runtime/line-count/main.ldn`.
 
@@ -964,8 +966,8 @@ number, right-aligned in six columns, and a tab.
   [0790] [0800], without its `\n` or `\r\n`.
 - A line too long for the buffer is the failure `io.line_too_long`; the
   program numbers it with a note in its place and goes on.
-- A template placeholder has no width, so the number is right-aligned in a
-  small `text.builder` with `text.align_right`, and each piece goes out
+- A placeholder has no width, so the number is right-aligned with
+  `text.align_right` in a small `text.builder`, and each piece is written
   with `io.put`.
 - The output goes through a buffered writer. There are no destructors, so
   `main` flushes at the end and a `defer` flushes on every other way out

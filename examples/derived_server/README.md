@@ -8,19 +8,14 @@ WAIT 200 a      answered "a done" after 200 milliseconds
 NOW b           answered "b done" at once
 ```
 
-Any other line is answered `malformed`. Build and run it on a hosted
-target with the pinned compiler:
+Any other line is answered `malformed`. From the repository root, with
+`refine` installed, run it on any hosted target:
 
 ```sh
-./scripts/dev-build.sh
-compiler/ada/build/nix-x86_64-linux/debug/bin/refine --root=. --emit=exe \
-  examples/derived_server -o compiler/ada/build/derived-server
-compiler/ada/build/derived-server --io=blocking --port=7070
+refine run --root=. examples/derived_server -- --io=blocking --port=7070
 ```
 
-The build directory is named for the host's build tag, `linux-amd64` in
-the container and `nix-x86_64-linux` under `nix develop`. The server
-listens on 127.0.0.1, at the port `--port` gives, 7070 when it is not
+The server listens on 127.0.0.1, at the port `--port` gives, 7070 when it is not
 given and one the system picks for 0, and its first line of output says
 where: `listening on 127.0.0.1:7070`.
 

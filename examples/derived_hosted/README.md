@@ -1,23 +1,22 @@
 # Derived hosted log filter
 
-The complete executable derivative of prototype 4 lives in this directory.
-Build and run it on native Linux x86-64 from the repository root, in the
-pinned development environment. The compiler's path depends on the build
-tag, which the Nix shell sets in `LANDIN_BUILD_TAG` and which is otherwise
-`linux-amd64`; the build prints the path too.
+A log filter whose command line builds a chain of filters, dispatched at
+run time: the working version of prototype 4, whose complete program is
+this directory. From the repository root, with `refine` installed, on any
+hosted target:
 
 ```sh
-./scripts/dev-build.sh --compiler-only
-refine="compiler/ada/build/${LANDIN_BUILD_TAG:-linux-amd64}/${LANDIN_BUILD_MODE:-debug}/bin/refine"
 demo=$(mktemp -d "${TMPDIR:-/tmp}/landin-log-filter.XXXXXX")
 printf 'INFO request started\nINFO request done\nERROR request failed\n' > "$demo/input.log"
-"$refine" compile --root=. examples/derived_hosted -o "$demo/log-filter"
+refine compile --root=. examples/derived_hosted -o "$demo/log-filter"
 "$demo/log-filter" --level INFO --match request --every 2 "$demo/input.log"
 "$demo/log-filter" --out "$demo/selected.log" --level ERROR "$demo/input.log"
 ```
 
-The sample input, the executable and the selected output stay in the
-temporary directory `$demo` names, to inspect and then remove.
+The first run prints a count for each of the eight levels and `kept: 1`;
+the second writes the `ERROR` line to `selected.log`. The sample input, the
+executable and the selected output stay in the temporary directory `$demo`
+names, to inspect and then remove.
 
 User arguments build an ordered heterogeneous filter chain. `--level` accepts
 DEBUG, INFO, WARN, ERROR, or FATAL. A level is a complete leading token followed
@@ -46,8 +45,8 @@ allocator without a fixed line-length limit. Consecutive leading `--level`
 filters can reject a line from at most six prefix bytes; the reader then
 discards it through the same fixed-size chunk, including an unterminated final
 line. A line that reaches another filter is assembled before that filter runs.
-Allocation and read failures are
-terminal for that reader; its partial internal line is not a retry protocol.
+An allocation or read failure ends that reader for good; the partial line it
+held is not kept for a retry.
 
 Every argument is copied before parsing, and a path is a host string over its
 copy. Configuration and match filters therefore survive later mutation of a
@@ -71,7 +70,7 @@ and diagnostics retain their write-all behavior and report failure without
 blindly retrying an unknown prefix. These policies claim neither transactional
 files nor durable delivery.
 
-The root supplies a heap capability to ordinary `core/region`; every run
+The root supplies a heap provider to ordinary `core/region`; every run
 allocation, including region bookkeeping, uses that supplied authority.
 A new region carries an explicit empty ledger; the list is initialized when
 the first payload is recorded, keeping the constructor's `from parent`
@@ -89,15 +88,13 @@ retained pointers, and double release remain manual lifetime obligations.
 `run_logged` and `build_logged` accept an ordinary `any core/diag.log`, shared
 with the prototype-2 parser support. Convenience wrappers create the streaming
 logger from the world supplied by their caller. Neither application routine
-mints a host capability. The hosted root is `entry`; tests pass the same
+makes a host handle of its own. The hosted root is `entry`; tests pass the same
 application a caller-backed memory world and deterministic allocator failures.
 
 The full source/support/fixture mapping is in
 [DERIVATION.md](../../compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md).
 
-The complete derivative and its failure/recovery oracles also run on native
-Darwin arm64 in the shared six-profile hosted parity runtime matrix. Native GDB and LLDB
-inspect the same complete sources at none/off, size/auto and size/all; see the
-[hosted parity guide](../../compiler/tests/darwin/README.md). The retired native acceptance
-required the same committed source archive on both hosted targets; nothing
-checks that now.
+The complete program and its failure and recovery checks also run natively
+on macOS arm64 in the six-profile hosted parity matrix, and native GDB and
+LLDB inspect the same sources at none/off, size/auto and size/all; see the
+[hosted parity guide](../../compiler/tests/darwin/README.md).
