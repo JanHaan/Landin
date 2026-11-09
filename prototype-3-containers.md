@@ -14,7 +14,9 @@
 >
 > The sketch itself begins at its first module heading, `core/mem`. The
 > notes between this banner and that heading reconcile the sketch with the
-> specification, and a reader can skip them.
+> specification, and a reader can skip them. `D211` names a decision
+> recorded in `spec.md`, and `[0910]` a numbered paragraph of `tour.md` or
+> `spec.md`; `refine explain D211` prints either.
 
 Current with specification 0.2.8. Its own findings Z1-Z19 are all
 resolved below.
@@ -24,17 +26,18 @@ parameterised types, concepts, allocator threading, escape rules and
 specialisation. A driver never instantiates anything and a parser
 barely does. A container library does nothing else.
 
-D211 separates those semantic instances from optional dispatch specialization.
-Allocator size/alignment evidence works with specialization off; expected
-instance metadata alone does not prove the incoming provider. Hidden evidence
-and aggregate-result ABI positions remain even after a proved entry call becomes
-direct. A counted failing allocator's attempts, rollback and frees remain
-observable, as do initialized-prefix publication and retained origins. D187's
-narrow raw-storage `unchecked` regions add no optimizer assumptions. D210
-reorders only explicitly optimal fields, never a container's natural layout;
-D209's numeric array loops do not turn arbitrary raw storage into initialized
-array values. These rules also preserve prototype 2's diagnostic provider and
-prototype 4's heterogeneous capability chains.
+Those instances are semantic, and dispatch specialization is an optional
+optimization over them (D211). An allocator's size and alignment evidence
+works with specialization off, and an instance's expected metadata does not
+prove which provider arrives. A call whose entry is proved becomes direct
+but keeps its hidden evidence and aggregate-result positions. A counted
+failing allocator's attempts, rollback and frees stay observable, as do
+initialized-prefix publication and retained origins. Raw storage's narrow
+`unchecked` regions give the optimizer no assumptions (D187). Only fields
+marked optimal are reordered, never a container's natural layout (D210),
+and numeric array loops do not make raw storage an initialized array
+(D209). Prototype 2's diagnostic provider and prototype 4's heterogeneous
+provider chains keep the same guarantees.
 
 D221 requires static provider-entry selection to name one declaration across
 the distinct concept closure. A composed map or allocator concept cannot pick
@@ -85,15 +88,16 @@ question is written out at the end.
 
 ## core/mem  —  allocation as a capability
 
-The repository `core/mem` implements the allocator interface below, plus an
-explicit monotonic arena and a budgeted failing arena. Its private raw storage
-`raw(t)` (D151) supersedes the later `slice_from` sketch: the public
-`storage(t)` alias lets `core/vec` name that nominal identity without exposing
-its fields, and a checked one-slot transfer copies initialized values during growth. The
-initialized slice witness holds exactly that prefix: a complete typed store
-precedes each extension, and `mem.used` returns the witness `from storage`.
-It never turns capacity into a slice length; `mem.replace` checks an existing
-initialized index and declares its inserted value escaping.
+The repository's `core/mem` implements the allocator interface below;
+`core/arena` supplies the monotonic arena, and `core/fault` an injector
+that fails on purpose over any provider. The private raw storage `raw(t)`
+(D151) replaces the later `slice_from` sketch. Its public alias
+`storage(t)` lets `core/vec` name the type without seeing its fields, and
+growth copies initialized values by a checked one-slot transfer. A
+complete typed store precedes each extension, so the slice `mem.used`
+returns `from storage` covers exactly the initialized prefix; capacity
+never becomes a slice length. `mem.replace` checks that its index is
+initialized and declares the inserted value escaping.
 
 For ordinary initialized storage, `addr view[index]` retains the slice's
 source origin [0790], as does an address selected through a pointer's `.val`.
@@ -206,12 +210,12 @@ separate pointer construction.
 
 ## core/mem  —  a bump allocator over borrowed storage
 
-The library names this allocator `mem.arena` and builds it with
-`mem.arena_over(base, size)` from a first byte and a length rather than a
-slice, returning it `from base`; the current representation is private and the
-checked constructor refuses tracked frame backing. Prototypes 2 and 4, the tour and `core/mem`
-all use that name. The sketch keeps `bump` and `bump_over` as its design
-record.
+The library's allocator is `core/arena`'s `arena.arena`, built by
+`arena.over(state, base, size)` from caller-owned state, a first byte and a
+length rather than a slice, and returned `from state, base`. Its
+representation is private. The checked `over` refuses frame backing, which
+`arena.over_unchecked` takes with an explicit lifetime opt-out. The sketch
+keeps `bump` and `bump_over` as its design record.
 
 ```landin
 public bump: type = struct
@@ -700,18 +704,20 @@ end get
 
 ```
 
-The sketch below counts tombstones toward the three-quarter threshold. The
-executable map instead reuses available dead or free buckets during churn.
-
-The executable D198 map grows only when a tombstone-free table is crowded. Its
-growth uses three fallible acquisitions and a publication-last rollback
-transaction. Its `entries()` cursor and
-`next_entry` operation follow linked live buckets in insertion order rather than the raw
-dense prefix, which still contains removed values. Reference-bearing entries
-remain `from map`; a scalar copy retains no view. Cursors are manual positions:
-restart after mutation and never resume one on a different map. This supplies
-the complete derivative's enumeration without making the public map
-composition opaque or changing prototype 4's retained-reference obligations.
+The sketch below counts tombstones toward the three-quarter threshold, and
+so does the library's map (D198). Its `capacity` is the number of entries
+that fit before a new key rebuilds the table, three quarters of its
+`slots`. An absent key first reuses a dead bucket on its own probe chain
+without a rebuild. A key taking a free bucket counts the tombstones with
+the live entries against `capacity`; when they reach it, the table is
+rebuilt at the same `slots` while the live entries fit in half its
+`capacity`, and doubled otherwise. A rebuild makes three fallible
+acquisitions and publishes the new table last, so a failure keeps the old
+one. The `entries()` cursor and `next_entry` follow linked live buckets in
+insertion order rather than the dense prefix, which still holds removed
+values. Reference-bearing entries remain `from map`; a scalar copy retains
+no view. A cursor is a manual position: restart it after a mutation and
+never resume it on another map.
 
 ```landin
 crowded: (key_type: type is hashable, value_type: type, m: map(key_type, value_type)) -> (yes: bool) =
@@ -881,18 +887,14 @@ make the node representation serializable: copying a text descriptor does not
 copy or relocate its backing. [0860]'s shallow reference-field limits still
 apply to the retained names.
 
-The library uses a widened `distinct usize` representation rather than the
-compact historical sketch above for
-`node_id`. Construction and extraction are explicit; the `id` and `ordinal`
-convenience functions retain that same boundary. This replaces the earlier
-one-field nominal workaround. New branches may name only existing contiguous
-children. Empty
-branches are allowed, and shared children are counted once per incoming path.
-Each immutable node stores its checked `usize` leaf total and a two-word
-cumulative total, so range sums and queries use constant work and bounded
-stack space even for deep structures. Overflow is a declared refusal before
-publication. The recursive code below remains the equivalent counting sketch,
-not the library's execution strategy.
+The library's `node_id` is a `distinct usize`, not the sketch's `u32`, and
+is made and read only explicitly, by `tree.id` and `tree.ordinal`. A new
+branch names an existing contiguous range of children, possibly empty, and
+a child reached by several paths counts once for each. Each node stores its
+checked `usize` leaf total and a two-word cumulative total, so range sums
+and queries take constant work and bounded stack at any depth. Overflow
+fails with a declared error before the node is published. The recursive
+code below is the equivalent counting sketch, not how the library counts.
 
 The hosted library corrects that original representation claim without
 rewriting the historical sketch: `name` is a reference-bearing `utf8` value. A name produced

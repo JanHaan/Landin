@@ -7,7 +7,8 @@ prototype remains a historical stress sketch. Its firmware half,
 `firmware/tick`, `firmware/board` and `firmware/app`, is derived in
 `compiler/tests/counterpart/`, mapped by its `DERIVATION.md`, and shares
 `app/protocol` with this server unchanged. The sketch's `core/fibre` is the
-library's, with D464's spellings.
+library's, with D464's spellings. `D464` names a decision recorded in
+`spec.md`; `refine explain D464` prints it.
 
 Two fixtures run it. `runtime/derived-server-two-process` is the server in
 a process of its own and a client in another, the server started through
@@ -77,15 +78,15 @@ server's last output line, written once its signal waiter had closed the
 listener and every session.
 
 The two children run the same `app/server`, `app/session` and
-`app/protocol`. Only `app/app.ldn`'s minting routines differ:
-`over_blocking` erases a `hosted/blocking` handle and calls `server.serve`,
-and `over_events` makes a `hosted/events` handle over its own frame's
-state and a round of four entries, the signal waiter and two sessions and
-one more, erases it as `any fibre.turns`, `any signal.signals`,
+`app/protocol`; only `app/app.ldn`'s minting routines differ.
+`over_blocking` erases a `hosted/blocking` handle and calls `server.serve`.
+`over_events` makes a `hosted/events` handle over its own frame's state and
+a round of four entries: the signal waiter, two sessions and one more. It
+erases that handle as `any fibre.turns`, `any signal.signals`,
 `any fibre.scheduler`, `any net.network`, `any time.clock` and
-`any io.world`, listens through `listening` and calls
-`server.serve_until_terminated`, returning 0 when it returns and 1 when it
-fails.
+`any io.world`, listens through `listening`, and calls
+`server.serve_until_terminated`, returning 0 when that returns and 1 when
+it fails.
 
 `runtime/derived-server-fake-turns` runs `serve_until_terminated`, the
 routine the event provider serves with, beside `ask_both` in a fibre,
