@@ -1,31 +1,32 @@
 # Development and validation environments
 
-Canonical hosting is GitHub; git.sr.ht
-is a mirror. The exact-revision native acceptance described below approved
-every revision through 0.2.0 and no longer runs. `.github/workflows/gate.yml`
-is what runs now, on every target unless a push meets the verified
-explanatory-only reuse policy below. Historical SourceHut gate
-results below keep their original meaning. The acceptance operations described
-here are historical; `scripts/ci/` has been removed.
+`.github/workflows/gate.yml` is what runs now: every target on every push,
+unless the push meets one of its two reuse conditions, identical-tree reuse
+or an explanatory edit, which the
+[gate reference](process.md#the-mechanical-gate) states. Canonical hosting
+is GitHub; git.sr.ht is a mirror. The exact-revision native acceptance
+approved every revision through 0.2.0 and no longer runs; `scripts/ci/` has
+been removed, and the passages below that describe it, and the SourceHut
+gate results they cite, are historical.
 
 Native macOS arm64 remains a development and gate environment. Use
 `./scripts/dev-test.sh --host` for compiler-host feedback; the gate runs
 `darwin-host`, `darwin-host-release`, whose last step is the LLDB sessions,
-and `darwin-parity` on the GitHub-hosted `macos-26` image. The former Darwin
-acceptance used `python3 scripts/ci/darwin.py accept COMMIT` on the Mac. Its
-verified bundle had to match the Linux bundle with compatible committed scope
-at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
-identities. See the [native Mac guide](../environments/macos-arm64/README.md)
-for current development commands and the retired acceptance record.
+and `darwin-parity` on the GitHub-hosted `macos-26` image. See the
+[native Mac guide](../environments/macos-arm64/README.md) for current
+development commands.
 
-The verified explanatory-only remote reuse policy in `AGENTS.md` permits
-qualifying edits to reuse a full successful main gate from the preceding
-seven days. Document and script checks always run.
+An explanatory edit may reuse a complete successful push run, of `main` or
+of a branch, from the preceding seven days whose commit is an ancestor of
+the edit; the [gate reference](process.md#the-mechanical-gate) states the
+conditions. Document and script checks always run.
 
 Embedded firmware and freestanding library consumers run on Linux x86-64
-through `environments/cortex-m/run.py`, in the gate's two `cortex-m` jobs on each
-full gate run, each running one of its two parts. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`
-checks compiler behavior for Cortex; they do not execute embedded workloads.
+through `environments/cortex-m/run.py`. A full gate run splits its lanes
+into three `cortex-m` jobs, `cortex-m-programs`, `cortex-m-corpus` and
+`cortex-m-rv32`, which keep separate QEMU CPU and synthetic device
+evidence. Mac `--host` checks compiler behavior for Cortex-M and executes
+no embedded workload.
 
 FreeBSD x86-64 and arm64 run in [system VMs](../environments/freebsd/README.md)
 on Linux. Each has separate recurring runtime, native guest LLDB and C ABI
@@ -65,22 +66,16 @@ expose none. A probe on 2026-10-16 (run 38921327105) found `/dev/kvm` on
 `ubuntu-24.04` and none on `ubuntu-24.04-arm` or `ubuntu-22.04-arm`, whose
 kernels log `kvm: HYP mode not available`.
 
-From 2026-10-07 to 2026-10-16 the Linux and Darwin jobs ran on registered
-runners instead, and FreeBSD on self-hosted VM controllers, on three Linux machines and a Mac whose macOS VMs shared
-their cores with the Linux slots and the FreeBSD VMs. At the switch the
-hosted gates had taken 17 to 23 minutes and the registered ones took 22 to
-24: the x86-64 debug suite went from 9.5 to 13.5 minutes and Darwin parity
-from 8 to 17, against gains on Linux arm64 and the Darwin build. Their
-setup, service repairs and inspection runs are in this document as of
-da765093.
+From 2026-10-07 to 2026-10-16 these jobs ran on registered runners, which
+measured slower; their setup is in this document as of da765093.
 
 Each job installs what it needs on a fresh image. The pinned-toolchain
 action fetches the Ada archives checksummed in `environments/pins.sh`, in
 4 to 15 seconds on the hosted images. `scripts/ci_packages.sh` verifies the
 requested packages, including Clang's exact version, and runs apt only for
-missing or mismatched ones. Builds and suites use the widths measured on
-four hosted vCPUs: four GPRbuild workers on Linux, three on Darwin, and
-eight fixture workers. The gate shares each host's checked debug and
+missing or mismatched ones. The hosted images have four vCPUs, and the
+widths measured on them are four GPRbuild workers on Linux, three on Darwin
+and eight fixture workers. The gate shares each host's checked debug and
 release builds with that host's lanes and determinism manifest; standalone
 determinism builds its own compiler.
 
@@ -97,29 +92,21 @@ See the [FreeBSD VMs](../environments/freebsd/README.md) for the guests.
 | environment | role | status |
 |---|---|---|
 | native macOS arm64 | compiler-host development; `darwin-host`, `darwin-host-release` with the LLDB sessions, and `darwin-parity` gate lanes | working |
-| exact-revision Darwin acceptance | verified Mac evidence matched Linux before approval | retired |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | Apple Container, `linux/arm64` on Apple silicon | Linux arm64 work before a push: the pinned aarch64 toolchain runs natively, with no emulation, in a Debian container | working |
 | QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain; `nix develop` provides it, and the gate's `rv64-qemu` jobs run RV64's | working |
 | FreeBSD amd64 and arm64 system VMs on Linux | independent runtime, native guest LLDB and C ABI gate lanes with checked CPU levels | working |
-| native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
-| builds.sr.ht | retired: the repository submits no build manifest | retired |
-| GitHub Actions | `gate.yml` runs every target unless the verified explanatory-only reuse policy above applies: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane and the called `determinism.yml` comparison; `links.yml`, `release.yml` and `pages.yml` run separately | working |
+| GitHub Actions | `gate.yml` runs every target unless a reuse condition applies: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, FreeBSD's VM lanes, RV64 under QEMU user emulation, every Cortex-M and Xtensa lane, the called `determinism.yml` comparison and, on a board-scope event, the physical boards on the rig; `links.yml`, `release.yml` and `pages.yml` run separately | working |
 
-The retired acceptance controller ran the committed `scripts/ci/policy.json` scope
-against one committed archive. Routine promotion ran debug compiler-host
-checks, the complete release suite and native identity, release quality,
-bindings, and document/tooling checks. GDB ran only for substantial debugging
-regression risk or a major milestone. Milestones restored the full matrix in
-both compiler modes. Actual versions, binary hashes, commands, logs and
-artifacts were retained; verified export, annotated approval and atomic main
-promotion were required. See the retired
-[native acceptance operations](../environments/native-ci/README.md) and
-[validation workflow](process.md) for that historical process.
+The exact-revision acceptance on the native Linux runner, its Darwin
+counterpart and the builds.sr.ht manifests are retired; the
+[historical section](#historical-the-exact-revision-acceptance) below says
+what they were.
 
 No build manifest is submitted. GitHub is canonical and git.sr.ht is a mirror,
-kept in step by a second push URL on the same remote (`AGENTS.md` says what
-the mirror holds and how a deletion reaches it); the Pages and
+kept in step by a second push URL on the same remote (the
+[gate reference](process.md#the-mechanical-gate) says what the mirror holds
+and how a deletion reaches it); the Pages and
 GitHub-mirror manifests are retired with the SourceHut gate, and
 `scripts/site.sh` renders and packages without publishing.
 `.github/workflows/pages.yml` is the only publisher. The former automatic Nix manifest was
@@ -147,7 +134,8 @@ the gate.
 
 ## Commands
 
-The same commands run in every environment:
+Every environment runs the same scripts once its pinned toolchain is named;
+the nix shell names it itself:
 
 ```sh
 export LANDIN_GNAT_HOME=...      # the pinned GNAT for this host
@@ -508,32 +496,27 @@ revision the shell is built from, but what it installs is decided by
 
 ## What each environment is authority for
 
-What the container does and does not settle is worth being exact about. It
-runs a real Linux kernel and a real x86-64 userspace, so it catches everything
-that depends on the operating system, the C library, the linker and the
-64-bit-little-endian layout of the target: the whole suite passing there is
-real evidence, and it is why the Linux checksums in
-`compiler/ada/TOOLCHAIN.md` are now verified rather than transcribed. What it
-does not do is execute x86-64 instructions on x86-64 hardware — Rosetta
-translates them — so now that `refine` produces runnable executables,
-instruction-level and timing-sensitive results from this loop are not
-authority. That distinction is why the roadmap named the native gate before
-there was any code to run in it, and it is why the gate now exists: `refine`
-emits instructions. The original SourceHut gate ran them on their target hardware,
-the native acceptance did so through 0.2.0, and the gate does now, on every target.
+The Apple Container loop runs a real Linux kernel and a real x86-64
+userspace, so it catches everything that depends on the operating system,
+the C library, the linker and the target's 64-bit little-endian layout: the
+whole suite passing there is real evidence, and it is why the Linux
+checksums in `compiler/ada/TOOLCHAIN.md` are verified rather than
+transcribed. It does not execute x86-64 instructions on x86-64 hardware —
+Rosetta translates them — so its instruction-level and timing-sensitive
+results are not authority. The gate executes emitted code on its target's
+hardware for Linux x86-64 and arm64, macOS arm64 and FreeBSD amd64, the last
+under KVM, and on a board-scope event on the boards on the rig; FreeBSD arm64 and RV64 run
+emulated, and the Cortex-M, RV32 and Xtensa lanes under QEMU.
 
 Hosting is canonical GitHub, mirrored to git.sr.ht. GitHub Actions runs the
-gate, publishes the pages and checks host-independent emission; `scripts/ci/`
-was removed with the acceptance, and no revision is accepted. The underlying
-compiler and test commands remain ordinary repository scripts.
+gate, publishes the pages and checks host-independent emission. The
+underlying compiler and test commands remain ordinary repository scripts.
 
 Native LLDB runs through `scripts/debug.sh --target=darwin-arm64` and the
 committed Mac policy. It validates emitted Landin programs with the pinned
 Apple debugger, dsymutil and dwarfdump, retaining dSYM/UUID and source-map
-matching evidence. The shared DWARF change selected routine Linux release GDB,
-and full hosted parity ran its dual-native milestone matrix in both compiler
-modes. See [the native parity guide](../compiler/tests/darwin/README.md)
-for the complete coverage and explicit physical-image limitation.
+matching evidence. See [the native parity guide](../compiler/tests/darwin/README.md)
+for the complete coverage and the explicit large-image limitation.
 
 ## Embedded environment probes
 
@@ -608,3 +591,10 @@ accounting, SP/paint/frame observations and bounded results. The retired
 dual-native milestone policies retained both compiler modes and native
 GDB/LLDB; no Cortex debugger session replaces a native one. See the
 [evidence contract](../environments/cortex-m/README.md#freestanding-evidence).
+
+## Historical: the exact-revision acceptance
+
+Through 0.2.0 a controller under the removed `scripts/ci/` accepted each
+revision on a native Linux runner and a Mac against one archive; the
+[native acceptance operations](../environments/native-ci/README.md) and the
+historical sections of the [validation workflow](process.md) describe it.
