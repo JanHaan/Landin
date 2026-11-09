@@ -1,21 +1,21 @@
 # The Ada bootstrap compiler
 
-This directory holds the bootstrap compiler for the language `spec.md` defines.
-It is a real compiler under construction, not a prototype: `spec.md` is the
-normative language specification and `tour.md` explains the language, and
-nothing here may quietly decide language semantics.
+This directory holds `refine`, the Ada bootstrap compiler for the language
+`spec.md` defines. It is a real compiler under construction, not a
+prototype: `spec.md` is the normative language specification and `tour.md`
+explains the language, and nothing here may quietly decide language
+semantics.
 
-For an introduction to the intermediate representation and the reasons for
-its structure, read [the IR guide](../../docs/ir.md). It is a maintained,
-non-authoritative account derived from the implementation and its tests.
+Start with [the layout](#layout) for where each stage lives, then
+[package ownership](#package-ownership) for what each package may and may
+not do, and [building](#building) for the commands. For the intermediate
+representation and the reasons for its structure, read
+[the IR guide](../../docs/ir.md), a maintained, non-authoritative account
+derived from the implementation and its tests, and for each target's
+frames, calls and images [the target contracts](../../docs/targets.md).
 
-Every `assembler.block` form, D248's named operands, D230's Cortex-only u32
-shorthand through r0 and the operand-free block, is one IR instruction with
-the same conservative effects and ordinary register/frame restrictions.
-`platform/cortex_m` uses `general` operands; [the core guide](../../core/README.md) records its public interfaces.
-The compiler-host Cortex tests verify source/IR restrictions and the native
-Linux freestanding lane executes the generated firmware. D231/D232 implement
-nonreturning control and selected panic handlers on every implemented backend.
+`D248` names a decision recorded in `spec.md`, and `[1975]` a numbered
+paragraph of `tour.md` or `spec.md`; `refine explain D248` prints either.
 
 ## Layout
 
@@ -108,7 +108,7 @@ different responsibilities.
 | `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
 | `Landin.Serials` | process-unique identities for trees and checking tables, so a stale key or tree is refused rather than matched by a reused address | reach output, numbering or iteration order |
 | `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
-| `Landin.Json` | reading a protocol message as strict RFC 8259 JSON, bounded in depth, which a reader of a tool's own output such as Clang's AST may raise, and never raising, and writing canonical JSON | convert a floating-point number, accept a duplicate key or invalid UTF-8, or write a build report or source map |
+| `Landin.Json` | reading a protocol message as strict RFC 8259 JSON, bounded in depth and never raising; the same reader with a deeper bound for a tool's own output, such as Clang's AST; and writing canonical JSON | convert a floating-point number, accept a duplicate key or invalid UTF-8, or write a build report or source map |
 | `Landin.Xml` | reading a vendor's file as strict well-formed XML 1.0 in the subset an SVD is written in, bounded in depth and never raising, its refusals placed by line and column (D555) | read a document type declaration or an entity it declares, accept bytes that are not UTF-8, or write XML |
 | `Landin.Source` | immutable snapshots, byte offsets, spans, line maps | read a file, or know an encoding beyond bytes |
 | `Landin.Source` storage | heap-allocated text and line maps, owned and freed by their snapshot, which is limited and handed out by reference | put a source file in an automatic object, or copy a snapshot |
@@ -122,7 +122,7 @@ different responsibilities.
 | `Landin.Tokens.Text` | D161/D181's shared UTF-8 validation for literals and comments, and byte, UTF-8 and UTF-16 literal decoder | diagnose, choose a literal context, or own emitted storage |
 | `Landin.Syntax` | the node table, extents, anchors, origins, soundness, and the retained independent C-convention, variadic, bodyless-import, visibility, C-layout and symbol-literal facts, and D233's fact that a later shared name reuses its first name's type, `at` and `from` nodes | know that types or IR values exist, or hold a diagnostic |
 | `Landin.Syntax.Precedence` | [1820] as data: levels, operators, folds, first sets | contain a parsing decision |
-| `Landin.Syntax.Parser` | the parse, including contextual separation of a final `try` expression from a `try` statement followed by more body items, D185's initialized condition-binding form D186's contextual caller parameter and D187's two-token contextual `unchecked` region, D233's one declaration node per shared name, contextual-name bindings and assignments selected by their punctuation before control-word dispatch, and the only construction of a tree | assign a diagnostic code, or read a byte |
+| `Landin.Syntax.Parser` | the parse and the only construction of a tree; its contextual decisions: a final `try` expression apart from a `try` statement with more body items after it, the initialized condition binding (D185), the caller parameter (D186), the two-token `unchecked` region (D187), one declaration node per shared name (D233), and contextual-name bindings and assignments, told apart by their punctuation before control words are dispatched | assign a diagnostic code, or read a byte |
 | `Landin.Syntax.Repairs` | D261's smallest change that mends a refused statement: its own scan and parse of one line, and of the routine that holds it, each as a local, and the report restated as that change | decide what a program means, keep anything past the call, or try a line outside a routine body |
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and freed with the forest | hand out a tree that can be copied, written to or kept past the forest |
@@ -132,14 +132,14 @@ different responsibilities.
 | `Landin.Resolution` | declarations, scopes, which declaration each name means and which declaration each declaring node made, and the fields and fill of a construction as it classified them | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Evidence` | target-neutral semantic evidence-table positions: size, alignment, then direct concept functions in declaration order | know machine bytes, target offsets, or physical layout |
-| `Landin.Checking` | the type of every runtime node and declaration, the concept and conformance register, interned nominal and routine instances with their per-instance facts and layouts, and D188's range-subtype identities; the full list is under "The four long rows, in full" below | decide a rule, execute user code, synthesize a source declaration, mutate a template, or ask the host for a width |
+| `Landin.Checking` | the type of every runtime node and declaration, the concept and conformance table, interned nominal and routine instances with their per-instance facts and layouts, and D188's range-subtype identities; the full list is under "What the four largest packages own" below | decide a rule, execute user code, synthesize a source declaration, mutate a template, or ask the host for a width |
 | `Landin.Checking.Spelling` | how a checked type is written for a person: the one spelling the checker interns for a pointer union and a server shows over a name | decide a type, or spell one a second way |
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
-| `Landin.IR` | the target-neutral instructions, shapes, descriptors, images, paths and source aliases into existing storage; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
+| `Landin.IR` | the target-neutral instructions, shapes, descriptors, images, paths and source aliases into existing storage; the full list is under "What the four largest packages own" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
 | `Landin.IR.Control_Flow` | linear-space adjacency and entry reachability of structurally checked IR | assume reachability or store represented object bytes |
 | `Landin.IR.If_Conversion` | under size and speed, D338's proof that neither arm of a two-armed `if` can trap, call or touch anything but a private slot, or that its one trapping operation is a checked update `x = x + k` the other arm leaves alone, and the rewrite of its branch to choices and stores | speculate a trap, a call, a memory access or a store outside a private slot, or convert at `--optimize none` |
-| `Landin.IR.In_Place` | under size and speed, the proof that a D94/D95 callee cannot tell its `in` aggregate from its caller's storage, a whole-unit summary of which routines may write outside their frame, and the rewrite to an address parameter with a zero-carrier home; dropping a caller's slice or `any` temporary nothing can change before its call | revise the convention, read a parameter in place across a possible write outside the frame, or touch a C or machine-convention entry |
-| `Landin.IR.Inlining` | D339's copies, at speed only: which direct calls are copied into their callers, the copy of each body with its arguments stored into copied parameters, its returns and failures rejoining the caller, values that cross it carried in slots, and each copied block, slot and alias recording the call it came from | copy a routine whose address is taken, copy a copy's own calls, change a trap's site or order, grow a routine past its bound, or run on Cortex-M0 |
+| `Landin.IR.In_Place` | under size and speed, the proof that a callee cannot tell its `in` aggregate from its caller's storage (D94, D95), with a whole-unit summary of which routines may write outside their frame; the rewrite to an address parameter whose home a zero carrier clears; and dropping a caller's slice or `any` temporary that nothing can change before its call | revise the convention, read a parameter in place across a possible write outside the frame, or touch a C or machine-convention entry |
+| `Landin.IR.Inlining` | D339's copies, at speed only: which direct calls are copied into their callers, the copy of each body with its arguments stored into copied parameters, its returns and failures rejoining the caller, values that cross it carried in slots, and each copied block, slot and alias recording the call it came from | copy a routine whose address is taken, copy a copy's own calls, change a trap's site or order, grow a routine past its bound, or run for a firmware target |
 | `Landin.IR.Dominance` | a routine's dominator tree from its control-flow graph, in O(E log V) work and linear space, with constant-time dominance questions | assume reachability, or say what holds in a block |
 | `Landin.IR.Liveness` | each slot's live interval over the laid-out order of a routine's values, in work bounded linearly in the routine, and each block's loop depth | choose a location, a register or which slots one may hold |
 | `Landin.Panics` | canonical entry-hook validation, source-byte site spaces, final nonzero atom codes, and the text of D361's hosted default report for a site | a runtime reporting library, allocation in an image, or how a backend writes the report |
@@ -148,7 +148,7 @@ different responsibilities.
 | `Landin.IR.Pipeline` | the optimization passes `refine compile` runs between lowering and emission, in its order, for the driver and for any test that inspects emitted code | choose what a pass does, or emit |
 | `Landin.IR.Rewriting` | shared arena compaction for verified transforms | change slot, signature, shape, image or semantic instance identities |
 | `Landin.IR.Scalar_Replacement` | splitting small scalar-part slots into one scalar slot per part, as simplification's first step and verified with its output: at speed, entry copies of the parameter parts a loop reads, rewritten part accesses, whole copies and clears, and the piece record a debugger reads | split a slot whose address is taken, a partial copy, a routine result or a part whose load checks, or move a trap |
-| `Landin.IR.Scratch_Arrays` | heap-owned, exception-safe scratch arrays for the optimization passes, sized by the unit and filled in place | place a unit-proportional array or its initializer on the host stack |
+| `Landin.IR.Scratch_Arrays` | the optimization passes' scratch arrays: on the heap, sized by the unit, filled in place and freed on any exit | place a unit-proportional array or its initializer on the host stack |
 | `Landin.IR.Shape_Measurement` | memoized represented extents under target facts and an explicit size limit | choose machine placement or allocate work per represented array element |
 | `Landin.IR.Simplification` | verified simplification under the selected objective: local rewrites, reads of immutable module values as their images, and checks a dominating comparison, a type's range or a passed check proves | reassociate floating arithmetic, create cross-block values, or infer a fact or alias from an unchecked region |
 | `Landin.IR.Specialization` | whole-program static-evidence devirtualization with retained instance entries and indirect fallbacks | create semantic instances or specialize exposed or unknown entries without proof |
@@ -160,19 +160,19 @@ different responsibilities.
 | `Landin.Backend.Reciprocals` | the multiplier, shift and 65-bit correction that divide every dividend of one width by one known divisor that is neither zero nor a power of two | choose instructions or registers, or ask the host a width |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
 | `Landin.Backend.Arm32_ABI` | Cortex-M AAPCS32 argument/result planning, at the base PCS and D616's VFP variant, and the internal Landin convention's, from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
-| `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal and C calls, C records copied by value into and out of the registers and outgoing area Arm32_ABI plans (D920), checked operations, ELF assembly and line/function CFI from verified IR | change language semantics, enable a C capability, own language startup/linking or promise full variable/type debugging |
+| `Landin.Backend.Cortex_M` | Cortex-M instruction selection at every level, reusable stack homes, frames, internal and C calls, C records copied by value into and out of the registers and outgoing area Arm32_ABI plans (D920), checked operations, ELF assembly and line/function CFI from verified IR | change language semantics, enable a C capability, own language startup/linking or promise full variable/type debugging |
 | `Landin.Backend.AAPCS64_ABI` | arm64 C classification and argument/result placement from neutral shapes and target facts, under the standard AAPCS64 or Apple's variant of it as the description's C ABI says | infer layout from the host, choose a convention by architecture, reuse SysV transport or change source semantics |
 | `Landin.Backend.RiscV_ABI` | explicit LP64D C carrier classification and register/stack placement from neutral shapes and target layout, including mixed FP/integer aggregates, split carriers and variadic integer transport | infer the selected ABI from LP64 widths, put transport in IR or access the host |
-| `Landin.Backend.RiscV` | RV64 instruction selection, stack homes, frame records, native and LP64D calls, the hosted entry's initializer call and ELF data images from verified IR | parse/check source, put physical transport in IR, access files or run tools |
+| `Landin.Backend.RiscV` | RV64 and RV32 instruction selection, stack homes, frame records, native and LP64D calls, the hosted entry's initializer call and ELF data images from verified IR | parse/check source, put physical transport in IR, access files or run tools |
 | `Landin.Backend.RiscV_Instructions` | native XLEN-parametric integer immediate, memory and indexed-address instruction selection, with independent Zba and XTheadBa capabilities | infer a width from the host, rank extension sets, choose an ABI, access files or invoke tools |
 | `Landin.Backend.Arm64` | arm64 instruction selection, stack homes, frame records, native/C calls, the hosted entry's initializer call and data images, for every arm64 description | parse/check source, put physical transport in IR, spell an object format's directives, write files or run tools |
 | `Landin.Backend.Arm64.Platform` | what arm64 assembly spells per object format: page relocations, read-only sections, symbol types and sizes, the local-label seed and the unit's trailer | select instructions, choose a C convention or name a libc function |
 | `Landin.Backend.Arm64.Selection` | which constants an arm64 instruction can carry, the move-wide lines for any pattern, the shift, mask or reciprocal sequence that divides by a known divisor, and the scratch registers selection writes, which allocation leaves alone | read IR, choose a location or ask the host a width |
 | `Landin.Backend.ELF` | the ELF directive spellings every ELF backend shares: symbol types and sizes, the read-only, relocated read-only, data and zero sections, the panic flag's section and the non-executable stack note | own a backend's line discipline, choose which section a datum belongs in, or spell ARM's `%` section types |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
-| `Landin.Backend.Xtensa` | native windowed Xtensa emission, stack homes, integer ABI carriers and verified IR operations | parse or check source, access files or run tools |
-| `Landin.Backend.Xtensa_Machine` | the native word-operation selector and logical word-bank access | define language semantics or execute bytecode |
-| `Landin.Backend.Xtensa_Words` | pure instruction spellings for the configured Xtensa word operations | infer chip features from a core name or access the host |
+| `Landin.Backend.Xtensa` | windowed Xtensa emission from verified IR: frames, the bank of memory words each routine's logical words live in, integer ABI carriers and every IR operation, written as RISC-V-form logical instructions that `Xtensa_Machine` selects as they are written | parse or check source, keep a logical instruction in its output, access files or run tools |
+| `Landin.Backend.Xtensa_Machine` | the Xtensa instructions for each logical instruction: every word read from and written to its home at a7 + 4×N, or held in a2-a6 in a routine without assembly, through the transient a8-a13; CALL8 and CALLX8 calls; and shortening a local jump proved in range | define language semantics, alias a word that has no home, or execute bytecode |
+| `Landin.Backend.Xtensa_Words` | the RISC-V-form immediate, memory and indexed-address logical instructions the Xtensa emitter writes | infer chip features from a core name or access the host |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry's initializer call, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
 | `Landin.Backend.X86_64.Allocation` | deterministic stack homes, the five available SysV callee-save GP registers, slots' registers over their live intervals, and the four caller-saved registers selection leaves alone between two operations | give a location a register selection writes inside its interval, or allocate failure registers |
 | `Landin.Backend.X86_64.Machine` | selected instruction counts and optional canonical body-equivalence evidence | canonicalize external symbols as local labels or equate counts with assembled bytes |
@@ -218,8 +218,8 @@ different responsibilities.
 | `Landin.Targets.Assembly` | each target's operand register table, the `general` class and the register it chooses, a register's spelling at a width, `{name}` substitution, the registers an ordinary block overwrites and those never named, each target's line comment and its removal from block text (D597), the refusals of other comment forms and digit separators, and hosted assembly text admission | decide an operand's type or read the host's registers |
 | `Landin.Targets.Packed` | packed image storage measurement and width-specific transaction eligibility from target facts | enable source syntax, select instructions or claim a Cortex emitter |
 | `Landin.Targets.Layouts` | target-byte placement of complete source-indexed field units under explicit layout policy | expand array elements into planner entries or decide C subset eligibility |
-| `Landin.Targets.RiscV_ISA` | supported RV64GC ISA strings and independent standard/vendor extension sets | rank levels, select an ABI, ask the host what executes or admit unimplemented ISA strings |
-| `Landin.Targets.Levels` | CPU feature levels per family, each level's feature set, each target's default level, and the spelling of every level and feature | change layout, a calling convention or a C ABI, or be read by checking or the IR |
+| `Landin.Targets.RiscV_ISA` | the supported RV64 and RV32 ISA strings and their independent standard/vendor extension sets | rank levels, select an ABI, ask the host what executes or admit unimplemented ISA strings |
+| `Landin.Targets.Levels` | CPU feature levels per family, each level's feature set, each target's default level, and the spelling of every level and feature | change layout, a calling convention or a C ABI, be read by the IR, or be read by checking except for an atomic access's availability (D690), Cortex-M block text and a firmware program's reference description |
 | `Landin.Targets.Selection` | the one list of target names and the description each selects, which the driver, the server, the test harness and the Python checks read | accept a triplet, a fixture label or a second spelling |
 | `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability, the hosted system a target runs on, toolchain triplets, and the reach and image budget of static data a program with no firmware profile emits under (D537) | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Configuration` | D139's immutable active-declaration view after target selection, the one table of `compiler.NAME` fixed facts, and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
@@ -227,11 +227,11 @@ different responsibilities.
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation, and keeping each source's tree and space in it | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Configuration` | validate and select D139 fixed declaration arms, collect and evaluate D202's global typed options, fixed compiler facts, scalar target measurements, assertions and library directives before resolution | execute user code, mutate syntax, resolve ordinary declarations or add a runtime declaration |
 | `Landin.Stages.Resolution` | the order the trees are walked in through the D139 activity view, including D185's condition-initializer outer scope and guarded-body binding scope and D186's caller-skipping positional call map | own the resolution table, or a code |
-| `Landin.Stages.Checking` | D247's routine-declaration and struct-field bounds, the type passes, concept and conformance collection, generic interning and instantiation, fixed-expression evaluation, inferred-error fixed points and checking-stage diagnostic order; the full list is under "The four long rows, in full" below | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
+| `Landin.Stages.Checking` | D247's routine-declaration and struct-field bounds, the type passes, concept and conformance collection, generic interning and instantiation, fixed-expression evaluation, inferred-error fixed points and checking-stage diagnostic order; the full list is under "What the four largest packages own" below | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
 | `Landin.Stages.Folding` | the shared constant folder for checked ordinary expressions in checking and lowering, a generic both stages instantiate with their tables and the few answers only each stage has: how a name reaches its tree, which scalar a conversion targets, a character's value, a float special's bits, and what to do when a module value is worked out from itself; integers and bools fold to their value, floats to their IEEE bit pattern, and an overflow is a distinct outcome from an unknown | report a diagnostic, hold a cycle set of its own, or fold anything the checker has not typed |
 | `Landin.Stages.Checking.Flow` | definite assignment, including D156/D157's conservative post-loop assignment boundary and D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, infer a nonliteral condition's value, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
-| `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
+| `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "What the four largest packages own" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
 | `Landin.Commands` | public command grammar, help, query dispatch and normalization into the existing driver request | implement a language rule or perform host effects outside `Landin.Platform` |
 | `Landin.Commands.Catalogue` | the shared command/option definitions used by parsing, help, reference and shell completion, and what each option needs of its request and the sentences refusing one, which the driver reads too (D565) | assign a release version or decide warning selection outside the invocation policy |
 | `Landin.Commands.Response_Files` | bounded quoted argument expansion through the supplied filesystem | expand environment variables or execute shell text |
@@ -446,7 +446,7 @@ Frame preflight and emission do not plan a routine twice. Preflight asks
 plans the frame only for a routine the bound does not show addressable.
 Emission plans each routine once, and when debug output is requested keeps
 the plan and frame for the DWARF encoder, which reads them rather than
-planning again; Cortex-M0's tentative emission hands its frame to the
+planning again; Cortex-M's tentative emission hands its frame to the
 final one. `scripts/quality.sh` obtains those from pinned Linux object
 tools. Complete mandatory runtime profiles and quantitative acceptance are
 recorded in `compiler/tests/README.md`, not inferred from the existence of
@@ -566,10 +566,12 @@ A CPU feature level (D255) is a `Landin.Targets.Levels.Feature_Level` held
 beside the description in the compilation, not a field of it. Comparing two
 `Target_Facts` therefore still answers which backend, object format and ABI,
 which is the only question `Targets.Capabilities` and the backends' guards
-ask; no stage that lays data out or checks a program is handed a level.
-Configuration reads it for `compiler.feature`, and emission and the
-toolchain arguments read it to select instructions. Each backend's default
-level emits exactly what it did before levels existed.
+ask, and no stage that lays data out is handed a level. Configuration reads
+it for `compiler.feature`, and emission and the toolchain arguments read it
+to select instructions. Checking reads it for three questions only: whether
+an atomic access is available at the level (D690), which instructions a
+Cortex-M `assembler.block` may use, and which reference description a
+firmware program without one receives.
 
 The `darwin-arm64` description has 64-bit pointers, eight-byte pointer
 alignment, sixteen-byte stack/scalar maximum alignment and little-endian
@@ -750,12 +752,6 @@ the release build. So no two of them may emit IR: an `IR.Emit_*` or
 the order emitted. `check.py` refuses two such calls as siblings; before it
 did, only the build-modes comparison noticed the instructions swap.
 
-## The four long rows, in full
-
-Four packages own an order of magnitude more than any other, and a table
-cell is the wrong place to read a list that long.  Each is spelled out
-here, one paragraph per package, in the words the table used to hold.
-
 D213 distinct identities reuse the nominal inventory with one unnameable
 representation child. `Landin.Checking` retains the exact base descriptor and
 per-node conversion fact, including routine-instance overlays; the checker
@@ -773,42 +769,53 @@ text and distinct-representation conversions. Lowering, folding and origin
 analysis preserve the corresponding existing behavior. A written pointer
 type application remains separate from the contextual `ptr(value)` operation.
 
-**`Landin.Checking`** owns what type every runtime node and declaration has,
-including concrete parameterized-alias application shapes and D136's canonical
-folded array counts but no template/formal syntax metadata; D142's closed
-compiler/source concept identities and concrete whole-program conformance
-register keyed by normalized represented type, concept and input tuple,
-retaining selected parameterized binders plus the generic evidence schema's
-declaration-ordered provider runs, constrained-routine evidence runs and
-per-view evidence selections, and D145/D146's exact any-concept, construction
-and flattened-dispatch positions without physical layout; opaque checker-owned
-nominal and routine instances interned by source template and an ordered
-normalized scalar, structural atom-set, exact fixed-array, nominal, structural
-function-signature or mathematical fixed-value actual tuple, with descriptor
-keys bound to their limited compilation table and bounded typed traversal of
-each stored tuple; routine-instance state publishes its substituted signature
-before graph discovery and owns a complete source-node/declaration fact
-overlay with global fallback plus caller-view generic-call targets, while
-checker-owned per-instance signatures finalize inferred errors before body
-checking; every enabled nonparameterized struct is its template's canonical
-empty tuple, while D137's structs separate identity-only function/type-actual
-mentions from by-value field/payload/array edges for both parameterized
-instances and canonical empty-actual ordinary structs, following ordinary
-nominal aliases without forcing layout; retain transient nonconcrete nominal
-obligations for unused-template recursion checks, reconstruct interned
-concrete bindings to promote nested nominal and nominal-array descriptors
-lazily at value uses, and build one selected-target layout per canonical
-instance without mutating their template; per-instance
-unseen/building/ready/invalid layout state, with bounded invalid-layout replay
-for each application-local diagnostic; structural atom/error sets, fixed-array
-and anonymous result shapes, aggregate element identity, recursive first-class
-target-neutral function signatures on values and aggregate fields, ordered
-result runs, and target-dependent
-scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout
-kept outside target-independent nominal keys; D188's range-subtype identities,
-interned on the written range and carried beside a node's or declaration's
-base integer kind rather than becoming one, with the check each value still
-owes its destination.
+## What the four largest packages own
+
+`Landin.Checking`, `Landin.IR`, `Landin.Stages.Checking` and
+`Landin.Stages.Lowering` each own an order of magnitude more than any other
+package, too much for a table cell. Their rows point here, and each has one
+paragraph below.
+
+**`Landin.Checking`** owns what type every runtime node and declaration
+has, including concrete parameterized-alias application shapes and D136's
+canonical folded array counts, but no template or formal syntax metadata.
+It owns the closed compiler and source concept identities and the
+whole-program conformance table, keyed by normalized represented type,
+concept and input tuple (D142); the table keeps selected parameterized
+binders, the generic evidence schema's declaration-ordered provider runs,
+constrained-routine evidence runs and per-view evidence selections.
+It owns the exact any-concept, construction and flattened-dispatch
+positions, without physical layout (D145, D146).
+It owns opaque nominal and routine instances, interned by source template
+and an ordered tuple of normalized actuals, each a scalar, a structural
+atom set, an exact fixed array, a nominal, a structural function signature
+or a mathematical fixed value; descriptor keys are bound to their limited
+compilation table, and each stored tuple has bounded typed traversal.
+A routine instance publishes its substituted signature before graph
+discovery and owns a complete overlay of source-node and declaration facts,
+with global fallback, plus caller-view generic-call targets, and its
+signature finalizes inferred errors before body checking.
+Every enabled nonparameterized struct is its template's canonical empty
+tuple, and D137's structs separate identity-only function and type-actual
+mentions from by-value field, payload and array edges, for parameterized
+instances and empty-actual ordinary structs alike, following ordinary
+nominal aliases without forcing layout.
+It keeps transient nonconcrete nominal obligations for unused-template
+recursion checks, and reconstructs interned concrete bindings to promote
+nested nominal and nominal-array descriptors lazily at value uses.
+It builds one selected-target layout per canonical instance without
+mutating its template, with per-instance unseen, building, ready or invalid
+layout state and bounded replay of an invalid layout for each
+application-local diagnostic.
+It owns structural atom and error sets, fixed-array and anonymous result
+shapes, aggregate element identity, recursive first-class target-neutral
+function signatures on values and aggregate fields, and ordered result
+runs; the target-dependent runtime layout of scalar, fixed-array,
+unfolded-variant and nested ordinary runs is kept outside the
+target-independent nominal keys.
+It owns the range-subtype identities, interned on the written range and
+carried beside a node's or declaration's base integer kind rather than
+becoming one, with the check each value still owes its destination (D188).
 
 **`Landin.IR`** owns the target-neutral instructions: items, slots, blocks and
 values, including signature-only external routine items, D161's read-only
@@ -833,35 +840,49 @@ the opcodes carrying a removable edge; and D188's second checked integer
 operation, whose operand and result types are identical and whose two folded
 bounds the verifier holds to values that type holds.
 
-**`Landin.Stages.Checking`** owns the three type passes, D142
-concept/conformance collection, constrained concrete lookup, family collision
-checking, D143's closed compiler `zeroable` predicate, evidence provider
-finalization and `T.entry` evidence selection, D145--D147 any
-identity/construction/object-safety/permission/dynamic-selection checking,
-D161's contextual read-only byte-literal view, D181's canonical immutable
-hosted-text identities, D259's exact `usize` ordinal and D182's distinct
-`core/text.position` byte-position utf8-index forms, D183's
-identity-preserving utf8/utf16 range selection, D184's exact
-immutable `u32` text-traversal Item, D185's ordinary binding check followed by
-its exact-bool condition requirement, D178/D179's complete collection
-traversal-element shapes and erased concept identity, D180's exact
-named-`iterable` selection and copied Item identity for struct and `any C`
-sources, compile-time-only positional substitution, D136's closed
-target-independent fixed-expression evaluator,
-scalar/fixed-array/nominal-aggregate normalization of parameterized aliases,
-symbolic validation of unused nominal and routine templates, canonical
-`(template, normalized actual tuple)` struct and routine interning, D138
+Every `assembler.block` form is one IR instruction with the same
+conservative effects and ordinary register and frame restrictions: named
+operands (D248), the Cortex-M-only `u32` shorthand through r0 (D230) and the
+operand-free block. `platform/cortex_m` uses `general` operands;
+[the core guide](../../core/README.md) records its public interfaces.
+Compiler-host tests verify the source and IR restrictions on Cortex-M, and
+the freestanding lane executes the generated firmware. Nonreturning control
+(D231) and selected panic handlers (D232) work on every backend.
+
+**`Landin.Stages.Checking`** owns the three type passes and checking-stage
+diagnostic order.
+For concepts it owns conformance collection (D142), constrained concrete
+lookup, family collision checking, the closed compiler `zeroable` predicate
+(D143), evidence provider finalization and `T.entry` evidence selection, and
+the identity, construction, object-safety, permission and dynamic-selection
+checks of `any` (D145-D147).
+For text it owns the contextual read-only byte-literal view (D161), the
+canonical immutable hosted-text identities (D181), the exact `usize` ordinal
+(D259) and the distinct `core/text.position` byte-position and utf8-index
+forms (D182), identity-preserving utf8 and utf16 range selection (D183) and
+the exact immutable `u32` text-traversal Item (D184).
+For conditions and loops it owns the ordinary binding check followed by the
+exact-bool condition requirement (D185), complete collection
+traversal-element shapes and erased concept identity (D178, D179), and the
+exact named-`iterable` selection and copied Item identity for struct and
+`any C` sources (D180).
+For generics it owns compile-time-only positional substitution, the closed
+target-independent fixed-expression evaluator (D136), scalar, fixed-array
+and nominal-aggregate normalization of parameterized aliases, symbolic
+validation of unused nominal and routine templates, canonical
+`(template, normalized actual tuple)` struct and routine interning,
 context-free recursive structural direct-call deduction with deferred exact
-computed-bound checks, per-instance substituted signatures/bodies and fact
-views, per-instance inferred-error fixed-point nodes, one active-view
-effective-call-signature lookup for inference/`try`/recovery, eager concrete
-recovery-binding materialization before a recovery body is checked, same-key
-recursion and finite-expansion refusal, identity-only versus value-layout
-requirements for generic and ordinary signature recursion, ordinary
-alias-chain identity lookup, transient symbolic nominal obligations across
-used-formal wrappers, lazy recursive promotion from interned concrete actual
-tuples, substituted per-instance layout, bounded repeated-invalid replay,
-D137/L0313 by-value recursion separation, and checking-stage diagnostic order.
+computed-bound checks (D138), per-instance substituted signatures, bodies and
+fact views, per-instance inferred-error fixed-point nodes, one active-view
+effective-call-signature lookup for inference, `try` and recovery, and eager
+concrete recovery-binding materialization before a recovery body is checked.
+For recursion it owns same-key recursion and finite-expansion refusal,
+identity-only versus value-layout requirements for generic and ordinary
+signature recursion, ordinary alias-chain identity lookup, transient
+symbolic nominal obligations across used-formal wrappers, lazy recursive
+promotion from interned concrete actual tuples, substituted per-instance
+layout, bounded replay of a repeated invalid layout, and the separation of
+by-value recursion (D137, L0313).
 
 **`Landin.Stages.Lowering`** owns the walk that first finds which routines,
 ready instances, conformances and module bindings a program reaches (D296),
@@ -887,13 +908,11 @@ plus reverse-order cleanup calls on selected exits, D187's region depth around
 a marked bare block and the required flag on every text boundary slice
 address, and refusing to run on a refused program.
 
-## What is deliberately absent
+## What the x86-64 backend emits
 
-The detailed transport account below records the Linux implementation and
-the decisions made for it. Darwin now covers the same enabled hosted language;
-its register, stack, C ABI and object contracts are described in
-[target contracts](../../docs/targets.md). Neither native implementation
-enables the deferred language or the freestanding target's own work.
+This section records the Linux x86-64 backend and the decisions made for it.
+[Target contracts](../../docs/targets.md) describe the other backends'
+registers, stacks, C ABIs and object formats.
 
 `Landin.Backend` lays out a routine's frame and
 `Landin.Backend.X86_64` emits assembly for every operation in the enabled
@@ -1060,13 +1079,13 @@ hardware the backend emits for. A host without the target toolchain fails
 rather than silently skipping that evidence. The shared hosted coverage is
 complete on both native targets, within its recorded physical-image limits.
 
-The native path sits behind the whole frontend: `refine` scans and parses every
-`.ldn` file it is given, resolves every name in them as one module, collects
-concepts and ordinary or parameterized conformances as one collision-checked
-register, and checks the
-type of everything and that every name is assigned before it is read, reports
-what none of the four could read, lowers every function it accepted into
-`Landin.IR`, verifies it and can dump it. Fully applied positional
+The native path sits behind the whole frontend. `refine` scans and parses
+every `.ldn` file it is given and resolves every name in them as one module.
+It collects concepts and ordinary or parameterized conformances into one
+collision-checked table, checks the type of everything and that every name
+is assigned before it is read, and reports what none of those stages could
+read. It lowers every function it accepted into `Landin.IR`, verifies it and
+can dump it. Fully applied positional
 parameterized aliases and structs are compile-time-only templates. Checking
 substitutes type and fixed integer actuals, including a fixed formal passed to a
 nested application. An alias records only the resulting ordinary scalar or
@@ -1229,14 +1248,14 @@ of a `routines` row for every routine it emits, with one meaning on every
 target. `frame_bytes` is what the prologue reserves below the frame record
 and the registers it pushes: slot cells, spill and save homes and incoming
 register homes, rounded to the stack's alignment. It is not the routine's
-stack: `stack_bytes` is, the figure the depth report gives the routine as
-its `frame_bytes`, from the stack pointer its caller had before the call,
-with the return address, frame record, pushed registers and the largest
-call or push area. `save_bytes` are the callee-saved registers it saves, in
+stack. `stack_bytes` is: how far the routine takes the stack pointer below
+where its caller had it before the call, the return address, frame record,
+pushed registers and largest call or push area included. The depth report
+calls the same figure `frame_bytes`. `save_bytes` are the callee-saved registers it saves, in
 the frame or pushed beside the frame record, never the record itself;
 `spill_bytes` and `spill_count` its spill homes. `register_count` is the
 distinct registers the allocation holds a value or slot in, saved or not,
-and zero on RISC-V and Cortex-M0, which give every one a home.
+and zero on RISC-V, Xtensa and Cortex-M, which give every one a home.
 `instructions`, `stack_loads`, `stack_stores`, `direct_calls` and
 `indirect_calls` are static sites in the routine's final text: a load or
 store reaches the stack through the stack or frame pointer or a register
@@ -1247,6 +1266,25 @@ Instruction/stack counts are static emission sites, `estimated_growth` is
 an IR policy score, and neither claims assembled bytes.
 
 ## Building
+
+From the repository root, with the toolchain `TOOLCHAIN.md` pins:
+
+```sh
+./scripts/build.sh
+./scripts/test.sh
+```
+
+On the Mac use `./scripts/test.sh --host`; the unqualified suite includes
+Linux workload cases and is not the Mac compiler-host command.
+
+`scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop,
+and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
+selector. On the Mac add `--host`; run Linux workloads in native development
+slots. Filtered runs identify themselves and never replace the complete
+suite. [The process guide](../../docs/process.md) explains both native
+policies, debugger selection and Linux-only resume.
+
+### Host adapters
 
 The stages remain Ada 2022. The host-only C adapter
 `src/platform/landin_file_identity.c`, compares the host headers' `struct stat`
@@ -1355,22 +1393,7 @@ and preserve exit/signal distinctions, argument bytes and capture modes.
 The shared project builds both adapters with warnings as errors; source checksums
 include C sources and headers as well as Ada sources.
 
-See `TOOLCHAIN.md`. From the repository root:
-
-```sh
-./scripts/build.sh
-./scripts/test.sh
-```
-
-On the Mac use `./scripts/test.sh --host`; the unqualified suite includes
-Linux workload cases and is not the Mac compiler-host command.
-
-`scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop,
-and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
-selector. On the Mac add `--host`; run Linux workloads in native development
-slots. Filtered runs identify themselves and never replace the complete
-suite. [The process guide](../../docs/process.md) explains both native
-policies, debugger selection and Linux-only resume.
+## Target, memory and device seams
 
 Darwin uses the shared DWARF encoder with x29-relative stack locations and
 Apple section/CFI conventions. Full executable output retains its object and
@@ -1392,7 +1415,7 @@ firmware links C archives (D923); variadic C calls remain refused (D922). Cortex
 `--debug=lines` enables the explicit [line/function contract](../../docs/targets.md#cortex-source-debugging);
 `--debug=full` remains refused. `Backend.Firmware` owns reset/script generation; the older external
 startup/linker probes remain independently identified test harnesses. See
-[target contracts](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
+[target contracts](../../docs/targets.md#cortex-m-layout-and-abi-planning).
 
 `Landin.Memory` owns the neutral operation/order vocabulary.
 `Configuration` recognizes the exact compiler member syntax; resolution visits
@@ -1424,14 +1447,15 @@ one per operation and kind, so a passing check falls through; each keeps its
 operation's line, variable locations and lexical scopes, and the body's frame
 description. Those native sessions remain separate from Cortex line/function debugging.
 
-The [device modules](../../devices/README.md) use the existing frontend,
-packed/volatile IR and Cortex firmware path without compiler changes. Vendor
-metadata is off target; the compiler does not parse SVD or run generators.
+The [device modules](../../devices/README.md) are ordinary Landin modules
+that `refine svd` writes from a vendor's SVD and a reviewed policy
+(`Landin.Devices`, `Landin.Commands.Devices`); a program compiles them
+through the same frontend, packed and volatile IR and firmware path as any
+other source. Nothing from the SVD reaches the target except what those
+modules declare.
 
 The complete [prototype-1 derivation](../tests/driver/DERIVATION.md) compiles
-through `--target=cortex-m0 --firmware-entry=start --emit=exe`. Its external
-CPU/peripheral runner was mandatory in the retired native Linux acceptance.
-Initializer inference settles recovery bindings while deferring concrete
+through `--target=cortex-m0 --firmware-entry=start --emit=exe`. Initializer inference settles recovery bindings while deferring concrete
 recovery bodies to the enclosing routine walk, so inferred bindings can recover with existing
 loop transfers. Firmware BSS has an explicit RAM LMA and no load payload.
 These repairs add no syntax, register metadata semantics, IR operation or
@@ -1498,9 +1522,9 @@ perf report -i refine.perf --no-children --sort symbol
 ```
 
 Unwind with DWARF and the largest stack copy `perf` allows. Frame-pointer
-unwinding (`-g`) drops a leaf's immediate caller, so a `memmove`'s cost shows
-one frame too high, and `dwarf,16384` truncates stacks inside the IR
-verifier, whose frame is larger than 16 KiB. `--stage-report` says which
+unwinding (`-g`) drops a leaf's immediate caller, so a `memmove`'s cost
+shows one frame too high. A 16 KiB copy, `dwarf,16384`, truncates stacks
+inside the IR verifier, whose frame is larger than that. `--stage-report` says which
 stage to look in first; this says which routine.
 
 Counting calls is valgrind's callgrind, which counts every call exactly and
