@@ -1,6 +1,6 @@
 # The mark
 
-One drawing, several renderings, and a few borrowed ones beside it. `icon.svg` holds the geometry and the
+One drawing and its renderings, with a few borrowed icons beside it. `icon.svg` holds the geometry and the
 site's own two colours, and everything that shows a Landin mark is a
 rendering of that file rather than another copy of it that drifts away —
 the same arrangement as [`highlight/`](../highlight/README.md) and

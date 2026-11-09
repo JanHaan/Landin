@@ -1,6 +1,6 @@
 # The faces
 
-Two webfont families, and one module that is every rendering of them.
+Two webfont families, and one module through which every page uses them.
 `Nunito Sans` sets the prose, `MonoLisaCode` sets the code, and nothing
 outside [`../fonts.py`](../fonts.py) names either — the same arrangement
 as [the mark](../README.md) and

@@ -1,7 +1,7 @@
 # Pinned toolchain
 
 The bootstrap has one canonical Ada toolchain, recorded exactly, reproduced
-from a clean environment, and named without a provider.
+from a clean environment, and pinned by version rather than by distributor.
 
 ## Canonical release
 
@@ -38,7 +38,7 @@ The versioned package name prevents a moving default Clang major.
 The Linux nix shell selects `llvmPackages."19".clang`, with `glibc.dev`, from
 the package set fixed by `flake.lock`.  The Darwin shell deliberately gains no
 Linux C frontend or sysroot: Apple headers are not evidence about the selected
-Linux ABI. Use native Linux development slots for that validation.  No independent Clang archive
+Linux ABI. Validate that on a Linux host.  No independent Clang archive
 is downloaded; each environment uses its package set's provenance, and the
 gate's is the exact package version above.
 

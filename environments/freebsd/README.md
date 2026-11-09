@@ -8,8 +8,8 @@ password; the supervisor exposes it only on a loopback port and tears down
 the VM on success or failure. This is test provisioning, outside the
 compiler's `Landin.Platform` host boundary.
 
-Each lane ensures a guest data-size ceiling of at least 4 GiB and removes the
-process soft data limit. The unchanged displacement-limit fixture declares
+Each lane raises the guest's data-size ceiling to at least 4 GiB and lifts
+the process's soft data limit. The unchanged displacement-limit fixture declares
 a 2 GiB global array; FreeBSD arm64's default 1 GiB ceiling refuses that
 executable before it reaches `main`. This reserves virtual address space,
 not 4 GiB of guest RAM. A temporary ceiling change is restored after the lane.
