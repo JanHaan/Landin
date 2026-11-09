@@ -11,4 +11,7 @@ assert file recognition, comment settings, and representative syntax groups.
 `emacs-treesit-smoke.el` opens the structural fixture with the compiled grammar
 and checks tree-sitter mode and representative font-lock faces.
 `../test.sh` runs them when their small test dependencies or editors are
-installed. Nothing here builds or invokes `refine`.
+installed. Nothing here builds `refine`. When `LANDIN_REFINE` names a
+compiler, `../test.sh` also starts its language server through Neovim and
+Emacs, `nvim-lsp-smoke.lua` and `emacs-lsp-smoke.el`, and waits for its
+diagnostic.

@@ -11,7 +11,7 @@ project elsewhere.
 - Argue with the idea, not with the person. Landin's design has been argued
   over hard, and its record of rejected ideas exists because people could
   be wrong in public without paying for it.
-- Be specific. A refusal that told you nothing, with the command and its
+- Be specific. An unhelpful error message, with the command and its
   output, is something to act on; a verdict on the whole compiler is not.
 - Not sure what would help? Say so and ask; nobody is expected to arrive
   knowing how to reduce a program to a report.
