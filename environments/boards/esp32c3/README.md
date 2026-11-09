@@ -58,7 +58,7 @@ describes; the rig host needs no refine or cross-binutils when consuming it.
 python3 environments/boards/esp32c3/board.py \
     --mode=ram --bundle=RAM_BUNDLE --ram-loader=PATH/TO/landin-ram-run \
     --probe-rs=PATH/TO/probe-rs \
-    --probehive /home/jan/src/probehive \
+    --probehive /var/lib/landin-rig/probehive \
     --output=NEW_DIRECTORY
 ```
 
