@@ -143,6 +143,17 @@ class LoggedCommands(unittest.TestCase):
         self.assertIn("failure-marker", result.stdout)
         self.assertIn(str(self.output / "result.json"), result.stdout)
 
+    def test_wait_reads_a_run_file_still_being_written_as_no_run_yet(self):
+        #  A wait that reads running.json while a wrapper is writing it sees
+        #  an empty file; it once failed with a traceback, exit 1 and
+        #  nothing on stdout, where it should look again.
+        self.output.mkdir(parents=True)
+        (self.output / "running.json").write_text("")
+        result = self.wait("--timeout=1")
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("holds no run_logged.py run", result.stderr)
+
     def until(self, ready):
         """Wait for READY to hold, failing once HANG seconds have passed."""
         deadline = time.monotonic() + HANG

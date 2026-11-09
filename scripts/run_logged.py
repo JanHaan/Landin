@@ -93,8 +93,13 @@ def wait(output, timeout, parser):
             result = json.loads(result_path.read_text())
             print("log: %s" % result["log"])
             return summarise(result, Path(result["log"]), result_path)
-        if running.exists():
+        try:
             pid = json.loads(running.read_text())["pid"]
+        except (FileNotFoundError, ValueError, KeyError):
+            # No run yet, or one a wrapper older than the atomic write is
+            # still writing: looked at again below until it appears.
+            pid = None
+        if pid is not None:
             if not alive(pid):
                 # The wrapper writes its result before it exits, so look once
                 # more before calling the run lost.
@@ -164,9 +169,13 @@ def main(argv=None):
 
     previous = {number: signal.signal(number, forward)
                 for number in (signal.SIGINT, signal.SIGTERM)}
-    (output / "running.json").write_text(json.dumps(
+    # Written whole, as the result is: a waiter reading a file that is
+    # still being written would see no run, or half of one.
+    starting = output / "running.json.tmp"
+    starting.write_text(json.dumps(
         {"pid": os.getpid(), "started_at": result["started_at"],
          "command": command, "log": str(log)}) + "\n")
+    starting.replace(output / "running.json")
     print("log: %s" % log, flush=True)
     try:
         with log.open("wb") as stream:
