@@ -1,24 +1,27 @@
 # Development and validation
 
-`ROADMAP.md` owns the work left on this process. The loop below is the
-one that runs now. The [gate reference](#the-mechanical-gate) describes its
-jobs and reuse rules. The historical sections preserve the exact-revision
-native acceptance that approved every revision through 0.2.0 and was retired
-with SourceHut: nothing submits it, `scripts/ci/` is gone, and no revision is
-accepted. They record how those approvals were chosen and what they cost.
+The loop below is the one that runs now, and the
+[gate reference](#the-mechanical-gate) describes its jobs and reuse rules;
+`ROADMAP.md` owns the work left on this process. The gate is a safety net
+rather than a verdict: green says a tree passed there, and nothing accepts a
+revision. The exact-revision native acceptance that approved every revision
+through 0.2.0 was retired with SourceHut and `scripts/ci/` is gone; the
+sections headed Historical record how its approvals were chosen and what
+they cost. `D586` names a decision recorded in `spec.md`, and
+`refine explain D586` prints its title.
 
 ## The loop that runs now
 
 | stage | command | what it says |
 |---|---|---|
-| edit/test loop | `./scripts/dev-test.sh` with affected exact `--suite` and `--case` selectors, or one `--fixture` selector | checksum-safe feedback; the transcript says `FILTERED` |
+| edit/test loop | `./scripts/dev-test.sh` with the affected exact `--suite`, `--case` and `--fixture` selectors in one invocation | checksum-safe feedback; the transcript says `FILTERED` |
 | Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
 | another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 --toolchain=DRIVER` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's |
 | before pushing a candidate | affected exact developer cases/suites and script controls; `python3 check.py` after documentation changes | focused feedback; the complete matrix runs once in CI |
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
-| candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; the RV64 Linux test program under QEMU's user emulation, its physical runtime, GDB, C ABI and ISA-level verdicts on RISE runners suspended until further notice; every QEMU lane on Cortex-M; the editor grammar, the flake, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
+| candidate push or pull request | `.github/workflows/gate.yml` | every target, unless identical-tree reuse or an explanatory edit applies; the [job table](#the-mechanical-gate) says what each job runs |
 | physical boards for a candidate | `gh workflow run gate.yml --ref BRANCH -f scope=boards`, by the maintainer | each port's RAM run, then its boot check, on the rig through `environments/boards/gate.py`, with `inputs`, documents and scripts; never a software pass |
 | promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the identical tree, then main's own push gate followed to its end | the push reuses the full candidate software pass and runs the boards fresh; documents and script controls still run |
 | closing an item | `python3 scripts/activations.py`, then the steps in [closing an item](#closing-an-item) | the register rows whose activation the item's changes met, and the passes only the gate runs that the changes reach |
@@ -55,24 +58,15 @@ listing and the tested tree; a changed merge tree needs its own full pass.
 Promotion also needs a passed boards dispatch on that tree, unless the edit
 is explanatory, and `main`'s own gate followed to its end, as the
 [promotion rule](#physical-boards-and-promotion) says.
-The item may be closed in the candidate itself or after its gate. A closing
-commit made after the branch's full gate that changes only the content of
-`README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md`, and says
-`Gate: explanatory`, reuses that gate under the explanatory exception, on
-the branch and again when main is promoted to it (D586). A close that changes
-any other file, `docs/capabilities.md` among them, is a new tree and needs
-its own full gate.
-The [identical-candidate reuse policy](#the-mechanical-gate) compares all
-tracked bytes, paths and modes, including workflow definitions and tool pins, with
-a recent complete successful push run from this repository. It never uses
-local filtered transcripts or build caches as test evidence. A manual
-dispatch of scope `full` requests a fresh full matrix and the boards.
-Superseded runs on a branch are cancelled.
-
-The [explanatory-only remote reuse policy](#the-mechanical-gate) permits
-qualifying edits to reuse a complete successful push run, of main or of a
-branch, from the preceding seven days, whose commit is an ancestor of the
-edit. Document and script checks always run.
+An item may close in the candidate itself or after its gate. A closing
+commit made after the branch's full gate reuses that gate, on the branch and
+again when main is promoted to it, when it changes only the content of
+`README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md` and says
+`Gate: explanatory` (D586). A close that changes any other file,
+`docs/capabilities.md` among them, is a new tree and needs its own full gate.
+The [gate reference](#the-mechanical-gate) states both reuse conditions,
+identical-tree reuse and an explanatory edit; neither ever takes local
+filtered transcripts or build caches as evidence.
 
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and let the full CI gate validate the
@@ -80,12 +74,8 @@ final candidate once. Run a complete local suite when an investigation needs
 it, rather than as a duplicate mandatory pre-push step. The
 explanatory-only prose path does not cover generated Ada or catalogues,
 executable examples or fixtures, or grammar and semantic rules in `spec.md`.
-The gate is a safety net rather than a verdict: each push runs every target
-or meets the verified candidate/explanatory reuse conditions above. On a failed Cortex-M job, it is configured to upload
-diagnostic output if present and retain it for 14 days. The called determinism workflow retains assembly manifests as short-lived
-artifacts. These are not a successful exact-revision acceptance record; green says the tree passed there, not that
-a revision is accepted. Documentation changes still receive the full
-`check.py`; its mechanical checks do not establish prose accuracy.
+Documentation changes still receive the full `check.py`; its mechanical
+checks do not establish prose accuracy.
 
 The parallel-equivalence wrapper builds once under the standard mode lock,
 then holds the same binaries across both runs. Its printed evidence directory,
@@ -112,19 +102,19 @@ Before an item closes:
 
 1. Run `python3 scripts/activations.py --base REV`, with REV the commit the
    item started from (`main` by default). It lists every `open` or
-   `scheduled` register row whose Activation names a path the item changed
-   since REV, uncommitted changes included, and the passes only the gate
-   runs that those paths reach: the editor grammar's corpus,
-   `./highlight/test.sh --integration`, when the grammar, a positive,
-   runtime or ABI fixture or `core/` changed, and the flake's build when
-   `flake.nix`, `flake.lock` or `environments/pins.sh` did. Take each row it
-   lists, or restate its activation, in the item; run each pass it names
-   inside `nix develop`, or add `--run` to have it run them. A row counts
-   only the changes made after the commit that added it or last changed its
-   Activation, when that commit is since REV: a change its writer had
-   already seen is what the row was written about. Each listed row names
-   the commits that met it, the rows left out for this are named, and
-   `--whole-window` counts every change since REV for every row.
+   `scheduled` row of the roadmap's register whose Activation names a path
+   the item changed since REV, uncommitted changes included. It also lists
+   the passes only the gate runs that those paths reach: the editor
+   grammar's corpus, `./highlight/test.sh --integration`, when the grammar,
+   a positive, runtime or ABI fixture or `core/` changed, and the flake's
+   build when `flake.nix`, `flake.lock` or `environments/pins.sh` did. Take
+   each listed row into the item, or restate its activation; run each listed
+   pass inside `nix develop`, or add `--run` to have it run them. A row
+   counts only the changes made after the commit that added it or last
+   changed its Activation, when that commit is since REV: a change its
+   writer had already seen is what the row was written about. Each listed
+   row names the commits that met it, the rows left out for that reason are
+   named, and `--whole-window` counts every change since REV for every row.
 
    It is a heuristic and says so: it matches paths an activation writes,
    in backticks or bare, base names of tracked files, Ada unit names and a
@@ -236,8 +226,9 @@ if [ -n "$landin_agent_env" ]; then
 fi
 ```
 
-An empty result means the helper has nothing to add; do not source an empty
-path. Re-run the helper after changing the flake or pins.
+With nothing to add the helper prints `/dev/null`, which sources as
+nothing; the snippet's `-n` test only guards against a helper that failed
+and printed nothing. Re-run it after changing the flake or pins.
 
 In Claude Code, launch the long command through Bash's `run_in_background`
 facility and use its completion notification. For a remote handoff, request
@@ -398,9 +389,10 @@ overrides that directory, and a host without either uses
 maintainer and the runner's `landin-rig` user, so a manual run and a CI
 run take one lock and see one USB stop. The board tools hold the lock for
 their hardware phase, and `environments/boards/gate.py` across a port's
-whole boot-then-RAM sequence. A manual run waits for a CI leg as for any
+whole sequence: a restoring boot check when the prior state needs one, the
+RAM run, then the boot check. A manual run waits for a CI leg as for any
 other holder; a CI leg waits 1200 seconds, then ends `rig-busy` naming the
-holder, which fails its gate. While the shared directory is used, a held
+holder, which fails that run's aggregate `gate` job. While the shared directory is used, a held
 `~/.cache/landin/rig.lock` stops a run `needs-operator`, since an older
 tool would hold that one. An adjacent tool without that protection must join
 the same lock on the rig host before accessing hardware. Separate
@@ -563,13 +555,15 @@ candidate runs every target the compiler has,
 in jobs that report separate verdicts. RV64 runs under QEMU's user
 emulation on an x86-64 runner, which is evidence about its emitted code and
 none about RV64 hardware; its jobs on RISE's physical runners stay skipped
-until they are dependable. A recent verified identical candidate
-or the explanatory-only exception below may reuse a full pass. Compiler
-builds supply checked executables to their same-host consumers, including
-the debug compilers used for cross-host determinism. The final `gate` job requires every build and verification
-job, including cross-host determinism, to succeed or be skipped under verified
-reuse or the event's scope; document and script checks must always succeed,
-and on a board-scope event so must every physical board leg.
+until they are dependable. Two reuse conditions, identical-tree reuse and
+an explanatory edit, both described below, let a push reuse a full pass
+instead. Each host's compiler builds hand checked executables to that
+host's consumers, the debug compilers for cross-host determinism among
+them. The final `gate` job, the aggregate job, requires every build and
+verification job, cross-host determinism included, to succeed or to be
+skipped under verified reuse or the event's scope; document and script
+checks must always succeed, and on a board-scope event so must every
+physical board leg.
 
 Linux x86-64, Linux arm64 and Darwin host checks run the production C
 publication, private-directory and cancellation controls alongside formatter write
@@ -580,8 +574,8 @@ runner's signal-forwarding controls among them. That is native system
 call evidence, separate from the Linux-hosted compiler and the generated
 program corpus; it is not a FreeBSD-hosted Ada compiler claim.
 
-A branch push or same-repository pull request by an author with write access
-may reuse a complete successful push run from this repository from the
+Identical-tree reuse: a branch push or same-repository pull request by an
+author with write access may reuse a complete successful push run from this repository from the
 preceding seven days when the entire tracked tree is identical. This key
 includes every byte, path and mode, the workflows and tool pins, and all
 documents. A pull request compares its merge checkout, not just its head.
@@ -597,7 +591,7 @@ group would still cancel its pending run when a third arrived, whatever
 `cancel-in-progress` says. Unrelated forks' pull requests cannot cancel
 each other.
 
-A declared explanatory edit confined to the content of `README.md`,
+An explanatory edit: a declared edit confined to the content of `README.md`,
 `ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a complete successful
 push run of this repository from the preceding seven days, of `main` or of
 any other branch, whose commit is an ancestor of the edit (D586). So a
@@ -605,9 +599,7 @@ documents-only commit that closes an item after its branch's full gate
 reuses that gate on the branch and again when main is promoted to it. A
 branch's run is as trustworthy a base as main's: only someone with write
 access can push to a branch, and the tree key covers the workflow that run
-executed and every tool pin. Live GitHub verification of a full main
-run, the classifier output and a skipped-lane aggregate gate completed before
-this path was enabled.
+executed and every tool pin.
 Every intervening commit must carry the exact line `Gate: explanatory`;
 the event must be a push to a branch of this repository, `main` or another,
 or a same-repository pull request whose author has write access. Declare
@@ -644,7 +636,7 @@ still succeed. The linked full run contains the target-test results.
 | `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
 | `darwin-release-build` | `macos-26` | build the release executables once for the `darwin-host-release` and `darwin-parity` jobs |
 | `darwin-host` | `macos-26` | the debug compiler host suite, determinism, report identity and the scripted server sessions |
-| `darwin-host-release` | `macos-26` | the release compiler host suite and the same follow-on checks, then the LLDB sessions, which had a job of their own until it was found holding one of the five macOS runners the account may use at once while `darwin-parity` queued for it |
+| `darwin-host-release` | `macos-26` | the release compiler host suite and the same follow-on checks, then the LLDB sessions |
 | `darwin-parity` | `macos-26` | the hosted corpus executed natively, every Darwin source verdict and the bindings |
 | `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` shards, `arm64-compiler-checks` and the Linux arm64 determinism manifest |
 | `arm64-compiler` matrix | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane in two `--shard` jobs, `arm64-compiler-1` and `arm64-compiler-2` |
@@ -681,18 +673,14 @@ the shared build dependency.
 The determinism manifest jobs covering all nine optimization/specialization
 combinations took 150 seconds on Linux x86-64, 137 on Linux arm64 and 276 on
 Darwin arm64; manifest emission itself took 50, 40 and 105 seconds
-respectively. The agreement job took five seconds. These are observations
-from a single run, excluding failed jobs whose durations cover only part
-of their work. They are not a controlled
-comparison with the earlier measurements before artifact sharing, and no
-CI time saving has been demonstrated. Same-run build archives are
-short-lived inputs, not acceptance records.
+respectively. The agreement job took five seconds. These are single-run
+observations, not a comparison, and exclude failed jobs whose durations
+cover only part of their work.
 
-The gate is **not** the retired acceptance: it retains no successful
-exact-revision acceptance record, and green is not a verdict on a revision.
-On a failed Cortex-M job, it is configured to upload diagnostic output if
-that output exists; uploaded artifacts are retained for 14 days. It is a
-safety net over every target.
+The gate keeps artifacts, never an acceptance record: among them a failed
+Cortex-M job's diagnostic output, when there is any, for 14 days, the
+determinism workflow's assembly manifests, and each board leg's evidence
+for 90 days. Same-run build archives are only inputs to later jobs.
 
 The gate calls `determinism.yml`, which
 requires every host in its matrix to emit the same bytes; it emits and hashes
@@ -704,13 +692,6 @@ Changes to link checker configuration and unknown changed ranges also check
 every document.
 `release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
 assets that `nix build .#refine-bin` consumes.
-
-The exact-revision native acceptance in `scripts/ci/` approved every revision
-through 0.2.0 and was removed when the project left SourceHut. Do not cite it
-as current and do not claim a change is accepted: nothing accepts revisions
-now, and the gate above is a safety net rather than a verdict on a revision.
-`environments/native-ci/README.md` and `environments/macos-arm64/README.md`
-describe the retired arrangement.
 
 The repository submits no build manifests. GitHub is canonical and takes
 pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
@@ -754,8 +735,7 @@ default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
 the same verdicts.
 
 Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
-gate, or from a host you run yourself; the former exact-revision native
-acceptance runner is retired.
+gate, or from a host you run yourself.
 A Darwin change receives focused checks on a Mac before it is pushed, and so,
 when a Mac is available, does a change to the harness or to fixtures the
 Darwin lanes run: `darwin-parity` and `darwin-host` were the lanes most often
@@ -767,7 +747,6 @@ The hosted macOS image's runner session may launch one. The first native Mac run
 expected-refusal transcript, in which the unfiltered harness failed only for
 want of a Linux driver, is historical bootstrap evidence, never a current
 success rule.
-`docs/process.md` explains the workflow.
 
 `scripts/test.sh` builds and runs the complete Linux test program on native
 Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
@@ -799,7 +778,7 @@ on Mondays, or a manual dispatch, in this repository only;
 reuse a pass, and the aggregate requires each of them to succeed and every
 port's outcome to be `passed`. A skipped, cancelled or failed leg, a leg
 that never reached the rig, and any other outcome, `rig-busy`,
-`needs-setup` and `unavailable` among them, fail the gate: missing physical
+`needs-setup` and `unavailable` among them, fail the aggregate job: missing physical
 evidence is not a pass. On every other event, a branch push or a pull
 request, the board jobs must be skipped, and the gate's summary says
 "physical boards: not run for this event". A green gate there is software
@@ -829,9 +808,10 @@ from a branch by the maintainer, each of `gate.yml` at the run's own ref
 with no pull request in its environment or payload. GitHub fails a job
 whose pre-job script exits nonzero before any of its steps
 ([running scripts before or after a job](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/run-scripts)),
-so nothing from a refused job's checkout runs on the rig. The repository's
-setting for approving fork pull requests, the maintainer's and recommended
-at all external contributors, is a second layer. The board jobs read no
+so nothing from a refused job's checkout runs on the rig. A second layer is
+the repository's setting that a fork's pull request waits for approval
+before its workflows run, set for all external contributors as GitHub
+recommends. The board jobs read no
 secret, and their token can only read the contents and the actions.
 
 A candidate reaches `main` in three steps:
@@ -852,9 +832,9 @@ decide the order; the Pico 2 covers both architectures.
 
 ### Proving a change emits the same bytes
 
-A change meant to alter no emitted output is shown to by two manifests,
-one from a compiler built before the change and one from a compiler built
-after it, emitted over the same checkout and compared. Keep the first
+A change meant to alter no emitted output proves it with two manifests,
+emitted over the same checkout by a compiler built before the change and
+one built after it, and compared. Keep the first
 compiler where it was built. `refine` finds its library in `lib/landin`
 beside the `bin/` it runs from, or in the checkout six directories above a
 build tree's `bin/refine`, so a copy anywhere else refuses every hosted
