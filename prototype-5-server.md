@@ -19,6 +19,8 @@
 > The sketch itself begins at its first module heading, `core/fibre`. The
 > notes between this banner and that heading say what it presses on and
 > reconcile the sketch with the library, and a reader can skip them.
+> `D464` names a decision recorded in `spec.md`, and `[1675]` a numbered
+> paragraph of `tour.md` or `spec.md`; `refine explain D464` prints either.
 
 Current with specification 0.2.8. Its own findings V1-V15 are all
 resolved below: V15 while it was written, the rest by D444-D449. The fibres
@@ -123,18 +125,18 @@ A round's wait when nobody can run is the concept `stacks.idler`, given to
 `any turns`, beside an unused `any scheduler`, because the one does not
 convert to the other.
 
-D463 put the switch, `prepare` and `switch`, in the submodule
+The switch, `prepare` and `switch`, lives in the submodule
 `core/fibre/stacks` with the library's round of fixed turns, `stacks.round`,
-so a program over `whole` or the blocking host carries no switch. D471 to
-D473 replaced the check `space.limit` was kept for: the record keeps no
-limit, every routine of a program that prepares a stack checks its own
-frame against the current stack's limit in its prologue, a switch carries
-each stack's limit in the frames it saves, and `prepare` keeps no room
-above it. D447 and D461 replaced V11's sentence that every fibre's stack
-carries the deepest interrupt nesting: on Cortex-M0 a fibre runs on the
-process stack, and its backing holds the one exception frame the core
-pushes. The sketch below keeps its own spellings, and its findings their
-wording. The firmware counterpart's derivation says where it departs
+so a program over `whole` or the blocking host carries no switch (D463).
+The sketch's `space.limit` served a check the library makes otherwise, so
+its record keeps no limit: every routine of a program that prepares a
+stack checks its own frame against the current stack's limit in its
+prologue, a switch saves each stack's limit with its frames, and `prepare`
+keeps no room above it (D471-D473). V11 said every fibre's stack carries
+the deepest interrupt nesting; on Cortex-M a fibre runs on the process
+stack, and its backing holds only the one exception frame the core pushes
+(D447, D461). The sketch below keeps its own spellings, and its findings
+their wording; the firmware counterpart's derivation says where it departs
 from them.
 
 ## core/fibre  —  the capability this sketch had to invent

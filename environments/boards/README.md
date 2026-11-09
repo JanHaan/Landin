@@ -10,12 +10,21 @@ an image onto a board of your own, the ELF on a Cortex-M or RP2350 board
 and `OUT.bin` at the description's flash offset on an ESP chip, see
 [the firmware guide](../../docs/targets.md#loading-an-image-onto-your-own-board).
 
-Build on epycmicro in Landin's pinned environment. The tools and physical
-oracles run on rigpi, by hand through `run.py` or in the gate through
-[`gate.py`](#the-board-gate-on-the-rig). A RAM run is a warm debugger entry;
-it does not establish power-on or boot-ROM behavior. `refine` retains the
-default boot layout; board tools default to `--mode=ram` and select the
-compiler's `--firmware-layout=ram` explicitly.
+The rig has names of its own. epycmicro is the maintainer's x86-64 Linux
+build host. rigpi is the Raspberry Pi the boards hang off. The cascade is
+its chain of USB hubs, whose ports `uhubctl` switches to power a board on
+and off. The Arty is a Digilent Arty A7 FPGA board on a Pi port outside the
+cascade, running probehive, the gateware that makes it a six-slot CMSIS-DAP
+probe over Ethernet with a UART and a reset line for each slot. `D973`
+names a decision recorded in `spec.md`; `refine explain D973` prints it.
+
+Build on epycmicro in Landin's pinned environment. The board tools and
+their physical checks run on rigpi, by hand through `run.py` or in the gate
+through [`gate.py`](#the-board-gate-on-the-rig). A RAM run enters an image
+loaded into SRAM through the debugger, so it establishes nothing about
+power-on or boot-ROM behavior. `refine` defaults to the boot layout; the
+board tools default to `--mode=ram` and pass `--firmware-layout=ram`
+explicitly.
 
 On NixOS the foreign cross-toolchain archives need an FHS environment, as
 the [emulator recipe](../cortex-m/README.md#on-nixos) explains.
@@ -474,16 +483,16 @@ python3 environments/boards/gate.py --port=PORT --bundles=BUNDLES \
 
 rig.json describes the maintainer's rig: the Arty's serial, the probehive
 commit with the SHA-256 of its seven runtime files and of its bitstream,
-and for each of seven ports, `rp2040`, `pico2`, `stm32h753`, `esp32c3`,
-`esp32c5`, `esp32` and `esp32s3`, its steps in order with the arguments
-that rig needs. `{probehive}` and `{ram_loader}` in an argument become
-`--probehive` and `--ram-loader`, by default `probehive/` and
-`bin/landin-ram-run` in the shared state, and a name from the port's
-`location`, such as the Pico 2's `{hub}` and `{port}`, becomes its value.
-A location left null ends the port `needs-setup` before any hardware, and
-the port's `setup` text says what the rig lacks. The gate itself passes
-`--mode`, `--bundle` and `--output`; rig.json may not pass them, nor
-`--record`.
+and the steps of each port, `rp2040`, `pico2`, `stm32h753`, `esp32c3`,
+`esp32c5`, `esp32` and `esp32s3`, in order with the arguments that rig
+needs. In an argument, `{probehive}` and `{ram_loader}` become the paths
+`gate.py` was given as `--probehive` and `--ram-loader`, by default
+`probehive/` and `bin/landin-ram-run` in the shared state, and a name from
+the port's `location`, such as the Pico 2's `{hub}` and `{port}`, becomes
+its value. A null location ends the port `needs-setup` before any hardware,
+and the port's `setup` text says what the rig lacks. The gate passes
+`--mode`, `--bundle` and `--output` itself, so rig.json may pass none of
+them, nor `--record`.
 
 Every port runs its RAM run first, from the verified fixed image the last
 run left, then its boot check, which flashes, cold-starts, checks the
@@ -534,24 +543,31 @@ boot ROM, since its power-only cable keeps that ROM's USB off the bus.
 
 ## The line exchange
 
-The tty boards change their serial line during each run and come back
-(D962, D963). After every existing oracle, and before the probe reads the
-counters back, `common.line_phase` sends 0x16 and eleven digits asking for
-a line; the board answers on the line in use with an `l` frame, `r`, `d`,
-`p` and `s` what it read, `k` the clock it computes from and `o` 0 with
-the register images, `b` the divisor and `f` the frame, the STM32H753's
-`x` its CR2, or `o` 1 for `line.unsupported_rate` or 2 for
-`line.unsupported_format`. The host holds each to the port's own oracle,
-written from its manual: `stm32h753/board.py`'s `line_oracle` from RM0433,
-`esp.py`'s from the ESP TRMs. A refusal must leave the board answering a
-0x11 on the old line. An accepted line is set on the tty with
-`TtyConsole.line`; nothing may arrive while the two ends change, a 48-byte
-payload and 0x17 must come back echoed byte for byte, the board's `e` frame
-must count and hash, FNV-1a, exactly the payload, and after the board and
-the tty go back to 115,200 8N1 it must answer a 0x11 there. A board that
-echoes the payload and 0x17 but sends no `e` frame read 0x17 as something
-else, as a parity bit left above seven data bits makes it read; the
-failure says so (D965).
+The boards with a tty console change their serial line during each run
+and come back (D962, D963). After the run's other checks, and before the
+probe reads the counters back, `common.line_phase` asks for a line by
+sending 0x16 and eleven digits. The board answers on the line in use with
+an `l` frame:
+
+| key | what it holds |
+|---|---|
+| `r`, `d`, `p`, `s` | the rate, data bits, parity and stop bits the board read |
+| `k` | the clock it computes the line from |
+| `o` | 0 when it accepts the line, 1 for `line.unsupported_rate`, 2 for `line.unsupported_format` |
+| `b`, `f` | for an accepted line, the divisor and frame register images |
+| `x` | on the STM32H753, its CR2 register image |
+
+The host holds each answer to the port's expected one, written from its
+manual: `stm32h753/board.py`'s `line_oracle` from RM0433, `esp.py`'s from
+the ESP TRMs. After a refusal the board must still answer a 0x11 on the old
+line. An accepted line is set on the tty with `TtyConsole.line`. Nothing
+may arrive while the two ends change; a 48-byte payload and 0x17 must come
+back echoed byte for byte; the board's `e` frame must count the payload and
+hash it, FNV-1a, exactly; and once the board and the tty are back at
+115,200 8N1 the board must answer a 0x11 there. A board that echoes the
+payload and 0x17 but sends no `e` frame has read 0x17 as something else,
+as a parity bit left above seven data bits makes it, and the failure says
+so (D965).
 
 | Port | Bridge | Accepted | Refused |
 |---|---|---|---|
@@ -649,11 +665,12 @@ that step `incomplete`.
 SIGINT or SIGTERM stops a tool at its next point. A power cycle or a
 download under way finishes first, because one cut short leaves a port off
 or a chip halted in its boot ROM. A boot check cancelled before its fixed
-image is restored skips the restoration and records it pending: GitHub's
-runner sends SIGTERM 7.5 s after SIGINT and kills the step 2.5 s later,
-and a restoration begun and killed would leave less than none. The port's
-next boot check restores it. The tool then closes the probe sessions and
-consoles it opened, releases the lock and records `cancelled` with the signal and the
-phase: the command running or last run, and the last paced action. Later
-signals are only noted. `gate.py` passes each signal to the step running,
-and between steps stops itself.
+image is restored records the restoration pending instead of starting it:
+GitHub's runner sends SIGTERM 7.5 s after SIGINT and kills the step 2.5 s
+later, too soon for a restoration, and one killed half way leaves the board
+worse off than one never begun. The port's next boot check restores it.
+The tool then closes the probe sessions and consoles it opened, releases
+the lock and records `cancelled` with the signal and the phase: the command
+running or last run, and the last paced action. Later signals are only
+noted. `gate.py` passes each signal to the running step, and between steps
+stops itself.

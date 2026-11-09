@@ -2,7 +2,8 @@
 
 Start with the [board guide](../README.md#the-stm32h753s-cached-profile)
 and the [cacheless port](../stm32h753/README.md), whose board, ST-LINK,
-virtual COM port, access and rig settings this run shares.
+virtual COM port, access and rig settings this run shares. `D973` names a
+decision recorded in `spec.md`; `refine explain D973` prints it.
 
 `compiler/tests/board/stm32h753_cached` targets the STM32H753 through
 `devices/descriptions/stm32h753_cached`, the cached profile, at
@@ -47,7 +48,7 @@ and eight hex digits, then ETX and LF. The host sends `S` first.
 | `e` | before the entry returns | `c` CCR, still on |
 | `h` | when the application halts | `s` the step that failed |
 
-## The oracle
+## What the host checks
 
 | Checked | Against |
 |---|---|
@@ -60,9 +61,9 @@ and eight hex digits, then ETX and LF. The host sends `S` first.
 | the stale transmit | each line the transmit without a clean carries is the `o`s memory held or, written back in between, the message's, at least one the `o`s; after the clean it carries the message, `A` to `Z` repeated; nothing else arrives outside the frames |
 | the end | CCR over SWD with IC and DC clear once the entry returned |
 
-The predictions are the host's, from what it sent and what a write-back
-data cache does; none is the firmware's own idea of itself. A cache may
-evict a line between the control's setup and its read, which is why a
-control is judged line by line: a line it evicted reads or sends what
-memory holds, never part of either. A step waits 20 seconds for the host,
+The host predicts each result from what it sent and what a write-back data
+cache does, never from the firmware's report of itself. A cache may evict
+a line between a control's setup and its read, so a control is judged line
+by line: an evicted line reads or sends what memory holds, never a mix of
+the two. A step waits 20 seconds for the host,
 which reads CCR over SWD between the boot frame and the control.

@@ -8,7 +8,8 @@ generated half of the device's description, `interrupts.ldn` (D542). The
 importer is part of `refine`, written in Ada; nothing here needs Python
 except the repository's own fetcher and tests. The compiler consumes the
 generated `.ldn` files as ordinary source, without network access, package
-acquisition or generator tooling.
+acquisition or generator tooling. `D542` names a decision recorded in
+`spec.md`; `refine explain D542` prints it.
 
 ```sh
 python3 scripts/fetch_inputs.py rp2040/RP2040.svd
@@ -30,14 +31,14 @@ modules (D831).
 ## Device descriptions
 
 `descriptions/DEVICE/` holds a device's description (D542): Landin source of
-tool directives the compiler reads into the profile a firmware program is
+tool directives the compiler reads into the firmware profile a program is
 built for, imported as `descriptions/DEVICE` with `--root=devices`, apart from
 the register modules under `generated/`. `interrupts.ldn` is the half an SVD
 gives, in the one text D542 fixes, and `memory.ldn` the half a developer
-writes. RP2040's `interrupts.ldn` was first written in that form by hand and is now
-what `refine svd` generates; `devices/test.py` regenerates it, and renders
-D542's form from the fetched SVD with nothing of the compiler's, and
-requires the file's bytes to be both. Its `memory.ldn` follows
+writes. RP2040's `interrupts.ldn`, first written by hand, is now what
+`refine svd` generates. `devices/test.py` requires its bytes to equal both a
+regeneration and the test's own rendering of the fetched SVD, which uses
+nothing of the compiler's. Its `memory.ldn` follows
 pico-sdk 2.2.0, checked against
 [`memmap_default.ld`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2040/memmap_default.ld)
 (SHA-256 `d409afb35ec0a8c3edf5ad6935907cb45f225a3cbdfd4c3b8505a7ed92df28dc`),
@@ -214,10 +215,12 @@ was consulted on 2026-09-18, pinned by documentation repository commit
 
 ## The selection policy
 
-A policy is JSON, schema 2, read by refine without Python (D556). Every
-member below except the first four has a default or may be left out; a
-member refine does not read is refused, except `provenance`, which holds the
-reviewer's notes and is not read.
+A policy is JSON, schema 2, read by refine without Python (D556). It must
+have `schema`, `device`, `svd_version`, `svd_sha256` and `notice`, a
+nonempty `selection`, and in `policies` a `read`, `write` and `reserved` for
+every selected register; every other member has a default or may be left
+out. A member refine does not read is refused, except `provenance`, which
+holds the reviewer's notes.
 
 | Member | Says |
 |---|---|
@@ -248,8 +251,8 @@ written as one. A write admits only the named fields, or `write_mask`.
 
 ## What the importer reads
 
-D557 says it in full. Properties are inherited from the register, its
-peripheral, the peripheral that is derived from, and the device. A derived
+Properties are inherited from the register, its peripheral, the peripheral
+it derives from, and the device (D557 gives the whole rule). A derived
 peripheral takes its parent's registers and keeps its own base, once. An
 alternate register is generated at the address it shares. A field lies where
 its `bitRange`, `bitOffset` and `bitWidth`, or `lsb` and `msb` say, and may
@@ -297,17 +300,17 @@ python3 devices/test.py                          # offline, as check.py runs it
 python3 devices/test.py --refine "$(command -v refine)"   # fetches and regenerates
 ```
 
-Offline, the test holds the lock and the policies to the same SVD hashes,
-every generated file to its manifest's hash, and every module to its notice.
-With `--refine` it fetches the inputs, regenerates every policy's files twice
-into fresh directories and requires every byte to be the checked-in one, puts
-back
-a changed output and removes a deselected one, refuses each unsupported form
-in a mutated, rehashed SVD with its code, and compares every selected register
-and field with the vendor's own C headers, which refine never reads. The
-gate's `cortex-m` job runs it with the release compiler. The two vendor
-formats may share an upstream database; they are independent of the
-projection, not a claim of independent silicon verification.
+Offline, the test requires the lock and the policies to name the same SVD
+hashes, every generated file to have its manifest's hash, and every module
+to carry its notice. With `--refine` it fetches the inputs and regenerates
+every policy's files twice, into fresh directories, requiring every byte to
+be the checked-in one. It also requires a regeneration to put back a changed
+output and remove a deselected one, refuses each unsupported form in a
+mutated, rehashed SVD by its code, and compares every selected register and
+field with the vendor's own C headers, which refine never reads. The gate's
+`cortex-m` job runs it with the release compiler. The SVD and the headers
+may come from one upstream database: they check the projection
+independently, not the silicon.
 
 ## ESP32-C3 and ESP32-C5: the selected surface
 
@@ -347,15 +350,15 @@ thirteen sources the SVD omits, and the CLIC, which no SVD has and the
 policy adds from the manual's 2.8.2 (D705). The literals reviewed from the
 manuals, the watchdogs' keys and bits among them, stay in `test.py`.
 
-The descriptions are RAM-only `esp-app-image`s (D707). The C3's SRAM1 is
-one memory on two buses; its `memory.ldn` puts code in its first 128 KiB
+Both descriptions build RAM-only `esp-app-image`s (D707). The C3's SRAM1 is
+one memory on two buses: its `memory.ldn` puts code in the first 128 KiB
 through the instruction bus and data in the 160 KiB after it through the
-data bus, so the two do not alias, and the C5's SRAM is one address space;
-each ends below what the ROM uses while it loads the image, as ESP-IDF's
-`bootloader.memory.ld.in` gives it. Each holds `watchdogs.ldn`, a stage
-before reset (D653, D708) that stops both MWDTs and the RTC watchdog and
-sets the super watchdog to feed itself, with registers alone, which the
-check evaluates store by store.
+data bus, so the two do not alias. The C5's SRAM is one address space. Each
+map ends below the memory the ROM uses while it loads the image, as
+ESP-IDF's `bootloader.memory.ld.in` gives it. Each description holds
+`watchdogs.ldn`, a stage before reset that stops both MWDTs and the RTC
+watchdog and sets the super watchdog to feed itself, using CPU registers and
+no RAM (D653, D708); the check evaluates it store by store.
 
 ## RP2350's Hazard3 cores
 
@@ -490,10 +493,10 @@ selects it by its identity and compares its linked regions, its 166-word
 vector table at 0x0800_0000, its reserved slots, a handler at USART3's slot
 55, a datum placed in the DTCM and its boot kind with
 `environments/cortex-m/descriptions.json`, recorded from ST's header.
-Every capacity verdict is rerun against its profile as RP2040's is: the
-corpus links with the reference's probe map, so its verdicts against the
-STM32H753 are a measurement from each limited image's sizes and frames, not
-a link against its map.
+Every capacity verdict is rerun against its firmware profile as RP2040's
+is: the corpus links each limited program again with the script refine
+derives from this description, so its verdicts against the STM32H753 are
+links against its map; none runs there.
 
 [`descriptions/stm32h753_cached`](descriptions/stm32h753_cached) is the same
 chip with its Cortex-M7's level 1 caches on (D974). Its policy,

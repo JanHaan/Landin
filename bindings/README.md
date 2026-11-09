@@ -25,6 +25,9 @@ regenerates the committed fixture's header and policy for it and runs the
 result natively. [Target contracts](../docs/targets.md) explains the separate
 compiler and generator guards.
 
+`D820` names a decision recorded in `spec.md`; `refine explain D820` prints
+it.
+
 The generator writes exactly four files:
 
 - `bindings.ldn` contains `layout(c)` and `layout(c, packed)` records, exact
@@ -120,12 +123,12 @@ headers. On a hosted target, opaque-object and nullable-callback allocation
 uses `calloc`/`free`, so the explicit include configuration must provide
 `<stdlib.h>` when those adapters are generated.
 
-A refusal is a diagnostic, and `refine explain` describes each code: a
-request written wrong, `--sysroot` missing for a hosted target or given for
-`cortex-m0` among them, is L0002, a header or policy that cannot be read L0003,
-a policy that is not one L0579, a Clang that cannot be used as asked L0580, a
-selection that cannot be bound L0581, outputs in the way L0582, and a
-replacement that fails L0005.
+Each error the generator reports has a code `refine explain` describes:
+L0002 for a request written wrong, such as `--sysroot` missing for a hosted
+target or given for `cortex-m0`; L0003 for a header or policy that cannot be
+read; L0579 for a policy that is not one; L0580 for a Clang that cannot be
+used as asked; L0581 for a selection that cannot be bound; L0582 for outputs
+in the way; and L0005 for a replacement that fails.
 
 Compile `adapters.c` with `-std=c11` and the preprocessor environment the
 generation used: the same target, include directories and defines, and on a
@@ -324,12 +327,12 @@ the value: such a record has no opaque form, is no array element and no
 field of another record, and is refused wherever C would copy it by value.
 
 C reaches both kinds, and a record holding either by value, only through a
-pointer (D414). A pointer to any record the policy selects and the
-generator writes as a Landin record, an ordinary `layout(c)` record as much
-as a packed or flexible-member one, is typed `ptr` or `ptr mut` to that
-record rather than an opaque byte pointer (D426): in a function's
-parameters and result, a callback type's, a global's value and address, a
-native record's field and an opaque record's member accessors. A caller
+pointer (D414). A pointer to a record the generator writes as a Landin
+record, ordinary, packed or flexible-member, is typed `ptr` or `ptr mut` to
+that record rather than as an opaque byte pointer (D426). That holds wherever
+the pointer appears: a function's or callback type's parameters and result,
+a global's value and address, a native record's field and an opaque record's
+member accessors. A caller
 passes `addr sample` and reads `result.val.gain` without a conversion. A
 pointer to an opaque, incomplete or unselected record is `ptr u8`, since no
 Landin record describes it.
@@ -648,12 +651,12 @@ refine bindings --clang="$CLANG" --target=cortex-m0 \
 CLANG=clang-19 python3 bindings/test.py --refine PATH
 ```
 
-`--refine` names the compiler under test, or `$LANDIN_REFINE` does. What only
-a fake Clang can show is the compiler's own: the `bindings` suite holds the
-target rows, the refusal of another triple before any header work, a whole
-binding with every Clang run in its own environment, each refusal by its
-code, and a replacement that fails after each of its moves putting every
-output back (`./scripts/dev-test.sh --suite=bindings`).
+`--refine`, or `$LANDIN_REFINE`, names the compiler under test. The
+`bindings` suite (`./scripts/dev-test.sh --suite=bindings`) covers what needs
+only a fake Clang: the target rows, the refusal of another triple before any
+header work, a whole binding with every Clang run in its own environment,
+each refusal by its code, and a replacement that fails after each of its
+moves and puts every output back.
 
 The suite requires an external Clang, and the gate and the development shell
 run different builds of Clang 19. The gate's `bindings` job installs Ubuntu

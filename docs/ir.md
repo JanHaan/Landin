@@ -15,6 +15,9 @@ the implementation and executable tests establish the current IR; the
 change, this account follows them. It must never be used to justify changing
 the compiler to match the prose.
 
+`D339` names a decision recorded in `spec.md`, and `[1960]` a numbered
+paragraph of `tour.md` or `spec.md`; `refine explain D339` prints either.
+
 ## Where it sits
 
 The frontend first parses source into a syntax table, resolves names and
@@ -40,9 +43,11 @@ The same IR feeds every native emitter, x86-64, arm64, RISC-V, Cortex-M
 and Xtensa, for hosted executables and firmware alike; the
 [capability inventory](capabilities.md) names the targets each supports and
 their limits. The IR is expressed without machine registers, stack offsets or
-instruction encodings. Each backend
-translates its operations into machine instructions and supplies the calling
-convention and object-format details.
+instruction encodings. Each backend translates its operations into machine
+instructions and supplies the calling convention and object-format details.
+Xtensa's does so in two steps: its emitter writes RISC-V-form instructions
+over words kept in memory, and a selector turns each into Xtensa
+instructions as it is written ([target contracts](targets.md#xtensa-firmware)).
 
 There is a reason for having a representation between syntax and assembly.
 The syntax already preserves nested statements and expressions. Repeating
@@ -69,11 +74,11 @@ successfully, exits with a declared failure, or traps with `Halt`. A loop is rep
 blocks and a backward edge. There is no separate loop instruction for the
 backend to interpret.
 
-Signature identity includes D231's `noreturn` return form. A direct or
-indirect nonreturning call must be the penultimate instruction of its block,
-followed immediately by `Halt`. D232 dispatches that guard as `unreachable` if an invalid callee returns.
-It has control and trap effects, and the verifier refuses a returning body
-with a nonreturning signature. Generic and erased evidence signatures retain
+A signature records whether its routine returns at all (`noreturn`, D231).
+A direct or indirect call of one that does not is followed at once by `Halt`,
+its block's terminator, which reports `unreachable` if a faulty callee
+returns after all (D232). The call has control and trap effects, and the
+verifier refuses a returning body with a nonreturning signature. Generic and erased evidence signatures retain
 the same flag; it never becomes an ordinary IR value type.
 
 An erased call of a concept that no conformance in the program answers has
@@ -183,16 +188,18 @@ incoming edges. Storage provides that connection here, including for
 expression results and short-circuit Boolean expressions. For `and`, the
 right operand runs only on the edge where the left operand was true; `or`
 uses the complementary choice. These are branches, not eager arithmetic
-operations. When the `and` or `or` is itself the condition of an `if`, a
-`while` or a `when`, no answer crosses a merge: each operand branches
-straight to the block its value decides, and the blocks that test the right
-operands are made before the operands are lowered so that each follows the
-test before it; a `not` over one exchanges the two destinations. A
-condition holding a control expression keeps the slot form, because that
-operand's arms could all leave and strand those blocks. For the same reason a
-loop makes its blocks only after its bounds or source, and a `while` whose
-condition does not jump only after that condition: a block nothing reaches
-is malformed IR.
+operations.
+
+When the `and` or `or` is itself the condition of an `if`, a `while` or a
+`when`, no answer crosses a merge. Each operand branches straight to the
+block its value decides, and a `not` over one exchanges the two
+destinations. Lowering makes the blocks that test the right operands before
+it lowers the operands, so that each follows the test before it. A
+condition holding a control expression keeps the slot form instead, because
+that operand's arms could all leave and strand those blocks. A block nothing
+reaches is malformed IR, so a loop likewise makes its blocks only after its
+bounds or source, and a `while` whose condition does not jump only after
+that condition.
 
 This makes the initial lowering straightforward and its operand rule cheap
 to check: block membership and instruction order suffice, without computing
@@ -246,9 +253,9 @@ constant replacements remove it with the check. The verifier refuses it on
 other opcodes. A range check keeps both bounds, but every backend tests
 only an edge inside its type: `ptr(n)`'s check is `1` up to the largest
 `usize`, and only the nonnull edge is emitted. A load of an atom-typed value
-tests that its bits are one of its set's codes, except a load of a sealed
-slot: a compiler temporary that only loads and stores name, which the
-verifier holds it to, so it reads back only a value of its set. An atom
+tests that its bits are one of its set's codes. A sealed slot is the
+exception: a compiler temporary that nothing but loads and stores names,
+which the verifier enforces, so it can only read back a value of its set. An atom
 `match` keeps its subject in one, so the subject is tested once where it is
 read and each arm only compares. A signed right shift describes
 the language's shift semantics; the x86 emitter is responsible for handling
@@ -303,18 +310,22 @@ cannot strand a carrier in a predecessor block.
 
 Under size and speed, `Landin.IR.In_Place` lets the receiving routine read
 such a parameter where its caller keeps it when nothing could tell the
-difference: the routine only reads the parameter, passes its address on only
-as another by-value argument, and nothing it does before its last read can
-write memory outside its own frame. A store through an address or to a module
-datum, an atomic access, an assembly block, an indirect call, a call to an
-import and a direct call to a routine that may do any of those, transitively,
-all could; a whole-unit summary answers the last. A parameter two words wide
-or narrower, a slice among them, is read in place only outside loops, where
-its copy costs more than reading through a carrier that may sit in memory. A
-call's address of the parameter may pass through a slot lowering keeps it in
-across later arguments, and at speed a read through that slot, which is how
-an inlined copy reads a parameter its caller passed on, is a read of the
-parameter. The parameter's slot then
+difference. That holds when:
+
+- the routine only reads the parameter, and passes its address on only as
+  another by-value argument;
+- nothing it does before its last read can write memory outside its own
+  frame: no store through an address or to a module datum, atomic access,
+  assembly block, indirect call, call to an import, or direct call to a
+  routine that may do any of those, which a whole-unit summary answers;
+- for a parameter two words wide or narrower, a slice among them, the read
+  is outside loops, where its copy costs more than reading through a carrier
+  that may sit in memory.
+
+A call's address of the parameter may pass through a slot that lowering
+keeps it in across later arguments. At speed a read through that slot counts
+as a read of the parameter, which is how an inlined copy reads a parameter
+its caller passed on. The parameter's slot then
 becomes an address slot holding the carrier, reached as an `inout` place is,
 and keeps its declaration so a debugger still shows the value. Its former
 shaped slot stays as its home: a zero carrier clears that home, and the
@@ -372,12 +383,12 @@ Even a reached entry need not be named by the emitted table. Each
 table records its concept, and the backends keep entry N only where code
 that can run projects entry N from some table of that concept (D374): the
 concept rather than the table a projection names, because an `any` value
-may carry any of its concept's tables. Code that can run is what a root
-reaches, a root being a routine something other than a call names, or one
-without parameters, or the panic handler, through calls, taken addresses
-and the routines an `assembler.block`'s text names by name or link name:
-a routine only a left-out entry's target calls projects nothing, on a
-hosted target whose startup and system calls are blocks as on any other.
+may carry any of its concept's tables. A root is a routine that something
+other than a call names, a routine without parameters, or the panic handler.
+Code that can run is what a root reaches through calls, taken addresses and
+the routines an `assembler.block`'s text names by name or link name. So a
+routine that only a left-out entry's target calls projects nothing, on a
+hosted target too, whose startup and system calls are blocks as on any other.
 An entry left out is a zero word in its place, so every offset D144 and
 D147 give stays put, and the routine it named is linked only if something
 else reaches it.
@@ -432,9 +443,10 @@ runs first inside simplification, whose output verification covers both. It
 checks storage runs and identities before dereferencing them, then block structure,
 reachability, operand order, type agreement, signatures, shapes, paths,
 evidence and static images. Pointer-provenance verification indexes stores
-and reads, then follows uninitialized paths for each read slot, retaining the
-first fault in block and instruction order. Its scoped heap scratch grows
-with blocks, slots, values and pointer uses, without block-by-slot tables.
+and reads, then follows the paths on which each read slot may be
+uninitialized, and keeps the first fault in block and instruction order. Its
+heap scratch grows with blocks, slots, values and pointer uses, and holds no
+table of blocks by slots.
 Successors come directly from validated terminators, so constructing a graph
 introduces no automatic queue or returned graph temporary. Array byte sizes
 and use counts are checked before allocation; partial allocations are released
@@ -447,9 +459,9 @@ This is structural and semantic consistency checking of a compiler data
 structure, not a proof that compilation preserves every program's behavior.
 Source diagnostics belong to the frontend. Malformed IR at this boundary is
 a compiler defect, and the tests deliberately construct malformed units to
-check that they are rejected. Recorded lowering and executable fixtures
-provide different evidence: what the compiler produced, and how the emitted
-program actually behaved.
+check that they are rejected. Recorded lowering and executable fixtures test
+different things: what the compiler produced, and how the emitted program
+actually behaved.
 
 Specialization currently proves incoming static evidence where it can and
 replaces eligible indirect dispatch with direct calls. It retains existing
@@ -465,10 +477,10 @@ only a function value, an image or an evidence entry exposes one.
 At `--optimize speed`, `Landin.IR.Inlining` then replaces a direct call
 to a small routine with a copy of its body (D339). The routine must have a
 body, no exposed address, the ordinary convention and Landin's own
-transport, and weigh at most a bound of those weighted operations as
-lowering made it; the copy's own calls stay calls, and a routine grows by at
-most the larger of a fixed floor and its own weight, calls inside loops
-first. The call's block ends by storing each argument into the copy of its
+transport, and weigh no more than a fixed bound of those weighted
+operations, as lowering made it. The copy's own calls stay calls. A caller
+grows by at most the larger of a fixed floor and its own weight, and calls
+inside loops are copied first. The call's block ends by storing each argument into the copy of its
 parameter, copying or clearing a by-value aggregate as the routine's entry
 would, or reading it where the caller keeps it when the routine only reads
 it and nothing can write that storage while the copy runs. A parameter the
@@ -483,17 +495,17 @@ its return to the other. Each copied block, slot and source alias names
 its `Inline_Site` — the routine, the call's origin and the call's scope —
 and every copied instruction keeps its own origin, so its traps and line
 rows are the routine's. Debug emission turns a site into DWARF's inlined
-subroutine. Cortex-M0, whose backend does not read the objective, is left
-alone.
+subroutine. Firmware targets, Cortex-M, RV32 and Xtensa, are left alone:
+no firmware debugging contract describes an inlined frame.
 
 Scalar replacement runs at size and speed, as the first step of
 simplification, which verifies the two passes' output in one walk; at speed
 that is after inlining, so an inlined copy's slots are split like the
 caller's own, and each piece keeps its slot's inline site. A slot
 holding a slice, or a record or fixed array of at most four scalars, is
-otherwise only reachable through field loads, field stores and whole copies,
-which neither forwarding, the proofs of checks nor a backend's register
-allocation sees through. When every use of a local slot names one of its
+otherwise reached only through field loads, field stores and whole copies.
+Forwarding, the proofs of checks and a backend's register allocation see
+through none of those. When every use of a local slot names one of its
 parts or copies or clears it whole, the pass gives each part a scalar slot
 of its own: part accesses become ordinary loads and stores, a whole copy one
 load and store per part, and a clear one store of zero per part. A taken
@@ -546,8 +558,8 @@ earlier identical one: the same opcode, type, flags and metadata over
 operands numbered the same, hashed so that the pass stays linear. That
 includes checked operations, an index's bounds check among them. By [1960]
 a check that fails stops the program where it stands, so once the earlier
-operation completed, the later one cannot fail; the later one is removed,
-which is a proof, and its unchecked flag is never set to say so. An
+operation completed, the later one cannot fail. Removing the later one is
+that proof; its unchecked flag is never set to record it. An
 operation in an `unchecked` region proves nothing for a checked one, so the
 flag is part of what must agree. An address through an address slot is the
 same only while no store has changed that slot and nothing else can reach
@@ -594,9 +606,11 @@ a loop, where each choice would wait on the one before it. Each arm is held to s
 besides constants, loads and stores, and the work is linear in the routine.
 x86-64 selects a choice as `cmov` or `setcc` and arm64 as `csel`, `fcsel` or
 `cset`, each on the flags a comparison right before it leaves when that is
-the comparison's only use. RV64 and Cortex-M0 have no conditional move: they
-use the condition's own zero or one for a choice of one or zero and branch
-around one load for any other.
+the comparison's only use. The RISC-V backend, for RV64 and RV32, and the
+Cortex-M and Xtensa backends select no conditional move: they use the
+condition's own zero or one for a choice of one or zero and branch around
+one load for any other. Xtensa has `moveqz` and `movnez`; the backend does
+not use them.
 
 These passes expose useful facts to the backend while leaving register
 allocation and machine instruction selection there. The current controls and
@@ -639,8 +653,8 @@ cover that distinction. Pointee edges are printed without recursive expansion.
 
 `refine compile --emit=ir program.ldn -o program.ir` writes the compact dump
 of a program as its backend would receive it, after every pass the request's
-`--optimize` and `--specialize` run (D365); it is the way to see why a value
-lives where it does without reading the lowering or diffing two assemblies.
+`--optimize` and `--specialize` run (D365). It shows why a value lives where
+it does without reading the lowering or comparing two assemblies.
 `refine compile --help` names it. `--link` still decides whether
 `platform/linux` joins the program; `--debug` and `--panic-map`, which
 describe machine code, are refused with it. Each evidence entry line in this
@@ -666,24 +680,9 @@ unchanged, so it still compares with the recorded fixtures.
 The dump has no reader and is not a stable serialization format. Comparing a
 fresh dump with the recorded one detects a change in lowering; it does not
 make the text an interchange protocol or establish the correctness of the
-change. The Ada representation can evolve as implementation evidence
-requires, without treating either its printed spelling or this page as a
+change. The Ada representation can evolve as the implementation's tests
+require, without treating either its printed spelling or this page as a
 compatibility promise.
-
-## Keeping this account current
-
-The implementation starting points are `Landin.IR`, `Landin.Stages.Lowering`
-and `Landin.IR.Verifier`; their child packages describe dumping, effects,
-specialization and simplification. The
-[compiler package guide](../compiler/ada/README.md) maps their responsibilities,
-and the [test guide](../compiler/tests/README.md) explains the recorded and
-executable evidence.
-
-Changes to the representation, its verification boundary or the optimization
-pipeline should update this account alongside the implementation. Examples
-should continue to follow checked fixtures, and claims about behavior should
-be traced to code and tests. A disagreement is a reason to investigate and
-correct this derived explanation, never to elevate it into a source of rules.
 
 ## Target capability checks
 
@@ -694,70 +693,125 @@ SysV support from its pointer width. Nominal C-layout metadata describes
 structural compatibility and also occurs on distinct scalar storage, even
 without an implemented C ABI. Its structural verification remains independent
 of that capability. The IR carries logical conventions, source link names and
-neutral shapes;
-ABI carrier assignment, object symbol prefixes and debug format selection stay
-in target/backend packages. The Linux and Darwin description seam compares
-canonical IR for native generic, aggregate and control-flow source. Isolating
-the target contracts added no opcode or serialized IR field; the existing complete IR golden is unchanged.
+neutral shapes; ABI carrier assignment, object symbol prefixes and debug
+format selection stay in target and backend packages. The Linux and Darwin
+description seam compares canonical IR for native generic, aggregate and
+control-flow source, and no target contract needed an opcode or IR field.
 
+## How each backend places values
+
+A home is the stack cell a backend keeps a slot or a value in. A source
+slot's frame home lasts the routine; the home of a value or a compiler
+temporary may be reused once nothing reads it. A location held in a register
+needs no home while it is held. Spill and save homes keep what a register
+held, and the Xtensa backend's scratch homes keep its logical words. Where
+the kind does not matter this page says home.
+
+`Landin.IR.Liveness` gives each slot one live interval over the order the
+blocks are laid out in, found backward from every block whose first mention
+of the slot reads it, and the loop nesting of every block. Its work is the
+routine plus the blocks each slot is live into, bounded by a multiple of the
+routine past which the remaining slots get the whole routine.
+
+x86-64 offers rbx and r12-r14 to slots over these intervals, heaviest first
+by references weighted with loop depth, so slots whose intervals are
+disjoint share a register. A slot holding an address through which an
+operation reaches storage counts each such reach as a read, and may hold a
+register too. A load whose value dies before its slot is next stored is the slot's
+register. In a routine without assembly, values and compiler temporaries'
+single-block spans may also take rsi, rdi, r8 and r9 wherever no call, copy,
+clear, fill, leave or fail lies in their interval, and for r8 and r9 no
+conversion or field or element operation either; selection uses those
+registers only there. With the speed objective, eligible float slots and
+values in routines without inline assembly use XMM8..XMM15 wherever no call
+falls inside their interval, since SysV preserves no XMM register across
+one; XMM0 remains instruction scratch. A slot loaded and stored in one block
+only, which stores it before reading it, and not given a register for its
+interval, may still hold one from that store through its last use, as a
+value does.
+
+Size holds a source variable it gives a register there for the whole
+routine, and gives single-block spans to compiler temporaries alone, so
+every source variable's debugger location covers the routine. At speed a
+source variable's debugger location covers its interval and, after the
+interval's last position, the rest of that block until a value writes over
+the register, including the first address of that value. Address-observed,
+parameter-at-a-C-entry, result and C transport slots keep stack homes, and
+source debugger locations follow the allocation plan. Argument spills
+preserve left-to-right evaluation across later control-flow expressions.
 
 The shared arm64 backend gives every routine an x29/x30 frame record and
-keeps source slots in fixed frame homes except at speed. Without
-optimization, scalar IR values also have separate homes. Size and speed
-modes reuse nonoverlapping scalar homes. At speed, slots and values whose
-interval no call or assembly crosses take x0-x7 or, for floats, d18-d31,
-neither of which costs a save; a parameter keeps the argument register it
-arrives in. Where enough scalar traffic pays for a save, x19-x28 and, for
-floats, d8-d15 hold the rest, including locations live across a call.
-Declared assembly registers remain excluded, addressable values stay in
-storage, and saved registers are described by CFI.
-Native Landin calls use integer bit carriers, address-based aggregate copies
-and a separate w8 failure carrier. The Darwin C planner maps the same verified
+keeps source slots in frame homes except at speed. Without optimization,
+scalar IR values also have homes of their own; size and speed reuse
+nonoverlapping scalar homes. At speed, slots and values whose interval no
+call or assembly crosses take x0-x7 or, for floats, d18-d31, neither of
+which costs a save; a parameter keeps the argument register it arrives in.
+Where enough scalar traffic pays for a save, the rest take callee-saved
+registers, which a call leaves alone: a slot over its interval takes one of
+x19-x24, a value or a slot's single-block span any of x19-x28, and a float
+one of d8-d15. Declared assembly registers remain excluded, addressable
+values stay in storage, and CFI describes the saved registers. Native Landin
+calls use integer bit carriers, address-based aggregate copies and a
+separate w8 failure carrier. The Darwin C planner maps the same verified
 signatures onto Apple's independent register banks, HFA rules, indirect
-results and packed/variadic stack rules. These choices belong to the emitter;
-error propagation and cleanup edges arrive already verified. Neutral
-specialization and simplification run before all native emitters. arm64 body
-folding remains separate from scalar home reuse. Reports record frame, spill,
-save and register use, while source debugging consumes the same placement
-plan for the fixed source slots.
-The RV64 backend keeps source slots in fixed frame homes at every
-optimization profile, with x8 holding the entry CFA and the saved caller
-frame and return address immediately below it. Without optimization every
-scalar IR value also has a home of its own; size and speed modes reuse
+results and packed or variadic stack rules. These choices belong to the
+emitter; error propagation and cleanup edges arrive already verified. arm64
+body folding is separate from scalar home reuse. Reports record frame,
+spill, save and register use, and source debugging reads the same placement
+plan for the source slots.
+
+The RISC-V backend, for RV64 and RV32, keeps source slots in frame homes at
+every optimization profile, with x8 holding the entry CFA and the saved
+caller frame and return address immediately below it. Without optimization
+every scalar IR value also has a home of its own; size and speed reuse
 nonoverlapping scalar homes as arm64 does, a value's home freed once the
 operation that reads it last has run, which takes 36 per cent off the
-runtime corpus's frame bytes at both. It does not promote SSA values into
-persistent registers. Neutral
-specialization and simplification still run before emission. The explicit
-LP64D and ilp32 planner assigns C carriers without putting register banks
-or stack positions into the IR. The emitter asks the target its XLEN and
-serves RV32 at 32 (D671): an eight-byte value is a register pair only
-while one operation looks inside it, so the IR does not depend on the
-machine's width, and RV32 takes neither RV64's layout nor its ABI.
-Instruction helpers select baseline and address-generation operations
-from independent Zba and XTheadBa sets.
+runtime corpus's frame bytes at both. It keeps no value in a register past
+the operation that uses it. The explicit LP64D and ilp32 planner assigns C
+carriers without putting register banks or stack positions into the IR. The
+emitter asks the target its XLEN and serves RV32 at 32 (D671): an
+eight-byte value is a register pair only while one operation looks inside
+it, so the IR does not depend on the machine's width, and RV32 takes
+neither RV64's layout nor its ABI. Instruction helpers select baseline and
+address-generation operations from independent Zba and XTheadBa sets.
+
+The Xtensa backend writes the RISC-V backend's form of each operation over
+the logical words x0-x31 and selects Xtensa instructions for it as it is
+written. Each logical word is a scratch home at a fixed offset from the
+frame base a7, except that in a routine without an `assembler.block` the
+emitter's five scratch words, x5-x7, x9 and x18, stay in a2-a6. Every operation therefore
+loads its operands from memory and stores its result there, and no value is
+allocated a register over an interval as on arm64 and x86-64.
+
+Cortex-M selection uses pinned source slots and reusable width-sized homes
+for block-local scalar temporaries. Last reads come from the verifier's
+explicit operand runs; live operands cannot share a home, and a call cannot
+destroy a live value. Selection uses low-register scratch. Routines with
+calls or transient stack changes construct the r11 frame record before
+publishing it; eligible leaves use SP-relative homes and preserve r11 and
+LR. The shared frame placer owns target-byte offsets and limits. Cortex-M
+performs no body sharing. The AAPCS32 planner, `Backend.Arm32_ABI`, consumes
+lowered pointer, atom, slice and `any`, distinct and evidence carriers, and
+adds the physical result address before the signature's evidence and
+parameter run; the emitter consumes the same plans, and external C and
+internal Landin transport stay separate. Eight source controls compare
+detailed IR, pointer metadata included, against synthetic-32. The
+[target guide](targets.md#cortex-m-assembly-implementation) records the
+physical choices and [the planning section](targets.md#cortex-m-layout-and-abi-planning)
+the ABI.
 
 The shared `Backend.Dwarf` encoder uses neutral source identities and
 `Backend.Debug_Locations` availability. Each backend owns its section policy
-and CFI, including ELF and x8 CFA on RV64; Darwin's Mach-O sections, x29 CFI
-and dSYM packaging stay at the backend/toolchain boundary.
+and CFI, including ELF and the x8 CFA on RISC-V; Darwin's Mach-O sections,
+x29 CFI and dSYM packaging stay at the backend and toolchain boundary.
+Scalar part addressing on Darwin carries wide IR element positions through
+target-byte placement rather than narrowing them through the Ada host index
+type. Complete derived programs share the same source, provenance and
+location facts across GDB and LLDB sessions; physical encodings and
+packaging remain backend-owned. Specialization copies the complete
+instruction metadata; it neither erases boundaries nor invents alias facts.
 
-The full hosted parity audit preserved these boundaries. Scalar part addressing
-on Darwin carries wide IR element positions through target-byte placement,
-rather than narrowing them through the Ada host index type. Complete derived
-programs share the same source/provenance and location facts across GDB and
-LLDB sessions; physical encodings and packaging remain backend-owned.
-
-A real Cortex-M0 description and `Backend.Arm32_ABI` planning leave this
-neutral representation unchanged. Eight existing source controls
-compare detailed IR, including pointer metadata, against synthetic-32 and plan
-their entry/direct/indirect signatures. The planner consumes lowered pointer,
-atom, slice/any, distinct and evidence carriers; it adds the physical result
-address before the signature's existing evidence/parameter run. External C
-and internal Landin transport remain separate. Independent C/assembly probes
-execute the selected contract. The Cortex emitter consumes those same
-plans; no new target-neutral opcode or effect category was needed.
-See [the target contract](targets.md#cortex-m0-layout-and-abi-planning).
+## Memory operations
 
 D227's `Memory_Access` retains operation, scalar width identity and
 success/failure orderings. Its variable operand run carries only runtime
@@ -780,46 +834,15 @@ changed. The stack-limit check of D471 is no IR operation: a backend adds
 it to the prologue of every routine of a program that prepares a stack,
 from the routine's frame, which only the backend knows.
 
-All memory primitives conservatively carry read/write/call/trap effects, so
-simplification retains discarded accesses. They cannot reach an eligible
-slot, so its forwarded value survives them; address-taken storage remains
-pinned by the existing address paths;
-x86 allocation uses its saved-register/scratch discipline.
-`Landin.IR.Liveness` gives each slot one live interval over the order the
-blocks are laid out in, found backward from every block whose first mention
-of the slot reads it, and the loop nesting of every block. Its work is the
-routine plus the blocks each slot is live into, bounded by a multiple of the
-routine past which the remaining slots get the whole routine. x86-64 offers
-rbx and r12-r14 to slots over these intervals, heaviest first by references
-weighted with loop depth, so slots whose intervals are disjoint share a
-register; arm64 does the same at speed with x0-x7 and d18-d31 for intervals
-no call crosses and x19-x24 and d8-d15 for the rest. A slot that is an
-address an operation reaches storage through counts each such reach as a
-read and may hold a register too. A load whose value dies before its slot is
-next stored is the slot's register. In a routine without assembly, values
-and compiler temporaries' single-block spans may also take rsi, rdi, r8 and
-r9 wherever no call, copy, clear, fill, leave or fail, and for r8 and r9 no
-conversion or field or element operation, lies in their interval; selection
-uses those registers only there. With the speed objective,
-eligible float slots and values in routines without inline assembly use
-XMM8..XMM15 wherever no call falls inside their interval, since SysV
-preserves no XMM register across one; XMM0 remains instruction scratch. A
-slot loaded and stored in one block only, which stores it before reading
-it, and not given a register for its interval, may still hold one just from
-that store through its last use, as a value does. Size holds a source
-variable it gives a register there for the whole routine, and gives single
-block spans to compiler temporaries alone, so every source variable's
-debugger location covers the routine; at speed a source variable's debugger
-location covers its interval and, after the interval's last position, the
-rest of that block until a value writes over the register, including the
-first address of that value. Address-observed, parameter-at-a-C-entry,
-result and C transport slots keep stack homes, and source debugger locations
-follow the allocation plan.
-Argument spills preserve left-to-right
-evaluation across later control-flow expressions.
-Specialization copies the complete instruction metadata; it neither erases
-boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
-with no atomicity promise. Target instructions are described in the target guide.
+All memory primitives conservatively carry read, write, call and trap
+effects, so simplification retains discarded accesses. They cannot reach an
+eligible slot, so its forwarded value survives them, and address-taken
+storage stays pinned by its address paths. Aggregate transfers remain
+ordinary copies, with no atomicity promise. The
+[target guide](targets.md#explicit-memory-operations) gives each target's
+instructions.
+
+## Packed fields and atom codes
 
 D228 adds packed geometry to neutral field shapes: first bit, element width
 and total carrier width. Encoded atom sets retain a separate unsigned encoding
@@ -850,25 +873,12 @@ branches. Optimized body sharing compares the selected machine operations,
 including those checks. Representation sharing cannot erase a validation trap.
 
 The native backends consume the same geometry and map validated atoms to or
-from each union's encoding table. Explicit register accesses reuse the volatile
+from each union's encoding table. Explicit device-register accesses reuse the volatile
 memory instruction; fixed modes are checked before lowering and reserved-bit
 requirements become retained guards before a write. The operation still has
 one scalar transaction. No packed field is an independently addressable object.
 Debug information exposes a packed nominal as its unsigned `raw` carrier;
 field-level bit-array presentation is not claimed.
-
-
-Cortex-M selection uses pinned source places and reusable width-sized homes for
-block-local scalar temporaries. Last reads come from the verifier's explicit
-operand runs; live operands cannot share a home, and a call cannot destroy a
-live value. Selection uses low-register scratch. Routines with calls or
-transient stack changes construct the r11 frame record before publishing it;
-eligible leaves use SP-relative homes and preserve r11 and LR. The shared frame
-placer still owns target-byte offsets and limits. Cortex performs no body
-sharing; specialization and IR optimization retain their existing proofs.
-The [target guide](targets.md#cortex-m0-assembly-implementation) records physical
-choices. The complete profile corpus, explicit 32-bit counterparts and memory/
-packed peripheral execution are retained by the embedded gate lane.
 
 ## Firmware and opaque assembly
 
@@ -920,9 +930,8 @@ never one a block of the routine declares, which it saves instead, so each
 input moves straight into its register and each output straight to its slot.
 
 `Landin.Backend.Firmware` constructs reset and the selected memory script;
-`Landin.Targets.Firmware` owns board limits and Cortex-M0 instruction
-eligibility. Startup
-copies initialized data and RAM code, clears BSS and transfers to the selected
+`Landin.Targets.Firmware` owns board limits and which Cortex-M instructions
+an `assembler.block` may use at each level. Startup copies initialized data and RAM code, clears BSS and transfers to the selected
 source entry. Neither module-image lowering nor startup executes user module
 initializers. Target ELF relocations distinguish Thumb code pointers from data
 addresses. The generated firmware probes test these boundaries through actual
@@ -989,3 +998,18 @@ They remain correct when another linked object contributes DWARF before the
 compiler's object, as FreeBSD's startup objects do; a contribution-relative
 offset would select the other object's list. This changes debug serialization,
 not the IR's verification or optimization boundary.
+
+## Keeping this account current
+
+The implementation starting points are `Landin.IR`, `Landin.Stages.Lowering`
+and `Landin.IR.Verifier`; their child packages describe dumping, effects,
+specialization and simplification. The
+[compiler package guide](../compiler/ada/README.md) maps their responsibilities,
+and the [test guide](../compiler/tests/README.md) explains the recorded and
+executed tests.
+
+Changes to the representation, its verification boundary or the optimization
+pipeline should update this account alongside the implementation. Examples
+should continue to follow checked fixtures, and claims about behavior should
+be traced to code and tests. A disagreement is a reason to investigate and
+correct this derived explanation, never to elevate it into a source of rules.

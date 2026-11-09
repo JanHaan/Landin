@@ -14,7 +14,9 @@
 >
 > The sketch itself begins at its first module heading, `core/mem`. The
 > notes between this banner and that heading reconcile the sketch with the
-> specification, and a reader can skip them.
+> specification, and a reader can skip them. `D212` names a decision
+> recorded in `spec.md`, and `[0820]` a numbered paragraph of `tour.md` or
+> `spec.md`; `refine explain D212` prints either.
 
 Current with specification 0.2.8. Its own findings W1-W7 are all
 resolved below.
@@ -50,24 +52,23 @@ shared with prototypes 2 and 3.
 
 ---
 
-D212 [0820] supersedes W7's historical resolution below: a helper can retain an
-independent allocator result in module state without returning it through a
-lexical boundary. Both builtin arena forms are withdrawn. The derivative uses
-an ordinary `core/region` allocator over an explicit provider, with explicit
-bulk cleanup; its allocations keep [0790]'s independent results. The compiler
-does not promise transitive lifetime checks for those results. Direct tracked
-references, source-derived views, and erased callback state retain their
-existing local checks. In particular, [1910] rejects retaining a frame or
-non-escaping reference by writing through a caller's pointer, slice or inout
-field. A known local alias cannot conceal that stored origin. This preserves
-the retained text and callback obligations shared with prototypes 2 and 3;
-independent allocator results and same-origin updates remain permitted.
-D222 additionally prevents a writable accessor from hiding module storage
-behind a parameter-only `from` clause. An explicit fallback argument preserves
-that choice and its caller-visible origins, including through a function value
-or concept entry. Independent region allocations still have no `from`, and
-read-only text results retain their existing dependency rule. This is the same
-accessor contract used by prototype 3, not a new lifetime promise for regions.
+A helper can keep an independent allocator result in module state without
+returning it through a lexical boundary ([0820], D212), which supersedes
+W7's historical resolution below. Both builtin arena forms are withdrawn:
+the derivative uses an ordinary `core/region` allocator over an explicit
+provider, released in bulk, whose allocations are independent results
+[0790]. The compiler promises no transitive lifetime checks for them.
+Direct tracked references, source-derived views and erased callback state
+keep their local checks, so writing a frame or non-escaping reference
+through a caller's pointer, slice or `inout` field is rejected [1910], and
+a known local alias does not hide that origin. Same-origin updates and
+independent allocator results remain permitted. A writable accessor cannot
+hide module storage behind a `from` clause that names only parameters
+(D222); an explicit fallback argument keeps that choice and the origins its
+caller sees, through a function value or concept entry too. Region
+allocations still carry no `from`, and read-only text results keep their
+dependency rule. Prototypes 2 and 3 share the retained text and callback
+obligations, and prototype 3 the accessor contract.
 The historical W7 finding remains unedited.
 
 The bounded memory-world pressure uses ordinary `core/io.memory` with explicit

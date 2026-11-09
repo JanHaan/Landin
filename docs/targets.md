@@ -1,7 +1,12 @@
 # Target contracts
 
-`spec.md` [1975] owns the language-facing C and link-name rules. This page
-explains the package boundaries, not a second work list.
+This page says what each target is to the compiler: which package owns each
+target fact, how each backend lays out frames, passes values and selects
+instructions, and how each target's images are linked, loaded and debugged.
+`spec.md` [1975] owns the language-facing C and link-name rules; this page
+explains the package boundaries, not a second work list. `D257` names a
+decision recorded in `spec.md`, and `[1975]` a numbered paragraph of
+`tour.md` or `spec.md`; `refine explain D257` prints either.
 
 | fact or operation | owner |
 |---|---|
@@ -64,8 +69,6 @@ direct branch when conservative byte accounting proves the target is in range
 (±32 KiB for test-bit branches, ±1 MiB for other conditional branches).
 Distant or unproven targets retain an adjacent inverted conditional branch
 followed by `b`; that branch still requires the architecture's 128-MiB reach.
-The recorded broader resource/scaling limitations remain; this adds no
-recovery guarantee for arbitrary exhaustion.
 
 Darwin's hosted providers reach libSystem through `platform/posix` over
 `platform/libc`: anonymous mappings for the heap's size classes,
@@ -114,7 +117,7 @@ The target mapping yields `_entry` on ELF and `__entry` on Darwin. Quoting an
 assembly operand is a later rendering step, and a leading underscore in source
 does not escape the platform prefix. The same mapping applies to explicit
 native names and C imports/exports, the argument initializer among them. Local labels
-are allocated separately. Existing ELF spelling and golden records remain valid.
+are allocated separately.
 
 ## Linux link modes
 
@@ -131,12 +134,11 @@ Darwin and FreeBSD reach their systems only through their C libraries, so
 for a target with no hosted system or outside checking, executable or
 assembly emission.
 
-A static executable or assembly request is refused with L0500 before any tool
-runs, and the note names `--link=libc`, when no library holding `platform/linux`
-was found, when the
-program asks for `linker.library` or `linker.directory` or the request names
-`-L`, or when it refers to a bodyless external
-symbol that no program item defines. That last check counts only what the
+A static executable or assembly request is refused with L0500 before any
+tool runs, its note naming `--link=libc`, in three cases: no library holding
+`platform/linux` was found; the program asks for `linker.library` or
+`linker.directory`, or the request names `-L`; or the program refers to a
+bodyless external symbol that no program item defines. That last check counts only what the
 entry reaches, as the link keeps it: every Linux backend collects per-item
 sections, so a reference from an unreached routine never reaches the linker.
 It follows calls and addresses taken from `_landin_start`, a C name to the
@@ -215,8 +217,11 @@ A build assumes one CPU feature level of its target's family (D255), given
 with `--level=NAME` or the language server's `level` option and resolved
 after the target, so a level of another family is L0009. `refine --identify`
 lists each target's levels. The level is a value beside `Target_Facts`, so
-every capability query above, and every layout, calling convention and C
-ABI, is the same at every level of a family.
+layout, calling convention and C ABI are the same at every level of a
+family. Checking reads the level for three questions only: whether an
+atomic access is available (D690), which instructions a Cortex-M
+`assembler.block` may use, and which reference description a firmware
+program without one receives.
 
 | target | default | other levels | what a higher level selects | tool arguments and assembly directives |
 |---|---|---|---|---|
@@ -227,7 +232,8 @@ ABI, is the same at every level of a family.
 | `linux-rv64` | `rv64gc` | `rv64gc_zba`, `rv64gc_xtheadba`, `rv64gc_zba_xtheadba` | `sh1add`/`sh2add`/`sh3add` or `th.addsl` for indexed addresses | selected ISA string passed to GNU tools with LP64D |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldadd`/`swp`/`cas`, in the ordering's form, for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m`, `armv8-m.main` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder, and `smull`/`umull`, with `mul` and `mla` for 64 bits, for products; at `armv8-m.main` also `lda`/`stl` and their byte and halfword forms for acquiring loads and releasing stores | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
-| `rv32` | `rv32imc` | `rv32imac` | nothing yet: the target checks and lowers, and emits nothing (D660) | `-march=LEVEL_zicsr_zifencei` and `-mabi=ilp32` for the assembler and linker |
+| `rv32` | `rv32imc` | `rv32imac` | A's `amoswap.w`/`amoadd.w` and `lr.w`/`sc.w` for atomic read-modify-write, which `rv32imc` refuses (D690) | `-march=LEVEL_zicsr_zifencei` and `-mabi=ilp32` for the assembler and linker |
+| `xtensa` | `xtensa-esp32` | `xtensa-esp32s3` | the other chip's configuration, not a superset: `compiler.feature.salt` and SALT/SALTU in assembly; generated code is the same at both | `xtensa-esp32-elf-gcc` or `xtensa-esp32s3-elf-gcc` with `-mabi=windowed`, and its assembler's `--abi-windowed`, `--auto-litpools`, `--longcalls` and chip configuration |
 | `synthetic-32` | none | none | nothing | none |
 
 The x86-64 assembler is held to the level at every level, the baseline's
@@ -525,8 +531,9 @@ access is needed to repeat these tests.
 
 The shared [target applicability matrix](../compiler/tests/targets.matrix)
 and [native parity path](../compiler/tests/darwin/README.md) distinguish
-language behavior from platform transport and packaging. The two hosted
-backends run the same runtime profiles and complete prototype derivatives.
+language behavior from platform transport and packaging. The three hosted
+backends, x86-64, arm64 and RISC-V for RV64, run the same runtime profiles
+and complete prototype derivatives.
 Architecture-selecting source, C register rules, symbol prefixes, archive
 availability and native trap delivery have explicit executable counterparts.
 The fault-endpoint adapter changes only fixture host services, never parsing,
@@ -614,11 +621,15 @@ does not claim identity when the source-path spelling changes.
 The [execution profile](../environments/cortex-m/README.md) pins QEMU's
 Cortex-M0 micro:bit CPU lane and a synthetic peripheral lane on the same QEMU. C/assembly
 probes establish the environment. Layout and ABI planning follow below, then
-compiler-generated M0 execution and compiler-owned firmware startup and linking.
-The original synthetic-32 goldens
-remain unchanged.
+compiler-generated execution and compiler-owned firmware startup and linking.
 
-## Cortex-M0 layout and ABI planning
+## Cortex-M layout and ABI planning
+
+`--target=cortex-m0` is the whole Cortex-M family, M0 through M33, and
+`--level` chooses the architecture: `armv6-m` for M0 and M0+, `armv7-m` for
+M3, `armv7e-m` for M4 and M7, `armv8-m.main` for M33. The name is the
+target's spelling only; this page says Cortex-M for the family and the
+backend.
 
 `Targets.Cortex_M` (`cortex-m0`) defaults to ARMv6-M Thumb,
 little endian and base AAPCS32 soft-float identity. A device description
@@ -751,9 +762,9 @@ Landin startup or source debugger is supplied by these plans.
 
 D227 admits unsigned scalar memory primitives through
 `Targets.Capabilities.Memory_Access`, independently of backend availability.
-Widths are 1/2/4/8 bytes on hosted targets and 1/2/4 on Cortex-M0. Every implemented access
-checks natural alignment at runtime, including inside `unchecked`. The M0
-source contract refuses exchange/add/compare-exchange. The backend emits the
+Widths are 1/2/4/8 bytes on hosted targets and 1/2/4 on Cortex-M. Every implemented access
+checks natural alignment at runtime, including inside `unchecked`. Cortex-M
+refuses exchange, add and compare-exchange at every level. The backend emits the
 admitted loads/stores and barriers; it introduces no atomic runtime helper. Synthetic-32 refuses these operations.
 
 Each atomic is lowered by its ordering (D499), by its architecture's published
@@ -761,7 +772,7 @@ mapping of the C/C++11 orderings, and is a full compiler memory boundary
 whatever its ordering. In the table `l` and `s` are RV64's load and store at
 the access's width.
 
-| ordering | x86-64 (x86-TSO) | arm64 | RV64 (RVWMO, Table A.6) | Cortex-M0 | Cortex-M0 at `armv8-m.main` |
+| ordering | x86-64 (x86-TSO) | arm64 | RV64 (RVWMO, Table A.6) | Cortex-M | Cortex-M at `armv8-m.main` |
 |---|---|---|---|---|---|
 | load relaxed | MOV | LDR | `l` | LDR | LDR |
 | load acquire | MOV | LDAR | `l`; FENCE R,RW | LDR; DMB SY | LDA |
@@ -790,7 +801,7 @@ holds them, which keep every byte outside the access. ARMv6-M's DMB has only
 the SY option, and so has Armv8-M's. At `armv8-m.main` an acquire or
 release takes the access's width, LDAB or LDAH and STLB or STLH for a byte
 or a halfword (D606); `armv7-m` and `armv7e-m` have no such instruction and
-keep the Cortex-M0 column. Retry loops promise no wait-free bound. Scalar volatile
+keep the Cortex-M column. Retry loops promise no wait-free bound. Scalar volatile
 accesses use exactly one width-matched load/store and no implicit hardware
 fence.
 
@@ -886,8 +897,8 @@ except at speed in a routine without assembly, where an eligible scalar
 slot may hold a register over its live interval: x0-x7, or d18-d31 for a
 float, where no call crosses it, else x19-x24 or d8-d15. Its optimized
 value plan reuses nonoverlapping scalar homes and at speed may hold
-eligible values in the same registers, x19-x28 standing for x19-x24;
-assembly leaves values only x19-x28 and d8-d15, which a block names only
+eligible values in the same registers, with all of x19-x28 where a slot
+takes only x19-x24; assembly leaves values only x19-x28 and d8-d15, which a block names only
 by declaring. A block's declared registers are excluded from that plan. A
 float input is loaded first, at its width as `sN` or `dN`, straight from its
 home while x15 is free to address a distant one (D630). Each integer input
@@ -902,7 +913,7 @@ frame home: the prologue stores it, as `d8`-`d15` for a float one, after
 reserving the frame, with a `.cfi_offset` from the CFA at x29+16, and every
 epilogue restores it before the frame record.
 
-## Cortex-M0 assembly implementation
+## Cortex-M assembly implementation
 
 `Backend.Cortex_M` consumes verified IR and `Backend.Arm32_ABI` entry/call plans.
 It does not change ordinary, C or optimal layout. Source slots remain pinned;
@@ -920,7 +931,7 @@ Outgoing arguments use the planner's aligned stack area plus private r0-r3 stagi
 
 | Selection | Implemented choice and boundary |
 |---|---|
-| Instructions and constants | ARMv6-M low-register forms; high-register MOV/BX where admitted. Small constants use MOVS and shifts; other constants use aligned adjacent literal islands skipped in execution. No MOVW/MOVT, Thumb-2 arithmetic, FPU or exclusive-access instructions. |
+| Instructions and constants | ARMv6-M low-register forms are the baseline at every level; high-register MOV/BX where admitted. Higher levels add only what the levels table lists, and a float unit its VFP operations (below). Small constants use MOVS and shifts; other constants use aligned adjacent literal islands skipped in execution. No MOVW/MOVT, other Thumb-2 arithmetic or exclusive-access instructions. |
 | Addresses and branches | Frame offsets materialize into a low register; no narrow displacement is assumed. Conditional transfers invert a nearby condition over an absolute Thumb jump. Direct BL relocations permit GNU veneers; indirect calls use BLX. ELF function identity carries the Thumb bit, ordinary data identity does not. |
 | Frames and limits | Shared target-byte placement, no red zone. Preflight reserves selector and outgoing-call overhead inside the 32-bit address budget and reports L0504. The external test map's 32 KiB flash/16 KiB RAM/4 KiB stack limits are separate from that arithmetic bound. |
 | Integer operations | Enabled 8/16/32/64-bit values, explicit narrow extension and pair operations, width-bounded shifts, signed/unsigned comparisons, checked overflow, division-zero and signed minimum/-1 handling. D187 removes only its specified checks. |
@@ -1030,7 +1041,7 @@ limits. Compiler-owned startup is D229; the bounded Landin source-debugging
 contract is above.
 
 
-## Cortex-M0 firmware images
+## Cortex-M firmware images
 
 `--target=cortex-m0 --firmware-entry=NAME --emit=exe` selects the entry-module
 source definition; its exported symbol may differ. The image follows the
@@ -1254,14 +1265,14 @@ product inline from M's `mul` and `mulhu`, a checked one proved inline, a
 quotient or remainder through libgcc's `__divdi3` family behind the
 language's guards. f32 and f64 are libgcc's soft float, called with the
 `ilp32` convention, and a conversion to an integer is decoded in words, as
-on Cortex-M0 (D672). An eight-byte language argument takes two registers
+on Cortex-M (D672). An eight-byte language argument takes two registers
 (D673). Frames keep x8 as the CFA, the return address at CFA−4 and the
 caller's frame at CFA−8; a routine saves only the callee-saved registers
 its text names, each with one sp-relative store, and inside a profile's
 1 MiB regions jumps and branches are the short forms (D678). Without A the
 panic latch is a load and a store (D674), and a fibre switches in a 64-byte
 frame of words (D675). Items take the sections their placements name, as
-on Cortex-M0 (D676), and `--debug=lines` writes Cortex-M0's line tables.
+on Cortex-M (D676), and `--debug=lines` writes Cortex-M's line tables.
 The C planner's `ilp32` mode places what GCC's does (D677).
 
 ## RV64 Linux
@@ -1323,9 +1334,30 @@ stack. `compiler.c_xtensa_windowed_ilp32` identifies this ABI; the general
 C source boundary remains refused. Floating values travel in integer
 carriers; pinned runtime helpers may use the configured FPU.
 
-The native backend uses CALL8/CALLX8, ENTRY and RETW, with compiler-owned
-window overflow and underflow vectors for CALL4, CALL8 and CALL12 helpers.
-Each firmware profile has an aligned 1 KiB architectural vector block,
+The backend works in two layers. `Landin.Backend.Xtensa`, which began as a
+copy of the RISC-V emitter, still lowers verified IR to RISC-V-form logical
+instructions, `addi`, `lw`, `beq`, `call`, over the logical words x0-x31.
+None of them is kept: each is passed at once to
+`Landin.Backend.Xtensa_Machine.Select_Word`, which parses it and writes the
+Xtensa instructions it stands for. A logical word lives in memory at
+a7 + 4×N, a7 being the routine's frame base, and an operation loads its
+operands into the transient a8-a13, computes, and stores its result back;
+x0 reads as zero, sp is a1, and x8, the CFA, is a7 plus the frame size. A
+routine without an `assembler.block` keeps the emitter's five scratch words,
+x5-x7, x9 and x18, in a2-a6 instead, and the twenty other words it uses in
+an 80-byte bank; a routine with one keeps all 32 words, 128 bytes, and a
+64-byte snapshot of the physical registers. A word with no home in its routine's bank,
+or a logical operation the selector does not know, is a compiler defect.
+A call loads the argument words x10-x15 into a10-a15 for CALL8 or CALLX8
+and stores a10-a13 back into the result words and a14 into the failure
+word x31. A jump is `movi` and `jx` through
+a10 until `Compact_Jumps` proves a local one in range of a direct `j`. The
+cost is code quality: most operations make a round trip through memory, no
+value is allocated a register as on arm64 and x86-64, and the build
+report's `register_count` is zero.
+
+Routines use ENTRY and RETW, with compiler-owned window overflow and
+underflow vectors for CALL4, CALL8 and CALL12 helpers. Each firmware profile has an aligned 1 KiB architectural vector block,
 followed immediately by its image entry. Startup initializes register
 windows, the FPU controls, stack, VECBASE and static storage before calling
 the entry. Ordinary interrupt handlers save all 64 physical address

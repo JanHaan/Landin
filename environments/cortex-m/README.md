@@ -1,10 +1,21 @@
 # Cortex-M execution profile
 
-The profile keeps independent C/assembly, memory-model and hosted transport
-controls beside compiler-generated ARMv6-M execution with direct synthetic
-peripheral access. A separate lane runs compiler-owned startup and firmware
-linking, and rooted `core/mem`, `core/vec`, `core/pool`
-and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned firmware path.
+This directory is the emulator harness for the Cortex-M and RV32 firmware
+targets. It installs locked QEMU, GDB and cross tools, and its lanes run
+independent C and assembly controls, compiler-generated firmware with
+compiler-owned reset, vectors and linking, and the backend corpus, against
+QEMU machines and synthetic peripherals. `setup.py` installs the tools and
+`run.py` runs every lane:
+
+```sh
+python3 environments/cortex-m/setup.py
+python3 environments/cortex-m/run.py --refine PATH_TO_REFINE --output NEW_DIRECTORY
+```
+
+[Reproduction and evidence](#reproduction-and-evidence) gives the whole
+sequence and the lane and part selectors. `D619` names a decision recorded
+in `spec.md`, and `[1990]` a numbered paragraph of `tour.md` or `spec.md`;
+`refine explain D619` prints either.
 
 ## Selected lanes and pins
 
@@ -48,12 +59,14 @@ and the Python that drives the probes, so any glibc 2.38 host runs the same
 locked binaries; the newest of them asks for exactly that glibc. This is a
 supported host profile, not a hermetic operating-system image.
 
-These C probe flags select base AAPCS soft-float transport and ELF32 EABI.
-The internal Landin transport is selected separately, as the
-[target guide](../../docs/targets.md#cortex-m0-layout-and-abi-planning) describes.
-The compiler-generated assembly lane retains external startup/linking test
-support. The firmware lane uses compiler-owned reset, vectors and linking. The
-general C source surface remains disabled.
+These C probe flags select base AAPCS soft-float transport and ELF32 EABI;
+the internal Landin transport is selected separately, as the
+[target guide](../../docs/targets.md#cortex-m-layout-and-abi-planning) describes.
+The compiler-generated assembly lane keeps external startup and linking; the
+firmware lane uses compiler-owned reset, vectors and linking. Landin's C
+boundary on Cortex-M is AAPCS32 signatures and records, in the base and VFP
+variants (D920), which [C peers on Cortex-M](#c-peers-on-cortex-m) runs;
+variadic C calls are not enabled (D922).
 
 ## Memory and device map
 
@@ -126,16 +139,16 @@ instructions is held to them, so the level is shown to have reached the
 bytes that ran. The six fixtures whose `levels:` name `armv7-m` add 24 QEMU
 sessions to the default run, and the three that name `armv8-m.main` 12.
 
-Two corpus lanes run on maps other than the reference's, each an emulator's
-and no chip's, which a description in Landin source under
-[`lanes/descriptions/`](lanes/descriptions) states. A program reaches its
-lane's description through one more entry-module file,
-`lanes/lane-NAME.ldn`, which imports it, so the program runs unchanged; a
-rooted program's entry module is named by its files then, since a rooted
-request names its directory or its files and not both (D619). The corpus
-derives each lane's profile, links with the script refine derives from it
-(D545, D589) and holds its facts to `descriptions.json`'s `lanes` record,
-apart from the devices. `backend_corpus.py --lane NAME` runs every
+The `mps2-an505` and `mps2-an500` corpus lanes run on an emulator's memory
+map rather than the reference's, each stated by a Landin description under
+[`lanes/descriptions/`](lanes/descriptions). The program itself is
+unchanged: one more entry-module file, `lanes/lane-NAME.ldn`, imports the
+lane's description. A rooted program then names its entry module by its
+files, since a rooted request names its directory or its files and not both
+(D619). The corpus derives each lane's firmware profile, links with the
+script refine derives from it (D545, D589), and holds its facts to the
+`lanes` record of `descriptions.json`, kept apart from the devices.
+`backend_corpus.py --lane NAME` runs every
 inventory row alone on lane NAME, and `run.py`'s lane of the same name is
 that run.
 
@@ -185,7 +198,7 @@ routine at all. At `LANDIN_CORTEX_JOBS=4` the lane is 3,278 verdicts,
 | One-clears and access modes | firmware clears pending bits; `Run.peripheral`'s model controls prove writing zero preserves error, one clears it, read-only/write-only/unknown accesses refuse | other access modes are absent; normative register rules are D228's and the generated device fixtures' |
 | Bad descriptor, bounds, unsupported direction | model controls reject bad destination, count above 65535 and unsupported direction; no transfer occurs | no physical bus fault/overrun timing; driver `buffer_empty`, `buffer_too_big`, `line.unsupported_rate`, `line.unsupported_format` and recovery execute in the derived driver over this lane |
 | Ordinary-slice read, head/tail and short output | current lane exposes count and circular RAM for the complete derived driver | the derived driver executes its `available`/`read` cases and failure oracles; this environment is not that driver |
-| SVD-derived types, encoded values, named refusals | checked-in model and map are explicit device inputs; malformed access controls already execute | D228 packed encodings; D231 `noreturn`; generated `.ldn` device fixtures; general generator stays with companion tooling |
+| SVD-derived types, encoded values, named refusals | checked-in model and map are explicit device inputs; malformed access controls already execute | D228 packed encodings; D231 `noreturn`; generated `.ldn` device modules, which `refine svd` writes from a vendor SVD ([device guide](../../devices/README.md)) |
 
 Feeds happen while the CPU is stopped. The firmware then runs until it is
 idle -- at a WFI with nothing to take, at a branch to itself, or in a polling
@@ -592,8 +605,8 @@ reserved-bit write policy. The
 [Arm Cortex-M0 user guide](https://documentation-service.arm.com/static/5ea6ce5e9931941038def8c1)
 requires aligned accesses for this core. These documents were consulted on
 2026-09-16; they inform the explicit control contracts, not an assertion that
-this synthetic map describes vendor hardware. The generated device fixtures
-keep their own provenance, and general SVD tooling remains companion-tool work.
+this synthetic map describes vendor hardware. The device modules `refine svd`
+generates keep their own provenance in the [device guide](../../devices/README.md).
 
 
 ## Compiler-generated execution
@@ -734,12 +747,12 @@ the 4 KiB stack it holds. The corpus derives each described profile once,
 under `profiles/DEVICE` in its output, from a firmware build of a program
 that selects it and places nothing, and holds the facts to
 [`descriptions.json`](descriptions.json). Every program's line gives its
-verdict and its image against those limits, each with the sections inside
-it, how far over the region an image that overflowed is, which the corpus
-measures by relinking the same objects against a copy of the script whose
-text and data regions are enlarged and whose assertions are removed, which
-never runs, and its three largest routines, `largest routines every_kind
-2940, ...`. Each program's `result.json` under the output gives every
+verdict, its image against those limits with the sections inside each, and
+its three largest routines, `largest routines every_kind 2940, ...`. For an
+image that overflowed it also says how far over the region the image is,
+which the corpus measures by relinking the same objects, never run, against
+a copy of the script with enlarged text and data regions and no assertions.
+Each program's `result.json` under the output gives every
 routine's size, `image.routines`, read with the pinned `nm` from the image
 that ran or from the measured one, so where an overflowing image's bytes go
 is read from the corpus rather than from tools run by hand. A
@@ -749,10 +762,10 @@ and `reason`, and add `cortex-m0` to the fixture's `targets:`. An overflow
 in a row with no limit fails naming its sizes and the same row.
 
 Each limited verdict is then linked again for every other described
-device, RP2040 and the STM32H753, with that device's derived script and a
-harness start assembled for its vector table and boot prefix, under
-`DEVICE/` in the program's output, and held to its build report's limits
-and stack; nothing runs there, since QEMU has no such chip. The corpus
+Cortex-M device, RP2040, RP2350 and the STM32H753, with that device's
+derived script and a harness start assembled for its vector table and boot
+prefix, under `DEVICE/` in the program's output, and held to its build
+report's limits and stack; nothing runs there, since QEMU has no such chip. The corpus
 prints, for each device, how many limited verdicts still exceed it, and
 records each program's verdict under `profiles` in its result. A program
 that fits the reference fits every described device, whose flash past its
@@ -872,16 +885,14 @@ python3 environments/cortex-m/backend_peripheral.py --refine PATH_TO_REFINE --ou
 Filtered commands are development feedback. The current `cortex-m-corpus` gate job
 runs `run.py --part=corpus` with the built compiler. Its mandatory `backend_acceptance.py`
 lane executes the complete compiler-generated corpus and controls under the
-pinned tools and records their results in `backend/result.json`. The retired
-exact-revision native acceptance separately exported
-`artifacts/cortex-m/backend` with all prior evidence. That acceptance no
-longer runs or approves revisions. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
-records instruction, allocation, ABI, runtime-helper and memory decisions.
+pinned tools and records their results in `backend/result.json`. The
+[target guide](../../docs/targets.md#cortex-m-assembly-implementation) records instruction, allocation, ABI, runtime-helper and memory decisions.
 Language startup/linking/sections/interrupt/naked/inline-assembly surfaces,
 the freestanding core and `noreturn`, the checked-in device fixtures and the
-complete driver each have their own lane below. General SVD generation stays
-with its companion tool. No scheduler, interrupt-masking abstraction, C source
-expansion or new DMA ownership model is introduced.
+complete driver each have their own lane below; `refine svd` writes the
+device modules, and package acquisition stays with the companion tool. No
+scheduler, interrupt-masking abstraction, C source expansion or new DMA
+ownership model is introduced.
 
 ### C peers on Cortex-M
 
@@ -1147,7 +1158,7 @@ Executable controls establish behavior on the pinned microbit/ARMv6-M profile;
 they do not generalize to another core, board, real peripheral or timing model.
 Core/CPU-library packaging and `noreturn`, the generated fixtures, the complete
 driver, source debugging and complete measured stack/firmware evidence have
-their own lanes below. General SVD generation remains companion-tool work.
+their own lanes below.
 
 ## Freestanding library consumers
 

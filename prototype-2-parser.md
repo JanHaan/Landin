@@ -13,7 +13,9 @@
 >
 > The sketch itself begins at its first module heading, `core/text`. The
 > notes between this banner and that heading reconcile the sketch with the
-> specification, and a reader can skip them.
+> specification, and a reader can skip them. `D225` names a decision
+> recorded in `spec.md`, and `[1760]` a numbered paragraph of `tour.md` or
+> `spec.md`; `refine explain D225` prints either.
 
 Current with specification 0.2.8. Its own findings Y1-Y7 are resolved
 below, except Y4, which stays an open watch in the roadmap's register.
@@ -49,13 +51,12 @@ This also applies to the blocks, loops and cleanup forms used by prototypes
 
 The parser-support core implements the byte-oriented pressure this parser
 needs: `core/text` accepts byte slices, gives byte offsets an opaque `position` identity, retains
-origins through subslices, and reports an end read directly. D181 later adds
-the `utf8` distinct view plus contextual literals and scalar decoding without
-changing that byte API. D182 adds [0610]'s text-view indexing, D183 adds
-identity-preserving direct ranges over validated text, and D184 adds scalar
-traversal over the hosted identities; D249 makes indexing decode a `u32`,
-and D259 makes the ordinal argument `usize`; none changes that byte API. The
-derived parser may classify its ASCII grammar from bytes while preserving
+origins through subslices, and reports an end read directly. What text
+gained since leaves that byte API unchanged: the `utf8` distinct view with
+contextual literals and scalar decoding (D181), text-view indexing [0610],
+which decodes a `u32` at a `usize` ordinal (D182, D249, D259),
+identity-preserving direct ranges over validated text (D183), and scalar
+traversal over the hosted identities (D184). The derived parser may classify its ASCII grammar from bytes while preserving
 unknown input as recoverable tokens.
 The direct spelling `[]u8(text)` [0310] also supplies a validated `utf8`
 value's immutable byte view. It retains the same source origin as the

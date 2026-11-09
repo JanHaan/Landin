@@ -5,8 +5,9 @@ This fixture is the executable derivative of
 finding record; its raw-storage sketches and obsolete spellings are not edited
 or silently treated as current APIs. The reusable program is
 `examples/derived_containers/workload`, while this directory supplies the
-hosted entry and exit-status oracle. The run writes neither stdout nor stderr:
-status 42 is its complete oracle.
+hosted entry and its expected exit status. The run writes neither stdout
+nor stderr: status 42 is its whole expected output. `D198` names a decision
+recorded in `spec.md`; `refine explain D198` prints it.
 
 ## Section coverage
 
@@ -20,8 +21,8 @@ status 42 is its complete oracle.
 | `core/vec` — growing array | The application reverses a fixed array into the prototype's 20 descending numbers, pushes all 20 into a list, sorts its initialized view, observes 1 and 20 at the ends, pops and restores the tail, then explicitly releases it. A separate pointer list injects replacement failure at length eight, proves the old first/eighth values and allocation remain intact, retries growth, and finishes with zero live pool extents. |
 | `core/spill` — inline capacity and spilling | `spill.list(i32, 2)` stores 11 and 13 in its private initialized prefix. An injected first spill failure leaves the published inline storage, length, capacity, and values unchanged; retry publishes a separate list of capacity four, pop returns 17, and release resets the count and spill flag without clearing unused inline slots while both wrapper and pool report zero live extents. |
 | `core/map` — open addressing without null | The normal arena path declares both composed conformances, inserts colliding keys, updates through a preceding probe chain, removes and reuses a tombstone, performs no-tombstone geometric growth, gets retained values, and removes again. A separate churn path reaches eight-slot pressure with three tombstones, proves through the public `slots()` query and arena used-byte count that the next absent insertion reuses a dead bucket without allocating, and preserves every survivor. The application path also maps the sorted numbers to squares and observes key 3 as 9 and key 20 as 400. |
-| `core/map` — entry enumeration | `entries()` creates a manual live-bucket cursor. `next_entry(map, cursor)` follows the linked used buckets in insertion order, returns each live `entry(K, V) from map` once, and reports `end_of_entries` on both empty and exhausted maps; repeated exhausted calls remain exhausted. Reusing a tombstone is checked to append after surviving entries. A capacity-sixteen table is reduced to one survivor and its walk returns that entry before exhausting twice; removing the survivor leaves retained capacity but an immediately empty walk, and reinsertion starts a new live chain. Before reuse, exact count, sums and order prove three live records are found despite three tombstones; the post-insertion walk finds all four survivors in the same order before the new entry. Scalar entries are copied before a later mutation, while pointer-bearing keys and values exercise retained entry origins. The cursor deliberately has no map identity or generation check, is not transferable between maps, and must be discarded after any mutation. |
-| `core/map` — three-acquisition rollback | Three independent reclaiming-pool cases inject failure before the first, second, and third acquisition of a growth replacement. They observe exact partial frees 0, 1, and 2, unchanged capacity and old entries, a missing new key, successful three-acquisition retry, retirement of the three old extents, and final zero live extents. |
+| `core/map` — entry enumeration | `entries()` creates a manual live-bucket cursor. `next_entry(map, cursor)` follows the linked used buckets in insertion order, returns each live `entry(K, V) from map` once, and reports `end_of_entries` on both empty and exhausted maps; repeated exhausted calls remain exhausted. Reusing a tombstone is checked to append after surviving entries. A sixteen-slot table is reduced to one survivor and its walk returns that entry before exhausting twice; removing the survivor leaves retained capacity but an immediately empty walk, and reinsertion starts a new live chain. Before reuse, exact count, sums and order prove three live records are found despite three tombstones; the post-insertion walk finds all four survivors in the same order before the new entry. Scalar entries are copied before a later mutation, while pointer-bearing keys and values exercise retained entry origins. The cursor deliberately has no map identity or generation check, is not transferable between maps, and must be discarded after any mutation. |
+| `core/map` — three-acquisition rollback | Three independent reclaiming-pool cases inject failure before the first, second, and third acquisition of a growth replacement. They observe exact partial frees 0, 1, and 2, unchanged slots and old entries, a missing new key, successful three-acquisition retry, retirement of the three old extents, and final zero live extents. |
 | `core/tree` — arenas and indices | `node_id` is `distinct usize`; the workload explicitly constructs `tree.node_id` values and extracts their `usize` ordinals. Eight named leaves receive IDs 0 through 7. Refused leaf and branch appends preserve every ID, count, retained name, and cached leaf count. The branch retry receives ID 8, names the contiguous range, reports eight leaves, retains `"branch"`, and releases the two vector extents exactly. |
 | `app` — using all of it | `containers_run` is the stable application routine. It executes the 20-number list/sort/squares flow, array compositions, direct raw prefix, every deterministic failure path, tree, and heterogeneous drawables before producing one boolean for `main` to map to status 42. |
 | `app` — heterogeneous `any drawable` values | A `vec.list(any drawable)` contains interleaved `circle` and `label` values. The two implementations have different sizes and field offsets, and their draw entries make different counter/total contributions. `draw_all` invokes each erased `ptr mut T` entry, mutating the original provider counters and a shared canvas; exact totals, per-type call counts, and two label sentinels detect incorrect evidence routing. The initialized any pairs survive vector storage and traversal; explicit release leaves the counted hosted allocator at zero live allocations. |
@@ -52,10 +53,13 @@ less and unsigned `u32` not to report less. At the second, `count = 20`,
 `map_first_failure_ok`, `map_second_failure_ok`, `map_third_failure_ok`,
 `tree_ok`, and `drawables_ok`.
 
-The map policy is equally explicit. Absent insertion reuses a dead bucket on
-the key's own probe chain; a key taking a free bucket counts the tombstones
-towards the pressure threshold, which rebuilds the table at its size while the
-live entries fit in half its capacity and doubles it otherwise.
+The map policy is equally explicit. A map's `capacity` is the number of
+entries that fit before a new key rebuilds the table, three quarters of its
+`slots`. An absent key reuses a dead bucket on its own probe chain without a
+rebuild. A key taking a free bucket counts the tombstones with the live
+entries against `capacity`; when they reach it, the table is rebuilt at the
+same `slots` while the live entries fit in half its `capacity`, and doubled
+otherwise.
 Enumeration exposes `entries()` and `next_entry`, returning `entry(K, V) from
 map` or `end_of_entries` for an empty or exhausted walk. Its cursor is only a
 manual live-bucket position: there is intentionally no map/generation validation,

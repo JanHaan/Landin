@@ -10,12 +10,13 @@ unchanged, as the sketch has one `app/protocol` serve both; its map is
 The sketch's `core/fibre` is the library's, with D464's spellings, and its
 `drivers/uart` is prototype 1's derived receive driver,
 `compiler/tests/driver/drivers/uart`, over that derivation's synthetic
-UART and DMA (`models.DriverPeripheral`).
+UART and DMA (`models.DriverPeripheral`). `D448` names a decision recorded
+in `spec.md`; `refine explain D448` prints it.
 
 `environments/cortex-m/counterpart.py` runs it, the `counterpart` lane of
 the gate's `cortex-m-programs` job, on QEMU's micro:bit at every
-optimization profile, and holds its trace to an oracle for D448's
-single-core answer: requests are answered one at a time, in the order they
+optimization profile, and judges its trace against the single-core answer
+(D448): requests are answered one at a time, in the order they
 arrived, and none is begun before the one before it has been answered.
 
 | Prototype section | Complete source and behavior |
@@ -82,15 +83,19 @@ Three scenarios, each in a session of its own, at every profile:
 - `refusals`: a request with no tag, one longer than the queue keeps, and
   `WAIT 5 z` ended by `\r\n`; `malformed`, `malformed`, `z done`.
 
-`judge` in the runner is the oracle. It numbers the lines it fed, reads
-the trace and what the device wrote, and fails a run on a missing answer;
-an answer begun while another was being answered, or begun out of arrival
-order; a wait answered before its ticks; `busy` for a queue with room, or
-a queued request beyond four; a line the device did not take, or a byte
-it refused; a lost trace; a request for two in flight that was not
-presented; and a trap, a halt or a timeout. It derives what each line must
-be answered from the protocol's rules written again in Python, not from
-the firmware.
+`judge` in the runner decides each run. It numbers the lines it fed, reads
+the trace and what the device wrote, and fails the run on any of these:
+
+- a missing answer, an answer begun while another was being answered, or
+  one begun out of arrival order;
+- a wait answered before its ticks;
+- `busy` for a queue with room, or a queued request beyond four;
+- a line the device did not take, or a byte it refused;
+- a lost trace, or a request for two in flight that was not presented;
+- a trap, a halt or a timeout.
+
+It derives the expected answer to each line from the protocol's rules,
+written again in Python, never from the firmware.
 
 Four controls build the same source with one mutation each, at the first
 profile, and require the run to fail for the mutation's reason: `overlap`,
