@@ -122,7 +122,7 @@ worker count and CPU placement at their defaults, with no `-j` or
 For parallel sessions, follow the
 [ownership and integration rules](docs/process.md#parallel-sessions-and-shared-resources).
 Each writer gets its own worktree and branch from an explicit base; a new
-chat in Paseo, the tool that runs agents on the tailnet's hosts, does not
+chat in Paseo, the tool that runs agents on the project's networked hosts, does not
 isolate a checkout. Name the integrator and who may push, rebase or promote.
 Coordinate overlaps and shared resources with their owner before using them.
 Hardware work on the rig, the host wired to the development boards, uses

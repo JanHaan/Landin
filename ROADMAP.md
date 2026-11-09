@@ -3748,14 +3748,15 @@ baseline is recorded:
   target/level pair. A level no runner executes, `x86-64-v4` if the hosted
   runners lack AVX-512, is a `limit` row with its activation, never a
   skipped measurement or a lower level in its place.
-- **Baselines** are committed data keyed by target, level, profile, workload
-  and runner class, with the runner's CPU model and image. A candidate is
+- **Baselines** are committed data keyed by target, level, optimization
+  profile, workload and runner class, with the runner's CPU model and image. A candidate is
   compared with its base commit's baselines, never its own; a commit that
   changes one names each key it changes, and a changed runner class
   re-baselines rather than fails.
 - **Cost.** Configurations whose emitted bytes are identical are measured
-  once and cite the identity. Size runs on every push, time on the schedule
-  and on dispatch. A pilot over the whole matrix records its minutes, its
+  once and cite the identity. Size runs on every push; time runs on the
+  schedule and on dispatch, whose scopes today run the boards alone and which
+  this item extends to the timing jobs. A pilot over the whole matrix records its minutes, its
   jobs against the account's concurrent-job limits and its noise before the
   thresholds are enforced.
 
@@ -3763,8 +3764,9 @@ The build report (D791) and `scripts/quality.sh` are the starting point; the
 new parts are time, the matrix and the baselines. A report format change here
 answers SR-370 and SR-707. A measured code-quality cost attributable to
 assembly's fixed memory effect is recorded against SR-09 before any narrower
-effect is proposed. This takes on SR-996 and SR-275, and carries SR-146's
-fresh-copy requirement.
+effect is proposed. Its ranked list answers the activations of SR-231,
+SR-385, SR-387, SR-596, SR-869 and SR-1023. This takes on SR-996 and SR-275,
+and carries SR-146's fresh-copy requirement.
 
 Exit evidence: the contract, the runner table and committed baselines for the
 whole matrix; the gate failing a deliberately larger image and a deliberately
@@ -3779,7 +3781,8 @@ Depends on: R16.10
 
 Keep values in registers where R16.10's ranked costs show stack traffic
 leading, backend by backend: arm64's remaining stack homes and x86-64's
-remaining cases; Cortex-M, which allocates only r0 to r7 at every level;
+remaining cases; Cortex-M, which keeps every value in a stack home and
+selects only through r0 to r7 at every level;
 RISC-V, which keeps every value in a stack home at RV64 and RV32; and Xtensa,
 whose backend writes RISC-V-form words that its machine layer keeps in memory
 (`docs/targets.md`), where this item either selects natively from the IR or
@@ -3788,7 +3791,8 @@ serves every backend is decided first, and R551-16's shared backend code is
 split where this work meets it. The other costs the ranked list puts first,
 among them the bounds check an indexed increment keeps and the atomic and
 barrier lowering R551-12 records as baseline, are taken here or recorded with
-their measurement. This takes on R551-12, SR-581, SR-582 and SR-584.
+their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024,
+and R551-16's backend part; its stage closures stay open.
 
 Exit evidence: a direct test of `Landin.IR.Liveness`'s intervals, its
 conservative whole-routine fallback included, before any allocator change that
@@ -3868,23 +3872,25 @@ waits for its activation.
 
 ## Register
 
-What waits for a trigger. A record keeps the identity it was given — R551 and
-R730 for the first roadmap's two debt ledgers, a letter and a number for the
-review register it inherited, SR for records added since — because the first
-roadmap's text refers to them. Merged records are folded into the record they
-joined.
+Work that waits for its activation, one row each, as distinct from the
+evidence registers in `compiler/tests/registers.md`. A row keeps the identity
+it was given — R551 and R730 for the first roadmap's two debt ledgers, a letter
+and a number for the review register it inherited, SR for rows added since —
+because the first roadmap's text refers to them. A merged row is folded into
+the row it joined.
 
 A status is `open`, waiting for its activation; `limit`, a measured boundary
 that stands until its activation; `watch`, an observation waiting for
 evidence; `scheduled` followed by one or more unfinished items that take on
 its parts, separated by commas; or `retired`, with the reason it no longer
-applies. Remove a scheduled owner when its part is complete. A record stays
-scheduled on its other owners until they finish, then leaves the register.
+applies; a retired row stays in the table with its reason. Remove a
+scheduled owner when its part is complete. A row stays scheduled on its other
+owners until they finish, and is then removed.
 
-A record that leaves the table is still cited by the item that closed it,
-so its identity is listed below, and a citation of a record that never
-existed can be told from one of a record that left. Remove a settled row
-and add its identity to the following departure list in the same edit.
+A removed row is still cited by the item that closed it, so its identity is
+listed below, which tells a citation of a removed row from one of a row that
+never existed. Remove the row and add its identity to the following departure
+list in the same edit.
 SR-210 to SR-213 are
 the four defects a review of `main` after R13.35 numbered and fixed at
 once; they were never rows.
