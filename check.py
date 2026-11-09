@@ -106,8 +106,12 @@ def absent(paths):
 #  specification` line (check_specification_version); at least one row in
 #  compiler/tests/registers.md's derivation register, which names a
 #  prototype by the number this table gives, and a scope row in its target
-#  applicability register (check_coverage_registers).  By hand, and held by
-#  nothing: AGENTS.md's prototype coverage describes each in prose.
+#  applicability register (check_coverage_registers).  The test program
+#  holds that register's scopes to its own list, in
+#  compiler/ada/tests/src/landin-testing-fixtures.adb, so a scope it does
+#  not know is refused rather than skipped: a new prototype's scope is
+#  added there by hand.  By hand, and held by nothing else: AGENTS.md's
+#  prototype coverage describes each in prose.
 PROTOTYPE_FINDINGS = {
     "X": "prototype-1-driver.md",
     "Y": "prototype-2-parser.md",

@@ -397,7 +397,7 @@ package body Landin.Tests.Fixture_Suite is
             "a changed target list is refused");
          Landin.Testing.Check
            (Item, not Matches_Inventory
-              (Found, First & Rest & LF & "prototype-5 | cortex-m0"),
+              (Found, First & Rest & LF & "prototype-6 | cortex-m0"),
             "an unknown scope cannot silently vanish");
          Landin.Testing.Check
            (Item, not Matches_Inventory

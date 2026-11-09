@@ -606,6 +606,7 @@ package body Landin.Testing.Fixtures is
               & Row;
          elsif Row (Row'First .. Divider - 1) in
            "prototype-1" | "prototype-2" | "prototype-3" | "prototype-4"
+             | "prototype-5"
          then
             return "";
          elsif Listed.Contains (Row) then

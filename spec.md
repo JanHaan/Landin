@@ -33920,7 +33920,9 @@ explicitly, which tests a launch no RV64 Linux makes. Both were declined.
 `runtime/thread-spawn-leaks-no-descriptor` under the handler. The two
 `runtime/environment-variables` fixtures keep their rows wherever a
 handler is registered, since the emulator passes the child one entry for
-each name in its environment and they give one name twice.
+each name in its environment and they give one name twice, and the libc
+one's child, given the environment the fixture builds, has no
+`QEMU_LD_PREFIX` to find its dynamic loader by.
 
 ### D494 — A program starts threads as a group it joins
 

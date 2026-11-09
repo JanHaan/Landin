@@ -11,8 +11,8 @@
     {
       "fixture": "runtime/environment-variables-libc",
       "runners": ["qemu-aarch64", "qemu-riscv64"],
-      "failures": ["recorded standard output", "the program's own exit status (expected 42, actual 3)"],
-      "reason": "the program starts itself again by its own name, which QEMU's user emulation runs only through a binfmt_misc handler, and where one is registered the emulator passes the child one entry for each name in its environment, so the variable the fixture gives twice reads once"
+      "failures": ["recorded standard output", "the program's own exit status (expected 42, actual 3)", "standard error is empty", "the program's own exit status (expected 42, actual 255)"],
+      "reason": "the program starts itself again by its own name, which QEMU's user emulation runs only through a binfmt_misc handler; where one is registered the emulator passes the child one entry for each name in its environment, so the variable the fixture gives twice reads once, and the child, given the environment the fixture builds and so no QEMU_LD_PREFIX, cannot find the C library's dynamic loader where the emulator needs that prefix"
     },
     {
       "fixture": "runtime/derived-server-two-process",
