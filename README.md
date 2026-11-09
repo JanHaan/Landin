@@ -95,7 +95,7 @@ the debug build, which keeps the compiler's own internal checks on;
 rather than copying it elsewhere.
 
 **Linking on Linux**, and so `refine run`, uses GCC as the linker driver,
-even though the program links no C library: the GCC your distribution
+even when the program links no C library: the GCC your distribution
 installs, `x86_64-linux-gnu-gcc` on Debian and Ubuntu,
 `x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which `nix-shell -p gcc`
 provides on NixOS. Without one, `refine` says what to install; checking,
@@ -206,7 +206,7 @@ short:
 | Linux RV64 | hosted executables | under QEMU's user emulation, with GDB |
 | macOS arm64 | hosted executables | natively, with LLDB |
 | FreeBSD x86-64 and arm64 | hosted executables, emitted on Linux | in FreeBSD VMs, with LLDB |
-| Cortex-M | boot or RAM firmware for the device description it imports, or for the reference firmware profile of 32 KiB flash and 16 KiB RAM; RP2040, RP2350 and STM32H753 ports recorded on their boards, the Cortex-M7 using its float unit and caches | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
+| Cortex-M | boot or RAM firmware for the device description it imports, or for the reference firmware profile of 32 KiB flash and 16 KiB RAM; RP2040, RP2350 and STM32H753 ports recorded on their boards, the STM32H753's Cortex-M7 using its float unit and caches | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
 | Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7), with one windowed ILP32 ABI and distinct instruction configurations; both boards have recorded RAM and boot checks | chip controls and the complete freestanding inventory on exact Espressif QEMU CPUs with explicitly virtual corpus RAM, plus strict assembler boundaries |
 | RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities; ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each run recorded against its expected output, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
 
