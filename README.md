@@ -5,12 +5,11 @@
 > when you are being an idiot.
 
 **Status: specification 0.2.8. Landin programs build and run on Linux,
-macOS and FreeBSD, and firmware builds for Cortex-M0, RV32 and windowed Xtensa.**
+macOS and FreeBSD, and firmware builds for Cortex-M, RV32 and windowed Xtensa.**
 
-`refine`, Landin's compiler, builds and runs programs on Linux (x86-64,
-arm64 and RV64), FreeBSD (x86-64 and arm64) and macOS (arm64), and builds
-firmware for Cortex-M0, 32-bit RISC-V and windowed Xtensa. The language is
-pre-v1 and still growing, and
+The language is pre-v1 and still growing. Its compiler, `refine`, runs
+programs on Linux x86-64, arm64 and RV64, FreeBSD x86-64 and arm64 and
+macOS arm64, and
 [Current compiler capabilities](#current-compiler-capabilities) lists what
 works today.
 
@@ -49,15 +48,12 @@ beside it. There are three ways to get both.
 [the releases page](https://github.com/JanHaan/Landin/releases) holds
 `bin/refine` and the library under `lib/landin`, with no top-level
 directory. Unpack it into a directory of its own and put its `bin` on your
-`PATH`. No release yet can build the first program below: it imports
-`hosted/blocking` and starts with `refine run`, which came after 0.2.8, and
-the archives of 0.2.7 and earlier hold `refine` alone, without its library.
-Until a release has them, install with nix or from source, which build the
-compiler and library this README describes. The 0.2.8 archive for
-Linux x86-64 is 34 MB, most of it the compiler's debug information; later
-archives leave that out, at about 10 MB, and publish it beside them as
-`landin-VERSION-PLATFORM-debug.tar.gz`, which is wanted only to read a
-crash of the compiler itself.
+`PATH`. No release yet runs the first program below, which needs
+`refine run` and `hosted/blocking`, both newer than 0.2.8; until one does,
+install with nix or from source. Archives up to 0.2.7 hold `refine` without
+its library. Later archives leave the compiler's debug information out and
+publish it beside them as `landin-VERSION-PLATFORM-debug.tar.gz`, which you
+need only to read a crash of the compiler itself.
 
 **With nix.** This builds `refine` from source and puts it on your `PATH`;
 the first build also fetches the pinned toolchain, which takes a few
@@ -90,14 +86,16 @@ export LANDIN_GPRBUILD_HOME="$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VE
 
 Name `aarch64-linux` on Linux arm64, and `aarch64-darwin` on a Mac, which
 also needs Xcode's command-line tools; any other host needs nix. The
-archives are about 500 MB together. The build prints where it put `refine`,
-`compiler/ada/build/linux-amd64/debug/bin/refine`: the debug build, which
-keeps the compiler's own internal checks on.
-`LANDIN_BUILD_MODE=release` builds the faster release one beside it. That
-`refine` uses the clone's own library, so leave it where it is and put its
-directory on your `PATH`.
+archives are about 500 MB together. The build prints where it put `refine`:
+`compiler/ada/build/linux-amd64/debug/bin/refine` on Linux x86-64, where
+`linux-amd64` is the build tag that keeps each host's objects apart. That is
+the debug build, which keeps the compiler's own internal checks on;
+`LANDIN_BUILD_MODE=release` builds the faster release one beside it. This
+`refine` reads the clone's library, so put its directory on your `PATH`
+rather than copying it elsewhere.
 
-**Linking on Linux**, and so `refine run`, needs a C compiler driver: the GCC your distribution
+**Linking on Linux**, and so `refine run`, uses GCC as the linker driver,
+even though the program links no C library: the GCC your distribution
 installs, `x86_64-linux-gnu-gcc` on Debian and Ubuntu,
 `x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which `nix-shell -p gcc`
 provides on NixOS. Without one, `refine` says what to install; checking,
@@ -187,7 +185,7 @@ it names.
 | `refine compile --debug=full ...` | include source debugging for GDB or LLDB |
 | `refine compile --target=linux-arm64 ...` | compile for another target; `refine targets` lists them |
 | `refine fmt main.ldn` | rewrite a source in the one layout; `--check` only reports |
-| `refine explain L0301` | explain a diagnostic code and what to change; `[1760]` or `D275`, a cited rule or decision |
+| `refine explain L0301` | explain a diagnostic code and what to change; also a numbered paragraph of the tour or `spec.md`, `[1760]`, or a decision recorded in `spec.md`, `D275` |
 | `refine lsp` | the language server an editor starts |
 | `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD; see [devices](devices/README.md) |
 | `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
@@ -208,20 +206,20 @@ short:
 | Linux RV64 | hosted executables | under QEMU's user emulation, with GDB |
 | macOS arm64 | hosted executables | natively, with LLDB |
 | FreeBSD x86-64 and arm64 | hosted executables, emitted on Linux | in FreeBSD VMs, with LLDB |
-| Cortex-M0 | boot or debugger-loaded RAM firmware from the device description it imports, or within the 32 KiB flash and 16 KiB RAM reference; RP2040, RP2350 and STM32H753 ports have physical oracles; a Cortex-M7 description with its float unit builds hard-float, and one with its caches, the STM32H753's cached profile, turns them on and maintains DMA buffers through `core/cache` | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
+| Cortex-M | boot or RAM firmware for the device description it imports, or for the reference firmware profile of 32 KiB flash and 16 KiB RAM; RP2040, RP2350 and STM32H753 ports recorded on their boards, the Cortex-M7 using its float unit and caches | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
 | Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7), with one windowed ILP32 ABI and distinct instruction configurations; both boards have recorded RAM and boot checks | chip controls and the complete freestanding inventory on exact Espressif QEMU CPUs with explicitly virtual corpus RAM, plus strict assembler boundaries |
-| RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities; ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each recorded against its own oracle, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
+| RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities; ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each run recorded against its expected output, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
 
-- **The language kernel:** functions, aggregates and variants, declared
+- **The enabled language:** functions, aggregates and variants, declared
   failures with `else` and `try`, `defer` and `undo`, generics and concepts
   with static or `any` dispatch, local origin and escape checks, directory
   modules, atomics, volatile access and packed register images, and
   stackful fibres on every native target.
-- **The library:** twenty `core` modules of allocators, containers, text,
-  I/O, time, networking, random numbers and atomic cells, each service
-  with a fake for testing; `hosted` services over POSIX, threads started
-  as a group a routine joins among them; and Linux executables with no C
-  library by default.
+- **The library:** `core` modules of allocators, containers, text, I/O,
+  time, networking, random numbers and atomic cells, each provider with a
+  fake for testing, and `hosted` providers over POSIX, among them threads
+  started as a group a routine joins. A Linux executable links no C
+  library unless `--link=libc` asks for one.
 - **The C boundary:** each hosted target's C ABI, packed and flexible
   records, callbacks and variadic calls, Cortex-M's AAPCS32 with its float
   unit's variant, without variadic calls, and `refine bindings`, a binding
@@ -236,9 +234,9 @@ short:
 
 ## What comes next
 
-The first roadmap built the language kernel, hosted Linux, native macOS
-and Cortex-M firmware, and closed with the slice feature-complete pre-v1,
-which is a claim about coverage and nothing else. The current roadmap
+The first roadmap built the enabled language, hosted Linux, native macOS
+and Cortex-M firmware, and closed with the pre-v1 language feature-complete,
+a claim about coverage and nothing else. The current roadmap
 takes the compiler to an editor, more targets, the microcontrollers people
 buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
@@ -277,7 +275,7 @@ describes for code.
 | path | what it is |
 | --- | --- |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions. |
+| `spec.md` | the normative specification: the grammar of the enabled language, the rules the tour left unsaid, and the register of decisions. |
 | `handoff.md` | the design in one page, and which decisions must not be quietly reversed. |
 | `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. |
 | `examples.md` | complete programs, each printing what it computes; the gate runs every one. |
@@ -306,7 +304,7 @@ out with `...`; what runs is derived from them.
 | `prototype-2-parser.md` | a parser that recovers from errors rather than stopping at the first | `examples/config_parser/` |
 | `prototype-3-containers.md` | generic containers, allocators, escape rules | the `core` containers and `examples/derived_containers/` |
 | `prototype-4-app.md` | a hosted application chosen by its command line: runtime dispatch | `examples/derived_hosted/` |
-| `prototype-5-server.md` | a server with two requests in flight, and a Cortex-M0 counterpart answering them on one core: fibres, started as a group | `examples/derived_server/`; the firmware counterpart is not derived yet |
+| `prototype-5-server.md` | a server with two requests in flight, and a Cortex-M0 counterpart answering them on one core: fibres, started as a group | `examples/derived_server/` and [the firmware counterpart](compiler/tests/counterpart/DERIVATION.md) |
 
 ### Building and checking
 
@@ -322,8 +320,7 @@ python3 check.py             # the mechanical checks over documents and fixtures
 check and tedious to re-check by hand, and every defect it missed once
 belongs in it. Every push runs [the gate](AGENTS.md#the-mechanical-gate),
 which tests every target in separate jobs; it is a safety net, not a
-verdict on a revision. The exact-revision acceptance that approved every
-revision through 0.2.0 [is retired](environments/native-ci/README.md).
+verdict on a revision.
 
 [The site](https://www.701.dev) is rendered from these files by
 `./scripts/site.sh` and published only from `main`; see
@@ -337,7 +334,8 @@ prototypes and two outside reviews, and that archive is kept separately;
 nothing here depends on it. What was worth carrying came along: the tour's
 closing section, WHAT WAS TRIED AND DROPPED, keeps the things that were
 designed and then taken out again, because a reader who does not know them
-will propose them back.
+will propose them back. The exact-revision acceptance that approved every
+revision through 0.2.0 [is retired](environments/native-ci/README.md).
 
 ## License
 
