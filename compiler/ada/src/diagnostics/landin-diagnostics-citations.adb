@@ -208,7 +208,7 @@ package body Landin.Diagnostics.Citations is
             when 600 =>
                "Text: `utf8`, `utf16` and `cstring`",
             when 610 =>
-               "Indexing text by codepoint or by position",
+               "Indexing text by scalar or by position",
             when 1410 =>
                "A module is a directory",
             when 1420 =>
@@ -324,7 +324,7 @@ package body Landin.Diagnostics.Citations is
             when 1610 =>
                "Choosing a symbol's linker name",
             when 1615 =>
-               "Storage each thread has its own of",
+               "Storage local to each thread",
             when 1590 =>
                "Linking a library",
             when 1570 =>

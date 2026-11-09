@@ -82,7 +82,7 @@
 0580 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | The empty slice
 0590 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Arithmetic on whole arrays
 0600 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Text: `utf8`, `utf16` and `cstring`
-0610 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Indexing text by codepoint or by position
+0610 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Indexing text by scalar or by position
 0620 | tour | - | - | - | - | - | - | - | - | - | transferred | none | none | Language evolution | Storing a collection field by field (deferred)
 0630 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Atoms
 0640 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Enumerations are unions of atoms
@@ -183,7 +183,7 @@
 1590 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | compiled | - | executed | hosted | none | none | Linking a library
 1600 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | Exporting to C
 1610 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Choosing a symbol's linker name
-1615 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Storage each thread has its own of
+1615 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Storage local to each thread
 1620 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Atomics
 1630 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | boundary | executed | all | none | none | Inline assembly, for what has no builtin
 1640 | tour | accepted emitted executed refused | compiled | compiled | compiled | compiled | compiled | compiled | executed | - | executed | cortex-m | none | none | Placing code and data on a microcontroller

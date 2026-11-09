@@ -42,9 +42,9 @@ refine compile main.ldn -o hello
 
 Line by line:
 
-- `import core/io` brings in the reader and writer interfaces, and
-  `hosted/blocking` the operating system that provides them, waiting
-  for each read and write to finish.
+- `import core/io` brings in the interfaces for reading and writing, and
+  `import hosted/blocking` an implementation of them over the operating
+  system, whose reads and writes wait until they are done.
 - `main` takes nothing and returns one named result, `code`, which becomes
   the exit status. A routine sets its results by assigning them.
 - `blocking.new()` is the program's handle on the operating system. Files,
@@ -53,6 +53,9 @@ Line by line:
   parameters say what it touches ([1660]). That is a convention: the
   compiler does not stop a routine from calling `blocking.new()` itself
   ([1680]).
+- `host` appears twice because `io.write` asks two things of it: the
+  first argument is what does the writing, and `io.out(host)` is that
+  host's standard output, the file written to.
 - `io.write` can fail, and Landin will not let a failure pass unnoticed.
   `else none` says that here it does not matter ([1030]). It is the
   handler to reach for last: [1030] also shows passing a failure on and
@@ -68,8 +71,8 @@ print_born: (host: blocking.host, name: utf8, year: u32) -> none =
 end print_born
 ```
 
-`main` passes it the handle, which is how its parameters say that it
-writes:
+`main` passes it the handle; taking the handle as a parameter is how
+`print_born` says that it writes:
 
 ```landin
     print_born(host, "Ada", 1815) -- Ada was born in 1815.
@@ -187,9 +190,27 @@ the path: read it in order and you can write ordinary programs. The rest
 is reference, to read when you need it.
 
 The numbers in brackets, such as [0430], never change, so other documents
-and the compiler's own messages can point here: a refusal ends with a note
+and the compiler's own messages can point here: an error ends with a note
 such as "the tour describes it at [0520]". The numbers are not in reading
 order, and do not need to be.
+
+Everything here is implemented unless its entry is marked DEFERRED, as
+[0620] is, or says *not yet*, as formatting floats does.
+
+Some words come up before the entry that explains them:
+
+| word | meaning |
+| --- | --- |
+| routine | a function; the tour uses both words |
+| refusal | an error the compiler reports, ending with the entry that explains the rule |
+| atom set | the named outcomes, such as `not_found`, that a routine declares it can fail with ([0630], [0940]) |
+| slice | a view of part of an array: an address and a length, copying nothing ([0570]) |
+| origin | what storage a pointer, slice or `any` refers to, and so how long it lives: static, allocated or a routine's frame ([0770]) |
+| provider | the value that implements a concept, such as an allocator or the operating system's I/O ([1360], [1660]) |
+| handle | the small copyable value passed around to reach a provider, such as `host` above |
+| evidence | a type's table of entries for a concept, which generic code and `any` both use ([1690]) |
+| erased | held as an `any C`, whose concrete type is known only at run time ([1370]) |
+| fibre | a task on a stack of its own, giving way to others only where it waits ([1675]); a thread is the system's, from `hosted/thread` |
 
 This tour teaches; it leaves out rules a reader would guess anyway.
 [`spec.md`](spec.md) is the specification, and where the two could be read
@@ -524,7 +545,7 @@ produces is not specified.
 
 ### [0250] Character literals
 
-A character literal is one Unicode code point, and its type is `u32`.
+A character literal is one Unicode scalar, and its type is `u32`.
 
 ```landin
 letter_a := 'a'
@@ -569,7 +590,7 @@ A backslash starts an escape. The set is small and closed:
 | `\n` `\r` `\t` `\e` | newline, carriage return, tab, escape |
 | `\\` `\"` `\'` | the character itself |
 | `\xNN` | one byte, exactly two hex digits |
-| `\u{...}` | one code point, any number of hex digits |
+| `\u{...}` | one Unicode scalar, any number of hex digits |
 
 ```landin
 line := "col\tsep\n"
@@ -673,7 +694,8 @@ The fine print:
   the one value.
 - As with a call result, bind the result before you index it, select a
   field or call it.
-- A converted reference keeps its storage and origin ([0770]).
+- A converted reference still refers to the same storage, and keeps its
+  origin: where that storage lives, and so how long ([0770]).
 - `ptr u8(value)` applies the type `ptr u8`: it can take the pointer out of
   a distinct type ([0650]), but it never turns an integer into a pointer.
   `ptr(address)` does that, taking its pointer type from the declaration
@@ -1004,9 +1026,10 @@ keep a reference. The two can go together. On a type parameter, `escaping`
 asks nothing when the type holds no references ([0840]).
 
 An `inout` argument need not be a binding: a pointer target such as
-`c.inner.val` is fine. One call may not pass the same binding-rooted place to
-two `inout` parameters. Two different pointer or computed-index paths may
-still alias; the compiler cannot see that, and does not promise to ([1720]).
+`c.inner.val` is fine. One call may not pass the same variable, or a field
+of it, to two `inout` parameters. Two different pointer or computed-index
+paths may still alias; the compiler cannot see that, and does not promise
+to ([1720]).
 
 ### [0910] `sink` consumes a place
 
@@ -1467,7 +1490,7 @@ each takes:
 | `caller` | none | [1040] |
 | `fixed` | none | [1490] |
 | `option` | none; it implies `fixed` | [1530] |
-| `link` | `section: "..."`, `symbol: "..."`, `align: 16`, `vector: 16`, `keep` | [1640] |
+| `link` | `symbol: "..."`, `thread`, `section: "..."`, `region: "..."`, `align: 16`, `vector: 16`, `keep`, `boot_stage` | [1610], [1615], [1640] |
 | `extern` | `c`, `interrupt`, `naked`, and others | [1570] |
 
 `at` gives a field its bit position ([0730]). `at`, `of` and `align` are
@@ -1813,7 +1836,8 @@ end sum_digits
   are failures.
 
 Collecting diagnostics needs somewhere to put them, and that is an
-ordinary parameter. The library's sink is the concept `core/diag.log`,
+ordinary parameter. The library's destination for diagnostics is the
+concept `core/diag.log`,
 which a routine takes as `inout log: any diag.log`, meaning any kind of
 log at all ([1370]). Its `note` entry takes a position in the text, a
 severity and the message bytes. Recording a note is a diagnostic; failing
@@ -2032,9 +2056,10 @@ Over anything else that satisfies `iterable`, the binding is a copy, since
 a silent write to nothing. Text likewise yields a copied `u32` that cannot
 be written.
 
-- The cursor and item keep their exact declared types. An `any C` item
-  keeps C and its evidence, and an `any C` source stays an erased value
-  passed to the providers; neither is treated as a slice.
+- The cursor and item keep their exact declared types. An `any C` item is
+  still an `any C`, carrying its type's table of C's entries, its
+  evidence ([1690]), and an `any C` source is handed as it is to its
+  `iterable` entries; neither is treated as a slice.
 - When the element is a fixed array, slice or `any C`, replacing the whole
   element follows the same rule. Writing through an inner slice follows
   that slice's own `mut`.
@@ -2334,10 +2359,11 @@ end refill
 
 Fine print:
 
-- The mixed form needs an explicitly typed local or module binding, or an
-  assignment to a mutable fixed array. It cannot be inferred, nested, or
-  passed or returned as a value. At module level every element must be a
-  compile-time known scalar [1460].
+- The mixed form needs an explicitly typed local or module binding, an
+  assignment to a mutable fixed array, or a fixed-array argument of the
+  same length, which it fills. It cannot be inferred, nested or returned.
+  At module level every element must be a compile-time known scalar
+  [1460].
 - An inferred `[n of v]` takes `v`'s scalar type, and an untyped integer
   becomes `i32`. Its size must fit the target's `usize`.
 - Refused: `row := [of 0]`, which has no length to give, and a zero count
@@ -2552,8 +2578,9 @@ traps, even inside `unchecked`.
 `text.from_bytes` and `text.from_c` validate the same way but fail with
 `invalid_text` instead of trapping; call them before traversing. The module
 also has exact byte equality, substring search, decimal parsing and bounded
-writing into a buffer you supply. It never normalizes, allocates or
-silently truncates.
+writing into a buffer you supply. It never normalizes or silently
+truncates, and allocates only in a builder made by `text.growing`, which
+takes an allocator.
 
 On plain `[]u8`, `core/text` counts positions as byte offsets of the
 opaque type `text.position`, with `first`, `at_end`, `next`, `advance`,
@@ -2563,13 +2590,13 @@ On `utf8`, the same positions step a whole scalar with `start`, `step`,
 `done` and `width`, and `find` returns where a match begins, so the text
 around it slices out by range with nothing copied.
 
-### [0610] Indexing text by codepoint or by position
+### [0610] Indexing text by scalar or by position
 
-Indexing a `utf8` gives the codepoint there as a `u32`, the type a
+Indexing a `utf8` gives the Unicode scalar there as a `u32`, the type a
 character literal [0250] and a traversal [1320] already give it. The index
 type picks the operation:
 
-- a `usize` counts codepoints from the start, so `word[2]` is the third
+- a `usize` counts scalars from the start, so `word[2]` is the third
   one; the compiler finds it by scanning;
 - a `core/text.position` is a byte offset, decoded directly in O(1).
 
@@ -2583,10 +2610,10 @@ bytes: utf8 = word[3..3] -- é again, at byte 3: two bytes, no copy
 A count past the end traps, and so does a position at the end or on a
 continuation byte. Neither index type converts implicitly to the other.
 
-The codepoint is decoded, so it is a value, not a place: `addr word[2]` and
-`word[2] = 'e'` are errors. To get its bytes, take a one-codepoint range
+The scalar is decoded, so it is a value, not a place: `addr word[2]` and
+`word[2] = 'e'` are errors. To get its bytes, take a one-scalar range
 as [0600] describes: its bounds count bytes, and the result is still
-`utf8`. A `utf8` converted to `[]u8` loses codepoint indexing and has the
+`utf8`. A `utf8` converted to `[]u8` loses scalar indexing and has the
 ordinary slice operations instead.
 
 ## MODULES
@@ -2772,7 +2799,7 @@ Four source namespaces belong to the repository:
 |---|---|---|
 | `core` | the shared freestanding library: `core/mem`, `core/text`, `core/vec` | every module and interface on every target |
 | `hosted` | hosted providers such as `hosted/heap`, `hosted/system` and `hosted/blocking` | on hosted systems |
-| `platform` | interfaces scoped to a target or a system: `platform/c`, the CPU modules `platform/cortex_m`, `platform/riscv` and `platform/xtensa`, and the POSIX layer, `platform/posix` over `platform/linux`, `platform/libc` and `platform/kqueue` | `platform/c` with an enabled C ABI, the hosted LP64 ones and Cortex-M's AAPCS32; each CPU module everywhere, declaring its operations only on its own targets, M-profile with higher feature levels included, `rv32` and `xtensa`, and its submodules and reference descriptions only there; the POSIX layer on the hosted POSIX systems, Linux, Darwin and FreeBSD; a `platform` module the compiler gives no scope, nowhere |
+| `platform` | interfaces scoped to a target or a system: `platform/c`, the CPU modules `platform/cortex_m`, `platform/riscv` and `platform/xtensa`, and the POSIX layer, `platform/posix` over `platform/linux`, `platform/libc` and `platform/kqueue` | `platform/c` wherever a C ABI is enabled: the hosted LP64 targets and Cortex-M's AAPCS32. A CPU module everywhere, with its operations, submodules and reference descriptions only on its own targets: Cortex-M at any level, `rv32`, `xtensa`. The POSIX layer on Linux, macOS and FreeBSD. A `platform` module the compiler gives no scope, nowhere |
 | `landin` | the toolchain modules of [1560]: `landin/compiler`, `landin/assembler`, `landin/linker` | everywhere, without an import |
 
 Fine print:
@@ -3101,11 +3128,12 @@ reference back into storage of the same origin is an update, not keeping,
 and needs no marker. Storing one parameter's reference into another
 parameter's storage needs `escaping`.
 
-Or it needs `escaping into`, which names the parameter whose storage keeps
-it, and no other. Then a frame node can go onto a frame list, as long as it
-lives as long as the list: it is a parameter of the caller, static,
-allocated, or a local declared before the list. Here each parameter is kept
-in the other's storage, so each names the other.
+Or it needs `escaping into`, which names the one parameter whose storage
+keeps it. That lets a node on the caller's frame go onto a list on the
+caller's frame, provided the node lives as long as the list: it is the
+caller's parameter, static, allocated, or a local declared before the
+list. Here each parameter is kept in the other's storage, so each names
+the other.
 
 ```landin
 push_kept: (escaping into item inout head: ptr mut node,
@@ -3268,11 +3296,11 @@ after checking its arithmetic; `core` gets no special privilege for it.
 [0500] says why there is no `offset` or `slice_from` to do this for you,
 and [0510] keeps uninitialized storage out of reach.
 
-Tracking comes back through a signature. A routine that indexes a table C
-gave it writes `from table` on its result, and callers are checked against
-that like any other signature. Its own body is not checked, since an
-integer-made pointer satisfies any `from`, so the contract is its author's
-claim: keep such routines small.
+A signature brings tracking back. A routine that indexes a table C gave
+it writes `from table` on its result, and its callers are checked against
+that as against any signature. Its body is not checked against it, since
+a pointer made from an integer satisfies any `from`: the contract is its
+author's claim, so keep such routines small.
 
 ### [0820] Arenas are ordinary allocators you give storage to
 
@@ -3372,8 +3400,8 @@ allocation or whether it still exists. So these go through:
   node's origin, and whatever it pointed to may be gone.
 - Anything across the C boundary.
 
-Catching these would need regions or generation counters, and Landin
-deliberately has neither.
+Catching these would need region-based checking or generation counters,
+and Landin deliberately has neither.
 
 ## CONCEPTS AND GENERIC CODE
 
@@ -3457,11 +3485,11 @@ values around. Fine print:
   concrete instance, so you cannot take `sort` itself and store it.
 - A private `! ...` error set is inferred separately for each concrete
   instance.
-- The body is checked for each instance a call makes. Before anything
-  calls it, only its names and the operands no type could make valid are
-  checked, so a generic function nothing calls is not refused for a view
-  held across a call that may move its source, or for anything else that
-  depends on what `t` turns out to be.
+- The body is checked for each instance a call makes. A generic function
+  nothing calls is checked only for its names and for operands no type
+  could make valid. An error that depends on what `t` turns out to be,
+  such as a view held across a call that may move its source, is reported
+  once a call picks `t`.
 
 ### [1300] Calling a generic function
 
@@ -3796,18 +3824,18 @@ end record_reading
 The same `record_reading` runs with `heap.new()` as `memory`, or with an
 arena over a buffer on the stack ([0820]).
 
-The list is changed, so it is passed `inout`. The allocator is a
-service, so it is a handle: a small copyable value, passed `in`, that
-refers to its provider's state. Its lifetime is checked once, where it
-is made from that state, and using it locks nothing, so several
-containers can allocate from one handle, and a region from its parent
+The list is changed, so it is passed `inout`. The allocator is passed as
+a handle: a small copyable value, passed `in`, that refers to its
+provider's state. Its lifetime is checked once, where it is made from
+that state, and using it does not borrow that state, so several
+containers can allocate through one handle, and a region from its parent
 while both are live.
 
-The allocator is passed to each call, not stored in the container. A
-stored allocator would make the type `vec.list(t, provider)`, so a list
+The allocator is passed to each call rather than stored in the container.
+A stored one would be part of the type, `vec.list(t, provider)`, so a list
 in an arena and a list on the heap would be different types and no
-function could take both. Passing it keeps the type `vec.list(t)` and
-costs one argument at every call that can allocate.
+function could take both. Passing it keeps the type `vec.list(t)`, at the
+cost of one argument to every call that can allocate.
 
 The four entries:
 
@@ -4379,8 +4407,8 @@ address can be handed to C as a callback.
   return the status or value the C interface promises.
 - Nothing is promised if a foreign exception or a `longjmp` crosses
   Landin frames.
-- Cortex-M has no C signatures yet. Its link names and placement are
-  enabled separately ([1610], [1640]).
+- On Cortex-M a C signature cannot be variadic: import a fixed-arity C
+  function that makes the variadic call instead.
 
 ### [1610] Choosing a symbol's linker name
 
@@ -4424,7 +4452,7 @@ twice.
 
 Exact rules: spec [1975].
 
-### [1615] Storage each thread has its own of
+### [1615] Storage local to each thread
 
 `link(thread)` before a module `mut` binding gives every thread its own
 instance of it. A thread reads and writes only its own, and each one
@@ -4549,12 +4577,12 @@ count_tick: () -> none =
 end count_tick
 ```
 
-Cortex-M0 has no read-modify-write atomics at all, so there a cell has no
-`exchange`, `add` or `compare_exchange`, and no `u64` cell, and the
-compiler says so where you call one. What it has is the single writer's
-add, `sole_add`: a load and a store, correct while one context alone, an
-interrupt handler say, writes the cell. State several contexts write takes
-`platform/cortex_m`'s critical section instead.
+Cortex-M0 has no read-modify-write atomics, so there a cell has no
+`exchange`, `add` or `compare_exchange`, there is no `u64` cell, and the
+compiler reports a call to one. What it has is `sole_add`, the single
+writer's add: a load and a store, correct while only one context, say an
+interrupt handler, writes the cell. State that several contexts write
+needs `platform/cortex_m`'s critical section instead.
 
 Each tool for shared memory does one thing:
 
@@ -4741,8 +4769,14 @@ Where things go:
   change its type's layout.
 - `align` and `vector` take decimal literals; digit separators are fine,
   hex and expressions are refused.
-- The image is 32 KiB of flash and 16 KiB of RAM, whose top 4 KiB is
-  reserved for stacks. The linker checks bounds and overlap.
+- `region: "NAME"` places a routine or module datum in a region of the
+  device description, by name rather than by section: code needs a region
+  that may execute, mutable data one that may be written, and reset
+  copies or clears it there.
+- Without a device description, the image has the reference firmware
+  profile's 32 KiB of flash and 16 KiB of RAM, whose top 4 KiB is
+  reserved for stacks; a description gives its own. The linker checks
+  bounds and overlap.
 - The compiler refuses reserved vectors, a section that does not match the
   declaration, duplicate attributes and symbol collisions.
 - There is no module initialization in user code ([1460]).
@@ -4750,12 +4784,12 @@ Where things go:
 Calling convention, symbol name, placement and retention are four
 independent choices; none implies another.
 
-A chip whose boot ROM runs a second stage before the image, as RP2040's
-reads its flash through one, holds that stage in its device description: a
-naked routine marked `link(boot_stage)`, which the description's boot kind
-places at the start of the image and the compiler seals with the checksum
-the ROM checks. Nothing else is marked that way, and nothing else in a
-description is code.
+Some boot ROMs run a second stage before the image: RP2040's reads its
+flash through one. On such a chip that stage lives in the device
+description, as a naked routine marked `link(boot_stage)`. The
+description's boot kind places it at the start of the image, and the
+compiler seals it with the checksum the ROM checks. Nothing else is marked
+that way, and nothing else in a description is code.
 
 ### [0730] Register images: flags, selections and sets
 
@@ -4834,9 +4868,10 @@ field claims is reserved: you cannot name it, no completion list offers
 it, and a read-modify-write leaves it untouched.
 
 You rarely write these by hand. A generator reading a vendor's SVD file
-writes the fields, and the helpers [0740] uses, for every register. SVD
-generation belongs to the companion tool; the language has no `set(X)`
-type former to do it instead.
+writes the fields, and the helpers [0740] uses, for every register:
+`refine svd` generates them ([devices](devices/README.md)), and running a
+generator as a step of a build belongs to the companion tool. The
+language has no `set(X)` type former to do it instead.
 
 A field may be an array, which is how a real peripheral packs sixteen
 two-bit pin settings into one word. The element width times the count must
@@ -5081,11 +5116,11 @@ from `core/io`'s `io.memory_over`, which takes caller-owned files,
 arguments and output storage and makes no host call, and the run cannot
 tell.
 
-For that to work, I/O is a concept, not a type, so another provider can
-satisfy it. It travels as `any`, not as a type parameter: an indirect call
-in front of a system call costs nothing, whereas an allocator sits in hot
-loops and is threaded generically. Same machinery, chosen per case
-([1690]).
+That works because I/O is a concept, not a type, so another provider can
+satisfy it. It travels as `any` rather than as a type parameter: an
+indirect call costs next to nothing beside the system call behind it. An
+allocator sits in hot loops, so it is passed as a type parameter instead.
+The machinery is the same, chosen case by case ([1690]).
 
 It is four concepts, because a provider should supply only what it has
 ([1260]):
@@ -5105,10 +5140,10 @@ of the world: `directories`, `environment`, `programs`, `file_system`,
 `world.write` on an erased world reaches the writer's entry. A UART
 implements `writer` and nothing else. A diagnostics log asks for
 `any io.writer`, which is why `entry` builds one from the same `host`: an
-erased world is not an erased writer, and the two do not convert. A routine
-holding only the world passes it to a routine generic over a writer as it
-is, and lends a writer to erase as an `any io.writer` with
-`io.writer_of(world)`.
+`any io.world` is not an `any io.writer`, and neither converts to the
+other. A routine holding only an erased world can pass it as it is to a
+routine generic over a writer, or make an `any io.writer` from the adapter
+`io.writer_of(world)` lends it.
 
 Both providers lend each argument and path as a `text.host_string`: the
 bytes the system gave, unconverted and uncopied, so an argument passed on
@@ -5297,17 +5332,18 @@ handler to run in: 640 bytes on x86-64 and arm64, 768 on RV64, 384 on
 Cortex-M0. A program that prepares no stack has no check, and its code is
 what it would be without fibres. How deep a task goes depends on the
 target: `ask` takes up to 4.4 KiB of its stack on RV64 and less on the
-others, which is why its stacks are 8 KiB. `refine --stack-report=PATH`
+others, which is why its stacks are 8 KiB. `refine compile --stack-report=PATH`
 writes each routine's frame and the deepest stack its calls can reach, and
 names the `any` calls, recursion and foreign calls that leave that open.
 Size a stack from its task's row and the margin. A backing too small for
 its stacks fails `mem.out_of_memory`, where the group is made or when a
 task is admitted.
 
-On one core, nothing runs at once, and fibres there are for structure:
-taking the next request while answering this one. A device answers
-requests one at a time, in the order they arrived, and says `busy` when
-its queue is full; two answers are never in flight together. On Cortex-M0
+On one core nothing runs at once, so there fibres are for structure: one
+takes the next request while another answers this one. A single-core
+device answers requests one at a time, in the order they arrived, and
+says `busy` when its queue is full; two answers are never in flight
+together. On Cortex-M0
 a fibre runs on the process stack and interrupt handlers on the main one,
 so a fibre's backing pays for one exception frame, 36 bytes, and the
 handlers' own frames are the main stack's. A handler never switches: it

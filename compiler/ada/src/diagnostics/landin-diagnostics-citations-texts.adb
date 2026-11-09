@@ -343,8 +343,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Constant folding keeps a literal's sign. The sign of a N"
                & "aN that arithmetic produces is not specified.",
             when 250 =>
-               "A character literal is one Unicode code point, and its t"
-               & "ype is `u32`."
+               "A character literal is one Unicode scalar, and its type "
+               & "is `u32`."
                & LF
                & LF
                & "    letter_a := 'a'"
@@ -400,7 +400,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "| `\xNN` | one byte, exactly two hex digits |"
                & LF
-               & "| `\u{...}` | one code point, any number of hex digits |"
+               & "| `\u{...}` | one Unicode scalar, any number of hex digi"
+               & "ts |"
                & LF
                & LF
                & "    line := ""col\tsep\n"""
@@ -527,8 +528,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- As with a call result, bind the result before you inde"
                & "x it, select a field or call it."
                & LF
-               & "- A converted reference keeps its storage and origin ([0"
-               & "770])."
+               & "- A converted reference still refers to the same storage"
+               & ", and keeps its origin: where that storage lives, and so"
+               & " how long ([0770])."
                & LF
                & "- `ptr u8(value)` applies the type `ptr u8`: it can take"
                & " the pointer out of a distinct type ([0650]), but it nev"
@@ -935,10 +937,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "An `inout` argument need not be a binding: a pointer tar"
                & "get such as `c.inner.val` is fine. One call may not pass"
-               & " the same binding-rooted place to two `inout` parameters"
-               & ". Two different pointer or computed-index paths may stil"
-               & "l alias; the compiler cannot see that, and does not prom"
-               & "ise to ([1720]).",
+               & " the same variable, or a field of it, to two `inout` par"
+               & "ameters. Two different pointer or computed-index paths m"
+               & "ay still alias; the compiler cannot see that, and does n"
+               & "ot promise to ([1720]).",
             when 910 =>
                "A `sink` argument is a place, and after the call that pl"
                & "ace is dead until you assign it again. A field of a bind"
@@ -1536,8 +1538,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "| `option` | none; it implies `fixed` | [1530] |"
                & LF
-               & "| `link` | `section: ""...""`, `symbol: ""...""`, `align: 16"
-               & "`, `vector: 16`, `keep` | [1640] |"
+               & "| `link` | `symbol: ""...""`, `thread`, `section: ""...""`, "
+               & "`region: ""...""`, `align: 16`, `vector: 16`, `keep`, `boo"
+               & "t_stage` | [1610], [1615], [1640] |"
                & LF
                & "| `extern` | `c`, `interrupt`, `naked`, and others | [15"
                & "70] |"
@@ -2000,14 +2003,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Collecting diagnostics needs somewhere to put them, and "
-               & "that is an ordinary parameter. The library's sink is the"
-               & " concept `core/diag.log`, which a routine takes as `inou"
-               & "t log: any diag.log`, meaning any kind of log at all ([1"
-               & "370]). Its `note` entry takes a position in the text, a "
-               & "severity and the message bytes. Recording a note is a di"
-               & "agnostic; failing to record it is an operation failure, "
-               & "so `note` declares `io.io_failed`, and a routine that re"
-               & "cords notes lists it too."
+               & "that is an ordinary parameter. The library's destination"
+               & " for diagnostics is the concept `core/diag.log`, which a"
+               & " routine takes as `inout log: any diag.log`, meaning any"
+               & " kind of log at all ([1370]). Its `note` entry takes a p"
+               & "osition in the text, a severity and the message bytes. R"
+               & "ecording a note is a diagnostic; failing to record it is"
+               & " an operation failure, so `note` declares `io.io_failed`"
+               & ", and a routine that records notes lists it too."
                & LF
                & LF
                & "- A bounded logger never fails. When it is full it stops"
@@ -2302,9 +2305,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "- The cursor and item keep their exact declared types. A"
-               & "n `any C` item keeps C and its evidence, and an `any C` "
-               & "source stays an erased value passed to the providers; ne"
-               & "ither is treated as a slice."
+               & "n `any C` item is still an `any C`, carrying its type's "
+               & "table of C's entries, its evidence ([1690]), and an `any"
+               & " C` source is handed as it is to its `iterable` entries;"
+               & " neither is treated as a slice."
                & LF
                & "- When the element is a fixed array, slice or `any C`, r"
                & "eplacing the whole element follows the same rule. Writin"
@@ -2709,10 +2713,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "- The mixed form needs an explicitly typed local or modu"
-               & "le binding, or an assignment to a mutable fixed array. I"
-               & "t cannot be inferred, nested, or passed or returned as a"
-               & " value. At module level every element must be a compile-"
-               & "time known scalar [1460]."
+               & "le binding, an assignment to a mutable fixed array, or a"
+               & " fixed-array argument of the same length, which it fills"
+               & ". It cannot be inferred, nested or returned. At module l"
+               & "evel every element must be a compile-time known scalar ["
+               & "1460]."
                & LF
                & "- An inferred `[n of v]` takes `v`'s scalar type, and an"
                & " untyped integer becomes `i32`. Its size must fit the ta"
@@ -3022,7 +3027,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "of trapping; call them before traversing. The module als"
                & "o has exact byte equality, substring search, decimal par"
                & "sing and bounded writing into a buffer you supply. It ne"
-               & "ver normalizes, allocates or silently truncates."
+               & "ver normalizes or silently truncates, and allocates only"
+               & " in a builder made by `text.growing`, which takes an all"
+               & "ocator."
                & LF
                & LF
                & "On plain `[]u8`, `core/text` counts positions as byte of"
@@ -3035,13 +3042,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "so the text around it slices out by range with nothing c"
                & "opied.",
             when 610 =>
-               "Indexing a `utf8` gives the codepoint there as a `u32`, "
-               & "the type a character literal [0250] and a traversal [132"
-               & "0] already give it. The index type picks the operation:"
+               "Indexing a `utf8` gives the Unicode scalar there as a `u"
+               & "32`, the type a character literal [0250] and a traversal"
+               & " [1320] already give it. The index type picks the operat"
+               & "ion:"
                & LF
                & LF
-               & "- a `usize` counts codepoints from the start, so `word[2"
-               & "]` is the third one; the compiler finds it by scanning;"
+               & "- a `usize` counts scalars from the start, so `word[2]` "
+               & "is the third one; the compiler finds it by scanning;"
                & LF
                & "- a `core/text.position` is a byte offset, decoded direc"
                & "tly in O(1)."
@@ -3067,12 +3075,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "erts implicitly to the other."
                & LF
                & LF
-               & "The codepoint is decoded, so it is a value, not a place:"
-               & " `addr word[2]` and `word[2] = 'e'` are errors. To get i"
-               & "ts bytes, take a one-codepoint range as [0600] describes"
-               & ": its bounds count bytes, and the result is still `utf8`"
-               & ". A `utf8` converted to `[]u8` loses codepoint indexing "
-               & "and has the ordinary slice operations instead.",
+               & "The scalar is decoded, so it is a value, not a place: `a"
+               & "ddr word[2]` and `word[2] = 'e'` are errors. To get its "
+               & "bytes, take a one-scalar range as [0600] describes: its "
+               & "bounds count bytes, and the result is still `utf8`. A `u"
+               & "tf8` converted to `[]u8` loses scalar indexing and has t"
+               & "he ordinary slice operations instead.",
             when 1410 =>
                "Every `.ldn` file directly inside one directory belongs "
                & "to one module, and those files see each other's declarat"
@@ -3304,14 +3312,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & ": `platform/c`, the CPU modules `platform/cortex_m`, `pl"
                & "atform/riscv` and `platform/xtensa`, and the POSIX layer"
                & ", `platform/posix` over `platform/linux`, `platform/libc"
-               & "` and `platform/kqueue` | `platform/c` with an enabled C"
-               & " ABI, the hosted LP64 ones and Cortex-M's AAPCS32; each "
-               & "CPU module everywhere, declaring its operations only on "
-               & "its own targets, M-profile with higher feature levels in"
-               & "cluded, `rv32` and `xtensa`, and its submodules and refe"
-               & "rence descriptions only there; the POSIX layer on the ho"
-               & "sted POSIX systems, Linux, Darwin and FreeBSD; a `platfo"
-               & "rm` module the compiler gives no scope, nowhere |"
+               & "` and `platform/kqueue` | `platform/c` wherever a C ABI "
+               & "is enabled: the hosted LP64 targets and Cortex-M's AAPCS"
+               & "32. A CPU module everywhere, with its operations, submod"
+               & "ules and reference descriptions only on its own targets:"
+               & " Cortex-M at any level, `rv32`, `xtensa`. The POSIX laye"
+               & "r on Linux, macOS and FreeBSD. A `platform` module the c"
+               & "ompiler gives no scope, nowhere |"
                & LF
                & "| `landin` | the toolchain modules of [1560]: `landin/co"
                & "mpiler`, `landin/assembler`, `landin/linker` | everywher"
@@ -3707,13 +3714,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "nother parameter's storage needs `escaping`."
                & LF
                & LF
-               & "Or it needs `escaping into`, which names the parameter w"
-               & "hose storage keeps it, and no other. Then a frame node c"
-               & "an go onto a frame list, as long as it lives as long as "
-               & "the list: it is a parameter of the caller, static, alloc"
-               & "ated, or a local declared before the list. Here each par"
-               & "ameter is kept in the other's storage, so each names the"
-               & " other."
+               & "Or it needs `escaping into`, which names the one paramet"
+               & "er whose storage keeps it. That lets a node on the calle"
+               & "r's frame go onto a list on the caller's frame, provided"
+               & " the node lives as long as the list: it is the caller's "
+               & "parameter, static, allocated, or a local declared before"
+               & " the list. Here each parameter is kept in the other's st"
+               & "orage, so each names the other."
                & LF
                & LF
                & "    push_kept: (escaping into item inout head: ptr mut n"
@@ -3944,12 +3951,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "] keeps uninitialized storage out of reach."
                & LF
                & LF
-               & "Tracking comes back through a signature. A routine that "
-               & "indexes a table C gave it writes `from table` on its res"
-               & "ult, and callers are checked against that like any other"
-               & " signature. Its own body is not checked, since an intege"
-               & "r-made pointer satisfies any `from`, so the contract is "
-               & "its author's claim: keep such routines small.",
+               & "A signature brings tracking back. A routine that indexes"
+               & " a table C gave it writes `from table` on its result, an"
+               & "d its callers are checked against that as against any si"
+               & "gnature. Its body is not checked against it, since a poi"
+               & "nter made from an integer satisfies any `from`: the cont"
+               & "ract is its author's claim, so keep such routines small.",
             when 820 =>
                "An arena is a library value from `core/arena`: you hand "
                & "it a block of bytes, it hands out pieces of it, and indi"
@@ -4104,8 +4111,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- Anything across the C boundary."
                & LF
                & LF
-               & "Catching these would need regions or generation counters"
-               & ", and Landin deliberately has neither.",
+               & "Catching these would need region-based checking or gener"
+               & "ation counters, and Landin deliberately has neither.",
             when 1230 =>
                "A concept names a bundle of operations, each a complete "
                & "function signature written in terms of the concept's typ"
@@ -4202,12 +4209,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- A private `! ...` error set is inferred separately for"
                & " each concrete instance."
                & LF
-               & "- The body is checked for each instance a call makes. Be"
-               & "fore anything calls it, only its names and the operands "
-               & "no type could make valid are checked, so a generic funct"
-               & "ion nothing calls is not refused for a view held across "
-               & "a call that may move its source, or for anything else th"
-               & "at depends on what `t` turns out to be.",
+               & "- The body is checked for each instance a call makes. A "
+               & "generic function nothing calls is checked only for its n"
+               & "ames and for operands no type could make valid. An error"
+               & " that depends on what `t` turns out to be, such as a vie"
+               & "w held across a call that may move its source, is report"
+               & "ed once a call picks `t`.",
             when 1300 =>
                "The type is normally deduced from the arguments. You may"
                & " also name it, in the same named-argument list as the ru"
@@ -4671,20 +4678,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The list is changed, so it is passed `inout`. The alloca"
-               & "tor is a service, so it is a handle: a small copyable va"
-               & "lue, passed `in`, that refers to its provider's state. I"
-               & "ts lifetime is checked once, where it is made from that "
-               & "state, and using it locks nothing, so several containers"
-               & " can allocate from one handle, and a region from its par"
-               & "ent while both are live."
+               & "tor is passed as a handle: a small copyable value, passe"
+               & "d `in`, that refers to its provider's state. Its lifetim"
+               & "e is checked once, where it is made from that state, and"
+               & " using it does not borrow that state, so several contain"
+               & "ers can allocate through one handle, and a region from i"
+               & "ts parent while both are live."
                & LF
                & LF
-               & "The allocator is passed to each call, not stored in the "
-               & "container. A stored allocator would make the type `vec.l"
-               & "ist(t, provider)`, so a list in an arena and a list on t"
-               & "he heap would be different types and no function could t"
-               & "ake both. Passing it keeps the type `vec.list(t)` and co"
-               & "sts one argument at every call that can allocate."
+               & "The allocator is passed to each call rather than stored "
+               & "in the container. A stored one would be part of the type"
+               & ", `vec.list(t, provider)`, so a list in an arena and a l"
+               & "ist on the heap would be different types and no function"
+               & " could take both. Passing it keeps the type `vec.list(t)"
+               & "`, at the cost of one argument to every call that can al"
+               & "locate."
                & LF
                & LF
                & "The four entries:"
@@ -5468,8 +5476,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- Nothing is promised if a foreign exception or a `longj"
                & "mp` crosses Landin frames."
                & LF
-               & "- Cortex-M has no C signatures yet. Its link names and p"
-               & "lacement are enabled separately ([1610], [1640]).",
+               & "- On Cortex-M a C signature cannot be variadic: import a"
+               & " fixed-arity C function that makes the variadic call ins"
+               & "tead.",
             when 1610 =>
                "`link(symbol: ""..."")` gives a declaration a linker name "
                & "its Landin name cannot spell, or does not want. It follo"
@@ -5695,14 +5704,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end count_tick"
                & LF
                & LF
-               & "Cortex-M0 has no read-modify-write atomics at all, so th"
-               & "ere a cell has no `exchange`, `add` or `compare_exchange"
-               & "`, and no `u64` cell, and the compiler says so where you"
-               & " call one. What it has is the single writer's add, `sole"
-               & "_add`: a load and a store, correct while one context alo"
-               & "ne, an interrupt handler say, writes the cell. State sev"
-               & "eral contexts write takes `platform/cortex_m`'s critical"
-               & " section instead."
+               & "Cortex-M0 has no read-modify-write atomics, so there a c"
+               & "ell has no `exchange`, `add` or `compare_exchange`, ther"
+               & "e is no `u64` cell, and the compiler reports a call to o"
+               & "ne. What it has is `sole_add`, the single writer's add: "
+               & "a load and a store, correct while only one context, say "
+               & "an interrupt handler, writes the cell. State that severa"
+               & "l contexts write needs `platform/cortex_m`'s critical se"
+               & "ction instead."
                & LF
                & LF
                & "Each tool for shared memory does one thing:"
@@ -5983,9 +5992,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- `align` and `vector` take decimal literals; digit sepa"
                & "rators are fine, hex and expressions are refused."
                & LF
-               & "- The image is 32 KiB of flash and 16 KiB of RAM, whose "
-               & "top 4 KiB is reserved for stacks. The linker checks boun"
-               & "ds and overlap."
+               & "- `region: ""NAME""` places a routine or module datum in a"
+               & " region of the device description, by name rather than b"
+               & "y section: code needs a region that may execute, mutable"
+               & " data one that may be written, and reset copies or clear"
+               & "s it there."
+               & LF
+               & "- Without a device description, the image has the refere"
+               & "nce firmware profile's 32 KiB of flash and 16 KiB of RAM"
+               & ", whose top 4 KiB is reserved for stacks; a description "
+               & "gives its own. The linker checks bounds and overlap."
                & LF
                & "- The compiler refuses reserved vectors, a section that "
                & "does not match the declaration, duplicate attributes and"
@@ -5999,13 +6015,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & " are four independent choices; none implies another."
                & LF
                & LF
-               & "A chip whose boot ROM runs a second stage before the ima"
-               & "ge, as RP2040's reads its flash through one, holds that "
-               & "stage in its device description: a naked routine marked "
-               & "`link(boot_stage)`, which the description's boot kind pl"
-               & "aces at the start of the image and the compiler seals wi"
-               & "th the checksum the ROM checks. Nothing else is marked t"
-               & "hat way, and nothing else in a description is code.",
+               & "Some boot ROMs run a second stage before the image: RP20"
+               & "40's reads its flash through one. On such a chip that st"
+               & "age lives in the device description, as a naked routine "
+               & "marked `link(boot_stage)`. The description's boot kind p"
+               & "laces it at the start of the image, and the compiler sea"
+               & "ls it with the checksum the ROM checks. Nothing else is "
+               & "marked that way, and nothing else in a description is co"
+               & "de.",
             when 730 =>
                "A hardware register mixes kinds of field, and confusing "
                & "them is the classic driver bug. Landin describes a regis"
@@ -6125,9 +6142,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "You rarely write these by hand. A generator reading a ve"
                & "ndor's SVD file writes the fields, and the helpers [0740"
-               & "] uses, for every register. SVD generation belongs to th"
-               & "e companion tool; the language has no `set(X)` type form"
-               & "er to do it instead."
+               & "] uses, for every register: `refine svd` generates them "
+               & "(devices), and running a generator as a step of a build "
+               & "belongs to the companion tool. The language has no `set("
+               & "X)` type former to do it instead."
                & LF
                & LF
                & "A field may be an array, which is how a real peripheral "
@@ -6509,12 +6527,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "annot tell."
                & LF
                & LF
-               & "For that to work, I/O is a concept, not a type, so anoth"
-               & "er provider can satisfy it. It travels as `any`, not as "
-               & "a type parameter: an indirect call in front of a system "
-               & "call costs nothing, whereas an allocator sits in hot loo"
-               & "ps and is threaded generically. Same machinery, chosen p"
-               & "er case ([1690])."
+               & "That works because I/O is a concept, not a type, so anot"
+               & "her provider can satisfy it. It travels as `any` rather "
+               & "than as a type parameter: an indirect call costs next to"
+               & " nothing beside the system call behind it. An allocator "
+               & "sits in hot loops, so it is passed as a type parameter i"
+               & "nstead. The machinery is the same, chosen case by case ("
+               & "[1690])."
                & LF
                & LF
                & "It is four concepts, because a provider should supply on"
@@ -6545,11 +6564,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ing, and `world.write` on an erased world reaches the wr"
                & "iter's entry. A UART implements `writer` and nothing els"
                & "e. A diagnostics log asks for `any io.writer`, which is "
-               & "why `entry` builds one from the same `host`: an erased w"
-               & "orld is not an erased writer, and the two do not convert"
-               & ". A routine holding only the world passes it to a routin"
-               & "e generic over a writer as it is, and lends a writer to "
-               & "erase as an `any io.writer` with `io.writer_of(world)`."
+               & "why `entry` builds one from the same `host`: an `any io."
+               & "world` is not an `any io.writer`, and neither converts t"
+               & "o the other. A routine holding only an erased world can "
+               & "pass it as it is to a routine generic over a writer, or "
+               & "make an `any io.writer` from the adapter `io.writer_of(w"
+               & "orld)` lends it."
                & LF
                & LF
                & "Both providers lend each argument and path as a `text.ho"
@@ -6842,26 +6862,26 @@ package body Landin.Diagnostics.Citations.Texts is
                & "uld be without fibres. How deep a task goes depends on t"
                & "he target: `ask` takes up to 4.4 KiB of its stack on RV6"
                & "4 and less on the others, which is why its stacks are 8 "
-               & "KiB. `refine --stack-report=PATH` writes each routine's "
-               & "frame and the deepest stack its calls can reach, and nam"
-               & "es the `any` calls, recursion and foreign calls that lea"
-               & "ve that open. Size a stack from its task's row and the m"
-               & "argin. A backing too small for its stacks fails `mem.out"
-               & "_of_memory`, where the group is made or when a task is a"
-               & "dmitted."
+               & "KiB. `refine compile --stack-report=PATH` writes each ro"
+               & "utine's frame and the deepest stack its calls can reach,"
+               & " and names the `any` calls, recursion and foreign calls "
+               & "that leave that open. Size a stack from its task's row a"
+               & "nd the margin. A backing too small for its stacks fails "
+               & "`mem.out_of_memory`, where the group is made or when a t"
+               & "ask is admitted."
                & LF
                & LF
-               & "On one core, nothing runs at once, and fibres there are "
-               & "for structure: taking the next request while answering t"
-               & "his one. A device answers requests one at a time, in the"
-               & " order they arrived, and says `busy` when its queue is f"
-               & "ull; two answers are never in flight together. On Cortex"
-               & "-M0 a fibre runs on the process stack and interrupt hand"
-               & "lers on the main one, so a fibre's backing pays for one "
-               & "exception frame, 36 bytes, and the handlers' own frames "
-               & "are the main stack's. A handler never switches: it recor"
-               & "ds what happened, and the provider looks before it waits"
-               & "."
+               & "On one core nothing runs at once, so there fibres are fo"
+               & "r structure: one takes the next request while another an"
+               & "swers this one. A single-core device answers requests on"
+               & "e at a time, in the order they arrived, and says `busy` "
+               & "when its queue is full; two answers are never in flight "
+               & "together. On Cortex-M0 a fibre runs on the process stack"
+               & " and interrupt handlers on the main one, so a fibre's ba"
+               & "cking pays for one exception frame, 36 bytes, and the ha"
+               & "ndlers' own frames are the main stack's. A handler never"
+               & " switches: it records what happened, and the provider lo"
+               & "oks before it waits."
                & LF
                & LF
                & "An application makes a group, and at most a provider, as"
