@@ -1,35 +1,40 @@
 # Hosted parity on native Darwin
 
-This directory holds the full hosted parity contract and its scope selection.
-Shared fixtures, metadata and prototype derivations supply the application
-oracles; spec.md owns language semantics. Schema 4 uses the same
-archived revision and scope/debugger choice as Linux. Both compiler modes run
-host checks. Routine runs complete release hosted coverage; debugger risk adds
-all release LLDB coverage. Milestones run everything below in both modes:
-
-- Compiler-host checks with `test.sh --host`.
-- Every applicable positive and negative source verdict with Darwin selected,
-  including ordered diagnostic codes and exact diagnostic files.
-- Every shared runtime and ABI case, using the four standard profiles or all
-  six specialization profiles. Native counterparts and regenerated bindings
-  use all four standard profiles.
-- The complete parser, containers and hosted application under native LLDB at
-  none/off, size/auto and size/all, followed by the full macOS source-debugging
-  contract.
-
-`check.py --parity` derives its schedule from shared metadata. `parity.json`
-records each source-selected verdict, native replacement and demonstrated
-platform limitation; it cannot silently omit a new fixture. `cases.json`
-retains the historical selected scope of the first Darwin lowering corpus.
-`--case`, `--profile` and debugger `--workload` are filtered development
-feedback, never acceptance.
+This directory holds the hosted parity contract for macOS arm64 and its
+scope selection. Shared fixtures, metadata and prototype derivations supply
+the expected outputs; spec.md owns language semantics. On a Mac, a focused
+check names its exact cases, and `--profile` and the debugger's
+`--workload` narrow it further:
 
 ```sh
 python3 compiler/tests/darwin/check.py --parity \
     --refine compiler/ada/build/darwin-arm64/release/bin/refine \
     --case runtime/derived-parser --output .scratch/parser-darwin
-python3 scripts/ci/darwin.py accept FULL_COMMIT
+./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
 ```
+
+The complete contract runs in the gate's Darwin jobs on `macos-26`:
+
+- `darwin-host` and `darwin-host-release`: the compiler host suite,
+  `test.sh --host`, in each compiler mode.
+- `darwin-parity`, with the release compiler: every shared runtime and ABI
+  case through `check.py --parity`, at the four standard profiles or, for a
+  fixture that asks, all six specialization profiles, with the native
+  counterparts at the four; every applicable positive and negative source
+  verdict with Darwin selected, ordered diagnostic codes and exact
+  diagnostic files included, through `diagnostics.py`; and the regenerated
+  bindings and archives through `bindings.py --parity`.
+- The last step of `darwin-host-release`: the complete parser, containers
+  and hosted application under native LLDB at none/off, size/auto and
+  size/all, followed by the full macOS source-debugging contract, through
+  `scripts/debug.sh --target=darwin-arm64 --parity`.
+
+`check.py --parity` derives its schedule from shared metadata. `parity.json`
+records each source-selected verdict, native replacement and demonstrated
+platform limitation; it cannot silently omit a new fixture. `cases.json`
+holds the first Darwin lowering corpus's selected scope, which a run
+without `--parity` checks. A run with `--case` or `--profile` records its
+scope as filtered.
 
 ## Cross-target comparison
 
@@ -47,9 +52,9 @@ python3 scripts/ci/darwin.py accept FULL_COMMIT
 The last row does not change array semantics or claim all large executables
 are impossible on macOS. The compiler must still emit the complete byte
 offset and the assembler/linker must succeed. A bounded Ada seam regression
-checks both read and write without assembling a large object. Acceptance
-retains the small zero-reservation objects and both programs' actual outcomes;
-an unexplained signal, timeout or missing control fails verification.
+checks both read and write without assembling a large object. A run keeps
+the small zero-reservation objects and both programs' actual outcomes; an
+unexplained signal, timeout or missing control fails it.
 
 ## Complete source debugging
 
@@ -73,12 +78,7 @@ source-debugging sessions additionally retain all thirteen scalars, source alias
 unavailable locals, the three-u32 caller ABI, optional filename deployment,
 comment-only source identity changes and mismatched dSYM refusal.
 
-Schema-3/4 verification reconstructs coverage and producer/consumer commands
-from the accepted source archive, checks shared output oracles and artifact
-hashes, and checks LLDB values against the committed source-derived oracle.
-Missing profiles, altered source/compiler commands, failed or timed-out
-sessions, substituted artifacts and weakened expected values are refused.
-Schema-1/2 records retain their original lowering/debugging meaning. Schema 3
-retains both-mode parity and its archived Linux milestone requirement. The
-versioned derivative oracle reads marker lines from the accepted archive;
-changing live debugger helpers cannot silently reinterpret old evidence.
+## Historical
+
+Through 0.2.0 the retired exact-revision acceptance verified these runs
+against an archived revision; its schema 1 to 4 records keep that meaning.

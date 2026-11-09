@@ -86,6 +86,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
 
+      #  Four workers, the hosted images' four vCPUs (docs/environments.md).
       - name: Build refine for a standalone run
         if: ${{ !inputs.debug-artifacts }}
         run: ./scripts/build.sh --compiler-only -j4

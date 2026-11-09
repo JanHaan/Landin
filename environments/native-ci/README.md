@@ -3,10 +3,11 @@
 > **Retired.** This describes the exact-revision gate that approved every
 > revision through 0.2.0. Nothing submits it now and no revision is accepted;
 > `scripts/ci/` was removed with it and survives only in the history. Kept
-> because it is the operational record of how those approvals were produced. `.github/workflows/gate.yml`
-> replaced it: every target on full gate runs, with no evidence retained and
-> no revision accepted. `AGENTS.md` describes the current verified
-> explanatory-only reuse exception.
+> because it is the operational record of how those approvals were produced.
+> `.github/workflows/gate.yml` replaced it: every target on full gate runs,
+> with artifacts kept but no acceptance record. The
+> [gate reference](../../docs/process.md#the-mechanical-gate) states its
+> reuse conditions.
 
 `scripts/ci/policy.json` is the
 canonical acceptance job list; `scripts/ci/common.py` independently requires

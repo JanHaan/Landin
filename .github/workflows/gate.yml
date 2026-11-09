@@ -1,4 +1,5 @@
-#  The gate: every target, unless verified explanatory edits reuse a full pass.
+#  The gate: every target, unless identical-tree reuse or an explanatory edit
+#  reuses a full pass.
 #  RV64 runs under QEMU's user emulation (rv64-qemu); its physical RISE jobs
 #  stay suspended until they are dependable (see rv64-emit).
 #
@@ -26,8 +27,8 @@
 #  every target.
 #  Cross-host determinism also contributes to the aggregate gate status.
 #
-#  AGENTS.md records observed job timings and their measurement limits.
-#  Shared build artifacts are not acceptance records.
+#  docs/process.md's gate reference records observed job timings and their
+#  measurement limits.  Shared build artifacts are not acceptance records.
 #
 #  The physical boards run on a board-scope event: a push to main, the
 #  weekly schedule and a manual dispatch, in this repository only.  The
@@ -71,7 +72,8 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # Reuse requires the verified explanatory-only conditions in AGENTS.md.
+  # Reuse requires the conditions docs/process.md's gate reference states:
+  # identical-tree reuse or an explanatory edit.
   # The physical jobs are never in the reuse list: their evidence is fresh
   # on every board-scope event, and gate_inputs.py's PHYSICAL names them.
   inputs:

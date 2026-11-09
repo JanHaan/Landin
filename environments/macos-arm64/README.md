@@ -4,8 +4,9 @@
 > runs; the Darwin evidence it produced stands for the revisions it named. The
 > environment itself -- the pinned tool homes, the Mac `--host` workflow and
 > LLDB -- is current and still how this machine is used. The gate's
-> `darwin-host`, `darwin-parity` and `lldb` jobs run these lanes on every
-> push, on GitHub's `macos-26` image with Xcode 26.6, whose tools match
+> `darwin-host`, `darwin-host-release` and `darwin-parity` jobs run these
+> lanes on every push, LLDB as the last step of `darwin-host-release`, on
+> GitHub's `macos-26` image with Xcode 26.6, whose tools match
 > `policy.json`; see the
 > [runner setup](../../docs/environments.md#github-actions-runners). LLDB
 > must be able to launch a target from the runner session, which the hosted
