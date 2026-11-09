@@ -7,6 +7,10 @@ is legal. Derived; never an authority.
 
 Keep it an inventory rather than a log: when a capability changes, edit the
 entry that describes it, and put a new one where a reader would look for it.
+Evidence belongs to the README that owns it; an entry links there.
+
+`D542` names a decision recorded in `spec.md`, and `[1480]` a numbered
+paragraph of `tour.md` or `spec.md`; `refine explain D542` prints either.
 
 ## Targets
 
@@ -18,7 +22,7 @@ entry that describes it, and put a new one where a reader would look for it.
 | `darwin-arm64` | hosted executables | natively | LLDB with dSYM |
 | `freebsd-x86-64` | hosted executables, emitted on Linux | a FreeBSD VM under KVM | LLDB in the VM |
 | `freebsd-arm64` | hosted executables, emitted on Linux | an emulated FreeBSD VM | LLDB in the VM |
-| `cortex-m0` | ARMv6-M firmware | the pinned QEMU | GDB, lines and functions |
+| `cortex-m0` | Cortex-M firmware, ARMv6-M by default and up to ARMv8-M Mainline by `--level` | the pinned QEMU | GDB, lines and functions |
 | `xtensa` | windowed LX6 and LX7 firmware, ILP32; physical ESP32 and ESP32-S3 RAM and boot ports | Espressif QEMU chip controls and complete corpus on exact CPUs with explicitly virtual RAM | lines with `--debug=lines`; no gate debugger session |
 | `rv32` | RV32IMC and RV32IMAC firmware, ilp32 | Espressif's QEMU, `sifive_e` and `esp32c3` | lines with `--debug=lines`; no gate session |
 
@@ -29,80 +33,43 @@ entry that describes it, and put a new one where a reader would look for it.
   RV64 hardware. Its [physical RISE lanes](../compiler/tests/rv64/README.md),
   with separate runtime, native GDB, C ABI and ISA-level verdicts, are
   suspended from the gate until they are dependable.
-- **Darwin** checks a host-dependent large-image loader limitation against a
+- **macOS** checks a host-dependent large-image loader limitation against a
   native Clang control: the shared-region placement limit observed on some
   hosts.
-- **Cortex-M0** builds firmware with compiler-owned reset, data and RAM-code
+- **Cortex-M** builds firmware with compiler-owned reset, data and RAM-code
   copying, BSS clearing, typed interrupt and naked functions, vector
   references, placement and fixed assembly. The memory map, the vector slots
   a handler takes and the boot image follow the device description the
   program imports (D542-D545), Landin source of directives such as
-  `linker.region`; with none, the constrained 32 KiB flash, 16 KiB RAM and
-  4 KiB stack reference profile applies, itself a description in the
-  library. RP2040's description selects its 2 MiB flash, its SRAM and
-  scratch banks and all 32 of its interrupts, and holds its second stage, a
-  port of pico-sdk's generic one marked `link(boot_stage)` (D587), which
-  refine emits at the start of flash and seals with the boot ROM's checksum
-  in the object it assembles (D588); the stage's stores are held to
-  pico-sdk's own by reading the linked instructions. A Raspberry Pi Pico
-  boots such an image from power-on and runs prototype 1's UART, DMA,
-  timer, GPIO and interrupt port at the RP2040's own addresses, checked
-  against a physical oracle by a developer tool,
-  [`board.py`](../environments/boards/rp2040/README.md) (D593-D596), which
-  the gate's physical board legs run. The NUCLEO-H753ZI's port of the same application, its supply,
-  clocks, USART3 received through DMA in laps, PB0's indicator and a float
-  exercise, builds at `--level=armv7e-m` with an oracle of its own; its
-  description's stage configures the supply from the reset vector before
-  compiler-owned reset writes any RAM (D653), and it is checked by
-  [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), with
-  passed cold-boot and repeated RAM records. Its cached profile,
-  `descriptions/stm32h753_cached`, runs the receive ring and a transmit by
-  DMA with the M7's caches on, maintained through `core/cache`, beside
-  controls that show a stale read, a lost dirty line and a stale transmit
-  when the maintenance is left out, checked from SRAM by
-  [its own `board.py`](../environments/boards/stm32h753_cached/README.md)
-  (D974, D975); the board tools share
-  `environments/boards/common.py` (D646). RP2350's description, learnt from
-  pico-sdk's SVD (D635), selects a Cortex-M33 with the Pico 2's 4 MiB
-  flash, its 512 KiB of SRAM and scratch banks and all 52 of its
-  interrupts, and boots as an `rp2350-image-block`: refine emits the
-  IMAGE_DEF block the boot ROM looks for directly after the vector table
-  and reads it back from the object it assembles (D636-D638); it compiles
-  and links. The Pico 2's port of the RP2040 application, at
-  `--level=armv8-m.main` with no float, is checked by an oracle of its own,
-  [`board.py`](../environments/boards/rp2350/README.md) (D654, D655), with
-  passed cold-boot and repeated RAM records. Its boot check verifies the
-  exact power-on reset cause and restores the quiet fixed image. On the rig
-  the Pico 2's cable carries VBUS and ground alone, so its boot checks
-  flash over SWD and cold-start it by switching its cascade port, with any
-  USB device on that port stopping the run (D906); with a data cable they
-  run off the cascade, by manual UF2 installation and Pico-only power
-  cycles. Malformed-block controls remain disabled.
+  `linker.region`; with none, the reference firmware profile of 32 KiB
+  flash, 16 KiB RAM and a 4 KiB stack applies, itself a description in the
+  library. [The device descriptions](../devices/README.md) cover RP2040,
+  whose second stage, marked `link(boot_stage)`, refine seals with the boot
+  ROM's checksum (D587, D588); RP2350's Cortex-M33, whose IMAGE_DEF block
+  refine emits after the vector table and reads back (D636-D638); and the
+  STM32H753, whose supply stage runs before reset writes any RAM (D653).
+  Their registers are checked in as generated device fixtures.
+  Prototype 1's application runs on a Raspberry Pi Pico, on a Pico 2 at
+  `--level=armv8-m.main`, and on a NUCLEO-H753ZI at `--level=armv7e-m` with
+  its float unit and, in the cached firmware profile `stm32h753_cached`, its
+  caches maintained through `core/cache`, beside controls that fail when
+  the maintenance is left out (D974, D975). Each port is checked against
+  its expected output by [the board tools](../environments/boards/README.md),
+  which record a RAM run, loaded into SRAM without writing flash, and a
+  boot check from power-on separately (D593-D596, D647-D655, D901, D902).
+  The gate runs both on the maintainer's rig on every push to `main`,
+  weekly and by dispatch, never for a branch, and never reuses physical
+  evidence (D904, D905).
   The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
   `link(region: ...)` places a declaration in a named region (D547).
   Cortex-M, RV32 and Xtensa also derive an in-place SRAM layout with
   `--firmware-layout=ram` (D900), checking the linked vectors, sections and
-  stack, retaining BSS clearing and omitting ROM packaging. The
-  [board tools](../environments/boards/README.md) prepare all eight ports
-  without hardware, compare boot and RAM records separately, and transfer
-  checked images and matching tool sources to the Pi board host. Their
-  default development mode halts and reinitializes supported device state,
-  loads and verifies SRAM, and resumes without writing flash or resetting
-  through the ROM (D901, D902). A separate boot mode checks ROM packaging
-  and a cold start, then restores a fixed image with no application USB
-  service; Pico 2 architecture changes are such boot checks. In the gate,
-  `gate.py` runs each port's RAM run and then its boot check on the rig
-  from bundles built for the commit, on every push to `main`, weekly and by
-  dispatch, and never for a branch or a pull request; physical evidence is
-  never reused, and every run reports one of a fixed set of outcomes
-  (D904, D905).
+  stack, retaining BSS clearing and omitting ROM packaging.
   Firmware runs on the pinned QEMU
   [emulator](../environments/cortex-m/README.md), with synthetic devices
-  served through its debugger stub. Fifty-five RP2040 registers and
-  forty-seven RP2350 registers are checked in as
-  [generated device fixtures](../devices/README.md).
+  served through its debugger stub.
 - **RV32** is a firmware target, `--target=rv32`, at `rv32imc` or
   `rv32imac` with the ILP32 soft-float layout (D660). Its programs check,
   configure against a device description or the library's
@@ -258,11 +225,12 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   `--emit asm` writes assembly, `--emit ir` writes the IR the backend would
   receive, and `refine compile program.s -o program` links an assembly file
   as a compiled program is linked. `--emit ir-annotated` writes the same IR
-  for a dump kept to compare against later: its first line records the
-  target, level, optimization and specialization, each routine's name
-  carries its module and, for a generic instance, its template and item,
-  and the IR's metadata is included. The compile leaves only the executable;
-  `--keep-asm` keeps the assembly beside it. Generated artifacts use one
+  with what a later comparison needs: a first line recording the target,
+  level, optimization and specialization, each routine's module and, for a
+  generic instance, its template and item, and the IR's metadata. The
+  compile leaves only the executable; `--keep-asm` keeps the assembly
+  beside it.
+- **Publishing outputs.** Generated artifacts use one
   loss-preserving publication group (D907): exclusive private staging beside
   each destination, verification before installation, and prior versions kept
   through verification of the whole group, including an ESP image or Darwin
@@ -289,7 +257,7 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   plain absolute file paths or a standalone assembly input or linker script.
   A relative Clang dependency that escapes its private workspace is also
   refused; use an absolute include path or a declared `--include-dir`.
-  On interrupt, termination or hangup, refine forwards cancellation to its
+- **Cancelling a build.** On interrupt, termination or hangup, refine forwards cancellation to its
   active tool's process group, allows bounded shutdown, stops remaining
   ordinary group members and reaps its direct child before recovering outputs.
   Tools that escape their group or change credentials are outside that
@@ -350,7 +318,7 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   its own, for the headers' declarations and writes the bindings a reviewed
   policy selects: Landin declarations, C adapters for the forms Landin does
   not carry natively, the header that declares them, and metadata (D820,
-  D821). It binds for Linux x86-64, Linux arm64, Darwin arm64 and
+  D821). It binds for Linux x86-64, Linux arm64, macOS arm64 and
   freestanding Cortex-M, the last under AAPCS32's base procedure call
   standard or its VFP variant as the policy says, with Clang's own headers
   alone and adapters that allocate nothing (D935-D938). It stages its four outputs and compiles the adapters before
@@ -432,7 +400,7 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   and `io.println`, `io.printf`, `io.print` or `io.puts` is shown the
   `io.write_format` call that prints a value, spelt with the program's
   alias for `core/io`.
-  A construct the tour describes and the kernel omits is refused with a note
+  A construct the tour describes and the enabled language omits is refused with a note
   naming the paragraph that describes it and whether the form is a recorded
   boundary, withdrawn or transferred to a successor.
   Refused leading-keyword typos point at the misspelled word and offer a
@@ -450,9 +418,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - Denial returns status 1 before producing artifacts; ordinary warnings
   retain status 0 and the same generated bytes. Quiet mode retains selected
   diagnostics.
-- Both current warning families are recommended, so `default` and `all`
-  currently agree; so is L0016, which says a `--root` holds a module the
-  library supplies instead.
+- Every current warning is recommended, L0016 among them, which says a
+  `--root` holds a module the library supplies instead, so `default` and
+  `all` currently select the same warnings.
 - Unnecessary local declarations produce advisories even when comments or
   layout prevent a safe automatic repair; unused signed numeric literals are
   also covered. A warning can report an observation without an edit; exact
@@ -508,12 +476,12 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - **Generics and dispatch.** Generics take fixed parameters by compile-time
   substitution, an untyped literal argument takes its parameter's type, and
   a fixed array is lent to a generic slice parameter. Concepts carry a
-  whole-program conformance register. Generic calls pass only the evidence
+  whole-program record of their conformances. Generic calls pass only the evidence
   their checked bodies use; direct and `any C` dispatch share table storage
   only when their layouts and entries match, and an `any C` call no
-  conformance of C answers builds as a trap no value reaches. An `any C` is
-  a provider of C and of the concepts C refines, so a generic routine takes
-  it and calls each entry through its own table (D492).
+  conformance of C answers builds as a trap no value reaches. An `any C`
+  itself satisfies C and every concept C refines, so a generic routine can
+  take it and call each entry through its table (D492).
 - **Pointers and slices** get local origin, borrow, `escaping`,
   `escaping into` (D445), `from` and consume checks.
 - **Modules.** Directory modules have file-local imports, aliases, selected
@@ -573,9 +541,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   on each of those targets, its frame and the deepest stack of the call
   graph it can close, and names each foreign call, recursion, runtime
   helper and stack-moving assembly that opens it (D447, D467, D468). A
-  call through `any`, a generic's table or a function value reaches every
-  routine of the program it can be, so a fibre's task has a depth to size
-  its stack from wherever nothing foreign is reached (D570).
+  call through `any`, a generic's table or a function value is counted as
+  reaching every routine of the program it could call, so a fibre's task
+  has a depth to size its stack from wherever nothing foreign is reached
+  (D570).
 
 `compiler/tests/constructs.matrix` records every normative construct's
 state, targets and evidence, and `check.py` refuses a stale or unexplained
@@ -584,21 +553,23 @@ row.
 ## The library
 
 The standard library comes with `refine`: `core`, `hosted` and `platform`
-are found beside the executable. [The library reference](library.md) is
-generated from public signatures and doc comments, with module browsing,
-search, source links and examples taken directly from runtime fixtures.
+are found beside the executable. [The library overview](library.md)
+introduces each module, and the site's
+[library reference](https://www.701.dev/library.html) is generated from it,
+the public signatures and their doc comments, with module browsing, search,
+source links and examples taken directly from runtime fixtures.
 
 ### `core`
 
-The twenty-two shared `core/*` modules thread arena and pool allocators and a
-failure injector as capabilities.
+The shared `core/*` modules take arena and pool allocators and a failure
+injector as arguments, as providers.
 
 - **Memory and containers.** Raw memory, vectors, inline-prefix spill lists,
   maps, trees, and sorting by ordering evidence or by a comparison given a
   context. A pool grows a block within its slot. Containers share
   construction and release names, and vectors, spill lists and maps lend
-  writable slots with `at` alongside copying `get`. D212 withdraws the
-  former builtin arena syntax in favour of ordinary allocator capabilities.
+  writable slots with `at` alongside copying `get`. An arena is an ordinary
+  allocator, not syntax (D212).
 - **Comparison.** The comparison concepts are a module of their own,
   `core/cmp`, with library-supplied evidence for integer keys and ordering,
   Boolean and byte slice keys, and UTF-8 keys and ordering.
@@ -650,15 +621,16 @@ failure injector as capabilities.
   read-modify-write at `rv32imc`, naming `rv32imac`, which admits it, the
   one checking rule a level decides (D690, D691).
 
-### Services
+### Providers
 
-A service, an allocator or an I/O provider, is a handle passed by value over
-state its caller declares, so a program and its logger write through one and
-a region allocates beside its parent without either locking it. Each one has
-a caller-backed fake; the fakes of a system's providers are
-`core/io/fake`'s, each named for what it fakes.
+An allocator or an I/O provider is reached through a handle passed by
+value over state its caller declares, so a program and its logger write
+through one handle, and a region allocates beside its parent while both are
+live; the checker ties neither up, and any lock is the provider's own
+business. Each one has a caller-backed fake; the fakes of a system's
+providers are `core/io/fake`'s, each named for what it fakes.
 
-| service | what it does | its fake |
+| concept | what it does | its fake |
 | --- | --- | --- |
 | reader, writer, file | caller-backed I/O; a streaming log needs only a writer; `write_format` writes a template and its values in one call, a buffered writer gathers many writes in a caller's buffer until it is flushed, and a line reader lends each line until the next read | the memory world |
 | process | lends standard input beside standard output and error | the memory world |
@@ -682,7 +654,7 @@ process ignores SIGPIPE and gives its children the default back.
   an address, beside the flag that a thread has started, and `hosted/heap`
   keeps its size classes behind it once one has (D501, D502, D513).
 - `hosted/heap`, `hosted/system`, `hosted/blocking` and `hosted/events`
-  supply the hosted heap, the system's services that do not wait, the I/O
+  supply the hosted heap, what the system offers that does not wait, the I/O
   provider that blocks the thread while it waits and the one that switches
   fibres, written once over `platform/posix` (D476, D478, D479).
   `hosted/events` is one handle over state its caller declares; it supplies
@@ -769,9 +741,9 @@ process ignores SIGPIPE and gives its children the default back.
 - `refine bindings` ([`bindings/`](../bindings/README.md)) generates
   bindings, packed and flexible-member records among them and every pointer
   to a generated record typed to it, from an external
-  Clang's view of a header, with nothing but refine and that Clang, for the
-  hosted LP64 targets and for Cortex-M's ILP32 AAPCS32 in both procedure call
-  standards; two committed Cortex-M bindings come from pinned CMSIS headers
+  Clang's view of a header, with nothing but refine and that Clang, for
+  Linux x86-64, Linux arm64 and macOS arm64 and for Cortex-M's ILP32
+  AAPCS32 in both procedure call standards; two committed Cortex-M bindings come from pinned CMSIS headers
   (D939). Unsupported C forms are refused by name.
 - Only the entry, C imports, public C definitions, link names and Cortex-M
   placements are global symbols. Every other routine and datum, public or
@@ -850,16 +822,16 @@ Add `--target=darwin-arm64` for native macOS output, then open
 
 - **Derived programs.** Programs derived from prototypes 2, 3 and 4 run as
   the recovering configuration parser, the container client and the log
-  filter on Linux and macOS, with native debugging coverage. The one derived
+  filter on every hosted target, with native debugging coverage. The one derived
   from prototype 1 runs as the
   [derived driver](../compiler/tests/driver/DERIVATION.md) on the Cortex-M0
   emulators, opening any line its PL011 can carry, whose register images
-  the emulator's model holds to an oracle (D957, D964). Each runs against a
-  generated oracle. The driver and its
+  the emulator's model holds to an oracle (D957, D964). Each runs against
+  generated expected output. The driver and its
   application run with compiler-owned startup within the recorded 32 KiB
   capacity and source-debugging limits. The server derived from prototype
   5's hosted half runs on every hosted target from one source over both
-  Ios, in a process of its own that a client in another asks: over
+  I/O providers, in a process of its own, asked by a client in another: over
   `hosted/blocking` it answers one request at a time and SIGTERM ends it,
   and over `hosted/events` two requests are in flight and its signal
   waiter stops it cleanly (D490). It also runs in one process over the
@@ -882,16 +854,15 @@ Add `--target=darwin-arm64` for native macOS output, then open
 
 ## Where the evidence comes from
 
-The recurring gate runs Linux and Darwin programs natively, FreeBSD programs
+The recurring gate runs Linux and macOS programs natively, FreeBSD programs
 in accelerated VMs and Cortex-M firmware under QEMU, with separate runtime,
 C ABI and debugger verdicts; RV64 Linux runs under QEMU's user emulation, as
 above. On a push to `main`, weekly and by dispatch it also runs all eight
-board ports on the physical rig, each boot check followed by its RAM run. The [gate reference](process.md#the-mechanical-gate) describes every job.
-Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
-arm64 through 0.2.0, and is retired. The recorded boundaries stand as
-measured: the 32 KiB capacity verdicts, linked again against RP2040's,
+board ports on the physical rig, each RAM run followed by its boot check.
+The [gate reference](process.md#the-mechanical-gate) describes every job.
+The recorded boundaries stand as measured: the 32 KiB capacity verdicts, linked again against RP2040's,
 RP2350's and the STM32H753's derived scripts, the lines-and-functions Cortex-M
-debugging contract and the Darwin shared-region placement limit observed on
+debugging contract and the macOS shared-region placement limit observed on
 some hosts.
 
 The Cortex-M lanes also run one thing at a time on a developer's Linux
