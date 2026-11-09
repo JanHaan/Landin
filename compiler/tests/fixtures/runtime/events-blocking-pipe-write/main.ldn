@@ -1,0 +1,96 @@
+--  D1045: a write through hosted/events to a pipe that is still
+--  blocking lets the provider's other fibres run.  The program makes a
+--  pipe whose two ends stay blocking, and one fibre writes 256 KiB to
+--  it in one `io.write`, more than any system's pipe holds, while
+--  another fibre reads it a little at a time.  A write handed
+--  everything left once the pipe has room would wait in the system
+--  until the reader took it, and the reader is a fibre of the same
+--  thread, so the program would never end.  It ends only if each write
+--  takes no more than the room the pipe reported, and what is read must
+--  be what was written.
+import core/cmp
+import core/failure
+import core/fibre
+import core/io
+import hosted/events
+import hosted/system
+import platform/posix
+
+total: usize = 262144
+
+mut sent: [262144]u8 = zeroed
+mut taken: [262144]u8 = zeroed
+mut received: usize = 0
+
+--  A check that did not hold.
+wrong: atom
+
+writing: type = struct
+    host: events.host
+    into: io.file
+end writing
+
+--  Write everything in one call, then close the pipe's end.
+write_all: (inout state: writing) -> none ! failure.reason =
+    try io.write(state.host, state.into, sent)
+    closed: io.file = state.into
+    try io.close(state.host, closed)
+end write_all
+
+reading: type = struct
+    host: events.host
+    source: io.file
+end reading
+
+--  Read until the pipe ends or everything has come, at most 1000 bytes at
+--  a time, so that the pipe is often left part full.
+read_all: (inout state: reading) -> none ! failure.reason =
+    while received < total do
+        mut limit: usize = received + 1000
+        if limit > total then limit = total end if
+        got: usize = try io.read(state.host, state.source,
+                                 taken[received..<limit])
+        break when got == 0
+        received += got
+    end while
+    closed: io.file = state.source
+    try io.close(state.host, closed)
+end read_all
+
+mut backing: [2 * 32768]u8 = zeroed
+
+run: (host: events.host) -> none ! ... =
+    ends: posix.pipe_ends = try posix.pipe()
+    fail wrong when try posix.non_blocking(ends.writing)
+      or try posix.non_blocking(ends.reading)
+    mut tasks := try fibre.turns_over(any(addr host), backing, 2)
+    defer fibre.join(tasks) else none
+    writer: writing = (host: host, into: system.file_of(ends.writing))
+    try fibre.admit(tasks, write_all, writer)
+    reader: reading = (host: host, source: system.file_of(ends.reading))
+    try fibre.admit(tasks, read_all, reader)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    for at in usize(0)..<total do
+        sent[at] = u8(at % 251)
+    end for
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    host := events.over(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when received <> total
+    code = 4
+    return when cmp.compare(taken[0..<total], sent[0..<total]) <> cmp.equal
+    code = 42
+end main

@@ -130,7 +130,7 @@ public main: () -> (code: i32) =
     mut state: events.space = zeroed
     --  Two fibres, and one more for the routine that joins them.
     mut entries: [3]usize = zeroed
-    host := events.new(state, entries) else (problem)
+    host := events.over(state, entries) else (problem)
         _ = problem
         return
     end

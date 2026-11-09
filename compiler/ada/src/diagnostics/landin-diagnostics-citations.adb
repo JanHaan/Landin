@@ -3046,6 +3046,9 @@ package body Landin.Diagnostics.Citations is
             when 487 =>
                "A child's end is a pidfd on Linux and kqueue's process f"
                & "ilter elsewhere",
+            when 1045 =>
+               "A write to a blocking descriptor takes no more than a pi"
+               & "pe reported ready takes whole",
             when 488 =>
                "The event provider reads every watched signal through on"
                & "e descriptor, and stopping reads what came",
@@ -4521,6 +4524,8 @@ package body Landin.Diagnostics.Citations is
             when 486 =>
                "Decisions: The core library and the derived programs",
             when 487 =>
+               "Decisions: The core library and the derived programs",
+            when 1045 =>
                "Decisions: The core library and the derived programs",
             when 488 =>
                "Decisions: The core library and the derived programs",
@@ -6752,6 +6757,10 @@ package body Landin.Diagnostics.Citations is
             when 487 =>
                "https://www.701.dev/spec.html#d487-a-child-s-end-is-a-pi"
                & "dfd-on-linux-and-kqueue-s-process-filter-elsewhere",
+            when 1045 =>
+               "https://www.701.dev/spec.html#d1045-a-write-to-a-blockin"
+               & "g-descriptor-takes-no-more-than-a-pipe-reported-ready-ta"
+               & "kes-whole",
             when 488 =>
                "https://www.701.dev/spec.html#d488-the-event-provider-re"
                & "ads-every-watched-signal-through-one-descriptor-and-stop"

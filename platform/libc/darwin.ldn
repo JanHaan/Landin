@@ -210,6 +210,9 @@ fixed if compiler.os == darwin then
     --- `open` and `fcntl` flag: a call that would wait fails with EAGAIN
     --- instead, `O_NONBLOCK`.
     public o_nonblock: i32 = 4
+    --- The most bytes a write to a pipe writes whole, `PIPE_BUF`: a write
+    --- of no more waits until there is room for all of it.
+    public pipe_buf: usize = 512
 
     --- `posix_spawnattr_setflags` flag: the child's signals named by
     --- `posix_spawnattr_setsigdefault` start at their default disposition.

@@ -1,0 +1,8 @@
+class: runtime
+summary: D1045 under hosted/events one fibre writes 256 KiB in one io.write to a pipe whose ends the program made and left blocking while another fibre reads it, so the program ends only if each write after the pipe reports room takes no more than PIPE_BUF; what is read equals what was written
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1380, 1620, 1660, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

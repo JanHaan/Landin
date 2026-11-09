@@ -2404,6 +2404,12 @@
     "runtime/evaluation-order-is-left-then-right": {
       "mode": "execute"
     },
+    "runtime/events-blocking-pipe-write": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/events-child-wait": {
       "codes": [
         "L0015"

@@ -217,6 +217,9 @@ fixed if compiler.os == freebsd then
     --- `open` and `fcntl` flag: a call that would wait fails with EAGAIN
     --- instead, `O_NONBLOCK`.
     public o_nonblock: i32 = 4
+    --- The most bytes a write to a pipe writes whole, `PIPE_BUF`: a write
+    --- of no more waits until there is room for all of it.
+    public pipe_buf: usize = 512
     --- `socket` and `accept4` flag: the new socket is non-blocking, set
     --- with it, `SOCK_NONBLOCK`.  Darwin has none.
     public sock_nonblock: i32 = 536870912

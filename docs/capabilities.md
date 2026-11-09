@@ -666,7 +666,10 @@ process ignores SIGPIPE and gives its children the default back.
   and receive, a child's pipes and end, a sleep and a signal each submit a
   record on the waiting fibre's own stack and are answered by the loop;
   closing or shutting a socket wakes its waiters with `io_failed`, and a
-  child's end is a pidfd or kqueue's process filter (D485--D488).
+  child's end is a pidfd or kqueue's process filter (D485--D488). A file
+  left blocking, standard output among them, is written at most
+  `PIPE_BUF` bytes a call unless it is a regular file, so a pipe read by
+  another fibre of the same thread does not hold it (D1045).
 - `hosted/thread` starts threads as a group a routine joins, made over a
   `hosted/system` handle, a backing the caller lends and a count, as
   `core/fibre` starts fibres: each task's stack is prepared and checked,

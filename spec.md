@@ -28306,12 +28306,14 @@ constructs a handle that borrows nothing.
 
 **Chosen:** `l1.handle` is `platform/cortex_m/l1`'s only type, so its
 constructor is `l1.new()`, as `heap.new()` and `system.new()` are. The fake
-clock beside a network is `fake.clock_over_beside`: `over` because it
-fills the caller's state, and a suffix saying what it adds, as
-`network_over_turns` does. `cache.cacheless(line)` keeps its name, since
-`core/cache`'s principal type is the `maintenance` concept, which nothing
-constructs, and `cacheless` makes a second kind of provider, named for
-what it is, beside the cached ones platforms supply (D970, D972).
+clock beside a network is `fake.clock_over_beside`: `over` because it fills
+the caller's state, and a suffix saying what it adds, as
+`network_over_turns` does. `events.new(state, entries)` fills the caller's
+state and returns a handle `from` it, so it is `events.over`, as
+`system.over` and `blocking.over` are. `cache.cacheless(line)` keeps its
+name, since `core/cache`'s principal type is the `maintenance` concept,
+which nothing constructs, and `cacheless` makes a second kind of provider,
+named for what it is, beside the cached ones platforms supply (D970, D972).
 
 **The alternatives:** `cache.new(line)`, which reads as constructing the
 concept and would leave a platform's provider no name of its own;
@@ -28321,6 +28323,7 @@ and `l1.caches()` kept, the one handle that borrows nothing not called
 
 **Pinned by** `negative/cache-provider-cacheless`,
 `runtime/network-fake-turns-sleeper`, `runtime/derived-server-fake-turns`,
+`runtime/events-tcp-exchange`,
 `devices/consumers/stm32h753_cached` and the cached board run (D975).
 
 ### D1033 — A library name is public when a program has a use for it
@@ -33181,11 +33184,12 @@ task to its end. `hosted/events` is the provider whose waiting operations
 switch fibres over the system's event mechanism. Each of the two is built
 over a `hosted/system` handle and supplies `io.world` and the concepts the
 system supplies, by handing it what does not wait. A program mints its root
-from the one it chooses, `blocking.new()` or `events.new(...)`; a program
-that never waits on anything may still use `system.new()` alone. Every
-hosted source and document moves from `system.new()` to `blocking.new()`.
-D479 amends this list: starting a program stays with the system, and
-reading its pipes and waiting for it are the waiting providers'.
+from the one it chooses, `blocking.new()` or `events.over(...)`
+(`events.new` until D1032); a program that never waits on anything may
+still use `system.new()` alone. Every hosted source and document moves
+from `system.new()` to `blocking.new()`. D479 amends this list: starting
+a program stays with the system, and reading its pipes and waiting for
+it are the waiting providers'.
 
 **The alternatives:** `hosted/events` importing the blocking `hosted/system`
 and delegating to it, which compiles the blocking provider into every event
@@ -33503,21 +33507,22 @@ and left its arguments open. D444 has a provider of `turns` run fibres on
 records the caller keeps, D464 gives the round of turns an idler for the
 wait when nobody can run, and the provider must allocate nothing.
 
-**Chosen:** `events.new(state, entries)` fills an `events.space` the caller
-declares `zeroed`, the round's state and the event loop's, and returns a
-handle `from state, entries`, where `entries` is the round's table, one more
-than the fibres that may be unfinished at once. It fails `mem.out_of_memory`
-for a table of fewer than two and `io_failed` when the system makes no
-queue. The handle runs its fibres on core/fibre/stacks' `round`, whose idler
-is the loop, and passes the round's entries on through their evidence, so
-it is a `fibre.turns`. An operation that waits fills a record on its own
-fibre's stack, links it into the loop's list and takes turns until the loop
-answers it: the fibre does not return from the call before then, so the
-list never holds a record whose frame has gone, and the provider needs no
-table of waits for the caller to size. The hosted/system handle beneath is
-the process's, `system.new()`, as `blocking.new()`'s is, so `last_errno`
-reads the process's cell. The queue is closed on exec and stays open until
-the process ends; there is no call that closes it.
+**Chosen:** `events.over(state, entries)`, `events.new` until D1032, fills
+an `events.space` the caller declares `zeroed`, the round's state and the
+event loop's, and returns a handle `from state, entries`, where `entries` is
+the round's table, one more than the fibres that may be unfinished at once.
+It fails `mem.out_of_memory` for a table of fewer than two and `io_failed`
+when the system makes no queue. The handle runs its fibres on
+core/fibre/stacks' `round`, whose idler is the loop, and passes the round's
+entries on through their evidence, so it is a `fibre.turns`. An operation
+that waits fills a record on its own fibre's stack, links it into the loop's
+list and takes turns until the loop answers it: the fibre does not return
+from the call before then, so the list never holds a record whose frame has
+gone, and the provider needs no table of waits for the caller to size. The
+hosted/system handle beneath is the process's, `system.new()`, as
+`blocking.new()`'s is, so `last_errno` reads the process's cell. The queue
+is closed on exec and stays open until the process ends; there is no call
+that closes it.
 
 **The alternatives:** a table of waiting records the caller sizes, which is
 a second count to get right and a failure when it is full, for records
@@ -33561,7 +33566,9 @@ that side's records. The provider's sockets and a child's pipes are
 non-blocking; a file it did not make, a standard stream or a file opened
 by path, is polled with no limit first and read or written once ready, so a
 regular file, always ready, is read at once, and the program's terminal is
-never made non-blocking behind its shell. A socket's limits are kept as the
+never made non-blocking behind its shell. While such a file is blocking, a
+write to it is handed no more than a pipe reported ready takes without
+waiting, unless it is a regular file (D1045). A socket's limits are kept as the
 system's own time limits, which a non-blocking socket never waits on, and
 each wait reads them back, `platform/posix`'s `send_timeout` beside
 `receive_timeout`; a limit the system does not give back, as QEMU's user
@@ -33605,6 +33612,55 @@ disposition for every child at once, shares its mask with the program's own
 **Pinned by** `runtime/events-child-wait`, a shell child whose output, its
 errors and its end are waited for by one fibre while another ticks on the
 clock and then writes the child the line it waits for.
+
+### D1045 — A write to a blocking descriptor takes no more than a pipe reported ready takes whole
+
+**The tour said** [1675] that a call that waits over `hosted/events` lets
+the other fibres run, and D486 had the provider poll a file it did not
+make and write to it once it was ready. A write to a descriptor that is
+still blocking, a standard stream, one `system.file_of` gave or a child's
+pipe the system would not make non-blocking, was handed everything left,
+and readiness promises room for less: a write larger than the room held
+the thread until the reader had taken it, so no other fibre ran, and a
+reader that was a fibre of the same thread never came.
+
+**Chosen:** for a write of more than `PIPE_BUF` bytes,
+`posix.pipe_atomic`, 4096 on Linux and 512 on Darwin and FreeBSD, the
+provider reads the descriptor's mode and kind: a non-blocking one, whose
+write fails EAGAIN rather than wait, and a regular file, which never waits
+for a reader, are handed all of it, and any other is handed `PIPE_BUF`
+bytes a call once it is ready. A blocking write of no more than `PIPE_BUF`
+bytes to a pipe waits only until all of it fits, and a pipe reported ready
+has that room: Linux's `poll` and epoll report a pipe writable when one of
+its buffers is free, and a buffer is a page, never smaller than 4096
+bytes; Darwin's and FreeBSD's `poll` and kqueue's write filter report it
+when at least `PIPE_BUF` bytes are free. No manual page promises that
+threshold: Linux's `poll(2)` says only that a write larger than the room
+still blocks, and `kqueue(2)` that the filter's data is the room left. The
+claim rests on the kernels' pipe code and on the regression fixture below,
+which every hosted target runs. A shorter write asks the system nothing
+more, and a longer one asks once, not per piece. Another writer, a thread
+or a process, can still fill the room between the report and the write; a
+terminal or a blocking socket the program hands the provider may report
+room for less than `PIPE_BUF`, and a write to one can still hold the
+thread until its other end reads. A child's pipe the system leaves
+blocking stays as it is rather than fail the spawn, since the cap covers
+it and the child has already started.
+
+**The alternatives:** setting `O_NONBLOCK` on every descriptor the
+provider is handed, which changes the open file a shell or another process
+shares, as D486 declined; a helper thread for each blocking write, which
+the provider has no storage or thread for and which a program without
+threads could not run; refusing a blocking descriptor, which turns away
+standard output; and failing the spawn when a child's pipe cannot be made
+non-blocking, which leaves a started child to end and reap. All were
+declined.
+
+**Pinned by** `runtime/events-blocking-pipe-write`, 256 KiB written in one
+`io.write` by one fibre to a pipe whose ends the program made and left
+blocking, read a thousand bytes at a time by another fibre of the same
+provider, which ends only if no write waits for its reader and compares
+the bytes read with those written; before this decision it never ended.
 
 ### D488 — The event provider reads every watched signal through one descriptor, and stopping reads what came
 
