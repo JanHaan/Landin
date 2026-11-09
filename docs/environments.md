@@ -3,7 +3,8 @@
 `.github/workflows/gate.yml` is what runs now: every target on every push,
 unless the push meets one of its two reuse conditions, identical-tree reuse
 or an explanatory edit, which the
-[gate reference](process.md#the-mechanical-gate) states. Canonical hosting
+[gate reference](process.md#the-mechanical-gate) states; document and
+script checks always run. Canonical hosting
 is GitHub; git.sr.ht is a mirror. The exact-revision native acceptance
 approved every revision through 0.2.0 and no longer runs; `scripts/ci/` has
 been removed, and the passages below that describe it, and the SourceHut
@@ -15,11 +16,6 @@ Native macOS arm64 remains a development and gate environment. Use
 and `darwin-parity` on the GitHub-hosted `macos-26` image. See the
 [native Mac guide](../environments/macos-arm64/README.md) for current
 development commands.
-
-An explanatory edit may reuse a complete successful push run, of `main` or
-of a branch, from the preceding seven days whose commit is an ancestor of
-the edit; the [gate reference](process.md#the-mechanical-gate) states the
-conditions. Document and script checks always run.
 
 Embedded firmware and freestanding library consumers run on Linux x86-64
 through `environments/cortex-m/run.py`. A full gate run splits its lanes
