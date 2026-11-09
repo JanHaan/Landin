@@ -221,13 +221,19 @@ package body Landin.Backend.Site_Counts is
       Text : constant String := Trimmed (Line);
       Space : Natural := 0;
    begin
-      if Text'Length = 0
-        or else Text (Text'First) in '.' | '#' | '@' | ';' | '/'
+      if Text'Length = 0 or else Text (Text'First) in '#' | '@' | ';' | '/'
       then
          return;
-      elsif Text (Text'Last) = ':' then
-         --  Control can arrive here from anywhere.
+      elsif Text (Text'Last) = ':'
+        and then (Text (Text'First) /= '.'
+                  or else (for all C of Text => not Is_Space (C)))
+      then
+         --  A label, an ELF local `.L` one among them, rather than a
+         --  directive whose operands end in a colon.  Control can arrive
+         --  here from anywhere.
          Into.Derived := [others => False];
+         return;
+      elsif Text (Text'First) = '.' then
          return;
       end if;
       for Index in Text'Range loop
