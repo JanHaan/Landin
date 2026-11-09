@@ -15,7 +15,7 @@ with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
 with Landin.Targets.Capabilities;
 with Landin.Backend.Xtensa_Machine;
-with Landin.Backend.Xtensa_Words;
+with Landin.Backend.RiscV_Instructions;
 with Landin.Backend.ELF;
 with Landin.Backend.Site_Counts;
 with Landin.Backend.Trap_Reports;
@@ -56,10 +56,10 @@ package body Landin.Backend.Xtensa is
 
    --  Paired words implement every enabled 64-bit scalar on this target.
    function XLEN (Facts : Landin.Targets.Target_Facts)
-     return Xtensa_Words.Machine_Width;
+     return RiscV_Instructions.Machine_Width;
 
    function XLEN (Facts : Landin.Targets.Target_Facts)
-     return Xtensa_Words.Machine_Width is
+     return RiscV_Instructions.Machine_Width is
       pragma Unreferenced (Facts);
    begin
       return 32;
@@ -599,7 +599,7 @@ package body Landin.Backend.Xtensa is
       --  D671: the machine's width, whether an eight-byte value is a
       --  register pair, and the word a pointer, a saved register and a
       --  frame record's half are moved at.
-      Width : constant Xtensa_Words.Machine_Width := XLEN (Facts);
+      Width : constant RiscV_Instructions.Machine_Width := XLEN (Facts);
       Pairs : constant Boolean := Width = 32;
       Word : constant Positive := Natural (Width) / 8;
       Load_Word : constant String := (if Pairs then "lw" else "ld");
@@ -668,14 +668,14 @@ package body Landin.Backend.Xtensa is
            (Word, Native_Scratch_Registers)));
 
       function Reg (Spelling : String) return
-        Xtensa_Words.Register_Number is
-        (Xtensa_Words.Register_Number'Value
+        RiscV_Instructions.Register_Number is
+        (RiscV_Instructions.Register_Number'Value
           (Spelling (Spelling'First + 1 .. Spelling'Last)));
 
       procedure Immediate (Register : String; Value : Pattern) is
       begin
-         Emit (Xtensa_Words.Immediate
-           (Reg (Register), Xtensa_Words.Pattern (Value), Width));
+         Emit (RiscV_Instructions.Immediate
+           (Reg (Register), RiscV_Instructions.Pattern (Value), Width));
       end Immediate;
 
       --  D671: an eight-byte value's high word at XLEN 32 is x27 beside
@@ -721,14 +721,14 @@ package body Landin.Backend.Xtensa is
          if Pairs and then Size = Landin.Targets.Byte_8 then
             --  The high word first, so a pair loaded through its own low
             --  register still reads its base.
-            Emit (Xtensa_Words.Memory
+            Emit (RiscV_Instructions.Memory
               (Store, Landin.Targets.Byte_4, Reg (High (Register)),
                Reg (Base), Width, 4));
-            Emit (Xtensa_Words.Memory
+            Emit (RiscV_Instructions.Memory
               (Store, Landin.Targets.Byte_4, Reg (Register), Reg (Base),
                Width));
          else
-            Emit (Xtensa_Words.Memory
+            Emit (RiscV_Instructions.Memory
               (Store, Size, Reg (Register), Reg (Base), Width));
          end if;
       end Memory;
@@ -803,10 +803,10 @@ package body Landin.Backend.Xtensa is
          if Offset <= 2000 and then Pairs
            and then Size = Landin.Targets.Byte_8
          then
-            Emit (Xtensa_Words.Memory
+            Emit (RiscV_Instructions.Memory
               (Store, Landin.Targets.Byte_4, Reg (High (Register)), 8,
                Width, -Integer (Offset + 48) + 4));
-            Emit (Xtensa_Words.Memory
+            Emit (RiscV_Instructions.Memory
               (Store, Landin.Targets.Byte_4, Reg (Register), 8, Width,
                -Integer (Offset + 48)));
          elsif Offset <= 2000 then
@@ -815,13 +815,13 @@ package body Landin.Backend.Xtensa is
             --  not be, since a store keeps only its low bytes.
             if Pairs and then not Store and then Size = Landin.Targets.Byte_4
               and then Unbounded.To_String (Last_Line) = Character'Val (9)
-                & Xtensa_Words.Memory
+                & RiscV_Instructions.Memory
                     (True, Size, Reg (Register), 8, Width,
                      -Integer (Offset + 48))
             then
                return;
             end if;
-            Emit (Xtensa_Words.Memory
+            Emit (RiscV_Instructions.Memory
               (Store, Size, Reg (Register), 8, Width,
                -Integer (Offset + 48)));
          else
@@ -2656,7 +2656,7 @@ package body Landin.Backend.Xtensa is
                end if;
                Storage_Address (Storage, Field, "x6", Which, Payload, Nested);
                if Scale = 1 and then Shift > 0 then
-                  Emit (Xtensa_Words.Indexed_Address
+                  Emit (RiscV_Instructions.Indexed_Address
                     (6, 6, 29, 30, Shift, Width,
                      Landin.Targets.Levels.Has
                        (Level, Landin.Targets.Levels.Zba),
@@ -4302,9 +4302,10 @@ package body Landin.Backend.Xtensa is
                      Store_Value (Value);
                   end;
                when Landin.IR.Choose =>
-                  --  D338.  The base ISA has no conditional move: a choice
-                  --  of one or zero is the condition's own zero or one,
-                  --  and any other keeps a branch around one load.
+                  --  D338.  The backend uses none of Xtensa's conditional
+                  --  moves, MOVEQZ, MOVNEZ, MOVLTZ and MOVGEZ: a choice of
+                  --  one or zero is the condition's own zero or one, and
+                  --  any other keeps a branch around one load.
                   declare
                      use type Landin.Types.Magnitude;
 

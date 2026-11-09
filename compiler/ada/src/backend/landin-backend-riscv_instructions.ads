@@ -1,6 +1,8 @@
---  Native RISC-V instruction selection shared by the RV64 emitter and a
---  future RV32 emitter. Width is a target fact supplied by the caller;
---  neither an instruction nor an extension changes the ABI or layout.
+--  Native RISC-V instruction selection shared by the RISC-V emitter, at
+--  RV64 and RV32, and the Xtensa emitter, whose RISC-V-shaped words
+--  Landin.Backend.Xtensa_Machine selects into Xtensa. Width is a target
+--  fact supplied by the caller; neither an instruction nor an extension
+--  changes the ABI or layout.
 with Landin.Targets;
 
 package Landin.Backend.RiscV_Instructions is
