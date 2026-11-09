@@ -84,29 +84,25 @@ needed. Enter `nix develop` once around related commands, or source the file
 harness takes it). Keep the existing host, worker, target and verification
 requirements.
 
-For a long local command, use `scripts/run_logged.py` inside that environment
-and the agent's background-command facility. Wait for its completion
-notification while doing independent work; do not add sleep/log-probe
-loops. In Codex, retain a yielded command's session id and resume it with
-the native process continuation tool until it completes; keep the turn open
-while the result is required. When notifications or native continuation are
-unavailable, use `python3 scripts/run_logged.py --wait DIR`, with a wait
-shorter than the calling tool's timeout, and repeat it on exit 124. The
-recipe documents both the default 540-second wait and shorter tool limits.
-Never wait in a `sleep` loop, and never on
-`pgrep -f`, whose pattern matches the waiting shell's own command line, so the
-wait does not end. Inspect `result.json` and the retained log after completion.
-Report the
-command's scope and status, including `FILTERED` or `HOST-ONLY` where applicable;
-an exit-zero summary alone is not full-suite evidence. The wrapper retains full
-output and prints a bounded tail on failure. Never pipe a check through a
-filter that hides its failure status. See [the local feedback recipe](docs/process.md#local-agent-feedback).
+Run a long local command through `scripts/run_logged.py` inside that
+environment with the harness's background facility, and do independent work
+until its completion notification. In Codex, keep a yielded command's
+session id and resume it with the native process continuation tool until it
+completes, keeping the turn open while the result is needed. Without either,
+use `python3 scripts/run_logged.py --wait DIR` with a wait shorter than the
+calling tool's timeout, repeated on exit 124; the recipe gives the default
+540-second wait and shorter limits. Never wait in a `sleep` loop, nor on
+`pgrep -f`, whose pattern matches the waiting shell's own command line, so
+the wait never ends. Then inspect `result.json` and the retained log, and
+report the command's scope and status, `FILTERED` or `HOST-ONLY` included;
+an exit-zero summary alone is not full-suite evidence. Never pipe a check
+through a filter that hides its failure status. See [the local feedback recipe](docs/process.md#local-agent-feedback).
 
 Once a push is authorized, push the candidate as soon as it builds and the
-checks for what it touches pass.
-Further local lanes run beside its gate, never between the candidate and its
-push: the lanes that fail a gate are mostly ones no local host has, and an
-hour spent on the local matrix first only delays hearing from them. A change to
+checks for what it touches pass. Run further local lanes beside its gate,
+not before the push: the lanes that fail a gate are mostly ones no local
+host has, so an hour on the local matrix first only delays hearing from
+them. A change to
 the grammar, the highlighters or a fixture also runs
 `./highlight/test.sh --integration`, about a minute, before the push.
 
@@ -115,23 +111,24 @@ an authorized promotion whose gate passed, start what the answer cannot
 change, and say which answer you would take by default. A stated default is
 not approval for an action that needs the user's answer.
 
-A brief to a subagent or a parallel stream carries these rules itself, because
-streams that were not told polled their logs and ran complete suites anyway.
-It names the exact selectors for what the stream changes, leaves the complete
-suite to the integrated tree or the gate, names the harness's supported
-completion method with `run_logged.py --wait` as a fallback, and leaves the
-build's worker count and CPU placement at their
-defaults rather than choosing a `-j` or a `taskset`: a full build at `-j4`
-took two and a half times as long as at the default.
+A brief to a subagent or a parallel stream carries these rules itself:
+streams not told them polled their logs and ran complete suites. The brief
+names the exact selectors for what the stream changes, leaves the complete
+suite to the integrated tree or the gate, names the harness's completion
+method with `run_logged.py --wait` as fallback, and leaves the build's
+worker count and CPU placement at their defaults, with no `-j` or
+`taskset`: a full build at `-j4` took 2.5 times as long as the default.
 
 For parallel sessions, follow the
 [ownership and integration rules](docs/process.md#parallel-sessions-and-shared-resources).
 Each writer gets its own worktree and branch from an explicit base; a new
-Paseo chat alone does not isolate a checkout. Name the integrator and who
-may push, rebase or promote. Coordinate overlaps and shared resources with
-their owner before using them. Hardware work uses the board tools and the
-rig's common lock; a different board or probe slot does not make hub power
-operations independent. Existing authorization carries into the brief;
+chat in Paseo, the tool that runs agents on the tailnet's hosts, does not
+isolate a checkout. Name the integrator and who may push, rebase or promote.
+Coordinate overlaps and shared resources with their owner before using them.
+Hardware work on the rig, the host wired to the development boards, uses
+the board tools and its common lock; another board, or another slot of its
+shared probe, still shares the USB hubs' switched power, so power
+operations are never independent. Existing authorization carries into the brief;
 silence or an idle agent is not permission to take its resources.
 
 Reduce repeated orchestration, not reasoning effort, model capability, required
@@ -140,11 +137,12 @@ and log paths instead of repeatedly pasting complete transcripts.
 
 ## The mechanical gate
 
-The candidate's complete multi-host gate must pass before an authorized
-promotion to main, and the promoted tree must be the one tested. A changed
-merge tree needs new evidence. Filtered local checks are development
-feedback; they do not replace the gate. Green is not exact-revision
-acceptance: that process is retired.
+An authorized promotion to main needs the candidate's complete multi-host
+software gate passed, a `scope=boards` dispatch passed on the identical
+tree unless the edit is declared `Gate: explanatory`, and main's own push
+gate followed to its end; the promoted tree must be the one tested. A
+changed merge tree needs new evidence. Filtered local checks are
+development feedback; they do not replace the gate.
 
 Read [the gate reference](docs/process.md#the-mechanical-gate) when changing
 CI, checking reuse, following a candidate or promoting it. It owns the job
@@ -188,9 +186,9 @@ made rather than when the register is next read.
 
 Use the repository documents in this order:
 
-1. `spec.md` is the normative specification. It holds the grammar of the enabled kernel, [1740]-[1830], which covers what the compiler accepts today and shrinks as the language grows; the rules the tour left unsaid, [1840] onward, which are permanent; and a register naming every rule that was a decision rather than a transcription, with the alternative and the fixture that pins it, in fourteen subject sections. Where `spec.md` and `tour.md` could be read differently, `spec.md` decides.
+1. `spec.md` is the normative specification; where it and `tour.md` could be read differently, it decides. It holds the grammar of the enabled kernel, [1740]-[1830], which covers what the compiler accepts today and shrinks as the language grows; the rules the tour left unsaid, [1840] onward, which are permanent; and its decision register, by subject: every rule that was a decision rather than a transcription, with the alternative and the fixture that pins it.
 2. `tour.md` explains the language, [0010]-[1730]. It teaches by example, which is why it omits what a reader supplies for themselves — every implementation item so far has found more of what it left unsaid, and the answer is to write the rule into `spec.md` rather than to attribute one to a paragraph that does not state it. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions, and no ID is defined in both documents. Both documents are arranged by subject and their numbers therefore do not ascend down the page; that is the numbering working, not drift to be tidied up. `docs/documents.md` says where a new rule goes.
-3. `ROADMAP.md` is the sole authority for open work: the current roadmap's phases with their items, dependencies and gates, the register of work that waits for a trigger, and the positions an outside review challenged and the project kept. The first roadmap is closed and its text is in the history. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files. The evidence registers, what the compiler's evidence is rather than what is left to do, are in `compiler/tests/registers.md`.
+3. `ROADMAP.md` is the sole authority for open work: the current roadmap's phases, with their items, dependencies and gates; its register of work that waits for a trigger; and the positions an outside review challenged and the project kept. The first roadmap is closed and its text is in the history. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files. The evidence registers, which record what the compiler's evidence is rather than what is left to do, are in `compiler/tests/registers.md`.
 4. `prototype-{1..5}-*.md` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
 5. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
 6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the other live documents — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
@@ -208,7 +206,7 @@ The prototypes jointly define the implementation pressure on the specification:
 - Prototype 2 covers a recovering parser and distinguishes foreseeable syntax diagnostics from failures such as allocation failure.
 - Prototype 3 develops the conceptual `core/mem`, `core/vec`, `core/small`, `core/map`, `core/tree` and `core/sort` layers and stresses generics, allocators, evidence tables, origins, and raw storage.
 - Prototype 4 builds on prototypes 2 and 3, adds hosted I/O, and exercises heterogeneous runtime dispatch through `any C`.
-- Prototype 5 builds on prototypes 1 and 4: a server with two requests in flight and a Cortex-M0 counterpart answering them on one core. It stresses fibres over caller-supplied stacks, started only as a group the caller joins, concurrency as a provider's answer rather than a function's, switch points, origins across a switch, interrupts waking fibres without read-modify-write atomics, and stopping without cancellation. Its findings are decided as D444-D449, which the concurrency phase implements.
+- Prototype 5 builds on prototypes 1 and 4: a server with two requests in flight and a Cortex-M0 counterpart answering them on one core. It stresses fibres over caller-supplied stacks, started only as a group the caller joins, concurrency as a provider's answer rather than a function's, switch points, origins across a switch, interrupts waking fibres without read-modify-write atomics, and stopping without cancellation. The concurrency phase implemented its findings, decided as D444-D449.
 
 Repeated module names describe shared future subsystems, not separately checked source dependencies. Prototypes 1 and 4 cover the freestanding and hosted authority roots respectively, and prototype 5 both at once; capabilities below those roots are passed as ordinary arguments.
 
@@ -218,24 +216,25 @@ The bootstrap compiler implements the enabled pre-v1 Landin slice in Ada 2022. I
 
 Two rules already hold in the chassis and must keep holding. Every host effect the compiler needs goes through a `Landin.Platform` interface, so every driver and stage case runs against a fake filesystem; the cases that exercise the native adapter, run the recorded fixtures, or read the real fixture tree are the deliberate exceptions, and each one names the real host in its own comment. Nothing outside `Landin.Targets` may ask the host how wide a pointer is: a 32-bit target description stays 32-bit on a 64-bit host, and layout arithmetic counts target bytes in `Landin.Targets.Byte_Count` rather than in the host compiler's `Natural`.
 
-The compiler checks whole programs and may use private caches. Its verified target-neutral IR is allowed to evolve from implementation evidence rather than being frozen as one flat or serialized form. Landin retains its own native backends, which emit assembly for platform assembler/linker tooling. Target order is Linux x86-64, native macOS arm64, then emulator-first Cortex-M; C and LLVM remain rejected backend alternatives.
+The compiler checks whole programs and may use private caches. Its verified target-neutral IR is allowed to evolve from implementation evidence rather than being frozen as one flat or serialized form. Landin retains its own native backends, which emit assembly for platform assembler/linker tooling. The first targets came in the order Linux x86-64, native macOS arm64, then emulator-first Cortex-M; [what refine does today](docs/capabilities.md) lists the current ones. C and LLVM remain rejected backend alternatives.
 
 [`docs/ir.md`](docs/ir.md) explains the IR and its rationale for readers new to
 the project. Keep it current when the representation, verification boundary
 or optimization pipeline changes. It is derived from implementation and
 tests, never an authority for semantics, implementation decisions or work.
-`docs/targets.md` does the same for the C and link-name package boundaries,
-`docs/diagnostics.md` explains every diagnostic code and is the text
-`refine explain` prints, generated into the compiler by
-`python3 check.py --catalogue`, `docs/format.md` shows every rule of the one
-layout `refine fmt` gives a source, which the test program holds the
-formatter to, `docs/server.md` says what `refine lsp` answers, which the
-scripted sessions under `compiler/tests/server/` hold the server to, and
-`examples.md` holds the complete programs the runtime suite executes,
-`docs/benchmarks.md` what five of them cost against other languages, and
-`docs/from-c.md` the Landin form of each C habit, its examples a fixture
-the test program compiles. All eight are derived documents and none of
-them decides anything.
+Seven more are derived the same way:
+
+| document | what it holds |
+|---|---|
+| `docs/targets.md` | the C and link-name package boundaries |
+| `docs/diagnostics.md` | every diagnostic code: the text `refine explain` prints, built in by `python3 check.py --catalogue` |
+| `docs/format.md` | every rule of `refine fmt`'s one layout, held to it by the test program |
+| `docs/server.md` | what `refine lsp` answers, held to it by the sessions under `compiler/tests/server/` |
+| `examples.md` | the complete programs the runtime suite executes |
+| `docs/benchmarks.md` | what five of them cost against other languages |
+| `docs/from-c.md` | the Landin form of each C habit, its examples a fixture the test program compiles |
+
+All eight are derived; none decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 
@@ -290,4 +289,4 @@ Before reviving a previously rejected idea, read `ROADMAP.md`'s retained positio
 
 When implementation requires a semantic change, update `tour.md`, the affected prototype-derived tests, and `ROADMAP.md` together. Trace the construct's citations, reread all affected prototypes including cross-prototype interactions, and then run `python3 check.py`. Per-file reasoning has previously missed contradictions found only by comparing prototypes.
 
-Do not modernize obsolete syntax inside prototype finding sections (`Xn`, `Yn`, `Zn`, `Wn`) or the tour's `WHAT WAS TRIED AND DROPPED` section. Those passages intentionally preserve rejected wording next to its resolution, and `check.py` deliberately excludes them from some retired-spelling checks.
+Do not modernize obsolete syntax inside prototype finding sections (`Xn`, `Yn`, `Zn`, `Wn`, `Vn`) or the tour's `WHAT WAS TRIED AND DROPPED` section. Those passages intentionally preserve rejected wording next to its resolution, and `check.py` deliberately excludes them from some retired-spelling checks.

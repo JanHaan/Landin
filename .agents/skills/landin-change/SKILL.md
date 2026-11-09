@@ -17,8 +17,9 @@ Carry the user's existing authorization forward without asking again.
 
 For parallel work, use the
 [ownership and integration recipe](../../../docs/process.md#parallel-sessions-and-shared-resources).
-Establish a worktree/branch per writer, the common base, owned paths and
-identity ranges, and the integrator/publication owner before dispatch.
+Before dispatch, give each writer its own worktree and branch from the
+common base, its owned paths and identity ranges, and name the integrator
+and who publishes.
 Paseo's default shared checkout and its agent status are not isolation or
 resource locks. Use the current `paseo-hubbish` skill when coordinating there;
 carry exact commit and evidence handoffs between the authorized sessions.
@@ -41,8 +42,10 @@ roadmap, rather than in this skill or a separate task list.
 Once a push is authorized and affected checks pass, push the candidate and
 follow the [gate](../../../docs/process.md#the-mechanical-gate). Investigate
 failed jobs and verify the complete job listing. Promote to main when that
-action is authorized, the complete gate passed and the promoted tree is
-the tested tree. If main advanced, integrate first and obtain evidence for
+action is authorized, the complete software gate passed, a `scope=boards`
+dispatch passed on the identical tree unless the edit is declared
+`Gate: explanatory`, and the promoted tree is the tested tree; then follow
+main's own push gate, with its fresh boards, to its end. If main advanced, integrate first and obtain evidence for
 the resulting tree. Let independent work continue while a question is open.
 
 Return what changed, the check scope and result, retained evidence, findings,
