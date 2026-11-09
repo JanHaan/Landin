@@ -1,16 +1,18 @@
 # Landin — orientation
 
 Everything a fresh reader, or a fresh session, needs before touching
-anything. Kept current at specification **0.2.8**, the eighth under the
-second implementation roadmap.
+anything. Kept current at specification **0.2.8**. How work is done and
+checked, the development loop, the multi-host gate and the physical boards
+on the rig, is in [`docs/process.md`](docs/process.md). `D211` names a
+decision recorded in `spec.md`; `refine explain D211` prints its title.
 
 ---
 
 ## What this is
 
 A systems language, a compiler and a small standard library, built from
-scratch as a serious learning project. The scale is Odin, Hare, Crystal
-— one person, several years.
+scratch as a serious learning project. Comparable in scope to Odin, Hare
+and Crystal; one person, several years.
 
 **The range is the point.** A Cortex-M0 with 32 KB of flash at one end,
 a hosted application at the other, and the same way of writing code on
@@ -48,14 +50,14 @@ value owns and this language does not track ownership.
 
 **Lifetime** has no borrow checker and no annotations. Every reference
 carries an origin — static, allocated or frame — and frame origin may
-not be returned or stored anywhere longer-lived. Origins join to the
-shortest-lived part. `escaping` marks a parameter the callee may keep;
+not be returned or stored anywhere longer-lived. A reference built from
+several takes the shortest-lived of their origins. `escaping` marks a parameter the callee may keep;
 a `from` clause marks a returned reference as borrowing what it came
 from. Both are written rather than inferred, deliberately: inference
 across calls lets a distant body change a signature, and for `from`
 inference was shown to get the allocator wrong. A checked arena constructor
-therefore rejects frame backing before its origin-erasing allocation path can
-hide that frame lifetime.
+rejects frame backing, because the allocations it hands out carry no origin
+and would hide that frame lifetime.
 
 **Errors** are atoms in a dedicated register, declared per function
 after `!`, with `fail`, `try` and an `else` clause on the call. A
@@ -85,14 +87,16 @@ override one. Generic code is a value plus evidence that its type
 satisfies a concept; `any C` is the same evidence with the type erased,
 which makes static generics and runtime dispatch one mechanism seen from
 two sides. The evidence table is the foundation and specialising is an
-optimisation weighed per instantiation against code size. D211 distinguishes
-semantic instantiation from optional dispatch specialization: incoming evidence
-must be proved, hidden evidence positions selected by the checked instance body
-and hidden result positions remain, and heterogeneous `any` dispatch needs no
-specialization. Size/auto defaults are independent of
-build mode. `unchecked` establishes no optimizer facts. D210 reorders only an
-explicitly optimal struct on a strict padded-size win, and reports remain
-off-target rather than imposing runtime machinery on a 32 KB device.
+optimisation weighed per instantiation against code size. Instantiation,
+which checks a generic body at its types, is separate from specialization,
+an optional optimization of its dispatch (D211): incoming evidence must
+still be proved, the evidence positions the checked instance body selects
+and its hidden result positions stay, and heterogeneous `any` dispatch needs
+no specialization at all. The default profile, size/auto, is the same in
+both build modes. `unchecked` establishes no optimizer facts. Fields are
+reordered only in a struct declared optimal, and only when that strictly
+shrinks its padded size (D210); the build report, not the program, states
+the chosen order, so a 32 KB device carries no machinery for it.
 
 **Capabilities** replace effects in interfaces. An allocator, an Io, a
 diagnostics log, a peripheral handle are values a function can receive.
@@ -209,16 +213,17 @@ reopen them are in `ROADMAP.md`'s retained positions.
 
 And one thing that is *not* a held position but reads like one: `sink`
 is a use-after-consume check on one place, not ownership. A copy taken
-beforehand is refused nothing. Affine values are the other thing, and
-they are parked with a condition rather than refused.
+beforehand is not affected. Affine values, which ownership would need, are a
+separate idea, parked in the roadmap's register with a condition rather
+than refused.
 
 ---
 
 ## Where the work stands
 
 The specification is coherent and mechanically checked. Five prototypes
-exist. The first four's findings are all worked in; the fifth's are decided and
-the concurrency phase implements them. Independent reviews are folded
+exist. The first four's findings are all worked in; the fifth's were decided
+and the concurrency phase implemented them. Independent reviews are folded
 back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 
