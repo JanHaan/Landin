@@ -3503,13 +3503,14 @@ names `landin.stack_switch` and `landin.stack_start` and checks the frames
 on each side with GDB on Linux x86-64, arm64 and RV64 and on Cortex-M0, and
 with LLDB on Darwin and FreeBSD. On the retained Cortex-M0 profile two
 fibres of `core/fibre`'s round, each on 1,472 bytes of module storage, fit
-at every profile: 22,492 bytes of flash at none, 7,168 of 16,384 bytes of
-RAM reserved with the 4 KiB main stack, a painted peak of 904 bytes per
-fibre, and the Cortex-M lane reports the figures and the verdict (D470).
+at every profile: when the item closed, 22,492 bytes of flash at none,
+7,168 of 16,384 bytes of RAM reserved with the 4 KiB main stack and a
+painted peak of 904 bytes per fibre, and the Cortex-M lane reports each
+run's figures and verdict (D470).
 
 ### R14.25 — Run the firmware counterpart
 
-Status: planned
+Status: complete
 Depends on: R14.20, R13.20
 
 Derive a complete Cortex-M0 program from prototype 5's firmware counterpart.
@@ -3524,6 +3525,44 @@ Exit evidence: the firmware derivative running in the Cortex-M0 emulator lane
 in the gate, with its captured trace checked against a repository-owned oracle
 for the specified no-concurrency answer and no two operations in flight. A
 missing answer, overlap, trap or timeout fails the run.
+
+Done: `compiler/tests/counterpart` derives prototype 5's firmware
+counterpart: a taker and an answerer fibre on `core/fibre`'s round, lent
+with a SysTick clock counted by `atomic.sole_add` as one board provider,
+take requests on prototype 1's synthetic serial line and answer them
+through the hosted server's `app/protocol`, unchanged, one at a time in
+arrival order, refusing `busy` for a full queue (D1034). Its trace records
+when each request arrived, began and ended being answered, and the
+`counterpart` lane of the Cortex-M0 emulator, in the gate's
+`cortex-m-programs` job, feeds `WAIT 200 a` and then `NOW b` while `a` is
+being answered, with a full queue and refused lines beside them, and holds
+each run at every profile to an oracle for D448's answer: a missing
+answer, an overlap, a broken order or wait, a trap or a timeout fails it,
+and four controls that overlap, drop, trap and stall each fail for their
+own reason (D1035). The program takes about 56 KB of flash at `size`, so
+the maintainer chose a lane description of the micro:bit's own nRF51822
+over the 32 KiB reference (D1036). A writer made from a reference-free
+handle no longer locks the state it was copied from (D1042), and the RV64
+lane registers its emulator as a binfmt_misc handler, so the derived
+server's two-process fixture runs there over both Ios (D1037). In
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/42567437394)
+on `343ac6a1`, 49 of 53 jobs passed in its fourth attempt, after GitHub's
+release downloads answered 504 to the first three, and the board and
+suspended RV64 legs were skipped; [the boards
+dispatch](https://github.com/JanHaan/Landin/actions/runs/42577864078) on the same
+tree passed every port in its third attempt, once probehive's GPIO shell,
+which the rig's weekly garbage collection had removed, was prepared again
+(SR-1013), and after two ESP32-C3 cross-checks found one recovery more
+over JTAG than in the last frame (SR-1014).
+
+The R14 gate holds. In that gate the derived server ran on every hosted
+target over both Ios, `runtime/derived-server-two-process` on Linux
+x86-64, arm64 and RV64, Darwin arm64 and FreeBSD x86-64 and arm64, and the
+firmware counterpart ran on Cortex-M0 against its trace oracle; the
+capacity control reported R14.20's retained-profile figures at every
+profile, each fitting; and the scripted session through the switch passed
+on every target R14.20 covers, with GDB on Linux x86-64, arm64 and RV64
+and on Cortex-M0 and with LLDB on Darwin and FreeBSD.
 
 ### R14.30 — A second Io
 
@@ -4164,7 +4203,7 @@ SR-982, SR-699.
 | SR-789 | Usability | The boards guides did not say why the RP and Xtensa ports need `--ram-loader` in boot mode while the STM32H753, ESP32-C3 and ESP32-C5 need it only for RAM runs, so `environments/boards/rig.json`'s argument sets were assembled from three READMEs and `common.board_preflight`. Met writing rig.json for R12.60. | The next change to a port's arguments. | The guide saying which ports need the helper and probehive in each mode, and why. | retired: `environments/boards/README.md` says which ports read only through the helper's single-core readback and which name probehive, and rig.json writes every port's arguments out |
 | SR-791 | Usability | The gate's board legs asked for `[self-hosted, landin-rig]`, the runner was registered with its one label and none of GitHub's defaults, and every leg sat `queued` with no message saying no runner carried both labels: the runner was online and idle the whole time. Met in R12.60's first boards dispatch, which was cancelled after twelve minutes in the queue. | The next change to the board legs' `runs-on` or to the runner's labels. | The legs asking for `landin-rig` alone, held by a control to the label the runner carries. | retired: the legs ask for `[landin-rig]`, and `scripts/tests/test_gate_inputs.py` refuses any other `runs-on` for a physical job and any job but those on the rig |
 | SR-792 | Usability | The rig's shared pace file, created empty for the new shared state, names no last action, so the first run's USB guard would read the kernel's whole journal, earlier boots included, and stop on USB trouble the maintainer had already acknowledged; carrying the previous pace record across by hand avoided it. Met deploying R12.60's runner. | The next change to `common.Pace` or to the rig's state setup. | An empty or missing pace that cannot resurrect acknowledged trouble: bounded to the current boot or seeded by the setup, with a control. | open |
-| SR-793 | Usability | `environments/cortex-m/setup.py --tools` ended a gate job with a bare `urllib.error.HTTPError: HTTP Error 504: Gateway Time-out` traceback after one attempt: it names neither the archive nor the URL that failed, so telling an upstream outage from a broken pin meant reading `setup.py` and its lock, and the only recovery was rerunning the job. Met when R12.60's `board-bundles` job failed installing the locked tools, a step the same job had passed an hour earlier. | The next change to `environments/cortex-m/setup.py`'s downloads. | A failed download naming the archive, its URL and the HTTP status, a bounded retry of transient server errors, and a hash mismatch still fatal at once, with controls. | open |
+| SR-793 | Usability | `environments/cortex-m/setup.py --tools` ended a gate job with a bare `urllib.error.HTTPError: HTTP Error 504: Gateway Time-out` traceback after one attempt: it names neither the archive nor the URL that failed, so telling an upstream outage from a broken pin meant reading `setup.py` and its lock, and the only recovery was rerunning the job. Met when R12.60's `board-bundles` job failed installing the locked tools, a step the same job had passed an hour earlier. Met again by R14.25's candidate gate, run 42567437394: GitHub's release downloads answered 504 to 12 jobs, then 22, then 6 over three attempts, through `environments/pins.sh`'s `landin_fetch`, a single `curl`, as well as `setup.py` and `scripts/fetch_inputs.py`, and nothing past an install step ran until the fourth. | The next change to `environments/cortex-m/setup.py`'s, `environments/pins.sh`'s or `scripts/fetch_inputs.py`'s downloads. | A failed download naming the archive, its URL and the HTTP status, a bounded retry of transient server errors, and a hash mismatch still fatal at once, with controls. | open |
 | SR-794 | Usability | Every board leg's bundle check failed on the rig runner with `cmp: command not found` and `diff: command not found`, then said `the downloaded files are not the ones files.sha256 lists`: the runner's packages lack diffutils, and the step read a missing command as a mismatch, so a missing tool looked like tampered evidence. Met in R12.60's boards dispatch, the first whose legs reached the rig. | The next change to the board legs' steps or to the rig runner's packages. | The check needing no host tool the runner lacks, a missing one failing as itself, and a control. | retired: the file-list comparison is Python, which names the missing and unlisted files, and `scripts/tests/test_gate_inputs.py` refuses `cmp`, `diff`, `jq`, `curl` and `wget` in a board leg |
 | SR-795 | Usability | The first Pico 2 gate leg on the rig flashed the Arm application, power-cycled the board and then stopped on `[Errno 2] No such file or directory: 'ping'`: the runner had no `ping`, which the Pico 2 tools run after every cycle, and nothing looked for it before the hardware sequence began, so the fixed image's restoration was left pending after a second flash and cycle. The kernel logged no USB line through either RP235x download on the power-only cable. Met in R12.60's first boards dispatch whose legs reached the hardware; the other six ports passed. | The next host command a board tool adds, or the next change to the rig runner's packages. | Every host command a port's steps run found before the lock, a missing one ending the port `needs-setup` with nothing touched, with a control. | retired: `gate.py` checks each step's host tools (`uhubctl`, `journalctl`, and `nix` where probehive's GPIO shell is used) before the lock, ending `needs-setup` and naming every missing one, which `scripts/tests/test_board_gate.py` holds; the Pico 2's echo after a cycle no longer needs `ping` (SR-796) |
 | SR-796 | Usability | With `ping` installed, the Pico 2 gate leg's probe check after a cycle still failed: `probe-ping` exited -31, SIGSYS, because the NixOS runner module's syscall filter forbids `capset`, which iputils `ping` calls to drop its privileges; the log showed only the command line, and the tool reported `the probe at 10.42.0.50 does not answer ping` although probehive answered a manual `ping` at once. Met in R12.60's boards dispatch after the runner gained `ping`. | The next change to the Pico 2 tools' probe check or to the runner's sandbox. | A probe check that needs no privileged host tool, with a control. | retired: `environments/boards/common.py echo HOST` sends one ICMP echo through an unprivileged ICMP socket, which the rig's `ping_group_range` allows and which passed under the runner's own syscall and address-family limits on rigpi, and prints ping's summary line, which the Pico 2 tools already check; `scripts/tests/test_board_common.py`'s `Echo` holds it |
@@ -4230,6 +4269,10 @@ SR-982, SR-699.
 | SR-1000 | Usability | `python3 scripts/add_fixture.py negative/NAME`, for a negative fixture whose `fixture.meta` gave `expect: expected.txt` and `program: main.ldn`, stopped with "expect without args: nothing would produce it" and said neither what `args` to write nor that the program's path is spelled from `compiler/ada`, `args: ../tests/fixtures/negative/NAME/main.ldn`; the form was found by reading other fixtures' metadata, and `compiler/tests/README.md` gives it only for a fixture with several roots. Met adding `negative/generic-from-pointer-handle-beside-inout` in R14.25. | The next change to `compiler/tests/fixture_meta.py`'s refusals or to `scripts/add_fixture.py`. | The refusal naming the `args` line a single-program fixture takes, or `add_fixture.py` writing it from `program`. | open |
 | SR-1005 | Usability | A derivation's map is checked as a live document only once someone adds it to `check.py`'s `LIVE_DOCS` by hand, and no document says to: `compiler/tests/counterpart/DERIVATION.md` cited a roadmap item by its identity, which `check.py` refuses outside `ROADMAP.md`, and nothing refused it until the map joined `LIVE_DOCS`; the four hosted maps, `DERIVATION.md` under `runtime/derived-parser`, `runtime/derived-containers`, `runtime/derived-hosted-memory` and `runtime/derived-server-two-process`, are still in no live-document check. Met registering prototype 5's firmware counterpart as a derivation in R14.25, where `firmware_derivation_problems` now holds each firmware derivation's `mapping` to being in `LIVE_DOCS`. | The next derivation map, or the next change to `LIVE_DOCS`. | Every derivation's map read as a live document by a rule, the derivation register's rows or the fixture tree's `DERIVATION.md` files, rather than by a hand-kept list. | open |
 | SR-1010 | Usability | Adding prototype 5's scope to the target applicability register passed `check.py`, which holds the register's scopes to `PROTOTYPE_FINDINGS`, and failed every gate job that runs the test program with "compiler/tests/targets.matrix has the row prototype-5 ... and there is no such fixture": the test program skips scope rows by a list of its own in `compiler/ada/tests/src/landin-testing-fixtures.adb`, which nothing held to the prototypes and no document named. `check.py`'s comment over `PROTOTYPE_FINDINGS` now names it. Met in R14.25's first candidate gate, run 42563070754. | The next prototype, or the next change to the fixture suite's inventory check. | The test program's scopes read from the register or held to `PROTOTYPE_FINDINGS` by `check.py`. | open |
+| SR-1011 | Usability | `scripts/gate_watch.py` stopped with a `CalledProcessError` traceback when `gh api --paginate --slurp 'repos/{owner}/{repo}/actions/runs/RUN/jobs?filter=all&per_page=100'` failed: GitHub answered that listing 502 once a run held 193 jobs over four attempts, while 30-job pages and each attempt's own listing answered, so following the candidate meant `gh run watch` and a listing assembled by hand. Met following R14.25's candidate gate, run 42567437394, three times. | The next change to the gate watcher's listing or its error handling. | The watcher reading the listing in pages GitHub answers and retrying a server error a bounded number of times, naming the request that failed. | open |
+| SR-1012 | Usability | `gh run view RUN --job JOB --log`, and the jobs API's log, returned 1,880 lines of the `release` job labelled `UNKNOWN STEP` and ended before its GDB step, so the stack switch's x86-64 session looked absent from the gate; only the attempt's log archive, `gh api repos/{owner}/{repo}/actions/runs/RUN/attempts/N/logs`, had the step's own file. The job of a later attempt that a rerun carried over has no log of its own. Met verifying the R14 gate's third bullet in R14.25. | The next change to the documented verification of a gate run. | `docs/process.md` naming the attempt's log archive as where a job's evidence is read, and the carried-over job's attempt. | open |
+| SR-1013 | Usability | The rp2040 boot and RAM legs of R14.25's boards dispatch, run 42577864078, failed twice with "probehive's lightweight GPIO shell ... did not open within 300 s": rigpi's weekly `nix-gc`, at 00:00 CET on 2026-11-09, had deleted 684 store paths, the shell's closure among them, since nothing roots it, and opening it again downloaded its Python and built migen on the Pi for longer than the board tool waits. Preparing it, as the refusal says, with `nix develop /var/lib/landin-rig/probehive#gpio --profile ~/.local/state/nix/profiles/probehive-gpio` took 63 s and left an automatic root; `environments/boards/README.md` roots the RAM helper in a profile and says why, and says nothing of the GPIO shell. | The next change to the rig's state setup, to `ProbehivePins` or to the board README's rig preparation. | The GPIO shell rooted as the RAM helper is, by the rig's setup or the board tool, and the README saying so. | open |
+| SR-1014 | Release readiness | Two ESP32-C3 runs of R14.25's boards dispatch, run 42577864078, the boot run of its first attempt and the RAM run of its second, failed the JTAG cross-check with "recoveries reads 3 over JTAG, 2 in the frame": the image matched its record, the last frame said two recoveries, and the firmware counted a third before the probe read it, with no USB event in the failing RAM run; the third attempt passed both runs, and no earlier gate's C3 leg had failed so. Met completing R14.25. | The next ESP32-C3 run that fails the cross-check, or the next change to `environments/boards/esp.py`'s cross-check or the C3 application's recovery. | The extra recovery's cause found, from the line or the firmware, and the cross-check or the application changed for it, or the reason recorded. | watch |
 
 ## Retained positions
 

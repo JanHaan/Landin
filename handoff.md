@@ -251,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R14.25 — Run the firmware counterpart (planned).**
+**Next roadmap item: R16.10 — Measure generated code (planned).**
 
 ## Versions
 

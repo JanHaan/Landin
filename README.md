@@ -244,7 +244,7 @@ buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
 [`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
 
-**Next roadmap item: R14.25 — Run the firmware counterpart (planned).**
+**Next roadmap item: R16.10 — Measure generated code (planned).**
 
 ## Questions, bugs and ideas
 
