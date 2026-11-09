@@ -10,13 +10,17 @@ three namespaces:
 | `platform` | The narrower target scope each module declares. |
 
 `platform/posix`, and beneath it each system's own interface,
-`platform/linux` and `platform/libc`, serve the hosted POSIX systems:
-Linux, Darwin and FreeBSD, as does `platform/kqueue`, the event interface
-of Darwin and FreeBSD. They are refused on firmware.
+`platform/linux` and `platform/libc`, serve the hosted POSIX systems,
+Linux, macOS and FreeBSD, and `platform/kqueue` is the event interface of
+macOS and FreeBSD. None of them is available on firmware.
 
 Availability does not promise that every composition fits a particular
 firmware image. All memory and handle lifetimes remain explicit caller
 obligations.
+
+A number in brackets, such as [1300], is a numbered paragraph of
+[the tour](../tour.md) or `spec.md`, and `D503` names a decision recorded
+in `spec.md`; `refine explain D503` prints either.
 
 ## Common tasks
 
@@ -134,7 +138,8 @@ Which module does what:
 
 ## Reading a signature
 
-Each module's page shows every call's full signature, such as
+On the site, [the library reference](https://www.701.dev/library.html)
+gives each module a page that shows every call's full signature, such as
 `io.argument_at`'s
 `(provider: type is process, host: provider, index: usize) -> (value: text.host_string from host) ! no_argument`.
 A call writes far less: `io.argument_at(host, 0)`.
@@ -161,10 +166,13 @@ A call writes far less: `io.argument_at(host, 0)`.
 
 ## About this reference
 
-This reference is generated from the public declarations and their `---`
-doc comments in `core`, `hosted` and `platform`. Each module's page has
-the exact signatures, source links, module browsing and local search, and
-the same comments appear in editor hover. The
+This page is the overview: each module's introduction, its main calls
+and an executable example. The site's
+[module pages](https://www.701.dev/library.html) are generated from it and
+from the public declarations and their `---` doc comments in `core`,
+`hosted` and `platform`. They have the exact signatures, source links,
+module browsing and local search, and the same comments appear in editor
+hover. The
 [library guide](../core/README.md) explains the shared conventions and
 evidence; the [tour](../tour.md) teaches the language.
 
@@ -632,13 +640,16 @@ host strings, and a program declares it for a type of its own. Floats,
 `f32` and `f64`, are not formattable yet.
 
 `format_onto` formats through a buffer of the caller's and hands the text
-to an `outlet` each time the buffer fills and once at the end, so text of
-any length goes through a buffer of any size: `io.write_format` is it over
-a file. An `outlet` has one entry, `take`, which takes the bytes whole or
-reports `no_space`. A value that fits the buffer is formatted whole into
-it, so a conformance's `length` and alignments see its own piece; only a
-value longer than the whole buffer is handed on in pieces as it is
-written.
+to an `outlet` each time the buffer fills and once at the end, so the text
+may be longer than the buffer: `io.write_format` is it over a file. An
+`outlet` has one entry, `take`, which takes the bytes whole or reports
+`no_space`. A value that fits the buffer is formatted whole into it, so a
+conformance's `length` and alignments see its own piece; a library value
+longer than the whole buffer is handed on in pieces as it is written. The
+buffer must still hold the largest piece a value asks room for at once:
+twenty bytes hold every integer the library formats, and a conformance of
+the program's own that asks for more than the buffer has fails
+`no_space`.
 
 To print a float, scale it to an integer and print the parts. Converting
 a float to an integer truncates toward zero and traps when the value does
@@ -706,7 +717,7 @@ decimals.
 
 ## core/io
 
-Reader, writer, file and process capabilities, their world composition, directories, running programs, entropy, the rest of the file system and terminals beside them, the memory world, a formatted write, a buffered writer and a line reader. Time is `core/time`, the network `core/net` and the fakes of a system `core/io/fake`.
+Concepts for reading, writing, files and the process, and `world`, which composes them; beside them directories, running programs, entropy, terminals and the rest of the file system; the memory world, a formatted write, a buffered writer and a line reader. Time is `core/time`, the network `core/net`, and fakes of a system's providers `core/io/fake`.
 
 The capabilities are concepts, and a program names only the ones it uses:
 
@@ -879,10 +890,10 @@ A child never waited for keeps what its provider holds for it until the
 process ends. Close a child's pipes only through `close_input` and
 `wait`, never through `files`.
 
-`write_child`, `read_child` and `wait` wait, and `spawn` and
-`close_input` do not, so `programs` is supplied by a provider that waits,
-as reading and writing are: `hosted/blocking`'s and `hosted/events`', not
-`hosted/system`'s.
+`write_child`, `read_child` and `wait` wait, while `spawn` and
+`close_input` do not. So, like reading and writing, `programs` comes from
+a provider that waits: `hosted/blocking` or `hosted/events`, not
+`hosted/system`.
 Its pipes are its own files, which its `reader` and `writer` also take, a
 line reader over a child's output among them. The memory world's are not.
 
@@ -968,6 +979,15 @@ Terminals are `terminals`, one more concept outside `world`.
 `is_terminal` says whether a stream is one, and `window_size` gives its
 `window`, rows and columns, or `not_a_terminal`.
 
+### Entropy
+
+`entropy` is another concept outside `world`, with one entry,
+`fill_random`, which fills all of a buffer with unpredictable bytes or
+fails `io_failed`. Its fake, `fake.entropy`, made by `entropy_over` over
+the caller's bytes, gives them in order, and a request for more than is
+left fails, so a program that seeds itself from entropy runs the same in
+every test. It runs on Cortex-M0.
+
 ### A formatted write
 
 `write_format` writes a template and its values to a file in one call:
@@ -1047,9 +1067,9 @@ Each fake is named one way:
 | its constructor, which fills the state and returns the handle | the name with `_over` | `fake.volume_over` |
 
 The fakes are `fake.volume`, `fake.network`, `fake.clock`, `fake.entropy`,
-`fake.terminals` and `fake.signals`. The clock and entropy are described
-with `core/time`, the network with `core/net` and the signals with
-`core/io/signal`. The memory world, which is firmware's own world rather
+`fake.terminals` and `fake.signals`. The clock is described with
+`core/time`, entropy with `core/io`, the network with `core/net` and the
+signals with `core/io/signal`. The memory world, which is firmware's own world rather
 than a fake of a system's, stays in `core/io` as `io.memory`.
 
 ### The volume
@@ -1180,19 +1200,13 @@ of nanoseconds, which holds 584 years.
 There is no floating point, and the arithmetic is the same on every
 target. Calendars, time zones and formatting a date are not here.
 
-### Entropy
-
-`entropy` is a third concept, `fill_random`, which fills all of a buffer
-with unpredictable bytes or fails `io_failed`.
-
-### Fakes
+### The fake clock
 
 | Fake | Made by | Behaviour |
 |---|---|---|
 | `fake.clock` | `clock_over`, over the caller's `clock_space`, or `clock_over_beside`, beside a fake network | Moves only when a test says: `advance` moves both its clocks, and a `sleep` advances them by exactly what it asks and returns at once. Made by `clock_over_beside` beside a network that takes turns, a `sleep` takes turns instead and the clock moves only while every other fibre waits. The test may set either reading through the state, and the state counts readings, sleeps and the time slept. |
-| `fake.entropy` | `entropy_over`, over the caller's bytes | Gives the bytes in order; a request for more than is left fails. So a program that seeds itself from entropy runs the same in every test. |
 
-Both fakes run on Cortex-M0.
+It runs on Cortex-M0.
 
 [Executable example](../compiler/tests/fixtures/runtime/clock-manual/main.ldn)
 
@@ -1333,7 +1347,7 @@ checked for both.
 
 ## core/failure
 
-Error messages: words for a person for each library failure, a short English phrase for every failure atom the core library raises.
+Words for a person for every failure atom a `core` module raises: a short English phrase each.
 
 `failure.words(problem)` gives the phrase for any of the 38 atoms in
 `failure.reason`, every atom a `core` module fails with. So a call's
@@ -1457,7 +1471,7 @@ the arena's own.
 
 ## core/panic
 
-The four compiler panic atoms and their shared panic-kind domain.
+The compiler's five panic atoms and their shared panic-kind domain.
 
 Checked range, arithmetic and conversion faults, and an unreachable path,
 use these atoms.
@@ -1581,17 +1595,17 @@ end now_ticks
 Cortex-M0 has no atomic read-modify-write and no eight-byte atomic
 access. There a `u64` cell, `exchange`, `add`, `add_relaxed` and
 `compare_exchange` are refused with L0344 where the program writes them,
-the refusal naming `sole_add` and `platform/cortex_m`'s critical section,
-`disable_interrupts` to `restore_interrupts`, which state several contexts
-write takes instead. A cell of any other type is refused on every target.
+and the error names what to use instead: `sole_add`, or for state several
+contexts write, `platform/cortex_m`'s critical section,
+`disable_interrupts` to `restore_interrupts`. A cell of any other type is refused on every target.
 
 [Executable example](../compiler/tests/fixtures/runtime/atomic-tick-firmware/main.ldn)
 
 ## core/cache
 
 Cache maintenance for memory a device reads or writes behind the CPU's
-caches: D227's DMA handoff as one concept, `maintenance`, over ranges of
-whole lines.
+caches: handing a DMA buffer between CPU and device as one concept,
+`maintenance`, over ranges of whole lines (D227).
 
 | Call | What it does |
 |---|---|
@@ -1962,9 +1976,9 @@ interleave.
 
 ## hosted/system
 
-The hosted services that do not wait and are the same whoever waits,
-written once over `platform/posix`: the provider `host`, made by `new`,
-imported as `system` with no alias. It reads and writes no stream, so it
+What a hosted program needs that does not wait, the same under either
+waiting provider and written once over `platform/posix`: the provider
+`host`, made by `new`, imported as `system`. It reads and writes no stream, so it
 is not a `world`. `hosted/blocking` and `hosted/events` are each built
 over it and supply what waits, the one by blocking the thread and the
 other by switching fibres. A program that never reads, writes or sleeps
@@ -2003,8 +2017,8 @@ for a library that keeps its detail apart from the rest of its thread's.
 
 `last_errno` captures the terminal failing call as provider-specific
 detail: the number of the errno `platform/posix` failed with. It is not a
-portable error type. A call that succeeds clears it, and a refusal the
-provider makes itself, without asking the system, sets none. `last_signal` is the number of the signal that ended
+portable error type. A call that succeeds clears it, and a failure the
+provider reports itself, without asking the system, sets none. `last_signal` is the number of the signal that ended
 the child last waited for, beside `io.ending`'s `signalled`, and zero
 after a child that exited.
 
@@ -2263,9 +2277,9 @@ other.
 
 ### Memory and polling
 
-`map` and `unmap` handle anonymous memory, and `page_size` gives the
-page. `extend` grows a mapping where it is, and `remap` grows it where it
-is or moves its pages.
+`map` and `unmap` make and release anonymous memory, and `page_size` gives
+the page size. `extend` grows a mapping in place, and `remap` grows it in
+place or by moving its pages.
 
 `poll` runs over entries made by `watch` and read by `happened`. Its
 `poll_events` is a distinct flag set, combined with `|` and tested with

@@ -1,27 +1,9 @@
 # Highlighting Landin
 
-One scanner, several renderings. `landin_highlight.py` holds the lexical
-surface of the language — the reserved words, the token shapes, and the
-little state a line cannot decide on its own — and everything that colours
-Landin is a rendering of that file rather than another scanner that drifts
-away from it.
-
-| artifact | feeds | state |
-|---|---|---|
-| `landin_highlight.py` | the scanner itself; standard library only, no output format | here |
-| `landin_pygments.py` | Pygments: sourcehut's blob view, Sphinx, MkDocs, `pygmentize` | here |
-| `docs/site/render_html.py` | the reading copies at www.701.dev, as HTML spans | imports the scanner |
-| `textmate/` | VS Code, VSCodium, Cursor, Windsurf, TextMate, Shiki and `bat`; importable by JetBrains IDEs | generated grammar plus extension |
-| `tree-sitter/` | the incremental concrete-syntax grammar and canonical queries | generated C parser and corpus |
-| `nvim/`, `helix/`, `zed/` | tree-sitter editor packages | ready-to-install adapters |
-| `vim/`, `emacs/` | native Vim and Emacs packages, including Emacs tree-sitter mode | ready-to-install adapters |
-| `sublime/`, `visual-studio/`, `jetbrains/` | TextMate consumers with native packaging or installation instructions | ready-to-install adapters |
-| `eclipse/` | Eclipse Generic Editor through its TM4E integration | importable adapter |
-| `notepad-plus-plus/`, `nano/`, `kate/` | widely used and lightweight native syntax definitions | generated adapters |
-
-The two grammars are the reason this directory exists rather than the
-scanner living under `docs/site/`: the reading copies are a consumer of
-the language's highlighting, not the owner of it.
+Highlighting and language-server packages for Landin, for Zed, VS Code and
+its descendants, Neovim, Helix, Vim, Emacs, Sublime Text, Visual Studio,
+JetBrains IDEs, Eclipse, Notepad++, Kate, Nano and Pygments. The packages
+come first, and how the highlighting is made after them.
 
 ## Installing editor and IDE support
 
@@ -46,6 +28,46 @@ objects or an outline where their host supports them.
 | Kate | `highlight/kate` | Install `landin.xml` as a user syntax-highlighting definition, and merge `lsp-client.json` into the LSP Client plugin's settings for the language server. |
 | Nano | `highlight/nano/landin.nanorc` | Include the syntax file from the user's `nanorc`. |
 | Pygments, Sphinx, MkDocs | `highlight` | Run `pip install ./highlight`; the lexer registers the `landin` and `ldn` aliases and the `.ldn` suffix. |
+
+## The language server
+
+`refine lsp` is the compiler's language server: diagnostics, go to
+definition, hover, formatting and quick fixes from the compiler's own stages,
+as [`docs/server.md`](../docs/server.md) describes. The Neovim, Helix, Emacs,
+Zed, VS Code, Vim, Sublime Text and Kate packages each start it, with
+`refine` on the editor's path; each package's README says how, and
+`test_adapters.py` holds every one of them to `refine lsp`. `test.sh` starts it
+through Neovim and Emacs when `LANDIN_REFINE` names a compiler.
+
+The TextMate grammar can also be loaded directly by TextMate, Shiki and
+`bat`. The package-specific README in each directory records any additional
+host details. These are repository packages rather than editor-marketplace
+releases, so installation is deliberately local for now.
+
+## How the highlighting is made
+
+One scanner, several renderings. `landin_highlight.py` holds the lexical
+surface of the language — the reserved words, the token shapes, and the
+little state a line cannot decide on its own — and everything that colours
+Landin is a rendering of that file rather than another scanner that drifts
+away from it.
+
+| artifact | feeds | state |
+|---|---|---|
+| `landin_highlight.py` | the scanner itself; standard library only, no output format | here |
+| `landin_pygments.py` | Pygments: sourcehut's blob view, Sphinx, MkDocs, `pygmentize` | here |
+| `docs/site/render_html.py` | the reading copies at www.701.dev, as HTML spans | imports the scanner |
+| `textmate/` | VS Code, VSCodium, Cursor, Windsurf, TextMate, Shiki and `bat`; importable by JetBrains IDEs | generated grammar plus extension |
+| `tree-sitter/` | the incremental concrete-syntax grammar and canonical queries | generated C parser and corpus |
+| `nvim/`, `helix/`, `zed/` | tree-sitter editor packages | ready-to-install adapters |
+| `vim/`, `emacs/` | native Vim and Emacs packages, including Emacs tree-sitter mode | ready-to-install adapters |
+| `sublime/`, `visual-studio/`, `jetbrains/` | TextMate consumers with native packaging or installation instructions | ready-to-install adapters |
+| `eclipse/` | Eclipse Generic Editor through its TM4E integration | importable adapter |
+| `notepad-plus-plus/`, `nano/`, `kate/` | widely used and lightweight native syntax definitions | generated adapters |
+
+The two grammars are the reason this directory exists rather than the
+scanner living under `docs/site/`: the reading copies are a consumer of
+the language's highlighting, not the owner of it.
 
 ## Maintaining grammar pins
 
@@ -82,26 +104,11 @@ reports that it skipped this comparison; fetch the commit for the full check.
 The gate's editor-grammar job checks out full history so that it always runs
 the comparison.
 
-## The language server
-
-`refine lsp` is the compiler's language server: diagnostics, go to
-definition, hover, formatting and quick fixes from the compiler's own stages,
-as [`docs/server.md`](../docs/server.md) describes. The Neovim, Helix, Emacs,
-Zed, VS Code, Vim, Sublime Text and Kate packages each start it, with
-`refine` on the editor's path; each package's README says how, and
-`test_adapters.py` holds every one of them to `refine lsp`. `test.sh` starts it
-through Neovim and Emacs when `LANDIN_REFINE` names a compiler.
-
-The TextMate grammar can also be loaded directly by TextMate, Shiki and
-`bat`. The package-specific README in each directory records any additional
-host details. These are repository packages rather than editor-marketplace
-releases, so installation is deliberately local for now.
-
 ## What the scanner is not
 
 It is not a parser. It is a token scanner with a symbol table collected
-from the file itself, which is how a name the file declares reads the same
-everywhere it is used — the whole reason the Pygments lexer takes a file
+from the file itself, so a name the file declares is coloured the same
+everywhere it is used; that is why the Pygments lexer takes a whole file
 rather than a line.
 
 What it cannot do is tell the `set` of `[0410]` from a variable called

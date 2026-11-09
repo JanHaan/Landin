@@ -1,25 +1,24 @@
 # How `refine fmt` lays out a source
 
-`refine fmt` gives every Landin source one layout, and this page shows each of
-its rules with a program as written and the same program formatted. It is
-derived: D252 in `spec.md` records the decision and what it was chosen over,
-and `Landin.Formatting` is the implementation. The test program formats every
-example on this page, requires the result shown beneath it, and requires the
-result to be formatted already. `check.py` holds each section to one pair of
-examples and both to the grammar.
+`refine fmt FILE.ldn` rewrites a source in Landin's one layout, and
+`refine fmt DIR` every `.ldn` file under a directory, a dot-named directory
+left out. `refine fmt --check` writes nothing and reports every line that
+is not in the layout, each with the line as the layout writes it and
+marked from the column where it differs, a blank line it removes or a line
+end it changes; `refine fmt --stdout FILE.ldn` writes one source to
+standard output in the layout and leaves its file as it is (D359, D385).
+This page shows each rule of the layout with a program as written and the
+same program formatted.
+
+`D252` names a decision recorded in `spec.md`, and `[0280]` a numbered
+paragraph of `tour.md` or `spec.md`; `refine explain D252` prints either.
 
 A layout is a decision about space. The formatter never adds, removes or
 changes a token, never changes a comment's bytes, never breaks a long line and
 never joins two lines. It decides where each line starts, the space between
 two things on one line, which blank lines survive and how line ends outside
 raw literals and block comments are normalized.
-There is no option that changes any of that. `refine fmt --check` writes
-nothing and reports every line that is not in the layout, each with the line
-as the layout writes it and marked from the column where it differs, a blank
-line it removes or a line end it changes; `refine fmt --stdout` writes one
-source to standard output in the layout and leaves its file as it is (D359,
-D385). A directory given to any of them is the `.ldn` files under it, a
-dot-named directory left out.
+There is no option that changes any of that.
 
 A file that does not scan or parse is refused with the report a compilation
 would give it, and nothing is written. Formatting reads nothing later than the
@@ -40,16 +39,16 @@ The bytes inside a raw literal [0280] and inside a block comment [1780] are
 the literal's and the comment's, their line ends included, and never change.
 Formatted source can therefore retain CR LF or lone CR line ends inside them.
 
-`refine fmt` retains the descriptor that supplied its original bytes and
-writes through that descriptor into the same
-file, so that everything the file carries stays with it: its owner and group,
-its extended attributes and ACLs, those the caller cannot even list among
-them, and every other name a hard link gives it, which sees the formatted
-bytes too (D358). It needs no privilege. It follows a symlink to its target,
-and needs a writable ordinary file and write permission in that file's
-directory, because before the first byte changes it copies the original bytes
-into a file beside it, `.fmt-original-` and an exclusive invocation suffix, and syncs
-that copy and the directory. When the new bytes are synced the copy is
+`refine fmt` writes the layout through the descriptor it read the original
+bytes from, into the same file, so everything the file carries stays with
+it: its owner and group, its extended attributes and ACLs, even those the
+caller cannot list, and every other name a hard link gives it, which sees
+the formatted bytes too (D358). It needs no privilege, and it follows a
+symlink to its target. It needs a writable ordinary file and write
+permission in that file's directory, because before the first byte
+changes it copies the original bytes into a file beside it, named
+`.fmt-original-` and a suffix unique to the run, and syncs that copy and
+the directory. When the new bytes are synced the copy is
 removed. A write that fails puts the original bytes back and removes the
 copy; one that cannot even do that keeps the copy and says where it is, as a
 crash during the write leaves it. Writing clears a set-user-ID or
@@ -350,12 +349,12 @@ end f
 
 ### An `if` inside a line
 
-An `if` that begins inside a line is an expression, and it is laid out from
-its `if` rather than from its line: a `then` that begins a line, each `elsif`
-and `else` and its `end if` stand under the `if`, and each arm's body four
-columns in from it, wherever the `if` stands, an argument's place among them.
-One whose first arm's value shares the `if`'s line is a table, each arm on a
-line of its own.
+An `if` that begins inside a line is an expression, laid out from its `if`
+rather than from the start of its line, wherever the `if` stands, an
+argument's place included. A `then` that begins a line, each `elsif` and
+`else`, and its `end if` stand under the `if`, and each arm's body four
+columns in from it. When the first arm's value shares the `if`'s line, the
+arms form a table, each on a line of its own.
 
 ```landin
 f: (byte: u8, wide: bool) -> (digit: u32) =
@@ -440,3 +439,11 @@ end f
 -- at the end
 h: u32 = 1 -- one
 ```
+
+## Where this comes from
+
+This page is derived: D252 in `spec.md` records the layout and what it was
+chosen over, and `Landin.Formatting` is the implementation. The test
+program formats every example on this page, requires the result shown
+beneath it, and requires the result to be formatted already. `check.py`
+holds each rule to one pair of examples and both to the grammar.

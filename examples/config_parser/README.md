@@ -1,8 +1,19 @@
 # Derived configuration parser
 
-This is the executable library portion of the first complete derived
-program, derived from `prototype-2-parser.md` without changing that design
-record.
+A configuration lexer and parser that recovers from errors: the working
+version of prototype 2, derived from `prototype-2-parser.md` without
+changing that design record. This directory is the library; its hosted
+entry, recorded input and expected output are in
+`compiler/tests/fixtures/runtime/derived-parser`. From the repository root,
+with `refine` installed:
+
+```sh
+refine run --root=. compiler/tests/fixtures/runtime/derived-parser \
+    -- compiler/tests/fixtures/runtime/derived-parser/input.txt
+```
+
+It reports each syntax fault it recovered from, `E:36:expected '='` first,
+and exits with status 42, the status the fixture expects.
 
 `lexer/lexer.ldn` turns an ASCII configuration source into positioned tokens.
 `parser/parser.ldn` builds an arena-backed recursive AST, reports recoverable
@@ -10,25 +21,13 @@ syntax faults through `any core/diag.log`, and propagates allocation or
 diagnostic-delivery failures. Flat sequences, lexer byte scans and recovery
 use loops; only bounded nested groups retain recursive walks.
 
-The hosted entry, recorded input and exact output oracle are in
-`compiler/tests/fixtures/runtime/derived-parser`. `DERIVATION.md` there maps
-the running evidence back to prototype 2's findings.
+`DERIVATION.md` in the fixture's directory maps the running evidence back to
+prototype 2's findings. While working on the compiler,
+`./scripts/dev-test.sh --fixture=runtime/derived-parser` builds it and runs
+this fixture alone, checking the recorded output and the status; the run
+reports `FILTERED` because it selects one fixture.
 
-This directory has no entry point of its own. To run the hosted entry over
-its recorded input, use the pinned development environment at the
-repository root:
-
-```sh
-./scripts/dev-test.sh --fixture=runtime/derived-parser
-```
-
-The harness builds the compiler, passes the fixture's `input.txt` as the
-program's argument, and checks the recorded output and the expected
-status, 42. The run reports `FILTERED` because it selects one fixture.
-
-The complete derivative and its failure/recovery oracles also run on native
-Darwin arm64 in the shared six-profile hosted parity runtime matrix. Native GDB and LLDB
-inspect the same complete sources at none/off, size/auto and size/all; see the
-[hosted parity guide](../../compiler/tests/darwin/README.md). The retired native acceptance
-required the same committed source archive on both hosted targets; nothing
-checks that now.
+The complete program and its failure and recovery checks also run natively
+on macOS arm64 in the six-profile hosted parity matrix, and native GDB and
+LLDB inspect the same sources at none/off, size/auto and size/all; see the
+[hosted parity guide](../../compiler/tests/darwin/README.md).

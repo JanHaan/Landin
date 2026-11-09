@@ -1,7 +1,7 @@
 # tree-sitter-landin
 
 This is the incremental concrete-syntax grammar for Landin editor tooling. It
-is a checked transcription of the enabled kernel in `../../spec.md`, not a
+is a checked transcription of the enabled language in `../../spec.md`, not a
 second language authority. The parser intentionally accepts a little extra
 around contextual `lenof` and `of` so an incomplete editor buffer remains
 useful; its C-boundary rules keep `c`, `layout`, `link`, and `symbol` as
@@ -9,8 +9,8 @@ identifiers outside their annotated positions. Where the lexer may offer a
 contextual word as its own token, because a declaration, a label or a
 parameter list could begin there, `distinct`, `link`, `option`, `as` and
 `caller` are still read as names: in an expression, as a declaration's name, as a statement's label,
-after `end` and as a field's or an argument's label. Refine reserves only
-[1760]'s fifty words. The compiler and normative grammar decide legality.
+after `end` and as a field's or an argument's label. `refine` reserves only
+the words [1760] lists. The compiler and normative grammar decide legality.
 
 With Node.js available:
 
@@ -19,7 +19,7 @@ npm install
 npm run generate
 export TREE_SITTER_LIBDIR="$(mktemp -d)"   # a fresh parser library; see below
 npm test
-tree-sitter highlight ../tests/structural.ldn
+npx tree-sitter highlight ../tests/structural.ldn
 ```
 
 A change to `grammar.js` or `queries/` takes two commits, because Helix, Zed
@@ -58,7 +58,7 @@ each run a library directory of its own, which the CLI must compile into and
 which fails when it cannot:
 
 ```sh
-TREE_SITTER_LIBDIR="$(mktemp -d)" tree-sitter parse ../tests/structural.ldn
+TREE_SITTER_LIBDIR="$(mktemp -d)" npx tree-sitter parse ../tests/structural.ldn
 ```
 
 `../test.sh` does the same with a fresh `XDG_CACHE_HOME`, and refuses when

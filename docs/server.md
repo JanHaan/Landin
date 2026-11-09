@@ -3,18 +3,17 @@
 `refine lsp` is a language server: an editor starts it, talks to it over
 standard input and output, and gets back what `refine` would say about the
 program a file belongs to, as the editor's own diagnostics, navigation, hover
-text, formatting and quick fixes. It is the compiler's own stages, the same
-loader and the same checks, so an editor never says something a build will
-not. This page is derived: D253 in `spec.md` records the one way the server
-reports more than `refine` does and what it was chosen over, and
-`Landin.Server` is the implementation. Every capability below is pinned by a
-scripted session under `compiler/tests/server/`, which the test program runs
-against the server in-process and `native_session.py` runs through the
-executable.
+text, formatting and quick fixes. The packages under `highlight/` start it,
+as [In an editor](#in-an-editor) says. It runs the compiler's own stages,
+the same loader and the same checks, so what an editor shows is what a
+build reports, except where this page says otherwise.
 
 `refine lsp --stdio` is the same: an editor's language client often adds
-`--stdio`, and the server accepts it. Any other argument after `lsp` is a
-misuse, refused with status 2.
+`--stdio`, and the server accepts it. `refine lsp --help` prints its help.
+Any other argument after `lsp` is a misuse, refused with status 2.
+
+`D253` names a decision recorded in `spec.md`, and `[1410]` a numbered
+paragraph of `tour.md` or `spec.md`; `refine explain D253` prints either.
 
 ## Where a file belongs
 
@@ -36,13 +35,13 @@ The library the server ships with, `core`, `hosted` and `platform`, follows
 those roots, found beside the executable as `refine` finds it, and imports of
 those three namespaces resolve from it alone. So an editor needs no root for
 the library, and a file analysed alone still reaches it. For this repository
-the root is the checkout, which is how the examples are compiled:
-`refine --root=. examples/derived_hosted`.
+the root is the checkout, which is how the examples are checked:
+`refine check --root=. examples/derived_hosted`.
 
 A buffer the editor has not saved is read in place of the file: what the
 server checks is what is on the screen, and the files around it are what is
 on disk. A buffer with no file at all, such as an editor's untitled one, is
-analysed alone, as `refine FILE` would analyse it, with only the library to
+analysed alone, as `refine check FILE` would analyse it, with only the library to
 import from, and so is every file when there are no roots. `fixture.meta` means nothing to the server: a fixture
 directory is analysed as the module its files make, which is not always what
 the test program compiles.
@@ -87,23 +86,25 @@ is published as any imported module is; the reference, which the loader
 adds and no import names, is published only when something in it is
 refused. The scripted session
 `firmware-description` holds the server to it.
-Nor does it make a claim about the link: a static Linux link's refusal of a
-C library or of a C symbol nothing defines, L0500, answers a build's
-`--link`, which the server is not given, so `refine check` reports it and
-the server does not.
+Nor does it check the link. L0500, a static Linux link's refusal of a C
+library or of a C symbol nothing defines, depends on a build's `--link`,
+which the server is not given, so `refine check` reports it and the server
+does not.
 
 When several settings are refused, each error appears on its own line
 in that one notification.
 
 ## What it answers
 
-| request | answer |
+| message | what the server does |
 |---|---|
-| `textDocument/publishDiagnostics` | every diagnostic of each source of the module, after every change |
-| `textDocument/definition` | where the name under the cursor is declared |
-| `textDocument/hover` | what the name or expression under the cursor is, and its doc comment |
-| `textDocument/formatting` | D252's layout, as edits |
-| `textDocument/codeAction` | each fix of a diagnostic the range touches, as a quick fix; ranges have exclusive ends, while an empty range acts as a cursor position |
+| `textDocument/didOpen`, `didChange`, `didClose` | notifications it takes: holds, updates or drops the editor's buffer, then analyses |
+| `workspace/didChangeWatchedFiles` | a notification it takes: rechecks what read a changed file |
+| `textDocument/publishDiagnostics` | a notification it sends: every diagnostic of each source of the module, after every change |
+| `textDocument/definition` | a request: where the name under the cursor is declared |
+| `textDocument/hover` | a request: what the name or expression under the cursor is, and its doc comment |
+| `textDocument/formatting` | a request: [the one layout](format.md) (D252), as edits |
+| `textDocument/codeAction` | a request: each fix of a diagnostic the range touches, as a quick fix; ranges have exclusive ends, while an empty range acts as a cursor position |
 
 A diagnostic carries its catalogue code, a link to its explanation on the
 reading copy of [`docs/diagnostics.md`](diagnostics.md), every secondary
@@ -171,9 +172,10 @@ answer in unaffected code. The unresolved name has no definition or type, and
 diagnostics remain the same as a build's resolution diagnostics; any type
 errors found during this extra editor check are not published until the names
 are resolved. A call whose callee is one of those names has no error set for
-the check to infer: a routine that recovers from it, `! ...` included, is
-left with the build's diagnostics rather than an inference the check cannot
-close, which the session `unresolved-recovered-call` holds the server to.
+the check to infer from, so a routine that recovers from such a call, one
+declared `! ...` included, keeps the build's diagnostics rather than an
+inference the check cannot finish; the session `unresolved-recovered-call`
+holds the server to this.
 
 Anything else is refused as the protocol says: a request the server does not
 offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
@@ -278,8 +280,9 @@ goes on. `exit` after `shutdown` is status 0, and any other end is 1.
 
 The packages under `highlight/` start the server, each where its editor
 makes that a matter of configuration; [`highlight/README.md`](../highlight/README.md)
-says how to install each. `refine` must be on the editor's path, as
-`nix build .#refine` or a release asset puts it.
+says how to install each. `refine` must be on the editor's path: install
+it as [the README](../README.md#installing) describes. `nix build .#refine`
+alone leaves it in `result/bin`, which then has to be put on the path.
 
 | editor | how it starts `refine lsp` |
 |---|---|
@@ -302,3 +305,12 @@ Git-free project's root so imports in sibling modules are visible. Neovim's
 `highlight/test.sh` starts the server through Neovim and Emacs when
 `LANDIN_REFINE` names a compiler. Nano and Notepad++ have no language
 client, and JetBrains IDEs and Eclipse load the TextMate grammar alone.
+
+## Where this comes from
+
+This page is derived: D253 in `spec.md` records the one way the server
+reports more than `refine` does and what it was chosen over, and
+`Landin.Server` is the implementation. Every capability above is pinned by
+a scripted session under `compiler/tests/server/`, which the test program
+runs against the server in-process and `native_session.py` runs through the
+executable.

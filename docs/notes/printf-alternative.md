@@ -1,8 +1,14 @@
-# Exploratory formatting API
+# Superseded formatting design
 
-> **Superseded** by the formatting `core/text` now has, recorded 2026-10-14;
-> the note below is kept as it was written. `core/text` has a `builder` over a
-> caller's buffer, or one an allocator grows, and `text.format(builder, template, values)`
+> **Status:** superseded design note, non-normative. It was recorded on
+> 2026-08-24 as an exploratory design for formatted output and superseded on
+> 2026-10-14 by the formatting `core/text` now has. It is not a decision, a
+> roadmap commitment or library surface; `spec.md`, `tour.md` and
+> `ROADMAP.md` are the authorities. The note below is kept as it was written,
+> but for its count of names, which said four for its five.
+>
+> What `core/text` has instead: a `builder` over a caller's buffer, or one
+> an allocator grows, and `text.format(builder, template, values)`, which
 > fills each `{}` of the template with the next value of a slice of
 > `any text.formattable`, written as an array literal the call lends:
 > `text.format(line, "{} of {}", [any(addr kept), any(addr total)])`. A
@@ -17,12 +23,6 @@
 > writes nothing, rather than a visible marker in the output, and each call
 > reports `text.no_space` instead of a writer holding a sticky error.
 
-> **Status:** Exploratory design note, recorded 2026-08-24. This document is
-> non-normative. It is not a decision, roadmap commitment, or accepted
-> standard-library surface. `spec.md`, `tour.md`, and `ROADMAP.md` remain the
-> relevant authorities; this note is evidence to revisit if executable work
-> later needs formatted output.
-
 # A printf-alternative in Landin
 
 Constraints that decide the shape: no varargs, no macros, no compile-time
@@ -30,7 +30,7 @@ execution ([1540]), no capture ([1010]), no overloading, no default arguments
 ([0980]), no implicit conversion ([0310]). Concepts and `any` supply what
 varargs would have ([1370]).
 
-The whole API is four names.
+The whole API is five names.
 
 ```landin
 import core/text/fmt (print, say, arg, s)
@@ -44,7 +44,7 @@ Against `printf("%s of %s\n", ...)` the tax is `arg(` per argument and one pair
 of brackets. That is the irreducible cost of not having varargs, and it buys a
 call the type checker fully understands.
 
-## The four names
+## The five names
 
 ```landin
 public writer: type = concept (T: type)

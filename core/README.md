@@ -5,8 +5,12 @@ namespace is available on, the conventions every module shares, and how
 the library fits a small microcontroller. The
 [library reference](../docs/library.md) has each call. The last part,
 [for library contributors](#for-library-contributors), is for people who
-change the library, and for programs written against an earlier version
-of it: how to add a module, and what each change renamed.
+change the library, and [the migration notes](#migration-notes) after it
+for programs written against an earlier version of it: what each change
+renamed.
+
+`D269` names a decision recorded in `spec.md`, and `[0800]` a numbered
+paragraph of `tour.md` or `spec.md`; `refine explain D269` prints either.
 
 These ordinary Landin modules use explicit roots and imports, with no user-code
 module initialization. `spec.md` owns their language contracts, and the
@@ -24,26 +28,23 @@ The shared freestanding modules are `core/arena`, `core/atomic`, `core/cache`,
 `core/map`, `core/mem`,
 `core/net`, `core/panic`, `core/pool`, `core/random`, `core/region`,
 `core/sort`, `core/spill`, `core/text`, `core/time`, `core/tree` and
-`core/vec`. Every public interface is
-available on every target, but for `core/fibre/stacks`, which switches
-stacks through the compiler's stack builtins, which a target whose backend
-does not emit them refuses where the program reaches one (D453, D564);
-`core/fibre` itself, its groups over
-`fibre.whole` and over the blocking host, needs no switch and serves every
-target. `core/atomic`'s cells serve every target too, but for a `u64`
-cell and the read-modify-writes, which Cortex-M0 has not and refuses where
-a program uses them (D510). `core/cache`'s cacheless provider serves every
-target; its cached provider, `platform/cortex_m/l1`, is a cached profile's
-alone (D970, D972). Their providers retain caller-supplied
-authority.
+`core/vec`. Every public interface is available on every target, with
+these exceptions. `core/fibre/stacks` switches stacks through the
+compiler's stack builtins, so a target whose backend does not emit them
+refuses a program where it reaches one (D453, D564); `core/fibre` itself,
+with its groups over `fibre.whole` and over the blocking host, needs no
+switch and serves every target. Cortex-M0 has no `u64` atomic cell and no
+read-modify-write, and refuses `core/atomic`'s where a program uses them
+(D510). `core/cache`'s cacheless provider serves every target, and its
+cached provider, `platform/cortex_m/l1`, only a cached firmware profile
+(D970, D972). Their providers retain caller-supplied authority.
 
 `hosted/heap`, `hosted/system`, `hosted/blocking`, `hosted/events` and
 `hosted/thread/lock`, the lock threads share state behind, require a hosted
 system. Import the I/O provider, `blocking`, or `events`
 for one whose fibres take turns over the system's event mechanism,
 beside the shared `core/io` protocol it implements, with no alias; each
-is built over `system`, which keeps the services that do not wait (D476,
-D485). They are
+is built over `system`, which keeps what does not wait (D476, D485). They are
 written once, over `platform/posix`, which gives POSIX's facilities in
 Landin types on Linux, Darwin and FreeBSD and would not exist on a system
 that is not POSIX. Beneath it each system's own interface stays raw:
@@ -100,30 +101,32 @@ Every module spells the same operations the same way (D269):
 | A provider's caller-owned state | `space`, declared `zeroed` | `arena.space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
-| A writable slot for in-place update | `at` | `vec.at`, `spill.at`, `map.at`; the binding is locked while the slot lives [0800] |
+| A writable slot for in-place update | `at` | `vec.at`, `spill.at`, `map.at`; the binding is borrowed until the slot's last use [0800] |
 | Count and room | `length`, `capacity` | `mem`, `vec`, `spill`, `map`, `diag`'s `length`; a map's `capacity` is the entries that fit before the next new key rebuilds it |
 | Initialized view | `used` | `mem.used`, `vec.used`, `spill.used`, `text.used` |
 
 A value that is edited, a list, a map, a buffer or raw storage, is passed
-`inout`. A service, an allocator or an I/O provider, is a handle: a small
-copyable value passed `in` that refers to its state, so a program, its logger
-and several containers share one without locking it. Its lifetime is checked
+`inout`. An allocator or an I/O provider is reached through a handle: a
+small copyable value passed `in` that refers to the provider's state, so a
+program, its logger and several containers share one, and passing it
+borrows nothing. Its lifetime is checked
 once, where `over` makes it `from` the state; the state's type is the
 module's `space`, which the caller declares `zeroed` beside its backing bytes
 and keeps alive while any handle is used. So a state holds only scalars,
 counters, limits and cursors: `zeroed` has no image for a pointer, a slice,
 a pointer union, a function or an atom set, and refuses one with L0328.
-Everything a service refers to, the backing it was given and the provider it
+Everything a provider refers to, the backing it was given and the provider it
 stacks on, is held by the handle `over` returns, which is why the handle is
 `from` the state and may also be `from` that backing: `arena.space`
 counts, and the arena's handle holds the base. Giving the state back, as
 `region.release` does, takes it `inout` and is refused while a handle made
-from it is still in use. Process-wide state, the argument root, the last
-errno and the Linux heap's classes, belongs to the process, so
-`system.new()`, `blocking.new()` and `heap.new()` make handles that borrow
-nothing. Code that must keep its own last errno, a C thread calling into
-Landin among them, declares a `system.space` and takes its handle with
-`system.over`, or a `blocking.space` with `blocking.over`. A
+from it is still in use. The argument root and the Linux heap's classes
+belong to the process, and each thread keeps its own last errno and
+signal in a cell of its own (D503), so `system.new()`, `blocking.new()`
+and `heap.new()` make handles that borrow nothing. Code that keeps its
+last errno apart from the rest of its thread's, a library among them,
+declares a `system.space` and takes its handle with `system.over`, or a
+`blocking.space` with `blocking.over`. A
 provider stacked on another, a region, an injector, the lent writer or a
 streaming log, holds a copy of its parent's handle. One parameter name serves
 each role: `memory` is an allocator handle, `host` an I/O handle, `state` a
@@ -154,10 +157,11 @@ Every atom a `core` module fails with is in
 with no final stop, so a program reports `settings: not found` without a
 table of its own; a new failure atom adds its phrase there (D388).
 
-`core/io` is four narrow concepts over one provider type, `reader`, `writer`,
-`files` and `process`, with `world` their composition and `writer_of` lending
-a world's writer; a sink implements `writer`'s two entries and `core/diag`
-streams through `any io.writer` (D268). Every entry takes the provider's
+`core/io` is four narrow concepts, `reader`, `writer`, `files` and
+`process`, which one provider type may implement together; `world` composes
+them, and `writer_of` lends a world's writer. A destination that only
+takes output implements `writer`'s two entries, and `core/diag` streams
+through `any io.writer` (D268). Every entry takes the provider's
 handle by value, and an erased capability is built from the address of a
 handle binding, `any(addr host)`; dispatch copies the handle from there.
 `process` lends the standard streams `input`, `out` and `err` and the argument
@@ -328,8 +332,8 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. A growth or a resize keeps a block in its slot to any extent the slot holds, so a list over a pool grows in place until its slot is full (`runtime/core-pool-grow`, 16.5 KB at size/auto, and `runtime/core-pool-list-grows`, 23.3 KB) (D386). No backing allocation or fallback heap. |
 | `core/sort` | Heapsort and selection sort by `cmp.ordered` evidence, and `sort_by`, heapsort by a comparison given a context, with no allocation; `runtime/core-sort-context`, which sorts records into a shared pool of names with `cmp.compare`, is 10.7 KB at size/auto (D387). |
-| `core/failure` | `failure.words`, a phrase for each of the 34 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
-| `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
+| `core/failure` | `failure.words`, a phrase for each of the 38 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
+| `core/panic` | The canonical five-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. Over `utf8`, positions, the searches and the encoder with both builders' scalar appends and a refusal of each, `runtime/library-shared-text`, are 26.1 KB at size/auto and 30.9 KB at none/off, with 1,048 and 1,496 bytes of stack observed; the Two-Way search shared by `contains` and every `find` is 3.8 KB of it at size/auto and 5.4 KB at none/off. A console line checked, split at a found `=` and arrow and encoded again, `runtime/core-text-utf8-firmware`, is 26.4 KB and 31.4 KB, of which `valid`, which `from_bytes` runs once, is 3.4 KB and 4.3 KB. Static RAM is 20 bytes in each. |
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
 | `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
@@ -357,8 +361,9 @@ Zero-sized vector elements retain logical capacity in `usize`; it is not
 silently truncated to a physical byte count. Nonzero byte-count overflow is
 checked before allocation. Failed reserve preserves the old length, capacity
 and values. Raw storage publishes an initialized prefix only after complete
-stores. It is not an ownership token: aliases, backing extent, provider identity,
-free order and lifetime remain manual obligations under D148/D193.
+stores. It is not an ownership token: the caller still answers for aliases,
+the backing's extent, which provider it came from, the order of frees and
+lifetime (D148, D193).
 
 `disable_interrupts()` returns the prior PRIMASK. Restore that saved value,
 including on early returns; an ordinary `defer` can do this. Each nested section
@@ -376,17 +381,17 @@ memory knowledge, `device_barrier()` adds DMB SY ordering, and
 or supplies missing cache coherence. The selected core has no cache, FPU,
 exclusive-access primitives or VTOR. Ordinary DMA buffers remain slices.
 
-## Other modules and closure
+## Other modules, and what firmware leaves out
 
 `core/cmp`, `core/fault`, `core/region`, `core/spill`, `core/map`, `core/tree`,
 `core/sort` and `core/text` contain reusable target-neutral code. Existing tests and the
 Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
 of hosted imports does not promise that every composition fits 32 KiB.
 `core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
-caller backing, and every `core/io` concept can be selected on Cortex-M0. The
-`hosted/io` provider, `hosted/heap`, `platform/posix`, `platform/linux`,
-`platform/libc` and the C aliases in `platform/c` remain outside this
-consumer closure. Even unused hosted declarations in a
+caller backing, and every `core/io` concept can be selected on Cortex-M0.
+`hosted/system` and the providers built on it, `hosted/heap`,
+`platform/posix`, `platform/linux`, `platform/libc` and the C aliases in
+`platform/c` stay outside what the firmware consumers import. Even unused hosted declarations in a
 selected module must meet target checks.
 
 `core/sort.sort` sorts a mutable initialized view in place with heapsort:
@@ -441,14 +446,13 @@ controls do not broaden the library or manual lifetime guarantees.
 
 ## For library contributors
 
-This part is for people who change the library, and for a program written
-against an earlier version of it. Adding a module comes first; each
-migration note after it says what one change renamed or reshaped.
+This part is for people who change the library.
 
-The [library reference](../docs/library.md) is generated from public signatures
-and attached `---` comments. Build it with `scripts/site.sh` and open
-`docs/site/site/library.html`; [the site guide](../docs/site/README.md) describes
-the documentation convention.
+The site's library reference, `library.html`, is generated from
+[the library overview](../docs/library.md), the public signatures and
+their attached `---` comments. Build it with `scripts/site.sh` and open
+`docs/site/site/library.html`; [the site guide](../docs/site/README.md)
+describes the documentation convention.
 
 ### Adding a module
 
@@ -492,6 +496,11 @@ which library routines name it when nothing reaches them. Two lists in
 compiler or the linker starts, and `LIBRARY_TABLES`, a generated table
 such as `platform/linux/numbers`, which counts as one facility consumed
 by the module built on it. Each entry says why it is there.
+
+## Migration notes
+
+Each note says what one change renamed or reshaped, for a program written
+against an earlier version of the library.
 
 ### Container and diagnostic migration
 
