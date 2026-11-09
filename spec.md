@@ -19668,7 +19668,7 @@ build and a debugger.
 failed check first writes one line to standard error and then executes
 D232's terminal instruction, so the process ends as it did and a debugger
 still stops on that instruction. The line is
-`FILE:LINE:COLUMN: trap: KIND`, the kind one of `core/panic`'s four atom
+`FILE:LINE:COLUMN: trap: KIND`, the kind one of `core/panic`'s five atom
 names and the site the failed operation's own, the one D232's site number
 and the panic map name: under D339's inlining at `speed` a copied check
 reports the routine's line, as the call's would have. Each file is named by

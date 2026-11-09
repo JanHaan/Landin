@@ -835,20 +835,6 @@ package body Landin.Checking is
       return Of_Table.Conformance_Actuals.Element (Members.First + Position);
    end Nth_Conformance_Input;
 
-   function Conformance_Binding_Count
-     (Of_Table : Table; Id : Conformance_Id) return Natural
-     is (Of_Table.Conformances.Element
-           (Conformance_Identities.Position (Of_Table, Id)).Bindings.Count);
-
-   function Nth_Conformance_Binding
-     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
-      return Actual_Key
-   is
-      Members : constant Run := Of_Table.Conformances.Element
-        (Conformance_Identities.Position (Of_Table, Id)).Bindings;
-   begin
-      return Of_Table.Conformance_Actuals.Element (Members.First + Position);
-   end Nth_Conformance_Binding;
 
    function Conformance_Source
      (Of_Table : Table; Id : Conformance_Id)
@@ -1711,7 +1697,6 @@ package body Landin.Checking is
                Into.Node_Owed_Checks.Append (No_Constraint);
                Into.Node_Concepts.Append (No_Concept);
                Into.Node_Result_Shapes.Append (No_Signature);
-               Into.Node_Variadic_Parts.Append (0);
                Into.Node_Lent_Arrays.Append (0);
                Into.Node_Routine_Targets.Append (No_Routine_Instance);
                Into.Node_Evidence.Append (No_Conformance);
@@ -4380,55 +4365,6 @@ package body Landin.Checking is
       end loop;
    end Spell_Conformance;
 
-   function Variadic_Argument_Of
-     (Of_Table : Table;
-      Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Signature_Part
-   is
-      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
-      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
-      Part : constant Natural :=
-        (if Overlay /= 0
-           and then Of_Table.Node_Overlays.Element (Overlay).Has_Variadic_Part
-         then Of_Table.Node_Overlays.Element (Overlay).Variadic_Part
-         else Of_Table.Node_Variadic_Parts.Element (Where));
-   begin
-      return (if Part = 0 then (others => <>)
-              else Of_Table.Signature_Parts.Element (Part));
-   end Variadic_Argument_Of;
-
-   procedure Note_Variadic_Argument
-     (Into    : in out Table;
-      Of_Tree : Landin.Syntax.Tree;
-      Node    : Landin.Syntax.Node_Id;
-      Part    : Signature_Part)
-   is
-      Where : constant Positive := Slot (Into, Of_Tree, Node);
-      Prior : constant Signature_Part :=
-        Variadic_Argument_Of (Into, Of_Tree, Node);
-   begin
-      if not Holds (Into, Part) then
-         raise Landin.Compiler_Defect with "invalid variadic actual type";
-      elsif Prior.Kind /= Landin.Types.No_Value then
-         if not Parts_Agree (Into, Prior, Part) then
-            raise Landin.Compiler_Defect with
-              "one variadic actual was assigned two promoted types";
-         end if;
-         return;
-      end if;
-      Into.Signature_Parts.Append (Part);
-      if Into.Current_Routine = No_Routine_Instance then
-         Into.Node_Variadic_Parts (Where) := Into.Signature_Parts.Last_Index;
-      else
-         declare
-            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
-         begin
-            Into.Node_Overlays (Overlay).Has_Variadic_Part := True;
-            Into.Node_Overlays (Overlay).Variadic_Part :=
-              Into.Signature_Parts.Last_Index;
-         end;
-      end if;
-   end Note_Variadic_Argument;
 
    function Result_Shape_Of
      (Of_Table : Table;
@@ -5175,17 +5111,6 @@ package body Landin.Checking is
       return False;
    end Has_Variant_Part;
 
-   function Has_Aggregate_Field (Of_Table : Table; Id : Nominal_Type_Id)
-     return Boolean
-   is
-   begin
-      for Field in 1 .. Layout_Field_Count (Of_Table, Id) loop
-         if Field_Kind_Of (Of_Table, Id, Field) = Aggregate_Field then
-            return True;
-         end if;
-      end loop;
-      return False;
-   end Has_Aggregate_Field;
 
    function Field_Shape_Of
      (Of_Table : Table; Id : Nominal_Type_Id; Field : Positive)

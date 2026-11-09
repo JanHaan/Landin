@@ -1086,24 +1086,6 @@ package Landin.Checking is
           Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
                   and then Holds (Into, Add_Signature'Result);
 
-   --  The promoted actual expression, not its argument wrapper.  Absent
-   --  metadata returns No_Value; generic routine views retain separate facts.
-   procedure Note_Variadic_Argument
-     (Into    : in out Table;
-      Of_Tree : Landin.Syntax.Tree;
-      Node    : Landin.Syntax.Node_Id;
-      Part    : Signature_Part)
-     with Pre => Is_Prepared (Into) and then Covers (Into, Of_Tree)
-                 and then Landin.Syntax.Contains (Of_Tree, Node)
-                 and then Holds (Into, Part);
-
-   function Variadic_Argument_Of
-     (Of_Table : Table;
-      Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Signature_Part
-     with Pre => Is_Prepared (Of_Table) and then Covers (Of_Table, Of_Tree)
-                 and then Landin.Syntax.Contains (Of_Tree, Node);
-
    function Signature_Never_Returns
      (Of_Table : Table; Signature : Signature_Id) return Boolean;
 
@@ -1543,18 +1525,6 @@ package Landin.Checking is
      with Pre  => Holds (Of_Table, Id)
                   and then Position <= Conformance_Input_Count (Of_Table, Id),
           Post => Holds (Of_Table, Nth_Conformance_Input'Result);
-
-   function Conformance_Binding_Count
-     (Of_Table : Table; Id : Conformance_Id) return Natural
-     with Pre => Holds (Of_Table, Id);
-
-   function Nth_Conformance_Binding
-     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
-      return Actual_Key
-     with Pre  => Holds (Of_Table, Id)
-                  and then Position <= Conformance_Binding_Count
-                    (Of_Table, Id),
-          Post => Holds (Of_Table, Nth_Conformance_Binding'Result);
 
    function Conformance_Source
      (Of_Table : Table; Id : Conformance_Id)
@@ -2128,12 +2098,6 @@ package Landin.Checking is
                                          = Fields'Length);
 
    function Has_Variant_Part (Of_Table : Table; Id : Nominal_Type_Id)
-     return Boolean
-     with Pre => Is_Prepared (Of_Table)
-                 and then Holds (Of_Table, Id)
-                 and then Has_Layout (Of_Table, Id);
-
-   function Has_Aggregate_Field (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
      with Pre => Is_Prepared (Of_Table)
                  and then Holds (Of_Table, Id)
@@ -2890,8 +2854,6 @@ private
       Has_Text_Conversion : Boolean := False;
       Has_Distinct_Conversion : Boolean := False;
       Distinct_Conversion : Nominal_Type_Id := No_Nominal_Type;
-      Has_Variadic_Part : Boolean := False;
-      Variadic_Part : Natural := 0;
       Has_Lent_Array : Boolean := False;
       Lent_Array : Natural := 0;
       Text_Conversion : Text_Conversion_Kind := No_Text_Conversion;
@@ -3007,7 +2969,6 @@ private
       Node_Owed_Checks : Constraint_Id_Vectors.Vector;
       Node_Concepts : Concept_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
-      Node_Variadic_Parts : Index_Vectors.Vector;
       --  Zero where the node lends nothing, else one more than the length
       --  of the whole array it lends as a slice.
       Node_Lent_Arrays : Index_Vectors.Vector;

@@ -24120,7 +24120,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "tandard error and then executes D232's terminal instruct"
                & "ion, so the process ends as it did and a debugger still "
                & "stops on that instruction. The line is `FILE:LINE:COLUMN"
-               & ": trap: KIND`, the kind one of `core/panic`'s four atom "
+               & ": trap: KIND`, the kind one of `core/panic`'s five atom "
                & "names and the site the failed operation's own, the one D"
                & "232's site number and the panic map name: under D339's i"
                & "nlining at `speed` a copied check reports the routine's "

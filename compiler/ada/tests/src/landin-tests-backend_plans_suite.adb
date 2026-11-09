@@ -1338,6 +1338,59 @@ package body Landin.Tests.Backend_Plans_Suite is
          & HT & "pop {r4, r5}" & LF
          & HT & ".word 7" & LF,
          13, 2, 2, 1, 1, "Thumb follows r6 until a label");
+      --  An ELF local label ends what a register derived from the frame
+      --  holds as a Mach-O one does; a directive does not.
+      Expect
+        (Sites.RISC_V,
+         HT & "addi x5, x8, -48" & LF
+         & HT & "sd x9, 0(x5)" & LF
+         & ".Ljoin:" & LF
+         & HT & "lw x6, 0(x5)" & LF,
+         3, 0, 1, 0, 0, "RISC-V forgets x5 at an ELF local label");
+      Expect
+        (Sites.RISC_V,
+         HT & "addi x5, x8, -48" & LF
+         & HT & "sd x9, 0(x5)" & LF
+         & "Ljoin:" & LF
+         & HT & "lw x6, 0(x5)" & LF,
+         3, 0, 1, 0, 0, "RISC-V forgets x5 at a Mach-O style label");
+      Expect
+        (Sites.RISC_V,
+         HT & "addi x5, x8, -48" & LF
+         & HT & "sd x9, 0(x5)" & LF
+         & HT & ".p2align 6" & LF
+         & HT & ".text" & LF
+         & HT & ".p2align 2 # join:" & LF
+         & HT & "lw x6, 0(x5)" & LF,
+         3, 1, 1, 0, 0, "RISC-V keeps x5 across directives");
+      Expect
+        (Sites.Xtensa,
+         HT & "addi a8, a7, 16" & LF
+         & HT & "s32i a2, a8, 0" & LF
+         & ".Lxtensa_word_1:" & LF
+         & HT & "l32i a3, a8, 0" & LF,
+         3, 0, 1, 0, 0, "Xtensa forgets a8 at an ELF local label");
+      Expect
+        (Sites.Xtensa,
+         HT & "addi a8, a7, 16" & LF
+         & HT & "s32i a2, a8, 0" & LF
+         & "Lxtensa_word_1:" & LF
+         & HT & "l32i a3, a8, 0" & LF,
+         3, 0, 1, 0, 0, "Xtensa forgets a8 at a Mach-O style label");
+      Expect
+        (Sites.A64,
+         HT & "add x15, x29, #16" & LF
+         & HT & "str x0, [x15]" & LF
+         & ".Ljoin:" & LF
+         & HT & "ldr x1, [x15]" & LF,
+         3, 0, 1, 0, 0, "arm64 forgets x15 at an ELF local label");
+      Expect
+        (Sites.A64,
+         HT & "add x15, x29, #16" & LF
+         & HT & "str x0, [x15]" & LF
+         & "Ljoin:" & LF
+         & HT & "ldr x1, [x15]" & LF,
+         3, 0, 1, 0, 0, "arm64 forgets x15 at a Mach-O label");
    end Site_Counts_Follow_Frame_Addresses;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
