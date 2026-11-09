@@ -1746,8 +1746,9 @@ against the stack it runs on before it reserves the frame, and traps
 stack's limit, so a task that goes too deep stops at the call that would
 have overflowed, between switches as at them. The limit stands a margin
 above the stack's lowest byte, room for a failed check's handler: 640
-bytes on x86-64 and arm64, 768 on RV64 and 384 on Cortex-M0, which
-`--stack-report` gives as `margin_bytes`. A switch carries each stack's
+bytes on x86-64 and arm64, 768 on RV64 and RV32, 1024 on Xtensa, and 384 on
+Cortex-M, 528 with a float unit, which `--stack-report` gives as
+`margin_bytes`. A switch carries each stack's
 limit with the registers it saves. A prepared stack is at least 128
 words, beside the few words its first frame keeps at its top; size it
 from the report's depth of the task's routine and the margin.

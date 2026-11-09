@@ -24944,6 +24944,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "| Xtensa | 1024 | 256 | 336 | 416 | 608 |"
                & LF
                & LF
+               & "RV32 keeps RV64's 768 (D675), and a Cortex-M profile wit"
+               & "h a float unit adds 72 bytes each for the extended excep"
+               & "tion frame and the larger switch frame (D620), 528 in al"
+               & "l."
+               & LF
+               & LF
                & "The default report needs 8 to 24 bytes of that. What is "
                & "left is sized from the depth report's `trap` figure, whi"
                & "ch counts a handler's frame twice (D467), for the corpus"

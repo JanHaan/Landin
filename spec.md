@@ -21275,6 +21275,10 @@ spill areas and recorded backchains without reserving another frame.
 | Cortex-M0 | 384 | 64 | 48 | 188 | 196 |
 | Xtensa | 1024 | 256 | 336 | 416 | 608 |
 
+RV32 keeps RV64's 768 (D675), and a Cortex-M profile with a float unit adds
+72 bytes each for the extended exception frame and the larger switch frame
+(D620), 528 in all.
+
 The default report needs 8 to 24 bytes of that. What is left is sized from
 the depth report's `trap` figure, which counts a handler's frame twice
 (D467), for the corpus's selected handlers that run on an overflowed

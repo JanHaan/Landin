@@ -38,8 +38,9 @@ with Landin.Targets;
 --
 --  A caller grows by at most the larger of Growth_Floor and its own weight,
 --  calls inside loops first, so no routine more than doubles and the work
---  stays linear in the program.  Cortex-M0 is left alone: its backend does
---  not read the objective and its debugger contract has no inlined frames.
+--  stays linear in the program.  Firmware targets are left alone: the
+--  Cortex-M backend does not read the objective, and no firmware debugger
+--  contract has inlined frames.
 --  Each copied block, slot and alias records where it came from
 --  (Landin.IR.Inline_Site), which is what source debugging describes.
 package Landin.IR.Inlining is

@@ -226,7 +226,7 @@ Fixture source: `compiler/tests/fixtures/runtime/line-count/main.ldn`.
 
 ```landin
 --  Count the lines of the file named by the first argument, as `wc -l`
---  does.  A failure is said in words on standard error, and the program
+--  does, and a last line without a newline too.  A failure is said in words on standard error, and the program
 --  then returns 1.
 import core/failure
 import core/io

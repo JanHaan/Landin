@@ -4437,7 +4437,8 @@ package body Landin.Driver is
                Spellings : Landin.Source.Names.Table renames
                  Landin.Stages.Identities (Context).all;
                Refused : Boolean := False;
-               --  The selected profile's stack, as [1990] says "4 KiB".
+               --  The selected firmware profile's stack, 4 KiB in
+               --  [1990]'s reference profile.
                Stack_Bytes : constant Landin.Targets.Byte_Count :=
                  Landin.IR.Firmware_Profile (Unit).Stack_Size;
                use type Landin.Targets.Byte_Count;
