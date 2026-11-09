@@ -3733,15 +3733,16 @@ baseline is recorded:
   counterpart on the firmware profile it fits. Each keeps the oracle its
   fixture already has, and a target runs the set its kind allows.
 - **Size** is the exact bytes of each section of the linked image, read from
-  the image: the build report counts emission sites, not bytes, unless this
-  item's format change adds them. Emission is deterministic, so size has no tolerance: growth
+  the image: the build report gives a firmware image's totals, and its
+  routine counters count emission sites, not bytes. Emission is deterministic, so size has no tolerance: growth
   fails unless the commit declares the new baseline.
 - **Time** depends on where the code runs. On a native runner it is the
   median wall time over several fresh copies of each executable, since
   SR-146 found placement alone moving it by up to 50%. On the rig's boards
-  it is a cycle counter over a RAM run where the core has one (DWT CYCCNT on
-  the M7 and M33, `mcycle`, CCOUNT), and a SysTick or timer count where it
-  does not, as on the RP2040's M0+.
+  it is the core's cycle counter over a RAM run where it has one (DWT CYCCNT on
+  the M7 and M33, `mcycle` or the vendor's counter on RISC-V, CCOUNT on
+  Xtensa), and a SysTick or timer count where it does not, as on the
+  RP2040's M0+; the runner table names each board's.
   Under emulation alone (RV64, FreeBSD arm64 and the QEMU firmware lanes) it
   is a deterministic instruction count, or the target records size alone;
   an emulator's wall time does not measure the code. Each class's tolerance
@@ -3759,7 +3760,8 @@ baseline is recorded:
 - **Cost.** Configurations whose emitted bytes are identical are measured
   once and cite the identity. Size runs on every push; time runs on the
   schedule and on dispatch: the schedule and a `scope=boards` dispatch run
-  the boards alone today, and this item adds the timing jobs to them. A pilot over the whole matrix records its minutes, its
+  the boards, documents and scripts but no software lanes today, and this
+  item adds the timing jobs to them. A pilot over the whole matrix records its minutes, its
   jobs against the account's concurrent-job limits and its noise before the
   thresholds are enforced.
 
@@ -3794,8 +3796,9 @@ serves every backend is decided first, and R551-16's shared backend code is
 split where this work meets it. The other costs the ranked list puts first,
 among them the bounds check an indexed increment keeps and the atomic and
 barrier lowering R551-12 records as baseline, are taken here or recorded with
-their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024,
-and R551-16's backend part; its stage closures stay open.
+their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024.
+Where it meets the backends' shared code it answers R551-16's activation and
+splits that code; the row stays open for the stage closures.
 
 Exit evidence: a direct test of `Landin.IR.Liveness`'s intervals, its
 conservative whole-routine fallback included, before any allocator change that
@@ -4328,7 +4331,7 @@ SR-982, SR-699.
 | SR-1021 | Usability | `compiler/tests/registers.md`'s [0730] row says SVD generation stays with the companion tool though `refine svd` generates register modules, and `check.py` then requires the tour to say so too, so the tour keeps a sentence the compiler contradicts. Met correcting tour [0730] in the pre-R16 council review. | The next change to `registers.md` or to tour [0730]. | The row naming the companion tool only for what it still owns, and the tour's sentence matching. | open |
 | SR-1022 | Usability | Library names that read alike mean different things: `status_of` takes a path in `core/io` and an open descriptor in `platform/posix`, whose path form is `status_at`; `fake.terminals_over` has no `_space` though the fakes' naming says each is named one way; and `platform/posix` still takes `follow: bool` and `data_only: bool` where `core/io` replaced such flags with atoms. Met by the pre-R16 council review of the library. | The next change to `platform/posix`'s file calls or to the fakes. | One meaning per name across the library, or the difference stated where both are documented. | open |
 | SR-1023 | Competitive optimization | Costs the library imposes that R16's measurements will see: an erased table still reaches every entry (D484), and formatting goes through `[]any formattable` with a pointer `self`, `text.builder` through `any grower` even over a fixed buffer, and `diag.stream` through `any io.writer`; `core/README.md`'s Cortex-M size rows for the memory network and the volume blame complete conformance tables and predate D484; and `core/mem`'s firmware copy loops are chosen by `compiler.os`, so `speed` and `size` run the same byte loops. Met by the pre-R16 council review. | R16.10's ranked costs. | Measured, and each either improved or recorded with its measurement. | open |
-| SR-1024 | Competitive optimization | The Xtensa backend keeps the RISC-V backend's saved-register set (indexed 9 to 59, with RISC-V float and `x27` comments) and its frame preflight passes that set's length to `Frame_Bound`, so the frame budget counts 51 saves that never happen; `XLEN` always returns 32. Met by the pre-R16 council review. | R16.20's decision on Xtensa. | A frame budget counting Xtensa's own saves. | open |
+| SR-1024 | Competitive optimization | The Xtensa backend keeps the RISC-V backend's saved-register set (indexed 9 to 59, with RISC-V float and `x27` comments) and its frame preflight passes that set's length to `Frame_Bound`, so the frame budget counts 51 saves that never happen; `XLEN` always returns 32. Met by the pre-R16 council review. | R16.20's decision on Xtensa. | A frame budget counting Xtensa's own saves. | scheduled R16.20 |
 | SR-1025 | Usability | A struct field named `from` is refused first with L0103 "this struct is never closed" at the struct's header; only the second diagnostic, L0100 "`from` is a keyword", names the cause. Met writing `runtime/events-blocking-pipe-write`'s `reading` struct in the pre-R16 council review. | The next change to the parser's recovery or its keyword diagnostics. | A keyword used as a field name reported once, naming the keyword. | open |
 | SR-1026 | Broader standard library | Under `hosted/events`, a write to a blocking terminal or a blocking socket the program supplied can still hold the thread: D1045 caps a write at `PIPE_BUF` after readiness, which a pipe guarantees room for, but such a descriptor's readiness can promise less. Met fixing the event provider's blocking pipe writes in the pre-R16 council review. | The completion interface's work, or the next change to the provider's writes. | Such writes never holding the thread, or the provider refusing such descriptors and saying so. | open |
 | SR-1028 | Scale and self-hosting | Some target byte counts are held in the host's `Natural` or `Positive` rather than `Landin.Targets.Byte_Count` (the Xtensa machine's `Frame_Bytes`, and frame figures in the Xtensa, RISC-V and Cortex-M backends), `landin-bindings.adb` spells a word size of 4 or 8 outside `Landin.Targets`, and `landin-targets-assembly.adb` raises `Program_Error` where the compiler's convention is `Compiler_Defect`. All are bounded today. Met by the pre-R16 council review of the backends. | The next change to those frames, to the bindings' layout or to the assembly target facts. | Byte counts in `Byte_Count`, the word size read from `Landin.Targets`, and `Compiler_Defect` raised. | open |

@@ -1777,8 +1777,11 @@ class Transcriptions(unittest.TestCase):
             rules = rules.replace(
                 "```landin\n    counter: u32 = 0\n", "```text\n", 1)
             rules = rules.replace("r = a * (b + -1) - -a", "r = a *", 1)
+            rules, after = (rules.split("\n## ", 1) + [None])[:2]
             rules += ("\n### Nothing\n\n```landin\na: u32 = 1\n```\n\n"
                       "```landin\na: u32 = 1\n```\n")
+            if after is not None:
+                rules += "\n## " + after
             page.write_text(head + "## Rules\n" + rules)
             said = [why for _, _, why in checker.check_layout_page(True)]
         self.assertIn("a rule's only blocks are its two landin examples",
@@ -2006,14 +2009,15 @@ class RoadmapStructure(unittest.TestCase):
         #  Past every record the register has had, so it names nothing.
         invented = "SR-%d" % (1 + max(int(n) for n in re.findall(
             r"SR-(\d+)", real_roadmap())))
-        said = roadmap_faults(once("What waits for a trigger.",
-                                   "What waits for a trigger (%s)." % invented))
+        said = roadmap_faults(once("Work that waits for its activation,",
+                                   "Work that waits for its activation (%s),"
+                                   % invented))
         self.assertTrue(any("%s is cited and is no register record" % invented
                             in why for why in said))
         #  Quoted in a code span, as a finding spells what it met, it is not
         #  a citation.
-        said = roadmap_faults(once("What waits for a trigger.",
-                                   "What waits for a trigger (`%s`)."
+        said = roadmap_faults(once("Work that waits for its activation,",
+                                   "Work that waits for its activation (`%s`),"
                                    % invented))
         self.assertFalse(any(invented in why for why in said))
 

@@ -578,7 +578,7 @@ class GeneratedReference(unittest.TestCase):
         for name in ('library.css', 'library-theme.js', 'library.js'):
             self.assertTrue((self.destination / name).is_file(), name)
         read = html.unescape(re.sub(r'<[^>]*>', '', text))
-        summary = read.index('Reader, writer, file and process capabilities')
+        summary = read.index('Concepts for reading, writing, files and the process')
         self.assertLess(summary, 2048)
         self.assertLess(summary, read.index('platform/linux/numbers'))
         # A signature, its source line and its documentation are lines of
@@ -640,7 +640,7 @@ class GeneratedReference(unittest.TestCase):
         self.assertRegex(text, r'<input type="search" id="api-search"[^>]*aria-expanded="false"')
         self.assertIn('<label for="api-search">search all library APIs</label>', text)
         # The compact field follows the module's opening paragraph.
-        self.assertLess(text.index('Reader, writer, file and process capabilities'),
+        self.assertLess(text.index('Concepts for reading, writing, files and the process'),
                         text.index('id="api-search"'))
         # Without a script the field and the button are hidden.
         theme = (self.destination / 'library-theme.js').read_text()
