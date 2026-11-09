@@ -4,6 +4,22 @@ Fixtures live here rather than under `compiler/ada/` because they describe
 Landin, not the Ada implementation that currently checks them. When a stage
 is eventually rewritten, these must still be the tests it has to pass.
 
+A few words have a fixed meaning in this guide and the documents that cite
+it. An *oracle* is the expected result a check compares with, written down
+before the run: an exit status, a trap, a byte stream or a debugger value;
+reader-facing documents call it the expected output. A *lane* is one runner
+configuration of the harness, one target's corpus on one kind of runner, as
+[Lanes](#lanes) says; a CI *job* is a job of `.github/workflows/gate.yml`,
+which may run a lane, one `--shard` of it, one of the Cortex-M harness's
+three parts, or a board leg, one port on the rig. *Evidence* is what a run
+records that a result held, its transcript, verdicts and kept artifacts,
+and never an approval of a revision. A run narrower than the complete suite
+says so at the head of its transcript: `FILTERED` for exact selectors,
+`HOST-ONLY` for the Mac's `--host`, `SHARD I of N` for one shard, and
+`NOT APPLICABLE` for a selected fixture this lane does not run. `D257`
+names a decision recorded in `spec.md`, and `[1760]` a numbered paragraph
+of `tour.md` or `spec.md`; `refine explain D257` prints either's title.
+
 ## Layout
 
 ```text
@@ -29,6 +45,10 @@ compiler/tests/
   layout.targets                         recorded: what each target measures
   lowering.ir                            recorded: every positive fixture, lowered
 ```
+
+A fixture directory named `r420-...` or `r630-...` carries the number,
+without its dot, of the first roadmap's item that added it; that roadmap is
+closed, and a new fixture takes a descriptive name alone.
 
 Generated and recorded are not the same word here. `check.py` writes the
 generated files and refuses each when it is stale; the last two are written
@@ -56,10 +76,10 @@ its ordered `codes`, an empty list included when none are pinned; an
 end-to-end fixture carries no `codes`. Otherwise the command says which no
 longer holds and writes nothing, because those are the fixture's verdict and
 a recording replaces only bytes. `./scripts/dev-test.sh` takes the same
-options. `constructs.matrix`
-began as the list of every construct either document defines against what
-the corpus says about it, and is now the construct inventory: each
-row also gives the strongest claim per product target, read from fixture
+options.
+
+`constructs.matrix` is the construct inventory: every construct either
+document defines, against what the corpus says about it. Each row also gives the strongest claim per product target, read from fixture
 metadata together with `darwin/parity.json`, `cortex-m/corpus.json` and
 `driver/fixture.json`; every named refusal with whether its note says the form
 is a recorded boundary, withdrawn or transferred to a named successor; and the
@@ -192,8 +212,9 @@ QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh --target=linux-rv64 \
 
 That is QEMU's user emulation with a cross driver, which is evidence that
 the emitted code is right and none about the pinned toolchain on its own
-host; the gate's `ubuntu-24.04-arm` jobs are that for arm64, and its
-`rv64-qemu` jobs run the second command's lane under the flake's
+host. The gate does not emulate arm64: its arm64 jobs run the lane natively
+on `ubuntu-24.04-arm`, so the first command is the emulated stand-in for
+them. Its `rv64-qemu` jobs run the second command's lane under the flake's
 pinned QEMU with Ubuntu's cross packages. `nix develop` provides the
 whole cross lane, pinned by `environments/pins.sh` to the versions
 `flake.lock`'s nixpkgs has:
@@ -233,15 +254,11 @@ the run as a regression, and one that passes fails too, naming the row to
 remove. The listed failures are therefore told apart from a regression
 without building an unchanged compiler to compare with. A fixture selected
 with `--fixture` on the lane is held to its row the same way.
-The retired routine acceptance policy used this scope for the debug compiler
-and ran the complete runtime/ABI matrix with the release compiler; milestone
-acceptance ran the complete suite in both modes. Those exact-revision
-acceptance runs are retired. The current `.github/workflows/gate.yml` has
-separate Linux `compiler` and `release` jobs. `release` runs unfiltered
-`./scripts/test.sh`; `compiler` runs it as three required `--shard` jobs,
-which together are the complete run. So the complete suite runs in both
-debug and release modes. The gate is a safety net, not an exact-revision acceptance verdict.
-See [`docs/process.md`](../../docs/process.md).
+
+The gate runs the complete suite in both compiler modes: its Linux
+`release` job runs `./scripts/test.sh` unfiltered, and `compiler` runs it
+with the debug compiler as three required `--shard` jobs, which together
+are the complete run. See [the gate reference](../../docs/process.md#the-mechanical-gate).
 
 D213's `r490-distinct-*` fixtures cover exact base construction/extraction,
 opaque identity, no inherited operators or conformances, ordinary identifiers,
@@ -681,7 +698,7 @@ emits assembly text.
 | `class` | yes | must match the directory the fixture sits in |
 | `summary` | yes | one line, what the fixture proves |
 | `profiles` | yes for runtime and ABI only | `standard` for the four baseline compiler profiles, or `specialization` for all six; independent of fixture name |
-| `levels` | no, and runtime only | comma-separated CPU feature levels (D255), each some product target's, at which the program is also built and executed under every profile; each lane runs its own family's (Linux x86-64 the x86-64 ones, Linux arm64 and Darwin the arm64 ones, the Cortex-M corpus the M-profile ones), and the default level always runs. A level runs only once the processor that runs the lane confirms every feature of it: a Linux lane reads `/proc/cpuinfo`, a native one its host's and a cross one as its runner presents it, through a C program the lane's driver links; Darwin asks `sysctl`. An unconfirmed level fails as `UNVERIFIED` rather than being skipped or inferred from another lane. On Linux arm64, which has no ISA note, the image built at a level is held to its LSE instructions and to no exclusive-monitor loop, and the default's image of the same fixture to no LSE instruction; on Linux RV64, which has none either, it is held to its `Tag_RISCV_arch` attribute naming each of the level's extensions, and the processor's `isa` line to naming them too |
+| `levels` | no, and runtime only | comma-separated CPU feature levels (D255), each some product target's, at which the program is also built and executed under every profile, the default level always as well; the paragraph after this table says which lane runs which and how a level is confirmed |
 | `level_status` | no, and only with `levels` | comma-separated `LEVEL=STATUS` entries, each a level `levels` names: the status the program returns when built at that level, where its result is the level's feature fact; `status` otherwise |
 | `program` | yes for runtime, ABI, and a rooted positive or negative | the `.ldn` program the fixture runs or uses as its compile-only corpus file |
 | `with` | no | the rest of the Landin module, when one file is not enough; never a C source |
@@ -708,6 +725,19 @@ emits assembly text.
 | `constructs` | yes for a fixture with a program | the `[NNNN]` ids, without brackets, this fixture is evidence about |
 | `targets` | yes | comma-separated targets the fixture applies to |
 | `fixed` | no | for a negative with a program and codes: golden results after the first fix of every diagnostic that offers one is applied; a bare name is the program's result and `source -> result` another source's |
+
+A lane runs the `levels` of its own family: Linux x86-64 the x86-64 ones,
+Linux arm64 and Darwin the arm64 ones, the Cortex-M corpus the M-profile
+ones. A level runs only once the processor that runs the lane confirms
+every feature of it: a Linux lane reads `/proc/cpuinfo`, a native one its
+host's and a cross one as its runner presents it, through a C program the
+lane's driver links; Darwin asks `sysctl`. An unconfirmed level fails as
+`UNVERIFIED` rather than being skipped or inferred from another lane. On
+Linux arm64, which has no ISA note, the image built at a level is held to
+its LSE instructions and to no exclusive-monitor loop, and the default's
+image of the same fixture to no LSE instruction; on Linux RV64, which has
+none either, it is held to its `Tag_RISCV_arch` attribute naming each of
+the level's extensions, and the processor's `isa` line to naming them too.
 
 `codes` also says which stage refused the fixture, and that is what decides
 whether the grammar must derive its program. The frontend refuses what the
@@ -1011,15 +1041,16 @@ recording run and one test run for them all. `--refuse`, `--reason` and
 `--stops` describe one fixture's row, so a fixture that needs them is added
 in a run of its own.
 
-It reads the metadata as the test program does and stops on any fault; gives
-a runtime or ABI fixture its row in `cortex-m/corpus.json`; puts a positive,
-runtime or ABI fixture's sources in the layout `refine fmt` gives, which
-`formatting/the corpus is formatted` holds the corpus to, unless the fixture
-names [1750] and its layout is its evidence; regenerates every file a fixture
-is read into (`check.py --generate`: `targets.matrix`, `constructs.matrix`,
-the diagnostic matrix and `lexical.tokens` among them); and says what only a
-person can decide, a Linux x86-64 runtime or ABI fixture that does not run on
-arm64 needing its record in `linux-arm64/parity.json`.
+It reads the metadata as the test program does and stops on any fault. It
+gives a runtime or ABI fixture its row in `cortex-m/corpus.json`. It puts a
+positive, runtime or ABI fixture's sources in the layout `refine fmt` gives,
+which `formatting/the corpus is formatted` holds the corpus to, unless the
+fixture names [1750] and its layout is its evidence. It regenerates every
+file a fixture is read into (`check.py --generate`: `targets.matrix`,
+`constructs.matrix`, the diagnostic matrix and `lexical.tokens` among
+them). Last, it says what only a person can decide: that a Linux x86-64
+runtime or ABI fixture that does not run on arm64 needs its record in
+`linux-arm64/parity.json`.
 A runtime fixture's row is what Cortex-M0 compilation does with it: the
 script compiles it with refine, the newest this checkout built or the one
 `--refine=PATH` names, and writes `execute` when it compiles and `refuse`
@@ -1080,7 +1111,7 @@ everywhere.
 | negative, end-to-end | executed: recorded cases compare `refine` output/status with `expect`/`status`; program-only negative cases require the expected failure status and ordered `codes:` sequence |
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |
 | ABI | executed in the existing `runtime fixtures execute` case: `refine` emits assembly, the selected target's C driver compiles it with `c-sources`, and the result's output/status/trap verdict is checked |
-| positive | executed: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the selected target's backend must emit assembly for it |
+| positive | checked and emitted, never run: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the selected target's backend must emit assembly for it |
 | debugger | sessions in `debugging/` run separately through `scripts/debug.sh` |
 
 Each producing attempt first removes its expected output through the platform
@@ -1235,7 +1266,7 @@ limited `out` parameter is passed by reference and `Lex` had not cleared it.
 `python3 check.py --generate` regenerates every generated file at once: the
 token dump, the catalogue and its matrix and explanations, the coverage and
 construct matrices and the editor files. Each flag below writes its own share,
-and several flags in one run each run.
+and one run may name several flags.
 
 `python3 check.py --catalogue` writes both `diagnostics.catalogue` and
 `diagnostics.matrix`. The compact catalogue comes from
@@ -1265,7 +1296,7 @@ copies are generated for reading; editing one cannot change its source.
 `outputs` come from the fixture's own record — its program, root, arguments,
 C peer, status, ordered codes and a digest of every golden it cites — so an
 edited expected output or a changed code list moves the column and a stale
-matrix fails the gate. `results` is the verdict each product target's retained
+matrix fails `check.py`, and so the gate's `documents` job. `results` is the verdict each product target's retained
 record reaches for that one derivation, read through the same per-fixture
 reader the construct inventory folds over constructs: `executed`, `compiled`
 or `refused`, strongest first. `targets` stays the applicability claim it

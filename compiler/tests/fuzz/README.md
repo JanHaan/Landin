@@ -36,7 +36,8 @@ picks the kind and every choice inside it through splitmix64, so a seed
 number names one mutant on every host and every Python, against the same
 fixture tree; `scripts/tests/test_fuzz_mutator.py` holds the generator to
 splitmix64's published outputs and each kind to the bytes it makes. A source
-is read as an editor shows it, a byte that is not UTF-8 as U+FFFD.
+is read as an editor shows it, each byte that is not valid UTF-8 replaced
+by U+FFFD.
 
 The server is initialized with the checkout as its import root. Before the
 mutants, the driver opens `negative/core-fault-needs-mutable-inner` unchanged

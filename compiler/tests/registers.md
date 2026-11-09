@@ -27,11 +27,12 @@ with every named refusal and the wording of its [1830] note.
   successor family. `advisory`: design, usage or process prose that adds no
   source behaviour a fixture could discriminate. A named refusal is not a
   state; it is part of a row.
-- **Targets** are `all` (Linux x86-64, arm64 and RV64, FreeBSD x86-64 and arm64, macOS arm64 and Cortex-M), `hosted`,
+- **Targets** name the product targets, the targets the inventory accounts
+  every construct on and the columns of `constructs.matrix`: `all` (Linux x86-64, arm64 and RV64, FreeBSD x86-64 and arm64, macOS arm64 and Cortex-M), `hosted`,
   `cortex-m` or `none`; `cortex-m` is the Cortex-M family, today
   `cortex-m0` alone, and a scope rather than a target's spelling.
   `synthetic-32` is a pre-Cortex model and applies to no construct.
-  `rv32`, the RV32 firmware target, is no product target and has no
+  `rv32`, the RV32 firmware target, is not a product target and has no
   column (D840): it runs the firmware corpus on two lanes, but [1270],
   [1400], [1570], [1610], [1730], [1830] and [1860] have their Cortex-M
   evidence only from records that are Cortex-M's alone, the derived
@@ -39,12 +40,16 @@ with every named refusal and the wording of its [1830] note.
   `cortex-m0`, so accounting every construct on it would open gaps no
   item owns. A fixture that names it is still held to a run there: a
   compile-time one selects `--target=rv32`, and a runtime or ABI one has
-  a firmware corpus row an RV32 lane executes. **Gaps** are applicable targets without the state's
+  a firmware corpus row an RV32 lane executes. `xtensa` is not a product
+  target either: no prototype applies to it, so no row of the
+  [target applicability table](#target-applicability-coverage) lists it
+  and no fixture may name it, and its lanes reach the firmware corpus
+  through the rows of `cortex-m/corpus.json`. **Gaps** are applicable targets without the state's
   evidence, and every gap needs an owning item.
 - **Owners** are live roadmap items or successor families. A finished owner,
   an unknown owner or an owner the disposition does not mention is refused.
-  A disposition of "matrix evidence" means the generated row's evidence is
-  the whole explanation.
+  The disposition `matrix evidence` says the row needs no explanation
+  beyond the evidence the generated matrix shows for it.
 
 `check.py` holds all of it on every full run, and
 `scripts/tests/test_construct_inventory.py` shows each refusal fires.
@@ -278,7 +283,7 @@ construct.
 ## Prototype derivation coverage
 
 A row means the fixture is a completed executable or negative derivation of
-the named pressure, not merely that it uses a construct the prototype also
+the prototype pressure the row names, not merely that it uses a construct the prototype also
 used. Source line numbers in the generated `prototypes.matrix` are recovered
 from the finding labels, so moving prose cannot stale a hand-copied location,
 and each row's inputs, outputs and per-target results are derived from the
