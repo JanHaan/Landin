@@ -1922,13 +1922,13 @@ and by `blocking.last_errno`'s number, before going on with its defaults.
 
 The hosted provider whose waiting operations switch fibres, written once
 over `platform/posix`, `platform/linux`'s epoll and signalfd and
-`platform/kqueue`: the provider `host`, made by `new`, imported as
+`platform/kqueue`: the provider `host`, made by `over`, imported as
 `events` with no alias. A program that serves several things at once,
 or waits for a signal, mints it instead of `blocking.new()`.
 
 | Call | What it does |
 |---|---|
-| `events.new(space, entries)` | Fill an `events.space` the caller declares `zeroed` and return a `host` over it and over `entries`, the table of fibres that may be unfinished at once, one more than a group's count. |
+| `events.over(space, entries)` | Fill an `events.space` the caller declares `zeroed` and return a `host` over it and over `entries`, the table of fibres that may be unfinished at once, one more than a group's count. |
 | `events.last_errno(host)` | The errno number of the calling thread's last failing call. |
 | `events.last_signal(host)` | The signal that ended the last child waited for. |
 
@@ -1948,7 +1948,13 @@ own accord. With nothing waiting it returns at once.
 - The provider's sockets and a child's pipes are non-blocking. A file it
   did not make is polled first and read or written once it is ready, so
   a regular file is read at once, and a terminal or a pipe a fibre waits
-  for lets the others run.
+  for lets the others run. The provider never makes such a file
+  non-blocking, since other processes share its mode; while one that is
+  not a regular file is blocking, a write to it is handed at most
+  `PIPE_BUF` bytes at a time, 4096 on Linux and 512 on Darwin and
+  FreeBSD, which a pipe ready to write takes without waiting. A terminal
+  or a blocking socket can report room for less, and a write to one can
+  still hold the thread until the other end reads (D1045).
 - Closing a file or a socket, or shutting a socket's side, through the
   provider wakes every fibre waiting on it, whose call fails `io_failed`.
 - A socket's limits from `set_timeouts` bound each wait, and their

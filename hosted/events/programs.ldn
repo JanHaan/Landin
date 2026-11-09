@@ -20,8 +20,10 @@ events_spawn: (self: host, path: text.host_string,
               ! io.not_found | io.no_access | io.io_failed =
     started = try system.start(services(self), path, arguments, environment,
                                streams)
-    --  A pipe left blocking still works, since every read and write waits
-    --  for readiness first; a non-blocking one never holds the thread.
+    --  A pipe the system leaves blocking stays as it is rather than fail
+    --  the spawn, which would leave a started child to end and reap: a
+    --  read waits for readiness first, and a write then takes no more
+    --  than a pipe reported ready takes without waiting (D1045).
     if started.input_open then
         posix.set_non_blocking(system.descriptor_of(started.input), true)
             else none

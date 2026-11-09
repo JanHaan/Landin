@@ -90,7 +90,7 @@ public main: () -> (code: i32) =
     code = 1
     mut state: events.space = zeroed
     mut entries: [2]usize = zeroed
-    host := events.new(state, entries) else (problem)
+    host := events.over(state, entries) else (problem)
         _ = problem
         return
     end

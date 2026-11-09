@@ -90,7 +90,7 @@ end idle_value
 
 --- Caller-owned state of an event provider: the round of turns its
 --- fibres take, and its event loop. Declare it `zeroed` and give it to
---- `new`, which fills it; it must outlive the handle.
+--- `over`, which fills it; it must outlive the handle.
 public space: type = struct
     round: stacks.round_space
     events: loop_state
@@ -130,16 +130,16 @@ end last_signal
 --- Fill `state` and return a handle to the event provider over it and
 --- over `entries`: a round of turns over that table of the fibres that
 --- may be unfinished at once, one more than a group's count, an event
---- queue, closed on exec, and a `hosted/system` handle from `new`, which
---- reports through the calling thread's last-error and last-signal
---- cells. Fails `mem.out_of_memory` when `entries` holds fewer than two,
---- and `io.io_failed` when the system makes no queue, with its errno in
---- the calling thread's cell. Calling this before the hosted entry has
+--- queue, closed on exec, and the `hosted/system` handle `system.new`
+--- gives, which reports through the calling thread's last-error and
+--- last-signal cells. Fails `mem.out_of_memory` when `entries` holds
+--- fewer than two, and `io.io_failed` when the system makes no queue,
+--- with its errno in the calling thread's cell. Calling this before the hosted entry has
 --- established the process's arguments traps, as `hosted/system`'s `new`
 --- does. The queue stays open until the process ends.
-public new: (inout state: space, entries: []mut usize)
-            -> (handle: host from state, entries)
-            ! mem.out_of_memory | io.io_failed =
+public over: (inout state: space, entries: []mut usize)
+             -> (handle: host from state, entries)
+             ! mem.out_of_memory | io.io_failed =
     system.clear_errno(system.new())
     state.events.queue = -1
     state.events.first = 0
@@ -156,7 +156,7 @@ public new: (inout state: space, entries: []mut usize)
         fail io.io_failed
     end
     handle = (state: addr state.events, round: round)
-end new
+end over
 
 --  The hosted/system handle beneath: the process's, which borrows
 --  nothing, so a handle `from` its caller's state carries no storage of
@@ -306,7 +306,7 @@ longest_wait: u64 = 86400000
 --  answers what the reports say is ready, then every record whose
 --  deadline has passed.  With nothing waiting it returns at once.
 loop_idle: (self: idle_value) -> none =
-    --  [0810]: the address of the loop's state `new` kept.
+    --  [0810]: the address of the loop's state `over` kept.
     state: ptr mut loop_state = ptr(self.address)
     turned: bool = state.val.turned
     state.val.turned = false
@@ -457,19 +457,50 @@ events_read: (self: host, opened: io.file, into: []mut u8)
     end loop
 end events_read
 
---  Write some of `bytes` once `opened` has room, waiting for it as a fibre
---  does: a positive count no greater than the slice's.
-written_some: (self: host, opened: io.file, bytes: []u8)
+--  How many of `wanted` bytes one write to `opened` may be handed once
+--  it is ready, so that the write cannot wait (D1045): all of them when
+--  they are no more than `posix.pipe_atomic`, which a pipe reported ready
+--  takes without waiting, or when the descriptor is non-blocking, whose
+--  write fails EAGAIN rather than wait, or a regular file, which never
+--  waits for a reader; otherwise `posix.pipe_atomic`.  The mode is read
+--  here rather than set: it belongs to the open file, which a standard
+--  stream shares with other processes.  A terminal or a blocking socket
+--  the program hands over may report room for less, and a write there
+--  can still hold the thread.
+at_most: (opened: io.file, wanted: usize) -> (most: usize) =
+    most = wanted
+    return when wanted <= posix.pipe_atomic
+    most = posix.pipe_atomic
+    descriptor: posix.descriptor = system.descriptor_of(opened)
+    unblocked: bool = posix.non_blocking(descriptor) else (problem)
+        _ = problem
+        return
+    end
+    if not unblocked then
+        found: posix.status = posix.status_of(descriptor) else (problem)
+            _ = problem
+            return
+        end
+        return when found.kind <> posix.regular
+    end if
+    most = wanted
+end at_most
+
+--  Write some of `bytes`, no more than `most` of them, once `opened` has
+--  room, waiting for it as a fibre does: a positive count no greater than
+--  the slice's.
+written_some: (self: host, opened: io.file, bytes: []u8, most: usize)
               -> (count: usize) ! io.io_failed =
     descriptor: posix.descriptor = system.descriptor_of(opened)
+    taken: usize = if lenof bytes > most then most else lenof bytes end if
     loop do
         try until_ready(self, descriptor, true)
-        accepted: usize = put_some(opened, bytes) else (problem)
+        accepted: usize = put_some(opened, bytes[0..<taken]) else (problem)
             continue when problem == posix.eintr or problem == posix.eagain
             record(self, problem)
             fail io.io_failed
         end
-        fail io.io_failed when accepted == 0 or accepted > lenof bytes
+        fail io.io_failed when accepted == 0 or accepted > taken
         count = accepted
         return
     end loop
@@ -477,10 +508,11 @@ end written_some
 
 write_all: (self: host, opened: io.file, bytes: []u8)
            -> none ! io.io_failed =
+    most: usize = at_most(opened, lenof bytes)
     mut written: usize = 0
     while written < lenof bytes do
         written += try written_some(self, opened,
-                                    bytes[written..<lenof bytes])
+                                    bytes[written..<lenof bytes], most)
     end while
 end write_all
 
@@ -500,7 +532,8 @@ events_write_some: (self: host, opened: io.file, bytes: []u8)
     end if
     mut requested: usize = lenof bytes
     if requested > 65536 then requested = 65536 end if
-    count = try written_some(self, opened, bytes[0..<requested])
+    count = try written_some(self, opened, bytes[0..<requested],
+                             at_most(opened, requested))
 end events_write_some
 
 --  What does not wait is the system's: its files, streams and arguments.

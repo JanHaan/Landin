@@ -5301,9 +5301,9 @@ On a hosted system the choice is made where the roots are minted
 | provider | a call that waits | groups | signals |
 | --- | --- | --- | --- |
 | `hosted/blocking`, `blocking.new()` | blocks the thread | `scheduler`: each task to its end | none: SIGTERM ends the process |
-| `hosted/events`, `events.new(state, entries)` | lets the other fibres run while epoll or kqueue waits | `turns` | `core/io/signal`'s `signals` |
+| `hosted/events`, `events.over(state, entries)` | lets the other fibres run while epoll or kqueue waits | `turns` | `core/io/signal`'s `signals` |
 
-`events.new` takes a space the caller declares and a round's table, one
+`events.over` takes a space the caller declares and a round's table, one
 entry more than the fibres unfinished at once. A signal is an event a
 fibre waits for with `next_signal`, so only a provider of turns gives
 one: over the blocking host a fibre waiting for SIGTERM would hold the

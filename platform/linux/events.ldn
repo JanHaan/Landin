@@ -220,6 +220,10 @@ fixed if compiler.os == linux then
     --- would wait fails with EAGAIN instead, `O_NONBLOCK`.  The same on
     --- x86-64, arm64 and RV64.
     public o_nonblock: i32 = 2048
+    --- The most bytes a write to a pipe writes whole, `PIPE_BUF`: a write
+    --- of no more waits until there is room for all of it.  The same on
+    --- x86-64, arm64 and RV64.
+    public pipe_buf: usize = 4096
     --- `socket` and `accept4` flag: the new socket is non-blocking, set
     --- with it, `SOCK_NONBLOCK`.
     public sock_nonblock: i32 = 2048
