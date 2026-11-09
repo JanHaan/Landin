@@ -28095,7 +28095,7 @@ without a narrowing conversion; byte slices and `utf8` use 64-bit FNV-1a, and
 `utf8` orders byte-wise, which for valid UTF-8 is scalar order. Floats are
 excluded: IEEE equality is not reflexive for NaN, and hashing raw bits would
 give different hashes to equal signed zeros. There is one
-register and no override (D2), so a program that re-declares `u32 is
+register and no override (retained position D2), so a program that re-declares `u32 is
 cmp.hashable` is refused as a collision, and another reading of a shipped key
 goes on a `distinct` wrapper with its own evidence, which is what the
 colliding-hash fixture now does. D1031 ships the evidence of `core/time`'s

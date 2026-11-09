@@ -29697,13 +29697,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "yte-wise, which for valid UTF-8 is scalar order. Floats "
                & "are excluded: IEEE equality is not reflexive for NaN, an"
                & "d hashing raw bits would give different hashes to equal "
-               & "signed zeros. There is one register and no override (D2)"
-               & ", so a program that re-declares `u32 is cmp.hashable` is"
-               & " refused as a collision, and another reading of a shippe"
-               & "d key goes on a `distinct` wrapper with its own evidence"
-               & ", which is what the colliding-hash fixture now does. D10"
-               & "31 ships the evidence of `core/time`'s and `core/net`'s "
-               & "key types in those modules.",
+               & "signed zeros. There is one register and no override (ret"
+               & "ained position D2), so a program that re-declares `u32 i"
+               & "s cmp.hashable` is refused as a collision, and another r"
+               & "eading of a shipped key goes on a `distinct` wrapper wit"
+               & "h its own evidence, which is what the colliding-hash fix"
+               & "ture now does. D1031 ships the evidence of `core/time`'s"
+               & " and `core/net`'s key types in those modules.",
             when 271 =>
                "Chosen: the vector, spill list and map keep `get` as a c"
                & "opy and gain `at`, which takes the container `inout` and"
