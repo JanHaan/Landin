@@ -2,24 +2,30 @@
 
 `refine explain CODE` prints one section of this page. Each section says what
 rule the code enforces, cites the paragraph or decision that states it, and
-says what to change. The citations a section or a note carries are answered
-too: `refine explain [1760]` or `1760` names a construct's title, document
-and page on the site, `refine explain D275` or `d275` a decision's, with the
-section of the register it is in, and `--full` adds the construct's text or
-the decision's chosen rule (D530). zsh reads `[1760]` as a pattern, so quote
-it there or write `1760`. It is derived: `spec.md` and `tour.md` decide what a
+says what to change. Most codes are errors, which this page also calls
+refusals: the program is not built. The rest are warnings.
+
+`[1760]` names a numbered paragraph of `tour.md` or `spec.md`, and `D275` a
+decision in `spec.md`'s decision register. `refine explain` answers both, as
+`refine explain 1760` and `refine explain D275` or `d275`: it prints the
+title, the document and the page on the site, and for a decision the section
+of the decision register it is in; `--full` adds the paragraph's text or the
+decision's chosen rule (D530). In zsh, which reads `[1760]` as a pattern,
+quote it or write `1760`.
+
+This page is derived: `spec.md` and `tour.md` decide what a
 program means, and the diagnostic catalogue in
 `compiler/ada/src/diagnostics/landin-diagnostics-catalogue.ads` decides which
 codes exist and what each occurrence must carry. `check.py` holds every
 catalogued code to exactly one section here and every citation to a paragraph
 or decision that exists, and generates the compiler's copy of this text.
 
-A section's example, where it has one, is a program the code refuses; the
-test program's `catalogue` case `every code is explained` compiles it beside
-the repository's own library, as `refine` finds its library, and requires
-its report to begin with that code. An example is one file, compiled with no option on the default
-hosted target, unless its first line names the options it needs, as a code
-only a Cortex-M build raises does:
+A section's example, where it has one, is a program that raises the code.
+The test program's `catalogue` case `every code is explained` compiles each
+example with the repository's library, found as `refine` finds it, and
+requires the report to begin with that code. An example is one file compiled
+with no option on the default hosted target, unless its first line names the
+options it needs, as one for a code only a Cortex-M build raises does:
 
 ```text
 -- refine: --target=cortex-m0
@@ -430,9 +436,9 @@ construct that required it. When a name near the required keyword stands in
 its place, such as `thne` for `then`, the diagnostic offers the keyword as a
 likely fix. An arm that names several cases binds no payload, so bindings
 after them are refused here: give the case whose payload is bound an arm of
-its own (D405). Only a name is indexed [0570], so a text literal followed by
-`[` is refused with the route, a name given to the text first; no repair
-removes the literal, which would change what the line computes. Nor is an
+its own (D405). Only a name is indexed [0570]: a text literal followed by
+`[` is refused, and the note says to name the text first. No repair removes
+the literal, which would change what the line computes. Nor is an
 applied type called to make a value: `list(i32)(items: ..., len: 3)` is
 refused naming the form that works, the fields in parentheses where the
 type is declared [1350]. A match arm runs one statement or one expression,
@@ -582,14 +588,14 @@ A name that is declared in no scope this use reaches [1860]. There is no
 implicit declaration, so it is a misspelling or a name used outside its scope.
 When a declared name the position could mean is near it, the diagnostic offers
 that name as a likely fix: a local or parameter, a type, a public member of an
-imported module, never a name out of scope or inaccessible. A member a module
-declares only in a `fixed if` arm this target does not select, a Linux call
-written for Darwin among them, is named as one this system does not have,
-since no spelling of it would be found here. One declared under an arm that
-reads `compiler.feature.cache`, `platform/cortex_m/l1`'s provider, is named
-as a cached profile's on a firmware profile whose description declares no
-cache, and the note says to import a cached description or to maintain
-through `core/cache`'s cacheless provider (D972).
+imported module, never a name out of scope or inaccessible. A member that a
+module declares only in a `fixed if` arm this target does not select, such
+as a Linux call used on Darwin, is reported as one this system does not
+have, and no other spelling is offered. A member declared under an arm that
+reads `compiler.feature.cache`, such as `platform/cortex_m/l1`'s provider,
+is reported as a cached profile's when the firmware profile's description
+declares no cache; the note says to import a description with a cache, or
+to use `core/cache`'s cacheless provider instead (D972).
 
 `core/io` has no `print`, `println`, `printf` or `puts`: one call writes a
 template and its values to a file (D527). Asked for one of those, the note
@@ -804,7 +810,9 @@ quotient: u32 = 7 / 0
 
 ### L0307
 
-A chain of type aliases that never reaches a type [1795].
+A chain of type aliases that never reaches a type [1795]. End the chain:
+make one of its aliases name a scalar or a struct body instead of another
+alias in the chain.
 
 ```landin
 a: type = b
@@ -975,8 +983,8 @@ end bad
 
 ### L0317
 
-Two conformances of one type to one concept [1280]. There is one register for
-the whole program; remove one, or give one type `distinct` identity.
+Two conformances of one type to one concept [1280]. The whole program has
+one table of conformances; remove one, or give one type `distinct` identity.
 
 ```landin
 ordered: type = concept (t: type)
@@ -1056,7 +1064,9 @@ bad: []u8 = """
 
 ### L0324
 
-A compile-time assertion is false [1510].
+A compile-time assertion is false [1510]. Change what it measures, a type's
+layout or the target the build selects, until the condition holds, or
+correct the condition if it states the wrong fact.
 
 ### L0325
 
@@ -1154,15 +1164,16 @@ first-class signature writes a concrete error set instead of `! ...`. Add the
 atom to the error set, handle or propagate the call, or remove the handling
 from an infallible call. The implicit provider calls in `try for` also
 propagate their declared errors: the enclosing routine must declare or infer
-those atoms, and its caller may recover them through ordinary call `else`. In
-an `if` arm, `else value` after a call divides the `if` [1820], which leaves
-the call unrecovered: write `(f() else 0)`, or bind the error with
-`else (problem)`. A failing call that ends a body with returns is read as the
-routine's value [1080], and the refusal says so; its result is held to the
-returns only once the failure is handled (D871). The hosted `main` takes no
-`!` set [1970], so a `try` or an unhandled call there is not mended by
-widening one: handle the failure with `else`, or move the work into a routine
-whose set holds it and handle that call's failure in `main` (D872).
+those atoms, and its caller may recover them through ordinary call `else`.
+
+In an `if` arm, `else value` after a call is read as the `if`'s own `else`
+[1820], so the call is left unrecovered: write `(f() else 0)`, or bind the
+error with `else (problem)`. A failing call that ends a body with returns is
+the routine's value [1080], and the message says so; its result is checked
+against the returns once the failure is handled (D871). The hosted `main`
+declares no `!` set [1970], so widening one cannot mend a `try` or an
+unhandled call there: handle the failure with `else`, or move the work into
+a routine whose set holds it and handle that call's failure in `main` (D872).
 
 ```landin
 missing, denied: atom
@@ -1475,20 +1486,21 @@ operations, `atomic.load` and `atomic.store` among them, and the refusal of a
 builtin given one names them.
 
 A `core/atomic` cell the target's atomics cannot carry is refused the same
-way where the program uses it (D510): on Cortex-M0 and RV32 a `u64` cell,
-and on Cortex-M0 and RV32 at `rv32imc` a cell's `exchange`, `add`,
-`add_relaxed` and `compare_exchange`. On RV32 the read-modify-writes are the
-level's (D690): build at `rv32imac`, with `--level=rv32imac` or the language
-server's `level`, where the core has the A extension. A cell one context
-alone writes adds with `atomic.sole_add`, a load and a store; state several
-contexts write takes `platform/cortex_m`'s or `platform/riscv`'s critical
-section.
+way where the program uses it (D510): on every firmware target a `u64`
+cell, and on Cortex-M, Xtensa and RV32 at `rv32imc` a cell's `exchange`,
+`add`, `add_relaxed` and `compare_exchange`. On RV32 the read-modify-writes
+are the level's (D690): build at `rv32imac`, with `--level=rv32imac` or the
+language server's `level`, where the core has the A extension. A cell one
+context alone writes adds with `atomic.sole_add`, a load and a store; state
+several contexts write takes the target's critical section, in
+`platform/cortex_m`, `platform/riscv` or `platform/xtensa`.
 
 ### L0345
 
 An interrupt or naked routine is used outside its machine-entry contract
-[1570]. The machine convention is Cortex-M0's and takes a nongeneric
-`() -> none` signature without errors. A naked body is one assembly block. A
+[1570]. An interrupt routine is a firmware target's, and a naked routine a
+firmware target's or one on x86-64, arm64 or RV64; either takes a
+nongeneric `() -> none` signature without errors. A naked body is one assembly block. A
 machine entry is entered by its vector and is never called as a routine.
 Correct the signature or body, or call an ordinary routine instead.
 
@@ -1499,12 +1511,12 @@ extern(interrupt) tick: (count: u32) -> none = end tick
 ### L0346
 
 A C boundary declaration or call is something the C ABI cannot carry
-[1580]. A target with no enabled C ABI yet, as RV32 and Xtensa have none, has
-no C signature and lays out no `layout(c)` record, and the diagnostic says so
-by the target's name; a byte-packed `layout(c, packed)` record needs no C
-alignment and stands there. The refusal of a signature names the part C
-cannot carry beside it. On a target with C ABI support, a C signature is infallible and
-nongeneric, with at most one result. Each parameter and result part uses
+[1580]. RV32 and Xtensa have no C ABI yet, so they take no C signature and
+lay out no `layout(c)` record, and the diagnostic names the target; a
+byte-packed `layout(c, packed)` record needs no C alignment and is accepted
+there. The refusal of a signature names the part C cannot carry. Where a C
+ABI is enabled, a C signature is infallible and nongeneric, with at most
+one result. Each parameter and result part uses
 implicit or explicit `in`, without `caller` or a constraint. Its type is a
 scalar, pointer (including a named optional pointer union), fixed infallible
 C callback, or `layout(c)` struct; slices, `any`, atoms and by-value arrays
@@ -1544,9 +1556,9 @@ end bad
 
 ### L0347
 
-A link symbol, hosted initializer, firmware placement or thread storage
-breaks [1610]'s, [1975]'s, [1640]'s or [1996]'s contract. A link symbol denotes one compatible function
-and at most one definition. Beside a hosted entry, a declaration carrying
+A link symbol [1610], hosted initializer [1975], firmware placement [1640]
+or thread storage [1996] breaks its contract. A link symbol denotes one
+compatible function and at most one definition. Beside a hosted entry, a declaration carrying
 `_landin_host_initialize_arguments` is exactly
 `extern(c) (count: i32, values: ptr ptr u8, environment: ptr ptr u8) -> none`,
 which takes C's `argc`, `argv` and `envp`. Only the entry module's hosted `main` takes the
@@ -1713,22 +1725,28 @@ end trusted
 ### L0500
 
 The requested output cannot be made with the selected target, settings or
-available toolchain [1550]. The diagnostic and its note identify the cause:
-the target has no backend, its source debug mode is unsupported, firmware
-forbids `linker.library`, `linker.directory` and `-L`, a static Linux link
-cannot be made (no library holding `platform/linux` was found, or the program
-asks for `linker.library`, `linker.directory` or `-L` (D524) or
-refers to C symbols nothing in it defines, each named with the routine that
-refers to it, as `platform/posix`'s loader refers to `dlopen`; `refine check`
-gives the last two as a compilation would), no toolchain
-is selected, or no driver the target names can be started. On Linux the
-message lists every driver looked for, the target's own GCC and the names
-Debian, Ubuntu and Fedora give it, and the note says which package to
-install, through `nix-shell -p gcc` on Nix (D364), and that `refine check`,
-`fmt` and `lsp`, and `compile --emit=asm` or `--emit=ir`, need no C driver
-(D384); the program's own refusals come first, so a static link that
-meets a C symbol is refused for that before anything asks for a driver.
-Choose a target with a backend, change the debug or firmware configuration,
+available toolchain [1550]. The diagnostic and its note say which of these
+is the cause. The target has no backend, has one that emits nothing yet, or
+lacks the requested source debug mode. No toolchain is selected, no driver
+the target names can be started, or, on Darwin, the tool that packages debug
+information cannot be run. A static Linux link cannot be made: no library
+holding `platform/linux` was found, the program asks for `linker.library`,
+`linker.directory` or `-L` (D524), or it refers to C symbols nothing in it
+defines, each named with the routine that refers to it, as
+`platform/posix`'s loader refers to `dlopen`; `refine check` reports the
+last two as a compilation would.
+
+A firmware link takes `linker.library`, `linker.directory` and `-L` as a
+hosted link does, each library a static archive `libNAME.a` (D923), so none
+of them raises this code there.
+
+On Linux the message lists every driver looked for, the target's own GCC
+and the names Debian, Ubuntu and Fedora give it, and the note says which
+package to install, through `nix-shell -p gcc` on Nix (D364), and that
+`refine check`, `fmt` and `lsp`, and `compile --emit=asm` or `--emit=ir`,
+need no C driver (D384). The program's own refusals come first, so a static
+link that meets an undefined C symbol is refused for that before anything
+asks for a driver. Choose a target with a backend, change the debug mode,
 link with `--link=libc`, or select or install a toolchain as the note
 directs. `--toolchain=` only helps when a toolchain is absent or
 unavailable.
@@ -1739,10 +1757,10 @@ Executable emission failed [1550]. The assembler or linker may have refused
 the emitted code, or the requested output could not be produced, verified, or
 restored. The note describes the failure, names paths needed for recovery,
 and includes tool output when available.
-Tools are refused before spawning when `SIGCHLD` is ignored or
-`SA_NOCLDWAIT` would discard their exit status. Start refine with `SIGCHLD`
-at its default disposition and `SA_NOCLDWAIT` clear. The refusal preserves
-the inherited policy and keeps this corrective action ahead of long paths.
+refine starts no tool while `SIGCHLD` is ignored or `SA_NOCLDWAIT` is set,
+since either discards the tool's exit status; it leaves the inherited
+setting as it is, and the message gives the fix before any path. Start
+refine with `SIGCHLD` at its default disposition and `SA_NOCLDWAIT` clear.
 
 ### L0502
 
@@ -1760,7 +1778,9 @@ nothing raises this.
 
 ### L0504
 
-A verified frame is larger than x86-64's signed 32-bit displacement reaches.
+A verified frame is larger than the target's backend can address: the
+signed 32-bit offsets of x86-64, arm64, RISC-V and Xtensa, or the 32-bit
+address space on Cortex-M. The message names the routine and the limit.
 Move the large local storage into a module value or an allocation.
 
 ### L0505
@@ -1783,13 +1803,19 @@ zero until the program writes it reserves its bytes rather than writing them.
 ### L0506
 
 The panic handler is invalid, or the program has more check sites than their
-identifier space holds [1670].
+identifier space holds [1670]. Declare the entry module's `panic_handler`
+public, ordinary, nongeneric and infallible, of type
+`(core/panic.panic_kind, u32) -> noreturn` as the message gives it; for the
+site space, compile less source, since every source byte takes one of its
+32-bit identifiers for each panic kind.
 
 ### L0507
 
-One routine's saved registers and local frame exceed the selected 4 KiB firmware
-stack reservation [1990]. Move large local storage elsewhere or make it smaller.
-This check does not bound calls or interrupt nesting.
+One routine's saved registers and local frame exceed the firmware profile's
+stack [1990], which the description's `linker.place("stack", ...)` sets:
+4 KiB in each reference profile. The message gives the size. Move large
+local storage elsewhere or make it smaller, or give the stack more of the
+device's RAM. This check does not bound calls or interrupt nesting.
 
 ### L0508
 
@@ -1797,8 +1823,9 @@ A program that prepares a stack selects a panic handler that does not fit
 the target's stack margin [1670]. A failed check enters the handler on the
 stack that overflowed, so the handler and everything it calls run in the
 margin a prepared stack keeps above its base (D472): 640 bytes on x86-64 and
-arm64, 768 on RV64 and 384 on Cortex-M0. The message gives what the handler
-needs, the margin and the target: what the margin pays before the handler,
+arm64, 768 on RV64 and RV32, 1024 on Xtensa, and on Cortex-M 384, or 528
+with a float unit. The message gives what the handler needs, the margin
+and the target: what the margin pays before the handler,
 and the handler's depth from the stack report's `trap` figure, by its
 deepest path. When the handler's calls reach a foreign call, recursion, a
 runtime helper or assembly that moves the stack, its depth cannot be known,
