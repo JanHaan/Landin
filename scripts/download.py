@@ -45,6 +45,9 @@ def download(url, name, consume, *, opener=None, timeout=60, attempts=ATTEMPTS,
                 return consume(response)
         except OSError as error:
             status = status_of(error)
+            if status is not None:
+                #  An HTTPError is the refused response, still open.
+                error.close()
             said.append('HTTP %d %s' % (status, error.reason) if status is not None
                         else '%s: %s' % (type(error).__name__, error))
             final = status is not None and status not in TRANSIENT
