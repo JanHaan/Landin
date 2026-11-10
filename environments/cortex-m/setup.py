@@ -10,9 +10,12 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
+import download  # noqa: E402
 DEFAULT = Path.home() / "work/.cortex-m"
 PINS = HERE.parent / "pins.sh"
 #  GCC and binutils are GNAT's arm-elf archive, and for the RV32 lanes its
@@ -197,13 +200,25 @@ def compile_gdb_python(root):
         raise RuntimeError('compiling GDB\'s Python failed: ' + completed.stdout + completed.stderr)
 
 
-def fetch(packages, item):
+def fetch(packages, item, sleep=time.sleep):
     """ITEM's archive downloaded into PACKAGES and verified before anything unpacks it."""
     dest = packages / item['file']
-    with urllib.request.urlopen(item['url'], timeout=60) as src, dest.open('wb') as out:
-        shutil.copyfileobj(src, out)
-    if sha(dest) != item['sha256']:
-        raise RuntimeError('archive hash mismatch: ' + item['file'])
+
+    def store(src):
+        with dest.open('wb') as out:
+            shutil.copyfileobj(src, out)
+    try:
+        #  urlopen is named here at each call, so a control can replace it.
+        download.download(item['url'], item['file'], store, sleep=sleep,
+                          opener=lambda url, timeout: urllib.request.urlopen(url, timeout=timeout),
+                          report=lambda line: print(line, file=sys.stderr, flush=True))
+    except download.DownloadError as error:
+        raise SystemExit('setup.py: ' + str(error)) from error
+    #  Never asked again: the bytes arrived and are not the pinned ones.
+    found = sha(dest)
+    if found != item['sha256']:
+        raise RuntimeError('archive hash mismatch: %s from %s has SHA-256 %s, not the pinned %s'
+                           % (item['file'], item['url'], found, item['sha256']))
     return dest
 
 
