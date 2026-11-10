@@ -1,5 +1,6 @@
 with Ada.Strings.Fixed;
 with Landin.Tokens;
+with Landin.Types;
 
 package body Landin.Bindings.Texts is
 
@@ -18,10 +19,15 @@ package body Landin.Bindings.Texts is
      return Boolean is (Words.Contains (Name));
 
    --  The keyword production of spec.md's [1760] is Landin.Tokens'
-   --  reserved words, which check.py holds to it.
+   --  reserved words, which check.py holds to it.  The scalar names of
+   --  [1790] are Landin.Types': they are not keywords, so a module that
+   --  declared one would take it from every later line of the module, and
+   --  the generated declarations write `u8` and `usize` meaning Landin's.
    function Is_Avoided (Name : String) return Boolean is
      ((for some Word in Landin.Tokens.Reserved_Word =>
          Landin.Tokens.Spelling (Word) = Name)
+      or else (for some Scalar in Landin.Types.Scalar_Name =>
+                 Landin.Types.Spelling (Scalar) = Name)
       or else Listed (Name, Contextual));
 
    --  The length of the UTF-8 sequence Text (Index) begins, one for a

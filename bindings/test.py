@@ -2313,6 +2313,273 @@ int main(void) { return f(36) != 37; }
         metadata = json.loads((output / "bindings.json").read_text())
         self.assertEqual(len(metadata["declarations"]), 2)
 
+    def checked(self, source: pathlib.Path, module: pathlib.Path) -> None:
+        """The generated module is one refine accepts."""
+        done = subprocess.run([
+            refine(), "check", "--target=" + TARGET_NAME, "--link=libc",
+            "--root=" + str(source), "--root=" + str(HERE.parent), str(module),
+        ], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+
+    def test_a_tag_declared_again_keeps_its_definition(self) -> None:
+        #  Clang gives every declaration of a tag a node of its own; the
+        #  record or enum is the one that defines it, wherever it stands.
+        reference = {"p": annotation()}
+        bodies = {
+            "defined then declared": "struct S { int a; long b; };\nstruct S;\n",
+            "declared, defined, declared":
+                "struct S;\nstruct S { int a; long b; };\nstruct S;\nstruct S;\n",
+            "declared in another's field":
+                "struct S { int a; long b; };\nstruct T { struct S *next; };\nstruct S;\n",
+        }
+        for index, (name, body) in enumerate(bodies.items()):
+            for representation in ("auto", "native"):
+                with self.subTest(order=name, representation=representation):
+                    source = self.root / f"again-{index}-{representation}"
+                    _, output = self.generate(source, selected_policy=self.selection(
+                        self.record("struct S", representation=representation),
+                        self.function("by_pointer", parameters=reference),
+                        self.function("by_value")), header=(
+                            body + "int by_pointer(struct S *p);\n"
+                            "int by_value(struct S s);\n"))
+                    text = (output / "bindings.ldn").read_text()
+                    self.assertIn("public s: type = layout(c) struct\n    a: c.c_int\n"
+                                  "    b: c.c_long\nend s", text)
+                    self.assertIn("by_pointer: (p: ptr mut s) -> (result: c.c_int)", text)
+                    self.assertIn("by_value: (s_: s) -> (result: c.c_int)", text)
+                    self.assertNotIn("incomplete", text)
+                    self.checked(source, output)
+        _, output = self.generate(self.root / "again-typedefs", selected_policy=self.selection(
+            self.record("Early"), self.function("f", parameters={"a": annotation(),
+                                                                 "b": annotation()})),
+            header=("typedef struct S Early;\nstruct S { int a; };\nstruct S;\n"
+                    "typedef struct S Late;\nint f(Early *a, Late *b);\n"))
+        text = (output / "bindings.ldn").read_text()
+        self.assertIn("public early: type = layout(c) struct\n    a: c.c_int\nend early", text)
+        self.assertIn("f: (a: ptr mut early, b: ptr mut early) -> (result: c.c_int)", text)
+        _, output = self.generate(self.root / "again-enum", selected_policy=self.selection(
+            {"kind": "enum", "name": "enum E"}, self.function("f")),
+            header="enum E { A = 1, B };\nenum E;\nenum E f(void);\n")
+        text = (output / "bindings.ldn").read_text()
+        self.assertIn("public e: type = c.c_uint\npublic a: e = 1\npublic b: e = 2", text)
+        self.assertIn("f: () -> (result: e)", text)
+        #  A tag that is never defined stays incomplete however often it
+        #  is declared.
+        _, output = self.generate(self.root / "again-incomplete", selected_policy=self.selection(
+            self.record("struct O"), self.function("g", parameters=reference)),
+            header="struct O;\nstruct O;\nint g(struct O *p);\n")
+        text = (output / "bindings.ldn").read_text()
+        self.assertIn("-- o is an incomplete C-owned object", text)
+        self.assertIn("g: (p: ptr mut u8) -> (result: c.c_int)", text)
+
+    def test_a_record_past_two_gibibytes_is_laid_out(self) -> None:
+        #  D1067: layout counts the target's bytes, not the host's Natural.
+        cases = [
+            ("char data[4294967296]; int tail;", "    data: [4294967296]c.c_char\n",
+             {"size": 4294967300, "alignment": 4, "tail": 4294967296}),
+            ("char lead; int data[536870911];", "    data: [536870911]c.c_int\n",
+             {"size": 2147483648, "alignment": 4, "data": 4}),
+            ("char a[1073741824]; char b[1073741824]; char tail;",
+             "    b: [1073741824]c.c_char\n",
+             {"size": 2147483649, "alignment": 1, "tail": 2147483648}),
+        ]
+        for index, (fields, line, expected) in enumerate(cases):
+            with self.subTest(fields=fields):
+                source = self.root / f"large-{index}"
+                _, output = self.generate(source, selected_policy=self.selection(
+                    self.record("struct Large", representation="native")),
+                    header=f"struct Large {{ {fields} }};\n")
+                self.assertIn(line, (output / "bindings.ldn").read_text())
+                adapters = (output / "adapters.c").read_text()
+                self.assertIn(f"_Static_assert(sizeof(struct Large) == {expected['size']},",
+                              adapters)
+                [record] = json.loads((output / "bindings.json").read_text())["declarations"]
+                self.assertEqual(record["size"], expected["size"])
+                self.assertEqual(record["alignment"], expected["alignment"])
+                last = fields.rstrip(";").split()[-1].split("[")[0]
+                self.assertEqual(record["offsets"][last], expected[last])
+                self.checked(source, output)
+
+    def test_attributes_clang_adds_to_its_builtins_are_not_the_headers(self) -> None:
+        #  D1065: Clang records what it knows of strlen, abs or printf as
+        #  implicit attributes; no header wrote them and none says how the
+        #  function is called.
+        reference = annotation()
+        optional = annotation(ownership="caller_owned", nullability="nullable")
+        source = self.root / "builtins"
+        _, output = self.generate(source, selected_policy=self.selection(
+            self.function("strlen", parameters={"s": reference}),
+            self.function("abs"), self.function("sqrt"),
+            self.function("toupper"),
+            self.function("malloc", result=optional),
+            self.function("memcpy", parameters={"d": reference, "s": reference},
+                          result=annotation(sources=["d"])),
+            self.function("printf", parameters={"f": reference})),
+            header=("unsigned long strlen(const char *s);\n"
+                    "int abs(int x);\nint abs(int x);\n"
+                    "double sqrt(double x);\nint toupper(int c);\n"
+                    "void *malloc(unsigned long n);\n"
+                    "void *memcpy(void *d, const void *s, unsigned long n);\n"
+                    "int printf(const char *f, ...);\n"))
+        text = (output / "bindings.ldn").read_text()
+        for line in (
+                'link(symbol: "strlen") strlen: (s: ptr c.c_char) -> (result: c.c_ulong)',
+                'link(symbol: "abs") abs: (x: c.c_int) -> (result: c.c_int)',
+                'link(symbol: "sqrt") sqrt: (x: c.c_double) -> (result: c.c_double)',
+                'link(symbol: "toupper") toupper: (c_: c.c_int) -> (result: c.c_int)',
+                'link(symbol: "printf") printf: (f: ptr c.c_char, ...) -> (result: c.c_int)'):
+            self.assertIn(line, text)
+        self.assertIn('link(symbol: "malloc") malloc: (n: c.c_ulong) -> ', text)
+        self.assertIn('link(symbol: "memcpy") memcpy: (d: ptr mut u8, s: ptr u8,'
+                      ' n: c.c_ulong) -> ', text)
+        self.checked(source, output)
+        #  The same kinds written in the header are the header's, on
+        #  whichever declaration; and what Clang adds that changes how a
+        #  call returns is still refused.
+        refused = [
+            ("__attribute__((pure)) unsigned long strlen(const char *s);",
+             self.function("strlen", parameters={"s": reference}), "PureAttr"),
+            ("__attribute__((const)) int abs(int x);", self.function("abs"), "ConstAttr"),
+            ("__attribute__((format(printf, 1, 2))) int printf(const char *f, ...);\n"
+             "int printf(const char *f, ...);",
+             self.function("printf", parameters={"f": reference}), "FormatAttr"),
+            ("__attribute__((nothrow)) int mine(int x);\nint mine(int x);",
+             self.function("mine"), "NoThrowAttr"),
+            ("typedef struct { long words[8]; } jmp_buf[1];\nint setjmp(jmp_buf env);",
+             self.function("setjmp", parameters={"env": reference}), "ReturnsTwiceAttr"),
+        ]
+        for header, entry, kind in refused:
+            with self.subTest(kind=kind):
+                self.assert_generation_error(
+                    self.selection(entry),
+                    "unsupported calling convention or parameter/function attribute " + kind,
+                    header=header + "\n")
+
+    def test_a_types_words_are_read_whole(self) -> None:
+        #  A tag or typedef whose name contains complex, volatile, va_list,
+        #  vector_size or __int128 is the header's name, not C's word.
+        reference = {"p": annotation()}
+        named = [
+            ("struct complex_number { double re, im; };", "struct complex_number",
+             "complex_number"),
+            ("struct complex { double re, im; };", "struct complex", "complex"),
+            ("struct volatile_state { int a; };", "struct volatile_state", "volatile_state"),
+            ("struct vector_size { int w, h; };", "struct vector_size", "vector_size"),
+            ("struct my_va_list_box { int n; };", "struct my_va_list_box", "my_va_list_box"),
+            ("struct __int128_pair { long lo, hi; };", "struct __int128_pair",
+             "c___int128_pair"),
+            ("typedef struct fftw_complex_s { double v[2]; } fftw_complex;",
+             "fftw_complex", "fftw_complex"),
+            ("typedef struct complex { double re, im; } complex;", "complex", "complex"),
+        ]
+        for index, (declaration, spelling, landin) in enumerate(named):
+            with self.subTest(spelling=spelling):
+                source = self.root / f"words-{index}"
+                _, output = self.generate(source, selected_policy=self.selection(
+                    self.record(spelling), self.function("f", parameters=reference),
+                    self.function("g", parameters=reference),
+                    self.function("h", parameters=reference)), header=(
+                        f"{declaration}\nint f({spelling} *p);\n"
+                        f"int g(const {spelling} *p);\nint h({spelling} p[4]);\n"))
+                text = (output / "bindings.ldn").read_text()
+                self.assertIn(f"f: (p: ptr mut {landin}) -> (result: c.c_int)", text)
+                self.assertIn(f"g: (p: ptr {landin}) -> (result: c.c_int)", text)
+                self.checked(source, output)
+        _, output = self.generate(self.root / "words-enum", selected_policy=self.selection(
+            {"kind": "enum", "name": "enum complexity"}, self.function("rate")),
+            header="enum complexity { LOW, HIGH };\nint rate(enum complexity c);\n")
+        self.assertIn("rate: (c_: complexity) -> (result: c.c_int)",
+                      (output / "bindings.ldn").read_text())
+        #  The words themselves still say what they said.
+        refused = [
+            ("int f(_Complex double z);", {}, "unsupported complex type"),
+            ("int f(volatile int *p);", reference, "unsupported atomic or volatile"),
+            ("int f(int *volatile p);", reference, "unsupported atomic or volatile"),
+            ("int f(_Atomic int *p);", reference, "unsupported atomic or volatile"),
+            ("int f(__int128 p);", {}, "unsupported 128-bit integer type"),
+            ("int f(unsigned __int128 *p);", reference, "unsupported 128-bit integer type"),
+            ("typedef int v4 __attribute__((vector_size(16)));\nint f(v4 p);", {},
+             "unsupported vector or calling-convention attribute"),
+            ("typedef __builtin_va_list va_list;\nint f(const char *p, va_list tail);",
+             reference, "unsupported va_list forwarding"),
+            ("struct volatile_state { int a; };\nint f(volatile struct volatile_state *p);",
+             reference, "unsupported atomic or volatile"),
+        ]
+        for header, parameters, message in refused:
+            with self.subTest(header=header):
+                self.assert_generation_error(
+                    self.selection(self.function("f", parameters=parameters)),
+                    message, header=header + "\n")
+
+    def test_a_typedef_named_as_a_landin_scalar_does_not_redefine_it(self) -> None:
+        #  D1066: the generated lines write u8 and usize meaning Landin's,
+        #  so a C typedef of such a name takes c_, as a keyword does.
+        scalars = ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64",
+                   "usize", "isize", "f32", "f64"]
+        source = self.root / "scalar-names"
+        header = ("typedef unsigned short usize;\ntypedef double u8;\n"
+                  "typedef unsigned long u32;\n" +
+                  "".join(f"typedef int {name};\n" for name in scalars
+                          if name not in ("usize", "u8", "u32")) +
+                  "union U { int words[4]; float f; };\n"
+                  "usize narrow(u8 a, u32 b);\n")
+        _, output = self.generate(source, selected_policy=self.selection(
+            *[{"kind": "alias", "name": name} for name in scalars],
+            self.record("union U"), self.function("narrow")), header=header)
+        text = (output / "bindings.ldn").read_text()
+        for name in scalars:
+            self.assertNotRegex(text, rf"(?m)^public {name}:")
+            self.assertRegex(text, rf"(?m)^public c_{name}: type = ")
+        self.assertIn("public c_usize: type = c.c_ushort\n", text)
+        self.assertIn("public c_u8: type = c.c_double\n", text)
+        self.assertIn("narrow: (a: c_u8, b: c_u32) -> (result: c_usize)", text)
+        #  The adapters' own declarations still mean the builtins.
+        self.assertIn('link(symbol: "landin_probe_u_size") u_size: () -> (size: usize)', text)
+        self.assertIn("u_words_get: (object: ptr u8, index: usize) -> (value: c.c_int)", text)
+        self.assertIn("__SIZE_TYPE__ landin_probe_u_size(void);",
+                      (output / "exports.h").read_text())
+        self.checked(source, output)
+        for name in scalars:
+            with self.subTest(name=name):
+                self.assert_generation_error(
+                    self.selection({"kind": "alias", "name": "word", "landin_name": name}),
+                    f"landin_name '{name}' is reserved", header="typedef int word;\n")
+
+    def test_a_pointer_to_a_pointer_is_a_pointer(self) -> None:
+        #  Clang writes `char **`, one space and two stars.
+        reference = annotation()
+        source = self.root / "pointer-pointer"
+        _, output = self.generate(source, selected_policy=self.selection(
+            self.record("struct Table", fields={"rows": annotation(retention="stored")}),
+            self.function("count", parameters={"argv": reference}),
+            self.function("open_db", parameters={"path": reference, "out_handle": reference}),
+            self.function("names", result=annotation(ownership="static")),
+            self.function("deep", parameters={"p": reference}),
+            self.function("qualified", parameters={"p": reference}),
+            self.function("decayed", parameters={"argv": reference}),
+            self.function("walk", parameters={"list": reference})), header=(
+                "struct Table { char **rows; int n; };\n"
+                "int count(char **argv);\n"
+                "int open_db(const char *path, void **out_handle);\n"
+                "char **names(void);\n"
+                "int deep(const int ***p);\n"
+                "int qualified(char *const *restrict p);\n"
+                "int decayed(char *argv[]);\n"
+                "int walk(const char *const *list);\n"))
+        text = (output / "bindings.ldn").read_text()
+        for line in (
+                "    rows: ptr mut ptr mut c.c_char\n",
+                "count: (argv: ptr mut ptr mut c.c_char) -> (result: c.c_int)",
+                "open_db: (path: ptr c.c_char, out_handle: ptr mut ptr mut u8)"
+                " -> (result: c.c_int)",
+                "deep: (p: ptr mut ptr mut ptr c.c_int) -> (result: c.c_int)",
+                "qualified: (p: ptr ptr mut c.c_char) -> (result: c.c_int)",
+                "decayed: (argv: ptr mut ptr mut c.c_char) -> (result: c.c_int)",
+                "walk: (list: ptr ptr c.c_char) -> (result: c.c_int)"):
+            self.assertIn(line, text)
+        self.assertRegex(text, r"names: \(\) -> \(result: ptr mut ptr mut c\.c_char\)")
+        self.checked(source, output)
+
     def test_ambient_include_variables_are_excluded_from_every_clang_invocation(self) -> None:
         parent = self.root / "ambient"
         sysroot, includes, output = self.make_tree(parent, header="#include <dep.h>\n",

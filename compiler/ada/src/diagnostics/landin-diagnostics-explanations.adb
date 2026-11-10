@@ -1721,7 +1721,15 @@ package body Landin.Diagnostics.Explanations is
                & "mal`, `modify` or `refused`, or a mask that is not a `0x"
                & "` 32-bit value. The message names the member. A reviewer"
                & "'s notes belong under `provenance`, which is not read. `"
-               & "devices/README.md` describes every member.",
+               & "devices/README.md` describes every member."
+               & LF
+               & LF
+               & "It is also a policy whose paths cannot all be written (D"
+               & "1064): two of `modules`, `prefix`, `correspondence`, `ma"
+               & "nifest` and `description` put two outputs at one path, o"
+               & "r one output at a path another lies below; or whose `pre"
+               & "fix` has a part Landin reserves, which no import could n"
+               & "ame (D1063).",
             when Catalogue.Svd_Input_Mismatch =>
                "The SVD `refine svd` was given is not the one its policy"
                & " was reviewed against (D556): its SHA-256, its device na"
@@ -1748,7 +1756,16 @@ package body Landin.Diagnostics.Explanations is
                & "0's `1_15MHZ` or `2mA`, cannot be an atom. Every selecte"
                & "d field with one is named in a single refusal, each with"
                & " its first such name; list each in the policy's `numeric"
-               & "_enums`, which reads the field as a plain number.",
+               & "_enums`, which reads the field as a plain number."
+               & LF
+               & LF
+               & "A name written with nothing added must not be one Landin"
+               & " reserves, a keyword or `compiler`, `assembler` or `link"
+               & "er` (D1063): an interrupt that would be an interrupt-mat"
+               & "rix source of that name, which the policy's `interrupt_c"
+               & "orrections` can omit, and a selected peripheral, whose m"
+               & "odule is imported by its name. A field with more than tw"
+               & "o `enumeratedValues` is refused too (D1062).",
             when Catalogue.Svd_Device_Inconsistent =>
                "The SVD describes a selected register in a way that cann"
                & "ot be generated as it says (D557): two fields overlap, a"
@@ -1759,7 +1776,21 @@ package body Landin.Diagnostics.Explanations is
                & "rnate register is at another address, or two vendor name"
                & "s become one Landin name once lowercased and joined. The"
                & " message names the element. Leave the register out of th"
-               & "e selection, or record a reviewed correction.",
+               & "e selection, or record a reviewed correction."
+               & LF
+               & LF
+               & "It is also what the SVD omits, overstates or says twice "
+               & "(D1062): an interrupt without a `value` or an array with"
+               & "out a `dimIncrement`; a `bitOffset`, an `addressOffset`,"
+               & " a `dimIncrement` or a `deviceNumInterrupts` beyond what"
+               & " a 32-bit register, a 32-bit address or a vector table h"
+               & "olds; two peripherals or two registers of a selected nam"
+               & "e, or a selected name that is both a register and an ele"
+               & "ment of an array; and a field whose `bitRange`, `bitOffs"
+               & "et` and `bitWidth`, and `lsb` and `msb` do not give the "
+               & "same bits. A missing interrupt value is refused whatever"
+               & " the policy selects, because every interrupt of the file"
+               & " is read.",
             when Catalogue.Svd_Not_Found =>
                "The policy selects what the SVD does not have (D556): a "
                & "peripheral, a register, or a register's alternate. A reg"
@@ -1772,16 +1803,19 @@ package body Landin.Diagnostics.Explanations is
                & "): the output root is missing, a link or not a directory"
                & "; a destination is a directory or link, or aliases a pro"
                & "tected input; a retained publication needs recovery; or "
-               & "the manifest names a file outside the output directory. "
-               & "Correct the named path or manifest, or choose another `-"
-               & "-out-dir`. For a retained `.refine-publication-...` work"
-               & "space, inspect its `destination-...` records and recover"
-               & " the previous or new output before removing it and retry"
-               & "ing. Preparation can already have created private stagin"
-               & "g; later publication or cleanup failures are L0005 and c"
-               & "an leave recovered or retained versions. Follow those re"
-               & "covery messages rather than assuming nothing was written"
-               & ".",
+               & "the manifest names a file outside the output directory, "
+               & "or one this run no longer makes that is not the bytes th"
+               & "e manifest records (D1064): a generated module edited si"
+               & "nce, or a file `refine svd` never wrote. Remove that fil"
+               & "e, or its entry in the manifest to keep it. Correct the "
+               & "named path or manifest, or choose another `--out-dir`. F"
+               & "or a retained `.refine-publication-...` workspace, inspe"
+               & "ct its `destination-...` records and recover the previou"
+               & "s or new output before removing it and retrying. Prepara"
+               & "tion can already have created private staging; later pub"
+               & "lication or cleanup failures are L0005 and can leave rec"
+               & "overed or retained versions. Follow those recovery messa"
+               & "ges rather than assuming nothing was written.",
             when Catalogue.Bindings_Policy_Invalid =>
                "`refine bindings` cannot read its policy (D820): it is n"
                & "ot UTF-8 JSON, names a key twice, is not schema 1, lacks"

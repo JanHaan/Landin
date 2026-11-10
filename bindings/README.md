@@ -202,7 +202,12 @@ changed input. A declaration removed from a header produces a stale-policy
 error; it is never silently skipped.
 
 All entries accept `kind`, `name`, and an optional `landin_name`. The default
-Landin name is a safe form of the C name. Names that would collide in Landin
+Landin name is a safe form of the C name: lowercased, and given `c_` before
+it when it is a Landin keyword, a contextual word such as `text` or
+`layout`, or one of the scalar names `u8` to `u64`, `i8` to `i64`, `usize`,
+`isize`, `f32`, `f64` and `bool` (D1066), so `typedef unsigned char u8;`
+becomes `c_u8` and the module's own `u8` stays Landin's. A `landin_name` may
+not be one of those. Names that would collide in Landin
 must be disambiguated explicitly. Policy `name` values made only of whitespace
 and `@` are rejected, including when `landin_name` is explicit.
 
@@ -301,7 +306,10 @@ behind after a header type changes.
 }
 ```
 
-`name` may be a typedef, `struct Tag`, or `union Tag`. `representation` is
+`name` may be a typedef, `struct Tag`, or `union Tag`. A tag declared more
+than once is the one record its definition gives, wherever the definition
+stands among the declarations: `struct S { ... }; struct S;` is complete.
+`representation` is
 `auto`, `native`, or `opaque`. `fields` supplies reference policy by C field
 name. `native` requires a complete nonempty ordinary struct containing only
 supported native fields and positive fixed arrays. `auto` makes such a struct
@@ -309,7 +317,9 @@ a Landin `layout(c)` type and otherwise chooses C-owned opaque storage.
 `opaque` always keeps a complete record on the C side.
 
 Native records receive generated `_Static_assert`s for `sizeof`, `_Alignof`,
-and every `offsetof`.
+and every `offsetof`. Layout is counted in the target's bytes (D1067): a
+record past 2 GiB is laid out where the target holds one, and a record or
+array larger than the target's greatest object is refused by name.
 
 A struct carrying its own `__attribute__((packed))` becomes a
 `layout(c, packed)` record (D410): every field at alignment one, no padding.
@@ -456,7 +466,20 @@ A parameter or result that holds a reference names its policy:
 ```
 
 Signatures, parameter names, variadicness, and all type dependencies come from
-the header. `direction: import` emits a direct external declaration when the
+the header. A pointer to a pointer, `char **argv` or `void **out`, is `ptr`
+to `ptr` with each level's own `const`. A pointer to an array, which is
+what `int m[][3]` decays to, and a pointer to an unnamed function pointer
+type are refused; name the function pointer with a typedef.
+
+An attribute a header writes on a selected function is refused, whatever
+it is. An attribute Clang adds itself to a declaration of one of its
+library builtins is not the header's (D1065): `strlen`, `malloc`, `abs`,
+`sqrt`, `memcpy` and `printf` declared plainly are bound. A C library that
+writes attributes on its declarations, as glibc's `__THROW` and
+`__nonnull` do, is refused for those; bind such a function from a header of
+your own that declares it without them. `setjmp` and `vfork` stay refused,
+because Clang knows they return twice, and `exit` and `abort` because it
+knows they do not return. `direction: import` emits a direct external declaration when the
 native C subset can carry it, and a generated wrapper for opaque by-value
 records, nullable callbacks, or internal inline definitions. Direct variadic
 imports remain variadic Landin declarations; a form that would need a wrapper
@@ -530,7 +553,10 @@ type.
 ## Diagnostics and unsupported forms
 
 The generator reports the selected declaration and position for missing,
-unsafe, or stale policies. It explicitly refuses selected extended/x87,
+unsafe, or stale policies. A type is refused for what its own words say,
+read as whole identifiers: a record, enum or typedef whose name merely
+contains `complex`, `volatile`, `va_list`, `vector_size` or `__int128` is
+that declaration and is bound. It explicitly refuses selected extended/x87,
 complex, vector, 128-bit, atomic/volatile, old-style, non-C-calling-convention,
 attributed (other than a record's own `packed`), misplaced flexible or
 zero-size, anonymous-aggregate, anonymous-unaliased, and unsupported array
@@ -676,7 +702,10 @@ to exercise union and signed/unsigned/zero-width bitfield access, by-value
 wrappers (packed records' through typed pointers at an odd address), nullable callback cells, globals, real two-thread TLS isolation, and
 a mixed register/stack-sized incoming-varargs schema. Regression inputs also pin
 recursive retention and callback policy, unequal nested array extents, true enum
-compatible types, declaration identity, reserved names, ambient-environment
+compatible types, declaration identity, reserved names, a tag declared again
+after its definition, records past 2 GiB, the attributes Clang adds to its
+builtins, type words read whole, typedefs named as Landin's scalars,
+pointers to pointers, ambient-environment
 exclusion, repeated anonymous-enum ordering, transitive path macros and a
 dependency chain deep enough to need each record classified once.
 The Cortex-M cases bind both conventions,

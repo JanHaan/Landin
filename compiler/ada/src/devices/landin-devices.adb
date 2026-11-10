@@ -1,3 +1,5 @@
+with Landin.Tokens;
+
 package body Landin.Devices is
 
    use type Interfaces.Unsigned_64;
@@ -103,6 +105,14 @@ package body Landin.Devices is
       end loop;
       return Result;
    end Lowered;
+
+   --  The keywords are Landin.Tokens' reserved words, which check.py holds
+   --  to the keyword production; the three namespaces are those the
+   --  resolver keeps for the toolchain.
+   function Is_Reserved (Name : String) return Boolean is
+     (Name in "compiler" | "assembler" | "linker"
+      or else (for some Word in Landin.Tokens.Reserved_Word =>
+                 Landin.Tokens.Spelling (Word) = Name));
 
    Hex_Digits : constant String := "0123456789abcdef";
 

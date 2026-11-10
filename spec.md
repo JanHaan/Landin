@@ -22560,7 +22560,9 @@ run. L0529 refuses
 what cannot be generated as it is said: overlapping fields, a field outside
 its register, an enumerated value that does not fit or is given twice, a
 property given nowhere it is inherited from, an address that is not a
-word-aligned 32-bit address, and an alternate at another address.
+word-aligned 32-bit address, and an alternate at another address. D1062
+adds what an SVD omits, overstates or says twice, and D1063 a name Landin
+reserves.
 
 What is written is the text the RP2040 fixture was first generated in,
 byte for byte: one module per selected peripheral, `PREFIX/NAME/device.ldn`;
@@ -22598,7 +22600,8 @@ what this invocation replaced without clobbering a concurrent change, or names t
 copy it could not put back. A file whose bytes are already the new ones is
 left alone. The manifest is how refine knows which files are its own: a file
 the old manifest names that this run does not make is removed with the
-rest. A refusal before writing is L0531; a write that fails is L0005.
+rest, while it is still the bytes the manifest records (D1064). A refusal
+before writing is L0531; a write that fails is L0005.
 This recovers from a failure; it is not a snapshot for a concurrent reader.
 
 **The alternatives:** writing in place, which the interrupted run defeats;
@@ -22608,6 +22611,111 @@ deselected module behind, which a program could still import.
 
 **Pinned by** the `devices` suite's `outputs are replaced whole` and
 `devices/test.py`'s `a changed output is put back and a stale one removed`.
+
+### D1062 — What an SVD omits, overstates or says twice is refused where it says it
+
+**The tour said** nothing. D557 lists what cannot be generated as it is
+said, and its list was of what the two first devices' files could get
+wrong. A vendor's file that is well-formed XML can also leave out a child
+its schema requires, give a number no register holds, or give one name
+twice, and the projection read each without asking: an absent child ended
+the command in an internal defect that named no element, two of an SVD's
+64-bit numbers were added before their sum was compared, so a wrapped sum
+passed as a bit position, a 32-bit address or a vector count, and the first
+of two elements of one name was taken in silence.
+
+**Chosen:** each is L0529, placed at the element. A child the projection
+reads as a number and the element lacks is refused naming both, whichever
+caller reads it: an interrupt's `value`, read for every peripheral of the
+file whether or not it is selected, and an array's `dimIncrement` were the
+two unguarded. Each number is bounded before it meets another: a
+`bitWidth` is 1 to 32 and a `bitOffset` at most 32 less it, an
+`addressOffset` and a `dimIncrement` are each 32-bit before one is
+multiplied by an element's position and added to the other and to the
+base, and `deviceNumInterrupts` is at most 65536, one more than the highest
+number an interrupt may have. A selected name has one reading: two
+peripherals of the name a policy selects or a peripheral derives from, two
+registers of a selected name, and a selected name that is both a register
+and an element of an array, or an element of two arrays, are refused at the
+second. A field that gives its position in more than one of the three
+forms gives the same bits in each. A field has at most two
+`enumeratedValues`, the one read and the one written that CMSIS-SVD admits;
+a third is L0528.
+
+The reader and the projection also take time that grows with the file and
+not with its square: an element's attributes, a field's enumerated values
+and a device's interrupts are each looked up in an ordered set, where each
+was compared with every one before it, and a few hundred kilobytes ran for
+minutes.
+
+**The alternatives:** taking the first of two, which generates a plausible
+module at an offset nobody reviewed; preferring `bitRange` over a
+disagreeing `lsb` and `msb`, the same silence; arithmetic in a wider type,
+which moves the wrap rather than removing it; and a cap on attributes and
+values instead of the sets, which refuses a file for its size rather than
+reading it.
+
+**Pinned by** the `devices` suite's `what an SVD omits or overstates is
+refused`, `an ambiguous SVD is refused` and `a large SVD costs in
+proportion`, which fails when four times the attributes, values or
+interrupts take more than ten times the processor time.
+
+### D1063 — A name refine svd writes unprefixed is not one Landin reserves
+
+**The tour said** nothing. D557 keeps the names a module declares from the
+keyword rule by construction, `f_` before a field and a suffix after a
+register, and D701's module of interrupt-matrix sources declares each
+interrupt under its own lowercased name, as a peripheral's module is
+imported under its own. An interrupt named `END` or `TYPE` was written as
+`public end: u32 = 1`, the command reported success, and every program
+importing the module was refused.
+
+**Chosen:** such a name is refused when it is generated. A reserved name is
+a keyword, as `Landin.Tokens` has them, or one of the toolchain's three
+namespaces. An interrupt that would be a source of that name is L0528, and
+the policy's `interrupt_corrections` can omit it; as a slot of a core
+without a matrix its name is a string and is written. A selected
+peripheral whose lowercased name is reserved is L0528, and a part of the
+policy's `prefix` that is reserved is L0526, because no import can name
+either.
+
+**The alternatives:** a prefix on every source, as fields have, which
+renames the sources of the four ESP devices already generated and every
+program that reads them, for names no vendor's file has yet; and writing
+the module and leaving the refusal to the compiler, which is the success
+that was false.
+
+**Pinned by** the `devices` suite's `a reserved name is refused`.
+
+### D1064 — refine svd's outputs are distinct paths, and it removes only what it wrote
+
+**The tour said** nothing. D558 has the old manifest say which files are
+refine's own, and D556 lets a policy name the correspondence, the manifest
+and the description. The manifest's path was compared with the other
+outputs' before the modules' root was put before it, so under a root other
+than `.` a manifest named like a module replaced the module and the command
+reported success; an output named below another failed only at publication,
+after directories were made; and whatever regular file an old manifest
+named below the root was removed, the hash beside its name unread.
+
+**Chosen:** every output's path is compared as it is written, the modules'
+root included. Two outputs at one path, or one at a path another lies
+below, are refused before anything is prepared: L0526 when the clash is
+between the policy's `modules`, `prefix`, `correspondence`, `manifest` and
+`description`. A file the old manifest names that this run does not make is
+removed only while its SHA-256 is the one the manifest records; one that
+differs, cannot be read, or whose entry is not a hash is L0531, naming the
+file, and nothing is replaced. The developer removes the file or its entry.
+
+**The alternatives:** leaving a changed stale file in place and going on,
+which leaves a deselected module a program can still import while the
+command reports success; removing it as before, which trusts a manifest's
+keys over the bytes they name, and a manifest carried over from another
+layout names a developer's files; and checking only that a stale path is
+not a hand-written `memory.ldn`, one case of the class.
+
+**Pinned by** the `devices` suite's `outputs do not overlap` and `outputs
+are replaced whole`.
 
 ### D559 — Vendor inputs are pinned by URL and SHA-256 and fetched
 
@@ -22719,6 +22827,91 @@ gate's `bindings` job. Signature collision consumers are pinned by
 `bindings/test.py`'s `test_signature_names_avoid_parameters_and_referenced_types`,
 `test_incoming_handler_prototype_avoids_typedef_shadowing` and, on the
 adapter-backed Cortex-M paths, `test_cortex_adapter_names_stay_consistent`.
+
+### D1065 — An attribute Clang adds to one of its builtins is not the header's
+
+**The tour said** at [1580] that the generator reads headers. D820 refuses
+a selected function that carries an attribute, because an attribute may
+change how the function is called and none is guessed. For a declaration
+whose name and type are one of its library builtins Clang records what it
+knows of the function as attributes of its own, marked implicit, on a
+declaration it makes itself and the header's then inherits them from:
+`BuiltinAttr` on every one, `NoThrowAttr`, `ConstAttr`, `PureAttr`,
+`FormatAttr` and `AllocSizeAttr` on those they describe. They were read as
+the header's, so `strlen`, `malloc`, `abs`, `sqrt`, `memcpy` and `printf`,
+declared with no attribute at all, were each refused on every hosted target
+for an attribute no header wrote.
+
+**Chosen:** those six kinds are passed over on a selected function when
+Clang added them: the node is marked implicit, or is inherited and no
+declaration of the function writes an attribute of that kind itself. They
+say what a function does and nothing of how it is called. The same kind
+written in the header, on any declaration of the function, is refused as
+before, and so is every other kind Clang adds: `ReturnsTwiceAttr`, which it
+knows of `setjmp` and `vfork`, is a way of returning no Landin call can
+keep. A builtin Clang knows not to return, `exit` or `abort`, has
+`noreturn` in its type rather than as an attribute, and stays refused with
+every `noreturn` function.
+
+**The alternatives:** passing over every implicit attribute, which admits
+`returns_twice`; `-fno-builtin` for the AST run, which stops Clang adding
+them and also changes what it says of every other declaration, in a
+command whose outputs are compared byte for byte; and passing over the six
+kinds wherever they stand, which admits a header's own `format` or `pure`
+and is a wider change than the defect.
+
+**Pinned by** `bindings/test.py`'s
+`test_attributes_clang_adds_to_its_builtins_are_not_the_headers`.
+
+### D1066 — A C name that is one of Landin's scalar names takes `c_`
+
+**The tour said** at [1790] that the scalar names are predeclared and are
+not keywords, so a module may declare one again. D820 gives a C name that
+is a keyword `c_` before it. A C typedef named `usize`, `u8` or `u32` was
+written under that name, and every other line of the same module that the
+generator wrote meaning the scalar then meant the typedef: an opaque
+pointer's `ptr mut u8`, and the `usize` an adapter's size, alignment and
+index are declared with beside C's `__SIZE_TYPE__`.
+
+**Chosen:** the thirteen scalar names, as `Landin.Types` spells them, are
+avoided as the keywords are: such a C name becomes `c_usize`, and a
+policy's `landin_name` may not be one. Nothing else in a binding changes,
+and a header without such a name generates what it did.
+
+**The alternatives:** writing every generated use of a scalar so that no
+declaration of the module can capture it, which Landin has no spelling
+for; refusing such a typedef unless the policy renames it, which refuses
+`typedef unsigned char u8;`, the commonest of them and a harmless one; and
+leaving it, which reads a 64-bit `size_t` result at the typedef's width.
+
+**Pinned by** `bindings/test.py`'s
+`test_a_typedef_named_as_a_landin_scalar_does_not_redefine_it`.
+
+### D1067 — A C record's layout is counted in the target's bytes
+
+**The tour said** nothing of how large a C record may be. D18 bounds one
+array by the greatest byte count the target's `usize` holds, and layout
+arithmetic counts target bytes in `Landin.Targets.Byte_Count` everywhere
+but here: the generator laid records out in the host compiler's `Natural`,
+so a record of 2 GiB or more, which LP64 C admits, ended the command in an
+internal defect that named neither the record nor the field.
+
+**Chosen:** sizes, alignments and offsets are `Byte_Count`s, and each sum
+and product is compared with the target's greatest object before it is
+formed. A record or array past that is L0581, naming the array type or the
+record and the field that passes it; one within it is laid out, asserted
+against C and recorded, whatever the host's integers hold. The greatest
+object and the width of a pointer are read from `Landin.Targets`' facts for
+the row's target, where the generator spelled its own 4 and 8.
+
+**The alternatives:** a 64-bit count with no bound, which wraps where this
+refuses; and refusing at the host's 2 GiB with a diagnostic, which makes a
+property of the machine running the compiler a limit on the target's C.
+
+**Pinned by** the `bindings` suite's `a record is laid out in target
+bytes`, whose refusals are a fake Clang's because the real one refuses such
+a record first, and `bindings/test.py`'s
+`test_a_record_past_two_gibibytes_is_laid_out`.
 
 ### D821 — Clang runs in an environment of its own, through `Landin.Platform`
 

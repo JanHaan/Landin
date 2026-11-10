@@ -240,6 +240,35 @@ package body Landin.Commands.Devices is
                         if not Clear (Destination (Whole)) then
                            return False;
                         end if;
+                        --  The manifest's names alone do not decide what
+                        --  is removed: a file goes only while it is still
+                        --  the bytes the manifest says refine svd wrote.
+                        declare
+                           Recorded : constant J.Value :=
+                             J.Member_Value (Old, J.Root (Old), Position);
+                           Kept : US.Unbounded_String;
+                        begin
+                           Host.Read_File (Destination (Whole), Kept, Read);
+                           if Read /= Platform.Read_Ok
+                             or else not J.Is_Kind
+                               (Old, Recorded, J.String_Value)
+                             or else Dev.Projection.Sha256
+                               (US.To_String (Kept))
+                               /= J.Text (Old, Recorded)
+                           then
+                              Report (Cat.Svd_Output_Refused, "the manifest "
+                                      & Manifest_Path & " names "
+                                      & Destination (Whole) & ", which this"
+                                      & " run no longer makes and would"
+                                      & " remove, but it is not the file"
+                                      & " the manifest says refine svd"
+                                      & " wrote: its SHA-256 differs or"
+                                      & " cannot be taken; remove the file,"
+                                      & " or its entry in the manifest to"
+                                      & " keep it");
+                              return False;
+                           end if;
+                        end;
                         declare
                            Status : Platform.Write_Status;
                            Reason : US.Unbounded_String;

@@ -1188,6 +1188,170 @@ package body Landin.Tests.Bindings_Suite is
       end loop;
    end Arriving_Output_Trees_Are_Preserved;
 
+   procedure A_Record_Is_Laid_Out_In_Target_Bytes
+     (Item : in out Landin.Testing.Context);
+
+   --  D1067: sizes, alignments and offsets are counted in the target's
+   --  bytes, not the host compiler's Natural, so a record past 2 GiB is
+   --  laid out on a target that holds one, and one past what the target's
+   --  usize counts is refused by its record and field.  The second is a
+   --  fake Clang's alone to say: the real one refuses such a record first.
+   procedure A_Record_Is_Laid_Out_In_Target_Bytes
+     (Item : in out Landin.Testing.Context)
+   is
+      Meter : Landin.Platform.Unmetered;
+
+      function Big_Ast (Fields : String) return String is
+        ("{""id"":""0x1"",""kind"":""TranslationUnitDecl"",""inner"":["
+         & "{""id"":""0x10"",""kind"":""RecordDecl"",""loc"":{""offset"":0},"
+         & """name"":""Big"",""tagUsed"":""struct"","
+         & """completeDefinition"":true,""inner"":[" & Fields & "]}]}");
+
+      function Field (Id, Name, Spelling : String) return String is
+        ("{""id"":""" & Id & """,""kind"":""FieldDecl"",""name"":""" & Name
+         & """,""type"":{""qualType"":""" & Spelling & """}}");
+
+      Selecting : constant String :=
+        """declarations"": [{""kind"": ""record"", ""name"": ""struct Big"","
+        & " ""representation"": ""native"", ""fields"": {}}]}";
+
+      procedure Bind
+        (Cortex : Boolean; Fields : String;
+         Result : out Landin.Driver.Outcome;
+         Bindings, Adapters, Metadata : out US.Unbounded_String);
+
+      procedure Bind
+        (Cortex : Boolean; Fields : String;
+         Result : out Landin.Driver.Outcome;
+         Bindings, Adapters, Metadata : out US.Unbounded_String)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Whole : constant String :=
+           (if Cortex then Cortex_Policy (VFP => False) else Policy);
+         Asked : constant Landin.Platform.Path_List :=
+           (if Cortex
+            then ["bindings", "--clang=clang-19", "--target=cortex-m0",
+                  "--policy=policy.json", "--out-dir=out",
+                  "--system-include-dir=include", "api/api.h=api.h"]
+            else Arguments);
+      begin
+         Prepare (Host);
+         Host.Add_File
+           (Root & "/policy.json",
+            Whole (Whole'First
+                   .. Ada.Strings.Fixed.Index (Whole, """declarations""") - 1)
+            & Selecting);
+         Tools.Add_Result
+           (0, (if Cortex then B.Triple (B.Cortex_M_AAPCS)
+                else "x86_64-pc-linux-gnu") & LF);
+         Tools.Add_Result
+           (0, (if Cortex then Cortex_Macros (VFP => False)
+                else Macros (Unsigned_Char => False)));
+         Tools.Add_Result (0, Preprocessed);
+         Tools.Add_Result (0, Big_Ast (Fields));
+         Tools.Add_Result
+           (0, "refine-bindings: " & Work & "/output/adapters.c "
+            & Work & "/headers/api/api.h" & LF);
+         Result := Landin.Commands.Execute (Asked, Host, Tools, Meter);
+         Bindings := US.To_Unbounded_String
+           (Content_Of (Host, Root & "/out/bindings.ldn"));
+         Adapters := US.To_Unbounded_String
+           (Content_Of (Host, Root & "/out/adapters.c"));
+         Metadata := US.To_Unbounded_String
+           (Content_Of (Host, Root & "/out/bindings.json"));
+      end Bind;
+
+      Result : Landin.Driver.Outcome;
+      Bindings, Adapters, Metadata : US.Unbounded_String;
+   begin
+      --  4 GiB and four bytes, on a target whose objects may be that large.
+      Bind (False,
+            Field ("0x11", "data", "char[4294967296]") & ","
+            & Field ("0x12", "tail", "int"),
+            Result, Bindings, Adapters, Metadata);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, 0, "bound: " & Report_Of (Result));
+      Landin.Testing.Check
+        (Item, Contains (US.To_String (Bindings),
+                         "    data: [4294967296]c.c_char" & LF
+                         & "    tail: c.c_int" & LF),
+         "the record is written: " & US.To_String (Bindings));
+      Landin.Testing.Check
+        (Item, Contains (US.To_String (Adapters),
+                         "_Static_assert(sizeof(struct Big) == 4294967300,")
+         and then Contains
+           (US.To_String (Adapters),
+            "_Static_assert(__builtin_offsetof(struct Big, tail) =="
+            & " 4294967296,")
+         and then Contains (US.To_String (Adapters),
+                            "_Static_assert(_Alignof(struct Big) == 4,"),
+         "C is held to the size and the offset past 4 GiB: "
+         & US.To_String (Adapters));
+      Landin.Testing.Check
+        (Item, Contains (US.To_String (Metadata), """size"": 4294967300")
+         and then Contains (US.To_String (Metadata), """tail"": 4294967296"),
+         "and the metadata records them: " & US.To_String (Metadata));
+      --  One int short of 2 GiB, whose rounding up once overflowed.
+      Bind (False,
+            Field ("0x11", "lead", "char") & ","
+            & Field ("0x12", "data", "int[536870911]"),
+            Result, Bindings, Adapters, Metadata);
+      Landin.Testing.Check
+        (Item, Result.Status = 0
+         and then Contains
+           (US.To_String (Adapters),
+            "_Static_assert(sizeof(struct Big) == 2147483648,"),
+         "2 GiB exactly: " & Report_Of (Result));
+      --  On ILP32 an object is at most 4294967295 bytes.
+      Bind (True,
+            Field ("0x11", "data", "char[4294967295]") & ","
+            & Field ("0x12", "last", "char"),
+            Result, Bindings, Adapters, Metadata);
+      Landin.Testing.Check
+        (Item, Result.Status = Landin.Driver.Status_Reported
+         and then Contains (Report_Of (Result), "error[L0581]")
+         and then Contains
+           (Report_Of (Result),
+            "record 'Big' field 'last' is larger than any object of the"
+            & " target, which holds at most 4294967295 bytes")
+         and then US.Length (Bindings) = 0,
+         "a field past the target's greatest object: " & Report_Of (Result));
+      Bind (True, Field ("0x11", "data", "int[1073741824]"),
+            Result, Bindings, Adapters, Metadata);
+      Landin.Testing.Check
+        (Item, Result.Status = Landin.Driver.Status_Reported
+         and then Contains (Report_Of (Result), "error[L0581]")
+         and then Contains
+           (Report_Of (Result),
+            "array type 'int[1073741824]' is larger than any object of the"
+            & " target")
+         and then US.Length (Bindings) = 0,
+         "an array past the target's greatest object: "
+         & Report_Of (Result));
+      Bind (True,
+            Field ("0x11", "data", "char[4294967293]") & ","
+            & Field ("0x12", "last", "int"),
+            Result, Bindings, Adapters, Metadata);
+      Landin.Testing.Check
+        (Item, Result.Status = Landin.Driver.Status_Reported
+         and then Contains
+           (Report_Of (Result),
+            "record 'Big' field 'last' is larger than any object of the"
+            & " target"),
+         "an offset that rounds up past it: " & Report_Of (Result));
+      Bind (True,
+            Field ("0x11", "data", "char[4294967288]") & ","
+            & Field ("0x12", "last", "int"),
+            Result, Bindings, Adapters, Metadata);
+      Landin.Testing.Check
+        (Item, Result.Status = 0
+         and then Contains
+           (US.To_String (Adapters),
+            "_Static_assert(sizeof(struct Big) == 4294967292,"),
+         "the greatest record that fits is laid out: " & Report_Of (Result));
+   end A_Record_Is_Laid_Out_In_Target_Bytes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1223,6 +1387,9 @@ package body Landin.Tests.Bindings_Suite is
       Landin.Testing.Register
         (Into, "bindings", "arriving output trees are preserved",
          Arriving_Output_Trees_Are_Preserved'Access);
+      Landin.Testing.Register
+        (Into, "bindings", "a record is laid out in target bytes",
+         A_Record_Is_Laid_Out_In_Target_Bytes'Access);
    end Register;
 
 end Landin.Tests.Bindings_Suite;

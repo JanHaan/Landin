@@ -1,6 +1,11 @@
+with Ada.Containers.Indefinite_Ordered_Sets;
+
 package body Landin.Xml is
 
    package US renames Ada.Strings.Unbounded;
+
+   package Name_Sets is new Ada.Containers.Indefinite_Ordered_Sets
+     (Element_Type => String);
 
    --  Raised only inside Parse, to leave a refused document, and never
    --  propagated out of it.
@@ -537,6 +542,10 @@ package body Landin.Xml is
          Start : constant Integer := P;
          Made : Node;
          Item : Element;
+         --  The names of the element's attributes so far, a set so that
+         --  finding one given twice does not compare each with every
+         --  other: nothing bounds how many an element has.
+         Given : Name_Sets.Set;
       begin
          P := P + 1;
          declare
@@ -568,16 +577,11 @@ package body Landin.Xml is
                Quote : Character;
                Added : Attribute_Entry;
             begin
-               for Index in Made.First_Attribute .. Into.Attributes.Last_Index
-               loop
-                  if Slice (Into.Pool, Into.Attributes (Index).Name_First,
-                            Into.Attributes (Index).Name_Last)
-                    = Attribute_Name
-                  then
-                     Fail ("the attribute " & Attribute_Name & " is given"
-                       & " twice", Name_At);
-                  end if;
-               end loop;
+               if Given.Contains (Attribute_Name) then
+                  Fail ("the attribute " & Attribute_Name & " is given"
+                    & " twice", Name_At);
+               end if;
+               Given.Insert (Attribute_Name);
                Skip_Space;
                if P > Last or else Text (P) /= '=' then
                   Fail ("= was expected after the attribute "

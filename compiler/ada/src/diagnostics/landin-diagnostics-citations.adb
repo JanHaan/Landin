@@ -2299,10 +2299,26 @@ package body Landin.Diagnostics.Citations is
                "What the projection reads, and what it writes",
             when 558 =>
                "`refine svd` replaces its outputs whole or not at all",
+            when 1062 =>
+               "What an SVD omits, overstates or says twice is refused w"
+               & "here it says it",
+            when 1063 =>
+               "A name refine svd writes unprefixed is not one Landin re"
+               & "serves",
+            when 1064 =>
+               "refine svd's outputs are distinct paths, and it removes "
+               & "only what it wrote",
             when 559 =>
                "Vendor inputs are pinned by URL and SHA-256 and fetched",
             when 820 =>
                "`refine bindings` is the binding generator",
+            when 1065 =>
+               "An attribute Clang adds to one of its builtins is not th"
+               & "e header's",
+            when 1066 =>
+               "A C name that is one of Landin's scalar names takes `c_`",
+            when 1067 =>
+               "A C record's layout is counted in the target's bytes",
             when 821 =>
                "Clang runs in an environment of its own, through `Landin"
                & ".Platform`",
@@ -3965,9 +3981,21 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 558 =>
                "Decisions: The toolchain, C and the machine",
+            when 1062 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1063 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1064 =>
+               "Decisions: The toolchain, C and the machine",
             when 559 =>
                "Decisions: The toolchain, C and the machine",
             when 820 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1065 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1066 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1067 =>
                "Decisions: The toolchain, C and the machine",
             when 821 =>
                "Decisions: The toolchain, C and the machine",
@@ -5850,12 +5878,30 @@ package body Landin.Diagnostics.Citations is
             when 558 =>
                "https://www.701.dev/spec.html#d558-refine-svd-replaces-i"
                & "ts-outputs-whole-or-not-at-all",
+            when 1062 =>
+               "https://www.701.dev/spec.html#d1062-what-an-svd-omits-ov"
+               & "erstates-or-says-twice-is-refused-where-it-says-it",
+            when 1063 =>
+               "https://www.701.dev/spec.html#d1063-a-name-refine-svd-wr"
+               & "ites-unprefixed-is-not-one-landin-reserves",
+            when 1064 =>
+               "https://www.701.dev/spec.html#d1064-refine-svd-s-outputs"
+               & "-are-distinct-paths-and-it-removes-only-what-it-wrote",
             when 559 =>
                "https://www.701.dev/spec.html#d559-vendor-inputs-are-pin"
                & "ned-by-url-and-sha-256-and-fetched",
             when 820 =>
                "https://www.701.dev/spec.html#d820-refine-bindings-is-th"
                & "e-binding-generator",
+            when 1065 =>
+               "https://www.701.dev/spec.html#d1065-an-attribute-clang-a"
+               & "dds-to-one-of-its-builtins-is-not-the-header-s",
+            when 1066 =>
+               "https://www.701.dev/spec.html#d1066-a-c-name-that-is-one"
+               & "-of-landin-s-scalar-names-takes-c",
+            when 1067 =>
+               "https://www.701.dev/spec.html#d1067-a-c-record-s-layout-"
+               & "is-counted-in-the-target-s-bytes",
             when 821 =>
                "https://www.701.dev/spec.html#d821-clang-runs-in-an-envi"
                & "ronment-of-its-own-through-landin-platform",

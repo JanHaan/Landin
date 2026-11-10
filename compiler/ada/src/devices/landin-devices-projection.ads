@@ -45,4 +45,8 @@ package Landin.Devices.Projection is
    --  A path under Modules, as relative to the output directory.
    function Under (Directory, Path : String) return String;
 
+   --  The SHA-256 of Text in lowercase hexadecimal, as the manifest
+   --  records each file it lists.
+   function Sha256 (Text : String) return String;
+
 end Landin.Devices.Projection;
