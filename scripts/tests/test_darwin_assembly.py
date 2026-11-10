@@ -264,5 +264,32 @@ class StreamDefaultTests(unittest.TestCase):
         self.assertIn("Stream    : Stream_Choice := Merged;", ada)
 
 
+
+class ExactDiagnosticDifference(unittest.TestCase):
+    """What diagnostics.py says of a report that left its recording."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "compiler/tests/darwin"))
+        sys.path.insert(0, str(ROOT / "compiler/tests"))
+        self.addCleanup(sys.path.remove, str(ROOT / "compiler/tests/darwin"))
+        self.addCleanup(sys.path.remove, str(ROOT / "compiler/tests"))
+        spec = importlib.util.spec_from_file_location(
+            "darwin_diagnostics", ROOT / "compiler/tests/darwin/diagnostics.py")
+        self.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+
+    def test_it_names_the_recording_the_line_and_the_command(self):
+        said = self.module.exact_difference(
+            "end-to-end/refine-identity", "expected.txt",
+            b"refine 1\ntargets: a\n", b"refine 1\ntargets: a b\n")
+        self.assertIn("compiler/tests/fixtures/end-to-end/refine-identity/expected.txt", said)
+        self.assertIn("first at line 2: recorded 'targets: a', refine printed 'targets: a b'", said)
+        self.assertIn("./scripts/dev-test.sh --record=end-to-end/refine-identity", said)
+
+    def test_a_report_that_ends_early_says_so(self):
+        said = self.module.exact_difference("negative/x", "expected.txt", b"a\nb\n", b"a\n")
+        self.assertIn("first at line 2: recorded 'b', refine printed no line (it ends there)", said)
+
+
 if __name__ == "__main__":
     unittest.main()

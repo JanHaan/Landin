@@ -22,6 +22,23 @@ def candidates(root):
             yield meta.label, meta
 
 
+def exact_difference(name, expect, expected, actual):
+    """What a report that left its recording says: where, and how to re-record.
+
+    The recording is the one the test program holds the fixture to, so the
+    command that rewrites it is the test program's.
+    """
+    was, now = expected.splitlines(), actual.splitlines()
+    line = next((i for i, (a, b) in enumerate(zip(was, now)) if a != b), min(len(was), len(now)))
+
+    def shown(lines):
+        return repr(lines[line].decode(errors='replace')) if line < len(lines) else 'no line (it ends there)'
+    return (f'{name}: exact diagnostic differs from compiler/tests/fixtures/{name}/{expect},'
+            f' the recording the test program holds it to; first at line {line + 1}:'
+            f' recorded {shown(was)}, refine printed {shown(now)};'
+            f' once the difference is read, ./scripts/dev-test.sh --record={name} re-records it')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refine', type=Path, required=True)
@@ -70,7 +87,7 @@ def main():
             require(codes == expected_codes, f'{name}: diagnostic codes differ: {codes!r}')
             if 'expect' in meta:
                 expected = (ROOT / 'compiler/tests/fixtures' / name / meta['expect']).read_bytes()
-                require(actual == expected, f'{name}: exact diagnostic differs')
+                require(actual == expected, exact_difference(name, meta['expect'], expected, actual))
             if meta.get('stream') == 'output':
                 require(not stderr, f'{name}: unexpected stderr')
             summary['results'].append(dict(case=name, status='passed', exit=status,
