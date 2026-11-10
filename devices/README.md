@@ -370,7 +370,11 @@ map ends below the memory the ROM uses while it loads the image, as
 ESP-IDF's `bootloader.memory.ld.in` gives it. Each description holds
 `watchdogs.ldn`, a stage before reset that stops both MWDTs and the RTC
 watchdog and sets the super watchdog to feed itself, using CPU registers and
-no RAM (D653, D708); the check evaluates it store by store.
+no RAM (D653, D708); the check evaluates it store by store, and the
+descriptions lane follows the linked stage from the image's entry word to
+reset with [`rv32.py`](rv32.py), which evaluates RV32 instructions as
+[`thumb.py`](thumb.py) evaluates Thumb ones and records each device
+access.
 
 ## RP2350's Hazard3 cores
 

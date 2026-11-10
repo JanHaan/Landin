@@ -87,21 +87,71 @@ class ProbeFailures(unittest.TestCase):
         source = Path(evidence.__file__).read_text()
         self.assertIn('rows.append(row)\n            print(row_line(row),flush=True)', source)
 
+    def test_an_rv32_stage_is_followed_from_the_entry_word_to_reset(self):
+        import struct
+        import descriptions
+
+        def encode_i(opcode, rd, f3, rs1, imm):
+            return (imm & 0xfff) << 20 | rs1 << 15 | f3 << 12 | rd << 7 | opcode
+
+        def encode_s(rs1, rs2, imm):
+            return ((imm >> 5 & 0x7f) << 25 | rs2 << 20 | rs1 << 15 | 2 << 12
+                    | (imm & 0x1f) << 7 | 0x23)
+
+        def encode_j(offset):
+            return ((offset >> 20 & 1) << 31 | (offset >> 1 & 0x3ff) << 21
+                    | (offset >> 11 & 1) << 20 | (offset >> 12 & 0xff) << 12 | 0x6f)
+        base = 0x40380000
+        #  entry: j stage; reset: (not followed); stage: lui t0; lw; ori; sw; j reset
+        def image(stored=7):
+            words = [encode_j(8), 0x00000073,
+                     0x600082b7,                       # lui t0, 0x60008
+                     encode_i(0x03, 7, 2, 5, 0xac),    # lw t2, 172(t0)
+                     encode_i(0x13, 7, 6, 7, 1),       # ori t2, t2, 1
+                     encode_s(5, stored, 0xac),        # sw t2, 172(t0)
+                     encode_j(-20) & 0xffffffff]       # j reset
+            code = struct.pack('<%dI' % len(words), *words)
+            #  A minimal ELF32: one PT_LOAD segment, no sections.
+            header = struct.pack('<4sBBBB8xHHIIIIIHHHHHH', b'\x7fELF', 1, 1, 1, 0, 2, 243, 1,
+                                 base, 52, 0, 0, 52, 32, 1, 0, 0, 0)
+            segment = struct.pack('<IIIIIIII', 1, 84, base, base, len(code), len(code), 5, 4)
+
+            class Linked:
+                data = header + segment + code
+                symbols = {'_landin_firmware_entry': base, '_landin_firmware_reset': base + 4}
+            return Linked()
+        want = {'reset_stage': {'reads': [[0x600080ac, 0x04b00000]],
+                                'accesses': [['r', 0x600080ac, 4, 0x04b00000],
+                                             ['w', 0x600080ac, 4, 0x04b00001]]}}
+        descriptions.rv32_stage(image(), want, 'control')
+        #  A stage that stores another value, or to another register's
+        #  block, is not the recorded one.
+        with self.assertRaisesRegex(RuntimeError, 'control: the stage before reset makes'):
+            descriptions.rv32_stage(image(stored=0), want, 'control')
+        elsewhere = {'reset_stage': {'reads': [], 'accesses': [['w', 0x60020000, 4, 1]]}}
+        with self.assertRaisesRegex(AssertionError, 'outside the image'):
+            descriptions.rv32_stage(image(), elsewhere, 'control')
+        #  Each recorded RV32 stage is followed by the lane's selection.
+        source = Path(descriptions.__file__).read_text()
+        self.assertIn("if 'reset_stage' in want:\n        rv32_stage(image, want, device)", source)
+        self.assertTrue([d for d, record in descriptions.RV32_EXPECTED.items()
+                         if 'reset_stage' in record])
+
     def test_the_guide_is_no_probe_input(self):
         from setup import inventory, probe_inputs
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'lanes').mkdir()
-            for name in ('run.py', 'README.md', 'lanes/notes.md', 'lanes/start.S',
+            for name in ('run.py', 'GUIDE.md', 'lanes/notes.md', 'lanes/start.S',
                          'validation.json'):
                 (root / name).write_text(name)
             before = probe_inputs(root)
             self.assertEqual(sorted(before), ['lanes/start.S', 'run.py', 'validation.json'])
-            self.assertEqual(sorted(inventory(root)), ['README.md', 'lanes/notes.md',
+            self.assertEqual(sorted(inventory(root)), ['GUIDE.md', 'lanes/notes.md',
                                                        'lanes/start.S', 'run.py',
                                                        'validation.json'])
             #  Editing the guide while lanes run changes no input; a probe does.
-            (root / 'README.md').write_text('edited')
+            (root / 'GUIDE.md').write_text('edited')
             self.assertEqual(probe_inputs(root), before)
             (root / 'lanes/start.S').write_text('edited')
             self.assertNotEqual(probe_inputs(root), before)

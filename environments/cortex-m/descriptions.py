@@ -53,6 +53,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / 'devices'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 import fetch_inputs  # noqa: E402
+import rv32  # noqa: E402
 import thumb  # noqa: E402
 #  The Cortex-M devices, and the RV32 ones, which link with the RV32
 #  toolchain and take their own checks (D680-D686).
@@ -347,6 +348,8 @@ def select_rv32(run, refine, device):
     stage = '_landin_firmware_reset_stage' if 'reset_stage' in want else '_landin_firmware_reset'
     require(jump_target(image.word(origin), origin) == symbols[stage],
             '%s: the entry word does not jump to %s' % (device, stage))
+    if 'reset_stage' in want:
+        rv32_stage(image, want, device)
     require(symbols['_landin_firmware_vectors'] == vectors,
             '%s: the table is at %#x' % (device, symbols['_landin_firmware_vectors']))
     require(symbols['_landin_firmware_stack_top'] == want['stack_top'],
@@ -498,6 +501,31 @@ def reset_stage(image, want, device, vectors):
                                 lambda address, width: answers.get(address, 0),
                                 limit=10_000, until=lambda pc: pc == reset).run()
     except thumb.Refused as refused:
+        raise AssertionError('%s: the stage before reset: %s' % (device, refused))
+    require([list(a) for a in made] == stage['accesses'],
+            '%s: the stage before reset makes %r, and %r is recorded'
+            % (device, made, stage['accesses']))
+
+
+def rv32_stage(image, want, device):
+    """D684: from the entry word an RV32 description's stage makes the
+    device accesses recorded from the manual with no memory but the
+    image's own bytes, no RAM and no stack, and then enters reset.
+    devices/rv32.py follows it as devices/thumb.py follows an Arm one."""
+    stage = want['reset_stage']
+    entry = image.symbols['_landin_firmware_entry']
+    reset = image.symbols['_landin_firmware_reset']
+    answers = dict(stage['reads'])
+    #  The 4 KiB blocks the record's own accesses lie in: an access to
+    #  any other address is refused as one outside the image.
+    blocks = sorted({address & ~0xfff for address, _ in stage['reads']}
+                    | {access[1] & ~0xfff for access in stage['accesses']})
+    try:
+        made = rv32.Evaluation(rv32.Image(image.data), [(block, 0x1000) for block in blocks],
+                               (0, 0), lambda address, width: answers.get(address, 0),
+                               limit=10_000, start={'pc': entry},
+                               until=lambda pc: pc == reset).run()
+    except rv32.Refused as refused:
         raise AssertionError('%s: the stage before reset: %s' % (device, refused))
     require([list(a) for a in made] == stage['accesses'],
             '%s: the stage before reset makes %r, and %r is recorded'
