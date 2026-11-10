@@ -1,0 +1,50 @@
+error[L0329]: this failing call is neither tried nor recovered with `else`
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:34:14
+   |
+34 |     answer = item.read(value) -- error: neither tried nor recovered
+   |              ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:9:5
+  |
+9 |     read: (self: ptr item) -> (value: i32) ! closed
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error
+error[L0329]: this failing call is neither tried nor recovered with `else`
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:38:9
+   |
+38 |     r = h.call(1) -- error
+   |         ^^^^^^^^^
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:24:11
+   |
+24 |     call: (n: i32) -> (r: i32) ! closed
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error
+error[L0329]: this failing call is neither tried nor recovered with `else`
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:42:9
+   |
+42 |     r = table[0].call(1) -- error
+   |         ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:24:11
+   |
+24 |     call: (n: i32) -> (r: i32) ! closed
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error
+error[L0329]: this body can fail with `closed`, which is outside its declared error set
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:45:1
+   |
+45 | undeclared_entry: (item: type is service, value: ptr item)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:47:14
+   |
+47 |     answer = try item.read(value) -- error: `closed` is not in the set
+   |              ^^^^^^^^^^^^^^^^^^^^ this call can fail with `closed`
+  = note: [0940]: every failing path belongs to the function's `!` set; add `closed` to it, or recover the failure where it is raised
+error[L0329]: this body can fail with `closed`, which is outside its declared error set
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:50:1
+   |
+50 | undeclared_field: (h: handler) -> (r: i32) ! other =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn:51:9
+   |
+51 |     r = try h.call(1) -- error: `closed` is not in the set
+   |         ^^^^^^^^^^^^^ this call can fail with `closed`
+  = note: [0940]: every failing path belongs to the function's `!` set; add `closed` to it, or recover the failure where it is raised

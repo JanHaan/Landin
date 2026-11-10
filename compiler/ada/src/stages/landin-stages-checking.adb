@@ -2720,6 +2720,15 @@ package body Landin.Stages.Checking is
            Landin.Checking.Empty_Actuals;
          Record_Target : Boolean := True)
          return Landin.Checking.Signature_Id;
+      --  D1091: the signature of a function that a field or an element of a
+      --  declared struct or array holds, read from the declarations and
+      --  layouts alone: nothing is typed and nothing reported, so asking
+      --  before the body is checked changes no later answer.  No_Signature
+      --  for a callee this does not follow, a reference's target or a
+      --  private representation among them.
+      function Static_Callee_Signature
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id)
+         return Landin.Checking.Signature_Id;
       function Needs_Error_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       procedure Discover_Generic_Calls
@@ -17098,10 +17107,22 @@ package body Landin.Stages.Checking is
          then
             return Landin.Checking.Signature_Of
               (Types.all, Res.Bound_To (Meanings.all, Of_Tree, Callee));
-         else
-            return Landin.Checking.Signature_Of
-              (Types.all, Of_Tree, Callee);
          end if;
+         declare
+            Noted : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Signature_Of (Types.all, Of_Tree, Callee);
+         begin
+            if Noted /= Landin.Checking.No_Signature
+              or else Syn.Kind (Of_Tree, Callee)
+                not in Syn.Member_Selection | Syn.Element_Index
+            then
+               return Noted;
+            end if;
+            --  D1091: a function a struct field or an array element holds
+            --  is typed by that field or element, so the error rules that
+            --  run before its body is checked read its signature there.
+            return Static_Callee_Signature (Of_Tree, Callee);
+         end;
       end Effective_Call_Signature;
 
       --  [1950]'s third row.  An index the compiler knows is refused when
@@ -17183,6 +17204,129 @@ package body Landin.Stages.Checking is
             return Field_Position (Of_Tree.all, Written, Named);
          end;
       end Field_At;
+
+      function Static_Callee_Signature
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id)
+         return Landin.Checking.Signature_Id
+      is
+         --  The settled declaration of storage a name is bound to.
+         function Stored (Node : Syn.Node_Id) return Res.Declaration_Id;
+         function Field_Of
+           (Node : Syn.Node_Id; Shape : out Landin.Checking.Field_Shape)
+            return Boolean;
+         function Nominal_Of
+           (Node : Syn.Node_Id) return Landin.Checking.Nominal_Type_Id;
+
+         function Stored (Node : Syn.Node_Id) return Res.Declaration_Id is
+         begin
+            if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+              and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                = Res.Bound
+            then
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+               begin
+                  if Res.Sort_Of (Meanings.all, Id)
+                       in Res.Module_Binding | Res.Local_Binding
+                        | Res.Parameter | Res.Named_Return
+                    and then Landin.Checking.State_Of (Types.all, Id)
+                      = Landin.Checking.Settled
+                  then
+                     return Id;
+                  end if;
+               end;
+            end if;
+            return Res.No_Declaration;
+         end Stored;
+
+         function Nominal_Of
+           (Node : Syn.Node_Id) return Landin.Checking.Nominal_Type_Id
+         is
+            Id : constant Res.Declaration_Id := Stored (Node);
+            Shape : Landin.Checking.Field_Shape;
+         begin
+            if Id /= Res.No_Declaration then
+               return
+                 (if Landin.Checking.Type_Of (Types.all, Id) = Ty.Aggregate
+                  then Landin.Checking.Nominal_Of (Types.all, Id)
+                  else Landin.Checking.No_Nominal_Type);
+            elsif Field_Of (Node, Shape)
+              and then Shape.Kind = Landin.Checking.Aggregate_Field
+            then
+               return Shape.Nominal;
+            end if;
+            return Landin.Checking.No_Nominal_Type;
+         end Nominal_Of;
+
+         function Field_Of
+           (Node : Syn.Node_Id; Shape : out Landin.Checking.Field_Shape)
+            return Boolean is
+         begin
+            Shape := (others => <>);
+            if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+              and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                /= Res.Bound
+            then
+               declare
+                  Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                    Nominal_Of (Syn.Target_Of (Of_Tree, Node));
+                  Which : Natural;
+               begin
+                  if Wrote = Landin.Checking.No_Nominal_Type
+                    or else not Landin.Checking.Has_Layout
+                      (Types.all, Wrote)
+                    or else Representation_Is_Private
+                      (Wrote, Syn.Source_Of (Of_Tree))
+                  then
+                     return False;
+                  end if;
+                  Which := Field_At (Wrote, Syn.Name (Of_Tree, Node));
+                  if Which = 0 then
+                     return False;
+                  end if;
+                  Shape := Landin.Checking.Field_Shape_Of
+                    (Types.all, Wrote, Which);
+                  return True;
+               end;
+            elsif Syn.Kind (Of_Tree, Node) = Syn.Element_Index then
+               declare
+                  From : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Id : constant Res.Declaration_Id := Stored (From);
+                  Holder : Landin.Checking.Field_Shape;
+               begin
+                  if Id /= Res.No_Declaration then
+                     if Landin.Checking.Type_Of (Types.all, Id)
+                       /= Ty.Fixed_Array
+                     then
+                        return False;
+                     end if;
+                     Shape := Landin.Checking.Array_Element_Shape
+                       (Types.all, Id);
+                     return True;
+                  elsif Field_Of (From, Holder)
+                    and then Holder.Kind = Landin.Checking.Fixed_Array_Field
+                    and then Landin.Checking.Holds (Types.all, Holder)
+                  then
+                     Shape := Landin.Checking.Array_Field_Element
+                       (Types.all, Holder);
+                     return True;
+                  end if;
+               end;
+            end if;
+            return False;
+         end Field_Of;
+
+         Shape : Landin.Checking.Field_Shape;
+      begin
+         if Field_Of (Callee, Shape)
+           and then Shape.Kind = Landin.Checking.Scalar_Field
+         then
+            return Shape.Signature;
+         end if;
+         return Landin.Checking.No_Signature;
+      end Static_Callee_Signature;
 
       function Field_Position
         (Of_Tree : Syn.Tree;
@@ -40040,8 +40184,10 @@ package body Landin.Stages.Checking is
             then
                return;
             end if;
+            --  D1091: a tried call adds its entry's atoms to the routine's
+            --  set and one neither tried nor recovered is refused, so each
+            --  needs the entry as a recovered call does.
             if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
-              and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
             then
                declare
                   Callee : constant Syn.Node_Id :=

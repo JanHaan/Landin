@@ -13945,6 +13945,36 @@ admitting the address without the origin, which loses the escape refusal.
 **Pinned by** `runtime/destructured-locals-are-places` and
 `negative/destructured-local-escape`.
 
+### D1091 — A selected callee keeps its error set under every call rule
+
+**The tour said** at [0960] that a call that can fail is written with
+`try` or `else`, at [0940] that every atom a `try` passes on is in the
+routine's declared set and that `! ...` is whatever its callees can fail
+with, and at [1290] that this is worked out for each concrete instance.
+Those rules ran before the bodies they speak of were checked, and read a
+callee's set from the declaration its name resolved to. A callee that is
+selected, a concept entry through a type parameter, a function a struct
+field holds or one an array holds, had no such declaration yet: an
+untried call passed and stopped lowering with an internal defect, a `try`
+of one added nothing to a declared or an inferred set, and a caller that
+recovered the failure of a `! ...` routine was told the call could not
+fail.
+
+**Chosen:** the three rules read a selected callee's set from where the
+language puts it. A function a field or an element holds has the
+signature of that field's or element's function type, which is known
+before any body is checked. A concept entry reached through a
+constrained type parameter is selected in each ready instance before the
+sets are worked out, for every call of it, tried, recovered or neither,
+as it already was for a recovered call. L0329 then reports each as it
+reports a call of a named routine.
+
+**The alternative:** refusing a failing callee in these positions, which
+takes `try` away from generic code and callbacks. It is declined.
+
+**Pinned by** `negative/selected-callee-keeps-its-error-set` and
+`runtime/selected-callee-keeps-its-error-set`.
+
 ## DECISIONS: CONTROL FLOW
 
 Branches, loops, traversal, the cleanup an edge selects, and what the
