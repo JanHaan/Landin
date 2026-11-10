@@ -1585,6 +1585,67 @@ package body Landin.Tests.Server_Suite is
          "a root that cannot be listed is a fault and not an empty run");
    end A_Session_Directory_Without_A_Transcript_Is_A_Fault;
 
+   procedure A_Session_With_An_Empty_Directory_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   --  Git keeps no empty directory, so a session that needs one is
+   --  another session in every clone.  `handler-margin` opened a document
+   --  in `workspace/app` with nothing on disk there, and passed only
+   --  where the directory had been made by hand.
+   procedure A_Session_With_An_Empty_Directory_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      Root : constant String := Scratch_Sessions & "/hollow";
+      Opening : constant String :=
+        "-> {""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+        & """params"":{""textDocument"":{""uri"":"
+        & """file:///workspace/app/main.ldn"",""languageId"":""landin"","
+        & """version"":1,""text"":""""}}}" & LF & "exit: 0" & LF;
+   begin
+      Fresh_Scratch (Root);
+      Put (Root & "/opened/session.lsp", Opening);
+      Ada.Directories.Create_Path (Root & "/opened/workspace/app");
+      declare
+         Result : constant Landin.Testing.Sessions.Outcome :=
+           Landin.Testing.Sessions.Run (Root & "/opened");
+         Said   : constant String := Unbounded.To_String (Result.Problem);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Malformed
+              and then Ada.Strings.Fixed.Index
+                (Said, "an empty directory, served as /workspace/app,") > 0
+              and then Ada.Strings.Fixed.Index
+                (Said, "add " & Root & "/opened/workspace/app/main.ldn,"
+                 & " which the transcript names") > 0,
+            "the document's missing file is named: " & Said);
+      end;
+      Put (Root & "/opened/workspace/app/main.ldn", "");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Unbounded.To_String
+              (Landin.Testing.Sessions.Run (Root & "/opened").Problem),
+            "empty directory") = 0,
+         "with the file there the tree is the session's");
+
+      --  A directory the transcript names nothing in, in the library.
+      Put (Root & "/bare/session.lsp", "exit: 0" & LF);
+      Ada.Directories.Create_Path (Root & "/bare/library/core/panic");
+      declare
+         Result : constant Landin.Testing.Sessions.Outcome :=
+           Landin.Testing.Sessions.Run (Root & "/bare");
+         Said   : constant String := Unbounded.To_String (Result.Problem);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Malformed
+              and then Ada.Strings.Fixed.Index
+                (Said, "served as /opt/landin/lib/landin/core/panic,") > 0
+              and then Ada.Strings.Fixed.Index
+                (Said, "add a file in " & Root
+                 & "/bare/library/core/panic, or remove the directory") > 0,
+            "a directory nothing is named in is named itself: " & Said);
+      end;
+   end A_Session_With_An_Empty_Directory_Is_Refused;
+
    procedure Record_In
      (Root  : String;
       Name  : String;
@@ -2446,6 +2507,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "a session directory without a transcript is a fault",
          A_Session_Directory_Without_A_Transcript_Is_A_Fault'Access);
+      Landin.Testing.Register
+        (Into, "server", "a session with an empty directory is refused",
+         A_Session_With_An_Empty_Directory_Is_Refused'Access);
       Landin.Testing.Register
         (Into, "server", "a recording never replaces what it could not run",
          A_Recording_Never_Replaces_What_It_Could_Not_Run'Access);

@@ -608,7 +608,12 @@ both build modes on Linux and on macOS. Both runners take every directory
 under `server/` as a session, apart from one whose name begins with `.` or
 `_`, and fail on a directory that holds no `session.lsp`: a transcript
 misnamed by a merge or a rename is a session nobody runs. A session whose
-`workspace/` or `library/` tree cannot be read whole fails too.
+`workspace/` or `library/` tree cannot be read whole fails too, and so
+does one whose tree holds an empty directory: Git keeps none, so a session
+that needs a directory with nothing in it would pass where it was written
+and fail in every clone. The refusal names the file to add, the one the
+transcript opens there; a session that needs the directory to be missing
+simply has none.
 
 `./scripts/test.sh --record` rewrites every `<-` line with what the server
 sends now, as it does `lowering.ir`, and `./scripts/test.sh

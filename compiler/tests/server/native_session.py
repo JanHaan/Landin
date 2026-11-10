@@ -105,9 +105,41 @@ def messages(output):
 
 
 
+def hollow(directory, transcript):
+    """What to say of the first empty directory in a session's trees, or "".
+
+    Git keeps no empty directory, so a session that needs one passes where
+    it was written and is another session in every clone: a document opened
+    in `workspace/app` with nothing on disk there was checked as a module
+    where the directory stood and refused, as no directory, where it did
+    not.  The file to add is the first one there that the transcript names
+    in a URI, as `Landin.Testing.Sessions` has it.
+    """
+    for tree, served in (("workspace", PREFIX), ("library", LIBRARY)):
+        if not (directory / tree).is_dir():
+            continue
+        for held, _, files in sorted(os.walk(directory / tree)):
+            if os.listdir(held):
+                continue
+            below = Path(held).relative_to(directory / tree).as_posix()
+            uri = served if below == "." else served + "/" + below
+            named = re.search(re.escape(uri) + r'/([^"/ ]+)"', transcript)
+            return ("the session's tree holds an empty directory, served as"
+                    " %s, which Git does not keep, so the session differs in"
+                    " a clone: add %s, or remove the directory"
+                    % (uri[len("file://"):],
+                       "%s, which the transcript names"
+                       % (Path(held) / named.group(1)) if named
+                       else "a file in %s" % held))
+    return ""
+
+
 def run(refine, name):
     directory = HERE / name
     transcript = (directory / "session.lsp").read_text(encoding="utf-8")
+    problem = hollow(directory, transcript)
+    if problem:
+        return problem
     with tempfile.TemporaryDirectory(prefix="landin-lsp-") as scratch:
         workspace = Path(scratch).resolve() / "workspace"
         if (directory / "workspace").is_dir():

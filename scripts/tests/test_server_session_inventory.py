@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The native session runner's inventory: a directory without a transcript
-is a session nobody runs, and is said."""
+is a session nobody runs, and is said; and a session whose tree holds an
+empty directory, which a clone would not have, is refused."""
 import contextlib
 import importlib.util
 import io
@@ -54,6 +55,62 @@ class Inventory(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("renamed holds no session.lsp, so the session is not run", said.getvalue())
         self.assertIn("2 sessions, 2 failed", said.getvalue())
+
+
+class Hollow(unittest.TestCase):
+    """Git keeps no empty directory, so a session's tree holds none."""
+
+    OPENING = ('-> {"jsonrpc":"2.0","method":"textDocument/didOpen","params":'
+               '{"textDocument":{"uri":"file:///workspace/app/main.ldn",'
+               '"languageId":"landin","version":1,"text":""}}}\nexit: 0\n')
+
+    def session(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        return Path(temporary.name)
+
+    def test_the_file_the_transcript_opens_there_is_the_one_to_add(self):
+        root = self.session()
+        (root / "workspace/app").mkdir(parents=True)
+        said = RUNNER.hollow(root, self.OPENING)
+        self.assertIn("an empty directory, served as /workspace/app,", said)
+        self.assertIn("add %s, which the transcript names"
+                      % (root / "workspace/app/main.ldn"), said)
+        (root / "workspace/app/main.ldn").write_text("")
+        self.assertEqual(RUNNER.hollow(root, self.OPENING), "")
+
+    def test_a_directory_nothing_is_named_in_is_named_itself(self):
+        root = self.session()
+        (root / "library/core/panic").mkdir(parents=True)
+        said = RUNNER.hollow(root, "exit: 0\n")
+        self.assertIn("served as /opt/landin/lib/landin/core/panic,", said)
+        self.assertIn("add a file in %s, or remove the directory"
+                      % (root / "library/core/panic"), said)
+
+    def test_an_empty_tree_root_is_refused_and_a_missing_one_is_not(self):
+        root = self.session()
+        self.assertEqual(RUNNER.hollow(root, self.OPENING), "")
+        (root / "workspace").mkdir()
+        self.assertIn("served as /workspace,",
+                      RUNNER.hollow(root, self.OPENING))
+
+    def test_the_run_refuses_before_the_server_starts(self):
+        root = self.session()
+        (root / "opened/workspace/app").mkdir(parents=True)
+        (root / "opened/session.lsp").write_text(self.OPENING)
+        with mock.patch.object(RUNNER, "HERE", root), \
+                mock.patch.object(RUNNER.subprocess, "Popen") as started:
+            said = RUNNER.run("refine", "opened")
+        self.assertIn("an empty directory", said)
+        started.assert_not_called()
+
+    def test_no_session_of_the_tree_holds_one(self):
+        directory = ROOT / "compiler/tests/server"
+        for name in RUNNER.inventory(directory)[0]:
+            transcript = (directory / name / "session.lsp").read_text(
+                encoding="utf-8")
+            self.assertEqual(RUNNER.hollow(directory / name, transcript), "",
+                             name)
 
 
 if __name__ == "__main__":
