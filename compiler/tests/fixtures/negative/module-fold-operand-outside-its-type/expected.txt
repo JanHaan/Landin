@@ -1,0 +1,58 @@
+error[L0300]: this works out to 1000, and no `u8` holds it
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:10:23
+   |
+10 | through_u8: i64 = i64(u8(k)) -- error: 1000 is no u8
+   |                       ^^^^^
+  = note: [1940]: a module value has no moment in which to trap, so a fold no type holds is refused
+error[L0300]: this works out to 200, and the declared range is 0 .. 100
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:11:28
+   |
+11 | through_percent: i64 = i64(percent(wide)) -- error: 200 is no percent
+   |                            ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:5:17
+  |
+5 | percent: type = u8 range 0..100
+  |                 ^^^^^^^^^^^^^^^ the range written here
+  = note: [0660]: a range subtype is checked at every assignment and conversion into it
+error[L0300]: this known integer is not a bool value
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:12:25
+   |
+12 | through_bool: f64 = f64(bool(k)) -- error: 1000 is no bool
+   |                         ^^^^^^^
+  = note: [0310]/[1940]: only zero and one convert to bool
+error[L0300]: this works out to 400, and no `u8` holds it
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:13:26
+   |
+13 | sum_converted: i64 = i64(u8(wide + wide)) -- error: 400 is no u8
+   |                          ^^^^^^^^^^^^^^^
+  = note: [1940]: a module value has no moment in which to trap, so a fold no type holds is refused
+error[L0300]: this works out to 300, and no `u8` holds it
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:14:16
+   |
+14 | shifted: u8 = (200 + 100) >> 1 -- error: 300 is no u8
+   |                ^^^^^^^^^
+  = note: [1940]: a module value has no moment in which to trap, so a fold no type holds is refused
+error[L0300]: this works out to 256, and no `u8` holds it
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:15:22
+   |
+15 | complemented: u8 = ~(255 + 1) -- error: 256 is no u8
+   |                      ^^^^^^^
+  = note: [1940]: a module value has no moment in which to trap, so a fold no type holds is refused
+error[L0300]: this works out to 128, and no `i8` holds it
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:16:16
+   |
+16 | wrapped: i8 = (127 + 1) *% 1 -- error: 128 is no i8
+   |                ^^^^^^^
+  = note: [1940]: a module value has no moment in which to trap, so a fold no type holds is refused
+error[L0300]: this works out to -1, and no `u32` holds it
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:17:16
+   |
+17 | masked: u32 = (0 - 1) & 255 -- error: -1 is no u32
+   |                ^^^^^
+  = note: [1940]: a module value has no moment in which to trap, so a fold no type holds is refused
+error[L0300]: this image value works out to 1000, and no `u8` holds it
+  --> ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn:18:17
+   |
+18 | cells: [2]u8 = [u8(k), 1] -- error: 1000 is no u8
+   |                 ^^^^^
+  = note: D24/D34/D35/D66/D132: every module image value has to fit its contextual scalar type

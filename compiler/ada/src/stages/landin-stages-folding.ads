@@ -85,6 +85,26 @@ private generic
       return Boolean;
 package Landin.Stages.Folding is
 
+   --  D1090: why a fold arrived Overflowed, when the reason is a value
+   --  that a conversion or an operator inside it cannot take rather than
+   --  an answer past the fold's own range: the conversion, or the operand
+   --  of the width-dependent operator, the value it folded to, and the
+   --  type that does not hold it.  Constraint is the range subtype a
+   --  conversion applied when the value fits the base and not the range.
+   --  Node is No_Node when no such refusal was met.
+   type Narrow_Refusal is record
+      Source     : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Node       : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
+      Value      : Landin.Types.Folded := 0;
+      Into       : Landin.Types.Type_Kind := Landin.Types.Undecided;
+      Constraint : Landin.Checking.Constraint_Id :=
+        Landin.Checking.No_Constraint;
+   end record;
+
+   --  The first such refusal the latest Fold met, in the tree it was
+   --  given or in the initializer of a module binding it read.
+   function Last_Refusal return Narrow_Refusal;
+
    --  Completed module-binding values are shared within this query.  A
    --  value is shared with later queries only when its binding is final
    --  and every module binding its fold read was final too, and only in

@@ -4393,6 +4393,37 @@ operations on both target widths, plus final-image and positive/negative
 fold-range overflow refusals. Container capacity arithmetic inside a function
 remains subject to the runtime rule.
 
+### D1090 — Inside a module fold, a conversion and a width-dependent operator take only what their type holds
+
+**The tour said** at [0310] that an impossible conversion of a value known
+at compile time is a compile error, and D224 gave ordinary module
+arithmetic a wider folding range while saying that conversions, shifts,
+bit operators and wrapping operators keep their own type-dependent rules.
+The fold compared only its final value with the binding's type. So
+`a: i64 = i64(u8(k))` with a `k` of 1000 held 1000, `(200 + 100) >> 1` as
+a `u8` was 22, the 300 having been cut to eight bits first, and a range
+subtype applied inside a larger expression reached the backend unchecked.
+
+**Chosen:** the wider range belongs to `+ - * / %`, comparison and unary
+minus alone. A conversion inside a module value takes only a value its
+target holds: an integer its integer type holds, zero or one for `bool`,
+and a value inside the bounds for a range subtype. A shift, `&`, `|`, `^`,
+`~` and a wrapping operator take only operands their operand type holds;
+a shift's amount stays under [0320]'s own rule. A value that is not held
+is L0300 at the conversion or the operand, naming the value and the type,
+and a binding that reads the refused one reports nothing more. A wide
+intermediate that only ordinary arithmetic and a comparison meet folds as
+D224 says.
+
+**The alternatives:** cutting the value to the type's width, which is
+what D224 itself declines, an image nobody wrote in place of an error;
+and narrowing every intermediate to its type, which takes back D224's
+wider range. Both are declined.
+
+**Pinned by** `negative/module-fold-operand-outside-its-type`, with
+`runtime/module-range-subtype-negative-mask-operand` for a negative
+operand its signed type holds.
+
 ## DECISIONS: POINTERS AND RAW STORAGE
 
 Addresses, the absent pointer, and the operations that read storage
@@ -17287,6 +17318,30 @@ whose pointer is `ptr mut atomic.cell(u32)`; `negative/r630-optional`'s
 `negative/atomic-cell-holds-unsigned-scalars`,
 `negative/generic-closed-parameter-refusals` and
 `negative/for-iterable-missing-conformance`.
+
+### D1089 — A module value is typed before it is folded, in any order
+
+**The tour said** at [0130] that order does not matter in a module, and
+[1940] that one module value may name another written below it. The fold
+read a float literal's width from what checking its declaration had
+noted, so a value checked before the float it names took that float for
+unknown: an impossible conversion passed and ended in an internal defect
+at emission, and a range subtype's value that was known and in range was
+refused as unknown. Swapping the two lines swapped the outcome.
+
+**Chosen:** while module declarations are checked, a module binding the
+fold reaches is given its types first, by the check its own turn would
+make, which then is not made twice. A chain that comes back to a binding
+already being typed folds as it did, and [1940]'s report of a value
+worked out from itself is unchanged.
+
+**The alternative:** a pass typing every module initializer before any
+is folded. Typing one already folds others, for the bound of an array
+type and for a known conversion, so the order would only move. It is
+declined.
+
+**Pinned by** `negative/module-float-declared-below-is-known` and
+`runtime/module-float-declared-below-is-known`.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 

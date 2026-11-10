@@ -1,0 +1,29 @@
+--  D1090: D224's wider range is ordinary arithmetic's.  A conversion inside
+--  a module value takes only a value its target holds, and a shift, a bit
+--  operator or a wrapping operator only operands its type holds, wherever
+--  in the expression they stand.
+percent: type = u8 range 0..100
+
+k: i32 = 1000
+wide: u8 = 200
+
+through_u8: i64 = i64(u8(k)) -- error: 1000 is no u8
+through_percent: i64 = i64(percent(wide)) -- error: 200 is no percent
+through_bool: f64 = f64(bool(k)) -- error: 1000 is no bool
+sum_converted: i64 = i64(u8(wide + wide)) -- error: 400 is no u8
+shifted: u8 = (200 + 100) >> 1 -- error: 300 is no u8
+complemented: u8 = ~(255 + 1) -- error: 256 is no u8
+wrapped: i8 = (127 + 1) *% 1 -- error: 128 is no i8
+masked: u32 = (0 - 1) & 255 -- error: -1 is no u32
+cells: [2]u8 = [u8(k), 1] -- error: 1000 is no u8
+
+--  What each holds is accepted as before, and so is a wide intermediate
+--  that only ordinary arithmetic and a comparison meet.
+kept: i64 = i64(u8(k - 900))
+halved: u8 = (200 + 50) >> 1
+turned: u8 = 255 +% 1
+compared: bool = 2147483647 + 1 > 0
+
+public main: () -> (code: i32) =
+    code = i32(kept) + i32(halved) + i32(turned)
+end main

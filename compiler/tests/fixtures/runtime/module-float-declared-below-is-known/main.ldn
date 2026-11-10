@@ -1,0 +1,20 @@
+--  D1089: a module value may name a float written below it [0130], and is
+--  then as known as it is with the two lines the other way round: a range
+--  subtype's value folds, and a conversion gives the value it gives there.
+percent: type = u8 range 0..100
+
+level: percent = percent(u8(source))
+whole: i32 = i32(source * scale)
+narrow: f32 = f32(source)
+is_set: bool = bool(one)
+
+source: f64 = 50.0
+scale: f64 = 0.5
+one: f32 = 1.0
+
+public main: () -> (code: i32) =
+    code = 0
+    if level == 50 and whole == 25 and narrow == 50.0 and is_set then
+        code = 42
+    end if
+end main

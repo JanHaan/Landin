@@ -8,6 +8,7 @@ package body Landin.Stages.Folding is
    package Ty renames Landin.Types;
 
    use type Landin.Targets.Bit_Width;
+   use type Landin.Checking.Constraint_Id;
    use type Landin.Checking.Nominal_Type_Id;
    use type Res.Declaration_Sort;
    use type Res.Declaration_Id;
@@ -51,6 +52,37 @@ package body Landin.Stages.Folding is
      (Key_Type => Res.Declaration_Id, Element_Type => Outcome);
 
    Outcomes : Outcome_Maps.Map;
+
+   --  D1090: the first value of this request that something did not hold.
+   Refused : Narrow_Refusal;
+
+   function Last_Refusal return Narrow_Refusal is (Refused);
+
+   procedure Refuse_Narrow
+     (Of_Tree    : Syn.Tree;
+      Node       : Syn.Node_Id;
+      Value      : Ty.Folded;
+      Into       : Ty.Type_Kind;
+      Constraint : Landin.Checking.Constraint_Id :=
+        Landin.Checking.No_Constraint);
+
+   procedure Refuse_Narrow
+     (Of_Tree    : Syn.Tree;
+      Node       : Syn.Node_Id;
+      Value      : Ty.Folded;
+      Into       : Ty.Type_Kind;
+      Constraint : Landin.Checking.Constraint_Id :=
+        Landin.Checking.No_Constraint) is
+   begin
+      if Refused.Node = Syn.No_Node then
+         Refused :=
+           (Source     => Syn.Source_Of (Of_Tree),
+            Node       => Node,
+            Value      => Value,
+            Into       => Into,
+            Constraint => Constraint);
+      end if;
+   end Refuse_Narrow;
 
    --  [0300]'s wrapping arithmetic, [0330]'s bit operators and [0320]'s
    --  shifts answer at the operand type's own width, as two's-complement
@@ -442,6 +474,9 @@ package body Landin.Stages.Folding is
                      if not Sure then
                         return;
                      end if;
+                     --  [0310]/D1090: a conversion takes only a value its
+                     --  target holds, wherever in a fold it stands; D224's
+                     --  wider range is ordinary arithmetic's alone.
                      if Target = Ty.Bool then
                         if From in Ty.Float_Name then
                            Ty.Convert_Float_To_Bool
@@ -449,6 +484,10 @@ package body Landin.Stages.Folding is
                               Value, Blew);
                         else
                            Value := Given;
+                           if Given not in 0 .. 1 then
+                              Blew := True;
+                              Refuse_Narrow (Of_Tree, Node, Given, Ty.Bool);
+                           end if;
                         end if;
                      elsif Target in Ty.Integer_Name then
                         if From in Ty.Float_Name then
@@ -457,9 +496,40 @@ package body Landin.Stages.Folding is
                               Ty.Integer_Name (Target), Facts, Value, Blew);
                         else
                            Value := Given;
+                           if not Ty.Holds
+                             (Given, Ty.Integer_Name (Target), Facts)
+                           then
+                              Blew := True;
+                              Refuse_Narrow (Of_Tree, Node, Given, Target);
+                           end if;
+                        end if;
+                        --  D188: a range subtype applied to the value.
+                        if not Blew then
+                           declare
+                              Wanted : constant
+                                Landin.Checking.Constraint_Id :=
+                                  Landin.Checking.Constraint_Of
+                                    (Types.all, Of_Tree, Node);
+                           begin
+                              if Wanted /= Landin.Checking.No_Constraint
+                                and then
+                                  (Value < Landin.Checking.Bounds_Of
+                                     (Types.all, Wanted).Lower
+                                   or else Value > Landin.Checking.Bounds_Of
+                                     (Types.all, Wanted).Upper)
+                              then
+                                 Blew := True;
+                                 Refuse_Narrow
+                                   (Of_Tree, Node, Value, Target, Wanted);
+                              end if;
+                           end;
                         end if;
                      elsif Target in Ty.Float_Name then
                         if From = Ty.Bool then
+                           --  A bool the checker refused is not one.
+                           if Given not in 0 .. 1 then
+                              return;
+                           end if;
                            Value := Ty.Folded
                              (Ty.Convert_Bool_To_Float
                                 (Given, Ty.Float_Name (Target)));
@@ -553,6 +623,28 @@ package body Landin.Stages.Folding is
                then
                   return;
                end if;
+               --  D1090: these answer at the operand type's width, so an
+               --  operand that type does not hold has no pattern there,
+               --  and masking it would hand on a value nobody wrote.  A
+               --  shift's amount is a count, held to [0320]'s own rule.
+               if Carried in Ty.Integer_Name then
+                  if not Ty.Holds (Left, Ty.Integer_Name (Carried), Facts)
+                  then
+                     Overflowed := True;
+                     Refuse_Narrow
+                       (Of_Tree, Syn.Left_Of (Of_Tree, Node), Left, Carried);
+                     return;
+                  elsif Op not in Syn.Shift_Left | Syn.Shift_Right
+                    and then not Ty.Holds
+                      (Right, Ty.Integer_Name (Carried), Facts)
+                  then
+                     Overflowed := True;
+                     Refuse_Narrow
+                       (Of_Tree, Syn.Right_Of (Of_Tree, Node), Right,
+                        Carried);
+                     return;
+                  end if;
+               end if;
                declare
                   Bits : constant Landin.Targets.Bit_Width :=
                     Fold_Width (Ty.Scalar_Name (Carried));
@@ -609,7 +701,16 @@ package body Landin.Stages.Folding is
                Sure  : Boolean;
             begin
                Operand (Syn.Operand_Of (Of_Tree, Node), Under, Sure);
-               if Sure and then Carried in Ty.Scalar_Name then
+               if Sure
+                 and then Carried in Ty.Integer_Name
+                 and then not Ty.Holds
+                   (Under, Ty.Integer_Name (Carried), Facts)
+               then
+                  --  D1090: as the two-operand operators above.
+                  Overflowed := True;
+                  Refuse_Narrow
+                    (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Under, Carried);
+               elsif Sure and then Carried in Ty.Scalar_Name then
                   declare
                      Bits : constant Landin.Targets.Bit_Width :=
                        Fold_Width (Ty.Scalar_Name (Carried));
@@ -1016,6 +1117,7 @@ package body Landin.Stages.Folding is
         = Landin.Checking.No_Routine_Instance;
       Read_Unfinished := False;
       Outcomes.Clear;
+      Refused := (others => <>);
       Fold_Dependencies (Cache, Of_Tree, Node);
       Read_Unfinished := False;
       Fold (Cache, Of_Tree, Node, Depth, Value, Known, Overflowed);
