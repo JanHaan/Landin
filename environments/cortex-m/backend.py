@@ -367,7 +367,7 @@ def session(run, port, expected, traps, before=(), profile=None, vfp=False):
         #  A software watchpoint would single-step the whole program.
         'assert guard.type == gdb.BP_HARDWARE_WATCHPOINT, "the stack guard is no hardware watchpoint"',
         'end',
-        'break backend_done', 'break backend_fault_done', 'continue',
+        'break backend_done', 'break backend_fault_done', *watched_continue(),
         'python', 'import json, struct',
         'def value(expr): return int(gdb.parse_and_eval(expr))',
         #  Where the program stopped, said before anything is held to it:
@@ -384,6 +384,7 @@ def session(run, port, expected, traps, before=(), profile=None, vfp=False):
         'if pc not in (value("&backend_done"), value("&backend_fault_done")):',
         '    sp = value("$sp")',
         '    which = "process stack (PSP)" if value("$control") & 2 else "main stack (MSP)"',
+        *still_running('value("$lr") & ~1'),
         '    state = "stopped by the write watchpoint on the guard"',
         f'    check(False, "the stack overran its {reserved}-byte reservation: %s wrote into'
         f' its lowest 16 bytes at {bottom:#x}, called from %s, with sp %#x and %d bytes of the'
@@ -404,8 +405,53 @@ def session(run, port, expected, traps, before=(), profile=None, vfp=False):
         f'check(words[:4] == [0xa55ac33c]*4, "the stack overran its {reserved}-byte reservation")',
         f'check(value("$sp") >= {bottom}, "sp is below the stack reservation")',
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
-        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"is_stack_bound":False}},f)',
+        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"stack_top":{bottom}+{reserved},"is_stack_bound":False}},f)',
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
+
+
+def watched_continue():
+    """The session's `continue` to a result breakpoint, interrupted at
+    SESSION_LIMIT so that a program still running says where it is.
+
+    GDB has no deadline of its own for `continue`.  A timer thread posts
+    an `interrupt` to GDB's event loop, which serves it while the command
+    waits for the target; the session then finds the program stopped at
+    neither result breakpoint with `late` set, and `still_running` reports
+    the pc.  QEMU's mps2-an500 reads zero and ignores writes over unmapped
+    space, so a stray fetch there executes zeros to the limit rather than
+    faulting, and the pc is the only sign of where it went.
+    """
+    return [
+        'python', 'import threading',
+        'late, armed = [], [True]',
+        #  Bound to this session's lists: a timer that fires as its
+        #  `continue` returns must not interrupt the next session's program.
+        'def interrupt_late(late=late, armed=armed):',
+        '    if not armed: return',
+        '    late.append(True)',
+        '    try: gdb.execute("interrupt")',
+        '    except gdb.error: late.clear()',
+        f'watchdog = threading.Timer({SESSION_LIMIT}, lambda: gdb.post_event(interrupt_late))',
+        'watchdog.daemon = True',
+        'watchdog.start()',
+        'try: gdb.execute("continue")',
+        'finally:',
+        '    watchdog.cancel()',
+        '    armed.clear()',
+        'end']
+
+
+def still_running(caller):
+    """The lines, inside the session's "stopped at neither result
+    breakpoint" branch, that fail a program `watched_continue` had to
+    interrupt, naming the last pc and its caller, CALLER's expression."""
+    return [
+        '    if late:',
+        '        state = "interrupted at the session limit"',
+        f'        check(False, "the program was still running after {SESSION_LIMIT} s and had'
+        ' reached neither backend_done nor backend_fault_done: its last pc is %s, called from'
+        f' %s, with sp %#x; a pc outside the image is a stray jump, which on a machine whose'
+        f' unmapped space reads zero runs on without a fault" % (where(pc), where({caller}), sp))']
 
 
 def rv32_session(run, port, expected, traps, before=(), profile=None):
@@ -458,7 +504,7 @@ def rv32_session(run, port, expected, traps, before=(), profile=None):
         f'guard = gdb.Breakpoint("*(unsigned char (*)[16]){bottom}", gdb.BP_WATCHPOINT, gdb.WP_WRITE)',
         'assert guard.type == gdb.BP_HARDWARE_WATCHPOINT, "the stack guard is no hardware watchpoint"',
         'end',
-        'break backend_done', 'break backend_fault_done', 'continue',
+        'break backend_done', 'break backend_fault_done', *watched_continue(),
         'python', 'import json, struct',
         'def value(expr): return int(gdb.parse_and_eval(expr))',
         'def where(address):',
@@ -470,6 +516,7 @@ def rv32_session(run, port, expected, traps, before=(), profile=None):
         'pc = value("$pc")',
         'if pc not in (value("&backend_done"), value("&backend_fault_done")):',
         '    sp = value("$sp")',
+        *still_running('value("$ra")'),
         '    state = "stopped by the write watchpoint on the guard"',
         f'    check(False, "the stack overran its {reserved}-byte reservation: %s wrote into'
         f' its lowest 16 bytes at {bottom:#x}, called from %s, with sp %#x and %d bytes of the'
@@ -487,7 +534,7 @@ def rv32_session(run, port, expected, traps, before=(), profile=None):
         f'check(words[:4] == [0xa55ac33c]*4, "the stack overran its {reserved}-byte reservation")',
         f'check(value("$sp") >= {bottom}, "sp is below the stack reservation")',
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
-        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"is_stack_bound":False}},f)',
+        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"stack_top":{bottom}+{reserved},"is_stack_bound":False}},f)',
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
 
 
@@ -530,7 +577,8 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None)
             #  connection waits in its backlog rather than racing the start.
             require(process.poll() is None, 'QEMU exited before connection')
             try:
-                text = run.debug('gdb-backend', elf, script, timeout=SESSION_LIMIT)
+                text = run.debug('gdb-backend', elf, script,
+                                 timeout=SESSION_LIMIT + SESSION_GRACE)
             except CommandFailed as error:
                 if error.ended.startswith('timed out'):
                     raise timed_out(error, process, time.monotonic() - tick) from None
@@ -543,9 +591,13 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None)
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
 
 
-#  How long one program may take, from GDB connecting to its result
-#  breakpoint, under single-threaded QEMU.
+#  How long one program may take, from its harness's paint to its result
+#  breakpoint, under single-threaded QEMU: the session interrupts it then
+#  and says where it was (`watched_continue`).  SESSION_GRACE more is what
+#  the whole session may take before it is killed unheard, the backstop
+#  for a debugger that does not answer.
 SESSION_LIMIT = 20
+SESSION_GRACE = 10
 
 
 def session_failure(error):
@@ -577,7 +629,8 @@ def timed_out(error, process, elapsed):
     if process.poll() is None:
         return RuntimeError(
             'the program ran for %.1f s under QEMU and reached neither backend_done nor '
-            'backend_fault_done within the debugger\'s %d-second session limit: the fixture '
+            'backend_fault_done within the debugger\'s %d-second session limit, and the '
+            'session did not answer its own interrupt: the fixture '
             'takes longer than a corpus program may; inspect %s'
             % (elapsed, SESSION_LIMIT, error.log))
     return RuntimeError(
@@ -717,6 +770,34 @@ def image_sizes(run, elf, profile, name='sections', level='armv6-m'):
     return {'regions': {part: {'used': used[part], 'limit': limit}
                         for part, limit in limits.items()},
             'sections': sections, 'routines': routines}
+
+
+def observed_stack(out):
+    """What the session's paint showed of the executed image's stack, from
+    the stack-observation.json beside it: the bytes between the stack top
+    and the lowest word the program changed, with the reservation.
+
+    An observation of this run, not a bound: another input may go deeper,
+    and a stack the program made for itself, a fibre's, is not the painted
+    one.  None where no session wrote one.
+    """
+    path = Path(out) / 'stack-observation.json'
+    if not path.is_file():
+        return None
+    seen = json.loads(path.read_text())
+    bottom_of_use = seen['lowest_changed_word']
+    reserved = seen['reserved_bytes']
+    top = seen.get('stack_top')
+    if top is None:
+        return None
+    return {'observed_bytes': top - bottom_of_use, 'reserved_bytes': reserved}
+
+
+def describe_stack(stack):
+    """One corpus-line clause for `observed_stack`'s record; "" without one."""
+    if not stack:
+        return ''
+    return 'stack %d of %d observed' % (stack['observed_bytes'], stack['reserved_bytes'])
 
 
 def describe_routines(sizes, count=3):

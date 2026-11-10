@@ -118,9 +118,33 @@ def prepare(board, mode, refine, output, source=None):
                            ('attributes', 'attributes.log')):
         if (output / filename).is_file():
             files[name] = output / filename
-    if bundle.source_identity(ROOT) != before or bundle.sha(refine) != compiler['sha256']:
-        raise bundle.Invalid('source or compiler changed while building; prepare again')
+    changed = changed_inputs(before, bundle.source_identity(ROOT), refine,
+                             compiler['sha256'], bundle.sha(refine))
+    if changed:
+        raise bundle.Invalid(changed)
     return bundle.write(output, board, mode, files, metadata, names, compiler, before)
+
+
+def changed_inputs(before, after, refine, compiler_before, compiler_after, shown=8):
+    """What changed between a preparation's start and its end, as the
+    refusal's text, or None: each source path that was changed, added or
+    removed, the first SHOWN of them, with both source identities, and the
+    compiler with both of its hashes."""
+    said = []
+    if after != before:
+        was, now = before['files'], after['files']
+        paths = ['%s %s' % ('added' if name not in was else
+                            'removed' if name not in now else 'changed', name)
+                 for name in sorted(set(was) | set(now)) if was.get(name) != now.get(name)]
+        more = len(paths) - shown
+        said.append('the source changed while building: %s%s (source identity %s when it began,'
+                    ' %s now)' % (', '.join(paths[:shown]) or 'its identity alone',
+                                  ' and %d more' % more if more > 0 else '',
+                                  before['sha256'], after['sha256']))
+    if compiler_after != compiler_before:
+        said.append('the compiler %s changed while building (sha256 %s when it began, %s now)'
+                    % (refine, compiler_before, compiler_after))
+    return '; '.join(said) + '; prepare again' if said else None
 
 
 def fixed_image(board, args, output, run, files):

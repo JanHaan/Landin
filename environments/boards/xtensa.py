@@ -635,7 +635,7 @@ def main(chip_class, description):
     if args.inspect_boot:
         esp.required_tools(args)
         return inspect_boot(chip, args)
-    common.place_hubs(parser, args, 'hub', 'console_hub')
+    common.place_hubs(args, 'hub', 'console_hub')
     esp.required_tools(args)
     if args.trace_rom:
         return trace_rom(chip, args)

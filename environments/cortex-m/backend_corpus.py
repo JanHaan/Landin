@@ -14,6 +14,7 @@ import sys
 from backend import (HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      MATERIALIZATION, REFERENCE, THUMB_2, ImageLimit, build, c_compiler,
                      c_objects, conventions, derived, describe_routines, describe_sizes,
+                     describe_stack, observed_stack,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
                      hard_float, lane_inputs, lane_of, level_flags, levels_of, link,
                      measure_overflow, metadata, refine_level, region, target)
@@ -566,9 +567,11 @@ def corpus_line(result):
             ' ' + result.get('verdict', 'FAILED: ' + result.get('error', '')))
     if 'image' in result:
         text += ': ' + describe_sizes(result['image'])
-        largest = describe_routines(result['image'])
-        if largest:
-            text += '; ' + largest
+        #  An executed image's stack as its session's paint showed it.
+        for clause in (describe_stack(result.get('stack')),
+                       describe_routines(result['image'])):
+            if clause:
+                text += '; ' + clause
     elif result.get('boundary') == 'represented static image exceeds selected memory map':
         text += ': its assembly materialises more than 8 MiB, past any region of the map'
     elif 'minimum_stack_bytes' in result:
@@ -804,28 +807,87 @@ def profile_verdicts(results, others, own=REFERENCE):
     return verdicts
 
 
-def observe(output, tools, refine, program, profiles, level='armv6-m', roots=()):
-    """Run PROGRAM, a source file or a module directory, at PROFILES on the
-    constrained reference and say what it returned or where it trapped.
+class ProgramPeers:
+    """What `c_objects` reads of a fixture's metadata, for the C sources
+    given beside a --program: each compiled by the lane's C contract
+    (D985) with no arguments or pinned inputs of its own."""
+    label = '--program'
+    c_inputs = ()
+
+    def __init__(self, sources):
+        self.c_sources = [Path(source).resolve(strict=True) for source in sources]
+
+    def c_args_for(self, target):
+        return []
+
+
+def program_names(programs):
+    """A directory name for each of PROGRAMS, a list of resolved paths: its
+    stem, or with its directory's name where two share a stem, as two
+    main.ldn files do, and its place in the list where they still agree."""
+    stems = [path.stem for path in programs]
+    names = [stem if stems.count(stem) == 1 else path.parent.name + '-' + stem
+             for path, stem in zip(programs, stems)]
+    return [name if names.count(name) == 1 else '%s-%d' % (name, index)
+            for index, name in enumerate(names, start=1)]
+
+
+def observe(output, tools, refine, programs, profiles, level='armv6-m', roots=(),
+            c_sources=()):
+    """Run each of PROGRAMS, a source file or a module directory, at
+    PROFILES on the constrained reference and say what it returned or
+    where it trapped.
 
     No oracle is held: the status is printed, with the image against the
-    map, so a measured value comes back as a value.  The harness still
-    holds the stack to its reservation and names the routine that overran
-    it.  Nothing here is corpus evidence.
+    map and the stack the session's paint showed in use, so a measured
+    value comes back as a value.  The harness still holds the stack to its
+    reservation and names the routine that overran it.  C_SOURCES are C
+    peers built by the lane's C contract (D985) and linked with the one
+    program they are given beside.  Nothing here is corpus evidence.
     """
-    path = Path(program).resolve(strict=True)
+    if isinstance(programs, (str, Path)):
+        programs = [programs]
+    paths = [Path(program).resolve(strict=True) for program in programs]
+    require(not c_sources or len(paths) == 1,
+            '--c-source gives the C peers of one program; pass one --program with them')
+    peers = ProgramPeers(c_sources) if c_sources else None
+    results = []
+    for path, name in zip(paths, program_names(paths)):
+        results += observe_one(output, tools, refine, path, name, profiles, level, roots,
+                               peers)
+    (output / 'result.json').write_text(json.dumps(
+        {'scope': 'programs of your own, not corpus evidence', 'compiler_sha256': sha(refine),
+         'results': results}, indent=2) + '\n')
+    failed = [r for r in results if r['status'] == 'failed']
+    require(not failed, '%d of the %d runs failed: %s' % (
+        len(failed), len(results), ', '.join(
+            '%s %s/%s' % (r['name'], r['optimize'], r['specialize'])
+            for r in failed)))
+    return results
+
+
+def observe_one(output, tools, refine, path, name, profiles, level, roots, peers):
+    """`observe` for one program, whose runs go under OUTPUT/NAME--PROFILE."""
     inputs = [*('--root=' + str(Path(root).resolve()) for root in roots)]
     inputs += (['--root=' + str(path.parent), str(path)] if path.is_dir() else [str(path)])
+    #  Its file name, or the run's own name where that is not the file's
+    #  stem: two programs given at once that share one.
+    shown = path.name if name == path.stem else name
     results = []
     for opt, spec in profiles:
-        out = output / (path.stem + '--' + opt + '-' + spec
+        out = output / (name + '--' + opt + '-' + spec
                         + ('' if level == 'armv6-m' else '--' + level))
         out.mkdir(parents=True, exist_ok=False)
         run = Run(out, tools)
-        result = {'program': str(path), 'optimize': opt, 'specialize': spec, 'level': level}
+        result = {'program': str(path), 'name': shown, 'optimize': opt, 'specialize': spec,
+                  'level': level}
+        if peers:
+            result['c_sources'] = [str(source) for source in peers.c_sources]
         try:
             try:
-                elf = build(run, refine, inputs, opt, spec, level=level)
+                objects = (c_objects(run, peers, path if path.is_dir() else path.parent, level)
+                           if peers else [])
+                elf = build(run, refine, inputs, opt, spec, level=level, objects=objects)
             except (ImageLimit, CommandFailed) as error:
                 limit = image_limit(run, {'profile_limit': 'selected-image'}, error,
                                     derived(run, refine, LEVELS[level]['profile']), level)
@@ -839,6 +901,9 @@ def observe(output, tools, refine, program, profiles, level='armv6-m', roots=())
             qemu(run, elf, None, False, level=level)
             seen = json.loads((out / 'observed.json').read_text())
             result.update(seen, status='ran')
+            stack = observed_stack(out)
+            if stack:
+                result['stack'] = stack
             if 'mcause' in seen or 'a1' in seen:
                 said = ('trapped: mcause %d at %s%s' % (seen['mcause'], seen['mepc'],
                         ', an unimp trap' if seen['unimp'] else '')
@@ -847,20 +912,18 @@ def observe(output, tools, refine, program, profiles, level='armv6-m', roots=())
                 said = ('trapped: HardFault at %s%s' % (seen['stacked_pc'],
                         ', a udf #1 trap' if seen['udf_1'] else '')
                         if seen['trapped'] else 'returned %d (r12 %d)' % (seen['status'], seen['r12']))
-            print('cortex program: %s %s/%s %s: %s; %s' % (
-                path.name, opt, spec, said, describe_sizes(result['image']),
-                describe_routines(result['image'])), flush=True)
+            print('cortex program: %s %s/%s %s: %s' % (
+                shown, opt, spec, said, '; '.join(
+                    clause for clause in (describe_sizes(result['image']),
+                                          describe_stack(result.get('stack')),
+                                          describe_routines(result['image']))
+                    if clause)), flush=True)
         except Exception as error:
             said = str(error)
             result.update(status='failed', error=said)
-            print('cortex program: %s %s/%s FAILED: %s' % (path.name, opt, spec, said),
+            print('cortex program: %s %s/%s FAILED: %s' % (shown, opt, spec, said),
                   flush=True)
         results.append(result)
-    (output / 'result.json').write_text(json.dumps(
-        {'scope': 'one program, not corpus evidence', 'compiler_sha256': sha(refine),
-         'results': results}, indent=2) + '\n')
-    require(all(r['status'] != 'failed' for r in results),
-            'the program failed at %d profiles' % sum(r['status'] == 'failed' for r in results))
     return results
 
 
@@ -963,6 +1026,9 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
                     fixture(run, refine, name, opt, spec, level,
                             include_compiler_sha256=False)
                     result['verdict'] = 'executed'
+                    stack = observed_stack(out)
+                    if stack:
+                        result['stack'] = stack
                     result['image'] = {key: json.loads((out / 'image.json').read_text())[key]
                                        for key in ('regions', 'sections', 'routines')}
                     selects = lowering(run, name, row, level)
@@ -1034,13 +1100,24 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
     return summary
 
 
+def level_names():
+    """Where the corpus's level names and refine's own --level differ, for
+    the help: a lane's name carries its float unit, which refine reads
+    from the target's description rather than from the level."""
+    differ = ['%s for %s' % (refine_level(level), level)
+              for level in sorted(LEVELS) if refine_level(level) != level]
+    return 'the same names, except ' + ' and '.join(differ)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         epilog='--program runs a source file or module directory of your own at the corpus\'s'
                ' profiles on the constrained reference, or with --level on that level\'s'
                ' machine and map, and prints what it returned, or where it trapped, with its'
-               ' image against the map; no oracle is held.')
+               ' image against the map and the stack its run was seen to use; no oracle is'
+               ' held. Repeat it to run several. --level takes the corpus\'s names, which'
+               ' are not all refine\'s: see --level.')
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
@@ -1050,13 +1127,19 @@ def main():
     parser.add_argument('--profile', action='append', default=[],
                         help='none-off, size-off, size-auto, speed-auto, none-all or speed-all;'
                              ' none/off as the log prints it is the same profile')
-    parser.add_argument('--program', type=Path,
-                        help='a .ldn file or module directory to run instead of the corpus')
+    parser.add_argument('--program', type=Path, action='append', default=[],
+                        help='a .ldn file or module directory to run instead of the corpus;'
+                             ' repeat for more')
     parser.add_argument('--root', action='append', default=[],
                         help='a module root for --program, passed to refine')
+    parser.add_argument('--c-source', type=Path, action='append', default=[],
+                        help='a C source built by the corpus\'s C contract (D985) and linked'
+                             ' with the one --program; repeat for more')
     parser.add_argument('--level', default='armv6-m', choices=sorted(LEVELS),
-                        help='the M-profile level --program is built and run at, on that'
-                             ' level\'s machine and map')
+                        help='the level --program is built and run at, on that level\'s'
+                             ' machine and map, by the corpus\'s name for it, which says'
+                             ' the lane\'s float unit too; refine compile --level= takes '
+                             + level_names())
     parser.add_argument('--lane', choices=sorted(LANES),
                         help='run every inventory row alone on this emulator lane, at its'
                              ' level and on its description\'s map (D607, D619); without it,'
@@ -1069,22 +1152,26 @@ def main():
     import build_lock
     if args.refine:
         build_lock.reading(args.refine)
-    if args.program is not None and args.case:
-        parser.error('--program runs one program of your own; --case selects corpus fixtures')
-    if args.program is not None and args.lane:
-        parser.error('--program runs one program of your own, at --level; --lane runs the'
+    if args.program and args.case:
+        parser.error('--program runs programs of your own; --case selects corpus fixtures')
+    if args.program and args.lane:
+        parser.error('--program runs programs of your own, at --level; --lane runs the'
                      ' inventory on a lane')
+    if args.c_source and len(args.program) != 1:
+        parser.error('--c-source gives the C peers of one program; pass exactly one --program'
+                     ' with them')
     supported_host(args.output)
     args.tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    if args.program is not None:
+    if args.program:
         known = {'-'.join(p): p for p in PROFILES + SPECIALIZATION_PROFILES}
         chosen = [profile_name(p) for p in args.profile]
         require(set(chosen) <= set(known), 'unknown profile %s; the profiles are %s'
                 % (', '.join(sorted(set(chosen) - set(known))), ', '.join(known)))
         observe(out, args.tools.resolve(), args.refine.resolve(), args.program,
-                [known[p] for p in chosen] or PROFILES, args.level or 'armv6-m', args.root)
+                [known[p] for p in chosen] or PROFILES, args.level or 'armv6-m', args.root,
+                args.c_source)
         return
     execute(out, args.tools.resolve(), args.refine.resolve(), args.case, args.profile,
             args.lane)

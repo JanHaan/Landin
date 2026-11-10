@@ -390,8 +390,7 @@ def execute_suite(parent, refine, profiles=PROFILES, programs=None, controls=Non
     with ThreadPoolExecutor(max_workers=workers()) as pool:
         for row in pool.map(lambda job: job[0](job[1]),work):
             rows.append(row)
-            if 'program' in row:
-                print('evidence: '+row['profile']+'/'+row['program']+' passed',flush=True)
+            print(row_line(row),flush=True)
     require(sha(refine)==compiler_hash,'evidence compiler drift')
     #  D470's capacity report, every profile's, retained beside the rows.
     capacity=[row.pop('capacity') for row in rows if 'capacity' in row]
@@ -404,6 +403,15 @@ def execute_suite(parent, refine, profiles=PROFILES, programs=None, controls=Non
                    for p in sorted(root.out.rglob('*')) if p.is_file()})
     (root.out/'result.json').write_text(json.dumps(record,indent=2)+'\n')
     return record
+
+
+def row_line(row):
+    """The line a passed row prints, a program's or a control's, so the log
+    says which controls ran at which profile, as the driver and
+    counterpart lanes' logs do, rather than the artifact alone."""
+    if 'program' in row:
+        return 'evidence: '+row['profile']+'/'+row['program']+' passed'
+    return 'evidence: '+row['profile']+'/'+row['control']+' control passed'
 
 
 def main():

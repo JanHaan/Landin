@@ -213,6 +213,115 @@ class AddFixtureTest(unittest.TestCase):
         self.assertEqual(steps.count("python3 check.py"), 1)
         self.assertEqual(steps[-1], "python3 check.py")
 
+    def test_a_borrowed_program_has_nothing_to_lay_out(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            (base / "fixture.meta").write_text("program: ../other/main.ldn\n")
+            fake = base / "refine"
+            #  refine fmt refuses a directory with no source, L0002.
+            fake.write_text("#!/bin/sh\necho 'error[L0002]: fmt found no"
+                            " .ldn source' >&2\nexit 1\n")
+            os.chmod(fake, 0o755)
+            self.assertEqual(add_fixture.own_sources(base), [])
+            self.assertEqual(add_fixture.format_sources(
+                meta("runtime/borrows"), base, fake), [])
+
+    def run_main(self, arguments, fixtures):
+        """main over a scratch tree holding FIXTURES, label to metadata
+        text: what it returned or raised, its output and the corpus."""
+        import contextlib
+        import io
+        import json
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for label, text in fixtures.items():
+                home = root / "compiler/tests/fixtures" / label
+                home.mkdir(parents=True)
+                (home / "fixture.meta").write_text(text)
+                if "program: main.ldn" in text:
+                    (home / "main.ldn").write_text("fn main()\n")
+            corpus = root / "corpus.json"
+            corpus.write_text(json.dumps({"fixtures": {}}))
+            parity = root / "parity.json"
+            parity.write_text(json.dumps({"differences": {}}))
+            out, err = io.StringIO(), io.StringIO()
+            with mock.patch.object(add_fixture, "ROOT", root), \
+                    mock.patch.object(add_fixture, "CORPUS", corpus), \
+                    mock.patch.object(add_fixture, "ARM64_PARITY", parity), \
+                    mock.patch.object(add_fixture, "GENERATED", ()), \
+                    mock.patch.object(add_fixture, "cortex_codes",
+                                      lambda *a: []), \
+                    mock.patch.object(add_fixture, "format_sources",
+                                      lambda *a: []), \
+                    contextlib.redirect_stdout(out), \
+                    contextlib.redirect_stderr(err):
+                try:
+                    status = add_fixture.main(
+                        [*arguments, "--refine=/no/refine"])
+                except SystemExit as refusal:
+                    status = refusal
+            return (status, out.getvalue(), err.getvalue(),
+                    json.loads(corpus.read_text())["fixtures"])
+
+    RUNTIME = ("class: runtime\nprofiles: standard\nsummary: s\n"
+               "targets: linux-x86-64, linux-arm64, cortex-m0\n"
+               "program: main.ldn\nstatus: 0\nconstructs: 0570\n")
+
+    def test_a_batch_continues_past_one_refusal(self):
+        status, out, err, rows = self.run_main(
+            ["runtime/first", "runtime/broken", "runtime/absent",
+             "runtime/last"],
+            {"runtime/first": self.RUNTIME, "runtime/last": self.RUNTIME,
+             "runtime/broken": "class: runtime\n"})
+        self.assertEqual(status, 1)
+        self.assertEqual(sorted(rows), ["runtime/first", "runtime/last"])
+        self.assertIn("refused runtime/broken: ", err)
+        self.assertIn("refused runtime/absent: ", err)
+        self.assertIn("write the fixture first", err)
+        self.assertIn("not added, each refused above: runtime/broken"
+                      " runtime/absent", err)
+        self.assertIn("--fixture=runtime/first", out)
+        self.assertIn("--fixture=runtime/last", out)
+        self.assertIn("not measured: runtime/first, runtime/last are", out)
+
+    def test_an_execute_row_says_it_was_not_measured(self):
+        status, out, _, rows = self.run_main(
+            ["runtime/first"], {"runtime/first": self.RUNTIME})
+        self.assertEqual((status, rows), (0, {"runtime/first":
+                                              {"mode": "execute"}}))
+        last = out.strip().splitlines()[-1]
+        self.assertTrue(last.startswith(
+            "not measured: runtime/first is `execute` because Cortex-M0"
+            " compiles it; nothing here linked an image or measured it"
+            " against the map"), last)
+        self.assertIn("backend_corpus.py --refine=PATH --output=DIR"
+                      " --case=runtime/first", last)
+        #  A row that was already there, or is no execute row, says nothing.
+        status, out, _, _ = self.run_main(
+            ["negative/plain"],
+            {"negative/plain": "class: negative\nsummary: s\n"
+                               "targets: linux-x86-64\nprogram: main.ldn\n"
+                               "status: 1\ncodes: L0202\n"
+                               "constructs: 0570\n"})
+        self.assertNotIn("not measured", out)
+
+    def test_expect_without_args_names_the_line_to_write(self):
+        status, _, err, _ = self.run_main(
+            ["negative/recorded"],
+            {"negative/recorded":
+             "class: negative\nsummary: s\ntargets: linux-x86-64\n"
+             "program: main.ldn\nexpect: expected.txt\nstatus: 1\n"
+             "codes: L0202\nconstructs: 0570\n"})
+        said = str(status)
+        self.assertIn("expect without args: nothing would produce it", said)
+        self.assertIn("\n    args: ../tests/fixtures/negative/recorded/"
+                      "main.ldn\n", said)
+        self.assertIn("from compiler/ada", said)
+
     def test_one_row_options_take_one_fixture(self):
         with self.assertRaises(SystemExit) as raised:
             add_fixture.main(["runtime/a", "runtime/b", "--stops=link",

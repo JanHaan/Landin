@@ -323,7 +323,7 @@ class DriverPeripheral(Model):
         self.pending = self.alarm = 0
         self.integer_divisor = self.fraction_divisor = self.line_control = 0
         self.latched = None
-        self.dma_control = self.rejected = 0
+        self.dma_control = self.rejected = self.expected_refusals = 0
         self.source = self.destination = self.enabled = 0
         self.timer_pending = self.clock = self.errors = 0
         self.busy = self.alarm_armed = False
@@ -464,7 +464,17 @@ class DriverPeripheral(Model):
             raise Refused('forbidden driver write')
         self.events.append('w32:%x:%08x' % (offset, value))
 
-    def feed(self, value):
+    def feed(self, value, refused=False):
+        """Present one received byte to the device.
+
+        A byte fed while the DMA channel is disabled, exhausted or faulted
+        is dropped, as the device drops it, and counted in `rejected`.
+        REFUSED says the case means that to happen; a byte the device
+        takes then is the case's fault, said at once.  A byte dropped
+        without it is the lane's to fail: `unexpected_refusals` counts
+        them, since what the firmware then lacks otherwise shows only as a
+        missing answer at some later deadline.
+        """
         if value > 255:
             raise Refused('not a byte')
         line = self.line
@@ -472,8 +482,15 @@ class DriverPeripheral(Model):
             raise Refused('more bits than the frame carries')
         if not self.configuration & 1 or self.remaining == 0 or self.errors:
             self.rejected += 1
+            self.expected_refusals += refused
             return
+        if refused:
+            raise Refused('the device took a byte the case fed for it to refuse')
         self.transfer(value)
+
+    def unexpected_refusals(self):
+        """The bytes fed and dropped that no case meant to be."""
+        return self.rejected - self.expected_refusals
 
     def transfer(self, value):
         if self.remaining == 0:

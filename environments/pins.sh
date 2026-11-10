@@ -126,9 +126,25 @@ landin_fetch() {
     Sha="$4"
     Directory="$5"
 
-    curl -fsSL -o "$Into/$Archive" "$From/$Archive" || return 1
-    ( cd "$Into" && printf '%s  %s\n' "$Sha" "$Archive" | sha256sum -c - ) \
-        || return 1
+    #  curl asks again, a bounded number of times, only where the server
+    #  said to wait (408, 429, 500, 502, 503, 504) or the connection
+    #  failed; a 404 ends at once.  A failure names the archive, its URL
+    #  and the status, so an upstream outage is told from a broken pin.
+    Status=$(curl -fsSL --retry "${LANDIN_FETCH_RETRIES:-3}" \
+        --retry-delay "${LANDIN_FETCH_RETRY_DELAY:-2}" -w '%{http_code}' \
+        -o "$Into/$Archive" "$From/$Archive") || {
+        echo "landin_fetch: $Archive: cannot fetch $From/$Archive:" \
+            "HTTP status ${Status:-none} after up to" \
+            "$((${LANDIN_FETCH_RETRIES:-3} + 1)) attempts" >&2
+        rm -f "$Into/$Archive"
+        return 1
+    }
+    #  Never asked again: the bytes arrived and are not the pinned ones.
+    ( cd "$Into" && printf '%s  %s\n' "$Sha" "$Archive" | sha256sum -c - ) || {
+        echo "landin_fetch: $Archive: $From/$Archive is not the pinned" \
+            "archive: its SHA-256 is not $Sha" >&2
+        return 1
+    }
 
     mkdir -p "$Into/$Directory"
     tar xzf "$Into/$Archive" -C "$Into/$Directory" --strip-components=1 \

@@ -53,6 +53,31 @@ class Build(unittest.TestCase):
             with self.assertRaisesRegex(bundle.Invalid, 'must be a filename'):
                 build.image_name('esp32c3', 'boot')
 
+    def test_a_change_while_building_names_the_path_or_the_compiler(self):
+        def identity(digest, **files):
+            return dict(sha256=digest, files=files)
+        before = identity('aaa', **{'core/a.ldn': '1', 'core/b.ldn': '2', 'core/c.ldn': '3'})
+        after = identity('bbb', **{'core/a.ldn': '1', 'core/b.ldn': '9', 'core/d.ldn': '4'})
+        changed = build.changed_inputs
+        self.assertIsNone(changed(before, before, 'refine', 'c1', 'c1'))
+        self.assertEqual(
+            changed(before, after, 'refine', 'c1', 'c1'),
+            'the source changed while building: changed core/b.ldn, removed core/c.ldn,'
+            ' added core/d.ldn (source identity aaa when it began, bbb now); prepare again')
+        self.assertEqual(
+            changed(before, before, '/bin/refine', 'c1', 'c2'),
+            'the compiler /bin/refine changed while building (sha256 c1 when it began, c2 now);'
+            ' prepare again')
+        both = changed(before, after, '/bin/refine', 'c1', 'c2')
+        self.assertIn('changed core/b.ldn', both)
+        self.assertIn('the compiler /bin/refine changed', both)
+        many = identity('ccc', **{'core/%02d.ldn' % index: 'x' for index in range(12)})
+        self.assertIn('added core/07.ldn and 4 more (', changed(identity('aaa'), many, 'r', 'c', 'c'))
+        #  prepare refuses with it.
+        source = (ROOT / 'environments/boards/build.py').read_text()
+        self.assertNotIn('source or compiler changed while building', source)
+        self.assertIn('raise bundle.Invalid(changed)', source)
+
     def test_all_ports_both_modes_continue_after_failure(self):
         calls = []
         def prepare(board, mode, refine, directory, source):

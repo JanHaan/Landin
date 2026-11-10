@@ -171,7 +171,11 @@ lane's description gives it:
 4 MiB of code memory at 0, VTOR's address, and 4 MiB of RAM at
 `0x20000000` with a 64 KiB stack at its top. Unmapped space there reads
 zero and ignores writes with no fault, so a program that runs away hangs to
-the session's deadline rather than faulting. The harness start grants CP10
+the session's deadline rather than faulting. Every corpus session, on any
+lane, therefore interrupts a program still running at its 20-second limit
+and fails it with its last pc, the caller in the link register and sp: a
+pc outside the image, which `info symbol` cannot name, is a stray jump,
+and one inside it is a loop that did not end. The harness start grants CP10
 and CP11 before anything else, paints d8-d15 before `main` and checks them
 after, the image must carry `Tag_FP_arch: FPv5/FP-D16 for ARMv8` and
 `Tag_ABI_VFP_args: VFP registers`, libgcc comes from `thumb/v7e-m+dp/hard`,
@@ -242,6 +246,13 @@ and `evidence`; `mps2-an505`, `mps2-an500`, `esp32c3` and `sifive-e` are the
 corpus again on those lanes, and the two RV32 ones need `rv32-controls`
 (see [RV32 lanes](#rv32-lanes)). A run that selects lanes says `FILTERED` in its last line
 and its `result.json`, and is not the gate's run.
+
+A run records the SHA-256 of its inputs before its lanes and compares them
+after: when one changed meanwhile it fails with "probe inputs changed while
+the lanes ran", naming each, because no verdict then holds for one tree.
+The inputs are every file under `environments/cortex-m` except its
+Markdown, so this guide may be edited while lanes run and a probe, a
+script, a description or a recorded validation may not.
 
 The gate runs every lane in three jobs, one for each of `run.py`'s
 parts, because one job running all of them risked its hour on a four-CPU
@@ -790,13 +801,28 @@ fixture's `levels:`, is required to call neither `__aeabi_lmul` nor a
 directory, with `--root DIR` for the roots it imports from, at the corpus's
 four profiles, or the `--profile`s named, on the constrained reference,
 and prints what each returned, or where it trapped, with its image against
-the map; no oracle is held, so a measured value comes back as a value:
+the map and the stack its run was seen to use; no oracle is held, so a
+measured value comes back as a value:
 
 ```sh
 python3 environments/cortex-m/backend_corpus.py --refine PATH_TO_REFINE \
-  --output NEW_DIRECTORY --program answer.ldn --profile none-off
-cortex program: answer.ldn none/off returned 36 (r12 0): FLASH 1036 of 32768 (.isr_vector 192, .text 844); RAM 12 of 12288 (.bss 12); largest routines __udivsi3 266, depth 250, main 144
+  --output NEW_DIRECTORY --profile none-off \
+  --program compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn
+cortex program: main.ldn none/off returned 42 (r12 0): FLASH 668 of 32768 (.isr_vector 192, .text 476); RAM 20 of 12288 (.bss 20); stack 40 of 4096 observed; largest routines main 286
 ```
+
+`stack N of M observed` is the distance from the stack top to the lowest
+word of the M-byte reservation the run changed, read from the session's
+paint, and each executed corpus image's line and result carry it too. It
+is what this run used, not a bound, and a stack the program made for
+itself, a fibre's, is not the painted one. Repeat `--program` to run
+several programs in one invocation; two that share a file name are told
+apart by their directories. `--c-source FILE`, repeated, gives one
+program's C peers, built by the corpus's C contract (D985) with the
+program's directory on the include path and linked with it, so a C peer
+can be tried without a fixture or an inventory row. `--level` takes the
+corpus's names, which say a lane's float unit: `armv7e-m+fpv5-d16` here is
+`refine compile --level=armv7e-m`, and the others are refine's own.
 
 A program that traps says `trapped: HardFault at` the faulting routine and
 line, and whether it was the UDF #1 a check emits; one that does not fit
@@ -1046,6 +1072,15 @@ taken with `0xffffffe9` and the extended frame reserved lazily, the
 handler's float instruction fills it, the return restores the interrupted
 d0, and the computation ends with its IEEE value (D618); a soft-float C
 object linked into the image is refused for its VFP arguments (D617). Its
+`float-debug` case is a debugger's view of the same unit by unwinding: on
+an image built with `--debug=lines`, GDB reads a routine's arguments at
+its first instruction where AAPCS-VFP banks them, r0, d0, s2 and d2;
+reads d8-d15 in the caller's frame as the session set them, through the
+CFI of a framed routine whose assembly block has by then written d8 and
+d15 (D617); and, at a SysTick taken with the extended frame, selects the
+interrupted context above its 26 words and unwinds the three routines and
+reset from there, reading the caller's d8-d15 again. Ordinary unwinding
+still stops at interrupt entry, as it does for the `leaf` control. Its
 `cache-sequence` case links a program through `platform/cortex_m/l1` on the
 lane description `lanes/descriptions/mps2_an500_cached`, the an500's map
 with `compiler.cache`, and runs it under QEMU's trace of the System Control
@@ -1140,7 +1175,7 @@ python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_D
 ```
 
 `--case`, repeated, runs only the cases named: `cpu-levels`, `refusals`,
-`independent-c-assembly`, `compact-images`, `float-unit` and
+`independent-c-assembly`, `compact-images`, `float-unit`, `float-debug` and
 `cache-sequence` once, and `boot`, the
 cold-booted image built twice, `interrupts`, `fibre`, `dma`, `machine`,
 `veneers`, `fallthrough`, `images`, `hole` and `byte` at each profile. A
@@ -1292,6 +1327,16 @@ operands evaluated from their own and `ssi.h`'s, `addressmap.h`'s and
 `m0plus.h`'s macros, so a wrong constant in the port fails. The lane needs
 those inputs fetched (`python3 scripts/fetch_inputs.py`), as the gate's
 Cortex-M job does first.
+
+An ESP description's watchdog stage (D684) is followed the same way by
+[`devices/rv32.py`](../../devices/rv32.py), the RV32 reading beside
+`thumb.py`: from the linked image's entry word to reset, over no memory but
+the image's own bytes, with no RAM and no stack, the stage must make
+exactly the device accesses its record lists from the chip's manual, the
+one word it reads back answered as the record's `reads` gives it. An
+instruction outside RV32I, M and the integer part of C, a CSR access among
+them, or a load or store outside the 4 KiB blocks the record's own
+accesses lie in, is refused.
 
 It then links RP2040's program with a copy of the derived script and with
 four scripts each breaking one clause of D546's contract, and a fifth whose

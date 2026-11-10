@@ -75,6 +75,92 @@ class ProbeFailures(unittest.TestCase):
                          ['changed b.py', 'removed c.py', 'added d.py'])
         self.assertEqual(changed_inputs({'a.py': '1'}, {'a.py': '1'}), [])
 
+    def test_evidence_prints_a_line_for_each_program_and_control(self):
+        import evidence
+        self.assertEqual(evidence.row_line({'profile': 'none-off', 'program': 'app',
+                                            'status': 'passed'}),
+                         'evidence: none-off/app passed')
+        self.assertEqual(evidence.row_line({'profile': 'size-auto', 'control': 'switch',
+                                            'status': 'passed', 'capacity': {}}),
+                         'evidence: size-auto/switch control passed')
+        #  Every row the suite gathers is printed, whichever kind it is.
+        source = Path(evidence.__file__).read_text()
+        self.assertIn('rows.append(row)\n            print(row_line(row),flush=True)', source)
+
+    def test_an_rv32_stage_is_followed_from_the_entry_word_to_reset(self):
+        import struct
+        import descriptions
+
+        def encode_i(opcode, rd, f3, rs1, imm):
+            return (imm & 0xfff) << 20 | rs1 << 15 | f3 << 12 | rd << 7 | opcode
+
+        def encode_s(rs1, rs2, imm):
+            return ((imm >> 5 & 0x7f) << 25 | rs2 << 20 | rs1 << 15 | 2 << 12
+                    | (imm & 0x1f) << 7 | 0x23)
+
+        def encode_j(offset):
+            return ((offset >> 20 & 1) << 31 | (offset >> 1 & 0x3ff) << 21
+                    | (offset >> 11 & 1) << 20 | (offset >> 12 & 0xff) << 12 | 0x6f)
+        base = 0x40380000
+        #  entry: j stage; reset: (not followed); stage: lui t0; lw; ori; sw; j reset
+        def image(stored=7):
+            words = [encode_j(8), 0x00000073,
+                     0x600082b7,                       # lui t0, 0x60008
+                     encode_i(0x03, 7, 2, 5, 0xac),    # lw t2, 172(t0)
+                     encode_i(0x13, 7, 6, 7, 1),       # ori t2, t2, 1
+                     encode_s(5, stored, 0xac),        # sw t2, 172(t0)
+                     encode_j(-20) & 0xffffffff]       # j reset
+            code = struct.pack('<%dI' % len(words), *words)
+            #  A minimal ELF32: one PT_LOAD segment, no sections.
+            header = struct.pack('<4sBBBB8xHHIIIIIHHHHHH', b'\x7fELF', 1, 1, 1, 0, 2, 243, 1,
+                                 base, 52, 0, 0, 52, 32, 1, 0, 0, 0)
+            segment = struct.pack('<IIIIIIII', 1, 84, base, base, len(code), len(code), 5, 4)
+
+            class Linked:
+                data = header + segment + code
+                symbols = {'_landin_firmware_entry': base, '_landin_firmware_reset': base + 4}
+            return Linked()
+        want = {'reset_stage': {'reads': [[0x600080ac, 0x04b00000]],
+                                'accesses': [['r', 0x600080ac, 4, 0x04b00000],
+                                             ['w', 0x600080ac, 4, 0x04b00001]]}}
+        descriptions.rv32_stage(image(), want, 'control')
+        #  A stage that stores another value, or to another register's
+        #  block, is not the recorded one.
+        with self.assertRaisesRegex(RuntimeError, 'control: the stage before reset makes'):
+            descriptions.rv32_stage(image(stored=0), want, 'control')
+        elsewhere = {'reset_stage': {'reads': [], 'accesses': [['w', 0x60020000, 4, 1]]}}
+        with self.assertRaisesRegex(AssertionError, 'outside the image'):
+            descriptions.rv32_stage(image(), elsewhere, 'control')
+        #  Each recorded RV32 stage is followed by the lane's selection.
+        source = Path(descriptions.__file__).read_text()
+        self.assertIn("if 'reset_stage' in want:\n        rv32_stage(image, want, device)", source)
+        self.assertTrue([d for d, record in descriptions.RV32_EXPECTED.items()
+                         if 'reset_stage' in record])
+
+    def test_the_guide_is_no_probe_input(self):
+        from setup import inventory, probe_inputs
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'lanes').mkdir()
+            for name in ('run.py', 'GUIDE.md', 'lanes/notes.md', 'lanes/start.S',
+                         'validation.json'):
+                (root / name).write_text(name)
+            before = probe_inputs(root)
+            self.assertEqual(sorted(before), ['lanes/start.S', 'run.py', 'validation.json'])
+            self.assertEqual(sorted(inventory(root)), ['GUIDE.md', 'lanes/notes.md',
+                                                       'lanes/start.S', 'run.py',
+                                                       'validation.json'])
+            #  Editing the guide while lanes run changes no input; a probe does.
+            (root / 'GUIDE.md').write_text('edited')
+            self.assertEqual(probe_inputs(root), before)
+            (root / 'lanes/start.S').write_text('edited')
+            self.assertNotEqual(probe_inputs(root), before)
+        #  Both runs that hold their inputs still read them this way.
+        for name in ('run.py', 'packed_native.py'):
+            source = (Path(__file__).resolve().parent / name).read_text()
+            self.assertNotIn('inventory(HERE)', source)
+            self.assertEqual(source.count('probe_inputs(HERE)'), 2)
+
     def test_stack_observation_sites(self):
         from resources import hook_addresses
         sites, changes = hook_addresses('''000000c0 <reset>:
@@ -156,7 +242,7 @@ class ProbeFailures(unittest.TestCase):
                 imports('import core/'+name)
         helper = '/tools/thumb/v6-m/nofp/libgcc.a'
         base = 'LOAD core.elf.o\nLOAD '+helper+'\n'
-        for object_name in ('core.elf.o', './core.elf.o'):
+        for object_name in ('core.elf.o', './core.elf.o', '../stage/core.elf.o'):
             for suffix in ('', 'LOAD linker stubs\n'):
                 mapping = base.replace('core.elf.o', object_name) + suffix
                 self.assertEqual(linker_closure(mapping, helper)[0][:2],
@@ -166,8 +252,8 @@ class ProbeFailures(unittest.TestCase):
                     base.replace('LOAD core.elf.o\n', ''),
                     base+'LOAD linker stubs\nLOAD linker stubs\n',
                     *(base.replace('core.elf.o', name) for name in
-                      ('other/core.elf.o', '../core.elf.o',
-                       './core.elf.o/../core.elf.o'))):
+                      ('other/core.elf.o', '../core.elf.o', '../work/core.elf.o',
+                       'stage/core.elf.o', './core.elf.o/../core.elf.o'))):
             with self.assertRaises(RuntimeError):
                 linker_closure(bad, helper)
         self.assertEqual(set(programs()), {
@@ -725,6 +811,57 @@ class ProbeFailures(unittest.TestCase):
         self.assertEqual(line, 'cortex corpus: runtime/x size/auto executed: '
                                + describe_sizes(sizes))
 
+    def test_an_executed_image_reports_its_observed_stack(self):
+        from backend import describe_stack, observed_stack
+        from backend_corpus import corpus_line
+        sizes = {'regions': {'FLASH': {'used': 668, 'limit': 32768}}, 'sections': {},
+                 'routines': {'main': 286}}
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            self.assertIsNone(observed_stack(out))
+            (out / 'stack-observation.json').write_text(json.dumps(
+                {'lowest_changed_word': 0x20003fd8, 'reserved_bytes': 4096,
+                 'stack_top': 0x20004000, 'is_stack_bound': False}))
+            stack = observed_stack(out)
+        self.assertEqual(stack, {'observed_bytes': 40, 'reserved_bytes': 4096})
+        self.assertEqual(describe_stack(stack), 'stack 40 of 4096 observed')
+        self.assertEqual(describe_stack(None), '')
+        line = corpus_line({'fixture': 'runtime/x', 'optimize': 'none', 'specialize': 'off',
+                            'verdict': 'executed', 'image': sizes, 'stack': stack})
+        self.assertTrue(line.endswith('FLASH 668 of 32768; stack 40 of 4096 observed;'
+                                      ' largest routines main 286'), line)
+        #  Both sessions write the stack top the depth is measured from.
+        import backend
+        source = Path(backend.__file__).read_text()
+        self.assertEqual(source.count('"stack_top":{bottom}+{reserved}'), 2)
+
+    def test_programs_of_ones_own_are_named_apart_and_take_c_peers(self):
+        import subprocess
+        import backend_corpus
+        from backend_corpus import ProgramPeers, level_names, program_names
+        self.assertEqual(program_names([Path('/a/one.ldn'), Path('/a/two.ldn')]), ['one', 'two'])
+        self.assertEqual(program_names([Path('/a/main.ldn'), Path('/b/main.ldn')]),
+                         ['a-main', 'b-main'])
+        self.assertEqual(program_names([Path('/x/a/main.ldn'), Path('/y/a/main.ldn')]),
+                         ['a-main-1', 'a-main-2'])
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'peer.c'
+            source.write_text('int peer(void) { return 1; }\n')
+            peers = ProgramPeers([source])
+            self.assertEqual((peers.c_sources, peers.c_args_for('cortex-m0'), peers.c_inputs),
+                             ([source.resolve()], [], ()))
+            with self.assertRaises(FileNotFoundError):
+                ProgramPeers([Path(directory) / 'absent.c'])
+            #  C peers belong to one program, refused before anything is built.
+            with self.assertRaisesRegex(RuntimeError, 'C peers of one program'):
+                backend_corpus.observe(Path(directory), None, None, [source, source],
+                                       [('none', 'off')], c_sources=[source])
+        #  The help names refine's level where the corpus's own differs.
+        self.assertEqual(level_names(), 'the same names, except armv7e-m for armv7e-m+fpv5-d16')
+        self.assertIn(level_names(), ' '.join(subprocess.run(
+            [sys.executable, str(Path(backend_corpus.__file__)), '--help'],
+            capture_output=True, text=True, check=True).stdout.split()))
+
     def test_the_corpus_gives_each_routine_size(self):
         from backend import describe_routines, routine_sizes
         from backend_corpus import corpus_line
@@ -861,6 +998,47 @@ class ProbeFailures(unittest.TestCase):
         self.assertIn('the fixture takes longer', text)
         self.assertIn('/x/gdb-backend.log', text)
         self.assertIn('QEMU exited with status 1', str(timed_out(error, Exited(), 3.0)))
+
+    def test_a_session_interrupts_a_program_still_running_and_names_its_pc(self):
+        import backend
+        from backend import SESSION_GRACE, SESSION_LIMIT, still_running, watched_continue
+        watched = '\n'.join(watched_continue())
+        self.assertIn('threading.Timer(%d, lambda: gdb.post_event(interrupt_late))'
+                      % SESSION_LIMIT, watched)
+        self.assertIn('gdb.execute("interrupt")', watched)
+        #  The timer is cancelled and disarmed however the continue ends.
+        self.assertRegex(watched, r'finally:\n    watchdog\.cancel\(\)\n    armed\.clear\(\)')
+        said = '\n'.join(still_running('value("$ra")'))
+        self.assertIn('if late:', said)
+        self.assertIn('still running after %d s' % SESSION_LIMIT, said)
+        self.assertIn('its last pc is %s, called from', said)
+        self.assertIn('where(value("$ra"))', said)
+        #  The lines are Python a session can run: with a stopped program
+        #  the check raises, naming the pc; without `late` nothing happens.
+        seen = {}
+        def check(holds, what):
+            seen['what'] = what
+        for late in ([], [True]):
+            seen.clear()
+            exec('if True:\n' + said, {'late': late, 'check': check, 'pc': 0x10553234,
+                                       'sp': 0x203fffc8, 'value': lambda expr: 0x2e0,
+                                       'where': lambda address: '%#x' % address})
+            self.assertEqual(bool(seen), bool(late))
+        self.assertIn('its last pc is 0x10553234, called from 0x2e0, with sp 0x203fffc8',
+                      seen['what'])
+        #  Both sessions continue under the watchdog and ask before taking
+        #  the stop for the stack guard's; the outer limit is the backstop.
+        profile = {'stack_top': 0x20004000, 'stack_reserved': 4096,
+                   'regions': [], 'device': 'x'}
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), Path(directory))
+            for script in (backend.session(run, 1, 0, False, profile=profile),
+                           backend.rv32_session(run, 1, 0, False, profile=profile)):
+                self.assertIn(watched, script)
+                self.assertLess(script.index('if late:'),
+                                script.index('stopped by the write watchpoint'))
+                self.assertNotIn("'continue',\n'python'", script)
+        self.assertGreater(SESSION_GRACE, 0)
 
     def test_the_inventory_names_the_row_to_write(self):
         import shutil
@@ -1340,6 +1518,53 @@ class CounterpartOracle(unittest.TestCase):
         self.assertIn('timeout', self.kinds(self.trace(*self.GOOD[:2], outcome='timeout',
                                                        output='')))
         self.assertIn('stopped', self.kinds(self.trace(*self.GOOD, outcome='stopped: 4')))
+
+    def test_a_byte_the_device_dropped_fails_the_run_that_fed_it(self):
+        import driver
+        from models import DriverPeripheral, Refused
+        model = DriverPeripheral()
+        #  The channel is disabled: the byte is dropped and counted.
+        model.feed(65)
+        self.assertEqual((model.rejected, model.unexpected_refusals()), (1, 1))
+        with self.assertRaisesRegex(RuntimeError, 'case: the device refused 1 byte fed while'
+                                                  ' its DMA channel was disabled'):
+            driver.no_lost_feed(model, 'case')
+        #  One the case meant to be refused is counted and is no fault.
+        meant = DriverPeripheral()
+        meant.feed(65, refused=True)
+        self.assertEqual((meant.rejected, meant.unexpected_refusals()), (1, 0))
+        driver.no_lost_feed(meant, 'case')
+        #  A byte the device takes where the case expected a refusal says so.
+        taking = DriverPeripheral()
+        taking.configuration, taking.remaining = 1, 4
+        taking.transfer = lambda value: None
+        taking.feed(65)
+        with self.assertRaisesRegex(Refused, 'took a byte the case fed for it to refuse'):
+            taking.feed(65, refused=True)
+        #  Every run over the model through driver.machine ends at the check,
+        #  which Machine runs only for a run that did not already fail.
+        source = (Path(driver.__file__)).read_text()
+        self.assertIn('m.closing.append(lambda: no_lost_feed(model, name))', source)
+        from machine import Machine
+        import machine as machine_module
+        from unittest.mock import patch
+        closed = []
+        class Stopped:
+            returncode = 0
+        m = Machine.__new__(Machine)
+        m.process, m.relayed, m.stops, m.name = Stopped(), None, 0, 'x'
+        m.tick, m.record = 0, {}
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), Path(directory))
+            (run.out / 'x.log').write_text('')
+            m.run, m.log = run, (run.out / 'x.log').open('rb')
+            m.closing = [lambda: closed.append('held')]
+            with patch.object(machine_module, 'stop', lambda process: None):
+                m.__exit__(RuntimeError, RuntimeError('failed'), None)
+                self.assertEqual(closed, [])
+                m.log = (run.out / 'x.log').open('rb')
+                m.__exit__(None, None, None)
+                self.assertEqual(closed, ['held'])
 
     def test_a_lost_trace_or_input_fails(self):
         lost = self.trace(*self.GOOD)

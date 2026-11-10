@@ -38,7 +38,11 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 import urllib.request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import download  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / 'devices' / 'inputs.json'
@@ -82,7 +86,8 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def fetch(name, inputs=None, cache=None, offline=False, opener=None):
+def fetch(name, inputs=None, cache=None, offline=False, opener=None,
+          sleep=time.sleep):
     """The verified cached path of input NAME, fetching it if need be."""
     inputs = read_lock() if inputs is None else inputs
     if name not in inputs:
@@ -103,13 +108,14 @@ def fetch(name, inputs=None, cache=None, offline=False, opener=None):
     if offline:
         raise InputError(name + ': not in the cache at ' + str(target)
                          + ', and --offline forbids fetching it')
-    opener = opener or urllib.request.urlopen
     try:
-        with opener(pin['url'], timeout=120) as response:
-            data = response.read()
-    except OSError as error:
-        raise InputError(name + ': cannot fetch ' + pin['url'] + ': '
-                         + str(error)) from error
+        data = download.download(
+            pin['url'], name, lambda response: response.read(),
+            opener=opener or urllib.request.urlopen, timeout=120, sleep=sleep,
+            report=lambda line: print(line, file=sys.stderr, flush=True))
+    except download.DownloadError as error:
+        raise InputError(str(error)) from error
+    #  Never asked again: the bytes arrived and are not the pinned ones.
     if digest(data) != pin['sha256']:
         raise InputError(name + ': ' + pin['url'] + ' has SHA-256 '
                          + digest(data) + ', not the pinned '

@@ -255,6 +255,125 @@ def float_unit(parent, refine):
              'specialize': 'off', 'status': 'passed', 'lane': 'mps2-an500'}]
 
 
+FLOAT_DEBUG = """import descriptions/mps2_an500
+mut handled: u32 = 0
+mut seen: f64 = 0.0
+mut result: f64 = 0.0
+mut whole: u32 = 0
+link(vector: 15)
+extern(interrupt) tick: () -> none =
+    handled = handled + 1
+    seen = result * 2.0
+end tick
+pend: () -> none =
+    assembler.block(\"\"\"
+        ldr r0, =0xe000ed04
+        ldr r1, =0x04000000
+        str r1, [r0]
+        dsb sy
+        isb sy
+        \"\"\")
+end pend
+keep: (seed: u32, a: f64, b: f32, scale: f64) -> (r: f64) =
+    whole = assembler.block(
+        "vmov s16, {s}\\nvmov s31, {s}\\nvmov {r}, s16\\nadds {r}, #1",
+        in s: u32 at general = seed, out r: u32 at general,
+        out _ at d8, out _ at d15)
+    r = a * scale + f64(b)
+    result = r
+    pend()
+    r = r / scale
+end keep
+start: () -> none =
+    result = keep(7, 1.5, 0.25, 2.5)
+end start
+"""
+
+
+def float_debug(parent, refine):
+    """A debugger's view of the float unit on the mps2-an500 lane, by
+    unwinding rather than by the corpus's sentinels.
+
+    The image is built with line and frame information.  At `keep`'s first
+    instruction GDB reads its arguments where AAPCS-VFP banks them: the
+    integer in r0, the f64s in d0 and d2 and the f32 between them in s2.
+    `keep` holds an assembly block that names d8 and d15, so it is a
+    framed routine that saves d8-d15 (D617); once the block has written
+    both, GDB reads d8-d15 in the caller's frame as the session set them
+    in `start`, which only the routine's CFI for the saved registers
+    gives.  A SysTick pended in `pend` is taken with an extended frame,
+    EXC_RETURN 0xffffffe9; ordinary unwinding stops at interrupt entry, so
+    the session selects the interrupted context above the frame's 26
+    words, as the `leaf` control does above a basic frame's 8, and unwinds
+    `pend`, `keep`, `start` and reset from there, reading the caller's
+    d8-d15 again.  At the return they are the session's, and the
+    computation has its IEEE value.
+    """
+    import source_debug
+    out = parent.out
+    run = Run(out, parent.tools)
+    profile = derived(run, refine, 'mps2-an500', out / 'profiles')
+    elf = build(run, refine, FLOAT_DEBUG, level='armv7e-m', debug='lines',
+                roots=(LANE_ROOT,), profile=profile)
+    line = source_debug.source_line(run, 'boot.ldn', 'result = r')
+    sentinels = {8 + index: 100.5 + index for index in range(8)}
+    held = ('for n, want in %r.items(): assert d(%%s, n) == want, (n, d(%%s, n))'
+            % sentinels)
+    execute(run, elf, [
+        *source_debug.search(elf), *source_debug.PRELUDE,
+        'python', 'import struct',
+        'def d(frame, n): return float(frame.read_register("d%d" % n))',
+        'def raw(frame, n): return bytes(frame.read_register("d%d" % n).bytes)',
+        'end',
+        'break *start', 'continue', 'delete breakpoints',
+        *('set $d%d = %r' % item for item in sentinels.items()),
+        'python', held % ('gdb.newest_frame()', 'gdb.newest_frame()'), 'end',
+        #  The arguments where the procedure call standard banks them.
+        'break *keep', 'continue', 'delete breakpoints', 'python',
+        'f = gdb.newest_frame()',
+        'assert v("$r0") == 7, "the integer argument is %d in r0" % v("$r0")',
+        'assert d(f, 0) == 1.5, "the first f64 is %r in d0" % d(f, 0)',
+        'assert float(f.read_register("s2")) == 0.25, "the f32 is %r in s2" % float(f.read_register("s2"))',
+        'assert d(f, 2) == 2.5, "the second f64 is %r in d2" % d(f, 2)',
+        'end',
+        #  d8-d15 as the caller left them, through the callee's CFI, once
+        #  the block has written d8's low half and d15's high one.
+        'break boot.ldn:%d' % line, 'continue', 'delete breakpoints', 'python',
+        'chain(["keep", "start", "_landin_firmware_reset"])',
+        'f = gdb.newest_frame()',
+        'assert struct.unpack("<I", raw(f, 8)[:4])[0] == 7, "the block did not write s16"',
+        'assert struct.unpack("<I", raw(f, 15)[4:])[0] == 7, "the block did not write s31"',
+        held % ('f.older()', 'f.older()'),
+        'end', 'bt',
+        #  The handler entered over an extended frame, and the interrupted
+        #  context selected above it.
+        'break *tick', 'continue', 'delete breakpoints', 'python',
+        'assert v("$lr") == 0xffffffe9, "EXC_RETURN is %#x, not an extended frame\'s" % v("$lr")',
+        'assert v("$xpsr") & 511 == 15',
+        'assert gdb.newest_frame().older() is None',
+        'saved = {r: v("$" + r) for r in ("sp", "pc", "lr")}',
+        'hw = struct.unpack("<8I", bytes(gdb.selected_inferior().read_memory(saved["sp"], 32)))',
+        'gdb.execute("set $sp = %d" % (saved["sp"] + 104 + (4 if hw[7] & 512 else 0)))',
+        'gdb.execute("set $lr = %d" % hw[5])',
+        'gdb.execute("set $pc = %d" % hw[6])',
+        'chain(["pend", "keep", "start", "_landin_firmware_reset"])',
+        'gdb.execute("bt")',
+        'f = gdb.newest_frame().older().older()',
+        held % ('f', 'f'),
+        'gdb.execute("frame 0")',
+        'for reg, value in saved.items(): gdb.execute("set $%s = %d" % (reg, value))',
+        'end',
+        'break _landin_firmware_returned', 'continue', 'python',
+        'assert v("*(unsigned*)&handled") == 1',
+        'assert v("*(unsigned*)&whole") == 8',
+        'assert float(gdb.parse_and_eval("*(double*)&result")) == (1.5 * 2.5 + 0.25) / 2.5',
+        'assert float(gdb.parse_and_eval("*(double*)&seen")) == (1.5 * 2.5 + 0.25) * 2.0',
+        held % ('gdb.newest_frame()', 'gdb.newest_frame()'),
+        'print("FLOAT_DEBUG_PASS")', 'end'], marker='FLOAT_DEBUG_PASS', machine='mps2-an500')
+    return [{'kind': 'float-debug', 'level': 'armv7e-m', 'optimize': 'none',
+             'specialize': 'off', 'status': 'passed', 'lane': 'mps2-an500'}]
+
+
 CACHE_SEQUENCE = """import core/cache
 import descriptions/mps2_an500_cached
 import platform/cortex_m/l1
@@ -955,10 +1074,10 @@ def case(name):
         raise RuntimeError('compiler firmware ' + name + ': ' + str(error)) from error
 
 
-#  The lane's cases, in the order it runs them: six once, the rest at each
+#  The lane's cases, in the order it runs them: seven once, the rest at each
 #  profile.  `boot` is the cold-booted image built twice.
 ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images', 'float-unit',
-        'cache-sequence')
+        'float-debug', 'cache-sequence')
 KINDS = ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images',
          'hole', 'byte')
 CASES = ONCE + ('boot',) + KINDS
@@ -991,6 +1110,11 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
         out.mkdir()
         with case('float-unit'):
             controls += float_unit(Run(out, parent.tools), refine)
+    if 'float-debug' in chosen:
+        out = root / 'float-debug'
+        out.mkdir()
+        with case('float-debug'):
+            controls += float_debug(Run(out, parent.tools), refine)
     if 'cache-sequence' in chosen:
         out = root / 'cache-sequence'
         out.mkdir()

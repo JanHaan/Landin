@@ -145,6 +145,182 @@ class Offline(unittest.TestCase):
         self.assertEqual(evaluation.r[15], 0x10000100)
         self.assertEqual(evaluation.r[13], 0x20042000)
 
+    #  RV32 encoders, written from the instruction formats of the
+    #  unprivileged specification and apart from rv32.py's decoder.
+    @staticmethod
+    def rv_i(opcode, rd, f3, rs1, imm):
+        return (imm & 0xfff) << 20 | rs1 << 15 | f3 << 12 | rd << 7 | opcode
+
+    @staticmethod
+    def rv_s(f3, rs1, rs2, imm):
+        return ((imm >> 5 & 0x7f) << 25 | rs2 << 20 | rs1 << 15 | f3 << 12
+                | (imm & 0x1f) << 7 | 0x23)
+
+    @staticmethod
+    def rv_r(f7, rs2, rs1, f3, rd):
+        return f7 << 25 | rs2 << 20 | rs1 << 15 | f3 << 12 | rd << 7 | 0x33
+
+    @staticmethod
+    def rv_j(rd, offset):
+        return ((offset >> 20 & 1) << 31 | (offset >> 1 & 0x3ff) << 21 | (offset >> 11 & 1) << 20
+                | (offset >> 12 & 0xff) << 12 | rd << 7 | 0x6f)
+
+    @staticmethod
+    def rv_b(f3, rs1, rs2, offset):
+        return ((offset >> 12 & 1) << 31 | (offset >> 5 & 0x3f) << 25 | rs2 << 20 | rs1 << 15
+                | f3 << 12 | (offset >> 1 & 0xf) << 8 | (offset >> 11 & 1) << 7 | 0x63)
+
+    def rv_image(self, base, words):
+        import struct
+        code = b''.join(struct.pack('<I' if word & 3 == 3 else '<H', word) for word in words)
+
+        class Flash:
+            segments = [(base, code, len(code))]
+            symbols = {}
+            entry = base
+        return Flash(), base + len(code)
+
+    def test_the_rv32_evaluator_follows_a_stage_with_no_ram_to_its_exit(self):
+        """A watchdog stage as an ESP description writes one (D684): keys,
+        a field set in a word read back, and a jump to reset, over no
+        memory but the image's own bytes."""
+        import rv32
+        T0, T1, T2 = 5, 6, 7
+        base = 0x40380000
+        words = [
+            0x50d84337 | 0,                                  # lui t1, 0x50d84
+            self.rv_i(0x13, T1, 0, T1, -1375),                # addi t1, t1, -1375
+            0x6001f000 | T0 << 7 | 0x37,                      # lui t0, 0x6001f
+            self.rv_s(2, T0, T1, 100),                        # sw t1, 100(t0)
+            self.rv_i(0x03, T2, 2, T0, 72),                   # lw t2, 72(t0)
+            0x80000000 | T1 << 7 | 0x37,                      # lui t1, 0x80000
+            self.rv_r(0, T1, T2, 6, T2),                      # or t2, t2, t1
+            self.rv_s(2, T0, T2, 72),                         # sw t2, 72(t0)
+            self.rv_s(0, T0, 0, 101),                         # sb zero, 101(t0)
+            self.rv_s(2, T0, 0, 100),                         # sw zero, 100(t0)
+            self.rv_j(0, 8),                                  # j reset
+            0x00000073,                                       # ecall, never reached
+        ]
+        image, _ = self.rv_image(base, words)
+        reset = base + 4 * 12
+        made = rv32.Evaluation(image, [(0x6001f000, 0x1000)], (0, 0),
+                               lambda address, width: 0x04b00000,
+                               until=lambda pc: pc == reset).run()
+        self.assertEqual(made, [('w', 0x6001f064, 4, 0x50d83aa1),
+                                ('r', 0x6001f048, 4, 0x04b00000),
+                                ('w', 0x6001f048, 4, 0x84b00000),
+                                ('w', 0x6001f065, 1, 0),
+                                ('w', 0x6001f064, 4, 0)])
+
+    def test_the_rv32_evaluator_computes_as_the_instruction_set_says(self):
+        import rv32
+        A0, A1, A2, RA, SP = 10, 11, 12, 1, 2
+        base = 0x20000000
+
+        def run(words, registers=None, ram=(0, 0), devices=()):
+            image, end = self.rv_image(base, words)
+            evaluation = rv32.Evaluation(image, list(devices), ram, until=lambda pc: pc == end)
+            for register, value in (registers or {}).items():
+                evaluation.x[register] = value
+            evaluation.run()
+            return evaluation
+
+        def op(f7, f3, a, b):
+            return run([self.rv_r(f7, A1, A0, f3, A2)], {A0: a, A1: b}).x[A2]
+        low, top = 0x80000000, 0xffffffff
+        self.assertEqual(op(0, 0, 7, top), 6)                        # add
+        self.assertEqual(op(0x20, 0, 3, 5), 0xfffffffe)              # sub
+        self.assertEqual(op(0, 1, 1, 33), 2)                         # sll takes five bits
+        self.assertEqual((op(0, 2, top, 1), op(0, 3, top, 1)), (1, 0))   # slt, sltu
+        self.assertEqual((op(0, 5, low, 4), op(0x20, 5, low, 4)), (0x08000000, 0xf8000000))
+        self.assertEqual(op(1, 0, 0x10000, 0x10000), 0)              # mul
+        self.assertEqual(op(1, 1, top, top), 0)                      # mulh: -1 * -1
+        self.assertEqual(op(1, 2, top, top), top)                    # mulhsu: -1 * 2**32-1
+        self.assertEqual(op(1, 3, top, top), 0xfffffffe)             # mulhu
+        self.assertEqual((op(1, 4, 0xfffffff9, 2), op(1, 6, 0xfffffff9, 2)),
+                         (0xfffffffd, top))                          # -7 / 2 and its remainder
+        self.assertEqual((op(1, 4, 5, 0), op(1, 5, 5, 0), op(1, 6, 5, 0), op(1, 7, 5, 0)),
+                         (top, top, 5, 5))                           # a zero divisor
+        self.assertEqual((op(1, 4, low, top), op(1, 6, low, top)), (low, 0))   # the overflow
+        #  x0 stays zero; a branch is taken or not; jal and jalr link.
+        self.assertEqual(run([self.rv_i(0x13, 0, 0, 0, 5)]).x[0], 0)
+        taken = run([self.rv_b(4, A0, A1, 8), self.rv_i(0x13, A2, 0, 0, 1),
+                     self.rv_i(0x13, A2, 0, A2, 2)], {A0: top, A1: 1})
+        self.assertEqual(taken.x[A2], 2)                             # blt -1, 1 skips one
+        unsigned = run([self.rv_b(6, A0, A1, 8), self.rv_i(0x13, A2, 0, 0, 1),
+                        self.rv_i(0x13, A2, 0, A2, 2)], {A0: top, A1: 1})
+        self.assertEqual(unsigned.x[A2], 3)                          # bltu does not
+        skipped = 0x00000073                                         # ecall, never reached
+        called = run([self.rv_j(RA, 8), skipped, self.rv_i(0x67, A2, 0, RA, 12),
+                      skipped, self.rv_i(0x13, A0, 0, 0, 9)])
+        self.assertEqual((called.x[RA], called.x[A2], called.x[A0]), (base + 4, base + 12, 9))
+        #  Loads extend by sign or by zero; stores write their width.
+        ram = (0x30000000, 16)
+        stored = run([self.rv_s(2, A0, A1, 0), self.rv_s(0, A0, A2, 1),
+                      self.rv_i(0x03, 13, 0, A0, 1), self.rv_i(0x03, 14, 4, A0, 1),
+                      self.rv_i(0x03, 15, 1, A0, 0), self.rv_i(0x03, 16, 2, A0, 0)],
+                     {A0: ram[0], A1: 0x11223344, A2: 0x80}, ram)
+        self.assertEqual([stored.x[r] for r in (13, 14, 15, 16)],
+                         [0xffffff80, 0x80, 0xffff8044, 0x11228044])
+        #  The compressed forms are the wide ones they abbreviate.
+        compressed = run([0x4529,          # c.li a0, 10
+                          0x0505,          # c.addi a0, 1
+                          0x050a,          # c.slli a0, 2
+                          0x85aa,          # c.mv a1, a0
+                          0x95aa,          # c.add a1, a0
+                          0x8d89,          # c.sub a1, a0
+                          0x6605,          # c.lui a2, 1
+                          0x8a3d,          # c.andi a2, 15
+                          0x1141,          # c.addi sp, -16
+                          0xc02a,          # c.swsp a0, 0(sp)
+                          0x4682,          # c.lwsp a3, 0(sp)
+                          0x0058,          # c.addi4spn a4, sp, 4
+                          0xc308,          # c.sw a0, 0(a4)
+                          0x431c,          # c.lw a5, 0(a4)
+                          0x0141,          # c.addi sp, 16
+                          ], {SP: ram[0] + 16}, ram)
+        self.assertEqual([compressed.x[r] for r in (10, 11, 12, 13, 14, 15, SP)],
+                         [44, 44, 0, 44, ram[0] + 4, 44, ram[0] + 16])
+        #  c.jal and c.jalr link the two-byte instruction after them.
+        linked = run([0x2011,              # c.jal +4
+                      0x0001,              # c.nop, skipped
+                      0x8286,              # c.mv t0, ra
+                      self.rv_i(0x13, 6, 0, 6, 1),   # addi t1, t1, 1
+                      ], {})
+        self.assertEqual((linked.x[RA], linked.x[5], linked.x[6]), (base + 2, base + 2, 1))
+        image, end = self.rv_image(base, [0x9502,   # c.jalr a0
+                                          0x0001, 0x0001])
+        jumped = rv32.Evaluation(image, [], (0, 0), until=lambda pc: pc == end)
+        jumped.x[A0] = base + 4
+        jumped.run()
+        self.assertEqual(jumped.x[RA], base + 2)
+
+    def test_the_rv32_evaluator_refuses_what_it_does_not_follow(self):
+        import rv32
+        base = 0x20000000
+
+        def refused(words, pattern, registers=None, limit=1000):
+            image, end = self.rv_image(base, words)
+            evaluation = rv32.Evaluation(image, [(0x60000000, 0x100)], (0, 0), limit=limit,
+                                         until=lambda pc: pc == end)
+            for register, value in (registers or {}).items():
+                evaluation.x[register] = value
+            with self.assertRaisesRegex(rv32.Refused, pattern):
+                evaluation.run()
+        nothing = 'does not follow'
+        refused([0x30529073], nothing)                    # csrw mtvec, t0
+        refused([0x00000073], nothing)                    # ecall
+        refused([0x1005272f], nothing)                    # lr.w
+        refused([0x00a57553], nothing)                    # fadd.s
+        refused([0x0000], nothing)                        # the defined illegal instruction
+        refused([0x2000], nothing)                        # c.fld
+        refused([self.rv_i(0x03, 10, 2, 11, 0)], 'outside the image', {11: 0x50000000})
+        refused([self.rv_s(2, 11, 10, 0)], 'outside the image', {11: 0x50000000})
+        refused([self.rv_i(0x03, 10, 2, 11, 2)], 'misaligned 4-byte load', {11: 0x60000000})
+        refused([self.rv_s(1, 11, 10, 1)], 'misaligned 2-byte store', {11: 0x60000000})
+        refused([self.rv_i(0x67, 0, 0, 11, 0)], 'left the image', {11: 0x60000000})
+        refused([self.rv_j(0, 0)], 'no end within 50 steps', limit=50)
+
     def test_the_cores_are_the_compilers(self):
         """CORES is Landin.Targets.Firmware's table of each core's SVD
         cpu name, which refine svd reads, joined to the spelling a

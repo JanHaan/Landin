@@ -280,7 +280,7 @@ class RamGuard(unittest.TestCase):
     def test_explicit_cascade_override_does_not_require_a_connected_cascade(self):
         args = SimpleNamespace(cascade='9-9', hub='1-1')
         with mock.patch.object(BOARD.common, 'cascade_root', side_effect=AssertionError('scan')):
-            BOARD.common.place_hubs(argparse.ArgumentParser(), args, 'hub', sysfs=self.sysfs)
+            BOARD.common.place_hubs(args, 'hub', sysfs=self.sysfs)
         self.assertEqual((args.cascade, args.hub), ('9-9', '1-1'))
         self.assertIsNone(self.guard(cascade=args.cascade, hub=args.hub))
 

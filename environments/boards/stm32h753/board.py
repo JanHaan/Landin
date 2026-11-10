@@ -696,7 +696,7 @@ def main():
     common.board_preflight(args, 'stm32h753')
     # The virtual COM port's tty belongs to --hub-group (D836).
     common.rerun_in_group(args.hub_group)
-    common.place_hubs(parser, args, 'hub')
+    common.place_hubs(args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     for name in ('nm', 'objdump', 'readelf'):
         require(args.bundle or getattr(args, name), 'no arm-eabi-%s or arm-none-eabi-%s on PATH: name one with --%s'

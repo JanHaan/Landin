@@ -63,7 +63,8 @@ class Transfer(unittest.TestCase):
             self.assertFalse(self.args.output.exists())
         self.assertEqual(existing.read_bytes(), b'previous evidence')
 
-    def record_run(self, *, tool_status=0, record_status=0, payload=None, race=False):
+    def record_run(self, *, tool_status=0, record_status=0, payload=None, race=False,
+                   copy_status=0, retrieve_status=0, cleanup_status=0):
         """An actual remote record is simulated as opaque transferred bytes."""
         calls = []
         identity = {'sha256': 'source-bytes', 'files': {}}
@@ -76,9 +77,15 @@ class Transfer(unittest.TestCase):
             command = [str(value) for value in command]
             calls.append(command)
             Path(log).write_text('simulated transport\n')
+            if Path(log).name == 'remote-cleanup.log':
+                return cleanup_status
+            if Path(log).name == 'copy.log':
+                return copy_status
             if command[0] == 'ssh':
                 return tool_status
             if command[-1].endswith('/rigpi'):
+                if retrieve_status:
+                    return retrieve_status
                 Path(command[-1]).mkdir()
                 (Path(command[-1]) / 'result.json').write_text('{"status":"passed"}')
             elif Path(log).name == 'record-retrieve.log':
@@ -117,8 +124,67 @@ class Transfer(unittest.TestCase):
         status, transfer, calls = self.record_run(tool_status=7)
         self.assertEqual(status, 7)
         self.assertEqual(transfer['record_status'], 'skipped')
-        self.assertEqual([command[0] for command in calls], ['scp', 'ssh', 'scp'])
+        #  Copy, run, retrieve the result, then remove the staging: no
+        #  record is fetched.
+        self.assertEqual([command[0] for command in calls], ['scp', 'ssh', 'scp', 'ssh'])
         self.assertFalse(self.args.record.exists())
+
+    REMOVAL = 'rm -rf -- /tmp/landin-board.ABC123'
+
+    def test_the_remote_staging_is_removed_once_the_output_is_here(self):
+        """Seventy-six of these directories had gathered on the rig's
+        host; a run leaves none, passed or failed."""
+        for tool_status in (0, 7):
+            with self.subTest(tool_status=tool_status):
+                self.args.output = self.root / ('out-%d' % tool_status)
+                status, transfer, calls = self.record_run(tool_status=tool_status)
+                self.assertEqual(status, tool_status)
+                self.assertEqual(transfer['remote_cleanup'], 'removed')
+                self.assertEqual(calls[-1][0], 'ssh')
+                self.assertEqual(calls[-1][-1], self.REMOVAL)
+                #  The result was retrieved before anything was removed.
+                self.assertTrue(calls[-2][-1].endswith('/rigpi'))
+                self.assertTrue((self.args.output / 'rigpi/result.json').is_file())
+                self.assertTrue((self.args.output / 'remote-cleanup.log').is_file())
+
+    def test_the_remote_staging_is_kept_on_request(self):
+        self.args.keep_remote = True
+        status, transfer, calls = self.record_run()
+        self.assertEqual(status, 0)
+        self.assertEqual(transfer['remote_cleanup'], 'kept: asked for with --keep-remote')
+        self.assertEqual(transfer['directory'], '/tmp/landin-board.ABC123')
+        self.assertNotIn(self.REMOVAL, [command[-1] for command in calls])
+        with mock.patch.object(board_run, 'execute', return_value=0) as execute:
+            board_run.main(['--board=rp2040', '--refine=refine', '--output=run', '--keep-remote'])
+        self.assertTrue(execute.call_args.args[0].keep_remote)
+
+    def test_the_only_copy_of_an_output_is_never_removed(self):
+        #  The result could not be retrieved.
+        status, transfer, calls = self.record_run(retrieve_status=1)
+        self.assertEqual(status, 1)
+        self.assertEqual(transfer['remote_cleanup'],
+                         'kept: the result was not retrieved; see retrieve.log')
+        self.assertNotIn(self.REMOVAL, [command[-1] for command in calls])
+        #  The run passed and its record could not be.
+        self.args.output = self.root / 'out-record'
+        self.args.record = self.root / 'ram-record.json'
+        status, transfer, calls = self.record_run(record_status=8)
+        self.assertEqual(status, 1)
+        self.assertIn('kept: the record was not retrieved: record copy failed',
+                      transfer['remote_cleanup'])
+        self.assertNotIn(self.REMOVAL, [command[-1] for command in calls])
+
+    def test_a_copy_that_failed_leaves_nothing_behind(self):
+        with self.assertRaisesRegex(board_run.bundle.Invalid, 'copy failed'):
+            self.record_run(copy_status=1)
+        transfer = json.loads((self.args.output / 'transfer.json').read_text())
+        self.assertEqual(transfer['remote_cleanup'], 'removed')
+
+    def test_a_removal_that_fails_is_recorded_and_changes_no_verdict(self):
+        status, transfer, _ = self.record_run(cleanup_status=255)
+        self.assertEqual(status, 0)
+        self.assertEqual(transfer['remote_cleanup'],
+                         'failed with status 255; see remote-cleanup.log')
 
     def test_missing_bad_or_failed_record_copy_never_creates_local_evidence(self):
         for label, code, payload in (('copy', 8, None), ('missing', 0, None),
@@ -165,6 +231,8 @@ class Transfer(unittest.TestCase):
         def transport(command, log):
             calls.append([str(value) for value in command])
             Path(log).write_text('simulated transport\n')
+            if Path(log).name == 'remote-cleanup.log':
+                return 0
             if command[0] == 'ssh':
                 return 7
             if str(command[-1]).endswith('/rigpi'):
@@ -180,7 +248,8 @@ class Transfer(unittest.TestCase):
             status = board_run.execute(self.args, ('--probehive', '/path with spaces'))
         self.assertEqual(status, 7)
         self.assertEqual(process.call_count, 1)  # remote mktemp only
-        self.assertEqual([command[0] for command in calls], ['scp', 'ssh', 'scp'])
+        self.assertEqual([command[0] for command in calls], ['scp', 'ssh', 'scp', 'ssh'])
+        self.assertEqual(calls[3][-1], 'rm -rf -- /tmp/landin-board.ABC123')
         self.assertIn("'/path with spaces'", calls[1][-1])
         self.assertIn('--mode=ram', calls[1][-1])
         self.assertTrue((self.args.output / 'rigpi/result.json').is_file())
@@ -211,6 +280,8 @@ class Transfer(unittest.TestCase):
 
         def transport(command, log, **options):
             seen.append((Path(log).name, options))
+            if Path(log).name == 'remote-cleanup.log':
+                return 0
             if command[0] == 'ssh':
                 transfer = json.loads((self.args.output / 'transfer.json').read_text())
                 self.assertIn('manual.py status --output /tmp/landin-board.ABC123/result',
@@ -230,7 +301,7 @@ class Transfer(unittest.TestCase):
             status = board_run.execute(self.args, ['--boot-transport=manual-uf2'])
         self.assertEqual(status, 7)
         self.assertEqual(seen, [('copy.log', {}), ('remote-run.log', {'live': True}),
-                                ('retrieve.log', {})])
+                                ('retrieve.log', {}), ('remote-cleanup.log', {})])
 
 
 class LiveTransport(unittest.TestCase):

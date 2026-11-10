@@ -264,7 +264,138 @@ def collect(root):
                              or previous.condition == item.condition):
                 raise ValueError(f'{module}: ambiguous declaration {item.name}')
             names[item.name] = item
+    unresolved = unresolved_names(modules, files)
+    if unresolved:
+        raise ValueError('library comments name what their module does not declare:\n'
+                         + '\n'.join(unresolved))
     return modules, files
+
+
+IMPORT = re.compile(r'^import ((?:core|hosted|platform)(?:/\w+)+)(?: as (\w+))?\s*$', re.M)
+#  A code span that opens with QUALIFIER.NAME; what follows the name, a
+#  call's arguments or a further member, is not read.
+QUALIFIED = re.compile(r'`([a-z_]\w*)\.([A-Za-z_]\w*)[^`]*`')
+
+
+def unresolved_names(modules, files):
+    """Each backticked `module.name` in a `---` comment that names no
+    public declaration of the module it names, as a line to report.
+
+    The qualifier is read as the page's links read it: a module the
+    comment's own module imports, by its alias or its last segment, that
+    module itself, or the one library module with that last segment.  A
+    qualifier that is none of these is a value's name, `text.len`, and is
+    left alone.  The reference pages and an editor's hover show these
+    comments, and a name under the wrong module, `io.duration` for
+    `time.duration`, links nowhere and misleads both.
+    """
+    exports = {module: {item.name for item in items} for module, items in modules.items()}
+    leaves = {}
+    for module in modules:
+        leaves.setdefault(module.split('/')[-1], []).append(module)
+    aliases = {}
+    for path, text in files.items():
+        mine = aliases.setdefault(str(Path(path).parent), {})
+        for found in IMPORT.finditer(text):
+            mine[found[2] or found[1].split('/')[-1]] = found[1]
+    faults = []
+    for module, items in modules.items():
+        for item in items:
+            for found in QUALIFIED.finditer(item.documentation):
+                qualifier, name = found[1], found[2]
+                target = aliases.get(module, {}).get(qualifier)
+                if target is None and module.split('/')[-1] == qualifier:
+                    target = module
+                if target is None and len(leaves.get(qualifier, [])) == 1:
+                    target = leaves[qualifier][0]
+                if target in exports and name not in exports[target]:
+                    faults.append(
+                        '%s:%d: the comment of %s.%s writes `%s.%s`, and %s declares no'
+                        ' public %s; name the module that does, or drop the qualifier'
+                        ' where it is this declaration\'s own'
+                        % (item.source, item.line, module.split('/')[-1], item.name,
+                           qualifier, name, target, name))
+    return faults
+
+
+#  "the table above", "see below", "as said above.": a pointer to a place
+#  on the page, read from the word before it or the punctuation after it.
+#  "a count above the capacity" compares and is not one.
+POSITIONAL = re.compile(
+    r"(?:\b(table|list|section|paragraph|example|program|rows?|rule|module|overview|page)"
+    r"(?:'s|s)?\s+|\b(?:see|as|said|given|listed|shown|named|described|explained|stated)\s+)?"
+    r"\b(above|below)\b(?=(\s*(?:[.,;:)]|$)))?", re.I)
+
+
+def misplaced_pointers(module, body):
+    """Each "above" or "below" in a module's overview BODY that points
+    past its heading, as a line to report.
+
+    docs/library.md is one file and the site renders each module as a page
+    of its own, so a pointer to another module's section leads nowhere.  A
+    pointer is held to its own section: an "above" needs something before
+    its paragraph there, a "below" something after it, and one that names
+    a table needs a table on that side.
+    """
+    blocks = [block for block in re.split(r'\n\s*\n', body) if block.strip()]
+    faults = []
+    for index, block in enumerate(blocks):
+        if block.lstrip().startswith('```'):
+            continue
+        for found in POSITIONAL.finditer(block):
+            kind, word = (found[1] or '').lower(), found[2].lower()
+            if not (found[1] or found[3] is not None or found[0].lower() != word):
+                continue
+            side = blocks[:index] if word == 'above' else blocks[index + 1:]
+            if kind == 'table':
+                #  A table may also be the paragraph's own neighbour lines.
+                here = block[:found.start()] if word == 'above' else block[found.end():]
+                side = [one for one in [*side, here] if re.search(r'^\s*\|', one, re.M)]
+            if not side:
+                faults.append(
+                    '%s: "%s" in its overview points past its own section, where %s: each'
+                    ' module is a page of its own, so name the module, as a link, instead'
+                    % (module, ' '.join(found[0].split()),
+                       'no table is %s it' % word if kind == 'table'
+                       else 'nothing is %s it' % word))
+    return faults
+
+
+def drifting(modules):
+    """Each name a module declares once per target whose comments differ
+    by more than their target words, as (module, name, places).
+
+    `merged_documentation` joins a few differing words, "on x86-64 / arm64
+    / RV64"; where the copies differ by more it can only set the whole
+    texts side by side, which is what the page then shows.  Copies of one
+    routine's comment are meant to stay parallel, and nothing else says
+    when one was edited alone.
+    """
+    found = []
+    for module, items in modules.items():
+        grouped = {}
+        for item in items:
+            grouped.setdefault(item.name, []).append(item)
+        for name, variants in grouped.items():
+            texts = list(dict.fromkeys(' '.join(v.documentation.split()) for v in variants))
+            if len(texts) > 1 and merged_documentation(texts) == ' / '.join(texts):
+                found.append((module, name,
+                              ['%s:%d' % (v.source, v.line) for v in variants]))
+    return found
+
+
+def drift_report(modules):
+    """`drifting` as the lines the build prints; [] when nothing drifted."""
+    found = drifting(modules)
+    if not found:
+        return []
+    return ['library: %d name%s declared once per target %s comments that differ by more'
+            ' than their target words, so the page sets the whole texts side by side;'
+            ' keep the copies parallel:'
+            % (len(found), '' if len(found) == 1 else 's',
+               'has' if len(found) == 1 else 'have'),
+            *('  %s.%s (%s)' % (module, name, ', '.join(places))
+              for module, name, places in found)]
 
 
 def overviews(root, modules):
@@ -292,6 +423,10 @@ def overviews(root, modules):
         # it with the program, at its end.
         result[module] = (body[:example.start()].strip(), path,
                           body[example.end():].strip())
+    misplaced = [fault for module, body in zip(parts[1::2], parts[2::2])
+                 for fault in misplaced_pointers(module, body)]
+    if misplaced:
+        raise ValueError('\n'.join(misplaced))
     if set(result) != set(modules):
         raise ValueError('library overviews and source modules differ: '
                          + ', '.join(sorted(set(result) ^ set(modules))))
@@ -1115,6 +1250,8 @@ def linked_code(cell, link):
 def write(root, destination, render):
     """Render with the site's shell, Markdown reader, fonts and highlighter."""
     modules, sources = collect(root)
+    for line in drift_report(modules):
+        print(line, file=sys.stderr)
     anchors = {ref: d['out'] + '#' + ref for d in render.DOCS
                for ref in re.findall(r'^### \[(\d{4})\]', (root / d['src']).read_text(), re.M)}
     intro, descriptions = overviews(root, modules)
