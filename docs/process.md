@@ -250,7 +250,10 @@ limit: a 600-second tool call can use the default, while a tool limited to
 60 seconds can use `--timeout 45`. A tool that yields a process session can
 resume that session instead of opening another wait. Exit 124 means the
 logged command is still running, not that it failed. A run whose wrapper
-died without a result exits 125 at once. Do not wait with `sleep`
+died without a result exits 125 at once. Those two statuses are the wait's
+own: a finished run whose command itself exited 124 or 125, as `timeout`
+does, makes the wait exit 1 and say so, and the first line it prints is
+`state=finished`, `state=running` or `state=lost`. Do not wait with `sleep`
 loops over the log, nor with `pgrep -f`, whose pattern also matches the
 waiting shell's own command line, so the wait never ends. A live progress
 inspection is appropriate when diagnosing a stall, rather than as a timer.

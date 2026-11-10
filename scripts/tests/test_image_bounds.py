@@ -44,6 +44,26 @@ class Shapes(unittest.TestCase):
         self.assertEqual(image_bounds.REACH["linux-rv64"], 2 ** 31)
 
 
+class Measured(unittest.TestCase):
+    def test_a_talkative_driver_ends_and_its_last_lines_are_kept(self):
+        #  More than a pipe holds: with a pipe nobody read this never ended.
+        code = ("import sys\n"
+                "for line in range(8000):\n"
+                "    sys.stderr.write('image.s:%d: Error: no such instruction\\n' % line)\n"
+                "raise SystemExit(1)\n")
+        status, peak, _, said = image_bounds.peak_of([sys.executable, "-c", code], ".")
+        self.assertEqual(status, 1)
+        self.assertGreater(peak, 0)
+        self.assertTrue(said.endswith("image.s:7999: Error: no such instruction"), said)
+        self.assertLessEqual(len(said.splitlines()), 12)
+
+    def test_a_driver_that_does_not_end_is_ended(self):
+        status, _, seconds, _ = image_bounds.peak_of(
+            [sys.executable, "-c", "import time; time.sleep(600)"], ".", seconds=0.5)
+        self.assertLess(status, 0)
+        self.assertLess(seconds, 300)
+
+
 class Arguments(unittest.TestCase):
     def test_a_missing_driver_says_which_option_names_it(self):
         error = io.StringIO()
