@@ -34668,6 +34668,143 @@ with its debug information, and the gate's jobs that install a compiler
 outside the checkout, which package it the release's way; no fixture runs
 the release workflow itself.
 
+### D1132 — A job the rig's runner refuses loses its worker
+
+**The tour said** nothing. The physical boards hang off a self-hosted
+runner of a public repository, and the runner's job-started hook is what
+keeps a job that is not a trusted run of the gate off it. The hook refused
+by exiting nonzero, and the documents said such a job fails before any of
+its steps. The runner runs the hook as a step of the job, and a later step
+under `if: always()`, or the `pre:` entry of an action the job names, has a
+condition a failed earlier step can satisfy; whether the deployed runner
+goes on to one could not be established without the runner.
+
+**Chosen:** a refusal does not rest on step conditions. The hook removes
+the actions the runner downloaded for the job while it set the job up,
+finds the runner's worker process for the job among its own ancestors, the
+nearest whose command name or first two arguments contain `Runner.Worker`,
+and kills it before exiting nonzero. The worker is the process that
+evaluates and runs every step and waits for the hook meanwhile, so no step
+of a refused job runs whatever its condition. With no such ancestor, as
+when the hook is run by hand, it says that only its exit status refuses.
+A job whose acceptance the hook's log cannot record is refused the same
+way.
+
+**The alternatives:** the exit status alone, which holds only if the
+runner evaluates no step after a failed pre-job script; an ephemeral or
+just-in-time runner, which ends with a refused job but has to be
+registered again for every job and so keeps a registration credential on
+the rig; and killing every ancestor the hook's user owns, which also ends
+a maintainer's shell when the hook is tried by hand. All were declined.
+
+**Pinned by** `scripts/tests/test_rig_runner_hook.py`, whose stand-in
+worker runs the hook, ignores that it failed and goes on to its next step,
+and is killed before it gets there, while an accepted job's worker goes
+on; the same cases hold the names a worker is recognised by and the
+removal of the downloaded actions. No case runs the deployed runner, and
+`environments/rig-runner/README.md` gives the one job that observes a
+refusal there.
+
+### D1133 — A release is cut from a commit on main whose own gate passed, and is public only whole
+
+**The tour said** nothing. The release workflow ran for any `v*` tag and
+for a dispatched tag. Its checks tie the binary to the tag: the README's
+version is the tag's, and the compiler's identity names the tagged commit,
+clean and in release mode. Nothing tied the tag to a tree that was tested,
+so a tag on an unmerged commit, or on one whose gate had failed, published
+a compiler. The release was also made public before its twelve assets were
+uploaded, and an upload that stopped left a partial release that a second
+run refused to complete.
+
+**Chosen:** the workflow's first job refuses a commit that is not an
+ancestor of `main`, and one for which no `gate.yml` run of `main`'s own
+push of that commit succeeded. Its last makes the release a draft, uploads
+every asset, reads back what the release holds and only then publishes
+it; a draft an earlier run left is emptied and filled again, since the
+build is not reproducible and its files are not this build's. A published
+release is final, as it was: an asset of a name it already holds is
+refused. Each archive records root, by number and with no name, as every
+member's owner, with modes set by the packaging script.
+
+**The alternatives:** trusting the tag, which makes whoever can push one
+the only check between a commit and a published compiler; requiring only
+that the commit is on `main`, where a commit sits before its gate has run
+and stays if it fails; and publishing first and uploading after, which
+shows a reader of the releases page an archive without its checksum or a
+release without a platform. Who may push a `v*` tag, a required reviewer
+on the publishing job and a signed attestation of the assets are settings
+of the repository; the workflow establishes none of them.
+
+**Pinned by** `scripts/tests/test_release.py`, which holds the first job
+to a throwaway repository and the run lists GitHub would answer with, and
+the last to a stand-in `gh` that records what a reader could see after
+each request and fails an upload part-way; and
+`scripts/tests/test_outside_user.py`, which packages under two umasks and
+reads the owners and modes back. No case runs the workflow.
+
+### D1134 — A recording replaces a session's messages, and neither a transcript that did not run nor its status
+
+**The tour said** nothing. A scripted language-server session is a
+transcript the test program runs, and `--record` writes what the server
+sends now over its `<-` lines. It wrote whatever the run handed back, so a
+transcript that could not be run, one with no `exit:` line yet, no final
+line end or a line that is none of its forms, was replaced by an empty
+file and reported as written; and it rewrote the `exit:` line with the
+status the session ended with.
+
+**Chosen:** a recording replaces the messages of a session that ran. A
+transcript that cannot be run is left as it is, and so is a session that
+ended with another status than its `exit:` line names: the status is the
+transcript's verdict, as a fixture's expected status is, and is changed by
+hand. Either is said on standard error with exit status 1. Each directory
+under `compiler/tests/server` is a session, apart from one whose name
+begins with `.` or `_`, and one without a `session.lsp` fails both session
+runners.
+
+**The alternatives:** writing what the run handed back, which cost
+requests typed by hand that were in no commit; recording the status with
+the messages, which turns a session that now ends 1 into the expectation
+by a one-line difference; and taking only the directories that hold a
+transcript, under which a transcript misnamed by a merge leaves the gate
+with no word. All were declined.
+
+**Pinned by** the `server` suite's `a recording never replaces what it
+could not run` and `a session directory without a transcript is a fault`,
+over real files in the build tree, and
+`scripts/tests/test_server_session_inventory.py` for the native runner.
+
+### D1135 — A page links to an address or to the repository, and a fetched stylesheet is read and not trusted
+
+**The tour said** nothing. The site's pages carry their script inline and
+no content security policy, so whatever reaches a page as markup runs
+there. Two things reached it unexamined: a Markdown link's target, written
+into `href` as it stood, and the licensed code face's stylesheet, fetched
+at publish time from storage outside the repository and copied, header and
+declarations, into every page's `<style>` element.
+
+**Chosen:** a link's target is an `http`, `https` or `mailto` address or a
+path of the repository, written without a space, a quote, an angle
+bracket, a backtick or a backslash; any other stops the build. A
+family's `@font-face` rules are rebuilt from a fixed set of descriptors
+whose values are names, numbers, quotes and the punctuation of a range, a
+face's file is a bare `NAME.woff2`, and a preserved header holding `<` is
+refused. The fetch takes a face only as `woff2/FILE` and writes it only as
+that file. `assets/fonts/licensed.sha256`, once the maintainer records it
+from the licensed files, pins the stylesheet and each face by SHA-256.
+
+**The alternatives:** escaping a target and passing it through, which
+still publishes a `javascript:` link; a content security policy, which the
+single-file pages with their inline script would have to exempt
+themselves from; and pinning the stylesheet alone, which leaves the page
+at the mercy of whoever records the next pin without reading it. All were
+declined.
+
+**Pinned by** `scripts/tests/test_site_render.py`, with a link that runs
+script and one that leaves its attribute, and `scripts/tests/test_fonts.py`,
+with a header and a declaration that end the style element, a face named
+outside its directory, a pinned file that changed and a source to fetch
+from that names files it should not.
+
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 
 **The tour said** nothing. `core/fibre/stacks`' round of turns is the one

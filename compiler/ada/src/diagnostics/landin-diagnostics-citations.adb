@@ -3124,6 +3124,17 @@ package body Landin.Diagnostics.Citations is
             when 531 =>
                "A released compiler carries no debug information, which "
                & "ships beside it",
+            when 1132 =>
+               "A job the rig's runner refuses loses its worker",
+            when 1133 =>
+               "A release is cut from a commit on main whose own gate pa"
+               & "ssed, and is public only whole",
+            when 1134 =>
+               "A recording replaces a session's messages, and neither a"
+               & " transcript that did not run nor its status",
+            when 1135 =>
+               "A page links to an address or to the repository, and a f"
+               & "etched stylesheet is read and not trusted",
             when 571 =>
                "A round's yield calls nothing beneath it but its sweep, "
                & "its idler and its switch",
@@ -4584,6 +4595,14 @@ package body Landin.Diagnostics.Citations is
             when 527 =>
                "Decisions: The core library and the derived programs",
             when 531 =>
+               "Decisions: The core library and the derived programs",
+            when 1132 =>
+               "Decisions: The core library and the derived programs",
+            when 1133 =>
+               "Decisions: The core library and the derived programs",
+            when 1134 =>
+               "Decisions: The core library and the derived programs",
+            when 1135 =>
                "Decisions: The core library and the derived programs",
             when 571 =>
                "Decisions: The core library and the derived programs",
@@ -6852,6 +6871,21 @@ package body Landin.Diagnostics.Citations is
             when 531 =>
                "https://www.701.dev/spec.html#d531-a-released-compiler-c"
                & "arries-no-debug-information-which-ships-beside-it",
+            when 1132 =>
+               "https://www.701.dev/spec.html#d1132-a-job-the-rig-s-runn"
+               & "er-refuses-loses-its-worker",
+            when 1133 =>
+               "https://www.701.dev/spec.html#d1133-a-release-is-cut-fro"
+               & "m-a-commit-on-main-whose-own-gate-passed-and-is-public-o"
+               & "nly-whole",
+            when 1134 =>
+               "https://www.701.dev/spec.html#d1134-a-recording-replaces"
+               & "-a-session-s-messages-and-neither-a-transcript-that-did-"
+               & "not-run-nor-its-status",
+            when 1135 =>
+               "https://www.701.dev/spec.html#d1135-a-page-links-to-an-a"
+               & "ddress-or-to-the-repository-and-a-fetched-stylesheet-is-"
+               & "read-and-not-trusted",
             when 571 =>
                "https://www.701.dev/spec.html#d571-a-round-s-yield-calls"
                & "-nothing-beneath-it-but-its-sweep-its-idler-and-its-swit"

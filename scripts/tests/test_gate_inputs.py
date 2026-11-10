@@ -1288,6 +1288,8 @@ READERS = {
     "check.py": "the documents job",
     "scripts/tests/": "the scripts job",
     "docs/site/": "pages.yml and scripts/site.sh",
+    "assets/fonts.py": "the licensed fonts' own README, which --fetch takes "
+                       "from object storage beside the faces in pages.yml",
     "scripts/context_pack.py": "a developer tool; its test is in scripts/tests",
     "scripts/activations.py": "a developer tool for closing an item; its test is in scripts/tests",
     "scripts/gate_inputs.py": "the inputs job",
