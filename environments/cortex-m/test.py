@@ -75,6 +75,18 @@ class ProbeFailures(unittest.TestCase):
                          ['changed b.py', 'removed c.py', 'added d.py'])
         self.assertEqual(changed_inputs({'a.py': '1'}, {'a.py': '1'}), [])
 
+    def test_evidence_prints_a_line_for_each_program_and_control(self):
+        import evidence
+        self.assertEqual(evidence.row_line({'profile': 'none-off', 'program': 'app',
+                                            'status': 'passed'}),
+                         'evidence: none-off/app passed')
+        self.assertEqual(evidence.row_line({'profile': 'size-auto', 'control': 'switch',
+                                            'status': 'passed', 'capacity': {}}),
+                         'evidence: size-auto/switch control passed')
+        #  Every row the suite gathers is printed, whichever kind it is.
+        source = Path(evidence.__file__).read_text()
+        self.assertIn('rows.append(row)\n            print(row_line(row),flush=True)', source)
+
     def test_the_guide_is_no_probe_input(self):
         from setup import inventory, probe_inputs
         with tempfile.TemporaryDirectory() as directory:
@@ -180,7 +192,7 @@ class ProbeFailures(unittest.TestCase):
                 imports('import core/'+name)
         helper = '/tools/thumb/v6-m/nofp/libgcc.a'
         base = 'LOAD core.elf.o\nLOAD '+helper+'\n'
-        for object_name in ('core.elf.o', './core.elf.o'):
+        for object_name in ('core.elf.o', './core.elf.o', '../stage/core.elf.o'):
             for suffix in ('', 'LOAD linker stubs\n'):
                 mapping = base.replace('core.elf.o', object_name) + suffix
                 self.assertEqual(linker_closure(mapping, helper)[0][:2],
@@ -190,8 +202,8 @@ class ProbeFailures(unittest.TestCase):
                     base.replace('LOAD core.elf.o\n', ''),
                     base+'LOAD linker stubs\nLOAD linker stubs\n',
                     *(base.replace('core.elf.o', name) for name in
-                      ('other/core.elf.o', '../core.elf.o',
-                       './core.elf.o/../core.elf.o'))):
+                      ('other/core.elf.o', '../core.elf.o', '../work/core.elf.o',
+                       'stage/core.elf.o', './core.elf.o/../core.elf.o'))):
             with self.assertRaises(RuntimeError):
                 linker_closure(bad, helper)
         self.assertEqual(set(programs()), {
@@ -1456,6 +1468,53 @@ class CounterpartOracle(unittest.TestCase):
         self.assertIn('timeout', self.kinds(self.trace(*self.GOOD[:2], outcome='timeout',
                                                        output='')))
         self.assertIn('stopped', self.kinds(self.trace(*self.GOOD, outcome='stopped: 4')))
+
+    def test_a_byte_the_device_dropped_fails_the_run_that_fed_it(self):
+        import driver
+        from models import DriverPeripheral, Refused
+        model = DriverPeripheral()
+        #  The channel is disabled: the byte is dropped and counted.
+        model.feed(65)
+        self.assertEqual((model.rejected, model.unexpected_refusals()), (1, 1))
+        with self.assertRaisesRegex(RuntimeError, 'case: the device refused 1 byte fed while'
+                                                  ' its DMA channel was disabled'):
+            driver.no_lost_feed(model, 'case')
+        #  One the case meant to be refused is counted and is no fault.
+        meant = DriverPeripheral()
+        meant.feed(65, refused=True)
+        self.assertEqual((meant.rejected, meant.unexpected_refusals()), (1, 0))
+        driver.no_lost_feed(meant, 'case')
+        #  A byte the device takes where the case expected a refusal says so.
+        taking = DriverPeripheral()
+        taking.configuration, taking.remaining = 1, 4
+        taking.transfer = lambda value: None
+        taking.feed(65)
+        with self.assertRaisesRegex(Refused, 'took a byte the case fed for it to refuse'):
+            taking.feed(65, refused=True)
+        #  Every run over the model through driver.machine ends at the check,
+        #  which Machine runs only for a run that did not already fail.
+        source = (Path(driver.__file__)).read_text()
+        self.assertIn('m.closing.append(lambda: no_lost_feed(model, name))', source)
+        from machine import Machine
+        import machine as machine_module
+        from unittest.mock import patch
+        closed = []
+        class Stopped:
+            returncode = 0
+        m = Machine.__new__(Machine)
+        m.process, m.relayed, m.stops, m.name = Stopped(), None, 0, 'x'
+        m.tick, m.record = 0, {}
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), Path(directory))
+            (run.out / 'x.log').write_text('')
+            m.run, m.log = run, (run.out / 'x.log').open('rb')
+            m.closing = [lambda: closed.append('held')]
+            with patch.object(machine_module, 'stop', lambda process: None):
+                m.__exit__(RuntimeError, RuntimeError('failed'), None)
+                self.assertEqual(closed, [])
+                m.log = (run.out / 'x.log').open('rb')
+                m.__exit__(None, None, None)
+                self.assertEqual(closed, ['held'])
 
     def test_a_lost_trace_or_input_fails(self):
         lost = self.trace(*self.GOOD)

@@ -222,6 +222,9 @@ class Machine:
                                             pass_fds=(listener.fileno(),))
             self.stub = Stub(listener.getsockname()[1], time.monotonic() + 5)
         self.models = []
+        #  What a lane holds its run to once it ends without a failure:
+        #  each is called by __exit__ and fails the run by raising.
+        self.closing = []
         self.words = set()
         self.roles = {}
         self.observer = None
@@ -254,6 +257,8 @@ class Machine:
         if kind is None:
             other = [line for line in text.splitlines() if not QEMU_NOTICES.match(line)]
             require(not other, 'QEMU reported: ' + '\n'.join(other))
+            for check in self.closing:
+                check()
         return False
 
     # Memory and registers, while stopped.

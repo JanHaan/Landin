@@ -147,7 +147,18 @@ def machine(run, elf, s, name, poll=()):
     model = DriverPeripheral()
     m.map(0x40070000, 0x2000, model)
     m.trap(s['_landin_firmware_unhandled'], 'unhandled exception')
+    m.closing.append(lambda: no_lost_feed(model, name))
     return m, model
+
+
+def no_lost_feed(model, name):
+    """Fail a run whose device dropped a byte the case did not feed to be
+    dropped: every run over the model ends here (`machine`)."""
+    lost = model.unexpected_refusals()
+    require(not lost, '%s: the device refused %d byte%s fed while its DMA channel was disabled,'
+            ' exhausted or faulted, and the case expected none: the byte is dropped, so the'
+            ' firmware never sees it; feed while the channel runs, or pass refused=True'
+            ' where the refusal is what the case shows' % (name, lost, '' if lost == 1 else 's'))
 
 
 def application(run,elf,s):
@@ -224,9 +235,9 @@ def protocol(run,elf,s):
         u32, u8 = m.u32, m.u8
         def settle():
             m.settle()
-        def feed(values):
+        def feed(values, refused=False):
             for value in values:
-                model.feed(value)
+                model.feed(value, refused)
             settle()
         stage = [2]
         def op(code, result=0, outcome=0, data=None, extra=None, trace=None):
@@ -303,7 +314,7 @@ def protocol(run,elf,s):
         op(3, extra=lambda: u32(s['quiet']) == 1 and not model.busy,
            trace='w32:100c:000a84e0;r32:100c:000a84e0')
         op(7, trace='')
-        feed([60])
+        feed([60], refused=True)
         require(model.rejected == 1 and u8(s['storage']) == 165, 'stopped: rejected')
         op(4)
         op(1, 0, trace=stable(32))
@@ -327,7 +338,7 @@ def protocol(run,elf,s):
         require(u32(s['events']) == 9 and model.remaining == 0 and not model.busy
                 and model.pending == 0, 'exhausted: ring')
         op(2, outcome=8, extra=lambda: model.remaining == 0 and not model.busy)
-        feed([70])
+        feed([70], refused=True)
         require(model.rejected == 2, 'exhausted: rejected')
         op(4)
         feed([80])
