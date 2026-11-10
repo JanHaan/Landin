@@ -1,0 +1,15 @@
+node: type = struct
+    next: ptr mut node
+end node
+
+push_kept: (escaping into item inout head: ptr mut node,
+            escaping into head item: ptr mut node) -> none =
+    item.val.next = head
+    head = item
+end push_kept
+
+on_the_frame: (escaping seed: ptr mut node) -> none =
+    mut head: ptr mut node = seed
+    mut late: node = seed.val
+    push_kept(head, addr late)
+end on_the_frame

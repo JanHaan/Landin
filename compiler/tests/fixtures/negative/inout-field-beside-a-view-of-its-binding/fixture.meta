@@ -1,0 +1,9 @@
+class: negative
+summary: an `inout` field of a binding is refused while a binding views another field of it, and the note says that the view holds the whole binding because fields are not tracked apart
+program: program.ldn
+args: ../tests/fixtures/negative/inout-field-beside-a-view-of-its-binding/program.ldn
+expect: expected.txt
+codes: L0315
+constructs: 0800, 0830
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

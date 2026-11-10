@@ -1,0 +1,9 @@
+class: negative
+summary: D445 a frame node kept in a frame list declared before it is refused, and the note says the order: declare what the reference refers to before the storage that keeps it
+program: program.ldn
+args: ../tests/fixtures/negative/escaping-into-node-declared-after-the-list/program.ldn
+expect: expected.txt
+codes: L0314
+constructs: 0780, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1
