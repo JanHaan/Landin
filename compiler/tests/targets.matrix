@@ -222,6 +222,7 @@ negative/assembly-shorthand-after-operand | linux-x86-64, linux-arm64, darwin-ar
 negative/assembly-shorthand-hosted | linux-x86-64
 negative/assembly-synthetic-target | synthetic-32
 negative/assembly-template-names | cortex-m0
+negative/assembly-x86-64-prefixed-transfers | linux-x86-64
 negative/assigned-on-one-path-only | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assignment-as-expression | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assignment-to-a-parameter | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

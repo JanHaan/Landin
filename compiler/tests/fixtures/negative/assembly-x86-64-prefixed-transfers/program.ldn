@@ -1,0 +1,12 @@
+--  D1117: an ordinary block is straight-line behind a prefix too, and in
+--  the far forms. The last block is the control: a prefix on an
+--  instruction that transfers nothing is no transfer.
+f: (value: u64) -> none =
+    assembler.block("rep ret", in v: u64 at rax = value)
+    assembler.block("repz ret", in v: u64 at rax = value)
+    assembler.block("data16 ret", in v: u64 at rax = value)
+    assembler.block("notrack jmp *%rax", in v: u64 at rax = value)
+    assembler.block("bnd call *%rax", in v: u64 at rax = value)
+    assembler.block("lret", in v: u64 at rax = value)
+    assembler.block("lock addq $1, (%rax)", in v: u64 at rax = value)
+end f

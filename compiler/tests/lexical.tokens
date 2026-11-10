@@ -45199,6 +45199,124 @@ file negative/assembly-template-names/program.ldn tokens 81
   326 327 )
   328 331 end
   332 333 f
+file negative/assembly-x86-64-prefixed-transfers/program.ldn tokens 117
+  194 195 f
+  195 196 :
+  197 198 (
+  198 203 value
+  203 204 :
+  205 208 u64
+  208 209 )
+  210 212 ->
+  213 217 none
+  218 219 =
+  224 233 assembler
+  233 234 .
+  234 239 block
+  239 240 (
+  240 249 "rep ret"
+  249 250 ,
+  251 253 in
+  254 255 v
+  255 256 :
+  257 260 u64
+  261 263 at
+  264 267 rax
+  268 269 =
+  270 275 value
+  275 276 )
+  281 290 assembler
+  290 291 .
+  291 296 block
+  296 297 (
+  297 307 "repz ret"
+  307 308 ,
+  309 311 in
+  312 313 v
+  313 314 :
+  315 318 u64
+  319 321 at
+  322 325 rax
+  326 327 =
+  328 333 value
+  333 334 )
+  339 348 assembler
+  348 349 .
+  349 354 block
+  354 355 (
+  355 367 "data16 ret"
+  367 368 ,
+  369 371 in
+  372 373 v
+  373 374 :
+  375 378 u64
+  379 381 at
+  382 385 rax
+  386 387 =
+  388 393 value
+  393 394 )
+  399 408 assembler
+  408 409 .
+  409 414 block
+  414 415 (
+  415 434 "notrack jmp *%rax"
+  434 435 ,
+  436 438 in
+  439 440 v
+  440 441 :
+  442 445 u64
+  446 448 at
+  449 452 rax
+  453 454 =
+  455 460 value
+  460 461 )
+  466 475 assembler
+  475 476 .
+  476 481 block
+  481 482 (
+  482 498 "bnd call *%rax"
+  498 499 ,
+  500 502 in
+  503 504 v
+  504 505 :
+  506 509 u64
+  510 512 at
+  513 516 rax
+  517 518 =
+  519 524 value
+  524 525 )
+  530 539 assembler
+  539 540 .
+  540 545 block
+  545 546 (
+  546 552 "lret"
+  552 553 ,
+  554 556 in
+  557 558 v
+  558 559 :
+  560 563 u64
+  564 566 at
+  567 570 rax
+  571 572 =
+  573 578 value
+  578 579 )
+  584 593 assembler
+  593 594 .
+  594 599 block
+  599 600 (
+  600 622 "lock addq $1, (%rax)"
+  622 623 ,
+  624 626 in
+  627 628 v
+  628 629 :
+  630 633 u64
+  634 636 at
+  637 640 rax
+  641 642 =
+  643 648 value
+  648 649 )
+  650 653 end
+  654 655 f
 file negative/assigned-on-one-path-only/program.ldn tokens 24
   0 1 f
   1 2 :

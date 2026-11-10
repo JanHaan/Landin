@@ -2432,7 +2432,8 @@ begins with `#`. A number is the assembler's syntax and takes no digit
 separator; the refusal names the number to write. Directives, statement
 separators and labels
 are refused in an ordinary block, which is straight-line: it cannot branch,
-call, return or change control mode, except that Cortex-M0 `svc` enters the
+call, return or change control mode, on x86-64 behind an instruction prefix
+or in a far form either (D1117), except that Cortex-M0 `svc` enters the
 SVC exception handler at vector 11. That handler decides whether execution
 resumes after `svc`; this exception does not admit other control transfers
 in an ordinary block. At the default `armv6-m` level the
@@ -18299,6 +18300,33 @@ names the number without its separators. L0330 carries each refusal.
 `negative/assembly-arm64-statement-separator`, `targets/assembly comments
 are each target's own`, `cortex ABI/assembly comments are not emitted`, and
 RP2040's `boot2.ldn`, whose assembled stage keeps its bytes and checksum.
+
+### D1117 — On x86-64 the straight-line rule reads past instruction prefixes
+
+**The tour said** nothing; [1990] has an ordinary block unable to branch,
+call, return or change control mode, and the rule was applied to the first
+word of each line. On x86-64 an instruction may be written behind
+prefixes, each a word of its own, and the far transfers have mnemonics of
+their own, so `rep ret`, the two-byte return AMD's guides once recommended,
+`repz ret`, `data16 ret`, `notrack jmp`, `bnd call` and `lret` were
+accepted: a return in the middle of a routine, before the block's output
+is stored and before the frame is released.
+
+**Chosen:** on x86-64 the mnemonic the rule tests is the first word that
+is not a prefix: `rep`, `repe`, `repz`, `repne`, `repnz`, `lock`, `data16`,
+`data32`, `addr16`, `addr32`, `notrack`, `bnd`, `xacquire`, `xrelease`,
+`wait`, `fwait`, a segment override, a `rex` spelling or a `{...}`
+pseudo-prefix. The refused mnemonics gain `lret`, `ljmp`, `lcall`, and
+`xbegin` and `xabort`, which transfer to an abort address. A prefix on an
+instruction that transfers nothing, `lock addq`, stays accepted. The other
+targets have no prefix syntax and compare whole mnemonics as they did.
+
+**The alternative:** an allowlist of x86-64 instructions, as `armv6-m`
+has, which would close the class rather than its known members; it is a
+table of an instruction set the project does not otherwise keep.
+
+**Pinned by** `negative/assembly-x86-64-prefixed-transfers`, six refusals
+and the accepted prefix.
 
 ### D598 — A naked body on a hosted target may label what it branches to
 

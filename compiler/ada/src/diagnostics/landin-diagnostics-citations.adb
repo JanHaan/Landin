@@ -2024,6 +2024,9 @@ package body Landin.Diagnostics.Citations is
                "Assembly operands name their registers",
             when 597 =>
                "Assembly text takes its target's own line comment",
+            when 1117 =>
+               "On x86-64 the straight-line rule reads past instruction "
+               & "prefixes",
             when 598 =>
                "A naked body on a hosted target may label what it branch"
                & "es to",
@@ -3767,6 +3770,8 @@ package body Landin.Diagnostics.Citations is
             when 248 =>
                "Decisions: The toolchain, C and the machine",
             when 597 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1117 =>
                "Decisions: The toolchain, C and the machine",
             when 598 =>
                "Decisions: The toolchain, C and the machine",
@@ -5554,6 +5559,9 @@ package body Landin.Diagnostics.Citations is
             when 597 =>
                "https://www.701.dev/spec.html#d597-assembly-text-takes-i"
                & "ts-target-s-own-line-comment",
+            when 1117 =>
+               "https://www.701.dev/spec.html#d1117-on-x86-64-the-straig"
+               & "ht-line-rule-reads-past-instruction-prefixes",
             when 598 =>
                "https://www.701.dev/spec.html#d598-a-naked-body-on-a-hos"
                & "ted-target-may-label-what-it-branches-to",

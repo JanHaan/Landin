@@ -1,0 +1,60 @@
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:5:5
+  |
+5 |     assembler.block("rep ret", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:5:5
+  |
+5 |     assembler.block("rep ret", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:6:5
+  |
+6 |     assembler.block("repz ret", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:6:5
+  |
+6 |     assembler.block("repz ret", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:7:5
+  |
+7 |     assembler.block("data16 ret", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:7:5
+  |
+7 |     assembler.block("data16 ret", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:8:5
+  |
+8 |     assembler.block("notrack jmp *%rax", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:8:5
+  |
+8 |     assembler.block("notrack jmp *%rax", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:9:5
+  |
+9 |     assembler.block("bnd call *%rax", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:9:5
+  |
+9 |     assembler.block("bnd call *%rax", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:10:5
+   |
+10 |     assembler.block("lret", in v: u64 at rax = value)
+   |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn:10:5
+   |
+10 |     assembler.block("lret", in v: u64 at rax = value)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

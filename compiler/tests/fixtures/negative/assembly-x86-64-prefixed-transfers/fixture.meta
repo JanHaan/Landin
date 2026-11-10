@@ -1,0 +1,9 @@
+class: negative
+summary: D1117 an x86-64 ordinary block is refused a return, jump or call behind an instruction prefix and the far return, and a prefixed instruction that transfers nothing is accepted
+program: program.ldn
+expect: expected.txt
+args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-x86-64-prefixed-transfers/program.ldn
+codes: L0330, L0330, L0330, L0330, L0330, L0330
+status: 1
+constructs: 1630, 1990
+targets: linux-x86-64
