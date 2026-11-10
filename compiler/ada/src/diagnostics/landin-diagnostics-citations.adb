@@ -2885,6 +2885,8 @@ package body Landin.Diagnostics.Citations is
                "A loopback network in memory never waits",
             when 322 =>
                "SIGPIPE is ignored at start and restored in a child",
+            when 1125 =>
+               "SIGCHLD ignored at start is given its default back",
             when 323 =>
                "`platform/posix` gives sockets in the system's own recor"
                & "ds",
@@ -2995,6 +2997,8 @@ package body Landin.Diagnostics.Citations is
                & "s",
             when 425 =>
                "A list of bytes is the growable byte container",
+            when 1122 =>
+               "An append may be given the container's own bytes",
             when 442 =>
                "`platform/linux`'s path parameters take `ptr u8`",
             when 444 =>
@@ -3118,15 +3122,23 @@ package body Landin.Diagnostics.Citations is
             when 521 =>
                "A thread starts with the asynchronous signals blocked, a"
                & "nd a fault's own not",
+            when 1126 =>
+               "On Linux only a process's first thread watches a signal",
             when 527 =>
                "`io.write_format` writes a template and its values in on"
                & "e call",
+            when 1123 =>
+               "A builder's offsets count what `format_onto` has handed "
+               & "on",
             when 531 =>
                "A released compiler carries no debug information, which "
                & "ships beside it",
             when 571 =>
                "A round's yield calls nothing beneath it but its sweep, "
                & "its idler and its switch",
+            when 1124 =>
+               "A fibre that ends in a round hands its turn to the entry"
+               & " after it",
             when 572 =>
                "A check decides whether a handler fits from the frames i"
                & "t would emit",
@@ -4397,6 +4409,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The core library and the derived programs",
             when 322 =>
                "Decisions: The core library and the derived programs",
+            when 1125 =>
+               "Decisions: The core library and the derived programs",
             when 323 =>
                "Decisions: The core library and the derived programs",
             when 580 =>
@@ -4484,6 +4498,8 @@ package body Landin.Diagnostics.Citations is
             when 418 =>
                "Decisions: The core library and the derived programs",
             when 425 =>
+               "Decisions: The core library and the derived programs",
+            when 1122 =>
                "Decisions: The core library and the derived programs",
             when 442 =>
                "Decisions: The core library and the derived programs",
@@ -4581,11 +4597,17 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The core library and the derived programs",
             when 521 =>
                "Decisions: The core library and the derived programs",
+            when 1126 =>
+               "Decisions: The core library and the derived programs",
             when 527 =>
+               "Decisions: The core library and the derived programs",
+            when 1123 =>
                "Decisions: The core library and the derived programs",
             when 531 =>
                "Decisions: The core library and the derived programs",
             when 571 =>
+               "Decisions: The core library and the derived programs",
+            when 1124 =>
                "Decisions: The core library and the derived programs",
             when 572 =>
                "Decisions: The core library and the derived programs",
@@ -6561,6 +6583,9 @@ package body Landin.Diagnostics.Citations is
             when 322 =>
                "https://www.701.dev/spec.html#d322-sigpipe-is-ignored-at"
                & "-start-and-restored-in-a-child",
+            when 1125 =>
+               "https://www.701.dev/spec.html#d1125-sigchld-ignored-at-s"
+               & "tart-is-given-its-default-back",
             when 323 =>
                "https://www.701.dev/spec.html#d323-platform-posix-gives-"
                & "sockets-in-the-system-s-own-records",
@@ -6694,6 +6719,9 @@ package body Landin.Diagnostics.Citations is
             when 425 =>
                "https://www.701.dev/spec.html#d425-a-list-of-bytes-is-th"
                & "e-growable-byte-container",
+            when 1122 =>
+               "https://www.701.dev/spec.html#d1122-an-append-may-be-giv"
+               & "en-the-container-s-own-bytes",
             when 442 =>
                "https://www.701.dev/spec.html#d442-platform-linux-s-path"
                & "-parameters-take-ptr-u8",
@@ -6846,9 +6874,15 @@ package body Landin.Diagnostics.Citations is
             when 521 =>
                "https://www.701.dev/spec.html#d521-a-thread-starts-with-"
                & "the-asynchronous-signals-blocked-and-a-fault-s-own-not",
+            when 1126 =>
+               "https://www.701.dev/spec.html#d1126-on-linux-only-a-proc"
+               & "ess-s-first-thread-watches-a-signal",
             when 527 =>
                "https://www.701.dev/spec.html#d527-io-write-format-write"
                & "s-a-template-and-its-values-in-one-call",
+            when 1123 =>
+               "https://www.701.dev/spec.html#d1123-a-builder-s-offsets-"
+               & "count-what-format-onto-has-handed-on",
             when 531 =>
                "https://www.701.dev/spec.html#d531-a-released-compiler-c"
                & "arries-no-debug-information-which-ships-beside-it",
@@ -6856,6 +6890,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d571-a-round-s-yield-calls"
                & "-nothing-beneath-it-but-its-sweep-its-idler-and-its-swit"
                & "ch",
+            when 1124 =>
+               "https://www.701.dev/spec.html#d1124-a-fibre-that-ends-in"
+               & "-a-round-hands-its-turn-to-the-entry-after-it",
             when 572 =>
                "https://www.701.dev/spec.html#d572-a-check-decides-wheth"
                & "er-a-handler-fits-from-the-frames-it-would-emit",
