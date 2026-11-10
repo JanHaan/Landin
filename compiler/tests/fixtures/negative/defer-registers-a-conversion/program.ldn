@@ -1,0 +1,14 @@
+bad: atom
+
+metre: type = distinct i32
+
+held: (flag: bool) -> (result: i32) =
+    result = 42
+    defer i32(result)
+end held
+
+undone: (flag: bool) -> (result: i32) ! bad =
+    result = 42
+    undo metre(result)
+    fail bad when flag
+end undone

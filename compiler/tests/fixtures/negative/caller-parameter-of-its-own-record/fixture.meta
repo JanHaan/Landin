@@ -1,0 +1,9 @@
+class: negative
+summary: a function field whose `caller` parameter is the record itself is refused beside that use, not as a defect
+constructs: 0670, 0990
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0313, L0339, L0339
+expect: expected.txt
+args: ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn
+status: 1

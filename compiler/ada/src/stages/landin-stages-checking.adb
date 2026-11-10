@@ -885,6 +885,28 @@ package body Landin.Stages.Checking is
                      Because => "the constructed value",
                      Into    => Found);
                   Valid := False;
+               elsif Res.Role_Of (Meanings.all, Of_Tree, Argument)
+                    in Res.Field_Argument | Res.Payload_Argument
+                 and then Landin.Source.Names."="
+                   (Syn.Argument_Label (Of_Tree, Argument),
+                    Landin.Source.Names.No_Name)
+               then
+                  --  The grammar lets positional arguments lead a labelled
+                  --  list for a call's sake; a construction has no
+                  --  positions, so the value names no field.
+                  Bad.Report
+                    (Item    => Bad.Aggregate_Form,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Argument),
+                     Message => "a construction names the field each value"
+                                & " is for, and this value has no label",
+                     Note    => "[0700]: a struct or a variant case is built"
+                                & " from labelled fields, in any order;"
+                                & " write `field: value`",
+                     Related => Syn.Origin (Of_Tree, Node),
+                     Because => "the constructed value",
+                     Into    => Found);
+                  Valid := False;
                end if;
             end;
          end loop;
@@ -2762,6 +2784,10 @@ package body Landin.Stages.Checking is
       --  read there holds whatever was last written, not its image.
       In_Routine_Body : Boolean := False;
       Blocked_Error_Calls : Selection_Lists.Vector;
+      --  A recovered call with no signature: its `else` clause's error
+      --  name is never given a set, so a body that reads the name stays
+      --  open.  When nothing else can close the frontier, the call is why.
+      Unanswered_Recoveries : Selection_Lists.Vector;
       type Discovery_Parent is record
          Child, Parent : Landin.Checking.Routine_Instance_Id;
       end record;
@@ -4849,6 +4875,14 @@ package body Landin.Stages.Checking is
          function Invalid return Type_Descriptor
            is ((Kind => Ty.Ill_Typed, others => <>));
 
+         --  A use that asks for the layout of its own written type gives
+         --  its own place as the application.  That is no second place: the
+         --  report is then the unsubstituted one, beside the use.
+         Substituted : constant Boolean :=
+           Landin.Provenance.Is_Known (Application)
+           and then not Landin.Provenance."="
+             (Application, Syn.Origin (Of_Tree, At_Node));
+
          procedure Ensure_Nominal
            (Instance : Landin.Checking.Nominal_Type_Id;
             Valid    : out Boolean);
@@ -4863,7 +4897,7 @@ package body Landin.Stages.Checking is
          procedure Report_Recursion
            (Template_Tree : Syn.Tree; Struct_Node : Syn.Node_Id) is
          begin
-            if Landin.Provenance.Is_Known (Application) then
+            if Substituted then
                Bad.Report
                  (Item    => Bad.Recursive_Nominal_Value,
                   Source  => Application.Source,
@@ -5098,7 +5132,7 @@ package body Landin.Stages.Checking is
                   if Element_Bytes /= 0
                     and then Length > Maximum_Bytes / Element_Bytes
                   then
-                     if Landin.Provenance.Is_Known (Application) then
+                     if Substituted then
                         Bad.Report
                           (Item    => Bad.Literal_Out_Of_Range,
                            Source  => Application.Source,
@@ -5590,6 +5624,28 @@ package body Landin.Stages.Checking is
                         else Res.No_Declaration),
                      others => <>);
                elsif Count = 0 then
+                  if Pointers > 0 then
+                     Bad.Report
+                       (Item    => Bad.Type_Declaration_Form,
+                        Source  => (if Applied
+                                    then Application.Source
+                                    else Syn.Source_Of (Of_Tree)),
+                        Where   => (if Applied
+                                    then Application.Where
+                                    else Syn.Where (Of_Tree, Written)),
+                        Message => "this set of atoms names a pointer type"
+                                   & " and no atom",
+                        Note    => "[0940]/[0640]: an error set and an atom"
+                                   & " union name atoms, and [0480] admits"
+                                   & " one pointer type beside at least one",
+                        Related => (if Applied
+                                    then Syn.Origin (Of_Tree, Written)
+                                    else Context_Site (Of_Tree, Written)),
+                        Because => (if Applied
+                                    then "the template atom set"
+                                    else Context_Label (Of_Tree, Written)),
+                        Into    => Found);
+                  end if;
                   return Invalid;
                elsif Pointers = 1 and then Count > 1 then
                   --  [0480]/[1870]: two or more atoms beside the pointer
@@ -6077,14 +6133,26 @@ package body Landin.Stages.Checking is
                                       & " itself by value",
                            Note    => "D137: a finite nominal value layout"
                                       & " cannot include itself by value",
+                           --  An application that reaches itself through
+                           --  its own argument is the refused span, so the
+                           --  second place is then the template it applies.
                            Related =>
                              (if Landin.Provenance.Is_Known (Application)
+                                and then not Landin.Provenance."="
+                                  (This_Application,
+                                   Syn.Origin (Of_Tree, Written))
                               then Syn.Origin (Of_Tree, Written)
                               else Syn.Origin
                                 (Template.all,
                                  Syn.Declared_Type
                                    (Template.all, Declaration))),
-                           Because => "the recursive template field type",
+                           Because =>
+                             (if Landin.Provenance.Is_Known (Application)
+                                and then Landin.Provenance."="
+                                  (This_Application,
+                                   Syn.Origin (Of_Tree, Written))
+                              then "the template that holds it by value"
+                              else "the recursive template field type"),
                            Into    => Found);
                      else
                         --  Being reached while a struct layout is active does
@@ -8248,6 +8316,23 @@ package body Landin.Stages.Checking is
                   end;
                end loop;
 
+               --  One member that is a pointer type, an alias of one after
+               --  `!`, say, is no union at all.  Unreported, the signature
+               --  it stood in was dropped in silence.
+               if Valid and then Count = 0 and then Pointers > 0 then
+                  Bad.Report
+                    (Item    => Bad.Type_Declaration_Form,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Written),
+                     Message => "this set of atoms names a pointer type and"
+                                & " no atom",
+                     Note    => "[0940]/[0640]: an error set and an atom"
+                                & " union name atoms, and [0480] admits one"
+                                & " pointer type beside at least one",
+                     Related => Context_Site (Of_Tree, Written),
+                     Because => Context_Label (Of_Tree, Written),
+                     Into    => Found);
+               end if;
                if not Valid or else Count = 0 then
                   return Ty.Ill_Typed;
                end if;
@@ -8575,6 +8660,17 @@ package body Landin.Stages.Checking is
                end if;
                if Composition_Refused
                  (Of_Tree, Base, "a distinct representation")
+               then
+                  return Ty.Ill_Typed;
+               end if;
+               --  A base struct that was refused, for a field type or for
+               --  holding this type by value, has no layout to repeat, and
+               --  its refusal owns that: an array element's rule.
+               if Held = Ty.Aggregate
+                 and then Descriptor.Nominal
+                   /= Landin.Checking.No_Nominal_Type
+                 and then not Landin.Checking.Has_Layout
+                   (Types.all, Descriptor.Nominal)
                then
                   return Ty.Ill_Typed;
                end if;
@@ -10108,6 +10204,10 @@ package body Landin.Stages.Checking is
             declare
                Written : constant Syn.Node_Id :=
                  Syn.Error_Set_Of (Of_Tree, Node);
+               Set_Kind : constant Ty.Type_Kind :=
+                 (if Syn.Kind (Of_Tree, Written) = Syn.Inferred_Error_Set
+                  then Ty.Undecided else Type_At (Of_Tree, Written));
+               Set_Is_Atoms : constant Boolean := Set_Kind = Ty.Atom_Value;
             begin
                if Syn.Kind (Of_Tree, Written) = Syn.Inferred_Error_Set then
                   if Syn.Kind (Of_Tree, Node) /= Syn.Function_Declaration
@@ -10128,7 +10228,7 @@ package body Landin.Stages.Checking is
                   else
                      Error_Form := Landin.Checking.Inferred;
                   end if;
-               elsif Type_At (Of_Tree, Written) = Ty.Atom_Value then
+               elsif Set_Is_Atoms then
                   Errors := Landin.Checking.Atom_Set_Of
                     (Types.all, Of_Tree, Written);
                   Error_Form := Landin.Checking.Concrete;
@@ -10137,6 +10237,25 @@ package body Landin.Stages.Checking is
                   Valid := Valid
                     and then Errors /= Landin.Checking.No_Atom_Set;
                else
+                  --  D189's pointer beside atoms is still a type the union
+                  --  syntax spells, and an alias reaches one unseen.  It is
+                  --  a value's type, never what a routine fails with; left
+                  --  unreported, the signature was dropped in silence and
+                  --  lowering met the routine without one.
+                  if Set_Kind /= Ty.Ill_Typed then
+                     Bad.Report
+                       (Item    => Bad.Type_Declaration_Form,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Written),
+                        Message => "an error set holds atoms only, and this"
+                                   & " one holds a pointer type",
+                        Note    => "[0940]: a routine fails with an atom of"
+                                   & " its declared set; [0480]'s pointer"
+                                   & " beside atoms is the type of a value",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "the signature it is written in",
+                        Into    => Found);
+                  end if;
                   Valid := False;
                end if;
             end;
@@ -11813,12 +11932,18 @@ package body Landin.Stages.Checking is
                                      & " is `i32`, so convert it to the"
                                      & " type meant"
                                 else ""),
+                  --  One argument may decide a formal twice, and is then
+                  --  no second place.
                   Related =>
                     (if Landin.Provenance.Is_Known (First)
+                       and then not Landin.Provenance."="
+                         (First, Syn.Origin (Caller_Tree, Argument))
                      then First
                      else Syn.Origin (Template_Tree.all, Formal_Node)),
                   Because =>
                     (if Landin.Provenance.Is_Known (First)
+                       and then not Landin.Provenance."="
+                         (First, Syn.Origin (Caller_Tree, Argument))
                      then "this decided it first"
                      else "it is declared here"),
                   Into    => Found);
@@ -12172,7 +12297,6 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
                end;
-               return 0;
             end if;
 
             if Kind = Syn.Negation then
@@ -12259,7 +12383,20 @@ package body Landin.Stages.Checking is
                   end case;
                end;
             end if;
-            return 0;
+
+            --  What is left names no formal this call binds: D438's
+            --  immutable module integer, a compiler fact, or a form D136
+            --  refuses.  The one evaluator folds the first two.  The
+            --  refusal was reported once, at the routine's signature, and
+            --  a call is not a second source error; left as a silent
+            --  mismatch with nothing reported, the call reached lowering
+            --  unmatched.
+            if Template_Invalid (Positive (Template)) then
+               return 0;
+            end if;
+            return Fixed_Bound
+              (Pattern_Tree, Pattern, Bound, Landin.Provenance.No_Origin,
+               Valid, Known);
          end Evaluate_Pattern_Bound;
 
          function Match_Type_Pattern
@@ -17299,11 +17436,18 @@ package body Landin.Stages.Checking is
                   Type_At_Index := Index;
                   exit;
                end if;
-               --  A name resolution refused was reported there.
+               --  A name resolution refused was reported there.  A
+               --  module's name is bound to nothing itself and is no
+               --  refusal when [1420]'s `module.type` after it resolved.
                if Res.Verdict_Of (Meanings.all, Of_Tree, Chain (Index))
                     /= Res.Bound
                  and then Syn.Kind (Of_Tree, Chain (Index))
                    = Syn.Name_Reference
+                 and then not
+                   (Index < Depth
+                    and then Res.Verdict_Of
+                      (Meanings.all, Of_Tree, Chain (Index + 1))
+                        = Res.Bound)
                then
                   return False;
                end if;
@@ -23003,8 +23147,13 @@ package body Landin.Stages.Checking is
          Where : Syn.Node_Id := Node;
       begin
          loop
-            if Syn.Kind (Of_Tree, Where)
-                 in Syn.Member_Selection | Syn.Element_Index
+            --  [1420]: `module.name` is the declaration it names, so a
+            --  chain starts there and not at the namespace before it.
+            if Syn.Kind (Of_Tree, Where) = Syn.Element_Index
+              or else
+                (Syn.Kind (Of_Tree, Where) = Syn.Member_Selection
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Where)
+                   /= Res.Bound)
             then
                Where := Syn.Target_Of (Of_Tree, Where);
             else
@@ -23183,7 +23332,8 @@ package body Landin.Stages.Checking is
       is
          Where : constant Syn.Node_Id := Chain_Root_Of (Of_Tree, Node);
       begin
-         return Syn.Kind (Of_Tree, Where) = Syn.Name_Reference
+         return Syn.Kind (Of_Tree, Where)
+                  in Syn.Name_Reference | Syn.Member_Selection
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) = Res.Bound;
       end Chain_Starts_At_A_Name;
 
@@ -23192,7 +23342,8 @@ package body Landin.Stages.Checking is
       function Root_Names_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
         is (Is_Aggregate_Alias_Name (Of_Tree, Node)
-            or else (Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+            or else (Syn.Kind (Of_Tree, Node)
+                       in Syn.Name_Reference | Syn.Member_Selection
                      and then Res.Verdict_Of
                        (Meanings.all, Of_Tree, Node) = Res.Bound
                      and then Res.Sort_Of
@@ -23206,7 +23357,11 @@ package body Landin.Stages.Checking is
       is
          Where : Syn.Node_Id := Node;
       begin
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+         --  [1420]: `module.name` is where a chain starts, not a field.
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where)
+             /= Res.Bound
+         loop
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
          return Root_Names_Storage (Of_Tree, Where);
@@ -26151,6 +26306,42 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                   return Kept (Ty.Ill_Typed);
                end if;
+               --  D1100: a type formal stands for a type in a type
+               --  position only.  Applied, it would be a conversion or a
+               --  construction whose rule changes with the actual, and it
+               --  has no declaration with a value to ask for one.
+               if Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                    = Syn.Name_Reference
+                 and then Res.Verdict_Of
+                   (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                     = Res.Bound
+                 and then Res.Sort_Of
+                   (Meanings.all,
+                    Res.Bound_To
+                      (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
+                     = Res.Type_Parameter
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where
+                       (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
+                     Message => "`"
+                                & Spelled
+                                  (Syn.Name
+                                     (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
+                                & "` is a type parameter, which is not"
+                                & " applied to a value",
+                     Note    => "D1100: a conversion or construction names"
+                                & " a declared type; give a value the"
+                                & " parameter's type through a typed"
+                                & " binding, `zero: t = 0`, or a concept"
+                                & " entry",
+                     Related => Syn.Origin (Of_Tree, Node),
+                     Because => "this application",
+                     Into    => Found);
+                  return Kept (Ty.Ill_Typed);
+               end if;
                declare
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
@@ -27046,7 +27237,8 @@ package body Landin.Stages.Checking is
                   Addressable : constant Boolean :=
                     Syn.Kind (Of_Tree, Place)
                       not in Syn.Inclusive_Slice | Syn.Half_Open_Slice
-                    and then Syn.Kind (Of_Tree, Root) = Syn.Name_Reference
+                    and then Syn.Kind (Of_Tree, Root)
+                      in Syn.Name_Reference | Syn.Member_Selection
                     and then Res.Verdict_Of
                       (Meanings.all, Of_Tree, Root) = Res.Bound
                     and then Res.Sort_Of
@@ -27989,7 +28181,8 @@ package body Landin.Stages.Checking is
                  = Ty.Fixed_Array
                then
                   Landin.Checking.Note_Lent_Array
-                    (Types.all, Of_Tree, Node, Count);
+                    (Types.all, Of_Tree, Node,
+                     Landin.Checking.Element_Count (Count));
                end if;
             end;
             return;
@@ -28039,8 +28232,7 @@ package body Landin.Stages.Checking is
             end if;
             Landin.Checking.Note_Lent_Array
               (Types.all, Of_Tree, Node,
-               Natural (Landin.Checking.Array_Length
-                          (Types.all, Of_Tree, Node)));
+               Landin.Checking.Array_Length (Types.all, Of_Tree, Node));
          end;
       end Check_Lent_Array;
 
@@ -33304,10 +33496,34 @@ package body Landin.Stages.Checking is
                --  written, but leave every definite-assignment read to the
                --  selected exit where its callee and arguments run.
                declare
-                  Got : constant Ty.Type_Kind :=
-                    Synthesise (Of_Tree, Syn.Cleanup_Call (Of_Tree, Node));
+                  Call : constant Syn.Node_Id :=
+                    Syn.Cleanup_Call (Of_Tree, Node);
+                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Call);
                begin
-                  pragma Unreferenced (Got);
+                  --  A conversion is spelled as a call and is none: it has
+                  --  no routine to run at the exit.  Unreported, it reached
+                  --  lowering as a call without a match.
+                  if Got /= Ty.Ill_Typed
+                    and then Syn.Kind (Of_Tree, Call) = Syn.Call
+                    and then Effective_Call_Signature (Of_Tree, Call)
+                      = Landin.Checking.No_Signature
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Call),
+                        Message =>
+                          (if Syn.Kind (Of_Tree, Node) = Syn.Defer_Statement
+                           then "`defer`" else "`undo`")
+                          & " registers a call, and this is a conversion",
+                        Note    => "[1100]/[1110]: the registered call runs"
+                                   & " when its block is left, and a"
+                                   & " conversion runs nothing",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this registration",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Call);
+                  end if;
                end;
 
             when Syn.Fail_Statement =>
@@ -34557,6 +34773,14 @@ package body Landin.Stages.Checking is
       is
       begin
          if Node = Syn.No_Node then
+            return;
+         end if;
+
+         --  [1940]'s module boundary runs before this one and may already
+         --  have refused the value, an address in a module image, say.  A
+         --  refused value has its one report and is not typed again.
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node) = Ty.Ill_Typed
+         then
             return;
          end if;
 
@@ -38392,6 +38616,73 @@ package body Landin.Stages.Checking is
             end if;
          end Check_Image_Scalar;
 
+         --  [1940] for the address of `ptr(integer)`: [1975] converts it to
+         --  the target's usize, and an image has no moment in which that
+         --  conversion can trap.  A fold the operand's type or usize does
+         --  not hold is refused here; the backend once met it as a defect.
+         procedure Check_Image_Pointer (Each : Syn.Node_Id);
+
+         procedure Check_Image_Pointer (Each : Syn.Node_Id)
+         is
+            Address_Held       : Ty.Folded;
+            Address_Known      : Boolean;
+            Address_Overflowed : Boolean;
+         begin
+            if Each = Syn.No_Node
+              or else Syn.Kind (Of_Tree, Each) /= Syn.Pointer_Conversion
+              or else Landin.Checking.Type_Of (Types.all, Of_Tree, Each)
+                = Ty.Ill_Typed
+            then
+               return;
+            end if;
+            declare
+               Address : constant Syn.Node_Id :=
+                 Syn.Operand_Of (Of_Tree, Each);
+               Got : constant Ty.Type_Kind :=
+                 Landin.Checking.Type_Of (Types.all, Of_Tree, Address);
+            begin
+               if Got not in Ty.Integer_Name then
+                  return;
+               end if;
+               Fold (Of_Tree, Address, 0, Address_Held,
+                     Address_Known, Address_Overflowed);
+               if Address_Overflowed then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Address),
+                     Message => "this address's fold overflows the widest"
+                                & " value the compiler holds",
+                     Note    => "[1940]: a module value has no moment in"
+                                & " which to trap, so a fold whose result"
+                                & " walks past the compiler's widest kernel"
+                                & " value is refused",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Each);
+               elsif Address_Known
+                 and then not
+                   (Ty.Holds (Address_Held, Got, Facts)
+                    and then Ty.Holds (Address_Held, Ty.Usize, Facts))
+               then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Address),
+                     Message => "this address works out to "
+                                & Written (Address_Held) & ", and no "
+                                & (if Ty.Holds (Address_Held, Got, Facts)
+                                   then Shown (Ty.Usize) else Shown (Got))
+                                & " holds it",
+                     Note    => "[1940]/[1975]: a pointer is made from an"
+                                & " address the target's usize holds, and a"
+                                & " module value has no moment in which to"
+                                & " trap",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Each);
+               end if;
+            end;
+         end Check_Image_Pointer;
+
          procedure Check_Image_Field
            (Each : Syn.Node_Id; Shape : Landin.Checking.Field_Shape)
          is
@@ -38420,7 +38711,7 @@ package body Landin.Stages.Checking is
                      Check_Struct_Image (Each, Shape.Nominal);
                   end if;
                when Landin.Checking.Reference_Field =>
-                  null;
+                  Check_Image_Pointer (Each);
                when Landin.Checking.Variant_Field =>
                   raise Landin.Compiler_Defect with
                     "a variant became a standalone image field";
@@ -38650,6 +38941,11 @@ package body Landin.Stages.Checking is
                  /= Landin.Checking.No_Nominal_Type)
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
                     = Ty.Aggregate
+           --  A struct whose field type was refused has no layout to hold
+           --  an image to, and the refusal already said why.
+           and then Landin.Checking.Has_Layout
+             (Types.all,
+              Landin.Checking.Nominal_Of (Types.all, Of_Tree, Value))
          then
             Check_Struct_Image
               (Value, Landin.Checking.Nominal_Of (Types.all, Of_Tree, Value));
@@ -38709,6 +39005,9 @@ package body Landin.Stages.Checking is
                --  unfolded, `x: bool = x` reached the backend unreported.
                Fold (Of_Tree, Value, 0, Held, Known, Overflowed);
             end if;
+            return;
+         elsif Wanted = Ty.Pointer_Value then
+            Check_Image_Pointer (Value);
             return;
          elsif Wanted not in Ty.Integer_Name then
             return;
@@ -39433,6 +39732,15 @@ package body Landin.Stages.Checking is
            and then Syn.Assignment_Operation (Of_Tree, Node)
              = Landin.Tokens.Plain_Assignment
            and then Packed_Place (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+           --  A target the expression pass refused, a field of a place that
+           --  may not be written, has no field fact, and its value nothing
+           --  to be held to.
+           and then Landin.Checking.Field_Index
+             (Types.all, Of_Tree,
+              (if Syn.Kind (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                    = Syn.Element_Index
+               then Syn.Target_Of (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+               else Syn.Target_Of (Of_Tree, Node))) > 0
          then
             declare
                Place : Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
@@ -40330,6 +40638,19 @@ package body Landin.Stages.Checking is
                               end if;
                            end;
                         end if;
+                        if Signature = Landin.Checking.No_Signature then
+                           declare
+                              Pending : constant Pending_Selection :=
+                                (Syn.Source_Of (Of_Tree), Node,
+                                 Landin.Checking.Current_Routine_View
+                                   (Types.all));
+                           begin
+                              if not Unanswered_Recoveries.Contains (Pending)
+                              then
+                                 Unanswered_Recoveries.Append (Pending);
+                              end if;
+                           end;
+                        end if;
                         Scan
                           (Of_Tree, Syn.Else_Body (Of_Tree, Recovery),
                            Caller);
@@ -40408,6 +40729,7 @@ package body Landin.Stages.Checking is
          Complete := True;
          Progress := False;
          Blocked_Error_Calls.Clear;
+         Unanswered_Recoveries.Clear;
          if Signature_Total = 0 then
             return;
          end if;
@@ -42411,6 +42733,10 @@ package body Landin.Stages.Checking is
                --  when a call matches it, and a name that names nothing
                --  only fails that match, so report both here, as a
                --  non-generic signature's would be, called or not.
+               Formals : Formal_Actual_Array
+                 (1 .. Syn.Generic_Formal_Count (Of_Tree.all, Node)) :=
+                   [others => (others => <>)];
+
                procedure Check_Applications (Written : Syn.Node_Id);
 
                procedure Check_Applications (Written : Syn.Node_Id) is
@@ -42423,6 +42749,21 @@ package body Landin.Stages.Checking is
                         Check_Applications
                           (Syn.Referenced_Type (Of_Tree.all, Written));
                      when Syn.Array_Type =>
+                        --  D136: a bound is validated where it is declared,
+                        --  its fixed formals unknown, as a type template's
+                        --  is.  A call then meets no unreported form.
+                        declare
+                           Valid, Known : Boolean;
+                           Count : constant Ty.Folded := Fixed_Bound
+                             (Of_Tree.all,
+                              Syn.Bound_Of (Of_Tree.all, Written), Formals,
+                              Landin.Provenance.No_Origin, Valid, Known);
+                           pragma Unreferenced (Count, Known);
+                        begin
+                           if not Valid then
+                              Template_Invalid (Positive (Id)) := True;
+                           end if;
+                        end;
                         Check_Applications
                           (Syn.Element_Of (Of_Tree.all, Written));
                      when Syn.Type_Reference =>
@@ -42486,6 +42827,11 @@ package body Landin.Stages.Checking is
                   end case;
                end Check_Applications;
             begin
+               for Index in Formals'Range loop
+                  Formals (Index).Formal := Declaration_At
+                    (Syn.Source_Of (Of_Tree.all),
+                     Syn.Nth_Generic_Formal (Of_Tree.all, Node, Index));
+               end loop;
                for Index in 1 .. Syn.Parameter_Count (Of_Tree.all, Node) loop
                   Check_Applications
                     (Syn.Declared_Type
@@ -42789,6 +43135,37 @@ package body Landin.Stages.Checking is
                   if Landin.Diagnostics.Has_Errors (Found)
                     or else Landin.Diagnostics.Has_Errors (Report (Context))
                   then
+                     goto Publish_Diagnostics;
+                  end if;
+                  --  Nothing is reported yet, and a recovered call that
+                  --  never had a signature, a value that is no function
+                  --  called with an `else` that reads its error, keeps the
+                  --  frontier open for good.  The ordinary check of that
+                  --  call is what refuses it, so it is asked now, the body
+                  --  checks that would ask it being past this frontier.
+                  for Pending of Unanswered_Recoveries loop
+                     declare
+                        Of_Tree : constant not null access constant
+                          Syn.Tree := Tree_For (Pending.Source);
+                        Previous : constant
+                          Landin.Checking.Routine_Instance_Id :=
+                            Landin.Checking.Current_Routine_View (Types.all);
+                     begin
+                        Restore_Routine_View (Pending.View);
+                        declare
+                           Got : constant Ty.Type_Kind :=
+                             Synthesise (Of_Tree.all, Pending.Node);
+                        begin
+                           pragma Unreferenced (Got);
+                        end;
+                        Restore_Routine_View (Previous);
+                     exception
+                        when others =>
+                           Restore_Failed_Routine_View (Previous);
+                           raise;
+                     end;
+                  end loop;
+                  if Landin.Diagnostics.Has_Errors (Found) then
                      goto Publish_Diagnostics;
                   end if;
                   raise Landin.Compiler_Defect with

@@ -1,0 +1,18 @@
+fill: (fixed count: u32, inout data: [count << 1]u8) -> none =
+end fill
+
+spread: (item: type, fixed count: u32, value: [count | 2]item) -> none =
+end spread
+
+runs: (fixed count: u32, tag: [count]u8, data: [count * width()]u8) -> none =
+end runs
+
+width: () -> (w: u32) =
+    w = 2
+end width
+
+use: () -> none =
+    mut buffer: [4]u8 = zeroed
+    fill(buffer)
+    spread(buffer)
+end use

@@ -1,0 +1,16 @@
+unavailable: atom
+
+table: [2]i32 = [1, 2]
+
+by_name: (count: i32) -> (answer: i32) ! unavailable =
+    result: i32 = count() else (problem)
+        fail problem
+    end
+    answer = result
+end by_name
+
+by_element: () -> (answer: i32) ! unavailable =
+    answer = table[0]() else (problem)
+        fail problem
+    end
+end by_element

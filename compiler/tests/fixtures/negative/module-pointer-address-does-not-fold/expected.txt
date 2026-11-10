@@ -1,0 +1,30 @@
+error[L0300]: this address works out to -8, and no `usize` holds it
+  --> ../tests/fixtures/negative/module-pointer-address-does-not-fold/program.ldn:10:27
+   |
+10 | status: ptr mut u32 = ptr(base - back)
+   |                           ^^^^^^^^^^^
+  = note: [1940]/[1975]: a pointer is made from an address the target's usize holds, and a module value has no moment in which to trap
+error[L0300]: this address's fold overflows the widest value the compiler holds
+  --> ../tests/fixtures/negative/module-pointer-address-does-not-fold/program.ldn:11:24
+   |
+11 | top: ptr mut u32 = ptr(page * page)
+   |                        ^^^^^^^^^^^
+  = note: [1940]: a module value has no moment in which to trap, so a fold whose result walks past the compiler's widest kernel value is refused
+error[L0300]: this address works out to 400, and no `u8` holds it
+  --> ../tests/fixtures/negative/module-pointer-address-does-not-fold/program.ldn:12:27
+   |
+12 | narrow: ptr mut u32 = ptr(small + small)
+   |                           ^^^^^^^^^^^^^
+  = note: [1940]/[1975]: a pointer is made from an address the target's usize holds, and a module value has no moment in which to trap
+error[L0300]: this address works out to -8, and no `usize` holds it
+  --> ../tests/fixtures/negative/module-pointer-address-does-not-fold/program.ldn:13:41
+   |
+13 | ports: [2]ptr mut u32 = [ptr(base), ptr(base - back)]
+   |                                         ^^^^^^^^^^^
+  = note: [1940]/[1975]: a pointer is made from an address the target's usize holds, and a module value has no moment in which to trap
+error[L0300]: this address works out to -8, and no `usize` holds it
+  --> ../tests/fixtures/negative/module-pointer-address-does-not-fold/program.ldn:14:23
+   |
+14 | held: cell = (at: ptr(back - base - 16))
+   |                       ^^^^^^^^^^^^^^^^
+  = note: [1940]/[1975]: a pointer is made from an address the target's usize holds, and a module value has no moment in which to trap

@@ -1,0 +1,20 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+shape: type = struct
+    kind: variant
+        dot |
+        box: (wide: u32, high: u32)
+    end kind
+end shape
+
+build: (at: usize) -> (r: i32) =
+    p: point = point(3, y: 4)
+    mut cells: [2]point = zeroed
+    cells[at] = point(3, y: 4)
+    mut s: shape = shape(kind: dot)
+    s.kind = box(2, high: 3)
+    r = p.x + cells[0].x
+end build

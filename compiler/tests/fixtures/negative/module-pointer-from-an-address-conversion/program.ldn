@@ -1,0 +1,2 @@
+mut value: u32 = 1
+raw: ptr mut u32 = ptr(usize(addr value))

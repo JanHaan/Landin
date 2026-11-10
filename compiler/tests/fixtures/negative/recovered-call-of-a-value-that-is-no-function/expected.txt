@@ -1,0 +1,20 @@
+error[L0301]: this value is not a function, so this is not a call
+  --> ../tests/fixtures/negative/recovered-call-of-a-value-that-is-no-function/program.ldn:6:19
+  |
+6 |     result: i32 = count() else (problem)
+  |                   ^^^^^
+  --> ../tests/fixtures/negative/recovered-call-of-a-value-that-is-no-function/program.ldn:6:19
+  |
+6 |     result: i32 = count() else (problem)
+  |                   ^^^^^^^^^^^^^^^^^^^^^^ this call
+  = note: [1920]: a callee has a function type
+error[L0301]: this value is not a function, so this is not a call
+  --> ../tests/fixtures/negative/recovered-call-of-a-value-that-is-no-function/program.ldn:13:14
+   |
+13 |     answer = table[0]() else (problem)
+   |              ^^^^^^^^
+  --> ../tests/fixtures/negative/recovered-call-of-a-value-that-is-no-function/program.ldn:13:14
+   |
+13 |     answer = table[0]() else (problem)
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^ this call
+  = note: [1920]: a callee has a function type

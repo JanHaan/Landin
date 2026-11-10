@@ -1,0 +1,24 @@
+width: u32 = 2
+spare: u32 = width - 1
+
+-- D136/D438: a bound in a generic signature folds an immutable module
+-- integer beside its fixed formals, as any other bound does.
+fill: (fixed count: u32, tag: [count]u8,
+       inout data: [count * width + spare]u8) -> (wrote: usize) =
+    for at in 0..<lenof data do
+        data[at] = tag[at % lenof tag] + u8(at)
+    end for
+    wrote = lenof data
+end fill
+
+public main: () -> (code: i32) =
+    mut buffer: [5]u8 = zeroed
+    tag: [2]u8 = [10, 20]
+    wrote: usize = fill(tag, buffer)
+
+    code = 1
+    if wrote == 5 and buffer[0] == 10 and buffer[1] == 21 and buffer[4] == 14
+    then
+        code = 42
+    end if
+end main

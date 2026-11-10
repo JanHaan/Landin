@@ -1,0 +1,9 @@
+class: negative
+summary: `defer` and `undo` register a call: a conversion, which is spelled as one, is refused where it is written
+constructs: 0700, 1100, 1110
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0301, L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/defer-registers-a-conversion/program.ldn
+status: 1

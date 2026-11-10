@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D85's `inout` array payload takes a compound assignment at a known index, for a module, a local and an `inout` parameter subject
+program: main.ldn
+status: 42
+constructs: 0340, 0520, 0690, 1210, 1810, 1900
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

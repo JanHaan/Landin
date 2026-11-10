@@ -1,0 +1,6 @@
+error[L0201]: `kind` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/distinct-of-a-refused-struct/program.ldn:2:8
+  |
+2 |     x: kind
+  |        ^^^^
+  = note: [1860]: a name that names nothing is refused

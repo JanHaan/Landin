@@ -1,0 +1,13 @@
+point: type = struct
+    x: kind
+end point
+
+hidden_point: type = distinct point
+stored_point: hidden_point = hidden_point((x: 40))
+
+twice: type = distinct hidden_point
+
+use: (given: hidden_point) -> none =
+    local: twice = zeroed
+    several: [2]hidden_point = zeroed
+end use

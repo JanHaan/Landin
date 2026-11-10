@@ -1,0 +1,25 @@
+-- D18: an array is as long as the target's usize addresses, so its length
+-- and a known index into it are counted as the target counts them.
+mut samples: [3000000000]u8
+mut exact: [2147483647]u8
+mut pairs: [3000000000][2]u8
+
+total: (values: []u8) -> (sum: u64) =
+    sum = 0
+    for value in values do
+        sum += u64(value)
+    end for
+end total
+
+clear: (values: []mut u8) -> none =
+    for at in 0..<lenof values do
+        values[at] = 0
+    end for
+end clear
+
+use: () -> (sum: u64) =
+    clear(samples)
+    pairs[2999999999][1] = 1
+    pairs[2147483648][0] += 1
+    sum = total(samples) + total(exact) + u64(pairs[2999999999][1])
+end use

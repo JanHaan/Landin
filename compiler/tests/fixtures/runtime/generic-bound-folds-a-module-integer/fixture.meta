@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D136's bound in a generic signature folds D438's immutable module integer beside its fixed formals, and a call matches it
+program: main.ldn
+status: 42
+constructs: 0370, 0520, 1290, 1920
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

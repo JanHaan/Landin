@@ -1,0 +1,18 @@
+error[L0305]: this operator needs an operand width and is not available in a target-independent fixed expression
+  --> ../tests/fixtures/negative/generic-signature-bound-operator/program.ldn:1:39
+  |
+1 | fill: (fixed count: u32, inout data: [count << 1]u8) -> none =
+  |                                       ^^^^^^^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: this operator needs an operand width and is not available in a target-independent fixed expression
+  --> ../tests/fixtures/negative/generic-signature-bound-operator/program.ldn:4:48
+  |
+4 | spread: (item: type, fixed count: u32, value: [count | 2]item) -> none =
+  |                                                ^^^^^^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: a user call is not a fixed expression and its body is not executed
+  --> ../tests/fixtures/negative/generic-signature-bound-operator/program.ldn:7:57
+  |
+7 | runs: (fixed count: u32, tag: [count]u8, data: [count * width()]u8) -> none =
+  |                                                         ^^^^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs

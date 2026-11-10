@@ -1,0 +1,9 @@
+class: negative
+summary: a module pointer converted from the address of storage is [1940]'s one refusal
+constructs: 0430, 0470, 1940
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0305
+expect: expected.txt
+args: ../tests/fixtures/negative/module-pointer-from-an-address-conversion/program.ldn
+status: 1

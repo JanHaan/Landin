@@ -1,0 +1,10 @@
+error[L0313]: this nominal instance would contain itself by value
+  --> ../tests/fixtures/negative/nominal-holds-itself-through-its-own-argument/program.ldn:7:15
+  |
+7 |     children: box(node)
+  |               ^^^^^^^^^
+  --> ../tests/fixtures/negative/nominal-holds-itself-through-its-own-argument/program.ldn:1:23
+  |
+1 | box: type (t: type) = struct
+  |                       ^^^^^^ the template that holds it by value
+  = note: D137: a finite nominal value layout cannot include itself by value

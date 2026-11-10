@@ -1,0 +1,19 @@
+wrong: atom
+
+step: (n: u32) -> (ok: bool) ! wrong =
+    fail wrong when n == 0
+    ok = true
+end step
+
+ready: () -> (ok: bool) =
+    ok = true
+end ready
+
+run: () -> none ! wrong =
+    try step(1) or ready()
+    try step(2)
+end run
+
+sum: () -> none ! wrong =
+    try step(1) == true
+end sum

@@ -1,0 +1,5 @@
+class: positive
+summary: D18's array of 2**31 - 1 elements or more lends a slice of its whole length, and takes a known index into a nested element
+constructs: 0520, 0570, 1810, 1920
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

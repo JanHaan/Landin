@@ -1,0 +1,27 @@
+control: type = layout(packed) struct
+    enable: bool at 0
+    divider: u12 at 16..27
+end control
+
+held: control = zeroed
+
+set_parameter: (m: control) -> none =
+    m.enable = true
+end set_parameter
+
+set_local: () -> none =
+    m: control = zeroed
+    m.divider = 3
+end set_local
+
+set_module: () -> none =
+    held.enable = true
+end set_module
+
+set_target: (q: ptr control) -> none =
+    q.val.enable = true
+end set_target
+
+set_element: (xs: []control) -> none =
+    xs[0].divider = 1
+end set_element

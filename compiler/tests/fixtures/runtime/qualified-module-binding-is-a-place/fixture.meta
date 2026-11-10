@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a `public mut` binding named through its module is assigned, updated, counted and addressed as its plain name is, and `offsetof` measures a qualified struct
+program: main.ldn
+root: .
+status: 42
+constructs: 0430, 1420, 1810, 1900
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,49 @@
+import store
+
+bump: (inout value: u32) -> none =
+    value += 1
+end bump
+
+public main: () -> (code: i32) =
+    -- [1420]: `store.state` is the binding `state`, so it is assigned,
+    -- updated, counted and addressed as its plain name is.
+    store.state = 5
+    store.state += 10
+    inc store.state
+    store.state <<= 1
+    dec store.state
+    bump(store.state)
+    store.flags |= 6
+
+    whole := addr store.state
+    whole.val += 3
+    part := addr store.both.b
+    part.val = 7
+    cell := addr store.cells[1]
+    cell.val += 40
+    record := addr store.both
+    record.val.a += 9
+
+    -- A variant part of a qualified binding is matched where it stands.
+    store.form.kind = store.row(values: [1, 2, 3])
+    match store.form.kind
+        store.dot: _ = 0
+        store.row(inout values): values[1] += 40
+    end match
+    mut seen: u8 = 0
+    match store.form.kind
+        store.dot: _ = 0
+        store.row(values): seen = values[1]
+    end match
+
+    length: usize = offsetof store.header.length
+    nested: usize = offsetof store.header.body.b
+
+    code = 1
+    if store.read() == 35 and store.state == 35 and store.flags == 7
+      and store.both.a == 10 and store.both.b == 7 and store.cells[1] == 42
+      and length == 4 and nested == 12 and seen == 42
+    then
+        code = 42
+    end if
+end main

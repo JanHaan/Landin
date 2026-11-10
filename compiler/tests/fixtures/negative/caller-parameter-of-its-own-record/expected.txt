@@ -1,0 +1,30 @@
+error[L0313]: this nominal instance would contain itself by value
+  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:1:14
+  |
+1 | node: type = struct
+  |              ^^^^^^
+  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:2:13
+  |
+2 |     visit: (caller value: node) -> none
+  |             ^^^^^^^^^^^^^^^^^^ the by-value use
+  = note: D137: a finite nominal value layout cannot include itself by value
+error[L0339]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
+  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:2:13
+  |
+2 |     visit: (caller value: node) -> none
+  |             ^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:2:27
+  |
+2 |     visit: (caller value: node) -> none
+  |                           ^^^^ this written type
+  = note: D192: source filenames live in a separate table
+error[L0339]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
+  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:2:13
+  |
+2 |     visit: (caller value: node) -> none
+  |             ^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:2:27
+  |
+2 |     visit: (caller value: node) -> none
+  |                           ^^^^ this written type
+  = note: D192: source filenames live in a separate table

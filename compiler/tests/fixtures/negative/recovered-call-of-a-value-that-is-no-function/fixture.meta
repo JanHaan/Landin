@@ -1,0 +1,9 @@
+class: negative
+summary: a value that is no function, called with an `else` clause that reads its error name, is refused as no call
+constructs: 0960, 1020, 1920
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0301, L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/recovered-call-of-a-value-that-is-no-function/program.ldn
+status: 1

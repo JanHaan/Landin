@@ -9088,7 +9088,34 @@ package body Landin.Syntax.Parser is
                      return Parse_If (Context);
 
                   when Tok.Kw_Try =>
-                     return Parse_Expression;
+                     --  [1810]: a `try` statement is `try` and its call, or
+                     --  a tried `for`.  An operator after the call makes a
+                     --  value of it, and a value is no statement here any
+                     --  more than after a plain call; kept unreported, it
+                     --  was a statement no later stage knew.
+                     declare
+                        Tried : constant Node_Id := Parse_Expression;
+                     begin
+                        if Kind (Result, Tried)
+                             not in Try_Expression | For_Statement
+                                    | Error_Expression
+                          and then not Statement_Reported
+                        then
+                           Complain
+                             (Item    => Syn.Stray_Token,
+                              Where   => Where (Result, Tried),
+                              Message => "a `try` statement ends with its"
+                                         & " call, and this goes on into"
+                                         & " a value, which is not a"
+                                         & " statement",
+                              Note    => "[1810]: a standalone `try`"
+                                         & " propagates its call's failure"
+                                         & " and discards the result; use"
+                                         & " the value, or discard one"
+                                         & " with `_ =`");
+                        end if;
+                        return Tried;
+                     end;
 
                   when Tok.Kw_Fail =>
                      declare

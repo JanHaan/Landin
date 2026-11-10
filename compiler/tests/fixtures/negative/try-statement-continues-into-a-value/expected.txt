@@ -1,0 +1,12 @@
+error[L0110]: a `try` statement ends with its call, and this goes on into a value, which is not a statement
+  --> ../tests/fixtures/negative/try-statement-continues-into-a-value/program.ldn:13:5
+   |
+13 |     try step(1) or ready()
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+  = note: [1810]: a standalone `try` propagates its call's failure and discards the result; use the value, or discard one with `_ =`
+error[L0110]: a `try` statement ends with its call, and this goes on into a value, which is not a statement
+  --> ../tests/fixtures/negative/try-statement-continues-into-a-value/program.ldn:18:5
+   |
+18 |     try step(1) == true
+   |     ^^^^^^^^^^^^^^^^^^^
+  = note: [1810]: a standalone `try` propagates its call's failure and discards the result; use the value, or discard one with `_ =`

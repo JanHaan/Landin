@@ -3006,12 +3006,12 @@ package body Landin.Checking is
    function Lent_Encoding
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Natural;
+      Node     : Landin.Syntax.Node_Id) return Lent_Code;
 
    function Lent_Encoding
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Natural
+      Node     : Landin.Syntax.Node_Id) return Lent_Code
    is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
@@ -3033,30 +3033,31 @@ package body Landin.Checking is
    function Lent_Length
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Natural is
-     (Lent_Encoding (Of_Table, Of_Tree, Node) - 1);
+      Node     : Landin.Syntax.Node_Id) return Element_Count is
+     (Element_Count (Lent_Encoding (Of_Table, Of_Tree, Node) - 1));
 
    procedure Note_Lent_Array
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Length  : Natural)
+      Length  : Element_Count)
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
-      Prior : constant Natural := Lent_Encoding (Into, Of_Tree, Node);
+      Prior : constant Lent_Code := Lent_Encoding (Into, Of_Tree, Node);
+      Code  : constant Lent_Code := Lent_Code (Length) + 1;
    begin
-      if Prior /= 0 and then Prior /= Length + 1 then
+      if Prior /= 0 and then Prior /= Code then
          raise Landin.Compiler_Defect with
            "one node was lent as two different arrays";
       end if;
       if Into.Current_Routine = No_Routine_Instance then
-         Into.Node_Lent_Arrays (Where) := Length + 1;
+         Into.Node_Lent_Arrays (Where) := Code;
       else
          declare
             Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
          begin
             Into.Node_Overlays (Overlay).Has_Lent_Array := True;
-            Into.Node_Overlays (Overlay).Lent_Array := Length + 1;
+            Into.Node_Overlays (Overlay).Lent_Array := Code;
          end;
       end if;
    end Note_Lent_Array;
