@@ -3269,6 +3269,11 @@ Only `inout` and `sink` trigger the check, since they are the two ways a
 call can change the storage itself. While the view lives, you may still
 read the local, pass it `in` or pass it by pointer.
 
+A view needs no name to be in use. The slice a `for` walks is in use until
+the loop is done, so the loop's body does not pass what it walks `inout`
+unless it leaves the loop straight after; and a view given to a call is in
+use until the call returns, so its source is not passed `inout` beside it.
+
 An unchecked region ([1120]) does not turn the check off: origins and
 escape are among the checks that stay.
 

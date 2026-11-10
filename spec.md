@@ -1508,6 +1508,25 @@ call itself ends at that assignment, except where the call's recovery can
 `break` or `continue` past it (D291). A deferred call on a return or failure
 edge is checked against what is live on that edge, and no later statement is
 a use there (D292).
+A view no name holds is in use as well, until what it was evaluated for is
+done with it (D1084). The source of a `for` is in use while the loop runs:
+passing what it views `inout` or `sink` in the body is refused when a path
+from the call reaches another iteration, or reads the loop's element where
+that names the walked storage in place [1160]. An argument is in use until
+its call returns, so what it views is passed `inout` or `sink` neither to
+that call, in either order, nor to a call nested in a later argument; an
+operand of any other expression is held the same way while the operands
+after it are evaluated. What such a view views is the storage under it: a
+binding an address or a range was taken of, an array of it lent as a slice
+[0570], and for a call result what each argument its `from` names views,
+with the binding that argument is rooted in when the argument is a record
+or an array or is passed `inout`. A pointer, slice or `any` given by value
+lends what it refers to and not the binding that holds it; a reference only
+read out of a binding's field has other storage under it and holds nothing
+here; and an address or range of one field holds no other field of the
+same binding where fields alone reach both.
+A module binding named through its module, `store.cells`, is the binding
+its own name is [1420], here and in D149's test of one place passed twice.
 Volatile reference paths remain exempt [0850].
 
 A match payload alias keeps its selected storage live even when the payload
@@ -12009,6 +12028,74 @@ region is used afterwards; and a binding per handle, which still refuses it.
 Both are declined.
 
 **Pinned by** `runtime/defer-at-return-edge`.
+
+### D1084 — A view no name holds is in use until what took it is done
+
+**The tour said** at [0830] that a view taken from a local borrows it, and
+that the local is not passed `inout` or `sink` while the view is still in
+use; at [0800] that a result with `from` is such a view; at [1150] that a
+`for` walks each element of a slice in place; and at [1320] that a
+container is walked as `for value in vec.used(numbers)`. Every example
+gives the view a name, and the check built from them asked one question:
+is a named view read after the call. A view written as a loop's source, or
+passed beside its source, has no name and no later read. So
+`for value in vec.used(numbers) do try vec.push(numbers, memory, value)`
+and `append_all(numbers, memory, vec.used(numbers))` were accepted, and
+each read a block the list's growth had just freed.
+
+**Chosen:** a view is in use until what it was evaluated for is done with
+it, whether or not a name holds it.
+
+- The source of a `for` is in use from the loop's head to its last
+  iteration. In the body, passing what it views `inout` or `sink` is L0315
+  when some path from the call reaches the next iteration, or reads the
+  loop's element where the element names the walked storage in place
+  [1160]. A call the loop leaves straight after, by `break`, `return` or a
+  failure, is accepted, and so is one in `complete`, which runs when the
+  walk is over.
+- An argument is in use until its call returns. What it views is not
+  passed `inout` or `sink` to the same call, in either order and whether
+  the view is written in the call or held by a name whose last use the
+  call is; nor to a call nested in a later argument, since arguments are
+  evaluated left to right [0410]. An operand of any other expression is
+  held the same way while the operands after it are evaluated, and a
+  slice or pointer read for a selection while its index is.
+- What an unnamed view views is the storage under it: the binding an
+  address or a range was taken of, and an array of it lent as a slice
+  [0570]. A call result views what each argument its `from` names views,
+  and the binding that argument is rooted in when the argument is a
+  record or an array, as a container is, or is passed `inout`. A pointer,
+  slice or `any` given by value lends what it refers to, not the binding
+  that holds it, so `first(xs)` is no view of the binding `xs`. A
+  reference only read out of a field of a binding has other storage under
+  it and holds nothing, so a record is passed `inout` to an entry of an
+  `any` the record holds. An address or a range of one field holds no
+  other field of the same binding, where both are reached by fields
+  alone.
+
+[0830]'s rule for a view a name holds is unchanged, and still counts a
+reference read out of a field when the name is read after the call.
+
+A result whose `from` names a container is a view of the container even
+when what it returns is a reference the container only stored, as
+`vec.get` of a list of pointers returns: the signature says so and the
+caller is held to it.
+
+**The alternatives:** keeping the rule to named views, which leaves the
+traversal the tour teaches unchecked; holding a loop's source on every
+path, a loop left straight after the call included, which refuses the
+find-then-insert every such loop is written for; counting a reference
+read out of a field as the named rule does, which refuses a record that
+holds its own policy, as `core/text`'s builder does, though none of the
+record's storage is under that reference; narrowing the named rule to
+match, which changes what accepted programs mean to no purpose here; and
+holding the whole binding for a view of one field, which refuses a field
+passed beside the address of its neighbour. All five are declined.
+
+**Pinned by** `negative/for-source-view-holds-its-source`,
+`negative/view-argument-beside-its-source` and
+`negative/qualified-module-binding-is-one-place`, with
+`runtime/unnamed-view-finished-or-apart` for what is accepted.
 
 ### D433 — A pointer arm's binding may be `sink`, and consumes the matched place
 

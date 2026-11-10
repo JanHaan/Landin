@@ -1,0 +1,80 @@
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:29:22
+   |
+29 |         try vec.push(numbers, memory, value) -- error: the loop walks numbers
+   |                      ^^^^^^^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:28:18
+   |
+28 |     for value in vec.used(numbers) do
+   |                  ^^^^^^^^^^^^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `value` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `value` without `inout`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:44:19
+   |
+44 |         reset_rec(r) -- error
+   |                   ^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:43:14
+   |
+43 |     for x in part(addr r) do
+   |              ^^^^^^^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `r` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `r` without `inout`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:50:19
+   |
+50 |         reset_rec(r) -- error
+   |                   ^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:48:17
+   |
+48 |     for x, i in r.cells[0..<2] do
+   |                 ^^^^^^^^^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `r` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `r` without `inout`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:54:15
+   |
+54 |         reset(buffer) -- error
+   |               ^^^^^^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:53:14
+   |
+53 |     for x in buffer do
+   |              ^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `buffer` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `buffer` without `inout`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:59:15
+   |
+59 |         reset(buffer) -- error: x names an element of buffer
+   |               ^^^^^^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:58:14
+   |
+58 |     for x in buffer do
+   |              ^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `buffer` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `buffer` without `inout`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:67:19
+   |
+67 |             reset(buffer) -- error
+   |                   ^^^^^^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:64:14
+   |
+64 |     for x in buffer[0..<2] do
+   |              ^^^^^^^^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `buffer` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `buffer` without `inout`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:73:25
+   |
+73 |         defer reset_rec(r) -- error
+   |                         ^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:72:14
+   |
+72 |     for x in part(addr r) do
+   |              ^^^^^^^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `r` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `r` without `inout`
+error[L0315]: this argument is passed `sink`, so the call may take its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:79:17
+   |
+79 |         consume(gone) -- error
+   |                 ^^^^
+  --> ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn:78:14
+   |
+78 |     for x in gone.cells[0..<2] do
+   |              ^^^^^^^^^^^^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `sink` parameter `r` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed

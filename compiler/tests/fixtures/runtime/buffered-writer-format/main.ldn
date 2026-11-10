@@ -19,7 +19,7 @@ end wrote
 --  A template formatted straight into the buffer: into the room after the
 --  waiting bytes, after a flush when it does not fit there, and refused
 --  whole when it is larger than the buffer.
-formatted: (host: io.memory, inout state: io.memory_space)
+formatted: (host: io.memory, state: ptr mut io.memory_space)
            -> (ok: bool) ! ... =
     ok = false
     mut storage: [8]u8 = zeroed
@@ -29,9 +29,9 @@ formatted: (host: io.memory, inout state: io.memory_space)
     try io.put(out, "x")
     --  The values written inline, as `text.format` takes them.
     try io.format(out, "{}+{}", [any(addr a), any(addr b)])
-    return when state.writes <> 0 or io.pending(out) <> 7
+    return when state.val.writes <> 0 or io.pending(out) <> 7
     try io.format(out, "={}", [any(addr b)])
-    return when state.writes <> 1 or io.pending(out) <> 4
+    return when state.val.writes <> 1 or io.pending(out) <> 4
     mut refused: bool = false
     --  Ten digits, more than the whole buffer holds.  A u32 rather than a
     --  u64, whose 64-bit decimal writer would leave the image too large
@@ -43,7 +43,7 @@ formatted: (host: io.memory, inout state: io.memory_space)
     end
     return when not refused or io.pending(out) <> 0
     try io.flush(out)
-    ok = wrote(state, "x12+345=345")
+    ok = wrote(state.val, "x12+345=345")
 end formatted
 
 public main: () -> (code: i32) =
@@ -58,7 +58,7 @@ public main: () -> (code: i32) =
     mut state: io.memory_space = zeroed
     host := io.memory_over(state, files[0..<1], no_arguments, "",
                            output[0..<64], errors[0..<1])
-    ok := formatted(host, state) else false
+    ok := formatted(host, addr state) else false
     return when not ok
     code = 42
 end main

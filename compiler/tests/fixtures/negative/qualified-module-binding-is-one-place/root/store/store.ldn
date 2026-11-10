@@ -1,0 +1,2 @@
+public mut counter: u32 = 0
+public mut cells: [4]i32 = [1, 2, 3, 4]

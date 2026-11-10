@@ -15690,6 +15690,22 @@ package body Landin.Stages.Checking is
          function Same_Provable_Place
            (Left, Right : Syn.Node_Id) return Boolean is
          begin
+            --  [1420]: `store.cells` is the binding `cells` names in its
+            --  own module or after a selected import, in either spelling.
+            if Names_Module_Value (Of_Tree, Left)
+              or else Names_Module_Value (Of_Tree, Right)
+            then
+               return Syn.Kind (Of_Tree, Left)
+                        in Syn.Name_Reference | Syn.Member_Selection
+                 and then Syn.Kind (Of_Tree, Right)
+                        in Syn.Name_Reference | Syn.Member_Selection
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Left)
+                        = Res.Bound
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Right)
+                        = Res.Bound
+                 and then Res.Bound_To (Meanings.all, Of_Tree, Left)
+                        = Res.Bound_To (Meanings.all, Of_Tree, Right);
+            end if;
             if Syn.Kind (Of_Tree, Left) /= Syn.Kind (Of_Tree, Right) then
                return False;
             end if;
