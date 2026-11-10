@@ -510,9 +510,28 @@ def main() -> None:
         result = {"schema": 1, "tools": versions,
                   "compiler_sha256": hashlib.sha256(refine.read_bytes()).hexdigest(),
                   "measurements": evidence}
-        (args.output / "measurements.json").write_text(
-            json.dumps(result, indent=2, sort_keys=True) + "\n")
-        print(json.dumps(result, sort_keys=True))
+        record = args.output / "measurements.json"
+        record.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+        print(summary(result, record))
+
+
+def summary(result: dict, record: Path) -> str:
+    """What standard output says: the record's place, and each text size.
+
+    The record holds every disassembly and build report, 44 MB of them,
+    and was once printed whole as well as written; a log reader wants to
+    know that the acceptance passed, where the record is and what was
+    measured.
+    """
+    lines = ["object quality: every acceptance held",
+             f"record: {record} ({record.stat().st_size} bytes)",
+             f"compiler sha256: {result['compiler_sha256']}",
+             "text bytes by workload and profile (optimize-specialize):"]
+    for name, measured in sorted(result["measurements"].items()):
+        lines.append("  %-22s %s" % (name, "  ".join(
+            "%s %d" % (key, measured[key]["text_bytes"])
+            for key in sorted(measured))))
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
