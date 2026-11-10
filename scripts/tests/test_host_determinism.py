@@ -238,6 +238,57 @@ class Comparison(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
 
+    def test_identical_manifests_that_fail_alike_are_not_said_to_differ(self):
+        #  Each manifest's own faults were once reported per manifest under
+        #  "the manifests disagree", 432 of them between identical files.
+        other = dict(BASE)
+        other["alias-conversion|linux-x86-64|debug|optimize=size|specialize=auto"] = "refused:1"
+        result = compare(other, dict(other))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("2 manifests agree on all 3 entries", result.stdout)
+        self.assertNotIn("the manifests differ", result.stderr)
+        self.assertIn("every manifest fails its own expectations, on the "
+                      "same entries, so this is no difference between them: "
+                      "1 fault(s)", result.stderr)
+        self.assertEqual(result.stderr.count("unexpected emission result"), 1)
+
+    def test_a_difference_and_a_manifests_own_fault_are_reported_apart(self):
+        other = dict(BASE)
+        key = "alias-conversion|linux-x86-64|debug|optimize=size|specialize=auto"
+        other[key] = "refused:1"
+        result = compare(BASE, other)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("the manifests differ", result.stderr)
+        self.assertIn("1 difference(s)", result.stderr)
+        self.assertIn("m1.json fails its own expectations: 1 fault(s)",
+                      result.stderr)
+        self.assertNotIn("m0.json fails", result.stderr)
+
+    def test_a_runtime_refusal_the_inventory_records_is_expected(self):
+        #  `compare` reads this checkout's firmware inventory, as `emit`
+        #  reads its ROOT's, so the documented before-and-after of the
+        #  runtime corpus passes on an unchanged tree.
+        inventory = json.loads(
+            (ROOT / "compiler/tests/cortex-m/corpus.json").read_text())["fixtures"]
+        name = next(name for name, row in sorted(inventory.items())
+                    if name.startswith("runtime/") and row["mode"] == "execute"
+                    and row.get("targets", {}).get("xtensa", {}).get("mode") == "refuse"
+                    and row.get("lanes", {}).get("esp32c3", {}).get("mode") == "refuse")
+        recorded = dict(BASE)
+        for target, level in (("rv32", ""), ("xtensa", "|level=xtensa-esp32"),
+                              ("xtensa", "|level=xtensa-esp32s3")):
+            for debug in ("", "|debug=lines"):
+                recorded["%s|%s|debug|optimize=size|specialize=auto%s%s"
+                         % (name, target, level, debug)] = "refused:1"
+        result = compare(recorded, dict(recorded))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("agree on all 9 entries", result.stdout)
+        #  On a target the inventory does not record, it is still a fault.
+        recorded["%s|cortex-m0|debug|optimize=size|specialize=auto" % name] = "refused:1"
+        result = compare(recorded, dict(recorded))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("%s|cortex-m0" % name, result.stderr)
+
     def test_one_manifest_is_not_a_comparison(self):
         result = compare(BASE)
         self.assertEqual(result.returncode, 2)
@@ -322,8 +373,11 @@ SAYS_ITS_CONTROLS = (
     "pathlib.Path(args[args.index('-o') + 1]).write_text(' '.join(said))\n")
 
 
-def selected(stub, *options, fixtures=("positive/a", "positive/b", "runtime/r")):
-    """Run `emit` with OPTIONS over a small tree of FIXTURES and STUB."""
+def selected(stub, *options, fixtures=("positive/a", "positive/b", "runtime/r"),
+             inventory=None):
+    """Run `emit` with OPTIONS over a small tree of FIXTURES and STUB.
+
+    INVENTORY is the firmware corpus's rows, written when given."""
     with tempfile.TemporaryDirectory() as tmp:
         area = Path(tmp)
         for name in fixtures:
@@ -331,6 +385,10 @@ def selected(stub, *options, fixtures=("positive/a", "positive/b", "runtime/r"))
             fixture.mkdir(parents=True)
             (fixture / "fixture.meta").write_text(
                 "program: main.ldn\ntargets: linux-x86-64\n")
+        if inventory is not None:
+            (area / "compiler/tests/cortex-m").mkdir(parents=True)
+            (area / "compiler/tests/cortex-m/corpus.json").write_text(
+                json.dumps({"fixtures": inventory}))
         refine = area / "refine"
         refine.write_text(stub)
         refine.chmod(0o755)
@@ -369,6 +427,45 @@ class Selectors(unittest.TestCase):
         self.assertEqual(sorted(manifest), [
             "a|linux-x86-64|debug|optimize=none|specialize=off",
             "runtime/r|linux-x86-64|debug|optimize=none|specialize=off"])
+
+    REFUSES_ON = (
+        "#!" + sys.executable + "\n"
+        "import pathlib, sys\n"
+        "args = sys.argv[1:]\n"
+        "if any(a in args for a in %r):\n"
+        "    sys.exit(1)\n"
+        "pathlib.Path(args[args.index('-o') + 1]).write_text(' '.join(args[:4]))\n")
+
+    def test_the_runtime_corpus_knows_its_firmware_refusals(self):
+        #  The firmware corpus executes runtime/r on its reference and
+        #  records that rv32's default level and Xtensa refuse it.  Those
+        #  refusals are what the manifest should hold, at both Xtensa
+        #  configurations and with debug information.
+        refusing = {"mode": "refuse", "codes": ["L0346"]}
+        inventory = {"runtime/r": {"mode": "execute",
+                                   "lanes": {"esp32c3": refusing},
+                                   "targets": {"xtensa": refusing}}}
+        options = ("linux-x86-64,cortex-m0,rv32,xtensa", "--corpus=runtime",
+                   "--profile=size-auto", "--debug-info")
+        result, manifest = selected(
+            self.REFUSES_ON % (("--target=rv32", "--target=xtensa"),),
+            *options, inventory=inventory)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        refused = sorted(key for key, value in manifest.items()
+                         if value == "refused:1")
+        self.assertEqual(len(refused), 3 * 2 * 2)
+        self.assertEqual({key.split("|")[1] for key in refused},
+                         {"rv32", "xtensa"})
+        #  One the inventory does not record is still a fault, and named.
+        result, manifest = selected(
+            self.REFUSES_ON % (("--target=rv32", "--target=xtensa",
+                                "--target=cortex-m0"),),
+            *options, inventory=inventory)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("manifest lacks required assembly evidence: 4 fault(s)",
+                      result.stderr)
+        self.assertIn("runtime/r|cortex-m0|", result.stderr)
+        self.assertNotIn("runtime/r|rv32|", result.stderr)
 
     def test_debug_information_is_each_targets_own(self):
         result, manifest = selected(

@@ -78,6 +78,15 @@ host manifest stays what it is:
     --jobs=N                             compilations at once; every core
                                          by default
 
+A manifest is also held to its own expectations: an entry is assembly, or
+a refusal that is expected.  For a positive fixture the expected refusals
+are the list below; for a runtime fixture they are the ones the firmware
+corpus's inventory, `compiler/tests/cortex-m/corpus.json`, records for the
+target, which `emit` reads under ROOT and `compare` under the checkout
+this script is in.  `compare` reports the two things apart: entries on
+which the manifests differ, and entries on which a manifest fails its own
+expectations, once when every manifest fails the same ones.
+
 Debug information names the directory it was compiled in, the fixture's
 own, and a caller-file digest that follows it, so a `|debug=` entry is
 comparable only with one emitted over a ROOT at the same path.  That holds
@@ -192,19 +201,38 @@ EXPECTED_REFUSALS = {
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-def evidence_faults(manifest, diagnostics=None):
+def runtime_refusals(root):
+    """The (runtime fixture, firmware target) pairs ROOT's corpus refuses.
+
+    The firmware corpus's inventory records them, and `modes` already
+    expects them; without them every manifest of the runtime corpus failed
+    its own expectations, 96 faults on an unchanged tree.  A ROOT without
+    the inventory has none.
+    """
+    inventory = Path(root).resolve() / "compiler/tests/cortex-m/corpus.json"
+    if not inventory.is_file():
+        return frozenset()
+    return frozenset(pair for pair in mode_refusals(root, FIRMWARE_TARGETS)
+                     if pair[0].startswith("runtime/"))
+
+
+def evidence_faults(manifest, diagnostics=None, runtime=frozenset()):
     """Reject a shared refusal wherever assembly is promised.
 
     DIAGNOSTICS, where `emit` has them, holds the first diagnostic of each
     refusal, so a fault says why rather than only that it refused.  A
     `|debug=` entry refuses where its entry without debug information does.
+    RUNTIME is `runtime_refusals`' pairs, expected at every profile.
     """
     faults = []
     emitted = 0
     for key, value in sorted(manifest.items()):
+        bare = re.sub(r"\|level=[^|]+", "", key).split("|debug=")[0]
         if isinstance(value, str) and DIGEST.fullmatch(value):
             emitted += 1
-        elif value == "refused:1" and re.sub(r"\|level=[^|]+", "", key).split("|debug=")[0] in EXPECTED_REFUSALS:
+        elif value == "refused:1" and (
+                bare in EXPECTED_REFUSALS
+                or tuple(bare.split("|")[:2]) in runtime):
             continue
         else:
             said = (diagnostics or {}).get(key)
@@ -372,7 +400,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
     print("fixtures %d  entries %d  emitted %d  refused %d"
           % (len(entries), len(manifest), len(manifest) - refused, refused))
     print("manifest sha256:", hashlib.sha256(Path(out).read_bytes()).hexdigest())
-    faults = evidence_faults(manifest, diagnostics)
+    faults = evidence_faults(manifest, diagnostics, runtime_refusals(root))
     if faults:
         print("manifest lacks required assembly evidence: %d fault(s)" % len(faults),
               file=sys.stderr)
@@ -410,17 +438,24 @@ def merge(out, paths):
     return 0
 
 
-def compare(paths):
-    """Every manifest agrees, entry by entry, and says which one does not."""
+def compare(paths, root=Path(__file__).resolve().parents[1]):
+    """Every manifest agrees, entry by entry, and says which one does not.
+
+    Two findings are reported apart.  The manifests differ: an entry is
+    absent from one, or has another value.  A manifest fails its own
+    expectations: an entry is neither assembly nor an expected refusal,
+    whatever the other manifests say.  Byte-identical manifests can only
+    do the second, and were once told they disagreed.
+    """
     loaded = [(Path(p).name, json.loads(Path(p).read_text())) for p in paths]
     if len(loaded) < 2:
         print("compare: needs at least two manifests", file=sys.stderr)
         return 2
     (first_name, first), rest = loaded[0], loaded[1:]
+    runtime = runtime_refusals(root)
+    own = [(name, evidence_faults(manifest, runtime=runtime))
+           for name, manifest in loaded]
     faults = []
-    for name, manifest in loaded:
-        faults.extend("%s: %s" % (name, fault)
-                      for fault in evidence_faults(manifest))
     for name, other in rest:
         missing = sorted(set(first) - set(other))
         added = sorted(set(other) - set(first))
@@ -435,13 +470,25 @@ def compare(paths):
     if faults:
         #  Two hosts' manifests or two compilers' on one checkout: the
         #  same disagreement means a host leak in one, a change in the other.
-        print("the manifests disagree, so emission is not host-neutral evidence"
-              " or the compilers emit differently: %d fault(s)" % len(faults),
-              file=sys.stderr)
+        print("the manifests differ, so emission is not host-neutral evidence"
+              " or the compilers emit differently: %d difference(s)"
+              % len(faults), file=sys.stderr)
         report_faults(faults)
-        return 1
-    print("%d manifests agree on all %d entries" % (len(loaded), len(first)))
-    return 0
+    else:
+        print("%d manifests agree on all %d entries" % (len(loaded), len(first)))
+    failing = [(name, found) for name, found in own if found]
+    if failing and len(failing) == len(own) and all(
+            found == failing[0][1] for _, found in failing):
+        print("every manifest fails its own expectations, on the same "
+              "entries, so this is no difference between them: %d fault(s)"
+              % len(failing[0][1]), file=sys.stderr)
+        report_faults(failing[0][1])
+    else:
+        for name, found in failing:
+            print("%s fails its own expectations: %d fault(s)"
+                  % (name, len(found)), file=sys.stderr)
+            report_faults(found)
+    return 1 if faults or failing else 0
 
 
 #  The build-mode comparison: the request is fixed, so only the compiler's
