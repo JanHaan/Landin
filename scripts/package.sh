@@ -9,7 +9,9 @@
 #  tar and the bsdtar macOS ships, which has no --sort, no --mtime and no
 #  --owner: the members are listed in byte order, every timestamp is fixed
 #  at 1980, late enough that GNU tar does not call it implausibly old,
-#  and gzip -n drops the archive's own, so two runs on one host agree.
+#  every member is root's with a mode set here, and gzip -n drops the
+#  archive's own, so two runs on one host agree whoever runs them and
+#  under whatever umask.
 #
 #  --debug takes refine's debug information out of the packaged copy and
 #  writes it to DEBUG_ASSET, an archive of its own (D531): on Linux
@@ -39,17 +41,34 @@ test -x "$binary" || { echo "package: $binary is not an executable" >&2; exit 1;
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+#  Every member belongs to root, by number and with no name.  tar restores
+#  recorded ownership when root unpacks, so an archive that recorded the
+#  packaging account, a CI runner's uid 1001 or 501, gave the compiler and
+#  its library to whichever local account has that number on a machine
+#  where an administrator installed it.
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+    owner=(--owner=0 --group=0 --numeric-owner)
+else
+    owner=(--uid 0 --gid 0 --uname '' --gname '')
+fi
+
 #  Directories are members of their own, so --no-recursion keeps each
-#  file to the one entry the sorted list gives it.
+#  file to the one entry the sorted list gives it.  Modes are set here and
+#  not inherited from the packaging account's umask: a directory and a
+#  file its owner may execute are 755, any other file 644.
 archive() {
     local stage=$1 into=$2
     (
         cd "$stage"
+        find . -type d -exec chmod 755 {} +
+        find . -type f -perm -u+x -exec chmod 755 {} +
+        find . -type f ! -perm -u+x -exec chmod 644 {} +
         find . -exec touch -h -t 198001010000 {} +
         find . -mindepth 1 \( -type f -o -type d \) | sed 's|^\./||' \
             | LC_ALL=C sort > "$work/members"
     )
-    tar -cf - -C "$stage" --no-recursion -T "$work/members" | gzip -n -9 > "$into"
+    tar -cf - "${owner[@]}" -C "$stage" --no-recursion -T "$work/members" \
+        | gzip -n -9 > "$into"
 }
 
 stage=$work/stage
