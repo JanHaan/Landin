@@ -25562,11 +25562,27 @@ package body Landin.Diagnostics.Citations.Texts is
                & "byte for byte what it was. The cell is the running threa"
                & "d's (D497). A check is one load, one compare and one bra"
                & "nch, with the instructions that form the frame's address"
-               & " and the cell's: three instructions on x86-64, whose loa"
-               & "d is `%fs`-relative; six on Linux and FreeBSD arm64 and "
-               & "eight on Darwin, which read the thread pointer first (D5"
-               & "06); and eight on RV64 and on Cortex-M0, whose branch to"
-               & " the trap is a far one.",
+               & " and the cell's and the test of that address's borrow (D"
+               & "1111): five instructions on x86-64, whose load is `%fs`-"
+               & "relative; six on Linux and FreeBSD arm64 and eight on Da"
+               & "rwin, which read the thread pointer first (D506); and ni"
+               & "ne on RV64 and on Cortex-M0, whose branch to the trap is"
+               & " a far one.",
+            when 1111 =>
+               "Chosen: the difference's borrow is part of the compariso"
+               & "n, on every target and for a call's argument area as for"
+               & " a frame. x86-64 subtracts in a register and branches on"
+               & " the carry before it compares, where `lea` set no flag; "
+               & "arm64 subtracts with flags and makes the comparison cond"
+               & "itional on no borrow, reading as below otherwise; RISC-V"
+               & " and the Xtensa routines derived from it branch when the"
+               & " difference is above the stack pointer it was taken from"
+               & ", as Xtensa's own windowed prologue does; and Cortex-M b"
+               & "ranches on the carry of the subtraction it already made."
+               & " That is no instruction more on arm64, one on RISC-V, Xt"
+               & "ensa and Cortex-M and two on x86-64. A program that prep"
+               & "ares no stack still has no check, and its code is what i"
+               & "t was.",
             when 472 =>
                "Chosen: `compiler.stack_switch(save, resume)` has two ar"
                & "guments. The switch saves the cell's value in the frame "

@@ -396,6 +396,15 @@ package body Landin.Tests.Xtensa_Backend_Suite is
            and then Ada.Strings.Fixed.Index
              (Text (Text'First .. Named_At), "rsr a0, EXCSAVE1") = 0,
          "nothing reads the context register before it is written");
+      --  D471: the prologue's own check, of every ordinary routine once
+      --  a program prepares a stack, tests the wrapped difference first.
+      Landin.Testing.Check
+        (Item, Contains (Text, HT & "sub a8, a1, a8" & LF
+           & HT & "movi a9, ")
+           and then Contains (Text, HT & "bltu a1, a8, ")
+           and then Ada.Strings.Fixed.Index (Text, HT & "bltu a1, a8, ")
+             < Ada.Strings.Fixed.Index (Text, HT & "bgeu a8, a9, "),
+         "a frame larger than the stack pointer's value goes to the trap");
    end Switch_Masks_First;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

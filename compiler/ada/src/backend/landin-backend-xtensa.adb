@@ -1726,6 +1726,7 @@ package body Landin.Backend.Xtensa is
 
          procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
             Fits : constant String := Fresh;
+            Wrapped : constant String := Fresh;
          begin
             if Bytes = 0 then
                Emit ("mv x5, sp");
@@ -1738,7 +1739,15 @@ package body Landin.Backend.Xtensa is
             end if;
             Limit_Base ("x6");
             Emit (Load_Word & " x6, " & Limit_Offset & "(x6)");
+            --  A frame larger than the stack pointer's own value leaves a
+            --  difference that wrapped past zero and is above every limit.
+            if Bytes > 0 then
+               Emit ("bltu sp, x5, " & Wrapped);
+            end if;
             Emit ("bgeu x5, x6, " & Fits);
+            if Bytes > 0 then
+               Put (Wrapped & ":");
+            end if;
             Emit ("lla x7, " & Limit_Trap);
             Emit ("jr x7");
             Put (Fits & ":");
@@ -4780,6 +4789,7 @@ package body Landin.Backend.Xtensa is
             if Checks then
                declare
                   Fits : constant String := Fresh;
+                  Wrapped : constant String := Fresh;
                begin
                   Put (Character'Val (9) & "movi a8, "
                        & Trimmed (Landin.Targets.Byte_Count'Image
@@ -4787,7 +4797,10 @@ package body Landin.Backend.Xtensa is
                   Put (Character'Val (9) & "sub a8, a1, a8");
                   Put (Character'Val (9) & "movi a9, " & Stack_Limit);
                   Put (Character'Val (9) & "l32i a9, a9, 0");
+                  --  A difference that wrapped past zero fits nothing.
+                  Put (Character'Val (9) & "bltu a1, a8, " & Wrapped);
                   Put (Character'Val (9) & "bgeu a8, a9, " & Fits);
+                  Put (Wrapped & ":");
                   if Panic /= null
                     and then Landin.Panics.Handler (Panic.all)
                       /= Landin.IR.No_Item

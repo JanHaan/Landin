@@ -21253,10 +21253,11 @@ than the unchecked figure keeps the frame record its check needs. A program
 with no `compiler.stack_prepare` has no check and no cell, and its code is
 byte for byte what it was. The cell is the running thread's (D497). A check
 is one load, one compare and one branch, with the instructions that form
-the frame's address and the cell's: three instructions on x86-64, whose
-load is `%fs`-relative; six on Linux and FreeBSD arm64 and eight on
-Darwin, which read the thread pointer first (D506); and eight on RV64 and
-on Cortex-M0, whose branch to the trap is a far one.
+the frame's address and the cell's and the test of that address's borrow
+(D1111): five instructions on x86-64, whose load is `%fs`-relative; six
+on Linux and FreeBSD arm64 and eight on Darwin, which read the thread
+pointer first (D506); and nine on RV64 and on Cortex-M0, whose branch to
+the trap is a far one.
 
 **The alternatives:** the check at the switch alone, with a room sized per
 target from the depth report, which bounds the provider's path but not a
@@ -21280,6 +21281,54 @@ runtime fixture's assembly, for six targets at every profile, was compared
 before and after this decision, 3,949 files, and differed only for the
 fixture that prepares a stack and, in debug builds, in the hash of the
 library sources this decision edited.
+
+### D1111 — A frame larger than the stack pointer's own value is past the limit
+
+**The tour said** nothing, and D471 said "compares the stack pointer less
+its frame with one cell". Every backend formed that difference in the
+machine word and compared it unsigned, so a frame larger than the stack
+pointer's value left a difference that had wrapped past zero and was above
+every limit: the check answered that the frame fitted, and the routine
+moved its stack pointer to the wrapped address. The precondition is a
+prepared stack within one frame of address zero, which is not rare: a
+static Linux executable's module storage, where a fibre's stack usually
+is, lies 4 MiB above zero on x86-64 and arm64 and 86 KiB above it on RV64,
+and the STM32H753's ITCM is writable memory at zero. There the process
+died of a segmentation fault where `stack_exhausted` was specified, a
+selected handler was never entered, and arm64's and RV64's page probes
+first stored zeros through the module data below the stack.
+
+**Chosen:** the difference's borrow is part of the comparison, on every
+target and for a call's argument area as for a frame. x86-64 subtracts in
+a register and branches on the carry before it compares, where `lea` set
+no flag; arm64 subtracts with flags and makes the comparison conditional
+on no borrow, reading as below otherwise; RISC-V and the Xtensa routines
+derived from it branch when the difference is above the stack pointer it
+was taken from, as Xtensa's own windowed prologue does; and Cortex-M
+branches on the carry of the subtraction it already made. That is no
+instruction more on arm64, one on RISC-V, Xtensa and Cortex-M and two on
+x86-64. A program that prepares no stack still has no check, and its code
+is what it was.
+
+**The alternatives:** comparing the stack pointer less the limit with the
+frame, which needs the same second test, because a routine running inside
+the margin may have its stack pointer below the limit already; adding the
+frame to the limit instead, which wraps at the other end of the address
+space, where some parts have their RAM; and keeping the wrapping
+comparison for frames below a page, on the ground that no stack lies in
+page zero, which is true of a hosted process and false of firmware. All
+were declined.
+
+**Pinned by** `backend/a limit check tests the borrow`, the test's place in
+the emitted text of the four hosted and Cortex-M emitters for a frame an
+immediate holds and one it does not, and `xtensa backend/the stack switch
+masks before its context`, the same in Xtensa's prologue. The review's
+programs, D471's own fixture with a frame larger than its static stack's
+address, end with the handler's status on Linux x86-64, arm64 and RV64 and
+with the trap on Cortex-M3 and RV32 under QEMU. No fixture executes it:
+the firmware corpus has no disposition for a runtime fixture whose frame
+L0507 refuses under a firmware entry, and the frame that wraps on a hosted
+target is larger than any firmware stack.
 
 ### D472 — A saved context carries its limit, a margin above its stack's base
 

@@ -2850,16 +2850,22 @@ package body Landin.Backend.Arm64 is
             --  D497: the running thread's cell, loaded first so that
             --  Darwin's slot offset can pass through x16.
             Limit_Load ("x17", "x16");
+            --  A frame larger than the stack pointer's own value borrows,
+            --  and the difference it leaves is above every limit: the
+            --  comparison is made only when the subtraction did not, and
+            --  reads as below when it did.
             if Bytes = 0 then
                Emit ("mov x16, sp");
+               Emit ("cmp x16, x17");
             elsif Bytes < 4096 then
-               Emit ("sub x16, sp, #"
+               Emit ("subs x16, sp, #"
                      & Trimmed (Landin.Targets.Byte_Count'Image (Bytes)));
+               Emit ("ccmp x16, x17, #0, hs");
             else
                Immediate ("x16", Pattern (Bytes));
-               Emit ("sub x16, sp, x16");
+               Emit ("subs x16, sp, x16, uxtx");
+               Emit ("ccmp x16, x17, #0, hs");
             end if;
-            Emit ("cmp x16, x17");
             Emit ("b.lo " & Limit_Trap);
             Limit_Trapped := True;
          end Check_Limit;

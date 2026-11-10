@@ -2208,6 +2208,9 @@ package body Landin.Diagnostics.Citations is
                & "s",
             when 471 =>
                "Every routine checks its frame against its stack's limit",
+            when 1111 =>
+               "A frame larger than the stack pointer's own value is pas"
+               & "t the limit",
             when 472 =>
                "A saved context carries its limit, a margin above its st"
                & "ack's base",
@@ -3897,6 +3900,8 @@ package body Landin.Diagnostics.Citations is
             when 469 =>
                "Decisions: The toolchain, C and the machine",
             when 471 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1111 =>
                "Decisions: The toolchain, C and the machine",
             when 472 =>
                "Decisions: The toolchain, C and the machine",
@@ -5750,6 +5755,9 @@ package body Landin.Diagnostics.Citations is
             when 471 =>
                "https://www.701.dev/spec.html#d471-every-routine-checks-"
                & "its-frame-against-its-stack-s-limit",
+            when 1111 =>
+               "https://www.701.dev/spec.html#d1111-a-frame-larger-than-"
+               & "the-stack-pointer-s-own-value-is-past-the-limit",
             when 472 =>
                "https://www.701.dev/spec.html#d472-a-saved-context-carri"
                & "es-its-limit-a-margin-above-its-stack-s-base",

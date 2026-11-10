@@ -2271,6 +2271,11 @@ package body Landin.Backend.Cortex_M is
                Immediate ("r7", Pattern (Bytes));
                Emit ("subs r6, r6, r7");
             end if;
+            --  A frame larger than the stack pointer's own value borrows,
+            --  and the difference it leaves is above every limit.
+            if Bytes > 0 then
+               Branch ("cc", Limit_Trap);
+            end if;
             Address ("r7", Stack_Limit);
             Emit ("ldr r7, [r7]");
             Emit ("cmp r6, r7");

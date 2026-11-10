@@ -1977,6 +1977,7 @@ package body Landin.Backend.RiscV is
 
          procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
             Fits : constant String := Fresh;
+            Wrapped : constant String := Fresh;
          begin
             if Bytes = 0 then
                Emit ("mv x5, sp");
@@ -1989,7 +1990,15 @@ package body Landin.Backend.RiscV is
             end if;
             Limit_Base ("x6");
             Emit (Load_Word & " x6, " & Limit_Offset & "(x6)");
+            --  A frame larger than the stack pointer's own value leaves a
+            --  difference that wrapped past zero and is above every limit.
+            if Bytes > 0 then
+               Put (Character'Val (9) & "bltu sp, x5, " & Wrapped);
+            end if;
             Put (Character'Val (9) & "bgeu x5, x6, " & Fits);
+            if Bytes > 0 then
+               Put (Wrapped & ":");
+            end if;
             Put (Character'Val (9) & "lla x7, " & Limit_Trap);
             Put (Character'Val (9) & "jr x7");
             Put (Fits & ":");
