@@ -1072,6 +1072,15 @@ taken with `0xffffffe9` and the extended frame reserved lazily, the
 handler's float instruction fills it, the return restores the interrupted
 d0, and the computation ends with its IEEE value (D618); a soft-float C
 object linked into the image is refused for its VFP arguments (D617). Its
+`float-debug` case is a debugger's view of the same unit by unwinding: on
+an image built with `--debug=lines`, GDB reads a routine's arguments at
+its first instruction where AAPCS-VFP banks them, r0, d0, s2 and d2;
+reads d8-d15 in the caller's frame as the session set them, through the
+CFI of a framed routine whose assembly block has by then written d8 and
+d15 (D617); and, at a SysTick taken with the extended frame, selects the
+interrupted context above its 26 words and unwinds the three routines and
+reset from there, reading the caller's d8-d15 again. Ordinary unwinding
+still stops at interrupt entry, as it does for the `leaf` control. Its
 `cache-sequence` case links a program through `platform/cortex_m/l1` on the
 lane description `lanes/descriptions/mps2_an500_cached`, the an500's map
 with `compiler.cache`, and runs it under QEMU's trace of the System Control
@@ -1166,7 +1175,7 @@ python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_D
 ```
 
 `--case`, repeated, runs only the cases named: `cpu-levels`, `refusals`,
-`independent-c-assembly`, `compact-images`, `float-unit` and
+`independent-c-assembly`, `compact-images`, `float-unit`, `float-debug` and
 `cache-sequence` once, and `boot`, the
 cold-booted image built twice, `interrupts`, `fibre`, `dma`, `machine`,
 `veneers`, `fallthrough`, `images`, `hole` and `byte` at each profile. A
@@ -1318,6 +1327,16 @@ operands evaluated from their own and `ssi.h`'s, `addressmap.h`'s and
 `m0plus.h`'s macros, so a wrong constant in the port fails. The lane needs
 those inputs fetched (`python3 scripts/fetch_inputs.py`), as the gate's
 Cortex-M job does first.
+
+An ESP description's watchdog stage (D684) is followed the same way by
+[`devices/rv32.py`](../../devices/rv32.py), the RV32 reading beside
+`thumb.py`: from the linked image's entry word to reset, over no memory but
+the image's own bytes, with no RAM and no stack, the stage must make
+exactly the device accesses its record lists from the chip's manual, the
+one word it reads back answered as the record's `reads` gives it. An
+instruction outside RV32I, M and the integer part of C, a CSR access among
+them, or a load or store outside the 4 KiB blocks the record's own
+accesses lie in, is refused.
 
 It then links RP2040's program with a copy of the derived script and with
 four scripts each breaking one clause of D546's contract, and a fifth whose
