@@ -1,0 +1,22 @@
+error[L0303]: `table` is not mutable, so it may not be written
+  --> ../tests/fixtures/negative/immutable-array-inout-reports-once/main.ldn:12:11
+   |
+12 |     reset(table) -- error: `table` is not `mut`
+   |           ^^^^^
+  --> ../tests/fixtures/negative/immutable-array-inout-reports-once/main.ldn:4:1
+  |
+4 | table: [4]i32 = [1, 2, 3, 4]
+  | ^^^^^ declared here
+  = note: [1900]: mutable bindings, named returns and `inout` parameters may be written
+  = help (guess): declare `table` with `mut`
+error[L0303]: `local` is not mutable, so it may not be written
+  --> ../tests/fixtures/negative/immutable-array-inout-reports-once/main.ldn:13:11
+   |
+13 |     reset(local) -- error: `local` is not `mut`
+   |           ^^^^^
+  --> ../tests/fixtures/negative/immutable-array-inout-reports-once/main.ldn:11:5
+   |
+11 |     local: [4]i32 = [1, 2, 3, 4]
+   |     ^^^^^ declared here
+  = note: [1900]: mutable bindings, named returns and `inout` parameters may be written
+  = help (guess): declare `local` with `mut`

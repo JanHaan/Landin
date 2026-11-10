@@ -1,0 +1,15 @@
+--  An immutable array passed `inout` is refused for what is wrong with it:
+--  it may not be written.  Its type is the parameter's, and no second
+--  report says otherwise.
+table: [4]i32 = [1, 2, 3, 4]
+
+reset: (inout cells: [4]i32) -> none =
+    cells[0] = 0
+end reset
+
+public main: () -> (code: i32) =
+    local: [4]i32 = [1, 2, 3, 4]
+    reset(table) -- error: `table` is not `mut`
+    reset(local) -- error: `local` is not `mut`
+    code = 0
+end main

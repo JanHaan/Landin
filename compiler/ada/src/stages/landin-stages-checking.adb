@@ -16718,6 +16718,8 @@ package body Landin.Stages.Checking is
                            Because => "this parameter",
                            Into    => Found);
                      elsif Got = Ty.Fixed_Array
+                       and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Argument) /= Ty.Ill_Typed
                        and then
                          (Landin.Checking.Array_Length
                             (Types.all, Of_Tree, Argument)
