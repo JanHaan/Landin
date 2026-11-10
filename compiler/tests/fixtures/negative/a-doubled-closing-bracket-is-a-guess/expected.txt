@@ -1,0 +1,25 @@
+error[L0110]: `)` does not belong here
+  --> ../tests/fixtures/negative/a-doubled-closing-bracket-is-a-guess/program.ldn:6:25
+  |
+6 |     r = scale(a * b - c))
+  |                         ^
+  = note: written as `r = scale(a * b - c)` the line parses
+  = help (guess): remove `)`
+error[L0110]: `]` does not belong here
+  --> ../tests/fixtures/negative/a-doubled-closing-bracket-is-a-guess/program.ldn:10:21
+   |
+10 |     r = items[i + j]]
+   |                     ^
+  = note: written as `r = items[i + j]` the line parses
+  = help (guess): remove `]`
+error[L0101]: `:` does not belong here
+  --> ../tests/fixtures/negative/a-doubled-closing-bracket-is-a-guess/program.ldn:14:11
+   |
+14 |     twice:: i32 = a
+   |           ^
+  --> ../tests/fixtures/negative/a-doubled-closing-bracket-is-a-guess/program.ldn:14:5
+   |
+14 |     twice:: i32 = a
+   |     ^^^^^ declared here
+  = note: written as `twice: i32 = a` the line parses
+  = help: remove `:`

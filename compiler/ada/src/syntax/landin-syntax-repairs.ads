@@ -13,8 +13,12 @@
 --  The trials read the line's bytes and run the scanner and the parser over
 --  a few hundred bytes each, so the parser itself stays the reader of
 --  tokens it was and never reads a byte.  They are limited to one line and
---  a bounded count of tokens, which is what keeps a refused file as cheap
---  to report as an accepted one.
+--  a bounded count of tokens.  A trial that parses alone is read again in
+--  its routine, and only for the first refused line of that routine
+--  (D1076): a later one cannot be mended while the routine is refused
+--  before it, so the routine is not read to learn that.  The limits are
+--  what keep a refused file a bounded number of times as dear to report as
+--  an accepted one.
 
 with Landin.Diagnostics;
 with Landin.Source;
@@ -30,6 +34,16 @@ package Landin.Syntax.Repairs is
      (Snapshot : Landin.Source.Snapshot;
       Parsed   : Landin.Syntax.Tree;
       Found    : Landin.Diagnostics.Diagnostic_List)
+      return Landin.Diagnostics.Diagnostic_List;
+
+   --  The same, and how many times a routine was read again to judge a
+   --  trial, which the test program holds to the count of routines tried
+   --  rather than of lines refused.
+   function Restated
+     (Snapshot : Landin.Source.Snapshot;
+      Parsed   : Landin.Syntax.Tree;
+      Found    : Landin.Diagnostics.Diagnostic_List;
+      Readings : out Natural)
       return Landin.Diagnostics.Diagnostic_List;
 
 end Landin.Syntax.Repairs;

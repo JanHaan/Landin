@@ -1,0 +1,30 @@
+bad: atom
+problem: type = bad
+operation: type = (value: i32) -> (result: i32)
+
+leaf: (value: i32) -> (result: i32) ! problem =
+    fail bad when value < 0
+    result = value
+end leaf
+
+recovered: (value: i32) -> (result: i32) =
+    result = 0
+    leaf(value) else (error)
+        _ = error
+        result = 1
+    result = result + 2
+end recovered
+
+scoped: (value: i32) -> (result: i32) =
+    result = 0
+    begin
+        local: i32 = value
+        result = local
+    result = result + 2
+end
+
+applied: (value: i32) -> (result: i32) =
+    doubler: operation = (x: i32) -> (y: i32) =
+        y = x * 2
+    result = doubler(value)
+end applied

@@ -524,6 +524,45 @@ package body Landin.Tests.Formatting_Suite is
               "a:u32=true" & LF, "a: u32 = true" & LF);
    end Only_Syntax_Decides;
 
+   --  D1074: the layout moves where lines begin, so nothing the parser
+   --  accepts may depend on that.  Each of these parsed as written and
+   --  was refused once laid out, while the parser found a function's
+   --  closer by its indentation: the layout indents a signature's second
+   --  line, the closer that ends a line was then passed over, and a later
+   --  routine's `end` at the margin was taken for it.  Expect formats the
+   --  result again, which is what refused.
+   procedure The_Layout_Keeps_What_Parses
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Layout_Keeps_What_Parses
+     (Item : in out Landin.Testing.Context)
+   is
+      Main : constant String :=
+        "public main: () -> (code: i32) =" & LF
+        & "    code = add(20, 22) - 42" & LF
+        & "end" & LF;
+   begin
+      Expect (Item, "a closer ending its line under a two-line signature",
+              "add: (a: i32," & LF
+              & "b: i32) -> (r: i32) =" & LF
+              & "    r = a + b end" & LF & LF & Main,
+              "add: (a: i32," & LF
+              & "      b: i32) -> (r: i32) =" & LF
+              & "    r = a + b end" & LF & LF & Main);
+      Expect (Item, "a closer ending its line in a body at the margin",
+              "add: (a: i32, b: i32) -> (r: i32) =" & LF
+              & "r = a + b end" & LF & LF & Main,
+              "add: (a: i32, b: i32) -> (r: i32) =" & LF
+              & "    r = a + b end" & LF & LF & Main);
+      Expect (Item, "a closer deeper than its function",
+              "add: (a: i32, b: i32) -> (r: i32) =" & LF
+              & "    r = a + b" & LF
+              & "  end add" & LF & LF & Main,
+              "add: (a: i32, b: i32) -> (r: i32) =" & LF
+              & "    r = a + b" & LF
+              & "end add" & LF & LF & Main);
+   end The_Layout_Keeps_What_Parses;
+
    ------------------------------------------------------------------
    --  The corpus
    ------------------------------------------------------------------
@@ -1098,6 +1137,9 @@ package body Landin.Tests.Formatting_Suite is
       Landin.Testing.Register
         (Into, "formatting", "only syntax decides",
          Only_Syntax_Decides'Access);
+      Landin.Testing.Register
+        (Into, "formatting", "the layout keeps what parses",
+         The_Layout_Keeps_What_Parses'Access);
       Landin.Testing.Register
         (Into, "formatting", "every source keeps what it says",
          Every_Source_Keeps_What_It_Says'Access);

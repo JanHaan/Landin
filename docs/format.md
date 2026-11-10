@@ -23,6 +23,10 @@ There is no option that changes any of that.
 A file that does not scan or parse is refused with the report a compilation
 would give it, and nothing is written. Formatting reads nothing later than the
 parse, so a file whose names or types are wrong is formatted all the same.
+The layout is scanned and parsed again before it is given: one that changed a
+token or a comment, or that no longer parses, is a compiler defect and
+nothing is written. Where a line begins decides nothing in a program that
+parses (D1074), so the second cannot happen while that holds.
 
 What `refine fmt` does to bytes no example can show:
 

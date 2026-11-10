@@ -1,0 +1,30 @@
+error[L0104]: this recovery clause is never closed
+  --> ../tests/fixtures/negative/a-forgotten-end-is-not-the-functions/program.ldn:15:23
+   |
+15 |     result = result + 2
+   |                       ^
+  --> ../tests/fixtures/negative/a-forgotten-end-is-not-the-functions/program.ldn:12:17
+   |
+12 |     leaf(value) else (error)
+   |                 ^^^^ opened here
+  = note: [1030]: a bound `else` clause closes with `end`
+error[L0104]: this bare block is never closed
+  --> ../tests/fixtures/negative/a-forgotten-end-is-not-the-functions/program.ldn:23:23
+   |
+23 |     result = result + 2
+   |                       ^
+  --> ../tests/fixtures/negative/a-forgotten-end-is-not-the-functions/program.ldn:20:5
+   |
+20 |     begin
+   |     ^^^^^ opened here
+  = note: [1080]: a bare block closes with `end`
+error[L0104]: this anonymous function is never closed
+  --> ../tests/fixtures/negative/a-forgotten-end-is-not-the-functions/program.ldn:29:27
+   |
+29 |     result = doubler(value)
+   |                           ^
+  --> ../tests/fixtures/negative/a-forgotten-end-is-not-the-functions/program.ldn:27:26
+   |
+27 |     doubler: operation = (x: i32) -> (y: i32) =
+   |                          ^ opened here
+  = note: [1010]: an anonymous function closes with `end`

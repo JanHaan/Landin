@@ -232,10 +232,43 @@ package body Landin.Syntax.Parser is
       end loop;
    end Report_Capitalised_Words;
 
+   --  Raised by a reading by the grammar alone at the first thing it
+   --  would report, and handled in Parse: it never leaves this package.
+   Refused_By_Grammar : exception;
+
+   --  One reading of a token stream.  By_Grammar reads what [1740]-[1830]
+   --  derive and nothing else: a function has no fence, so its closer is
+   --  the `end` its body leaves, and a bare block's `end` is its own
+   --  whatever follows.  Such a reading reports nothing; at the first
+   --  mistake it raises Refused_By_Grammar with Report untouched.  The
+   --  other reading is D260's: it places closers by where they are
+   --  written, so that a mistake is reported once and where it is.
+   function Read
+     (From       : Landin.Tokens.Token_Stream;
+      Names      : in out Landin.Source.Names.Table;
+      Report     : in out Landin.Diagnostics.Diagnostic_List;
+      By_Grammar : Boolean) return Tree
+     with Post => Landin.Tokens.Source_Of (From) = Source_Of (Read'Result);
+
+   --  D1074: a program the grammar derives is read by the grammar, and
+   --  where its lines begin decides nothing.  Only a program that reading
+   --  refuses is read again with D260's recovery, which is what reports.
    function Parse
      (From   : Landin.Tokens.Token_Stream;
       Names  : in out Landin.Source.Names.Table;
       Report : in out Landin.Diagnostics.Diagnostic_List) return Tree is
+   begin
+      return Read (From, Names, Report, By_Grammar => True);
+   exception
+      when Refused_By_Grammar =>
+         return Read (From, Names, Report, By_Grammar => False);
+   end Parse;
+
+   function Read
+     (From       : Landin.Tokens.Token_Stream;
+      Names      : in out Landin.Source.Names.Table;
+      Report     : in out Landin.Diagnostics.Diagnostic_List;
+      By_Grammar : Boolean) return Tree is
    begin
       return Result : Tree do
          declare
@@ -249,8 +282,9 @@ package body Landin.Syntax.Parser is
             --  a function whose closer was found before its body, that
             --  closer.  Recovery skips forward and never past it, so a
             --  mistake in a body is reported inside that body and the
-            --  closer stays for the function that owns it.  A program the
-            --  parser accepts never reaches it from inside the body.
+            --  closer stays for the function that owns it.  Only D260's
+            --  reading sets it, so only a program the grammar's reading
+            --  refused meets it.
             Wall : Tok.Token_Index := Last;
             --  Set when something asked to move past the wall: from then on
             --  the wall reads as the end of input, so every loop that runs
@@ -305,8 +339,6 @@ package body Landin.Syntax.Parser is
             --  first, and the `end name` index a function is fenced by.
             Open_Closers : Closer_Vectors.Vector;
             Named_Ends : Closing_Names.Map;
-            --  Every `end` that begins a line, in token order.
-            Line_Ends : Token_Index_Vectors.Vector;
             Named_Ends_Ready : Boolean := False;
             Declaration_First : Tok.Token_Index := 1;
 
@@ -1311,6 +1343,9 @@ package body Landin.Syntax.Parser is
 
             procedure Mark_Reported is
             begin
+               if By_Grammar then
+                  raise Refused_By_Grammar;
+               end if;
                Reported := Natural'Max (Reported, Natural (Index));
                if Body_Level > 0 then
                   Statement_Reported := True;
@@ -2084,8 +2119,14 @@ package body Landin.Syntax.Parser is
                   return (others => <>);
                end Foreign_At;
 
-               Foreign : constant Foreign_Hit := Foreign_At;
+               Foreign : constant Foreign_Hit :=
+                 (if By_Grammar then (others => <>) else Foreign_At);
             begin
+               --  Gated or not: a reading that had anything to say is not
+               --  the grammar's.
+               if By_Grammar then
+                  raise Refused_By_Grammar;
+               end if;
                if Nesting_Refused then
                   return;
                end if;
@@ -2795,11 +2836,6 @@ package body Landin.Syntax.Parser is
                if not Named_Ends_Ready then
                   for Position in 1 .. Last - 1 loop
                      if Tok.Kind (From, Position) = Tok.Kw_End
-                       and then Begins_Line (Position)
-                     then
-                        Line_Ends.Append (Position);
-                     end if;
-                     if Tok.Kind (From, Position) = Tok.Kw_End
                        and then Tok.Kind (From, Position + 1) = Tok.Identifier
                      then
                         declare
@@ -2884,57 +2920,98 @@ package body Landin.Syntax.Parser is
                end;
             end Fence_For;
 
-            --  A bare `end` that begins a line no deeper than the function
-            --  closes it as well as its `end name` does, when it comes
-            --  first: `end` alone is [1800]'s closer, and a body written
-            --  deeper than its function has nothing else at that depth.
-            --  The fence is whichever comes first; Upto, when not zero,
-            --  is the named one.
+            --  A bare `end` alone on a line no deeper than the function
+            --  closes it as well as its `end name` does: `end` alone is
+            --  [1800]'s closer, and a body written deeper than its function
+            --  has nothing else at that depth.  So the fence is the first
+            --  line after the body's first that is no deeper than the
+            --  function, when that line is such an `end`.  When it is
+            --  anything else the body was left without one, and what lies
+            --  beyond is another declaration's: there is no fence, and any
+            --  `end` the body leaves closes the function, as [1800] has it.
+            --  Upto, when not zero, is the named fence, which stands.
             function Bare_Fence
               (Opened : Tok.Token_Index;
                Indent : Natural;
                Upto   : Natural) return Natural
             is
-               Low  : Natural := 0;
-               High : Natural := Natural (Line_Ends.Length);
+               Position : Tok.Token_Index := Opened + 1;
             begin
-               --  The first line-beginning `end` after Opened.
-               while Low < High loop
-                  declare
-                     Middle : constant Positive := Low + (High - Low) / 2 + 1;
-                  begin
-                     if Line_Ends (Middle) <= Opened then
-                        Low := Middle;
-                     else
-                        High := Middle - 1;
-                     end if;
-                  end;
-               end loop;
                --  Only a body written deeper than its function tells its
                --  own closer from a bare `end` inside it.
                --  A function with its own `end name` is closed there.
                if Upto /= 0 or else Body_Indent (Opened) <= Indent then
                   return Upto;
                end if;
-               for Position in Low + 1 .. Natural (Line_Ends.Length) loop
-                  exit when Upto /= 0
-                    and then Natural (Line_Ends (Position)) >= Upto;
-                  if Indent_Of (Line_Ends (Position)) <= Indent
-                    and then
-                      (Line_Ends (Position) = Last - 1
-                       or else Begins_Line (Line_Ends (Position) + 1)
-                       or else Tok.Kind (From, Line_Ends (Position) + 1)
-                         = Tok.End_Of_Input)
-                  then
-                     return Natural (Line_Ends (Position));
-                  end if;
+               --  Past the header's line, then to the first line that is
+               --  no deeper than the function.
+               while Position < Last and then not Begins_Line (Position) loop
+                  Position := Position + 1;
                end loop;
-               return Upto;
+               while Position < Last
+                 and then not (Begins_Line (Position)
+                               and then Indent_Of (Position) <= Indent)
+               loop
+                  Position := Position + 1;
+               end loop;
+               if Position < Last
+                 and then Tok.Kind (From, Position) = Tok.Kw_End
+                 and then (Position = Last - 1
+                           or else Begins_Line (Position + 1)
+                           or else Tok.Kind (From, Position + 1)
+                             = Tok.End_Of_Input)
+               then
+                  return Natural (Position);
+               end if;
+               return 0;
             end Bare_Fence;
 
             --  Whether the token in hand closes the construct Open
             --  describes, by the test that construct makes.
             function Closes (Open : Closer) return Boolean;
+
+            --  D260: after a mistake, a bare block does not take the
+            --  `end` of an `end if`, `end match` or `end unchecked`
+            --  written on one line while such a construct is open around
+            --  it: the block's own `end` is what is missing.  With the
+            --  word on the next line, or no such construct open, the
+            --  `end` is the block's, as the grammar has it.
+            function Left_For_Outer return Boolean;
+
+            function Left_For_Outer return Boolean is
+               Word : constant Tok.Token_Kind := Ahead (1);
+            begin
+               if By_Grammar
+                 or else Word not in Tok.Kw_If | Tok.Kw_Match
+                                     | Tok.Kw_Unchecked
+                 or else Begins_Line (Index + 1)
+               then
+                  return False;
+               end if;
+               for Open of Open_Closers loop
+                  if (Word = Tok.Kw_If and then Open.Kind = If_Closer)
+                    or else (Word = Tok.Kw_Match
+                             and then Open.Kind = Match_Closer)
+                    or else (Word = Tok.Kw_Unchecked
+                             and then Open.Kind = Unchecked_Closer)
+                  then
+                     return True;
+                  end if;
+               end loop;
+               return False;
+            end Left_For_Outer;
+
+            --  Whether the token in hand is the closer the function being
+            --  read was fenced by, met by a body that has reported
+            --  nothing.  It reads as `end` to everything in the body, and
+            --  is the function's: a construct that closes with a bare
+            --  `end` and meets it has no `end` of its own, and that is the
+            --  mistake.  After a report in the routine it is what that
+            --  mistake did to the rest of the body, and is taken quietly.
+            function At_Wall return Boolean
+              is (Wall < Last and then Index >= Wall
+                  and then not Past_Wall and then not Nesting_Refused
+                  and then not Routine_Reported);
 
             function Closes (Open : Closer) return Boolean is
                Follower : constant Tok.Token_Kind := Ahead (1);
@@ -2965,8 +3042,7 @@ package body Landin.Syntax.Parser is
                                       and then Indent_Of (Index)
                                         <= Open.Indent);
                         when Bare_Closer =>
-                           return Follower not in Tok.Kw_If | Tok.Kw_Match
-                                                  | Tok.Kw_Unchecked;
+                           return not Left_For_Outer;
                         when Label_Closer =>
                            return Follower = Tok.Identifier
                              and then Landin.Source.Names."="
@@ -8281,7 +8357,9 @@ package body Landin.Syntax.Parser is
                      Saved_Wall : constant Tok.Token_Index := Wall;
                      Own : constant Closer :=
                        (Kind   => Function_Closer,
-                        Fence  => Fence_For (Named, Declaration_First),
+                        Fence  => (if By_Grammar then 0
+                                   else Fence_For
+                                     (Named, Declaration_First)),
                         Indent => Line_Indent (Declaration_First),
                         others => <>);
                   begin
@@ -8523,7 +8601,7 @@ package body Landin.Syntax.Parser is
                   Body_Node := Add (Error_Statement, After_Previous);
                end if;
 
-               if Peek = Tok.Kw_End then
+               if Peek = Tok.Kw_End and then not At_Wall then
                   Advance;
                else
                   Complain
@@ -10214,9 +10292,8 @@ package body Landin.Syntax.Parser is
                --  construct when this block's own `end` is missing.  D187
                --  adds `end unchecked` to that set.
                elsif Peek = Tok.Kw_End
-                 and then Ahead (1) /= Tok.Kw_If
-                 and then not
-                   (Ahead (1) in Tok.Kw_Match | Tok.Kw_Unchecked)
+                 and then not At_Wall
+                 and then not Left_For_Outer
                then
                   Advance;
                else
@@ -11529,6 +11606,12 @@ package body Landin.Syntax.Parser is
                --  The parser retains that place without deciding whether it
                --  is addressable; the reference checker owns that question.
                if Peek = Tok.Kw_Addr then
+                  --  A refused operand is still read, by Parse_Unary, and
+                  --  may begin with `addr` again: the run is a nest.
+                  if Too_Deep (At_Item) then
+                     Advance;
+                     return Add (Error_Expression, At_Item);
+                  end if;
                   Advance;
                   --  `addr` takes a place, which is named: a literal, a
                   --  call or a parenthesised value has no storage to take
@@ -11552,10 +11635,12 @@ package body Landin.Syntax.Parser is
                                    & " field or an element; bind the"
                                    & " measure to a name first, as in"
                                    & " `count := lenof items`");
+                     Depth := Depth + 1;
                      declare
                         Ignored : constant Node_Id := Parse_Unary;
                         pragma Unreferenced (Ignored);
                      begin
+                        Depth := Depth - 1;
                         return Add (Error_Expression, At_Item,
                                     Join (At_Item, After_Previous));
                      end;
@@ -11572,10 +11657,12 @@ package body Landin.Syntax.Parser is
                         Note    => "[0380]: `addr` names a binding, a"
                                    & " field or an element; bind a value"
                                    & " to a name first");
+                     Depth := Depth + 1;
                      declare
                         Ignored : constant Node_Id := Parse_Unary;
                         pragma Unreferenced (Ignored);
                      begin
+                        Depth := Depth - 1;
                         return Add (Error_Expression, At_Item,
                                     Join (At_Item, After_Previous));
                      end;
@@ -11618,11 +11705,21 @@ package body Landin.Syntax.Parser is
                       (Ahead (1) = Tok.Left_Paren
                        and then Ahead (2) = Tok.Left_Bracket))
                then
+                  --  The primary measured may begin with `lenof` again.
+                  if Too_Deep (At_Item) then
+                     Advance;
+                     return Add (Error_Expression, At_Item);
+                  end if;
+                  Depth := Depth + 1;
                   Advance;
 
-                  return Add
-                    (Len_Of, At_Item,
-                     Children => [1 => Parse_Primary]);
+                  declare
+                     Measured : constant Node_Id := Parse_Primary;
+                  begin
+                     Depth := Depth - 1;
+                     return Add
+                       (Len_Of, At_Item, Children => [1 => Measured]);
+                  end;
                end if;
 
                --  D411's `offsetof T.field`.  The word is contextual like
@@ -12766,7 +12863,7 @@ package body Landin.Syntax.Parser is
                            Recovery_Body := Parse_Block
                              (Active_Frame, Allow_Value => True);
                            Pop;
-                           if Peek = Tok.Kw_End then
+                           if Peek = Tok.Kw_End and then not At_Wall then
                               Advance;
                            else
                               Complain
@@ -12979,6 +13076,6 @@ package body Landin.Syntax.Parser is
             Report_Capitalised_Words (From, Names, Result, Report);
          end;
       end return;
-   end Parse;
+   end Read;
 
 end Landin.Syntax.Parser;

@@ -1,0 +1,16 @@
+scale: (value: i32) -> (result: i32) =
+    result = value * 2
+end scale
+
+f: (a: i32, b: i32, c: i32) -> (r: i32) =
+    r = scale(a * b - c))
+end f
+
+g: (items: []i32, i: usize, j: usize) -> (r: i32) =
+    r = items[i + j]]
+end g
+
+h: (a: i32) -> (r: i32) =
+    twice:: i32 = a
+    r = twice
+end h

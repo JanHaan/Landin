@@ -112,7 +112,9 @@ end-to-end/refine-identity | linux-x86-64, linux-arm64, darwin-arm64, linux-rv64
 end-to-end/run-another-target | cortex-m0
 negative/a-concept-entry-names-its-public-operation | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-control-value-missing-twice-reports-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-doubled-closing-bracket-is-a-guess | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-fold-deeper-than-any-limit | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-forgotten-end-is-not-the-functions | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-missing-conformance-entry-is-one-report | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-nested-mistake-after-a-refused-statement-is-reported | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-noreturn-call-is-not-a-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1996,6 +1998,7 @@ runtime/choices-over-nan-comparisons | linux-x86-64, linux-arm64, linux-rv64, da
 runtime/clock-manual | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/clock-system | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/clock-system-libc | linux-x86-64, linux-arm64, linux-rv64
+runtime/closers-are-read-by-the-grammar | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/cmp-bytes-ordered | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/comparisons-exit-with-their-verdict | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/compiler-unreachable-dispatches | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

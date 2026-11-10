@@ -1443,6 +1443,268 @@ package body Landin.Tests.Parser_Suite is
          "the report uses the nesting code");
    end Deep_Nesting_Is_Reported;
 
+   --  `lenof` measures the primary after it and a refused `addr` operand
+   --  is still read, so a run of either word is a nest like any other: it
+   --  once recursed until the stack was gone.
+   procedure Measure_And_Address_Chains_Are_Bounded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Measure_And_Address_Chains_Are_Bounded
+     (Item : in out Landin.Testing.Context)
+   is
+      Depth : constant Positive := Landin.Syntax.Parser.Nesting_Limit * 400;
+
+      procedure Probe (Word : String; Wanted : String);
+
+      procedure Probe (Word : String; Wanted : String) is
+         Text  : Unbounded.Unbounded_String;
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Unbounded.Append
+           (Text, "f: () -> (r: i32) =" & ASCII.LF & "    r = ");
+         for Step in 1 .. Depth loop
+            pragma Unreferenced (Step);
+            Unbounded.Append (Text, Word & " ");
+         end loop;
+         Unbounded.Append (Text, "g" & ASCII.LF & "end f" & ASCII.LF);
+
+         Read_And_Parse
+           (Unbounded.To_String (Text), Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held, "the table's invariants hold past a run of " & Word);
+         Landin.Testing.Check
+           (Item, Total = 1
+              and then Contains (Unbounded.To_String (Codes), Wanted),
+            "a run of `" & Word & "` is one report, " & Wanted & ": "
+            & Unbounded.To_String (Codes));
+      end Probe;
+   begin
+      Probe ("lenof", "L0111");
+      --  The first `addr` is refused for its operand, and the nest under
+      --  it is the rest of that mistake.
+      Probe ("addr", "L0100");
+   end Measure_And_Address_Chains_Are_Bounded;
+
+   --  D1076: a repair counts only when its routine parses up to the line
+   --  it mends, so only the first refused line of a routine can be
+   --  restated, and the routine is read again only for that one.  It was
+   --  once read for every change to every refused line, the square of a
+   --  routine of systematic mistakes: 1,500 such lines took six minutes.
+   procedure The_Repair_Search_Reads_A_Routine_For_Its_First_Line
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Repair_Search_Reads_A_Routine_For_Its_First_Line
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Routines : constant := 3;
+      Refused  : constant := 200;
+      Text : Unbounded.Unbounded_String;
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Readings : Natural;
+      Mended   : Natural := 0;
+
+      function Image (Value : Natural) return String
+        is (Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Left));
+   begin
+      for Routine in 1 .. Routines loop
+         Unbounded.Append
+           (Text, "f" & Image (Routine) & ": () -> (r: i32) =" & LF
+                  & "    r = 1" & LF);
+         for Line in 1 .. Refused loop
+            Unbounded.Append
+              (Text, "    r = r + + " & Image (Line) & LF);
+         end loop;
+         Unbounded.Append (Text, "end f" & Image (Routine) & LF);
+      end loop;
+
+      declare
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("many.ldn", Unbounded.To_String (Text));
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Restated : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Syntax.Repairs.Restated
+                (Sources.Get (Id), Parsed, Found, Readings);
+         begin
+            for Index in 1 .. Landin.Diagnostics.Count (Restated) loop
+               if Landin.Diagnostics.Fix_Count
+                    (Landin.Diagnostics.Get (Restated, Index)) > 0
+               then
+                  Mended := Mended + 1;
+               end if;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Restated),
+               Routines * Refused, "each refused line is one report");
+            Landin.Testing.Check_Equal
+              (Item, Mended, Routines,
+               "the first refused line of each routine is restated");
+            Landin.Testing.Check
+              (Item, Readings in 1 .. Routines * 16,
+               "a routine is read again for its first refused line alone:"
+               & Readings'Image & " readings for" & Natural'Image (Routines)
+               & " routines of" & Natural'Image (Refused)
+               & " refused lines");
+         end;
+      end;
+   end The_Repair_Search_Reads_A_Routine_For_Its_First_Line;
+
+   --  D1074: where a line begins decides nothing in a program the grammar
+   --  derives.  Every fixture program that parses is read again with no
+   --  indentation at all and with every line that begins with a token
+   --  moved to a drawn depth, and parses as it did.  Lines inside a raw
+   --  literal or a block comment begin with no token and are not moved:
+   --  their blanks are bytes of the literal [0280].  Deliberate real-host
+   --  exception: the corpus on disk is what is read.
+   procedure Indentation_Decides_Nothing
+     (Item : in out Landin.Testing.Context);
+
+   procedure Indentation_Decides_Nothing
+     (Item : in out Landin.Testing.Context)
+   is
+      State : Mutation_Word := Mutation_Seed;
+      Host      : Landin.Platform.Native.Native_Filesystem;
+      Catalogue : Fixtures.Catalogue;
+      Programs  : Natural := 0;
+      Refused   : Natural := 0;
+      Examples  : Unbounded.Unbounded_String;
+
+      function Errors (Text : String) return Natural;
+
+      function Errors (Text : String) return Natural is
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse (Text, Codes, Total, Nodes, Held);
+         return Total + (if Held then 0 else 1);
+      end Errors;
+
+      --  Text with each line that begins with a token indented anew:
+      --  not at all when Depth_Limit is zero, else by a draw below it.
+      function Moved (Text : String; Depth_Limit : Natural) return String;
+
+      function Moved (Text : String; Depth_Limit : Natural) return String is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Result  : Unbounded.Unbounded_String;
+         Token   : Landin.Tokens.Token_Index := 1;
+         Cursor  : Natural := Text'First;
+      begin
+         Landin.Tokens.Lexer.Lex
+           (Sources.Get (Sources.Add ("moved.ldn", Text)), Names, Stream);
+         while Cursor <= Text'Last loop
+            declare
+               First_Byte : Natural := Cursor;
+               Line_End   : Natural := Cursor;
+            begin
+               while Line_End <= Text'Last
+                 and then Text (Line_End) /= ASCII.LF
+               loop
+                  Line_End := Line_End + 1;
+               end loop;
+               while First_Byte < Line_End
+                 and then Text (First_Byte) in ' ' | ASCII.HT
+               loop
+                  First_Byte := First_Byte + 1;
+               end loop;
+               while Token < Landin.Tokens.Count (Stream)
+                 and then Natural (Landin.Tokens.Where (Stream, Token).First)
+                            < First_Byte - Text'First
+               loop
+                  Token := Token + 1;
+               end loop;
+               if First_Byte < Line_End
+                 and then Token < Landin.Tokens.Count (Stream)
+                 and then Natural (Landin.Tokens.Where (Stream, Token).First)
+                            = First_Byte - Text'First
+               then
+                  if Depth_Limit > 0 then
+                     Unbounded.Append
+                       (Result,
+                        [1 .. Pick_Mutation_Value (State, Depth_Limit) - 1
+                           => ' ']);
+                  end if;
+                  Unbounded.Append
+                    (Result,
+                     Text (First_Byte .. Natural'Min (Line_End, Text'Last)));
+               else
+                  Unbounded.Append
+                    (Result,
+                     Text (Cursor .. Natural'Min (Line_End, Text'Last)));
+               end if;
+               Cursor := Line_End + 1;
+            end;
+         end loop;
+         return Unbounded.To_String (Result);
+      end Moved;
+   begin
+      Fixtures.Discover (Catalogue, Corpus, Host);
+
+      for Index in 1 .. Fixtures.Count (Catalogue) loop
+         declare
+            Fixture : constant Fixtures.Fixture :=
+              Fixtures.Nth (Catalogue, Index);
+            Class   : constant Fixtures.Fixture_Class :=
+              Fixtures.Class (Fixture);
+         begin
+            if Class in Fixtures.Positive_Program | Fixtures.Runtime
+              and then Fixtures.Program (Fixture) /= ""
+            then
+               declare
+                  Path : constant String :=
+                    Corpus & "/" & Fixtures.Class_Directory (Class) & "/"
+                    & Fixtures.Name (Fixture) & "/"
+                    & Fixtures.Program (Fixture);
+                  Content : Unbounded.Unbounded_String;
+                  Status  : Landin.Platform.Read_Status;
+               begin
+                  Host.Read_File (Path, Content, Status);
+                  if Status = Landin.Platform.Read_Ok
+                    and then Unbounded.Length (Content) > 0
+                    and then Errors (Unbounded.To_String (Content)) = 0
+                  then
+                     Programs := Programs + 1;
+                     for Depth_Limit in 0 .. 2 loop
+                        if Errors
+                             (Moved (Unbounded.To_String (Content),
+                                     (if Depth_Limit = 0 then 0 else 13)))
+                           /= 0
+                        then
+                           Refused := Refused + 1;
+                           if Refused <= 5 then
+                              Unbounded.Append
+                                (Examples, " " & Fixtures.Name (Fixture));
+                           end if;
+                        end if;
+                     end loop;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      Landin.Testing.Check
+        (Item, Programs > 800,
+         "the corpus was read:" & Programs'Image & " programs");
+      Landin.Testing.Check_Equal
+        (Item, Refused, 0,
+         "no program is refused for where its lines begin:"
+         & Unbounded.To_String (Examples));
+   end Indentation_Decides_Nothing;
+
    --  A selector chain and a run of `ptr` are read iteratively, but every
    --  later walk recurses over them, so they meet the same floor.
    procedure Deep_Chains_Are_Reported
@@ -5703,6 +5965,15 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "calls respect the nesting limit",
          Calls_Respect_The_Nesting_Limit'Access);
+      Landin.Testing.Register
+        (Into, "parser", "measure and address chains are bounded",
+         Measure_And_Address_Chains_Are_Bounded'Access);
+      Landin.Testing.Register
+        (Into, "parser", "indentation decides nothing",
+         Indentation_Decides_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "parser", "the repair search reads a routine once",
+         The_Repair_Search_Reads_A_Routine_For_Its_First_Line'Access);
       Landin.Testing.Register
         (Into, "parser", "transfers preserve completion boundaries",
          Transfers_Preserve_Completion_Boundaries'Access);
