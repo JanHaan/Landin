@@ -126,6 +126,25 @@ ROADMAP = "ROADMAP.md"
 #  what is left to do.  Four tables, read here and generated into matrices.
 REGISTERS = "compiler/tests/registers.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
+DERIVATION_MAP = "DERIVATION.md"
+
+
+def derivation_maps():
+    """Every derivation's map: each DERIVATION.md under compiler/tests.
+
+    A map was a live document only once someone added it to the list
+    below by hand, and no document said to: four of the six were in no
+    live-document check, and one cited a roadmap item unrefused.  The name
+    is the rule, so a new derivation's map is read the moment it exists.
+    """
+    found = []
+    for here, _, files in os.walk(os.path.join(ROOT, "compiler", "tests")):
+        if DERIVATION_MAP in files:
+            found.append(os.path.relpath(os.path.join(here, DERIVATION_MAP),
+                                         ROOT).replace(os.sep, "/"))
+    return sorted(found)
+
+
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/documents.md",
                      "docs/library.md",
@@ -141,13 +160,11 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "compiler/ada/README.md",
                      "core/README.md",
                      "devices/README.md",
-                     "compiler/tests/driver/DERIVATION.md",
-                     "compiler/tests/counterpart/DERIVATION.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",
                      REGISTERS,
                      "compiler/tests/harness-cases/README.md",
-                     "docs/site/README.md"]
+                     "docs/site/README.md"] + derivation_maps()
 
 RUNNING_EXAMPLES = [
     ("Word count",
@@ -4958,13 +4975,27 @@ def third_party_notices():
     return out
 
 
+#  What writes a published example's routines into the fixtures that carry
+#  copies of them; each refusal of a differing copy names it.
+SYNC_ROUTINES = "python3 scripts/sync_routines.py"
+
+
+def shared_routine(name, text):
+    """The match of routine NAME's declaration in TEXT, to its `end`."""
+    return re.search(r"^" + re.escape(name) + r": .*?^end "
+                     + re.escape(name) + r"$", text, re.M | re.S)
+
+
 def shared_routine_witnesses():
     """A published example's routine is the one its other fixtures run.
 
     The word count is copied out as one file, so the fixtures that run its
     counting where the example cannot, on firmware through core/io.memory
     and over a closed standard input, carry the routine themselves; this
-    holds every copy to the published text.
+    holds every copy to the published text.  A copy that differs is
+    rewritten from the published file by SYNC_ROUTINES, which the refusal
+    names: a cosmetic edit to an example once failed here until the same
+    routine was copied into a fixture by hand.
     """
     out = []
     for published, copies in SHARED_ROUTINES.items():
@@ -4978,15 +5009,52 @@ def shared_routine_witnesses():
         for copy, names in sorted(copies.items()):
             text = read_file(os.path.join(ROOT, copy), encoding="utf-8")
             for name in names:
-                found = re.search(r"^" + name + r": .*?^end " + name + r"$",
-                                  source, re.M | re.S)
+                found = shared_routine(name, source)
                 if not found:
                     out.append((published, 1, "the shared routine %s is "
                                 "not declared here" % name))
                 elif found.group() not in text:
-                    out.append((copy, 1, "%s differs from %s's"
-                                % (name, published)))
+                    out.append((copy, 1, "%s differs from %s's; the "
+                                "published file is the source, so copy "
+                                "its routine here with %s"
+                                % (name, published, SYNC_ROUTINES)))
     return out
+
+
+def sync_shared_routines():
+    """Write each published routine over its copies: (written, refusals).
+
+    WRITTEN is the (copy, name) pairs that differed and were rewritten.
+    A copy that does not declare the routine at all is not guessed at: the
+    refusal says where to add it.
+    """
+    written, refusals = [], []
+    for published, copies in sorted(SHARED_ROUTINES.items()):
+        source = read_file(os.path.join(ROOT, published), encoding="utf-8")
+        for copy, names in sorted(copies.items()):
+            path = os.path.join(ROOT, copy)
+            text = read_file(path, encoding="utf-8")
+            changed = False
+            for name in names:
+                found = shared_routine(name, source)
+                if not found:
+                    refusals.append("%s does not declare the shared routine"
+                                    " %s" % (published, name))
+                    continue
+                held = shared_routine(name, text)
+                if not held:
+                    refusals.append("%s does not declare %s, so there is no"
+                                    " routine to replace; add %s's to it"
+                                    % (copy, name, published))
+                elif held.group() != found.group():
+                    text = (text[:held.start()] + found.group()
+                            + text[held.end():])
+                    written.append((copy, name))
+                    changed = True
+            if changed:
+                with io.open(path, "w", encoding="utf-8") as stream:
+                    stream.write(text)
+    return written, refusals
 
 
 def tour_example_witnesses():
@@ -6772,11 +6840,14 @@ def firmware_derivation_problems(records, mandatory):
                 out.append((REGISTERS, 1,
                             "%s derivation lacks %s" % (one.what, field)))
         #  A mapping outside LIVE_DOCS escapes every live-document check:
-        #  the counterpart's first cited a roadmap item unrefused.
+        #  the counterpart's first cited a roadmap item unrefused.  A map
+        #  is live by its name and place (`derivation_maps`).
         if fields.get("mapping") and fields["mapping"] not in LIVE_DOCS:
             out.append((REGISTERS, 1,
-                        "%s derivation's mapping %s is not in check.py's"
-                        " LIVE_DOCS" % (one.what, fields["mapping"])))
+                        "%s derivation's mapping %s is no live document:"
+                        " name it %s, under compiler/tests, and check.py"
+                        " reads it as one"
+                        % (one.what, fields["mapping"], DERIVATION_MAP)))
         if one.lane not in mandatory:
             out.append((REGISTERS, 1, "%s evidence is not in the mandatory lane"
                         % one.what))
@@ -10172,6 +10243,54 @@ def cortex_corpus_row_problems():
     return out
 
 
+CONTROL_QUOTES = "scripts/tests/control_quotes.json"
+
+
+def check_control_quotes(full_run):
+    """Each document still says what a check's control quotes from it.
+
+    A control in scripts/tests copies a real document and changes one
+    place in it to show that a check notices; it finds the place by the
+    document's own words.  Reworded, the document is still right and the
+    control fails, where only scripts/script_tests.py and the gate looked.
+    CONTROL_QUOTES lists those words by document, the controls take them
+    from it, and this says so here, in the check a writer runs.
+    """
+    if not full_run:
+        return []
+    path = os.path.join(ROOT, CONTROL_QUOTES)
+    if not os.path.exists(path):
+        return [(CONTROL_QUOTES, 1, "missing: the text check.py's controls"
+                 " quote from the documents")]
+    try:
+        quotes = json.loads(read_file(path, encoding="utf-8"))
+        listed = [(document, text) for document, texts in sorted(quotes.items())
+                  for text in texts]
+        if not all(isinstance(text, str) and text for _, text in listed):
+            raise ValueError("a quote is not a non-empty string")
+    except (ValueError, AttributeError, TypeError) as error:
+        return [(CONTROL_QUOTES, 1, "unreadable: %s" % error)]
+    out = []
+    for document in sorted(quotes):
+        if not os.path.isfile(os.path.join(ROOT, document)):
+            out.append((CONTROL_QUOTES, 1, "quotes %s, which is not here"
+                        % document))
+    for document, text in listed:
+        where = os.path.join(ROOT, document)
+        if not os.path.isfile(where):
+            continue
+        if text not in read_file(where, encoding="utf-8"):
+            out.append((document, 1,
+                        "no longer says %s, which a control of check.py's"
+                        " looks for to show a check fires; the document may"
+                        " be right, so reword the quote in %s and in the"
+                        " control that uses it, then run python3"
+                        " scripts/script_tests.py test_check_controls"
+                        % (json.dumps(text, ensure_ascii=False),
+                           CONTROL_QUOTES)))
+    return out
+
+
 def check_owned_tests(full_run):
     """Run the repository's own Python tests, and say which one failed.
 
@@ -10963,6 +11082,7 @@ def main(argv):
     extra += check_source_locations(full_run)
     extra += check_optimization_contract(full_run)
     extra += check_array_prose(full_run)
+    extra += check_control_quotes(full_run)
     extra += check_owned_tests(full_run)
     extra += check_grammar_corpus(full_run)
     extra += check_token_vocabulary(full_run)

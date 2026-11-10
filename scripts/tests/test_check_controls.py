@@ -25,7 +25,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_controls import checker, faults, reasons   # noqa: E402
+from check_controls import checker, faults, quote, reasons   # noqa: E402
 
 ORACLES = list(checker.BENCHMARK_GAME_ORACLES)
 
@@ -898,7 +898,8 @@ class SplitSubjects(unittest.TestCase):
             tour = root / "tour.md"
             text = tour.read_text()
             tour.write_text(text.replace(
-                "### [0590]", "### [0590]\n\nreduce_add( revived\n", 1))
+                quote("tour.md", "### [0590]"),
+                "### [0590]\n\nreduce_add( revived\n", 1))
             said = [why for _, _, why in checker.check_array_prose(True)]
         self.assertTrue(said)
 
@@ -1298,7 +1299,7 @@ class GrammarCorpus(unittest.TestCase):
             with mock.patch.object(checker, "LETTERS", frozenset("ab")):
                 self.assertNotEqual(identity(), real)
             spec.write_text(spec.read_text().replace(
-                "```landin-grammar\nprogram",
+                quote("spec.md", "```landin-grammar\nprogram"),
                 "```landin-grammar\nstranded    ::= \"unreachable\"\nprogram",
                 1))
             self.assertNotEqual(identity(), real)
@@ -1313,7 +1314,7 @@ class GrammarCorpus(unittest.TestCase):
             spec = root / "spec.md"
             self.assertEqual(checker.grammar_problems(str(spec)), [])
             spec.write_text(spec.read_text().replace(
-                "```landin-grammar\nprogram",
+                quote("spec.md", "```landin-grammar\nprogram"),
                 "```landin-grammar\nstranded    ::= \"unreachable\"\nprogram",
                 1))
             said = [why for _, why in checker.check(str(spec))]
@@ -1335,7 +1336,7 @@ class GrammarCorpus(unittest.TestCase):
         with tree(copied=["spec.md"]) as root:
             spec = root / "spec.md"
             spec.write_text(spec.read_text().replace(
-                "```landin-grammar\nprogram",
+                quote("spec.md", "```landin-grammar\nprogram"),
                 "```landin-grammar\nstranded    ::= \"unreachable\"\nprogram",
                 1))
             line = checker.grammar_problems(str(spec))[0][0]
@@ -1394,7 +1395,8 @@ class TokenVocabulary(unittest.TestCase):
         with tree(copied=TOKENS) as root:
             spec = root / "spec.md"
             text = spec.read_text()
-            spec.write_text(text.replace('"match"', '"match" | "invented"', 1))
+            spec.write_text(text.replace(quote("spec.md", '"match"'),
+                                         '"match" | "invented"', 1))
             said = [why for _, _, why
                     in checker.check_token_vocabulary(True)]
         self.assertTrue(any("differ from the grammar" in why
@@ -1757,9 +1759,11 @@ class Transcriptions(unittest.TestCase):
             self.assertEqual(checker.check_explanations(True), [])
             page = root / "docs/diagnostics.md"
             text = page.read_text()
-            text = text.replace("### L0003\n", "### L0999\n", 1)
-            text = text.replace("Retired. An internal call", "An internal call",
-                                1)
+            text = text.replace(quote("docs/diagnostics.md", "### L0003\n"),
+                                "### L0999\n", 1)
+            text = text.replace(
+                quote("docs/diagnostics.md", "Retired. An internal call"),
+                "An internal call", 1)
             page.write_text(text)
             said = [why for _, _, why in checker.check_explanations(True)]
         self.assertIn("L0003 is not explained", said)
@@ -1775,10 +1779,11 @@ class Transcriptions(unittest.TestCase):
             text = page.read_text()
             self.assertIn("```landin\n-- refine: --target=cortex-m0\n", text)
             text = text.replace(
-                "```landin\n-- refine: --target=cortex-m0\n",
+                quote("docs/diagnostics.md",
+                      "```landin\n-- refine: --target=cortex-m0\n"),
                 "```landin\n-- refine: target=cortex-m0\n", 1)
             text = text.replace(
-                "```landin\nmask: u64 = 1u64\n",
+                quote("docs/diagnostics.md", "```landin\nmask: u64 = 1u64\n"),
                 "```landin\nmask: u64 = 1u64\n-- refine: --target=cortex-m0\n",
                 1)
             page.write_text(text)
@@ -1815,11 +1820,14 @@ class Transcriptions(unittest.TestCase):
             self.assertEqual(checker.check_layout_page(True), [])
             page = root / "docs/format.md"
             text = page.read_text()
-            head, rules = text.split("## Rules\n", 1)
+            head, rules = text.split(quote("docs/format.md", "## Rules\n"), 1)
             rules = rules.replace(
-                "```landin\n    counter: u32 = 0\n", "```text\n", 1)
-            rules = rules.replace("r = a * (b + -1) - -a", "r = a *", 1)
-            rules, after = (rules.split("\n## ", 1) + [None])[:2]
+                quote("docs/format.md", "```landin\n    counter: u32 = 0\n"),
+                "```text\n", 1)
+            rules = rules.replace(
+                quote("docs/format.md", "r = a * (b + -1) - -a"), "r = a *", 1)
+            rules, after = (rules.split(
+                quote("docs/format.md", "\n## "), 1) + [None])[:2]
             rules += ("\n### Nothing\n\n```landin\na: u32 = 1\n```\n\n"
                       "```landin\na: u32 = 1\n```\n")
             if after is not None:
@@ -2005,7 +2013,8 @@ class RoadmapStructure(unittest.TestCase):
         self.assertTrue(any("invalid status" in why for why in said))
 
     def test_a_phase_out_of_order_is_reported(self):
-        said = roadmap_faults(once("## R9 — ", "## R7 — "))
+        said = roadmap_faults(once(quote("ROADMAP.md", "## R9 — "),
+                                   "## R7 — "))
         self.assertTrue(any("not R8 onward in order" in why for why in said))
 
     def test_execution_order_requires_complete_unique_known_items(self):
@@ -2030,7 +2039,8 @@ class RoadmapStructure(unittest.TestCase):
         self.assertTrue(any("precedes dependency" in why for why in said))
 
     def test_a_reference_to_nothing_is_reported(self):
-        said = roadmap_faults(once("| Guarded cleanups can expand",
+        said = roadmap_faults(once(quote("ROADMAP.md",
+                                         "| Guarded cleanups can expand"),
                                    "| %s's guarded cleanups can expand"
                                    % CLOSED))
         self.assertTrue(any("%s is referenced and not defined" % CLOSED
@@ -2051,14 +2061,16 @@ class RoadmapStructure(unittest.TestCase):
         #  Past every record the register has had, so it names nothing.
         invented = "SR-%d" % (1 + max(int(n) for n in re.findall(
             r"SR-(\d+)", real_roadmap())))
-        said = roadmap_faults(once("Work that waits for its activation,",
+        said = roadmap_faults(once(quote("ROADMAP.md",
+                                         "Work that waits for its activation,"),
                                    "Work that waits for its activation (%s),"
                                    % invented))
         self.assertTrue(any("%s is cited and is no register record" % invented
                             in why for why in said))
         #  Quoted in a code span, as a finding spells what it met, it is not
         #  a citation.
-        said = roadmap_faults(once("Work that waits for its activation,",
+        said = roadmap_faults(once(quote("ROADMAP.md",
+                                         "Work that waits for its activation,"),
                                    "Work that waits for its activation (`%s`),"
                                    % invented))
         self.assertFalse(any(invented in why for why in said))
@@ -2118,14 +2130,15 @@ class RoadmapStructure(unittest.TestCase):
 
     def test_a_record_without_an_activation_is_reported(self):
         said = roadmap_faults(once(
-            "| A measured cleanup workload with unacceptable growth. |",
+            quote("ROADMAP.md", "| A measured cleanup workload with "
+                  "unacceptable growth. |"),
             "| — |"))
         self.assertTrue(any("%s has no activation" % GUARDED in why
                             for why in said))
 
     def test_a_family_that_owns_nothing_is_reported(self):
         said = roadmap_faults(once(
-            "- **Release readiness:**",
+            quote("ROADMAP.md", "- **Release readiness:**"),
             "- **Release readiness:** unchanged.\n- **Nobody's:**"))
         self.assertTrue(any("family Nobody's owns no open record" in why
                             for why in said))

@@ -17,6 +17,7 @@ quality, debugger and embedded lanes own behaviour.
 import copy
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
 import unittest.mock
 
@@ -329,8 +330,31 @@ class Derivations(unittest.TestCase):
             live = [doc for doc in CHECK.LIVE_DOCS if doc != mapping]
             with unittest.mock.patch.object(CHECK, "LIVE_DOCS", live):
                 self.refused(self.firmware_problems(),
-                             "%s derivation's mapping %s is not in"
+                             "%s derivation's mapping %s is no live document"
                              % (one.what, mapping))
+
+    def test_every_derivation_map_is_a_live_document_by_its_name(self):
+        #  The list was kept by hand, and four hosted maps were in no
+        #  live-document check.  Every tracked map is one now.
+        maps = sorted(path.relative_to(ROOT).as_posix() for path in
+                      (ROOT / "compiler/tests").rglob("DERIVATION.md"))
+        self.assertGreaterEqual(len(maps), 6)
+        for name in maps:
+            self.assertIn(name, CHECK.LIVE_DOCS)
+        for name in ("derived-parser", "derived-containers",
+                     "derived-hosted-memory", "derived-server-two-process"):
+            self.assertIn("compiler/tests/fixtures/runtime/%s/DERIVATION.md"
+                          % name, maps)
+        #  And the next one is, without an edit to check.py.
+        with tempfile.TemporaryDirectory() as directory:
+            new = Path(directory, "compiler/tests/fixtures/runtime/new-one")
+            new.mkdir(parents=True)
+            (new / "DERIVATION.md").write_text("# A map\n")
+            (new / "README.md").write_text("# Not a map\n")
+            with unittest.mock.patch.object(CHECK, "ROOT", directory):
+                self.assertEqual(
+                    CHECK.derivation_maps(),
+                    ["compiler/tests/fixtures/runtime/new-one/DERIVATION.md"])
 
     def test_an_absent_record_is_refused(self):
         for one in CHECK.FIRMWARE_DERIVATIONS:

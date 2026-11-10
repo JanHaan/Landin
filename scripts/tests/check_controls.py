@@ -59,6 +59,34 @@ def _cached_identity(path):
         return None
 
 
+#  The text the controls quote from the real documents, by document.  A
+#  control that copies a document and breaks one place in it finds the
+#  place by its words, so rewording the document breaks the control, and
+#  only scripts/script_tests.py ran the controls: four writers each passed
+#  check.py and the gate failed.  The quotes are listed here, where
+#  check.py reads them (`check_control_quotes`) and tells the writer which
+#  control a rewording reaches.
+QUOTES = "scripts/tests/control_quotes.json"
+_quotes = None
+
+
+def quote(document, text):
+    """TEXT, which a control is about to look for in a copy of DOCUMENT.
+
+    The pair has to be in QUOTES, so that check.py holds the document to
+    still saying it.  test_control_quotes.py refuses a control that quotes
+    a document's text without this.
+    """
+    global _quotes
+    if _quotes is None:
+        _quotes = json.loads((ROOT / QUOTES).read_text(encoding="utf-8"))
+    assert text in _quotes.get(document, ()), (
+        "%r is quoted from %s and is not in %s; list it there, so that "
+        "python3 check.py tells whoever rewords the document"
+        % (text, document, QUOTES))
+    return text
+
+
 _ignored = None
 
 
