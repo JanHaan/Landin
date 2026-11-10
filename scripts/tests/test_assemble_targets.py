@@ -56,6 +56,17 @@ if "broken" in source.read_text():
 out.write_text("object")
 """ % sys.executable
 
+#  Runs the script named after the record with that record as its
+#  KNOWN_REJECTIONS, and the rest of the arguments as its own.
+RECORDING = """
+import ast, importlib.util, sys
+spec = importlib.util.spec_from_file_location("assemble_targets", sys.argv[2])
+script = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(script)
+script.KNOWN_REJECTIONS = ast.literal_eval(sys.argv[1])
+sys.exit(script.main(sys.argv[2:]))
+"""
+
 
 class AssembleTargets(unittest.TestCase):
     def setUp(self):
@@ -86,9 +97,15 @@ class AssembleTargets(unittest.TestCase):
 
     def run_script(self, *arguments):
         #  Only the stubs and the interpreter's own directory are on PATH.
+        #  A control that set `self.record` runs the script with that as
+        #  its KNOWN_REJECTIONS, through RECORDING.
+        record = getattr(self, "record", None)
+        command = ([sys.executable, str(SCRIPT)] if record is None
+                   else [sys.executable, "-c", RECORDING, repr(record),
+                         str(SCRIPT)])
         return subprocess.run(
-            [sys.executable, str(SCRIPT), str(self.refine), str(self.area),
-             *arguments], capture_output=True, text=True, timeout=HANG,
+            [*command, str(self.refine), str(self.area), *arguments],
+            capture_output=True, text=True, timeout=HANG,
             env={**os.environ, "CALLS": str(self.calls),
                  "PATH": str(self.tools)})
 
@@ -159,9 +176,10 @@ class AssembleTargets(unittest.TestCase):
 
     def test_a_recorded_rejection_is_counted_and_a_stale_record_is_a_fault(self):
         self.tool("riscv64-linux-gnu-gcc")
-        (name, target), why = next(
-            item for item in sorted(ASSEMBLE.KNOWN_REJECTIONS.items())
-            if item[0][1] == "linux-rv64")
+        #  The record is the control's own, so that it holds whatever the
+        #  corpus rejects today, nothing included.
+        name, target = "recorded", "linux-rv64"
+        self.record = {(name, target): "a record this control wrote"}
         self.fixture("positive/" + name)
         #  Its assembly is refused, as recorded: counted, and no fault.
         self.refine.write_text(REFINE.replace(

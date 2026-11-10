@@ -1543,6 +1543,67 @@ package body Landin.Tests.Cortex_Suite is
       end;
    end Fixed_Fills_Enter_Their_Loops;
 
+   --  A zero-size datum keeps its aligned, zero-sized symbol and no
+   --  directive that reserves nothing: GNU as for Arm warns that it
+   --  ignores `.zero 0`, and firmware assembly makes warnings fatal.  The
+   --  three firmware targets are held to it alike.
+   procedure Empty_Datum_Reserves_Nothing
+     (Item : in out Landin.Testing.Context);
+
+   procedure Empty_Datum_Reserves_Nothing
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Target : String);
+
+      procedure Check (Target : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("p.ldn",
+           "direct: type = [0]u8 "
+           & "folded: type = [4 - 4]u16 "
+           & "mut first: direct "
+           & "mut second: folded "
+           & "start: () -> none = end start");
+         Args.Append ("--target=" & Target);
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("p.s");
+         Args.Append ("p.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               Target & ": " & U.To_String (Result.Report));
+            if Result.Status = Landin.Driver.Status_Success then
+               declare
+                  Text : constant String := Host.Written ("p.s");
+               begin
+                  Landin.Testing.Check
+                    (Item, Ada.Strings.Fixed.Index (Text, ".zero 0") = 0
+                       and then Ada.Strings.Fixed.Index
+                         (Text, ".space 0") = 0,
+                     Target & ": an empty datum has no zero-count"
+                     & " directive");
+                  Landin.Testing.Check
+                    (Item, Ada.Strings.Fixed.Index (Text, "first, 0") > 0
+                       and then Ada.Strings.Fixed.Index
+                         (Text, "second, 0") > 0,
+                     Target & ": an empty datum keeps its zero-sized"
+                     & " symbol");
+               end;
+            end if;
+         end;
+      end Check;
+   begin
+      Check ("cortex-m0");
+      Check ("rv32");
+      Check ("xtensa");
+   end Empty_Datum_Reserves_Nothing;
+
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context);
    procedure Local_Branches (Item : in out Landin.Testing.Context);
 
@@ -4809,6 +4870,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "fixed fills enter their loops",
          Fixed_Fills_Enter_Their_Loops'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "an empty datum reserves nothing",
+         Empty_Datum_Reserves_Nothing'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "fixed zero stores", Fixed_Zero_Stores'Access);
       Landin.Testing.Register

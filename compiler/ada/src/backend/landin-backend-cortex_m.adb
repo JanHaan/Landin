@@ -6805,7 +6805,12 @@ package body Landin.Backend.Cortex_M is
          --  lane identifies fibre backing in static RAM by it (D470).
          Emit (".type " & Symbol (Item) & ", %object");
          Put (Symbol (Item) & ":");
-         Emit (".zero " & Trimmed (Size'Image));
+         --  An empty datum keeps its aligned, zero-sized symbol, without
+         --  a zero-count space directive: GNU as for Arm warns that it
+         --  ignores one, and firmware assembly makes warnings fatal.
+         if Size > 0 then
+            Emit (".zero " & Trimmed (Size'Image));
+         end if;
          Emit (".size " & Symbol (Item) & ", " & Trimmed (Size'Image));
       end Emit_Reserved;
 
