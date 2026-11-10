@@ -1,0 +1,7 @@
+store_zero: () -> none =
+    assembler.block("sw zero, 4(t0)")
+end store_zero
+
+write_counter: () -> none =
+    assembler.block("csrrw zero, cycle, zero")
+end write_counter

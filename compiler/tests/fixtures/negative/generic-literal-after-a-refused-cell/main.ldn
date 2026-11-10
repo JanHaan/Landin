@@ -1,0 +1,7 @@
+import core/atomic
+
+public main: () -> (code: i32) =
+    mut flag: atomic.cell(bool) = zeroed
+    _ = atomic.exchange(addr flag, 18446744073709551615)
+    code = 0
+end main

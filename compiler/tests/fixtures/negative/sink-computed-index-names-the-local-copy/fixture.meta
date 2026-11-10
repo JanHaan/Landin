@@ -1,0 +1,9 @@
+class: negative
+summary: a `sink` argument that is an element at a computed index is refused with the way on: copy the value into a local binding first and pass that
+program: program.ldn
+args: ../tests/fixtures/negative/sink-computed-index-names-the-local-copy/program.ldn
+expect: expected.txt
+codes: L0337
+constructs: 0910
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

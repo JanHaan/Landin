@@ -1,0 +1,10 @@
+error[L0337]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
+  --> ../tests/fixtures/negative/sink-computed-index-names-the-local-copy/program.ldn:11:11
+   |
+11 |     close(opened[at])
+   |           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/sink-computed-index-names-the-local-copy/program.ldn:5:9
+  |
+5 | close: (sink h: handle) -> none =
+  |         ^^^^^^^^^^^^^^ this `sink` parameter
+  = note: [0910]: this is the boundary at which one consumed place remains provable; copy the value into a local binding first and pass that

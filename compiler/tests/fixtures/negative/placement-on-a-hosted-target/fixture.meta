@@ -1,0 +1,9 @@
+class: negative
+summary: a section, alignment, region or vector on a hosted target is refused naming the target compiled for and saying that placement is a firmware target's, not as a Cortex-M0 placement
+program: program.ldn
+args: ../tests/fixtures/negative/placement-on-a-hosted-target/program.ldn
+expect: expected.txt
+codes: L0347
+constructs: 1640
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

@@ -1,0 +1,13 @@
+small: type = i32 range 0..9
+
+subtype_address: () -> (r: i32) =
+    mut s: small = 3
+    r = compiler.atomic_load(addr s, compiler.relaxed)
+end subtype_address
+
+mistyped_index: (line: [4]u8) -> (r: u8) =
+    r = 0
+    for i in 0..<4 do
+        r = compiler.atomic_load(addr line[i], compiler.relaxed)
+    end for
+end mistyped_index

@@ -1,0 +1,12 @@
+taker: type = struct
+    received: u32
+    sent: u32
+end taker
+
+admit: (state_type: type, state: state_type) -> none =
+    _ = state
+end admit
+
+start: () -> none =
+    admit((received: 1, sent: 2))
+end start

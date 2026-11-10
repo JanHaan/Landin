@@ -1338,6 +1338,26 @@ package body Landin.Stages.Checking is
          end case;
       end C_Part_Allowed;
 
+      --  A record with no layout, or a `layout(c)` record holding what C
+      --  cannot, was refused where it is declared, for the field that
+      --  stopped it.  A C signature over it has that one fault, already
+      --  reported, so it adds no refusal of its own.
+      function Refused_C_Record
+        (Part : Landin.Checking.Signature_Part) return Boolean
+        is ((Part.Kind = Ty.Ill_Typed
+             and then Landin.Diagnostics.Has_Errors (Found))
+            or else
+            (Part.Kind = Ty.Aggregate
+            and then Landin.Checking.Holds (Types.all, Part.Nominal)
+            and then
+              ((not Landin.Checking.Has_Layout (Types.all, Part.Nominal)
+                and then Landin.Diagnostics.Has_Errors (Found))
+               or else
+                 (Landin.Checking.Has_Layout (Types.all, Part.Nominal)
+                  and then Landin.Checking.Has_C_Layout
+                    (Types.all, Part.Nominal)
+                  and then not C_Nominal_Allowed (Part.Nominal)))));
+
       --  D410/D413: a C record a signature takes by value that C reaches
       --  only through a pointer, which the refusal names.
       function C_Pointer_Only
@@ -1413,6 +1433,15 @@ package body Landin.Stages.Checking is
          Part : String := "";
          Returned : Boolean := False);
 
+      --  Why a target with no C signatures has none: RV32 and Xtensa name
+      --  the C ABI their target description holds, which no backend calls
+      --  through yet, and a target with no description of one has none.
+      function No_C_Boundary return String is
+        (if Landin.Targets."="
+              (Landin.Targets.C_ABI_Of (Facts), Landin.Targets.No_C_ABI)
+         then " has no C ABI"
+         else "'s C ABI is described and not enabled");
+
       procedure Reject_C_Signature
         (Site : Landin.Provenance.Origin;
          Fault : Landin.Provenance.Origin;
@@ -1428,11 +1457,12 @@ package body Landin.Stages.Checking is
               (Item => Bad.Foreign_Boundary,
                Source => Site.Source,
                Where => Site.Where,
-               Message => Landin.Targets.Name (Facts) & " has no C ABI, so"
-                          & " it has no C signature",
+               Message => Landin.Targets.Name (Facts) & No_C_Boundary
+                          & ", so it has no C signature",
                Note => "[1580]: a C signature is called as the target's C"
-                       & " ABI calls it, and this target has none yet; a"
-                       & " Landin routine needs no C convention",
+                       & " ABI calls it, which the hosted targets and"
+                       & " Cortex-M enable; a Landin routine needs no C"
+                       & " convention",
                Related => Fault, Because => Because, Into => Found);
             return;
          end if;
@@ -1625,7 +1655,13 @@ package body Landin.Stages.Checking is
                  (Item => Bad.Machine_Entry_Contract,
                   Source => Syn.Source_Of (Of_Tree),
                   Where => Syn.Where (Of_Tree, Node),
-                  Message => "machine convention requires Cortex-M0 and"
+                  Message =>
+                    (if Syn.Machine_Convention (Of_Tree, Node)
+                       = Landin.Machine.Naked_Routine
+                     then "a naked routine requires a firmware target,"
+                       & " x86-64, arm64 or RV64, and"
+                     else "an interrupt routine requires a firmware target"
+                       & " and")
                     & " a nongeneric () -> none signature without errors",
                   Note => "[1570]: interrupt and naked routines have"
                     & " distinct machine entry and return obligations",
@@ -1665,22 +1701,28 @@ package body Landin.Stages.Checking is
                   Plain_Record, Part_Name :
                     Ada.Strings.Unbounded.Unbounded_String;
                   Returned : Boolean := False;
+                  --  Whether the blamed part is a record already refused
+                  --  for its layout.
+                  Reported : Boolean := False;
 
                   procedure Blame
                     (At_Node : Syn.Node_Id;
                      Label : String;
                      Holds : String := "";
-                     Result : Boolean := False);
+                     Result : Boolean := False;
+                     Refused : Boolean := False);
 
                   procedure Blame
                     (At_Node : Syn.Node_Id;
                      Label : String;
                      Holds : String := "";
-                     Result : Boolean := False) is
+                     Result : Boolean := False;
+                     Refused : Boolean := False) is
                   begin
                      if Fault = Syn.No_Node and then At_Node /= Syn.No_Node
                      then
                         Fault := At_Node;
+                        Reported := Refused;
                         Because :=
                           Ada.Strings.Unbounded.To_Unbounded_String (Label);
                         Plain_Record :=
@@ -1723,6 +1765,8 @@ package body Landin.Stages.Checking is
                                    then "this record crosses to C by pointer"
                                    else "C cannot take this parameter"),
                                   Holds => Plain_Record_Name
+                                    (Parameters (Index)),
+                                  Refused => Refused_C_Record
                                     (Parameters (Index)));
                         end if;
                      end;
@@ -1749,11 +1793,15 @@ package body Landin.Stages.Checking is
                                    else "C cannot return this result"),
                                   Holds => Plain_Record_Name
                                     (Results (Index)),
-                                  Result => True);
+                                  Result => True,
+                                  Refused => Refused_C_Record
+                                    (Results (Index)));
                         end if;
                      end;
                   end loop;
-                  if Fault = Syn.No_Node
+                  if Reported then
+                     null;
+                  elsif Fault = Syn.No_Node
                     and then Syn.Is_Variadic (Of_Tree, Node)
                     and then Parameters'Length > 0
                     and then Landin.Targets.Capabilities.C_Signatures (Facts)
@@ -1838,8 +1886,8 @@ package body Landin.Stages.Checking is
             Message =>
               (case Fault is
                   when No_C_Records =>
-                    Landin.Targets.Name (Facts) & " has no C ABI, so it lays"
-                    & " out no layout(c) record",
+                    Landin.Targets.Name (Facts) & No_C_Boundary
+                    & ", so it lays out no layout(c) record",
                   when Fine | Not_C =>
                     (if Field = Syn.No_Node
                      then "this layout(c) struct has a non-C representation"
@@ -1865,7 +1913,8 @@ package body Landin.Stages.Checking is
               (case Fault is
                   when No_C_Records =>
                     "[1580]: a C record is laid out as the target's C ABI"
-                    & " lays it out, and this target has none yet; a"
+                    & " lays it out, which the hosted targets and"
+                    & " Cortex-M enable; a"
                     & " byte-packed `layout(c, packed)` record needs no C"
                     & " alignment and stands here, or the record may be a"
                     & " Landin struct",
@@ -7507,10 +7556,19 @@ package body Landin.Stages.Checking is
                            Refuse_At
                              (Syn.Nth_Argument (Of_Tree, Node, 1),
                               "the text names `" & Word & "`, a register"
-                              & " no ordinary block may write",
+                              & " no ordinary block may name, to read or"
+                              & " to write",
                               "[1990]: the stack, frame and link registers"
                               & " and the platform's reserved ones are"
-                              & " never named");
+                              & " never named"
+                              & (if Landin.Targets.Architecture_Of (Facts)
+                                      in Landin.Targets.RV64
+                                       | Landin.Targets.RV32
+                                   and then Word in "zero" | "x0"
+                                 then "; for a zero source load a scratch"
+                                   & " register, `li t1, 0`, and to write a"
+                                   & " CSR without reading it use `csrw`"
+                                 else ""));
                            return;
                         elsif Canonical /= ""
                           and then not Asm.Overwritten
@@ -7697,14 +7755,33 @@ package body Landin.Stages.Checking is
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Written),
                            Message => "a float assembly operand needs a"
-                                      & " float register, and the "
-                                      & (if Board.Present
-                                         then Landin.Targets.Firmware
-                                           .Profile_Name (Board)
-                                         else Landin.Targets.Name (Facts)
-                                           & " profile")
-                                      & " has none",
+                                      & " float register, and "
+                                      & (if (for all Any in
+                                               Landin.Targets.Assembly
+                                                 .Float_Unit =>
+                                               Asm.Float_Count (Facts, Any)
+                                                 = 0)
+                                         then Landin.Targets.Name (Facts)
+                                           & " has none at any level"
+                                         elsif Board.Present
+                                         then "the "
+                                           & Landin.Targets.Firmware
+                                               .Profile_Name (Board)
+                                           & " has none"
+                                         else "the "
+                                           & Landin.Targets.Name (Facts)
+                                           & " profile has none"),
                            Refused => Bad.Float_Operand,
+                           Route   =>
+                             (if (for all Any in
+                                    Landin.Targets.Assembly.Float_Unit =>
+                                    Asm.Float_Count (Facts, Any) = 0)
+                              then "instead, compute the float in Landin,"
+                                & " whose arithmetic this target does in"
+                                & " software, and keep the block for"
+                                & " targets with a float register under"
+                                & " `fixed if`"
+                              else ""),
                            Into    => Found);
                      elsif Held in Ty.Float_Name then
                         if Class in Asm.Operand_Register | Asm.General_Class
@@ -13281,6 +13358,42 @@ package body Landin.Stages.Checking is
                      goto Next_Deduction_Argument;
                   end if;
 
+                  --  The same for an untyped struct literal: its
+                  --  destination is a type formal, which gives it no named
+                  --  type, and the typed binding is what does.
+                  if Syn.Kind (Caller_Tree, Argument) = Syn.Struct_Literal
+                  then
+                     if Landin.Checking.Type_Of
+                          (Types.all, Caller_Tree, Argument)
+                        /= Ty.Ill_Typed
+                     then
+                        declare
+                           Name : constant String :=
+                             Spelled (Syn.Name (Template_Tree.all,
+                                                Parameter));
+                        begin
+                           Bad.Report
+                             (Item    => Bad.Unsupported_Use,
+                              Source  => Syn.Source_Of (Caller_Tree),
+                              Where   => Syn.Where (Caller_Tree, Argument),
+                              Message =>
+                                "a struct literal takes no type from"
+                                & " parameter `" & Name & "`, whose type"
+                                & " names a generic formal",
+                              Refused => Bad.Struct_Value,
+                              Route   =>
+                                "instead, bind it with the struct type it"
+                                & " means, `" & Name & ": T = (...)`, and"
+                                & " pass the name",
+                              Into    => Found);
+                        end;
+                        Landin.Checking.Refuse
+                          (Types.all, Caller_Tree, Argument);
+                     end if;
+                     Good := False;
+                     goto Next_Deduction_Argument;
+                  end if;
+
                   --  Deduction remains context-free for an unresolved type
                   --  formal.  A literal whose written parameter pattern
                   --  is already concrete is different: [0260] gives the
@@ -13387,16 +13500,29 @@ package body Landin.Stages.Checking is
                         then Ty.Default_Integer
                         else Ty.Default_Float);
                   begin
-                     Commit_To (Caller_Tree, Argument, Got);
-                     declare
-                        Agrees : constant Boolean := Match_Type_Pattern
-                          (Template_Tree.all, Pattern,
-                           Descriptor_At (Caller_Tree, Argument, Got),
-                           Argument, Index, 0, True);
-                        pragma Unreferenced (Agrees);
-                     begin
-                        null;
-                     end;
+                     if not Good
+                       and then Expected.Kind not in Ty.Integer_Name
+                                                   | Ty.Float_Name
+                     then
+                        --  Another argument was refused, and with it went
+                        --  what would have bound this literal's formal.
+                        --  [0200]'s default is then nobody's choice: a
+                        --  literal that does not fit `i32` would be told
+                        --  so for a type the program never wrote.
+                        Landin.Checking.Refuse
+                          (Types.all, Caller_Tree, Argument);
+                     else
+                        Commit_To (Caller_Tree, Argument, Got);
+                        declare
+                           Agrees : constant Boolean := Match_Type_Pattern
+                             (Template_Tree.all, Pattern,
+                              Descriptor_At (Caller_Tree, Argument, Got),
+                              Argument, Index, 0, True);
+                           pragma Unreferenced (Agrees);
+                        begin
+                           null;
+                        end;
+                     end if;
                   end;
                end if;
             end loop;
@@ -16488,7 +16614,9 @@ package body Landin.Stages.Checking is
                                                   (Syn.Name
                                                      (Of_Tree, Argument))
                                               & ")` (D433)"
-                                         else ""),
+                                         else "; copy the value into a"
+                                              & " local binding first and"
+                                              & " pass that"),
                            Related => Parameter.Site,
                            Because => "this `sink` parameter",
                            Into    => Found);
@@ -20149,12 +20277,128 @@ package body Landin.Stages.Checking is
                         Supplied : constant Syn.Node_Id :=
                           Syn.Nth_Conformance_Entry (Of_Tree, Node, Given);
                         Known : Boolean := False;
+                        Parent_Site : Landin.Provenance.Origin :=
+                          Landin.Provenance.No_Origin;
+                        Parent_Name : Landin.Source.Names.Name_Id :=
+                          Landin.Source.Names.No_Name;
+
+                        --  The nearest parent concept, at any depth, that
+                        --  declares an entry of this name.  The depth
+                        --  bound keeps a refused cyclic graph finite.
+                        procedure Find_Parent_Entry
+                          (In_Tree : Syn.Tree;
+                           Of_Concept : Syn.Node_Id;
+                           Label : Landin.Source.Names.Name_Id;
+                           Depth : Positive;
+                           Site : in out Landin.Provenance.Origin;
+                           Name : in out Landin.Source.Names.Name_Id);
+
+                        procedure Find_Parent_Entry
+                          (In_Tree : Syn.Tree;
+                           Of_Concept : Syn.Node_Id;
+                           Label : Landin.Source.Names.Name_Id;
+                           Depth : Positive;
+                           Site : in out Landin.Provenance.Origin;
+                           Name : in out Landin.Source.Names.Name_Id)
+                        is
+                        begin
+                           for Parent in 1 .. Syn.Concept_Parent_Count
+                             (In_Tree, Of_Concept)
+                           loop
+                              declare
+                                 Above : constant Landin.Checking.Concept_Id
+                                   := Concept_For
+                                     (In_Tree,
+                                      Syn.Nth_Concept_Parent
+                                        (In_Tree, Of_Concept, Parent));
+                              begin
+                                 if Above /= Landin.Checking.No_Concept
+                                   and then not Landin.Checking
+                                     .Is_Compiler_Concept (Types.all, Above)
+                                 then
+                                    declare
+                                       Declared : constant Res.Declaration_Id
+                                         := Landin.Checking.Concept_Declaration
+                                           (Types.all, Above);
+                                       Its_Tree : constant not null access
+                                         constant Syn.Tree := Tree_For
+                                           (Res.Source_Of
+                                              (Meanings.all, Declared));
+                                       Its_Node : constant Syn.Node_Id :=
+                                         Res.Node_Of (Meanings.all, Declared);
+                                    begin
+                                       for Position in 1
+                                         .. Syn.Concept_Entry_Count
+                                           (Its_Tree.all, Its_Node)
+                                       loop
+                                          if Syn.Name
+                                               (Its_Tree.all,
+                                                Syn.Nth_Concept_Entry
+                                                  (Its_Tree.all, Its_Node,
+                                                   Position)) = Label
+                                          then
+                                             Site := Syn.Origin
+                                               (Its_Tree.all, Its_Node);
+                                             Name := Syn.Name
+                                               (Its_Tree.all, Its_Node);
+                                             return;
+                                          end if;
+                                       end loop;
+                                       if Depth < 16 then
+                                          Find_Parent_Entry
+                                            (Its_Tree.all, Its_Node, Label,
+                                             Depth + 1, Site, Name);
+                                          if Name
+                                            /= Landin.Source.Names.No_Name
+                                          then
+                                             return;
+                                          end if;
+                                       end if;
+                                    end;
+                                 end if;
+                              end;
+                           end loop;
+                        end Find_Parent_Entry;
                      begin
                         for Position in 1 .. Expected loop
                            Known := Known or else Syn.Name (Of_Tree, Supplied)
                              = Expected_Name (Position);
                         end loop;
                         if not Known then
+                           Find_Parent_Entry
+                             (Concept_Tree.all, Concept_Node,
+                              Syn.Name (Of_Tree, Supplied), 1,
+                              Parent_Site, Parent_Name);
+                        end if;
+                        if not Known
+                          and then Parent_Name /= Landin.Source.Names.No_Name
+                        then
+                           --  The entry is a parent concept's, and a parent
+                           --  takes a conformance of its own: the label is
+                           --  right and written in the wrong conformance.
+                           Bad.Report
+                             (Item    => Bad.Conformance_Form,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Supplied),
+                              Message => "`"
+                                         & Spelled
+                                             (Syn.Name (Of_Tree, Supplied))
+                                         & "` is an entry of the parent"
+                                         & " concept `"
+                                         & Spelled (Parent_Name)
+                                         & "`, which takes a conformance of"
+                                         & " its own",
+                              Note    => "[1240]: a conformance supplies the"
+                                         & " named concept's own inputs and"
+                                         & " entries; conform the type to `"
+                                         & Spelled (Parent_Name)
+                                         & "` as well and supply this entry"
+                                         & " there",
+                              Related => Parent_Site,
+                              Because => "the parent concept declared here",
+                              Into    => Found);
+                           Valid := False;
+                        elsif not Known then
                            Bad.Report
                              (Item    => Bad.Conformance_Form,
                               Source  => Syn.Source_Of (Of_Tree),
@@ -26354,7 +26598,13 @@ package body Landin.Stages.Checking is
                            Held : constant Ty.Type_Kind :=
                              Synthesise (Of_Tree, Arg);
                         begin
-                           if Held /= Ty.Pointer_Value then
+                           if Held = Ty.Ill_Typed then
+                              --  The argument was refused where it is
+                              --  written, and that report says what is
+                              --  wrong; a pointer may well be what it
+                              --  spells.
+                              return Kept (Ty.Ill_Typed);
+                           elsif Held /= Ty.Pointer_Value then
                               return Refuse
                                 ("memory access needs a pointer", Arg);
                            end if;
@@ -42672,7 +42922,50 @@ package body Landin.Stages.Checking is
          if not Attr.Present then
             return;
          end if;
-         Valid := Landin.Targets.Is_Firmware (Facts);
+         if not Landin.Targets.Is_Firmware (Facts) then
+            --  A hosted program's linker places its own sections, so the
+            --  refusal names the target compiled for and no firmware one.
+            Bad.Report
+              (Item => Bad.Linkage_Contract, Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message => Landin.Targets.Name (Facts) & " places nothing:"
+                 & " a section, alignment, region or vector is a firmware"
+                 & " target's",
+               Note => "[1640]: placement is read by a firmware image's"
+                 & " linker script, and a hosted program has none; remove"
+                 & " it, or select it under `fixed if` for a firmware"
+                 & " target",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "the declaration it places", Into => Found);
+            return;
+         end if;
+         if Routine
+           and then Syn.Generic_Formal_Count (Of_Tree, Node) > 0
+         then
+            --  One placement names one routine, and a generic routine is
+            --  as many as its instances.
+            Bad.Report
+              (Item => Bad.Linkage_Contract, Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message => "a generic routine cannot be placed: `"
+                 & Spelled
+                     (Syn.Name
+                        (Of_Tree, Syn.Nth_Generic_Formal (Of_Tree, Node, 1)))
+                 & (if Syn.Kind
+                         (Of_Tree, Syn.Nth_Generic_Formal (Of_Tree, Node, 1))
+                      = Syn.Type_Formal
+                    then "` is a type parameter"
+                    else "` is a fixed parameter")
+                 & ", so this declares one routine for each instance",
+               Note => "[1640]: a placement names one routine; place a"
+                 & " nongeneric routine that calls this one, or pass the"
+                 & " varying part as a function value",
+               Related =>
+                 Syn.Origin
+                   (Of_Tree, Syn.Nth_Generic_Formal (Of_Tree, Node, 1)),
+               Because => "the generic parameter", Into => Found);
+            return;
+         end if;
          if Value.Alignment /= 0 then
             Valid := Valid and then Value.Alignment in
               1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256;
@@ -43970,16 +44263,24 @@ package body Landin.Stages.Checking is
                for Index in 1 .. Landin.Checking.Signature_Parameter_Count
                  (Types.all, Signature)
                loop
-                  Valid := Valid and then C_Part_Allowed
-                    (Landin.Checking.Nth_Signature_Parameter
-                       (Types.all, Signature, Index));
+                  Valid := Valid and then
+                    (C_Part_Allowed
+                       (Landin.Checking.Nth_Signature_Parameter
+                          (Types.all, Signature, Index))
+                     or else Refused_C_Record
+                       (Landin.Checking.Nth_Signature_Parameter
+                          (Types.all, Signature, Index)));
                end loop;
                for Index in 1 .. Landin.Checking.Signature_Result_Count
                  (Types.all, Signature)
                loop
-                  Valid := Valid and then C_Part_Allowed
-                    (Landin.Checking.Nth_Signature_Result
-                       (Types.all, Signature, Index));
+                  Valid := Valid and then
+                    (C_Part_Allowed
+                       (Landin.Checking.Nth_Signature_Result
+                          (Types.all, Signature, Index))
+                     or else Refused_C_Record
+                       (Landin.Checking.Nth_Signature_Result
+                          (Types.all, Signature, Index)));
                end loop;
                if not Valid then
                   Reject_C_Signature
@@ -44443,7 +44744,22 @@ package body Landin.Stages.Checking is
                     Code = Landin.Diagnostics.Catalogue.Code
                              (Landin.Diagnostics.Catalogue.Control_Value);
                begin
-                  if not Folds
+                  --  The checker reaches one declaration from several
+                  --  passes: a module binding's array bound is folded
+                  --  where its type is first wanted, where its storage is
+                  --  laid out and where its value is typed, and a
+                  --  template's field once for each use of its formal.
+                  --  A report that is the same in its code, place,
+                  --  message, notes and labels is the same report, and
+                  --  the order puts it beside its first copy, so it is
+                  --  published once.  Every copy stays in the list the
+                  --  passes count their own reports in.
+                  if Position > 1
+                    and then Landin.Diagnostics."="
+                      (Landin.Diagnostics.Get (Ordered, Position - 1), Item)
+                  then
+                     null;
+                  elsif not Folds
                     or else Landin.Diagnostics.Label_Count (Item) = 0
                     or else
                       (not Stood_On.Contains

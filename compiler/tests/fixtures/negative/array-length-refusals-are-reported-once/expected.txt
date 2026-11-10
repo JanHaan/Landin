@@ -1,0 +1,24 @@
+error[L0305]: this operator needs an operand width and is not available in a target-independent fixed expression
+  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:1:15
+  |
+1 | mut shifted: [2 << 1]u8 = zeroed
+  |               ^^^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: this is not one of the closed fixed-expression forms
+  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:2:17
+  |
+2 | mut sized: [2 * sizeof usize]u8 = zeroed
+  |                 ^^^^^^^^^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: this operator needs an operand width and is not available in a target-independent fixed expression
+  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:4:13
+  |
+4 | takes: (a: [3 << 1]u8) -> none =
+  |             ^^^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: this is not one of the closed fixed-expression forms
+  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:5:21
+  |
+5 |     mut local: [2 * sizeof usize]u8 = zeroed
+  |                     ^^^^^^^^^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs

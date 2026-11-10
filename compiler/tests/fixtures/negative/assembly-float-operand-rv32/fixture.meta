@@ -1,0 +1,9 @@
+class: negative
+summary: D630 D660 a float operand on rv32 is refused saying that rv32 has no float register at any level, and what to write instead
+program: program.ldn
+args: --target=rv32 ../tests/fixtures/negative/assembly-float-operand-rv32/program.ldn
+expect: expected.txt
+codes: L0304
+constructs: 1630, 1830
+targets: rv32
+status: 1

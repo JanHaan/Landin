@@ -1,0 +1,19 @@
+scheduler: type = concept (provider: type)
+    start: (self: provider) -> none
+    wait: (self: provider) -> none
+end scheduler
+
+turns: type = concept (provider: type) is scheduler
+    yield: (self: provider) -> none
+end turns
+
+board: type = struct
+    ticks: u32
+end board
+
+board_start: (self: board) -> none = end board_start
+board_wait: (self: board) -> none = end board_wait
+board_yield: (self: board) -> none = end board_yield
+
+board is turns (start: board_start, wait: board_wait, yield: board_yield,
+                pause: board_yield)

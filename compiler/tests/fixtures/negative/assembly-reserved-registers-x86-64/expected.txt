@@ -8,7 +8,7 @@ error[L0330]: `rbp` is a register no operand may name
 2 |     assembler.block("movq {v}, %rax", in v: u64 at rbp = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named
-error[L0330]: the text names `rsp`, a register no ordinary block may write
+error[L0330]: the text names `rsp`, a register no ordinary block may name, to read or to write
   --> ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn:3:21
   |
 3 |     assembler.block("movq {v}, %rsp", in v: u64 at general = value)

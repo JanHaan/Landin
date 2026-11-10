@@ -1257,7 +1257,12 @@ target's own form: `@` on Cortex-M,
 `//` on arm64, `#` on x86-64 and RV64 (D597). Its numbers are the
 assembler's and take no digit separator, so `0x1800_0000` is written
 `0x18000000`. Change the operand, register, template or text as the message
-says, or move the operands into an assembly block. A pointer crosses as `usize(p)`, and the routine around
+says, or move the operands into an assembly block. A reserved register is
+never named, to read or to write: on RISC-V a zero source is a scratch
+register loaded with `li`, and a CSR is written without a read by `csrw`.
+At Cortex-M's `armv6-m` level the refusal names the mnemonic, and says
+whether it is a naked routine's instruction or one that a higher level or a
+float unit has. A pointer crosses as `usize(p)`, and the routine around
 the block takes the storage as `ptr mut u8` or `[]mut u8`, the permission its
 callers are checked against (D440).
 
@@ -1485,7 +1490,9 @@ Every entry fixes one concrete error set. A conformance names a
 declared concept, supplies each input and entry once by label, and provides
 each entry with a function of exactly the required signature. A parameterized
 conformance applies its complete binder. Correct the declaration against the
-concept it names. A conformance refused for what it lacks is reported once:
+concept it names. A label that is an entry of a parent concept is refused
+naming that parent: a parent takes a conformance of its own, where the entry
+is supplied. A conformance refused for what it lacks is reported once:
 a use that needs it is not refused again for want of one. A parameter or local named after a concept hides it [0140],
 and the diagnostic then names the parameter as the cause (D381). A binding
 that holds an anonymous function is a value, not a declared function, and
@@ -1573,10 +1580,12 @@ extern(interrupt) tick: (count: u32) -> none = end tick
 ### L0346
 
 A C boundary declaration or call is something the C ABI cannot carry
-[1580]. RV32 and Xtensa have no C ABI yet, so they take no C signature and
-lay out no `layout(c)` record, and the diagnostic names the target; a
+[1580]. RV32's and Xtensa's C ABIs are described and not enabled, so they
+take no C signature and lay out no `layout(c)` record, and the diagnostic
+names the target; the hosted targets and Cortex-M enable theirs. A
 byte-packed `layout(c, packed)` record needs no C alignment and is accepted
-there. The refusal of a signature names the part C cannot carry. Where a C
+there. A signature over a record already refused for its layout adds no
+report of its own. The refusal of a signature names the part C cannot carry. Where a C
 ABI is enabled, a C signature is infallible and nongeneric, with at most
 one result. Each parameter and result part uses
 implicit or explicit `in`, without `caller` or a constraint. Its type is a
@@ -1627,7 +1636,11 @@ which takes C's `argc`, `argv` and `envp`. Only the entry module's hosted `main`
 `main` symbol. A datum's link symbol on a hosted target has a routine's
 shape and is never `main`; Cortex data symbols and sections use the
 spellings, alignments and vectors [1640] lists. Rename the symbol or correct
-the declaration. Two declarations of one C symbol that differ only in
+the declaration. Placement is a firmware target's: a hosted target places
+nothing, and its refusal names the target. A generic routine is one routine
+for each instance, so it takes no placement; the refusal names its generic
+parameter, and the way on is to place a nongeneric routine that calls it or
+to pass the varying part as a function value. Two declarations of one C symbol that differ only in
 `escaping` are refused too, and the report names the parameter: a Landin
 caller of either is checked against what it says, so repeat `escaping` on
 both (D441). A public naked or interrupt routine with no link name is a
@@ -1870,7 +1883,8 @@ zero until the program writes it reserves its bytes rather than writing them.
 The panic handler is invalid, or the program has more check sites than their
 identifier space holds [1670]. Declare the entry module's `panic_handler`
 public, ordinary, nongeneric and infallible, of type
-`(core/panic.panic_kind, u32) -> noreturn` as the message gives it; for the
+`(core/panic.panic_kind, u32) -> noreturn` as the message gives it, which
+ends by naming the part of the declaration that differs; for the
 site space, compile less source, since every source byte takes one of its
 32-bit identifiers for each panic kind.
 

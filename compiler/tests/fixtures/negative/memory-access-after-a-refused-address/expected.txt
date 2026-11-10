@@ -1,0 +1,17 @@
+error[L0304]: the address of a range subtype place cannot be taken
+  --> ../tests/fixtures/negative/memory-access-after-a-refused-address/program.ldn:5:35
+  |
+5 |     r = compiler.atomic_load(addr s, compiler.relaxed)
+  |                                   ^
+  = note: the tour describes it at [0660]
+  = note: this is a recorded source-form boundary
+error[L0301]: this indexes with `i32`, and an index is a usize
+  --> ../tests/fixtures/negative/memory-access-after-a-refused-address/program.ldn:11:44
+   |
+11 |         r = compiler.atomic_load(addr line[i], compiler.relaxed)
+   |                                            ^
+  --> ../tests/fixtures/negative/memory-access-after-a-refused-address/program.ldn:11:39
+   |
+11 |         r = compiler.atomic_load(addr line[i], compiler.relaxed)
+   |                                       ^^^^ the array indexed here
+  = note: D18: indexing accepts exactly usize and performs no implicit conversion

@@ -1,0 +1,10 @@
+error[L0346]: a C record cannot hold `offset`: `vector2` is not `layout(c)`
+  --> ../tests/fixtures/negative/c-signature-over-a-refused-record/program.ldn:7:5
+  |
+7 |     offset: vector2
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-signature-over-a-refused-record/program.ldn:6:26
+  |
+6 | camera: type = layout(c) struct
+  |                          ^^^^^^ this C layout
+  = note: [0750]: a layout(c) record holds a record by value only when that one is `layout(c)` too; declare `vector2: type = layout(c) struct`, or hold `ptr vector2` [1580]

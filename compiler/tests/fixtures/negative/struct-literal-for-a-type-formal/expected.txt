@@ -1,0 +1,8 @@
+error[L0304]: a struct literal takes no type from parameter `state`, whose type names a generic formal
+  --> ../tests/fixtures/negative/struct-literal-for-a-type-formal/program.ldn:11:11
+   |
+11 |     admit((received: 1, sent: 2))
+   |           ^^^^^^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0670]
+  = note: this is a recorded source-form boundary
+  = note: instead, bind it with the struct type it means, `state: T = (...)`, and pass the name

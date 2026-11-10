@@ -1,0 +1,30 @@
+error[L0341]: `start` is an entry of the parent concept `scheduler`, which takes a conformance of its own
+  --> ../tests/fixtures/negative/conformance-label-of-a-parent-concept/program.ldn:18:17
+   |
+18 | board is turns (start: board_start, wait: board_wait, yield: board_yield,
+   |                 ^^^^^
+  --> ../tests/fixtures/negative/conformance-label-of-a-parent-concept/program.ldn:1:1
+  |
+1 | scheduler: type = concept (provider: type)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the parent concept declared here
+  = note: [1240]: a conformance supplies the named concept's own inputs and entries; conform the type to `scheduler` as well and supply this entry there
+error[L0341]: `wait` is an entry of the parent concept `scheduler`, which takes a conformance of its own
+  --> ../tests/fixtures/negative/conformance-label-of-a-parent-concept/program.ldn:18:37
+   |
+18 | board is turns (start: board_start, wait: board_wait, yield: board_yield,
+   |                                     ^^^^
+  --> ../tests/fixtures/negative/conformance-label-of-a-parent-concept/program.ldn:1:1
+  |
+1 | scheduler: type = concept (provider: type)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the parent concept declared here
+  = note: [1240]: a conformance supplies the named concept's own inputs and entries; conform the type to `scheduler` as well and supply this entry there
+error[L0341]: this label is not an input or entry of the named concept
+  --> ../tests/fixtures/negative/conformance-label-of-a-parent-concept/program.ldn:19:17
+   |
+19 |                 pause: board_yield)
+   |                 ^^^^^
+  --> ../tests/fixtures/negative/conformance-label-of-a-parent-concept/program.ldn:6:1
+  |
+6 | turns: type = concept (provider: type) is scheduler
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the concept declared here
+  = note: [1240]: conformance labels match the concept declaration

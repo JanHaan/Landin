@@ -1,0 +1,9 @@
+class: negative
+summary: a binding whose type application was refused leaves a generic call over it nothing to deduce from, and the call's literal argument is not then typed as `i32` and refused for a type nobody wrote: one report for the one mistake
+program: main.ldn
+root: ../../../../..
+expect: expected.txt
+codes: L0318
+constructs: 1260, 1290, 1620
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

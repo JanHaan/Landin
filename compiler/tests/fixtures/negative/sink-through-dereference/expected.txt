@@ -7,4 +7,4 @@ error[L0337]: a `sink` argument must be a place rooted in a binding, without a d
   |
 1 | consume: (sink value: u32) -> none =
   |           ^^^^^^^^^^^^^^^ this `sink` parameter
-  = note: [0910]: this is the boundary at which one consumed place remains provable
+  = note: [0910]: this is the boundary at which one consumed place remains provable; copy the value into a local binding first and pass that
