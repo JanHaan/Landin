@@ -476,6 +476,16 @@ class GeneratedReference(unittest.TestCase):
         self.assertIn('id="the-buffered-writer"',
                       (self.destination / 'library-core-io.html').read_text())
 
+    def test_the_pitchs_asterisk_reaches_its_fine_print(self):
+        # A Markdown link once replaced the asterisk and was published as
+        # its brackets, with the fine print moved where the front page
+        # could not find it.
+        for page in ('index.html', 'tour.html'):
+            text = (self.destination / page).read_text()
+            self.assertIn('32 TB<a class="asterisk" href="#fine-print"', text)
+            self.assertRegex(text, r'id="fine-print">\*?32 TB is an unverified')
+            self.assertNotIn('](#', text)
+
     def test_front_page_reaches_installation(self):
         # The front page once linked no installation steps.
         anchor = render_html.INSTALL_ANCHOR

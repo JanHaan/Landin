@@ -1,8 +1,8 @@
 # Learn Landin in Y minutes
 
 Ada, but small. Zig, but sweeter. One systems language from 32 KB to
-32 TB[*](#what-is-still-open). Move fast, keep the pointers, and let the
-compiler tell you when you are being an idiot.
+32 TB*. Move fast, keep the pointers, and let the compiler tell you when
+you are being an idiot.
 
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
@@ -112,6 +112,10 @@ never change: when the compiler refuses a program, its error ends with the
 entry that explains the rule. Everything is implemented unless marked
 DEFERRED or *not yet*. [`spec.md`](spec.md) is the specification and
 decides wherever the two could be read differently.
+
+*32 TB is an unverified goal. What it measures at the hosted end, and what
+evidence would prove it, are still open, and nothing hosted today
+establishes it. Terabytes may vary.
 
 ---
 
@@ -5384,10 +5388,6 @@ what this tour leaves parked: structure-of-arrays [0620], affine values
 README](README.md#current-compiler-capabilities) says what it does today.
 Production status, release versioning, package acquisition and
 self-hosting are not part of the current plan.
-
-*32 TB is an unverified goal. What it measures at the hosted end, and what
-evidence would prove it, are still open, and nothing hosted today
-establishes it. Terabytes may vary.
 
 Version 0.2.8 — what each version changed is in
 [the handoff](handoff.md#versions).

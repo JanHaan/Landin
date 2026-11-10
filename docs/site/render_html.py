@@ -3690,6 +3690,11 @@ def main(argv):
         if not intro:
             raise SystemExit("render_html: tour.md has no opening prose "
                              "for the front page")
+        #  The pitch is printed as text, with only PITCH_LINKS linked, so
+        #  Markdown there would be published as its brackets.
+        if any(re.search(r"\]\(|\[[^]]*\]\[|`", para) for para in intro):
+            raise SystemExit("render_html: the tour's pitch is plain text; "
+                             "a link in it belongs in PITCH_LINKS")
         if (FINE_PRINT_MARK in " ".join(intro)) != bool(footnote):
             raise SystemExit("render_html: the tour's pitch and its fine "
                              "print must come together: an asterisk "
