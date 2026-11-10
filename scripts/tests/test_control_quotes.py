@@ -25,8 +25,11 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_controls import QUOTES, ROOT, checker, quote, tree  # noqa: E402
 
-#  The modules whose controls break copies of real documents.
-CONTROLS = ("scripts/tests/test_check_controls.py",)
+#  The modules whose controls look for a real document's words, each with
+#  the documents every one of its functions is read against: the library
+#  page's controls read the rendered page, and name no file where they do.
+CONTROLS = {"scripts/tests/test_check_controls.py": (),
+            "scripts/tests/test_library_docs.py": ("docs/library.md",)}
 QUOTING = ("replace", "split", "rsplit", "partition", "rpartition", "index")
 #  The roadmap controls' own helper, which edits ROADMAP.md.
 ROADMAP_EDIT = "once"
@@ -37,11 +40,15 @@ def literal(node):
             and isinstance(node.value, str) else None)
 
 
-def unlisted(source, documents):
+def unlisted(source, documents, always=()):
     """(line, text, document) for each bare literal quoting a document.
 
     DOCUMENTS is {path: text}.  A function is read against the documents
-    it names, and against ROADMAP.md when it calls ROADMAP_EDIT.
+    it names, against ROADMAP.md when it calls ROADMAP_EDIT, and against
+    ALWAYS.  A document the function does not name is matched by prose
+    only, a literal with a space in it: a module's name or one word is on
+    the rendered page from the library's sources as well, and listing it
+    would tell a writer of the page about a control it does not reach.
     """
     found = []
     for function in ast.walk(ast.parse(source)):
@@ -49,8 +56,16 @@ def unlisted(source, documents):
             continue
         calls = [node for node in ast.walk(function)
                  if isinstance(node, ast.Call) and node.args]
+        #  A document named only as quote()'s own argument is not one the
+        #  function reads a copy of.
+        through = {id(call.args[0]) for call in calls
+                   if isinstance(call.func, ast.Name)
+                   and call.func.id == "quote"}
         named = {text for node in ast.walk(function)
-                 for text in [literal(node)] if text in documents}
+                 for text in [literal(node)]
+                 if text in documents and id(node) not in through}
+        unnamed = set(always) - named
+        named.update(always)
         if any(isinstance(call.func, ast.Name)
                and call.func.id == ROADMAP_EDIT for call in calls):
             named.add("ROADMAP.md")
@@ -63,6 +78,8 @@ def unlisted(source, documents):
             if not quoting or text is None or len(text) < 4:
                 continue
             for document in sorted(named):
+                if document in unnamed and " " not in text:
+                    continue
                 if text in documents.get(document, ""):
                     found.append((call.lineno, text, document))
                     break
@@ -116,9 +133,9 @@ class ControlQuotes(unittest.TestCase):
         documents = {
             str(path.relative_to(ROOT)): path.read_text(encoding="utf-8")
             for path in list(ROOT.glob("*.md")) + list(ROOT.glob("docs/*.md"))}
-        for name in CONTROLS:
+        for name, always in CONTROLS.items():
             bare = unlisted((ROOT / name).read_text(encoding="utf-8"),
-                            documents)
+                            documents, always)
             self.assertEqual(bare, [], "\n" + "\n".join(
                 "%s:%d: %r is %s's text; write quote(%r, ...) and list it in "
                 "%s, so that check.py tells whoever rewords the document"
@@ -140,6 +157,12 @@ class ControlQuotes(unittest.TestCase):
         self.assertEqual(unlisted(source, documents), [
             (3, "The first sentence.", "docs/page.md"),
             (7, "Work that waits.", "ROADMAP.md")])
+        #  A module read against a page none of its functions name.
+        rendered = ("def test_three(self):\n"
+                    "    read.index('The first sentence.')\n"
+                    "    read.index('Page')\n")
+        self.assertEqual(unlisted(rendered, documents, ("docs/page.md",)),
+                         [(2, "The first sentence.", "docs/page.md")])
 
     def test_the_list_holds_only_what_a_control_uses(self):
         listed = {(document, text) for document, texts in self.quotes.items()

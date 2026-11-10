@@ -18,6 +18,9 @@
   "r = a * (b + -1) - -a",
   "\n## "
  ],
+ "docs/library.md": [
+  "Concepts for reading, writing, files and the process"
+ ],
  "spec.md": [
   "```landin-grammar\nprogram",
   "\"match\""
