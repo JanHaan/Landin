@@ -25,6 +25,11 @@ sys.path.insert(0, str(ROOT / 'environments/boards'))
 import common
 import manual
 
+#  Seconds before a subprocess here is called hung.  It ends in well under
+#  a second on an idle host; the limit only stops a hang, and is wide
+#  because scripts/script_tests.py's own workers load the host.
+HANG = 300
+
 
 class ManualCase(unittest.TestCase):
     def setUp(self):
@@ -362,7 +367,7 @@ class Copy(ManualCase):
         def command(name, argv, **kwargs):
             if name.endswith('-copy'):
                 result = subprocess.run([str(value) for value in argv], capture_output=True,
-                                        text=True, check=True, timeout=kwargs['timeout'])
+                                        text=True, check=True, timeout=HANG)
                 return result.stdout
             return ''
         run.command.side_effect = command

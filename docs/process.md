@@ -482,14 +482,21 @@ python3 check.py
 # Every scripts/tests module at once, check.py's controls in shards, as the
 # gate's scripts job runs them; about two minutes on sixteen workers.
 # Name modules, by path or by name, to run only those in one invocation.
+# A subprocess timeout in a script test is a hang guard of at least 60
+# seconds, which scripts/tests/test_hang_guards.py states and holds.
 python3 scripts/script_tests.py
 python3 scripts/script_tests.py test_fuzz_close test_scaling
 
 # Follow HEAD's gate run and return at its first failed job, rather than
 # when its last lane ends; with --all, follow it to its end and name every
-# failed job, when a round's fixes should go in one push.
+# failed job, when a round's fixes should go in one push.  Its first line
+# names the run it follows with its event and branch.  A commit can have
+# several runs, so after a promotion name main's: without --event and
+# --branch the newest listed run is followed, which for the first seconds
+# is the branch's finished one.
 python3 scripts/gate_watch.py
 python3 scripts/gate_watch.py --all
+python3 scripts/gate_watch.py --all --commit HEAD --event push --branch main
 
 # Regenerate every generated file: the matrices, catalogue, token dump and
 # editor files.  A stale one is named by the full run above.
