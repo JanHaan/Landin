@@ -675,13 +675,19 @@ path.write_text("-- generated at " + str(path) + "\\n"
         (self.root / "README.md").write_text("a document\n")
         (self.root / ".gitignore").write_text("compiler/ada/build/\ncalls\n"
                                               "compiler/ada/.build-locks/\n")
-        identity = ["-c", "user.name=t", "-c", "user.email=t@t"]
+        #  No detached maintenance after a commit: it can be at work
+        #  under .git while the cleanup removes the repository.
+        identity = ["-c", "user.name=t", "-c", "user.email=t@t",
+                    "-c", "maintenance.auto=false"]
         for arguments in (["init", "-q"], ["add", "-A"],
                           [*identity, "commit", "-q", "-m", "base"]):
             subprocess.run(["git", "-C", str(self.root), *arguments],
                            check=True, timeout=HANG)
         self.env.update(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
-                        GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+                        GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
+                        GIT_CONFIG_COUNT="1",
+                        GIT_CONFIG_KEY_0="maintenance.auto",
+                        GIT_CONFIG_VALUE_0="false")
 
     def test_a_document_edit_during_the_build_leaves_it_verified(self):
         #  A README edited beside a build turns the checkout dirty, and a

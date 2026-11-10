@@ -45,8 +45,12 @@ HANG = 300
 
 
 def git(cwd, *arguments):
+    #  No detached maintenance after a commit: it can outlive the case and
+    #  be at work under .git while the cleanup removes the repository.
     environment = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
-                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
+                       GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="maintenance.auto",
+                       GIT_CONFIG_VALUE_0="false")
     return subprocess.run(["git", *arguments], cwd=cwd, env=environment, check=True,
                           stdout=subprocess.PIPE, text=True).stdout.strip()
 
