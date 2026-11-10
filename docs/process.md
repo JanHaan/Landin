@@ -554,6 +554,20 @@ LANDIN_BUILD_VARIANT=inliner ./scripts/dev-build.sh
 QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh --target=linux-rv64 \
     --runner=qemu-riscv64 --suite='fixture execution'
 
+# Whether a backend change's emission still assembles for the targets this
+# host cannot run: emit the positive fixtures for every target but the
+# host's, Darwin and FreeBSD among them, and assemble each with the
+# shell's assembler for that target.  No VM, Mac, sysroot or emulator, and
+# nothing is linked or run, so it says the text is accepted by an assembler
+# of the target's kind and no more; the gate's lanes say the rest.  Name
+# targets, --corpus= or --fixture=KIND/NAME for less; --keep=DIR keeps each
+# refused assembly.
+python3 scripts/assemble_targets.py \
+    "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" .
+python3 scripts/assemble_targets.py \
+    "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" . \
+    darwin-arm64,freebsd-arm64 --corpus=runtime --keep=/tmp/refused
+
 # Render the documents selected in docs/site/render_html.py as HTML,
 # verify their text was not dropped, and package them. It does not publish:
 # .github/workflows/pages.yml is the only publisher; see docs/site/README.md.
