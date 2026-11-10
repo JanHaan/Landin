@@ -185,9 +185,17 @@ def reading(refine):
         _held.append((str(lock), fd))
     #  Held, so no publish is half done: absent means never built.
     if not path.exists():
+        #  The tag asked for is often one a document's example names; the
+        #  builds this checkout has are what the caller can pass instead.
+        built = sorted(str(found) for found in
+                       (ada / "build").glob("*/*/bin/" + path.name)
+                       if found.parent.parent.name in ("debug", "release"))
+        have = ("; this checkout has " + ", ".join(built) if built
+                else "; this checkout has no build of it")
         raise FileNotFoundError(
             f"{path} does not exist: no build of {tag}/{mode} has published"
-            f" it; run LANDIN_BUILD_TAG={tag} LANDIN_BUILD_MODE={mode}"
+            f" it{have}; to build the one asked for, run"
+            f" LANDIN_BUILD_TAG={tag} LANDIN_BUILD_MODE={mode}"
             " scripts/build.sh --compiler-only")
     os.environ[READER] = f"{readers}:{os.getpid()}"
     atexit.register(_release)

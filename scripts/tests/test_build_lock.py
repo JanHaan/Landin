@@ -344,6 +344,17 @@ finally:
                 build_lock.reading(unbuilt)
             self.assertIn("no build of test/release has published it",
                           str(raised.exception))
+            self.assertIn("this checkout has no build of it",
+                          str(raised.exception))
+            build_lock._release()
+            #  The build that does exist is named, whatever its tag.
+            other = self.root / "compiler/ada/build/nix-x/debug/bin/refine"
+            other.parent.mkdir(parents=True)
+            other.write_text("")
+            with self.assertRaises(FileNotFoundError) as raised:
+                build_lock.reading(unbuilt)
+            self.assertIn("this checkout has " + str(other.resolve()),
+                          str(raised.exception))
             build_lock._release()
         finally:
             sys.path.remove(str(self.root / "scripts"))
