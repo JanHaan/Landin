@@ -1025,6 +1025,10 @@ are.
 `expect` and `args` come as a pair. An expectation with no way to produce it
 is dead data that looks like coverage, and arguments with nothing to compare
 against are a command nobody checks, so either one alone is a reported fault.
+The test program runs `refine` from `compiler/ada`, so a recorded fixture
+with one program names it from there,
+`args: ../tests/fixtures/CLASS/NAME/main.ldn`, with any options after it;
+`scripts/add_fixture.py` gives that line when it meets `expect` alone.
 
 A fixture carrying both is **executed**: the harness runs `refine` with those
 arguments through the real tool adapter, and compares the captured bytes and

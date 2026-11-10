@@ -6,7 +6,9 @@
 Write the fixture first, `compiler/tests/fixtures/CLASS/NAME/fixture.meta`
 and its files, as compiler/tests/README.md says.  Several fixtures may be
 named at once; steps 1 to 3 are taken for each in turn, step 4 once for
-them all, and steps 5 and 6 say what is left for each.  `--refuse`,
+them all, and steps 5 and 6 say what is left for each.  A fixture one of
+steps 1 to 3 refuses is named with its refusal and left as it was, the
+others are still added, and the run ends unsuccessfully.  `--refuse`,
 `--reason` and `--stops` describe one fixture's row, so they take one
 fixture.  This then
 
@@ -24,11 +26,15 @@ fixture.  This then
    but one whose only code is L0015, takes the `--reason` it is given; the
    corpus reads an L0015 refusal's modules from the refusal itself, so its
    reason says only why, if anything.  `--refuse` still names the codes by
-   hand, held to refine's own;
+   hand, held to refine's own.  An `execute` row says only that
+   Cortex-M0 compiles the fixture: nothing here links the image or
+   measures it against the map, and a closing line says so and names the
+   lane that does;
 3. puts a positive, runtime or ABI fixture's sources in the layout
    `refine fmt` gives, which `formatting/the corpus is formatted` holds
    them to, unless the fixture names [1750] and its layout is its
-   evidence;
+   evidence, or it has no source of its own because its `program:` is
+   another fixture's, which that fixture's own layout holds;
 4. regenerates every file a fixture is read into, `check.py --generate`:
    the coverage, the matrices, the diagnostic catalogue's owners and the
    tokens among them;
@@ -110,12 +116,22 @@ def held_to_layout(meta):
             and meta.name not in LAYOUT_EVIDENCE)
 
 
+def own_sources(directory):
+    """The .ldn files under a fixture's own directory: none for a fixture
+    that borrows another's program through `program: ../OTHER/main.ldn`."""
+    return sorted(path for path in directory.rglob("*.ldn")
+                  if not any(part.startswith(".") for part in
+                             path.relative_to(directory).parts))
+
+
 def format_sources(meta, directory, refine):
     """Put the fixture's sources in refine fmt's layout, and return the
-    paths of those it changed."""
-    sources = sorted(path for path in directory.rglob("*.ldn")
-                     if not any(part.startswith(".") for part in
-                                path.relative_to(directory).parts))
+    paths of those it changed.  A fixture with no source of its own has
+    nothing to lay out, and refine fmt, which refuses a directory without
+    one (L0002), is not asked."""
+    sources = own_sources(directory)
+    if not sources:
+        return []
     before = {path: path.read_bytes() for path in sources}
     ran = subprocess.run([str(refine), "fmt", str(directory)],
                          capture_output=True, text=True, timeout=300)
@@ -125,6 +141,32 @@ def format_sources(meta, directory, refine):
                          " that layout:\n%s"
                          % (meta.label, ran.stdout + ran.stderr))
     return [path for path in sources if path.read_bytes() != before[path]]
+
+
+def unmeasured(labels):
+    """The closing line for the `execute` rows this run wrote: what was
+    not checked, and the lane that checks it."""
+    return ("not measured: %s %s `execute` because Cortex-M0 compiles %s;"
+            " nothing here linked an image or measured it against the map,"
+            " so one that does not fit fails only in the corpus lane, which"
+            " needs the embedded tools: python3"
+            " environments/cortex-m/backend_corpus.py --refine=PATH"
+            " --output=DIR %s (environments/cortex-m/README.md)"
+            % (", ".join(labels), "is" if len(labels) == 1 else "are",
+               "it" if len(labels) == 1 else "them",
+               " ".join("--case=" + label for label in labels)))
+
+
+def single_program_args(fixture, text):
+    """A hint for "expect without args", the refusal a recorded fixture
+    with one program meets: the `args:` line it takes.  The test program
+    runs refine from compiler/ada, so the program is spelled from there."""
+    program = re.search(r"(?m)^program:[ \t]*(\S+)", text)
+    return ("; a fixture with one program has its report produced by\n"
+            "    args: ../tests/fixtures/%s/%s\n"
+            "the program's path from compiler/ada, where the test program"
+            " runs refine, with any options refine takes after it"
+            % (fixture, program.group(1) if program else "main.ldn"))
 
 
 def remaining_steps(meta, expect_written, unformatted=None):
@@ -255,6 +297,62 @@ def corpus_row(meta, refuse, reason, refused=None, stops=None):
     return {"mode": "execute"}
 
 
+def add_one(fixture, args, refine, executing):
+    """Steps 1 to 3 for one fixture: its directory and metadata.  A
+    refusal is a SystemExit, raised before anything of this fixture's is
+    written; a label given an `execute` row is appended to EXECUTING."""
+    directory = ROOT / "compiler/tests/fixtures" / fixture
+    if not (directory / fixture_meta.NAME).is_file():
+        raise SystemExit("%s has no %s; write the fixture first, as"
+                         " compiler/tests/README.md says"
+                         % (directory.relative_to(ROOT), fixture_meta.NAME))
+    try:
+        meta = fixture_meta.read(directory)
+    except fixture_meta.FixtureError as error:
+        hint = ""
+        if "expect without args" in str(error):
+            hint = single_program_args(
+                fixture, (directory / fixture_meta.NAME).read_text(
+                    encoding="utf-8", errors="replace"))
+        raise SystemExit(str(error) + hint)
+
+    if meta.cls in ("runtime", "abi"):
+        record = json.loads(CORPUS.read_text(encoding="utf-8"))
+        if meta.label in record["fixtures"]:
+            print("%s already has its row in %s" % (
+                meta.label, CORPUS.relative_to(ROOT)), flush=True)
+        else:
+            refused = None
+            if not args.stops:
+                if refine is None:
+                    raise SystemExit(
+                        "no refine is built here to compile %s for"
+                        " Cortex-M0; build it with ./scripts/dev-build.sh"
+                        " --compiler-only, or pass --refine=PATH"
+                        % meta.label)
+                refused = cortex_codes(meta, directory, refine)
+            record["fixtures"][meta.label] = corpus_row(
+                meta, args.refuse, args.reason, refused, args.stops)
+            record["fixtures"] = dict(sorted(record["fixtures"].items()))
+            CORPUS.write_text(json.dumps(record, indent=2) + "\n",
+                              encoding="utf-8")
+            mode = record["fixtures"][meta.label]["mode"]
+            print("added %s to %s as %s" % (
+                meta.label, CORPUS.relative_to(ROOT), mode), flush=True)
+            if mode == "execute":
+                executing.append(meta.label)
+
+    if held_to_layout(meta):
+        if not own_sources(directory):
+            print("%s has no source of its own to lay out" % meta.label,
+                  flush=True)
+        elif refine is not None:
+            for path in format_sources(meta, directory, refine):
+                print("put %s in refine fmt's layout"
+                      % path.relative_to(ROOT), flush=True)
+    return directory, meta
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
@@ -276,53 +374,27 @@ def main(argv=None):
                          " fixture's row; add %s in a run of its own each"
                          % " and ".join(args.fixtures))
 
-    added = []
-    for fixture in args.fixtures:
-        directory = ROOT / "compiler/tests/fixtures" / fixture
-        if not (directory / fixture_meta.NAME).is_file():
-            raise SystemExit("%s has no %s; write the fixture first, as"
-                             " compiler/tests/README.md says"
-                             % (directory.relative_to(ROOT), fixture_meta.NAME))
-        try:
-            added.append((directory, fixture_meta.read(directory)))
-        except fixture_meta.FixtureError as error:
-            raise SystemExit(str(error))
-
+    added, refused_fixtures = [], []
     refine = args.refine or built_refine()
-    unformatted = {}
-    for directory, meta in added:
-        if meta.cls in ("runtime", "abi"):
-            record = json.loads(CORPUS.read_text(encoding="utf-8"))
-            if meta.label in record["fixtures"]:
-                print("%s already has its row in %s" % (
-                    meta.label, CORPUS.relative_to(ROOT)), flush=True)
-            else:
-                refused = None
-                if not args.stops:
-                    if refine is None:
-                        raise SystemExit(
-                            "no refine is built here to compile %s for"
-                            " Cortex-M0; build it with ./scripts/dev-build.sh"
-                            " --compiler-only, or pass --refine=PATH"
-                            % meta.label)
-                    refused = cortex_codes(meta, directory, refine)
-                record["fixtures"][meta.label] = corpus_row(
-                    meta, args.refuse, args.reason, refused, args.stops)
-                record["fixtures"] = dict(sorted(record["fixtures"].items()))
-                CORPUS.write_text(json.dumps(record, indent=2) + "\n",
-                                  encoding="utf-8")
-                print("added %s to %s as %s" % (
-                    meta.label, CORPUS.relative_to(ROOT),
-                    record["fixtures"][meta.label]["mode"]), flush=True)
-
+    unformatted, executing = {}, []
+    for fixture in args.fixtures:
+        #  One fixture's refusal leaves the others to be added: a batch
+        #  that stopped at the first left the rest to be named again.
+        try:
+            directory, meta = add_one(fixture, args, refine, executing)
+        except SystemExit as refusal:
+            if len(args.fixtures) == 1:
+                raise
+            refused_fixtures.append(fixture)
+            print("refused %s: %s" % (fixture, refusal), file=sys.stderr,
+                  flush=True)
+            continue
+        added.append((directory, meta))
         unformatted[meta.label] = None
-        if held_to_layout(meta):
-            if refine is None:
-                unformatted[meta.label] = str(directory.relative_to(ROOT))
-            else:
-                for path in format_sources(meta, directory, refine):
-                    print("put %s in refine fmt's layout"
-                          % path.relative_to(ROOT), flush=True)
+        if held_to_layout(meta) and own_sources(directory) and refine is None:
+            unformatted[meta.label] = str(directory.relative_to(ROOT))
+    if not added:
+        raise SystemExit("no fixture was added")
 
     for flag in GENERATED:
         ran = subprocess.run([sys.executable, str(ROOT / "check.py"), flag],
@@ -352,7 +424,12 @@ def main(argv=None):
                                      unformatted[meta.label]))
     for one in combined_steps(steps):
         print("then run: " + one)
-    return 1 if left else 0
+    if executing:
+        print(unmeasured(executing))
+    if refused_fixtures:
+        print("not added, each refused above: " + " ".join(refused_fixtures),
+              file=sys.stderr)
+    return 1 if left or refused_fixtures else 0
 
 if __name__ == "__main__":
     sys.exit(main())
