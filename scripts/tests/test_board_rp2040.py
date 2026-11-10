@@ -353,6 +353,41 @@ class Oracle(unittest.TestCase):
             BOARD.power_cycle(hub, self.args(hub))
 
 
+class ProbehiveDefault(unittest.TestCase):
+    """A manual run of an RP tool falls back to the rig state's probehive,
+    the one the gate passes, rather than requiring a checkout's path."""
+
+    class Parsed(Exception):
+        pass
+
+    def parsed(self, name, argv):
+        import argparse
+        spec = importlib.util.spec_from_file_location(
+            'probehive_default_' + name, ROOT / 'environments/boards' / name / 'board.py')
+        board = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(board)
+        real = argparse.ArgumentParser.parse_args
+
+        def parse(parser, *args, **kwargs):
+            raise self.Parsed(real(parser, *args, **kwargs))
+        with mock.patch.object(board.sys, 'argv', ['board.py', *argv]), \
+                mock.patch.object(argparse.ArgumentParser, 'parse_args', parse), \
+                self.assertRaises(self.Parsed) as raised:
+            board.main()
+        return board, raised.exception.args[0]
+
+    def test_each_rp_tool_defaults_to_the_rig_states_probehive(self):
+        for name in ('rp2040', 'rp2350', 'rp2350_hazard3'):
+            with self.subTest(board=name), tempfile.TemporaryDirectory() as tmp:
+                board, args = self.parsed(name, ['--output=' + tmp + '/run'])
+                self.assertEqual(args.probehive, board.common.RIG_STATE / 'probehive')
+                gate = (ROOT / 'environments/boards/gate.py').read_text()
+                self.assertIn("'--probehive', type=Path, default=common.RIG_STATE / 'probehive'",
+                              gate)
+                _, args = self.parsed(name, ['--output=' + tmp + '/run', '--probehive=' + tmp])
+                self.assertEqual(args.probehive, Path(tmp))
+
+
 class LockLifecycle(unittest.TestCase):
     def run_boot(self, *, borrowed=False, failure=None, acquire_fails=False):
         """Exercise cleanup through the entry point and the real restoration guard."""

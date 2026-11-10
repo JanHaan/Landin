@@ -1183,6 +1183,45 @@ class Pace(unittest.TestCase):
             with self.assertRaisesRegex(COMMON.Failed, 'error -71'):
                 pace.before('power cycle')
 
+    def test_an_empty_or_missing_pace_counts_from_this_boot(self):
+        """A newly made shared state names no last action; trouble from
+        before the running boot must not stop its first run."""
+        old = (400.0, 'usb 3-2: device descriptor read/64, error -71')
+        new = (950.0, 'usb 3-2: device descriptor read/64, error -110')
+        for content in (None, '', '\n', 'not a time\n'):
+            with self.subTest(content=content), tempfile.TemporaryDirectory() as tmp:
+                asked = []
+
+                def kernel(seconds, lines=[old]):
+                    asked.append(seconds)
+                    return lines
+                pace = COMMON.Pace(state=Path(tmp) / 'rig.pace', kernel=kernel,
+                                   clock=lambda: 1000.0, boot=lambda: 900.0)
+                if content is not None:
+                    (Path(tmp) / 'rig.pace').write_text(content)
+                self.assertEqual(pace.last(), 900.0)
+                #  The journal is asked for this boot's seconds, not the epoch's.
+                pace.before('power cycle')
+                self.assertEqual(asked, [101])
+                #  Trouble since the boot still stops the run.
+                later = COMMON.Pace(state=Path(tmp) / 'rig.pace',
+                                    kernel=lambda seconds: [old, new],
+                                    clock=lambda: 1000.0, boot=lambda: 900.0)
+                with self.assertRaisesRegex(COMMON.Failed, 'error -110'):
+                    later.before('power cycle')
+        #  A recorded time is kept, whatever the boot's.
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'rig.pace').write_text('300.000000 acknowledged: known\n')
+            pace = COMMON.Pace(state=Path(tmp) / 'rig.pace', kernel=lambda seconds: [old],
+                               clock=lambda: 1000.0, boot=lambda: 900.0)
+            self.assertEqual(pace.last(), 300.0)
+            with self.assertRaisesRegex(COMMON.Failed, 'error -71'):
+                pace.before('power cycle')
+        #  The default reads the running boot's start on the pace's own clock.
+        real = COMMON.Pace(state=Path('/nonexistent/landin/rig.pace'), kernel=lambda seconds: [])
+        self.assertAlmostEqual(real.last(), time.time() - time.clock_gettime(time.CLOCK_BOOTTIME),
+                               delta=5)
+
     def test_the_options_wait_for_nothing_by_default(self):
         parser = argparse.ArgumentParser()
         COMMON.pace_arguments(parser)
@@ -1478,16 +1517,37 @@ class Root(unittest.TestCase):
                     (['--hub', '.3.4', '--cascade', '5-1'], '5-1.3.4', '5-1.4', '5-1')):
                 parser = self.parser()
                 args = parser.parse_args(argv)
-                COMMON.place_hubs(parser, args, 'hub', 'console_hub', sysfs=sysfs)
+                COMMON.place_hubs(args, 'hub', 'console_hub', sysfs=sysfs)
                 self.assertEqual((args.hub, args.console_hub, args.cascade), (hub, console, cascade))
 
-    def test_no_root_is_the_parsers_error(self):
+    def test_no_root_is_a_result_with_its_outcome(self):
+        """A topology refusal is the run's result, not a parser's exit
+        before any: the gate reads an outcome rather than an incomplete
+        step."""
         with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'run'
+            sysfs = Path(tmp) / 'sysfs'
+            sysfs.mkdir()
             parser = self.parser()
-            args = parser.parse_args([])
-            with mock.patch('sys.stderr'), self.assertRaises(SystemExit) as raised:
-                COMMON.place_hubs(parser, args, 'hub', sysfs=Path(tmp))
-            self.assertEqual(raised.exception.code, 2)
+            parser.add_argument('--output', type=Path)
+            argv = ['--output', str(output)]
+
+            def main():
+                args = parser.parse_args(argv)
+                COMMON.place_hubs(args, 'hub', sysfs=sysfs)
+                self.fail('the tool went on without a cascade')
+            with mock.patch('sys.stderr'):
+                self.assertEqual(COMMON.tool_main(main, argv), 1)
+            result = json.loads((output / 'result.json').read_text())
+            self.assertEqual((result['status'], result['phase']), ('failed', 'preflight'))
+            self.assertIn(result['outcome'], COMMON.OUTCOMES)
+            with self.assertRaises(COMMON.Failed) as raised:
+                COMMON.place_hubs(parser.parse_args([]), 'hub', sysfs=sysfs)
+            self.assertEqual(result['outcome'], COMMON.outcome_of(raised.exception))
+            self.assertIn(str(raised.exception), json.dumps(result))
+        #  No tool hands its parser to the placement.
+        for tool in sorted((ROOT / 'environments/boards').rglob('*.py')):
+            self.assertNotIn('place_hubs(parser', tool.read_text(), tool)
 
     def test_no_tool_writes_an_absolute_hub_into_its_defaults(self):
         """A move of the cascade needs no edit: every tool's hub defaults

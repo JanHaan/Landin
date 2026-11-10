@@ -423,7 +423,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--refine', type=Path)
     common.board_arguments(parser)
-    parser.add_argument('--probehive', type=Path, required=True, help='a probehive checkout')
+    parser.add_argument('--probehive', type=Path, default=common.RIG_STATE / 'probehive',
+                        help="a probehive checkout; the rig state's by default, as the gate"
+                             ' takes it')
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs whose CMSIS-DAP TCP transport reaches the bridge')
     parser.add_argument('--probe', help="probe-rs's slot selector, direct UDP by default")
@@ -458,7 +460,7 @@ def main():
     if manual.selected(args):
         manual.preflight(args)
     else:
-        common.place_hubs(parser, args, 'hub')
+        common.place_hubs(args, 'hub')
         pico2.boot_location(args)
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.bundle or (args.nm and args.objdump), 'no riscv64-elf-nm and -objdump or riscv64-unknown-elf-nm and'

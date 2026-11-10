@@ -124,8 +124,9 @@ The probehive runtime needs its `flake.nix` and `flake.lock` for the
 `scripts/gpio.py`, and the loaded bitstream's
 `build/slots_ci/generated/rig.json` and `csr.json`. GPIO uses its lightweight
 `#gpio` shell, available on arm64 and x86-64, rather than the FPGA shell.
-The gate takes the runtime from `/var/lib/landin-rig/probehive`, and a
-manual run names it with `--probehive`. Prepare that environment before
+The gate takes the runtime from `/var/lib/landin-rig/probehive`, the rig
+state's, and a manual run of an RP tool takes the same unless `--probehive`
+names another. Prepare that environment before
 holding the rig lock:
 
 ```sh
@@ -184,7 +185,11 @@ matching tool source to a private directory on rigpi, runs the board tool,
 and retrieves its complete output, including a failed run. `--host` and
 `--identity` override the defaults above. The Pi checks artifact and source
 identities before hardware access and needs no compiler or cross tools to
-consume the bundle. `transfer.json` retains the remote paths and status.
+consume the bundle. The private directory is removed once the output is
+retrieved, a failed run's too, and `transfer.json` records that as
+`remote_cleanup` beside the path and status. It stays when `--keep-remote`
+asks, or when the result or a requested record could not be retrieved and
+the copy on rigpi is the only one.
 Each board tool records elapsed time, helper operations and oracle results.
 Add `--record NEW_LOCAL_PATH` before `--` to retrieve a successful tool's
 record without replacing an existing file. Use `ram-record.json` for RAM
@@ -600,7 +605,7 @@ rigpi; otherwise `~/.cache/landin`, the default on any other host.
 | entry | what it holds |
 |---|---|
 | `rig.lock` | the one lock, naming its holder |
-| `rig.pace` | the last action that disconnected a device, and acknowledgements |
+| `rig.pace` | the last action that disconnected a device, and acknowledgements; empty or missing, it counts from the running boot's start |
 | `runs/PORT.json` | `gate.py`'s journal of a port's step under way |
 | `probehive-loaded.json` | `rig.py`'s record of the loaded bitstream |
 | `probehive/` | the pinned probehive runtime |

@@ -656,10 +656,13 @@ class Pace:
     a default, since on the cascade's present port a switch disconnects
     only the device on the port switched.  The last action's time is kept
     in STATE beside the rig's lock; KERNEL(seconds) is the kernel's USB
-    lines of the last SECONDS, as (unix time, text)."""
+    lines of the last SECONDS, as (unix time, text).  BOOT() is when the
+    running boot began, from which an empty or missing STATE counts."""
     def __init__(self, spacing=0, quiet=0, state=None, kernel=None, clock=time.time,
-                 sleep=time.sleep, report=None, limit=600):
+                 sleep=time.sleep, report=None, limit=600, boot=None):
         self.spacing, self.quiet, self.limit = spacing, quiet, limit
+        #  When this boot began, on CLOCK's scale.
+        self.boot = boot or (lambda: self.clock() - time.clock_gettime(time.CLOCK_BOOTTIME))
         self.state = Path(state) if state else RIG_LOCK.with_name('rig.pace')
         self.kernel = kernel or kernel_usb_lines
         self.clock, self.sleep = clock, sleep
@@ -670,10 +673,15 @@ class Pace:
         self.last_action = None
 
     def last(self):
+        """When the last action or acknowledgement was.  A pace file that
+        is missing or names none, as a newly made shared state's does,
+        answers this boot's start: trouble the kernel logged before it
+        belongs to a rig that has since restarted, and counting from the
+        epoch would stop the first run on trouble long acknowledged."""
         try:
             return float(self.state.read_text().split()[0])
         except (OSError, ValueError, IndexError):
-            return 0.0
+            return max(self.boot(), 0.0)
 
     def check(self, what, now=None):
         """Retain this run's USB delta and stop on unacknowledged trouble."""
@@ -1697,17 +1705,17 @@ def cascade_argument(parser):
                              ' it is attached' % CASCADE_HUB)
 
 
-def place_hubs(parser, args, *names, sysfs=Path('/sys/bus/usb/devices')):
+def place_hubs(args, *names, sysfs=Path('/sys/bus/usb/devices')):
     """args.cascade found by `cascade_root` when it was not given, and each
     of NAMES, the attribute of ARGS naming a hub, placed on it by
-    `on_cascade`; either refusing is PARSER's error, before anything runs."""
-    try:
-        if args.cascade is None:
-            args.cascade = cascade_root(sysfs=sysfs)
-        for name in names:
-            setattr(args, name, on_cascade(getattr(args, name), args.cascade))
-    except Failed as error:
-        parser.error(str(error))
+    `on_cascade`, before anything runs.  Either refusing is a Failed the
+    tool lets go, so that `tool_main` writes it as the run's result with
+    its outcome: an argument parser's error would exit before any result,
+    and the gate would report the step incomplete rather than refused."""
+    if args.cascade is None:
+        args.cascade = cascade_root(sysfs=sysfs)
+    for name in names:
+        setattr(args, name, on_cascade(getattr(args, name), args.cascade))
 
 
 class Listings:

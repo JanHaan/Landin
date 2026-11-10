@@ -5,9 +5,12 @@
         --output=NEW_DIRECTORY -- --probehive /home/jan/src/probehive
 
 Arguments after -- go to the board tool. The rigpi tool owns the rig lock
-and all hardware operations. Remote files are retained with their paths in
-transfer.json; local output retains the prepared bundle, source, command
-logs and the board run's complete output, including failed runs.
+and all hardware operations. Local output retains the prepared bundle,
+source, command logs and the board run's complete output, including failed
+runs. The remote staging directory is removed once that output is here, a
+failed run's too; it stays, with its path in transfer.json, when
+--keep-remote asks, or when the result or a requested record could not be
+retrieved and the remote copy is the only one.
 --record LOCAL_PATH retrieves the board tool's passed record without
 replacing an existing local file. RAM records cannot be named record.json.
 """
@@ -73,6 +76,22 @@ def manual_boot(arguments):
     return selected == 'manual-uf2'
 
 
+def remove_remote(ssh, remote, output, transfer, kept=None):
+    """Remove the run's staging directory on the host unless KEPT says why
+    it stays; what happened is transfer['remote_cleanup'].
+
+    REMOTE is the path mktemp gave, already held to /tmp/landin-board.NAME,
+    so the command removes nothing else.  A removal that fails leaves the
+    run's verdict alone: the directory is the host's to clear.
+    """
+    if kept:
+        transfer['remote_cleanup'] = 'kept: ' + kept
+        return
+    status = transport(ssh + ['rm -rf -- ' + shlex.quote(remote)], output / 'remote-cleanup.log')
+    transfer['remote_cleanup'] = ('removed' if status == 0 else
+                                  'failed with status %s; see remote-cleanup.log' % status)
+
+
 def execute(args, board_args=()):
     if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.@-]*', args.host):
         raise bundle.Invalid('host must be an SSH hostname or USER@HOST, without options')
@@ -123,7 +142,11 @@ def execute(args, board_args=()):
                                                      + [shlex.join(status_command)])
         transfer['manual_output'] = remote + '/result'
     (output / 'transfer.json').write_text(json.dumps(transfer, indent=2) + '\n')
+    keep = 'asked for with --keep-remote' if getattr(args, 'keep_remote', False) else None
     if transport(scp + ['-r', stage, args.host + ':' + remote + '/prepared'], output / 'copy.log'):
+        #  Nothing ran there: what the directory holds is a partial copy.
+        remove_remote(ssh, remote, output, transfer, keep)
+        (output / 'transfer.json').write_text(json.dumps(transfer, indent=2) + '\n')
         raise bundle.Invalid('copy failed; see copy.log')
     tool = remote + '/prepared/source/environments/boards/' + args.board + '/board.py'
     command = ['python3', tool, '--mode=' + args.mode,
@@ -170,12 +193,17 @@ def execute(args, board_args=()):
             except (OSError, ValueError) as error:
                 record_failed = True
                 transfer.update(record_status='failed', record_error=str(error))
+    #  The remote copy goes once everything it holds is here.  What could
+    #  not be retrieved has no other copy, so the directory then stays.
+    remove_remote(ssh, remote, output, transfer, keep or (
+        'the result was not retrieved; see retrieve.log' if copied else
+        'the record was not retrieved: ' + transfer['record_error'] if record_failed else None))
     transfer.update(exit_status=status, retrieval_status=copied,
                     elapsed_seconds=round(time.monotonic() - started, 3))
     (output / 'transfer.json').write_text(json.dumps(transfer, indent=2) + '\n')
-    print('%s %s: %s; results %s; remote %s:%s' %
+    print('%s %s: %s; results %s; remote %s:%s %s' %
           (args.board, args.mode, 'passed' if status == 0 and copied == 0 and not record_failed else 'failed',
-           output, args.host, remote))
+           output, args.host, remote, transfer['remote_cleanup']))
     if record_failed:
         print('record failed: ' + transfer['record_error'])
     return status if status else int(copied != 0 or record_failed)
@@ -194,6 +222,9 @@ def main(argv=None):
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--record', type=Path, help="copy the tool's passed record to a new local file")
+    parser.add_argument('--keep-remote', action='store_true',
+                        help="leave the run's staging directory on the host, its path in"
+                             ' transfer.json, rather than remove it once the output is retrieved')
     parser.add_argument('--host', default='jan@10.42.0.60')
     parser.add_argument('--identity', type=Path, default=Path('~/.ssh/epycmicro-2026-09-17'))
     args = parser.parse_args(arguments)

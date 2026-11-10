@@ -102,7 +102,7 @@ def main():
     # The console's tty, and the JTAG's that --recover opens, belong to
     # --hub-group (D836).
     common.rerun_in_group(args.hub_group)
-    common.place_hubs(parser, args, 'hub')
+    common.place_hubs(args, 'hub')
     if unserved(args):
         parser.error(unserved(args))
     esp.required_tools(args)

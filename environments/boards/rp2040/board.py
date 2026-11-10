@@ -315,7 +315,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--refine', type=Path)
     common.board_arguments(parser)
-    parser.add_argument('--probehive', type=Path, required=True, help='a probehive checkout')
+    parser.add_argument('--probehive', type=Path, default=common.RIG_STATE / 'probehive',
+                        help="a probehive checkout; the rig state's by default, as the gate"
+                             ' takes it')
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the probe named by --probe')
     parser.add_argument('--slot', type=int, default=0, help="the probehive slot, 0 on the"
@@ -355,7 +357,7 @@ def main():
                         help="also write a passed run's record here, as record.json is")
     args = parser.parse_args()
     common.board_preflight(args, 'rp2040')
-    common.place_hubs(parser, args, 'hub')
+    common.place_hubs(args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.bundle or args.nm, 'no arm-eabi-nm or arm-none-eabi-nm on PATH: name one with --nm')
     args.probe = args.probe or common.udp_slot(args.probe_host, args.slot)
