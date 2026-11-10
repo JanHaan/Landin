@@ -976,6 +976,65 @@ def scope_gaps(workflow):
     return gaps
 
 
+#  Where docs/process.md names the controls that hold gate.yml's jobs.
+INVENTORY_HEADING = "### The controls that hold the job inventory"
+
+
+def gate_readers():
+    """The test files that name gate.yml: scripts/tests and each
+    environment's own tests."""
+    found = []
+    for path in (sorted((ROOT / "scripts/tests").glob("*.py"))
+                 + sorted((ROOT / "environments").glob("*/test.py"))):
+        if "gate.yml" in path.read_text(encoding="utf-8"):
+            found.append(path.relative_to(ROOT).as_posix())
+    return found
+
+
+class Inventory(unittest.TestCase):
+    """The gate's inventory controls are named in one place.
+
+    They are in five files, and a scope change once found each by failing
+    it.  The gate reference lists them, and this holds the list to every
+    test file that names the workflow, so a new control is added to it.
+    """
+
+    def section(self):
+        text = (ROOT / "docs/process.md").read_text(encoding="utf-8")
+        self.assertEqual(text.count(INVENTORY_HEADING + "\n"), 1)
+        return text.split(INVENTORY_HEADING + "\n", 1)[1].split("\n#", 1)[0]
+
+    def test_every_test_file_naming_the_gate_is_in_the_reference(self):
+        section = self.section()
+        readers = gate_readers()
+        self.assertIn("scripts/tests/test_gate_inputs.py", readers)
+        self.assertIn("environments/cortex-m/test.py", readers)
+        for name in readers:
+            self.assertIn("`%s`" % name, section,
+                          "%s names gate.yml and docs/process.md's \"%s\" "
+                          "does not name it; say there what it holds of the "
+                          "workflow, or that it holds nothing"
+                          % (name, INVENTORY_HEADING.lstrip("# ")))
+
+    def test_the_reference_names_no_file_that_is_gone(self):
+        named = re.findall(r"`((?:scripts/tests|environments)/[\w./-]+\.py)`",
+                           self.section())
+        self.assertGreaterEqual(len(named), 5)
+        for name in named:
+            self.assertTrue((ROOT / name).is_file(), name)
+            self.assertIn(name, gate_readers())
+
+    def test_the_scope_condition_is_held_in_one_control(self):
+        #  The conjuncts of the event's scope are spelt in this file and in
+        #  no other test, so a scope change edits one control.
+        for name in gate_readers():
+            if name == "scripts/tests/test_gate_inputs.py":
+                continue
+            text = (ROOT / name).read_text(encoding="utf-8")
+            for conjunct in SOFTWARE_IF + (BOARDS_IF,):
+                self.assertNotIn(conjunct, text, name)
+
+
 class Physical(unittest.TestCase):
     """Hold the physical jobs to their own category: never reused, by scope."""
 

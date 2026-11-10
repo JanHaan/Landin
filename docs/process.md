@@ -806,6 +806,25 @@ tree keeps `bin/`: executables are linked into `link/` and published into
 build's readers lock (`scripts/build_lock.py`). A compiler-only build records `refine` as current without claiming that
 `landin_tests` is current; the next full build still builds the test program.
 
+### The controls that hold the job inventory
+
+A change to a gate job's name, matrix, condition or needs is held by
+controls in several files. Read this list before the change, and run them
+together afterwards: `python3 scripts/script_tests.py test_gate_inputs
+test_rv64_lanes test_build_inventory test_host_determinism
+test_rig_runner_hook test_release`, and `python3
+environments/cortex-m/test.py`, which `check.py` runs.
+
+| file | what it holds of `gate.yml` |
+|---|---|
+| `scripts/tests/test_gate_inputs.py` | `Workflow`: the reuse list is exactly the jobs the aggregate needs, every matrix leg by its rendered name. `Physical`: every job's condition follows the event's scope, a software lane skipping for a reused pass and a boards-only event and a board job running by the boards scope alone, the board matrix is every port once, and the aggregate keeps documents and scripts always. `Inventory`: this list names every test file that names the workflow. Its matrix reader takes axis lines or one `include:` list, never both. |
+| `scripts/tests/test_rv64_lanes.py` | the RV64 jobs: the two hardware jobs are suspended, by a `false` conjunct in their condition, and absent from the aggregate and the reuse list; the emulated job is not suspended, has both shards and its packages, and its evidence is packaged. It compares conditions by that conjunct alone, so a scope change does not concern it. |
+| `scripts/tests/test_build_inventory.py` | `BuildArchives`: the archives the build jobs hand to their consumers hold the executables and both stamps. |
+| `scripts/tests/test_host_determinism.py` | `Workflows`: the `build-modes` matrix compares every mode target once, and `determinism.yml`'s parts emit every target once on each host. |
+| `environments/cortex-m/test.py` | the `cortex-m` job's `part` matrix is the runner's parts, and it passes `--part`. |
+| `scripts/tests/test_rig_runner_hook.py` | nothing of the jobs: it passes the workflow's path to the rig runner's hook. |
+| `scripts/tests/test_release.py` | nothing of the jobs: it names the workflow in the API path the release check asks for main's run. |
+
 ### Physical boards and promotion
 
 A board-scope event is a push to `main`, the weekly schedule at 04:00 UTC
