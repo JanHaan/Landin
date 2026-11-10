@@ -2462,6 +2462,15 @@ package body Landin.Stages.Configuration is
          --  Each placement names a region whose access fits it.
          for Section in Firmware.Section_Kind loop
             declare
+               --  Whether reset is all that fills memory: not when the
+               --  whole image is loaded into RAM, nor under a ROM loader
+               --  that writes every segment where it is mapped, an ESP
+               --  image's and every Xtensa one.
+               Boots_From_Its_Image : constant Boolean :=
+                 Landin.Configuration.Firmware_Layout (Activity.all)
+                   /= Firmware.RAM_Layout
+                 and then not Firmware.Takes_ESP_Image (Built.Boot)
+                 and then Built.Core not in Firmware.Xtensa_Core;
                Name : constant String := Ada.Strings.Unbounded.To_String
                  (Placed_Names (Section));
                Index : constant Firmware.Region_Count :=
@@ -2491,6 +2500,36 @@ package body Landin.Stages.Configuration is
                     & Firmware.Spelling (Built.Regions (Index).Mode),
                     "place " & Firmware.Spelling (Section)
                     & " in an ""rw"" or ""rwx"" region");
+               elsif Section in Firmware.Text | Firmware.Rodata
+                 and then Boots_From_Its_Image
+                 and then Firmware.Writable (Built.Regions (Index).Mode)
+                 and then Name /= Ada.Strings.Unbounded.To_String
+                   (Placed_Names (Firmware.Vectors))
+                 and then
+                   (Section = Firmware.Text
+                    or else Name /= Ada.Strings.Unbounded.To_String
+                      (Placed_Names (Firmware.Text)))
+               then
+                  --  D1116: reset copies `data` and RAM code out of the
+                  --  region `text` is placed in and nothing else.  Code
+                  --  in writable memory the image does not boot from, or
+                  --  constants in writable memory that holds neither the
+                  --  table nor the code, would have no image there after
+                  --  a power cycle.
+                  Layout (Placed_At (Section),
+                    "nothing fills " & Name & " at reset, and "
+                    & Firmware.Spelling (Section) & " placed there has no"
+                    & " image to boot from: " & Name & " is "
+                    & Firmware.Spelling (Built.Regions (Index).Mode)
+                    & (if Section = Firmware.Text
+                       then " and does not hold the vector table"
+                       else " and holds neither the vector table nor"
+                         & " text"),
+                    "place " & Firmware.Spelling (Section)
+                    & " in an ""rx"" region or with the vectors; a routine"
+                    & " in a .ramtext. section runs from RAM with its image"
+                    & " in flash, and --firmware-layout=ram loads a whole"
+                    & " image into RAM");
                else
                   Built.Placed (Section) := Index;
                end if;

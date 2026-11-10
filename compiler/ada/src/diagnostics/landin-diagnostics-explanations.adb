@@ -1269,12 +1269,14 @@ package body Landin.Diagnostics.Explanations is
                "A device description's parts do not fit together (D543):"
                & " two regions overlap, a placement names a region the des"
                & "cription does not have or one whose access does not fit,"
-               & " as code in an `""rw""` region or data in an `""rx""` one, t"
-               & "he vector table does not fit its region or would start u"
-               & "naligned, an interrupt's slot lies past the vector table"
-               & ", the table is longer than the core's architecture allow"
-               & "s, or the stack is larger than its region. The message n"
-               & "ames the region or the slot.",
+               & " as code in an `""rw""` region or data in an `""rx""` one, a"
+               & " flash image's code or constants are placed in writable "
+               & "memory that reset does not fill (D1116), the vector tabl"
+               & "e does not fit its region or would start unaligned, an i"
+               & "nterrupt's slot lies past the vector table, the table is"
+               & " longer than the core's architecture allows, or the stac"
+               & "k is larger than its region. The message names the regio"
+               & "n or the slot.",
             when Catalogue.Description_Core_Mismatch =>
                "A device description's core does not execute what the re"
                & "quest builds (D543): the target is not `cortex-m0`, or `"

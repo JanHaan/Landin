@@ -412,6 +412,7 @@ negative/description-esp-image-missing | rv32
 negative/description-float-unit-core | cortex-m0
 negative/description-float-unit-level | cortex-m0
 negative/description-float-unit-unknown | cortex-m0
+negative/description-places-code-where-nothing-loads | cortex-m0
 negative/description-regions-overlap | cortex-m0
 negative/description-unknown-core | cortex-m0
 negative/destructured-local-escape | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

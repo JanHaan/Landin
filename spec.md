@@ -25382,8 +25382,10 @@ two and no less than 128 bytes, fits its region past the boot kind's
 prefix; the table is no longer than the core's architecture allows, 48
 words on ARMv6-M and 512 on ARMv7-M, and on a RISC-V core what D662 gives
 it; each interrupt's slot is inside it;
-and the stack fits its region. Those are L0514. `.ramtext` is placed with
-`data`, and every load image in the region `text` is placed in.
+and the stack fits its region; and in an image that boots from its own
+memory, `text` is with the vectors or in a region that may not be written,
+and `rodata` there or with `text` (D1116). Those are L0514. `.ramtext` is
+placed with `data`, and every load image in the region `text` is placed in.
 
 A description's core must execute what the request builds: the target is
 its core's family's, `cortex-m0` for an Arm core and `rv32` for a RISC-V
@@ -25465,8 +25467,10 @@ prefix, then text, read-only data and the unwind tables in their regions,
 initialized data and RAM code in the data region loaded from the text
 region, BSS, and each region a `link(region: ...)` uses (D547). It asserts
 the vector address and length, the stack's alignment, that nothing placed
-in the stack's region reaches the stack, and that the last load image ends
-inside the text region. Reset copies and clears what the script places, by
+in the stack's region reaches the stack, whichever sections those are
+(D1114), and that the last load image ends inside the text region. A
+section that would begin at address zero leaves its first eight bytes
+unused (D1115). Reset copies and clears what the script places, by
 the `_landin_firmware_*` symbols. For the constrained reference the script
 is, byte for byte, the one D229 fixed.
 
@@ -25501,6 +25505,106 @@ select their profiles`, the latter holding the reference's derived script
 to D229's text, and `environments/cortex-m/descriptions.py`, which holds the
 linked `.boot2` and vector addresses and the build report's facts to
 `environments/cortex-m/descriptions.json`.
+
+### D1114 — The stack's reservation is asserted against whatever shares its region
+
+**The tour said** nothing; D545 has the derived script assert "that nothing
+placed in the stack's region reaches the stack". The assertion was written
+only when `data` or `bss` was placed in the stack's region, or a used
+`link(region:)` region was the stack's. A description whose stack shares
+its region with `text`, `rodata` or the vector table and keeps data and BSS
+elsewhere got no assertion at all: a 12000-byte constant lay 4532 bytes
+into a reserved 8 KiB stack, the link succeeded, and the build report gave
+the region's whole length as free.
+
+**Chosen:** the assertion is on the end of the section the script writes
+last into the stack's region, whichever that is: the vector table, entry
+word or image block, text, RAM code placed with text, read-only data, the
+unwind tables, data, RAM code, BSS, a used region's sections, or an
+archive's initializer array. The linker fills a region in the script's
+order, so that section's end is the region's use. Where it is data, RAM
+code, BSS or a used region the assertion is spelled as it was, and the
+reference's script is still D229's byte for byte.
+
+**The alternative:** one assertion a section, which says the same thing up
+to ten times, and a location-counter symbol after the last section, which
+the linker does not keep per region.
+
+**Pinned by** `rv32 firmware/the derived script guards its placements`,
+the assertion on `.rodata` for a stack that shares its region with code
+and constants alone. The review's description of that shape, which linked,
+is refused by the linker with the assertion's message.
+
+### D1115 — Nothing a program declares is placed at address zero
+
+**The tour said** [0480] that the atom of a one-atom pointer union is
+stored as zero, and D97 that a zero in a by-value aggregate argument's
+position is the zero carrier, on which the callee clears its parameter
+instead of copying. Both hold only while no object has address zero. This
+register's note that "Cortex-M0 flash begins at address zero with the
+vector table, so small addresses are real pointers there" covers flash,
+whose first bytes are the compiler's own table; a writable region at zero
+has no such tenant. The STM32H753's ITCM is one, and the first datum a
+program placed there with `link(region: "ITCM")` had address zero: passed
+by value it was read as all zeros, and its address was the absent case of
+a maybe-pointer. Which datum that was depended on link order.
+
+**Chosen:** in the derived script, a section of the program's that could
+begin at address zero leaves its first eight bytes unused: text, read-only
+data, data, BSS and a used region's sections, in any region that begins at
+zero other than the vectors' region, where the table or the entry word
+always comes first. The padding is inside the section, after its start
+symbol, so reset copies or clears it with the rest and the load image
+keeps its shape; it is written only when the section does begin at zero,
+and a description with no such region derives the script it did. Eight
+bytes is the sections' alignment.
+
+**The alternatives:** refusing `link(region:)` data for a region at zero,
+which gives up the STM32H753's ITCM, memory a program has reason to use,
+for the sake of its first word; and changing the carrier or the union's
+representation, which every backend and every by-value call would pay for.
+A developer's own `--linker-script` is not yet held to the rule; D546's
+contract reads the image's segments, not where its symbols lie.
+
+**Pinned by** `rv32 firmware/the derived script guards its placements`,
+the padding in the data and BSS sections of a region at zero and its
+absence elsewhere. The review's program on `descriptions/stm32h753` now
+links its datum at address 8.
+
+### D1116 — A flash image keeps code and constants where reset need not put them
+
+**The tour said** nothing; D543 asks that code and the vector table be in
+a region that may execute and data, BSS and the stack in one that may be
+written, and had no rule for `rodata`. The derived script gives `.text`
+and `.rodata` no load address of their own, and reset copies `.data`, RAM
+code and a used region's data out of the region `text` is placed in and
+nothing else. So `linker.place("rodata", RAM)` under a boot kind that
+starts from flash linked an image whose constants, strings and evidence
+tables had no bytes in flash, and `linker.place("text", RAM)` with the
+vectors in flash one whose reset vector pointed into RAM. Both links
+succeeded; an image loaded by a debugger, which writes every segment, ran,
+and failed after a power cycle.
+
+**Chosen:** L0514 at the placement. In an image that boots from its own
+memory, `text` is placed with the vectors or in a region that may not be
+written, and `rodata` likewise or with `text`. A description that keeps
+everything in one region, as a chip whose loader writes the whole image
+does, is unchanged, and so is one built with `--firmware-layout=ram`,
+whose image a debugger loads; an `esp-app-image` and every Xtensa image
+are loaded segment by segment by a ROM and keep their constants in data
+RAM as they did (D903). A routine that must run from RAM has `.ramtext`,
+which has a load image.
+
+**The alternative:** supporting the placement, giving such a section a
+load image in flash and having reset copy it before anything reads it, as
+`.ramtext` is. Constants in tightly coupled memory are a real wish, and
+that is the way to grant it, but it is new startup code on every firmware
+target and not a repair; until it exists the placement is refused rather
+than accepted and wrong. This is a maintainer's choice to confirm.
+
+**Pinned by** `negative/description-places-code-where-nothing-loads`, both
+refusals, and `rv32 firmware/the derived script guards its placements`,
+each alone.
 
 ### D546 — A developer's linker script is held to a written contract
 

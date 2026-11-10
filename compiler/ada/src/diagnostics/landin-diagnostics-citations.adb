@@ -2518,6 +2518,14 @@ package body Landin.Diagnostics.Citations is
             when 545 =>
                "The linker script is derived from the description, and b"
                & "oot kinds are the compiler's",
+            when 1114 =>
+               "The stack's reservation is asserted against whatever sha"
+               & "res its region",
+            when 1115 =>
+               "Nothing a program declares is placed at address zero",
+            when 1116 =>
+               "A flash image keeps code and constants where reset need "
+               & "not put them",
             when 546 =>
                "A developer's linker script is held to a written contrac"
                & "t",
@@ -4131,6 +4139,12 @@ package body Landin.Diagnostics.Citations is
             when 544 =>
                "Decisions: The toolchain, C and the machine",
             when 545 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1114 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1115 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1116 =>
                "Decisions: The toolchain, C and the machine",
             when 546 =>
                "Decisions: The toolchain, C and the machine",
@@ -6133,6 +6147,15 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d545-the-linker-script-is-"
                & "derived-from-the-description-and-boot-kinds-are-the-comp"
                & "iler-s",
+            when 1114 =>
+               "https://www.701.dev/spec.html#d1114-the-stack-s-reservat"
+               & "ion-is-asserted-against-whatever-shares-its-region",
+            when 1115 =>
+               "https://www.701.dev/spec.html#d1115-nothing-a-program-de"
+               & "clares-is-placed-at-address-zero",
+            when 1116 =>
+               "https://www.701.dev/spec.html#d1116-a-flash-image-keeps-"
+               & "code-and-constants-where-reset-need-not-put-them",
             when 546 =>
                "https://www.701.dev/spec.html#d546-a-developer-s-linker-"
                & "script-is-held-to-a-written-contract",

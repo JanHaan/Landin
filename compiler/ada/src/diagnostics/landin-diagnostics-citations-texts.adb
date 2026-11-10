@@ -28235,9 +28235,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & " no longer than the core's architecture allows, 48 words"
                & " on ARMv6-M and 512 on ARMv7-M, and on a RISC-V core wha"
                & "t D662 gives it; each interrupt's slot is inside it; and"
-               & " the stack fits its region. Those are L0514. `.ramtext` "
-               & "is placed with `data`, and every load image in the regio"
-               & "n `text` is placed in."
+               & " the stack fits its region; and in an image that boots f"
+               & "rom its own memory, `text` is with the vectors or in a r"
+               & "egion that may not be written, and `rodata` there or wit"
+               & "h `text` (D1116). Those are L0514. `.ramtext` is placed "
+               & "with `data`, and every load image in the region `text` i"
+               & "s placed in."
                & LF
                & LF
                & "A description's core must execute what the request build"
@@ -28298,11 +28301,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "gion loaded from the text region, BSS, and each region a"
                & " `link(region: ...)` uses (D547). It asserts the vector "
                & "address and length, the stack's alignment, that nothing "
-               & "placed in the stack's region reaches the stack, and that"
-               & " the last load image ends inside the text region. Reset "
-               & "copies and clears what the script places, by the `_landi"
-               & "n_firmware_*` symbols. For the constrained reference the"
-               & " script is, byte for byte, the one D229 fixed."
+               & "placed in the stack's region reaches the stack, whicheve"
+               & "r sections those are (D1114), and that the last load ima"
+               & "ge ends inside the text region. A section that would beg"
+               & "in at address zero leaves its first eight bytes unused ("
+               & "D1115). Reset copies and clears what the script places, "
+               & "by the `_landin_firmware_*` symbols. For the constrained"
+               & " reference the script is, byte for byte, the one D229 fi"
+               & "xed."
                & LF
                & LF
                & "A boot image kind is a fact of the target, not of a devi"
@@ -28328,6 +28334,41 @@ package body Landin.Diagnostics.Citations.Texts is
                & "and the data region's less a stack it holds, for `rp2040"
                & "-boot2` the stage (D588), and for `rp2350-image-block` t"
                & "he block (D638).",
+            when 1114 =>
+               "Chosen: the assertion is on the end of the section the s"
+               & "cript writes last into the stack's region, whichever tha"
+               & "t is: the vector table, entry word or image block, text,"
+               & " RAM code placed with text, read-only data, the unwind t"
+               & "ables, data, RAM code, BSS, a used region's sections, or"
+               & " an archive's initializer array. The linker fills a regi"
+               & "on in the script's order, so that section's end is the r"
+               & "egion's use. Where it is data, RAM code, BSS or a used r"
+               & "egion the assertion is spelled as it was, and the refere"
+               & "nce's script is still D229's byte for byte.",
+            when 1115 =>
+               "Chosen: in the derived script, a section of the program'"
+               & "s that could begin at address zero leaves its first eigh"
+               & "t bytes unused: text, read-only data, data, BSS and a us"
+               & "ed region's sections, in any region that begins at zero "
+               & "other than the vectors' region, where the table or the e"
+               & "ntry word always comes first. The padding is inside the "
+               & "section, after its start symbol, so reset copies or clea"
+               & "rs it with the rest and the load image keeps its shape; "
+               & "it is written only when the section does begin at zero, "
+               & "and a description with no such region derives the script"
+               & " it did. Eight bytes is the sections' alignment.",
+            when 1116 =>
+               "Chosen: L0514 at the placement. In an image that boots f"
+               & "rom its own memory, `text` is placed with the vectors or"
+               & " in a region that may not be written, and `rodata` likew"
+               & "ise or with `text`. A description that keeps everything "
+               & "in one region, as a chip whose loader writes the whole i"
+               & "mage does, is unchanged, and so is one built with `--fir"
+               & "mware-layout=ram`, whose image a debugger loads; an `esp"
+               & "-app-image` and every Xtensa image are loaded segment by"
+               & " segment by a ROM and keep their constants in data RAM a"
+               & "s they did (D903). A routine that must run from RAM has "
+               & "`.ramtext`, which has a load image.",
             when 546 =>
                "Chosen: `--linker-script=FILE` links firmware with FILE "
                & "in place of `OUT.ld`, which refine still writes beside t"

@@ -1021,6 +1021,96 @@ package body Landin.Tests.RV32_Firmware_Suite is
          & U.To_String (Said));
    end RAM_Layout;
 
+   --  D1114 to D1116: what the derived script holds for placements no
+   --  description of the repository has.
+   procedure Script_Guards (Item : in out Landin.Testing.Context);
+   procedure Script_Guards (Item : in out Landin.Testing.Context) is
+      function Placed
+        (Boot, Extra, Regions, Text, Rodata, Data, Stack : String)
+         return String
+      is ("compiler.device(""dev"")" & LF
+          & "compiler.core(""esp-rv32imc"")" & LF
+          & "compiler.vectors(32)" & LF
+          & "compiler.boot(""" & Boot & """)" & LF & Extra & Regions
+          & "linker.place(""vectors"", ""IRAM"")" & LF
+          & "linker.place(""text"", """ & Text & """)" & LF
+          & "linker.place(""rodata"", """ & Rodata & """)" & LF
+          & "linker.place(""data"", """ & Data & """)" & LF
+          & "linker.place(""bss"", """ & Data & """)" & LF
+          & "linker.place(""stack"", """ & Stack & """, 8 * 1024)" & LF);
+      ESP : constant String := "compiler.esp_image(5, 3, 199, 0x0)" & LF;
+      Two : constant String :=
+        "linker.region(""IRAM"", 0x4038_0000, 16 * 1024, ""rwx"")" & LF
+        & "linker.region(""DRAM"", 0x3FCA_0000, 16 * 1024, ""rw"")" & LF;
+      Low : constant String :=
+        "linker.region(""IRAM"", 0x4038_0000, 16 * 1024, ""rwx"")" & LF
+        & "linker.region(""LOW"", 0x0, 16 * 1024, ""rw"")" & LF;
+      Flash : constant String :=
+        "linker.region(""IRAM"", 0x2040_0000, 16 * 1024, ""rx"")" & LF
+        & "linker.region(""DRAM"", 0x8000_0000, 16 * 1024, ""rwx"")" & LF;
+      --  The stack shares its region with code and constants alone.
+      Shared : constant Written := Script_Of
+        (Placed ("esp-app-image", ESP, Two, "IRAM", "IRAM", "DRAM", "IRAM"),
+         Level => "rv32imc");
+      --  Data and BSS in a region that begins at address zero.
+      Zero : constant Written := Script_Of
+        (Placed ("esp-app-image", ESP, Low, "IRAM", "IRAM", "LOW", "LOW"),
+         Level => "rv32imc");
+      Pad : constant String :=
+        " . = . + (ABSOLUTE(.) < 8 ? 8 - ABSOLUTE(.) : 0);";
+      --  A flash image with code or constants in RAM reset does not fill.
+      Constants : constant Written := Script_Of
+        (Placed ("vector-table", "", Flash, "IRAM", "DRAM", "DRAM", "DRAM"),
+         Level => "rv32imc");
+      Code : constant Written := Script_Of
+        (Placed ("vector-table", "", Flash, "DRAM", "IRAM", "DRAM", "DRAM"),
+         Level => "rv32imc");
+   begin
+      Landin.Testing.Check
+        (Item, Shared.Status = Landin.Driver.Status_Success
+           and then Contains
+             (U.To_String (Shared.Script),
+              "ASSERT(ADDR(.rodata) + SIZEOF(.rodata) <="
+              & " _landin_firmware_stack_bottom," & LF
+              & "       ""IRAM image overlaps the reserved 8 KiB stack"")"),
+         "the last section of the stack's region ends below the stack,"
+         & " whichever it is: " & U.To_String (Shared.Said)
+         & U.To_String (Shared.Script));
+      Landin.Testing.Check
+        (Item, Zero.Status = Landin.Driver.Status_Success
+           and then Contains
+             (U.To_String (Zero.Script),
+              "    _landin_firmware_data_start = .;" & Pad & LF)
+           and then Contains
+             (U.To_String (Zero.Script),
+              "    _landin_firmware_bss_start = .;" & Pad & LF)
+           and then not Contains
+             (U.To_String (Zero.Script), "  .text : {" & Pad),
+         "a section that would begin at address zero leaves eight bytes: "
+         & U.To_String (Zero.Said) & U.To_String (Zero.Script));
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Shared.Script), "ABSOLUTE(."),
+         "no other region's sections are padded");
+      Landin.Testing.Check
+        (Item, Constants.Status /= Landin.Driver.Status_Success
+           and then Contains (U.To_String (Constants.Said), "error[L0514]")
+           and then Contains
+             (U.To_String (Constants.Said),
+              "nothing fills DRAM at reset, and rodata placed there")
+           and then U.Length (Constants.Script) = 0,
+         "constants in RAM a flash image does not fill are refused: "
+         & U.To_String (Constants.Said));
+      Landin.Testing.Check
+        (Item, Code.Status /= Landin.Driver.Status_Success
+           and then Contains (U.To_String (Code.Said), "error[L0514]")
+           and then Contains
+             (U.To_String (Code.Said),
+              "nothing fills DRAM at reset, and text placed there")
+           and then U.Length (Code.Script) = 0,
+         "code in RAM a flash image does not boot from is refused: "
+         & U.To_String (Code.Said));
+   end Script_Guards;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1035,6 +1125,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Landin.Testing.Register
         (Into, "rv32 firmware", "a stage runs before reset",
          Stage_Before_Reset'Access);
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "the derived script guards its placements",
+         Script_Guards'Access);
       Landin.Testing.Register
         (Into, "rv32 firmware", "descriptions select their profiles",
          Profiles_Are_Derived'Access);
