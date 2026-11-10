@@ -23841,6 +23841,21 @@ package body Landin.Stages.Checking is
                     = Ty.Fixed_Array;
       end Is_Direct_Array_Name;
 
+      --  D1180: an array parameter or named return is a copy source as a
+      --  local array is, so an array field takes it whole as a local or
+      --  a record literal's field does.
+      function Names_Array_Parameter
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is (Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+          and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+          and then Res.Sort_Of
+                     (Meanings.all,
+                      Res.Bound_To (Meanings.all, Of_Tree, Node))
+                   in Res.Parameter | Res.Named_Return
+          and then Settled_Type
+                     (Res.Bound_To (Meanings.all, Of_Tree, Node))
+                   = Ty.Fixed_Array);
+
       --  Whether this node directly names a binding that owns runtime storage.
       function Is_Direct_Binding_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
@@ -33323,6 +33338,8 @@ package body Landin.Stages.Checking is
                  or else Is_Array_Arithmetic
                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                  or else Is_Direct_Array_Name
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                 or else Names_Array_Parameter
                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                  or else Syn.Kind
                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
