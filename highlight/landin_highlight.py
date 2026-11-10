@@ -72,6 +72,7 @@ TOKEN = re.compile(
     | (?P<bclose>\)--)
     | (?P<comment>--.*)
     | (?P<string>"(?:[^"\\\n]|\\.)*")
+    | (?P<openstring>"(?:[^"\\\n]|\\.)*)
     | (?P<char>'(?:[^'\\\n]|\\.)')
     | (?P<number>
           0[xX][0-9A-Fa-f_]+(?:\.[0-9A-Fa-f_]+)?(?:[pP][-+]?[0-9]+)?
@@ -237,7 +238,13 @@ class Scanner:
             elif kind == "bclose":
                 yield "c", body
                 pos = m.end()
-            elif kind in ("string", "char"):
+            elif kind in ("string", "char", "openstring"):
+                #  A string that is never closed is one to the end of its
+                #  line, as the TextMate, Vim and Kate renderings have it.
+                #  Giving up on its quote alone and scanning on from the
+                #  next character made a line of `\"` cost its length
+                #  squared: every other character opened a string that ran
+                #  to the end of the line and failed there.
                 yield "q", body
                 pos = m.end()
             elif kind == "number":

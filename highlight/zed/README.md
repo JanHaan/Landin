@@ -13,5 +13,7 @@ Landin buffers: diagnostics, go to definition, hover, formatting and quick
 fixes. `refine` must be on the path of the shell Zed opens the project in;
 nothing is downloaded. Zed compiles `src/landin.rs` to WebAssembly when the
 dev extension is installed, which needs Rust from rustup, as Zed's extension
-documentation says. The repository's check builds it for `wasm32-wasip2`
-when such a Rust is present; it does not run Zed.
+documentation says. No check of this repository builds it or runs Zed:
+`../test.sh` compiles this package's queries, the outline among them,
+against the grammar, and `../test_adapters.py` holds the manifest and the
+two names the source starts the server by.

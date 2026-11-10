@@ -7,11 +7,16 @@ import vm from "node:vm";
 const tests = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.readFileSync(path.join(tests, "../textmate/extension.js"), "utf8");
 
-async function startedWith(settings) {
+async function startedWith(settings, trust = {}) {
   let argumentsGiven;
   const module = { exports: {} };
   const vscode = {
     workspace: {
+      isTrusted: trust.isTrusted,
+      onDidGrantWorkspaceTrust: (granted) => {
+        trust.grant = granted;
+        return { dispose() {} };
+      },
       getConfiguration: () => ({
         get: (name, fallback) => settings[name] ?? fallback,
       }),
@@ -28,8 +33,11 @@ async function startedWith(settings) {
     module,
     require: (name) => name === "vscode" ? vscode : { LanguageClient },
   });
-  await module.exports.activate({});
-  return JSON.parse(JSON.stringify(argumentsGiven));
+  await module.exports.activate({ subscriptions: [] });
+  trust.started = () => argumentsGiven !== undefined;
+  return argumentsGiven === undefined
+    ? undefined
+    : JSON.parse(JSON.stringify(argumentsGiven));
 }
 
 const defaults = await startedWith({});
@@ -49,5 +57,25 @@ assert.deepEqual(configured[3].initializationOptions, {
   level: "armv7-m",
   options: { enabled: "false" },
 });
+
+// A window that is not trusted starts no program, and starts refine once
+// the user trusts it.
+const restricted = { isTrusted: false };
+assert.equal(await startedWith({}, restricted), undefined);
+assert.equal(restricted.started(), false);
+await restricted.grant();
+assert.equal(restricted.started(), true);
+const trusted = { isTrusted: true };
+assert.notEqual(await startedWith({}, trusted), undefined);
+
+// The program is the user's choice: a workspace's settings cannot name it,
+// and Restricted Mode keeps the highlighting.
+const manifest = JSON.parse(
+  fs.readFileSync(path.join(tests, "../textmate/package.json"), "utf8"));
+const properties = manifest.contributes.configuration.properties;
+assert.equal(properties["landin.server.path"].scope, "machine");
+assert.deepEqual(manifest.capabilities.untrustedWorkspaces.supported, "limited");
+assert.deepEqual(manifest.capabilities.untrustedWorkspaces.restrictedConfigurations,
+                 ["landin.server.path"]);
 
 console.log("TextMate language client settings clean");
