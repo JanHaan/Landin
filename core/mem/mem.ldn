@@ -240,6 +240,54 @@ public reserve_storage: (item: type, provider: type is allocator,
     store = fresh
 end reserve_storage
 
+--- Copy `bytes` after a byte storage's initialized prefix and count them
+--- in it, as `admit_copy` does, first making room for `want` bytes in all
+--- as `reserve_storage` does when the storage holds fewer.  `bytes` may be
+--- a view of the storage's own block (D1122): where the block moves, they
+--- are copied into the fresh block before the old one is freed, so what is
+--- appended is what they held when the call began.  A move invalidates
+--- views of the old block once the call has returned.  `out_of_memory`,
+--- when the provider refuses or `want` bytes would not hold the prefix and
+--- `bytes`, leaves the storage, its prefix and its capacity as they were.
+public reserve_admit_copy: (provider: type is allocator,
+                            inout store: storage(u8), memory: provider,
+                            want: usize, bytes: []u8)
+                           -> none ! out_of_memory =
+    old_count: usize = length(store)
+    old_capacity: usize = capacity(store)
+    slots: usize = if want > old_capacity then want else old_capacity end if
+    fail out_of_memory when lenof bytes > slots - old_count
+    mut placed: bool = slots == old_capacity
+    if not placed then
+        placed = grow_storage(store, memory, old_capacity, slots, slots)
+    end if
+    if placed then
+        --  The block is where it was, so a view of it still reads it.
+        admit_copy(store, bytes) else (problem)
+            _ = problem
+            fail out_of_memory
+        end
+        return
+    end if
+    block: ptr mut u8 = try provider.alloc(memory, slots, alignof u8)
+    mut fresh := storage_over(item: u8, base: block, slots: slots)
+    transfer_prefix(store, fresh, old_count) else (problem)
+        _ = problem
+        release_storage(fresh, memory)
+        fail out_of_memory
+    end
+    --  The old block is still allocated and still holds its bytes, which
+    --  `transfer_prefix` copied and did not disturb: `bytes` is read here,
+    --  before the release below, whether or not it views that block.
+    admit_copy(fresh, bytes) else (problem)
+        _ = problem
+        release_storage(fresh, memory)
+        fail out_of_memory
+    end
+    release_storage(store, memory)
+    store = fresh
+end reserve_admit_copy
+
 --- Return the logical slot capacity, including slots for zero-sized items.
 public capacity: (item: type, store: storage(item)) -> (count: usize) =
     count = store.capacity_count

@@ -42,6 +42,13 @@ end cursor_value
 --- prefixes. Providers are supplied per operation. Its representation is the
 --- module's own, so nothing outside `core/map` can break the invariants its
 --- operations keep.
+---
+--- The map has no seed, and a bucket follows from the key's `cmp.hashable`
+--- hash alone. `core/cmp`'s hashes are fixed and public, so whoever chooses
+--- the keys can put them all in one probe chain, and each insertion and
+--- lookup then takes time in proportion to the map's size. Bound the keys
+--- an outside party may add, or key by a `distinct` wrapper whose hash
+--- is keyed by a secret, before keying a map by data from outside.
 public map: type (key: type is cmp.hashable, item: type) =
     map_value(key, item)
 

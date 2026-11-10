@@ -338,7 +338,9 @@ never frees the resources that its items refer to.
 
 A list of bytes is the growable byte container:
 
-- `append_bytes` copies a slice in after the list's bytes.
+- `append_bytes` copies a slice in after the list's bytes. The slice may
+  be the list's own bytes, `vec.used(list)` or a part of it: what is
+  appended is what it held when the call began, though the list moved.
 - `spare_bytes` lends the spare capacity, which a read fills.
 - `extend_bytes` counts what was written there.
 
@@ -414,6 +416,15 @@ policy.
 
 Keep keys and their backing stable while the map stores them, and
 restart cursors after any mutation.
+
+The map has no seed, and the hashes `core/cmp` ships are fixed and public:
+an integer hashes to itself and bytes with FNV-1a. Whoever chooses the keys
+can therefore choose keys that all land in one probe chain, and a map
+filled with them takes time in proportion to its size for each insertion
+and each lookup, where it otherwise takes a few probes. Bound how many
+keys an outside party may add, or key by a `distinct` wrapper whose hash
+is keyed by a secret of the program's, before keying a map by data from
+outside.
 
 A walk starts at `map.entries()` and calls `map.next_entry` until the
 call fails with `map.end_of_entries`. The executable example below walks
@@ -622,6 +633,11 @@ caller passes `inout`.
 | `length` | The offset the next piece begins at. |
 | `clear`, `truncate` | Empty the builder, or cut it back. |
 
+An append, and `format`, may be given the builder's own bytes,
+`text.used(line)` or a part of it. What is written is what they held when
+the call began, though the builder grew and moved while it wrote. The
+view is still not to be used after the call.
+
 Each append writes its whole piece, or reports `no_space` and leaves the
 builder as it was:
 
@@ -730,6 +746,21 @@ How a value passes through the buffer:
   once. Twenty bytes hold every integer the library formats. A
   conformance of the program's own that asks for more than the buffer has
   fails with `no_space`.
+
+A conformance of the program's own may be writing a value longer than the
+whole buffer, a row with a long name in it. Its offsets still hold:
+
+- `length` counts the bytes already handed on, so an offset taken before
+  a piece was handed on names the same byte after.
+- `align_left` fills after its piece wherever the piece began.
+- `align_right` needs the whole piece still in the buffer, and room there
+  for the fill. When some of the piece has been handed on, nothing can go
+  before it, and the call fails with `no_space`. Through
+  `io.write_format` that is `io_failed`, after the text before it was
+  written. A column that must hold a long value right-aligned is built in
+  a builder of the program's own that is long enough, and written whole.
+- `truncate` cuts what the buffer still holds. What was handed on stays
+  written.
 
 To print a float, scale it to an integer and print the parts. Converting
 a float to an integer truncates toward zero, and traps when the value
@@ -964,7 +995,7 @@ Each of the program's three standard streams is connected as
 
 | Choice | The child's stream is |
 |---|---|
-| `inherited` | the parent's own |
+| `inherited` | the parent's own, and closed when the parent has it closed |
 | `discarded` | connected to nothing |
 | `piped` | a pipe whose other end the parent holds |
 
@@ -1270,6 +1301,12 @@ How signals are delivered:
   before it is read may be one event, as the systems keep them.
 - A fibre waiting for a signal is stopped as any waiting fibre is, by
   failing its wait: `stop_watching` does that.
+- On Linux, watch in the process's first thread. `hosted/events` takes a
+  signal there by blocking it in the calling thread, and the first thread
+  of a program whose event loop runs on a `hosted/thread` thread would
+  still be given the signal and ended by it. `watch` in any other thread
+  fails with `io_failed`, and `events.last_errno` reads `EPERM`. On Darwin
+  and FreeBSD a watch is the process's, and any thread may make it.
 
 ### The fake
 
@@ -1930,7 +1967,11 @@ How a round runs:
   fibres it started, in the order they were started.
 - `start` prepares and returns, and the fibre runs at its first turn.
 - The table holds one entry more than the fibres that may be unfinished
-  at once.
+  at once. It needs no initial value: the round reads only the entries it
+  has written, and a `start` it refuses writes none.
+- A fibre that ends hands its turn to the entry after it, so a fibre that
+  yields resumes only when every other unfinished one has run, whichever
+  of them ended meanwhile.
 - When every unfinished fibre has yielded since anything last started or
   ended, the round calls its `stacks.idler` before it goes on: a device
   waits for an interrupt there, and `stacks.spin` returns at once.
@@ -2537,6 +2578,12 @@ Every descriptor the module makes is closed when the process executes a
 program; `closed_on_exec` says whether a descriptor is. No open makes a
 terminal the process's controlling terminal, `O_NOCTTY`.
 
+`duplicate_above(opened, lowest)` duplicates a descriptor at the lowest
+free number that is `lowest` or above, closed on exec. A process started
+with a standard stream closed is given that stream's number by its next
+`pipe` or open; `duplicate_above(made, 3)` moves such a descriptor clear
+of the three, as `hosted/system` does with every one it makes for a child.
+
 ### Files and directories
 
 | Call | What it does |
@@ -2658,6 +2705,16 @@ How SIGPIPE is handled:
 - `spawn` gives every child SIGPIPE's default back.
 - A program that imports no part of the POSIX layer keeps the system's
   default.
+
+How SIGCHLD is handled:
+
+- A process whose starter ignored SIGCHLD inherits the ignore, and the
+  system then discards how each of its children ended: `wait` would fail
+  with `echild`.
+- The argument initializer therefore gives SIGCHLD its default back when
+  it finds it ignored. A handler is kept.
+- A program that wants its children discarded ignores SIGCHLD itself
+  after the initializer has run.
 
 How signals reach a child:
 

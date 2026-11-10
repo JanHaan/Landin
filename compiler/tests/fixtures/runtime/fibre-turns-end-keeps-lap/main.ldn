@@ -1,0 +1,185 @@
+--  D1124: a fibre that ends does not restart the round's lap.  Three
+--  tasks are admitted to a group over a round: `a` marks, yields once and
+--  marks `A`, while `b` and `c` mark and end.  `b` ends between `a`'s
+--  yield and `c`'s first turn, and `c` still runs before `a` resumes,
+--  which is what `turns.yield` promises.  Then a long-lived fibre in a
+--  late entry gets a turn for every turn of the home stack, though a short
+--  task ends in the entry before it each time.  Last, a start the round
+--  refuses leaves a table that was never zeroed unread.
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/mem
+
+mut order: [8]u8 = zeroed
+mut steps: usize = 0
+
+mark: (letter: u8) -> none =
+    order[steps] = letter
+    steps += 1
+end mark
+
+note: type = struct
+    runs: any fibre.turns
+    letter: u8
+    yields: bool
+end note
+
+note_of: (runs: any fibre.turns, letter: u8, yields: bool)
+         -> (made: note from runs) =
+    made = (runs: runs, letter: letter, yields: yields)
+end note_of
+
+--  Mark the lower-case letter; a task that yields then takes one turn and
+--  marks the upper-case letter.
+lettered: (inout state: note) -> none ! failure.reason =
+    mark(state.letter)
+    if state.yields then
+        state.runs.yield()
+        mark(state.letter - 32)
+    end if
+end lettered
+
+mut stacks_of_three: [3 * 16384]u8 = zeroed
+
+three: (runs: any fibre.turns) -> none ! failure.reason =
+    mut tasks := try fibre.turns_over(runs, stacks_of_three, 3)
+    defer fibre.join(tasks) else none
+    a := note_of(runs, u8('a'), true)
+    try fibre.admit(tasks, lettered, a)
+    b := note_of(runs, u8('b'), false)
+    try fibre.admit(tasks, lettered, b)
+    c := note_of(runs, u8('c'), false)
+    try fibre.admit(tasks, lettered, c)
+    try fibre.join(tasks)
+end three
+
+mut long_turns: u32 = 0
+mut short_runs: u32 = 0
+mut stop: bool = false
+
+job: type = struct
+    runs: any fibre.turns
+    long: bool
+    yields: bool
+end job
+
+job_of: (runs: any fibre.turns, long: bool, yields: bool)
+        -> (made: job from runs) =
+    made = (runs: runs, long: long, yields: yields)
+end job_of
+
+worked: (inout state: job) -> none ! failure.reason =
+    if state.long then
+        --  One unit of work a turn until told to stop.
+        while not stop do
+            long_turns += 1
+            state.runs.yield()
+        end while
+    else
+        short_runs += 1
+        if state.yields then
+            state.runs.yield()
+        end if
+    end if
+end worked
+
+mut stacks_of_two: [2 * 16384]u8 = zeroed
+
+--  The home stack hands out a short task and takes a turn, a hundred
+--  times, beside a fibre that lasts.
+shared: (runs: any fibre.turns) -> none ! failure.reason =
+    mut tasks := try fibre.turns_over(runs, stacks_of_two, 2)
+    defer fibre.join(tasks) else none
+    first := job_of(runs, false, true)
+    try fibre.admit(tasks, worked, first)
+    lasting := job_of(runs, true, false)
+    try fibre.admit(tasks, worked, lasting)
+    for turn in usize(0)..<100 do
+        _ = turn
+        quick := job_of(runs, false, false)
+        try fibre.admit(tasks, worked, quick)
+        runs.yield()
+    end for
+    stop = true
+    try fibre.join(tasks)
+end shared
+
+mut ran: usize = 0
+
+once: type = struct
+    reserved: u32
+end once
+
+once_run: (self: ptr mut once) -> none =
+    _ = self.val.reserved
+    ran += 1
+end once_run
+
+once is fibre.task (run: once_run)
+
+mut piece: once = zeroed
+mut record: fibre.space = zeroed
+mut small: [256]u8 = zeroed
+mut large: [16384]u8 = zeroed
+
+--  A table holding what an earlier use left in it, none of it a record's
+--  address: a refused start counts no entry, so the next turn follows
+--  none, and the start after it takes the entry.
+unread: () -> (ok: bool) =
+    ok = false
+    mut state: stacks.round_space = zeroed
+    mut entries: [4]usize = [1, 0x1000, 0x1000, 0x1000]
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    runs: any fibre.turns = any(addr round)
+    mut refused: bool = false
+    runs.start(addr record, small, any(addr piece)) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    return when not refused or entries[1] <> 0x1000
+    runs.yield()
+    runs.start(addr record, large, any(addr piece)) else (problem)
+        _ = problem
+        return
+    end
+    return when entries[1] <> usize(addr record) or ran <> 0
+    runs.yield()
+    ok = ran == 1 and runs.finished(record)
+end unread
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: stacks.round_space = zeroed
+    mut entries: [4]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    three(any(addr round)) else (problem)
+        _ = problem
+        return
+    end
+    wanted: []u8 = "abcA"
+    return when steps <> lenof wanted
+    for at in usize(0)..<steps do
+        return when order[at] <> wanted[at]
+    end for
+
+    code = 2
+    shared(any(addr round)) else (problem)
+        _ = problem
+        return
+    end
+    --  The lasting fibre ran once for each of the home stack's turns at
+    --  least: 100 in the loop, and the turns its join took.
+    return when short_runs <> 101 or long_turns < 100
+
+    code = 3
+    return when not unread()
+    code = 42
+end main

@@ -116,37 +116,45 @@ end release
 --  and the list grows as `push` grows it, its bytes copied a word at a time
 --  where `mem.copy` moves words.
 
---  Make room for `extra` more bytes after the initialized ones, doubling
---  the capacity as `push` does, or to exactly what is wanted when doubling
---  is not enough or cannot be represented.
-make_room: (provider: type is mem.allocator, inout value: list(u8),
-            memory: provider, extra: usize) -> none ! mem.out_of_memory =
+--  The capacity that holds `extra` more bytes after the initialized ones:
+--  the one the list has when that is enough, and otherwise double it, as
+--  `push` grows, or exactly what is wanted when doubling is not enough or
+--  cannot be represented.
+roomy: (value: list(u8), extra: usize)
+       -> (slots: usize) ! mem.out_of_memory =
     count: usize = length(value)
-    have: usize = capacity(value)
-    return when extra <= have - count
+    slots = capacity(value)
+    return when extra <= slots - count
     maximum: usize = 0 -% 1
     fail mem.out_of_memory when extra > maximum - count
     wanted: usize = count + extra
-    next: usize = grown(have) else (problem)
+    next: usize = grown(slots) else (problem)
         _ = problem
         wanted
     end
-    try reserve(value, memory, if next > wanted then next else wanted end if)
+    slots = if next > wanted then next else wanted end if
+end roomy
+
+--  Make room for `extra` more bytes after the initialized ones.
+make_room: (provider: type is mem.allocator, inout value: list(u8),
+            memory: provider, extra: usize) -> none ! mem.out_of_memory =
+    slots: usize = try roomy(value, extra)
+    try reserve(value, memory, slots)
 end make_room
 
 --- Append every byte of `bytes`, growing capacity as `push` does, and
 --- copying them a word at a time where `mem.copy` moves words.  Reports
 --- `mem.out_of_memory` without appending anything when growth fails.
---- Successful growth may invalidate views into the previous allocation.
+--- `bytes` may be a view of the list's own bytes, `vec.used(value)` or a
+--- part of it: the bytes appended are the ones it held when the call
+--- began, read before a growth frees the block they were in (D1122).
+--- Successful growth invalidates views into the previous allocation once
+--- the call has returned, that one among them.
 public append_bytes: (provider: type is mem.allocator,
                       inout value: list(u8), memory: provider, bytes: []u8)
                      -> none ! mem.out_of_memory =
-    try make_room(value, memory, lenof bytes)
-    mem.admit_copy(value.values, bytes) else (problem)
-        --  After the room was made, mem.full would be an internal defect.
-        _ = problem
-        fail mem.out_of_memory
-    end
+    slots: usize = try roomy(value, lenof bytes)
+    try mem.reserve_admit_copy(value.values, memory, slots, bytes)
 end append_bytes
 
 --- Lend the spare capacity past the list's bytes, at least `extra` bytes

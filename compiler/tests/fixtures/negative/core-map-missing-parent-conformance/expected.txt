@@ -3,8 +3,8 @@ error[L0318]: `tag` has no conformance to `cmp.equatable`
   |
 7 | tag is cmp.hashable (hash: key_hash)
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../../core/cmp/cmp.ldn:18:49
+  --> ../../core/cmp/cmp.ldn:22:49
    |
-18 | public hashable: type = concept (item: type) is equatable
+22 | public hashable: type = concept (item: type) is equatable
    |                                                 ^^^^^^^^^ the constraint declared here
   = note: [1290]: every constrained type actual must have one whole-program conformance

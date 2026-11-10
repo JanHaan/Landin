@@ -32725,6 +32725,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "PE`, so socket writes are safe beside a C handler too, `"
                & "io.write` to a socket among them since D340; a pipe has "
                & "no such flag, so the process-wide ignore stays.",
+            when 1125 =>
+               "Chosen: the argument initializer, on its first call, giv"
+               & "es SIGCHLD the system's default disposition when it find"
+               & "s it ignored. A handler is kept, as D322 keeps SIGPIPE's"
+               & ". A program that wants its children discarded ignores SI"
+               & "GCHLD itself after the root is established, and a C `mai"
+               & "n` that ignored it before the call does so again after i"
+               & "t. A program that imports no POSIX layer keeps what it i"
+               & "nherited.",
             when 323 =>
                "Chosen: `posix.socket_address` is the system's own recor"
                & "d, laid out once per system: Linux's 16-bit family, and "
@@ -33503,6 +33512,37 @@ package body Landin.Diagnostics.Citations.Texts is
                & "an copy them. Reverse-complement keeps the builder: thro"
                & "ugh a list it took 0.94 seconds against the builder's 0."
                & "79.",
+            when 1122 =>
+               "Chosen: the library's appends that take bytes beside the"
+               & " container they append to, `vec.append_bytes`, `text.app"
+               & "end`, `append_text`, `append_host` and `text.format`, pr"
+               & "omise the bytes whichever block they are in: what is app"
+               & "ended is what the argument held when the call began. A l"
+               & "ist of bytes grows through `mem.reserve_admit_copy`, D35"
+               & "6's protocol with the copy of the appended bytes made be"
+               & "fore a moved block is released. A growing builder grows "
+               & "the same way when the old block may be read again, in pl"
+               & "ace through the allocator's `grow` and otherwise into a "
+               & "fresh block, appending before it frees the old one. That"
+               & " is when the appended bytes lie in the block, which thei"
+               & "r addresses say while it is live, and when a `format` is"
+               & " writing: `text.format` writes several values and a temp"
+               & "late, any of which may view the builder, so while a `for"
+               & "mat` writes, the builder keeps the first block a growth "
+               & "moves it out of and the call frees it when it ends; a `f"
+               & "ormat` a conformance calls inside another keeps its own,"
+               & " and hands it to the outer call when that one has kept n"
+               & "one. Every other growth still calls the allocator's `res"
+               & "ize`, as D425 measured it: nothing reads the old block a"
+               & "gain, and `hosted/heap` moves a large block's pages inst"
+               & "ead of copying them. The promise is the call's own: a vi"
+               & "ew of the old block is still invalid once the call has r"
+               & "eturned, and a routine of the program's that appends twi"
+               & "ce from a view it holds behind a pointer is not made saf"
+               & "e by it. Whether the checker refuses the direct spelling"
+               & "s is the origin check's rule and changes nothing here: t"
+               & "he library is sound with them accepted and with them ref"
+               & "used.",
             when 442 =>
                "Chosen: they keep `ptr u8`. Their caller is `platform/po"
                & "six`, which copies a host string into a room, ends it wi"
@@ -34480,6 +34520,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "nal is blocked while the thread starts and in the thread"
                & ", as D494 has it; the caller's mask is put back after th"
                & "e start.",
+            when 1126 =>
+               "Chosen: on Linux `signal.watch` through `hosted/events` "
+               & "is refused in any thread but the process's first, `io_fa"
+               & "iled` with `EPERM` as the last errno, and the signal kee"
+               & "ps its default. The first thread is the one whose thread"
+               & " ID is the process's. On Darwin and FreeBSD a watch is t"
+               & "aken in any thread, as before.",
             when 527 =>
                "Chosen: `core/io` gains `write_format`, generic over a `"
                & "writer` like `write`: a host, the file to write, a templ"
@@ -34497,6 +34544,22 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ber spelt as another language's print, `print`, `println"
                & "`, `printf` or `puts`, is L0201 whose fix shows the call"
                & ". Floating-point values stay unformatted.",
+            when 1123 =>
+               "Chosen: a builder counts the bytes it has handed on, and"
+               & " `text.length` is that count and the bytes it holds, so "
+               & "an offset names the same byte before and after a hand-ov"
+               & "er; for every other builder the count is zero and `lengt"
+               & "h` is the length of `used`. `align_left` fills after its"
+               & " piece wherever the piece's start now is. `align_right` "
+               & "reports `no_space` when any of the piece has been handed"
+               & " on, or has to be handed on to make room for the fill, s"
+               & "ince nothing can then be written before it; `io.write_fo"
+               & "rmat` reports that as `io_failed`, as it does a conforma"
+               & "nce asking for more room than the store has. `truncate` "
+               & "cuts what the builder still holds back to the offset and"
+               & " never below what was handed on. The library's own rollb"
+               & "acks, a negative number's sign and a failed `format`, cu"
+               & "t the same way.",
             when 531 =>
                "Chosen: the release workflow takes the debug information"
                & " out of the released `refine` before packaging: `objcopy"
@@ -34583,6 +34646,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "near its limit needs. The idler is the provider's to cho"
                & "ose and runs where the yield does: the event provider wa"
                & "its for its events there.",
+            when 1124 =>
+               "Chosen: a fibre that yields names the entry it switches "
+               & "to before it switches; one that ends does not. Entry 0, "
+               & "resumed with another entry still named, knows a fibre en"
+               & "ded there, and continues the search from that entry, swi"
+               & "tching to the next unfinished one after it and resuming "
+               & "itself only when the search comes round to it. The searc"
+               & "h stays written out in `round_yield`, as D571 requires. "
+               & "A start the round refuses counts no entry: the entry is "
+               & "written before the count grows, so the round reads only "
+               & "entries it wrote and the caller's table needs no initial"
+               & " value.",
             when 572 =>
                "Chosen: in a program that prepares a stack and selects a"
                & " handler, on a target with a backend, a check runs the o"

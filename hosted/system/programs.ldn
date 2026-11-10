@@ -23,8 +23,24 @@ end stream_end
 --  once to its end and takes every write.
 null_device: []u8 = "/dev/null"
 
+--  A descriptor this spawn made, moved above the standard streams when
+--  the system gave it one of their numbers, as it does when this process
+--  was started with that stream closed.  Left there, it would be taken
+--  for an inherited stream of the same spawn, which is named by its own
+--  number and is to stay closed in the child when it is closed here
+--  (`posix.standard_streams`): the child would get an end of its own pipe.
+raised: (made: posix.descriptor) -> (result: posix.descriptor) ! posix.errno =
+    result = made
+    return when i32(made) >= 3
+    result = posix.duplicate_above(made, 3) else (problem)
+        quietly_closed(made)
+        fail problem
+    end
+    quietly_closed(made)
+end raised
+
 --  Make the child's stream `target` as `choice` says; `output` when the
---  child writes it.
+--  child writes it.  What it makes is above the standard streams.
 prepared: (choice: io.stream_choice, target: posix.descriptor, output: bool)
           -> (result: stream_end) ! posix.errno =
     result = (child_side: target, parent_side: target, made: false,
@@ -38,24 +54,32 @@ prepared: (choice: io.stream_choice, target: posix.descriptor, output: bool)
              create: false, exclusive: false, truncate: false,
              append: false, directory: false)
         loop do
-            made: posix.descriptor =
+            opened: posix.descriptor =
                 posix.open_at(posix.working_directory,
                               text.host_over(null_device), options,
                               0) else (problem)
                     continue when problem == posix.eintr
                     fail problem
                 end
+            made: posix.descriptor = try raised(opened)
             result = (child_side: made, parent_side: made, made: true,
                       piped: false)
             return
         end loop
     end if
     ends: posix.pipe_ends = try posix.pipe()
-    result = if output then (child_side: ends.writing,
-                             parent_side: ends.reading, made: true,
-                             piped: true)
-             else (child_side: ends.reading, parent_side: ends.writing,
-                   made: true, piped: true) end if
+    reading: posix.descriptor = raised(ends.reading) else (problem)
+        quietly_closed(ends.writing)
+        fail problem
+    end
+    writing: posix.descriptor = raised(ends.writing) else (problem)
+        quietly_closed(reading)
+        fail problem
+    end
+    result = if output then (child_side: writing, parent_side: reading,
+                             made: true, piped: true)
+             else (child_side: reading, parent_side: writing, made: true,
+                   piped: true) end if
 end prepared
 
 --  Close what the spawn made for a stream: the child's side, which the
@@ -121,7 +145,10 @@ end launched
 --- provider that `descriptor_of` converts, and waits for the child through
 --- whatever waiting it does (D479). A discarded stream is the system's
 --- `/dev/null`. A piped one is a pipe made closed on exec, whose child end
---- is closed here once the child has it. An interrupted spawn is made
+--- is closed here once the child has it. An inherited one is the parent's
+--- own, and is closed in the child when the parent has it closed: every
+--- descriptor `start` makes is above the three standard ones, so none is
+--- taken for it. An interrupted spawn is made
 --- again. It fails `not_found` for a missing program, `no_access` for one
 --- the caller may not run and `io_failed` for the rest, each errno kept in
 --- the handle's last-error cell. On any failure no child was started and

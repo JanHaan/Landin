@@ -1,0 +1,188 @@
+--  Appending a container's own bytes to it (D1122).  The provider here is
+--  the hardest one for that: it never grows a block where it is, so every
+--  growth moves, and it overwrites a block the moment it is given back,
+--  so bytes read from a freed block are never the ones it held.
+import core/mem
+import core/text
+import core/vec
+
+scrub_state: type = struct
+    base: usize
+    size: usize
+    taken: usize
+    live: usize
+    frees: usize
+end scrub_state
+
+scrub: type = struct
+    state: ptr mut scrub_state
+end scrub
+
+--  What a freed block is filled with; no byte the tests append.
+poison: u8 = 238
+
+scrub_alloc: (self: scrub, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! mem.out_of_memory =
+    _ = alignment
+    state: ptr mut scrub_state = self.state
+    fail mem.out_of_memory when size > state.val.size - state.val.taken
+    block = ptr(state.val.base + state.val.taken)
+    state.val.taken += size
+    inc state.val.live
+end scrub_alloc
+
+scrub_grow: (self: scrub, block: ptr mut u8,
+             old_size: usize, new_size: usize, alignment: usize)
+            -> (grown: bool) =
+    _ = self.state
+    _ = block
+    _ = old_size
+    _ = new_size
+    _ = alignment
+    grown = false
+end scrub_grow
+
+scrub_free: (self: scrub, block: ptr mut u8, size: usize) -> none =
+    for at in usize(0)..<size do
+        cell: ptr mut u8 = ptr(usize(block) + at)
+        cell.val = poison
+    end for
+    inc self.state.val.frees
+    dec self.state.val.live
+end scrub_free
+
+scrub_resize: (self: scrub, block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (moved: ptr mut u8) ! mem.out_of_memory =
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end scrub_resize
+
+scrub is mem.allocator (alloc: scrub_alloc, grow: scrub_grow,
+                        resize: scrub_resize, free: scrub_free)
+
+--  The byte the tests hold at `at`.
+expected: (at: usize) -> (value: u8) =
+    value = u8('a') + u8(at % 23)
+end expected
+
+--  Whether `bytes` is `count` expected bytes `times` over.
+repeats: (bytes: []u8, count: usize, times: usize) -> (yes: bool) =
+    yes = false
+    return when lenof bytes <> count * times
+    for at in usize(0)..<lenof bytes do
+        return when bytes[at] <> expected(at % count)
+    end for
+    yes = true
+end repeats
+
+--  The same bytes as `bytes`, as a view that borrows nothing [0810]: what
+--  a view kept behind a pointer or made in `unchecked` code is to the
+--  origin check.  The library's promise is about the bytes, whichever way
+--  a program came to pass them, so these cases do not depend on which
+--  direct spellings of the call the checker accepts.
+unowned: (bytes: []u8) -> (same: []u8) =
+    same = []
+    return when lenof bytes == 0
+    first: ptr [1]u8 = ptr(usize(addr bytes[0]))
+    same = first.val[0..<1]
+    unchecked begin
+        same = same[0..<lenof bytes]
+    end unchecked
+end unowned
+
+--  A list appends all of itself, then a part of itself, each through a
+--  growth that moves it.
+list_appends: (memory: scrub) -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut bytes := vec.new(item: u8)
+    for at in usize(0)..<8 do
+        try vec.push(bytes, memory, expected(at))
+    end for
+    return when vec.capacity(bytes) <> 8
+    frees: usize = memory.state.val.frees
+    whole: []u8 = unowned(vec.used(bytes))
+    try vec.append_bytes(bytes, memory, whole)
+    return when memory.state.val.frees <> frees + 1
+    return when not repeats(vec.used(bytes), 8, 2)
+    --  A back-reference: the middle eight bytes again, which fill the
+    --  list past its capacity of sixteen.
+    doubled: []u8 = unowned(vec.used(bytes))
+    try vec.append_bytes(bytes, memory, doubled[4..<12])
+    return when memory.state.val.frees <> frees + 2
+    held: []mut u8 = vec.used(bytes)
+    return when lenof held <> 24 or not repeats(held[0..<16], 8, 2)
+    for at in usize(0)..<8 do
+        return when held[16 + at] <> expected((at + 4) % 8)
+    end for
+    vec.release(bytes, memory)
+    ok = true
+end list_appends
+
+--  A value whose text is its builder's own, twice, through a `format` of
+--  its own inside the one that writes it.
+echo: type = struct
+    unused: u8
+end echo
+
+echo_text: (self: ptr echo, inout into: text.builder)
+           -> none ! text.no_space =
+    _ = self.val.unused
+    once: []u8 = unowned(text.used(into))
+    twice: []u8 = once
+    text.format(into, "{}{}", [any(addr once), any(addr twice)])
+        else (problem)
+        _ = problem
+        fail text.no_space
+    end
+end echo_text
+
+echo is text.formattable (append: echo_text)
+
+builder_appends: (memory: scrub) -> (ok: bool)
+                 ! text.no_space | text.invalid_format =
+    ok = false
+    mut source: [16]u8 = zeroed
+    for at in usize(0)..<16 do
+        source[at] = expected(at)
+    end for
+    erased: scrub = memory
+    mut line := text.growing(any(addr erased))
+    try text.append(line, source[0..<16])
+    return when text.capacity(line) <> 16
+    --  One append of the builder's own bytes, which moves it.
+    first: []u8 = unowned(text.used(line))
+    try text.append(line, first)
+    return when not repeats(text.used(line), 16, 2)
+    return when memory.state.val.live <> 1
+    --  Two views in one `format`: the first value moves the builder, and
+    --  the second still reads what it viewed.
+    once: []u8 = unowned(text.used(line))
+    twice: []u8 = once
+    try text.format(line, "{}{}", [any(addr once), any(addr twice)])
+    return when not repeats(text.used(line), 16, 6)
+    return when memory.state.val.live <> 1
+    --  The same inside a conformance, whose `format` runs inside this
+    --  one: 96 bytes, then the 96 twice more.
+    again: echo = (unused: 0)
+    try text.format(line, "{}", [any(addr again)])
+    return when not repeats(text.used(line), 16, 18)
+    return when memory.state.val.live <> 1
+    text.release(line)
+    ok = memory.state.val.live == 0
+end builder_appends
+
+--  What the provider hands out, which it never takes back.
+mut backing: [2048]u8 = zeroed
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: scrub_state = (base: usize(addr backing[0]), size: 2048,
+                              taken: 0, live: 0, frees: 0)
+    memory: scrub = (state: addr state)
+    listed := list_appends(memory) else false
+    return when not listed or state.live <> 0
+    code = 2
+    built := builder_appends(memory) else false
+    return when not built
+    code = 42
+end main

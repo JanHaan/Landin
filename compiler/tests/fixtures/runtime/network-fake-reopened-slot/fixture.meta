@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io/fake's network leaves a socket opened in the slot of a peer that closed alone when the end that was left is shut or closed, so a second connection made after the server closed the first still carries bytes both ways, and it reads no zone, so a listener at ::1 takes a connection to ::1%lo and a second listener there is address_in_use
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

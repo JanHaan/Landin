@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: io.spawn over hosted/system leaves a child's inherited standard stream closed when the parent has it closed, though the pipes and the null device the same spawn makes are given that stream's number by the system: with standard input closed and the output piped, and with standard output closed too and the input and errors piped, the shell finds the inherited stream not open rather than an end of its own pipe
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1210, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

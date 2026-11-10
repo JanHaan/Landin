@@ -1,0 +1,86 @@
+--  core/io/fake's network keeps a connection's peer as a slot of its
+--  table.  Once the peer has closed, the next socket opened takes that
+--  slot, and it is no peer of the first connection: closing or shutting
+--  the end that was left does nothing to it.  And the network reads no
+--  zone, so a listener at `::1` takes a connection to `::1%lo` and two
+--  listeners there collide.
+import core/failure
+import core/io
+import core/io/fake
+import core/net
+
+--  The server closes the first connection, a second is made in its slot,
+--  and then the client ends the first, shutting it first or not: the
+--  second still carries bytes both ways.
+survives: (shuts: bool) -> (ok: bool) ! failure.reason =
+    ok = false
+    mut space: fake.network_space = zeroed
+    mut b0: [32]u8 = zeroed
+    mut b1: [32]u8 = zeroed
+    mut b2: [32]u8 = zeroed
+    mut b3: [32]u8 = zeroed
+    mut b4: [32]u8 = zeroed
+    mut sockets: [5]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2),
+         fake.socket_over(b3), fake.socket_over(b4)]
+    network := fake.network_over(space, sockets)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 8080))
+    at: net.address = try net.local_address(network, listener)
+    client1: io.file = try net.connect(network, at)
+    server1: io.file = try net.accept(network, listener)
+    try net.close_socket(network, server1)
+    client2: io.file = try net.connect(network, at)
+    server2: io.file = try net.accept(network, listener)
+    if shuts then
+        try net.shutdown(network, client1, net.sending)
+    end if
+    try net.close_socket(network, client1)
+    try net.send(network, client2, "ping")
+    try net.send(network, server2, "pong")
+    mut into: [8]u8 = zeroed
+    count: usize = try net.receive(network, server2, into)
+    return when count <> 4 or into[1] <> u8('i')
+    back: usize = try net.receive(network, client2, into)
+    ok = back == 4 and into[1] == u8('o')
+end survives
+
+zoned: () -> (ok: bool) ! failure.reason =
+    ok = false
+    mut space: fake.network_space = zeroed
+    mut b0: [32]u8 = zeroed
+    mut b1: [32]u8 = zeroed
+    mut b2: [32]u8 = zeroed
+    mut b3: [32]u8 = zeroed
+    mut sockets: [4]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2),
+         fake.socket_over(b3)]
+    network := fake.network_over(space, sockets)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv6, 8080))
+    with_zone: net.address = try net.parse_address("[::1%lo]:8080")
+    client: io.file = try net.connect(network, with_zone)
+    _ = client
+    _ = listener
+    --  A second listener at the same address with a zone is the same
+    --  binding.
+    mut collided: bool = false
+    second: io.file = net.listen(network, with_zone) else (problem)
+        collided = problem == net.address_in_use
+        return when not collided
+        ok = true
+        return
+    end
+    _ = second
+end zoned
+
+public main: () -> (code: i32) =
+    code = 1
+    closed := survives(false) else false
+    return when not closed
+    code = 2
+    shut := survives(true) else false
+    return when not shut
+    code = 3
+    zone := zoned() else false
+    return when not zone
+    code = 42
+end main

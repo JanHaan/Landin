@@ -1214,6 +1214,13 @@
         }
       }
     },
+    "abi/sigchld-ignored-restored": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "A C main, its signal dispositions and the argument initializer exist only on a hosted system, and Cortex-M0 has no signals."
+    },
     "abi/sigpipe-handler-kept": {
       "mode": "refuse",
       "codes": [
@@ -1952,6 +1959,11 @@
     "runtime/core-region-resize": {
       "mode": "execute"
     },
+    "runtime/core-self-append": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "A list of bytes and a growing builder appending their own bytes, with a format of two views and a conformance's nested one over a provider of the fixture's own, need 39,832 bytes of flash at size/auto, overflowing the 32 KiB profile by 7,064: the builder's growth and format are most of it, as runtime/core-text-builder's limit records. Each profile still attempts execution; runtime/core-vec-bytes grows a list of bytes through its provider and runtime/core-text-format-firmware formats into a builder within the image, and both require execution; this image limit is not runtime evidence."
+    },
     "runtime/core-sort-context": {
       "mode": "execute"
     },
@@ -1986,6 +1998,9 @@
       "reason": "Formatting every library conformance, a program's own, every malformed template, a partway refusal and a growing builder needs about 42 KiB of flash at size/auto, of which the fixture's own routines are 11 KiB, for the frame-home reason runtime/core-text-builder gives. Each profile still attempts execution; runtime/core-text-format-firmware formats within the image with both refusals and requires execution; this image limit is not runtime evidence."
     },
     "runtime/core-text-format-firmware": {
+      "mode": "execute"
+    },
+    "runtime/core-text-format-onto-offsets": {
       "mode": "execute"
     },
     "runtime/core-text-parse-signed": {
@@ -2566,6 +2581,11 @@
       "mode": "execute",
       "profile_limit": "selected-image",
       "reason": "The fixture cuts its fibres' stacks from a 16 KiB local backing, a frame larger than the selected profile's 4 KiB test stack reservation, so the image does not fit that map at any profile. runtime/stack-frame-past-limit-traps and runtime/stack-exhausted-reaches-the-handler trap stack_exhausted in a prologue on Cortex-M0 within the map; this image limit is not runtime evidence."
+    },
+    "runtime/fibre-turns-end-keeps-lap": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The fixture cuts its fibres' stacks from 16 KiB each, as a hosted target's frames need, six of them in static storage: 98,624 bytes of RAM against the profile's 12,288, at every profile, with 28,340 bytes of flash at size/auto. runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0 within the map and requires execution; this image limit is not runtime evidence."
     },
     "runtime/fibre-turns-interleave": {
       "codes": [
@@ -3480,6 +3500,11 @@
       "mode": "execute",
       "profile_limit": "selected-image",
       "reason": "The network consumer's routines over core/io's memory network beside a memory world, with its line reader, buffered writer, format and every oracle of the memory network, need 193,760 bytes of flash at size/auto, overflowing the 32 KiB profile by 160,992, 65,508 of them the bytes of the longest datagram the memory network carries, which its oracle sends. A table keeps only the entries something projects (D374), so what remains is the program's and the oracles' own direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/run-shell-memory's limit records. Each profile still attempts execution; runtime/network-addresses-firmware runs the network's address code within the image and requires execution; this image limit is not runtime evidence."
+    },
+    "runtime/network-fake-reopened-slot": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Two networks of core/io/fake with a listener, two connections made and closed in turn, a shutdown and an address parsed with its zone need 54,596 bytes of flash at size/auto, overflowing the 32 KiB profile by 21,828, most of it the program's direct calls into the network, as runtime/network-fake-turns-waits's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake over a round of turns within the image and requires execution; this image limit is not runtime evidence."
     },
     "runtime/network-fake-turns-exchange": {
       "mode": "execute",
@@ -4748,6 +4773,13 @@
     "runtime/slice-place-in-value-arm": {
       "mode": "execute"
     },
+    "runtime/spawn-inherited-closed-stream": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no processes or descriptors."
+    },
     "runtime/specialization-speed-growth": {
       "mode": "execute"
     },
@@ -4900,6 +4932,13 @@
       "reason": "Firmware has no threads."
     },
     "runtime/thread-signal-reaches-events": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no threads."
+    },
+    "runtime/thread-signal-watch-in-worker": {
       "codes": [
         "L0015"
       ],

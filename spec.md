@@ -32142,6 +32142,33 @@ overrides a C handler; and restoring in a child only what the parent changed.
 without the ignore, `runtime/posix-broken-pipe`, which fails when the child
 keeps it, `runtime/posix-broken-pipe-libc` and `abi/sigpipe-handler-kept`.
 
+### D1125 — SIGCHLD ignored at start is given its default back
+
+**The tour said** nothing. An ignored SIGCHLD survives an exec, and a
+process that has it ignored has each child reaped by the system as it ends:
+`wait` then fails with `echild`, and how the child ended is lost. A program
+started by a service that ignores SIGCHLD read its child's output and was
+told that waiting for it failed. D322 keeps an inherited ignore of SIGPIPE,
+which serves the library's contract; this one breaks it.
+
+**Chosen:** the argument initializer, on its first call, gives SIGCHLD the
+system's default disposition when it finds it ignored. A handler is kept,
+as D322 keeps SIGPIPE's. A program that wants its children discarded ignores
+SIGCHLD itself after the root is established, and a C `main` that ignored it
+before the call does so again after it. A program that imports no POSIX
+layer keeps what it inherited.
+
+**The alternatives:** refusing `spawn` while SIGCHLD is ignored, as the
+compiler's own tool supervision does, which makes every program that runs
+another fail under such a service for a state it cannot see in its source;
+restoring the default in `spawn` each time, which changes a disposition as a
+side effect of a call that is not about signals; and leaving it, with a note
+beside `wait`.
+
+**Pinned by** `abi/sigchld-ignored-restored`, whose C `main` ignores SIGCHLD
+before the initializer and whose wait fails without the rule. Darwin's and
+FreeBSD's arm of it was written by reading and is run by their lanes.
+
 ### D323 — `platform/posix` gives sockets in the system's own records
 
 **The tour said** nothing of sockets beneath the portable concept.
@@ -33618,6 +33645,56 @@ for bytes, which would keep its fixed text-oriented operations.
 **Pinned by** `runtime/core-vec-bytes`, `runtime/core-mem-zero-prefix`,
 `runtime/r420-vec-large-list`, `runtime/core-vec-pointer-storage` and
 `runtime/r420-stateful-filter-list`.
+
+### D1122 — An append may be given the container's own bytes
+
+**The tour said** at [0800] and [0830] that a view of a container locks it
+against `inout` while the view is in use, because the call could move the
+storage under the view. The lock did not reach a view whose last use is as
+another argument of that same call, so `vec.append_bytes(list, memory,
+vec.used(list))` and `text.append(line, text.used(line))` were accepted, and
+a view kept behind a pointer or made in `unchecked` code is never the origin
+check's to see. A growth then moved the storage, freed the old block, and
+copied from it.
+
+**Chosen:** the library's appends that take bytes beside the container they
+append to, `vec.append_bytes`, `text.append`, `append_text`, `append_host`
+and `text.format`, promise the bytes whichever block they are in: what is
+appended is what the argument held when the call began. A list of bytes
+grows through `mem.reserve_admit_copy`, D356's protocol with the copy of the
+appended bytes made before a moved block is released. A growing builder
+grows the same way when the old block may be read again, in place through
+the allocator's `grow` and otherwise into a fresh block, appending before it
+frees the old one. That is when the appended bytes lie in the block, which
+their addresses say while it is live, and when a `format` is writing:
+`text.format` writes several values and a template, any of which may view
+the builder, so while a `format` writes, the builder keeps the first block a
+growth moves it out of and the call frees it when it ends; a `format` a
+conformance calls inside another keeps its own, and hands it to the outer
+call when that one has kept none. Every other growth still calls the
+allocator's `resize`, as D425 measured it: nothing reads the old block
+again, and `hosted/heap` moves a large block's pages instead of copying
+them. The promise is the call's own:
+a view of the old block is still invalid once the call has returned, and a
+routine of the program's that appends twice from a view it holds behind a
+pointer is not made safe by it. Whether the checker refuses the direct
+spellings is the origin check's rule and changes nothing here: the library
+is sound with them accepted and with them refused.
+
+**The alternatives:** relying on the refusal alone, which leaves the read of
+a freed block to every view the origin check cannot follow and to every
+compiler that accepts the call; never calling `resize`, which costs every
+large builder the copy D425 measured; deriving a `format`'s values again by
+address after a `resize`, which cannot be done, since the block they were in
+is by then another's and its addresses mean nothing; and copying the
+appended bytes aside first, which needs storage an append has no right to
+ask for.
+
+**Pinned by** `runtime/core-self-append`, whose provider never grows in
+place and overwrites every block it is given back, and which fails on each
+of the list's and the builder's cases without the rule;
+`runtime/core-text-builder` and `runtime/core-vec-bytes` hold the growth
+itself.
 
 ### D442 — `platform/linux`'s path parameters take `ptr u8`
 
@@ -35396,6 +35473,39 @@ no hosted architecture has. Both were declined.
 **Pinned by** `runtime/thread-stack-past-limit-traps` on Darwin, whose
 report ends the process from the thread, and on every other hosted target.
 
+### D1126 — On Linux only a process's first thread watches a signal
+
+**The tour said** nothing. D494 and D521 start every thread of
+`hosted/thread` with the asynchronous signals blocked, so that a signal the
+process is sent reaches the provider that reads it. On Linux `hosted/events`
+takes a signal by blocking it in the calling thread and reading a signalfd,
+and the kernel gives a signal sent to the process to any thread that has it
+unblocked. The process's first thread is never started by `hosted/thread`
+and has nothing blocked, so a signal watched by an event loop on a worker
+thread was still delivered to the first thread, where its default ended the
+process. On Darwin and FreeBSD the disposition and kqueue's filter are the
+process's, and the same program received the event.
+
+**Chosen:** on Linux `signal.watch` through `hosted/events` is refused in
+any thread but the process's first, `io_failed` with `EPERM` as the last
+errno, and the signal keeps its default. The first thread is the one whose
+thread ID is the process's. On Darwin and FreeBSD a watch is taken in any
+thread, as before.
+
+**The alternatives:** blocking the asynchronous signals in the first thread
+once it has started a thread, and unblocking them at `join`, which leaves a
+program whose first thread waits in `join` and watches nothing deaf to
+SIGINT and SIGTERM; a handler in the first thread that forwards the signal,
+which D449 declined when it kept Landin code out of handlers; and
+documenting the difference between the systems, which leaves a program that
+shuts down cleanly on macOS to be killed on Linux. A maintainer may still
+prefer one of them: the refusal is the conservative choice.
+
+**Pinned by** `runtime/thread-signal-watch-in-worker` on the Linux targets,
+whose worker's watch is taken without the rule, leaving SIGTERM to end the
+process in the first thread; `runtime/thread-signal-reaches-events` holds
+the watch in the first thread on every hosted target.
+
 ### D527 — `io.write_format` writes a template and its values in one call
 
 **The tour said** at [1370] and [1380] that a template's `{}` takes the next
@@ -35451,6 +35561,37 @@ the rest, a mismatch as no write and a failed write as `io_failed`, on
 Cortex-M0 too; and `negative/core-io-println-is-write-format`,
 `negative/core-io-printf-is-write-format`, under an alias, and
 `negative/core-io-selected-puts-is-write-format`, whose notes show the call.
+
+### D1123 — A builder's offsets count what `format_onto` has handed on
+
+**The tour said** nothing. D527 writes a value longer than `format_onto`'s
+whole store through a builder that hands what it holds to the outlet
+whenever a piece does not fit, and said a conformance's `length`, `truncate`
+and alignment offsets hold "for every value the store holds". For a longer
+value they were offsets into a buffer that had since been emptied:
+`align_right` trapped on a checked subtraction or wrote its fill after the
+piece, and a `truncate` cut nothing or the wrong bytes. How long a value's
+text is, a name or a path, is the program's data and not its error.
+
+**Chosen:** a builder counts the bytes it has handed on, and `text.length`
+is that count and the bytes it holds, so an offset names the same byte
+before and after a hand-over; for every other builder the count is zero and
+`length` is the length of `used`. `align_left` fills after its piece
+wherever the piece's start now is. `align_right` reports `no_space` when any
+of the piece has been handed on, or has to be handed on to make room for the
+fill, since nothing can then be written before it; `io.write_format` reports
+that as `io_failed`, as it does a conformance asking for more room than the
+store has. `truncate` cuts what the builder still holds back to the offset
+and never below what was handed on. The library's own rollbacks, a negative
+number's sign and a failed `format`, cut the same way.
+
+**The alternatives:** leaving the trap, which ends a program on the first
+long value it prints; formatting every value whole into storage from an
+allocator, which D527 declined; and a count the conformance asks for apart
+from `length`, which every conformance already written would not ask.
+
+**Pinned by** `runtime/core-text-format-onto-offsets`, which traps without
+the rule; `runtime/io-write-format` holds the values the store holds.
 
 ### D531 — A released compiler carries no debug information, which ships beside it
 
@@ -35663,6 +35804,38 @@ the fibre fixtures, `runtime/fibre-turns-interleave` and
 `runtime/fibre-join-first-failure` among them, on every hosted target and
 the Cortex-M corpus; and the `capacity` control of
 `environments/cortex-m/evidence.py` (D470).
+
+### D1124 — A fibre that ends in a round hands its turn to the entry after it
+
+**The tour said** nothing; `fibre.turns` promises that a fibre that yields
+lets every other unfinished fibre of the provider run before it resumes.
+D450's first frame switches to one record when a task ends, and
+`stacks.round` names entry 0, the stack the round was made on, which resumed
+inside its own `yield` and went on as if its turn had come. So every fibre
+that ended sent the lap back to entry 1: entries after the one that ended
+lost that turn, a fibre in a late entry was not run at all while short tasks
+kept ending before it, and `core/io/fake`'s network, which takes one `yield`
+for a whole round, reported `timed_out` to a receiver whose sender had not
+had its turn.
+
+**Chosen:** a fibre that yields names the entry it switches to before it
+switches; one that ends does not. Entry 0, resumed with another entry still
+named, knows a fibre ended there, and continues the search from that entry,
+switching to the next unfinished one after it and resuming itself only when
+the search comes round to it. The search stays written out in `round_yield`,
+as D571 requires. A start the round refuses counts no entry: the entry is
+written before the count grows, so the round reads only entries it wrote and
+the caller's table needs no initial value.
+
+**The alternatives:** having the first frame switch to the next entry
+itself, which puts the round's table and search into `prepare`'s frame and
+under every provider built on it; and a counter of the laps in the round's
+state that `yield` waits on, which costs every yield a comparison to repair
+an ending.
+
+**Pinned by** `runtime/fibre-turns-end-keeps-lap`, whose order is `abAc`
+without the rule and whose refused start is followed into a table that was
+never zeroed.
 
 ### D572 — A check decides whether a handler fits from the frames it would emit
 

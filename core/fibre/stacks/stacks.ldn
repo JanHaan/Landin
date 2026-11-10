@@ -135,7 +135,9 @@ end round_value
 --- on; the others are the fibres `start` prepared, each the record it was
 --- given, in the order they were started. `start` prepares a fibre and
 --- returns; the fibre runs at its first turn. `yield` switches to the next
---- unfinished entry after the current one, round the table. After a whole
+--- unfinished entry after the current one, round the table, and a fibre
+--- that ends hands its turn to the one after it, so a fibre that yields
+--- resumes only when every other unfinished one has run. After a whole
 --- round in which every unfinished entry yielded and nothing started or
 --- ended, it calls the idler first. `wait` switches too, and `finished`
 --- only reads.
@@ -146,8 +148,9 @@ public round: type = round_value
 --- one entry for each fibre that may be unfinished at once, so a group of
 --- `count` stacks needs `count + 1`; `start` fails `mem.out_of_memory`
 --- when it is full. `round_over` fails `mem.out_of_memory` when `entries`
---- holds fewer than two. Keep `state`, `entries` and `when_idle` alive
---- while the round is used.
+--- holds fewer than two. The table needs no initial value: the round
+--- reads only the entries it has written. Keep `state`, `entries` and
+--- `when_idle` alive while the round is used.
 public round_over: (inout state: round_space, entries: []mut usize,
                     when_idle: any idler)
                    -> (handle: round from state, entries, when_idle)
@@ -196,14 +199,17 @@ round_start: (self: round, escaping record: ptr mut fibre.space,
     while index < state.val.count and self.entries[index] <> 0 do
         inc index
     end while
-    if index == state.val.count then
-        fail mem.out_of_memory when index == lenof self.entries
-        inc state.val.count
-    end if
+    fail mem.out_of_memory when index == lenof self.entries
     --  [0810]: entry 0 is the address of the round's own record.
     home: ptr mut fibre.space = ptr(self.entries[0])
     try prepare(record, stack, work, home)
+    --  The entry is written before it is counted, and only once the
+    --  fibre is prepared: a refused start leaves the table as it was, so
+    --  nothing the caller's table held is ever read as a record.
     self.entries[index] = usize(record)
+    if index == state.val.count then
+        inc state.val.count
+    end if
     state.val.quiet = 0
 end round_start
 
@@ -227,26 +233,34 @@ round_yield: (self: round) -> none =
     was: usize = state.val.current
     mut next: usize = was
     loop do
-        --  The next entry round the table, with no division, which
-        --  Cortex-M0 would call its runtime for.
-        inc next
-        if next == state.val.count then
-            next = 0
-        end if
-        break when next == was or next == 0
-        candidate: usize = self.entries[next]
-        if candidate <> 0 then
-            waiting: ptr mut fibre.space = ptr(candidate)
-            break when waiting.val.status <> 0
-        end if
+        loop do
+            --  The next entry round the table, with no division, which
+            --  Cortex-M0 would call its runtime for.
+            inc next
+            if next >= state.val.count then
+                next = 0
+            end if
+            break when next == was or next == 0
+            candidate: usize = self.entries[next]
+            if candidate <> 0 then
+                waiting: ptr mut fibre.space = ptr(candidate)
+                break when waiting.val.status <> 0
+            end if
+        end loop
+        break when next == was
+        state.val.current = next
+        leaving: ptr mut fibre.space = ptr(self.entries[was])
+        entering: ptr mut fibre.space = ptr(self.entries[next])
+        compiler.stack_switch(addr leaving.val.saved, entering.val.saved)
+        --  A fibre that yields names the entry it resumes before it
+        --  switches, so this is this entry's turn.
+        break when state.val.current == was
+        --  Otherwise a fibre ended into this entry, entry 0, without its
+        --  turn having come: `current` is still the entry that ended.
+        --  The lap goes on from there, so that the entries after it run
+        --  before this one resumes, as `yield` promises (D1124).
+        next = state.val.current
     end loop
-    return when next == was
-    state.val.current = next
-    leaving: ptr mut fibre.space = ptr(self.entries[was])
-    entering: ptr mut fibre.space = ptr(self.entries[next])
-    compiler.stack_switch(addr leaving.val.saved, entering.val.saved)
-    --  Whoever switched back here, a turn or a fibre that ended, this
-    --  entry runs again.
     state.val.current = was
 end round_yield
 

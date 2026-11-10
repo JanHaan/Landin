@@ -1,0 +1,75 @@
+--  D1126: on Linux a signal is taken by blocking it in the calling thread
+--  and reading it through a signalfd, and a signal sent to the process
+--  goes to any thread that has it unblocked.  An event loop on a thread of
+--  hosted/thread cannot block it in the program's first thread, so a
+--  SIGTERM it watched would still end the process there.  `signal.watch`
+--  on such a thread is refused instead, `io_failed` with `EPERM`, and
+--  SIGTERM keeps its default; the same watch on the first thread is taken.
+import core/failure
+import core/io
+import core/io/signal
+import hosted/events
+import hosted/system
+import hosted/thread
+
+--  What the watch in the thread did: 1 for a refusal with EPERM, 2 for
+--  any other failure, 3 when it was taken.
+mut outcome: u32 = 0
+
+job: type = struct
+    reserved: u32
+end job
+
+watch_here: (inout state: job) -> none ! failure.reason =
+    _ = state.reserved
+    mut space: events.space = zeroed
+    mut entries: [2]usize = zeroed
+    host := events.over(space, entries) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    signal.watch(host, signal.terminate) else (problem)
+        _ = problem
+        outcome = if events.last_errno(host) == 1 then 1 else 2 end if
+        return
+    end
+    outcome = 3
+end watch_here
+
+mut backing: [131072]u8 = zeroed
+
+threaded: (host: system.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(host, backing, 1)
+    defer thread.join(workers) else none
+    one: job = (reserved: 0)
+    try thread.admit(workers, watch_here, one)
+    try thread.join(workers)
+end threaded
+
+public main: () -> (code: i32) =
+    code = 1
+    threaded(system.new()) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when outcome <> 1
+    code = 3
+    --  The first thread may watch, and gives the signal back.
+    mut space: events.space = zeroed
+    mut entries: [2]usize = zeroed
+    host := events.over(space, entries) else (problem)
+        _ = problem
+        return
+    end
+    signal.watch(host, signal.terminate) else (problem)
+        _ = problem
+        return
+    end
+    code = 4
+    signal.stop_watching(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

@@ -21,15 +21,13 @@ script: []u8 = """
     exit 3
     """
 
---- Read what the child `started` writes to its output and its errors into
+--- Read what the child `running` writes to its output and its errors into
 --- `output` and `errors`, from whichever has something, until both have
---- ended, and wait for it.  Reading both while it runs is what lets a child
---- write more than a pipe holds to either.
-capture: (provider: type is io.programs, host: provider,
-          sink started: io.child, inout output: text.builder,
-          inout errors: text.builder)
-         -> (ended: io.ending) ! ... =
-    mut running: io.child = started
+--- ended.  Reading both while it runs is what lets a child write more than
+--- a pipe holds to either.
+gather: (provider: type is io.programs, host: provider,
+         inout running: io.child, inout output: text.builder,
+         inout errors: text.builder) -> none ! ... =
     mut buffer: [256]u8 = zeroed
     loop do
         part: io.child_read = try io.read_child(host, running, buffer)
@@ -40,6 +38,26 @@ capture: (provider: type is io.programs, host: provider,
             try text.append(output, buffer[0..<part.count])
         end if
     end loop
+end gather
+
+--- Read everything the child `started` writes into `output` and `errors`,
+--- and wait for it.  The child is waited for however the reading went, a
+--- builder that filled among the ways it can fail: there are no
+--- destructors, so a child left unwaited keeps its pipes open and its
+--- place in the system's table.  The wait closes the pipes it still has,
+--- which ends a child that is still writing to them.
+capture: (provider: type is io.programs, host: provider,
+          sink started: io.child, inout output: text.builder,
+          inout errors: text.builder)
+         -> (ended: io.ending) ! ... =
+    mut running: io.child = started
+    gather(host, running, output, errors) else (problem)
+        _ = io.wait(host, running) else (again)
+            _ = again
+            fail problem
+        end
+        fail problem
+    end
     ended = try io.wait(host, running)
 end capture
 

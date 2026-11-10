@@ -1,0 +1,157 @@
+--  A conformance's offsets in the builder `format_onto` hands it (D1123).
+--  The store here is sixteen bytes, so a value longer than that is
+--  written draining: the store is handed to the outlet whenever a piece
+--  does not fit.  `text.length` counts what was handed on, so an offset
+--  taken before a hand-over still names the same byte after it.
+import core/text
+
+--  An outlet that keeps what it is handed.
+keeper: type = struct
+    bytes: [96]u8
+    count: usize
+end keeper
+
+sink_take: (self: ptr mut keeper, bytes: []u8) -> none ! text.no_space =
+    fail text.no_space when lenof bytes > 96 - self.val.count
+    for at in usize(0)..<lenof bytes do
+        self.val.bytes[self.val.count + at] = bytes[at]
+    end for
+    self.val.count += lenof bytes
+end sink_take
+
+keeper is text.outlet (take: sink_take)
+
+right: atom
+left: atom
+
+--  A label, a space and a number in a field of six.
+row: type = struct
+    label: utf8
+    number: u32
+    side: right | left
+end row
+
+row_text: (self: ptr row, inout into: text.builder) -> none ! text.no_space =
+    try text.append_text(into, self.val.label)
+    try text.append_byte(into, u8(' '))
+    start: usize = text.length(into)
+    try text.append_u32(into, self.val.number)
+    if self.val.side == right then
+        try text.align_right(into, start, 6, u8('.'))
+    else
+        try text.align_left(into, start, 6, u8('.'))
+    end if
+end row_text
+
+row is text.formattable (append: row_text)
+
+--  A name alone in a field.
+cell: type = struct
+    name: utf8
+    width: usize
+    side: right | left
+end cell
+
+cell_text: (self: ptr cell, inout into: text.builder)
+           -> none ! text.no_space =
+    start: usize = text.length(into)
+    try text.append_text(into, self.val.name)
+    if self.val.side == right then
+        try text.align_right(into, start, self.val.width, u8('.'))
+    else
+        try text.align_left(into, start, self.val.width, u8('.'))
+    end if
+end cell_text
+
+cell is text.formattable (append: cell_text)
+
+--  A label, then a piece that is taken back, to the offset before it or
+--  to the offset the value began at.
+retracted: type = struct
+    label: utf8
+    whole: bool
+end retracted
+
+retracted_text: (self: ptr retracted, inout into: text.builder)
+                -> none ! text.no_space =
+    begins: usize = text.length(into)
+    try text.append_text(into, self.val.label)
+    kept: usize = text.length(into)
+    try text.append_text(into, "0123456789")
+    if self.val.whole then
+        --  The label has been handed on and stays; what is held goes.
+        text.truncate(into, begins)
+    else
+        text.truncate(into, kept)
+    end if
+end retracted_text
+
+retracted is text.formattable (append: retracted_text)
+
+--  Whether formatting `value` between brackets through a sixteen-byte
+--  store hands on exactly `wanted`.
+writes: (value: any text.formattable, wanted: []u8) -> (yes: bool) =
+    yes = false
+    mut store: [16]u8 = zeroed
+    mut kept: keeper = zeroed
+    onto: any text.outlet = any(addr kept)
+    text.format_onto(store[0..<16], onto, "[{}]", [value]) else (problem)
+        _ = problem
+        return
+    end
+    return when kept.count <> lenof wanted
+    for at in usize(0)..<lenof wanted do
+        return when kept.bytes[at] <> wanted[at]
+    end for
+    yes = true
+end writes
+
+--  Whether formatting `value` the same way reports `no_space`.
+refuses: (value: any text.formattable) -> (yes: bool) =
+    yes = false
+    mut store: [16]u8 = zeroed
+    mut kept: keeper = zeroed
+    onto: any text.outlet = any(addr kept)
+    text.format_onto(store[0..<16], onto, "[{}]", [value]) else (problem)
+        yes = problem == text.no_space
+    end
+end refuses
+
+public main: () -> (code: i32) =
+    code = 1
+    --  A value that fits the store is written whole, as into a builder.
+    short: row = (label: "ab", number: 42, side: right)
+    return when not writes(any(addr short), "[ab ....42]")
+
+    code = 2
+    --  Fourteen bytes, a space, and then digits that do not fit: the
+    --  store is handed on between `length` and the alignment, which
+    --  still finds the digits.
+    long: row = (label: "abcdefghijklmn", number: 42, side: right)
+    return when not writes(any(addr long), "[abcdefghijklmn ....42]")
+    code = 3
+    after: row = (label: "abcdefghijklmn", number: 42, side: left)
+    return when not writes(any(addr after), "[abcdefghijklmn 42....]")
+
+    code = 4
+    --  The fill of a left alignment follows a piece that was handed on.
+    padded: cell = (name: "abcdefghijkl", width: 20, side: left)
+    return when not writes(any(addr padded), "[abcdefghijkl........]")
+    code = 5
+    --  Nothing can go before one: the room for the fill hands the piece
+    --  on, and a piece longer than the store is handed on as it is
+    --  appended.
+    pushed: cell = (name: "abcdefghijkl", width: 20, side: right)
+    return when not refuses(any(addr pushed))
+    gone: cell = (name: "abcdefghijklmnopqrst", width: 30, side: right)
+    return when not refuses(any(addr gone))
+
+    code = 6
+    --  A cut takes back what the builder still holds, to an offset from
+    --  before the hand-over.
+    partly: retracted = (label: "abcdefghijklmn", whole: false)
+    return when not writes(any(addr partly), "[abcdefghijklmn]")
+    wholly: retracted = (label: "abcdefghijklmn", whole: true)
+    return when not writes(any(addr wholly), "[abcdefghijklmn]")
+    code = 42
+end main

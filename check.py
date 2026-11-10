@@ -225,7 +225,7 @@ SHARED_ROUTINES = {
     },
     "compiler/tests/fixtures/runtime/run-shell/main.ldn": {
         "compiler/tests/fixtures/runtime/run-shell-memory/main.ldn":
-            ("capture", "quoted", "report"),
+            ("gather", "capture", "quoted", "report"),
     },
     "compiler/tests/fixtures/runtime/network-echo/main.ldn": {
         "compiler/tests/fixtures/runtime/network-echo-memory/main.ldn":
