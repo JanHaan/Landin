@@ -1,0 +1,10 @@
+error[L0313]: this nominal value layout eventually contains itself by value
+  --> ../tests/fixtures/negative/distinct-of-a-struct-that-holds-it/program.ldn:4:12
+  |
+4 |     again: wrapped
+  |            ^^^^^^^
+  --> ../tests/fixtures/negative/distinct-of-a-struct-that-holds-it/program.ldn:3:15
+  |
+3 | inner: type = struct
+  |               ^^^^^^ the nominal struct body being laid out
+  = note: D137: a finite nominal value layout cannot include itself by value

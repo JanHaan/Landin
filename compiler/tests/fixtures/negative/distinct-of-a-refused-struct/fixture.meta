@@ -1,0 +1,9 @@
+class: negative
+summary: a distinct type over a struct whose field type is undeclared adds nothing to that one report
+constructs: 0650, 0670, 1940
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0201
+expect: expected.txt
+args: ../tests/fixtures/negative/distinct-of-a-refused-struct/program.ldn
+status: 1

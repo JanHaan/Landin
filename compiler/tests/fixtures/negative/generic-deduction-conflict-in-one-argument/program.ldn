@@ -1,0 +1,13 @@
+buffer: type (item: type, fixed capacity: u32) = struct
+    used: u32
+end buffer
+
+clear: (item: type, fixed count: u32,
+        target: buffer([count]item, count)) -> none =
+end clear
+
+scratch: buffer([3]i32, 2) = (used: 0)
+
+use: () -> none =
+    clear(scratch)
+end use

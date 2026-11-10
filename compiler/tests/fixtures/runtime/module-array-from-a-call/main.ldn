@@ -1,0 +1,46 @@
+bad: atom
+
+holder: type = struct
+    cells: [4]u32
+    count: u32
+end holder
+
+mut table: [4]u32 = [1, 2, 3, 4]
+mut held: holder = (cells: [1, 2, 3, 4], count: 0)
+
+reversed: (source: [4]u32) -> (result: [4]u32) =
+    result = [source[3], source[2], source[1], source[0]]
+end reversed
+
+filled: (seed: u32) -> (result: [4]u32) ! bad =
+    fail bad when seed == 0
+    result = [seed, seed, seed, seed]
+end filled
+
+refill: (seed: u32) -> none ! bad =
+    table = try filled(seed)
+    held.cells = try filled(seed + 1)
+end refill
+
+public main: () -> (code: i32) =
+    -- A call's array result is assigned to module storage as it is to a
+    -- local, the destination also being the argument included.
+    table = reversed(table)
+    held.cells = reversed(table)
+    first: u32 = table[0] * 10 + held.cells[0]
+
+    table = filled(0) else [5, 6, 7, 8]
+    held.cells = filled(9) else [0, 0, 0, 0]
+    second: u32 = table[3] * 10 + held.cells[3]
+
+    refill(3) else none
+    third: u32 = table[1] * 10 + held.cells[2]
+    refill(0) else none
+
+    code = 1
+    if first == 41 and second == 89 and third == 34 and table[0] == 3
+      and held.count == 0
+    then
+        code = 42
+    end if
+end main

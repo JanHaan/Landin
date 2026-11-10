@@ -857,7 +857,7 @@ package Landin.Checking is
    function Lent_Length
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Natural
+      Node     : Landin.Syntax.Node_Id) return Element_Count
      with Pre => Is_Prepared (Of_Table)
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node)
@@ -867,7 +867,7 @@ package Landin.Checking is
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Length  : Natural)
+      Length  : Element_Count)
      with Pre  => Is_Prepared (Into)
                   and then Covers (Into, Of_Tree)
                   and then Landin.Syntax.Contains (Of_Tree, Node),
@@ -2767,6 +2767,13 @@ private
    package Index_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Natural);
 
+   --  A lent array's length and one, zero for a node that lends none.  It
+   --  counts as Element_Count does: D18 lets an array be as long as the
+   --  target's usize addresses, which the host's Natural is not.
+   type Lent_Code is range 0 .. 2 ** 64;
+   package Lent_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Lent_Code);
+
    --  What an array is made of, or a length of zero and a default element
    --  where the node is not one.  A record and not two vectors, because
    --  the two are one answer and are always written together.
@@ -2855,7 +2862,7 @@ private
       Has_Distinct_Conversion : Boolean := False;
       Distinct_Conversion : Nominal_Type_Id := No_Nominal_Type;
       Has_Lent_Array : Boolean := False;
-      Lent_Array : Natural := 0;
+      Lent_Array : Lent_Code := 0;
       Text_Conversion : Text_Conversion_Kind := No_Text_Conversion;
       Has_Concept : Boolean := False;
       Concept : Concept_Id := No_Concept;
@@ -2971,7 +2978,7 @@ private
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
       --  Zero where the node lends nothing, else one more than the length
       --  of the whole array it lends as a slice.
-      Node_Lent_Arrays : Index_Vectors.Vector;
+      Node_Lent_Arrays : Lent_Vectors.Vector;
       Node_Routine_Targets : Routine_Id_Vectors.Vector;
       Node_Evidence : Conformance_Id_Vectors.Vector;
       Node_Evidence_Entries : Index_Vectors.Vector;

@@ -2720,6 +2720,9 @@
     "runtime/generic-atom-widening": {
       "mode": "execute"
     },
+    "runtime/generic-bound-folds-a-module-integer": {
+      "mode": "execute"
+    },
     "runtime/generic-closed-parameter-takes-context": {
       "mode": "execute"
     },
@@ -3285,6 +3288,9 @@
     "runtime/mixed-array-repetition-is-source-ordered": {
       "mode": "execute"
     },
+    "runtime/module-array-from-a-call": {
+      "mode": "execute"
+    },
     "runtime/module-array-from-struct-field-is-independent": {
       "mode": "execute"
     },
@@ -3716,6 +3722,9 @@
       "mode": "execute"
     },
     "runtime/qualified-module-array-copied-and-lent": {
+      "mode": "execute"
+    },
+    "runtime/qualified-module-binding-is-a-place": {
       "mode": "execute"
     },
     "runtime/qualified-static-type-argument": {
@@ -4820,6 +4829,9 @@
     "runtime/struct-fields-read-as-zero": {
       "mode": "execute"
     },
+    "runtime/struct-function-field-takes-itself-inout": {
+      "mode": "execute"
+    },
     "runtime/struct-literal-array-field-order": {
       "mode": "execute"
     },
@@ -5074,6 +5086,9 @@
       "mode": "execute"
     },
     "runtime/variable-shifts-at-every-width": {
+      "mode": "execute"
+    },
+    "runtime/variant-array-payload-compound-element": {
       "mode": "execute"
     },
     "runtime/variant-case-construction-runs-in-source-order": {

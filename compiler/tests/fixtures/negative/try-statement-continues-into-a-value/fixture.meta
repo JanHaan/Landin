@@ -1,0 +1,9 @@
+class: negative
+summary: [1810]'s `try` statement ends with its call: an operator after it is refused where it is written
+constructs: 1010, 1810
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0110, L0110
+expect: expected.txt
+args: ../tests/fixtures/negative/try-statement-continues-into-a-value/program.ldn
+status: 1

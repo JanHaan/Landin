@@ -1,0 +1,9 @@
+class: negative
+summary: a struct that holds a distinct type over itself is D137's one refusal, whichever is declared first
+constructs: 0650, 0670
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0313
+expect: expected.txt
+args: ../tests/fixtures/negative/distinct-of-a-struct-that-holds-it/program.ldn
+status: 1

@@ -1,0 +1,20 @@
+error[L0301]: `defer` registers a call, and this is a conversion
+  --> ../tests/fixtures/negative/defer-registers-a-conversion/program.ldn:7:11
+  |
+7 |     defer i32(result)
+  |           ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/defer-registers-a-conversion/program.ldn:7:5
+  |
+7 |     defer i32(result)
+  |     ^^^^^^^^^^^^^^^^^ this registration
+  = note: [1100]/[1110]: the registered call runs when its block is left, and a conversion runs nothing
+error[L0301]: `undo` registers a call, and this is a conversion
+  --> ../tests/fixtures/negative/defer-registers-a-conversion/program.ldn:12:10
+   |
+12 |     undo metre(result)
+   |          ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/defer-registers-a-conversion/program.ldn:12:5
+   |
+12 |     undo metre(result)
+   |     ^^^^^^^^^^^^^^^^^^ this registration
+  = note: [1100]/[1110]: the registered call runs when its block is left, and a conversion runs nothing

@@ -1,0 +1,3 @@
+node: type = struct
+    visit: (caller value: node) -> none
+end node

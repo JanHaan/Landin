@@ -1381,6 +1381,8 @@ package body Landin.Diagnostics.Citations is
                & "s zero",
             when 206 =>
                "Null construction cannot evade the pointer union",
+            when 1104 =>
+               "A module pointer's address is folded and held to usize",
             when 235 =>
                "Several atoms beside a pointer store the atom's own code"
                & " beside the pointer",
@@ -1592,6 +1594,8 @@ package body Landin.Diagnostics.Citations is
             when 72 =>
                "Construction names the ordinary struct a labelled litera"
                & "l builds",
+            when 1102 =>
+               "A construction's values are all labelled",
             when 73 =>
                "A contextual variant part is refused once as a whole",
             when 74 =>
@@ -1816,6 +1820,9 @@ package body Landin.Diagnostics.Citations is
             when 382 =>
                "An atom outside the error set is named with the `fail` o"
                & "r call that raises it",
+            when 1103 =>
+               "An error set names atoms, and a pointer type reached thr"
+               & "ough an alias is refused",
             when 406 =>
                "A discard ignores a value call's failure with `else none"
                & "`",
@@ -1883,6 +1890,11 @@ package body Landin.Diagnostics.Citations is
             when 138 =>
                "Direct generic calls deduce one checker-owned routine in"
                & "stance",
+            when 1100 =>
+               "A type parameter is not applied to a value",
+            when 1101 =>
+               "A generic signature's array bound is D136's, validated a"
+               & "t the signature",
             when 142 =>
                "Concepts and conformances are collected before constrain"
                & "ed instantiation",
@@ -3227,6 +3239,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Pointers and raw storage",
             when 206 =>
                "Decisions: Pointers and raw storage",
+            when 1104 =>
+               "Decisions: Pointers and raw storage",
             when 235 =>
                "Decisions: Pointers and raw storage",
             when 238 =>
@@ -3402,6 +3416,8 @@ package body Landin.Diagnostics.Citations is
             when 71 =>
                "Decisions: Structs, variants and nesting",
             when 72 =>
+               "Decisions: Structs, variants and nesting",
+            when 1102 =>
                "Decisions: Structs, variants and nesting",
             when 73 =>
                "Decisions: Structs, variants and nesting",
@@ -3585,6 +3601,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Functions, calls and returns",
             when 382 =>
                "Decisions: Functions, calls and returns",
+            when 1103 =>
+               "Decisions: Functions, calls and returns",
             when 406 =>
                "Decisions: Functions, calls and returns",
             when 432 =>
@@ -3634,6 +3652,10 @@ package body Landin.Diagnostics.Citations is
             when 137 =>
                "Decisions: Concepts, generics and runtime dispatch",
             when 138 =>
+               "Decisions: Concepts, generics and runtime dispatch",
+            when 1100 =>
+               "Decisions: Concepts, generics and runtime dispatch",
+            when 1101 =>
                "Decisions: Concepts, generics and runtime dispatch",
             when 142 =>
                "Decisions: Concepts, generics and runtime dispatch",
@@ -4731,6 +4753,9 @@ package body Landin.Diagnostics.Citations is
             when 206 =>
                "https://www.701.dev/spec.html#d206-null-construction-can"
                & "not-evade-the-pointer-union",
+            when 1104 =>
+               "https://www.701.dev/spec.html#d1104-a-module-pointer-s-a"
+               & "ddress-is-folded-and-held-to-usize",
             when 235 =>
                "https://www.701.dev/spec.html#d235-several-atoms-beside-"
                & "a-pointer-store-the-atom-s-own-code-beside-the-pointer",
@@ -4996,6 +5021,9 @@ package body Landin.Diagnostics.Citations is
             when 72 =>
                "https://www.701.dev/spec.html#d72-construction-names-the"
                & "-ordinary-struct-a-labelled-literal-builds",
+            when 1102 =>
+               "https://www.701.dev/spec.html#d1102-a-construction-s-val"
+               & "ues-are-all-labelled",
             when 73 =>
                "https://www.701.dev/spec.html#d73-a-contextual-variant-p"
                & "art-is-refused-once-as-a-whole",
@@ -5272,6 +5300,10 @@ package body Landin.Diagnostics.Citations is
             when 382 =>
                "https://www.701.dev/spec.html#d382-an-atom-outside-the-e"
                & "rror-set-is-named-with-the-fail-or-call-that-raises-it",
+            when 1103 =>
+               "https://www.701.dev/spec.html#d1103-an-error-set-names-a"
+               & "toms-and-a-pointer-type-reached-through-an-alias-is-refu"
+               & "sed",
             when 406 =>
                "https://www.701.dev/spec.html#d406-a-discard-ignores-a-v"
                & "alue-call-s-failure-with-else-none",
@@ -5347,6 +5379,12 @@ package body Landin.Diagnostics.Citations is
             when 138 =>
                "https://www.701.dev/spec.html#d138-direct-generic-calls-"
                & "deduce-one-checker-owned-routine-instance",
+            when 1100 =>
+               "https://www.701.dev/spec.html#d1100-a-type-parameter-is-"
+               & "not-applied-to-a-value",
+            when 1101 =>
+               "https://www.701.dev/spec.html#d1101-a-generic-signature-"
+               & "s-array-bound-is-d136-s-validated-at-the-signature",
             when 142 =>
                "https://www.701.dev/spec.html#d142-concepts-and-conforma"
                & "nces-are-collected-before-constrained-instantiation",

@@ -434,6 +434,13 @@ package body Landin.Stages.Lowering is
       type Signature_Map is
         array (Source_Signature) of IR.Signature_Id;
       Signatures : Signature_Map := [others => IR.No_Signature];
+      --  [0670]: a struct may take itself `inout` in its own function
+      --  field.  The parameter's pointee is the struct's body, whose field
+      --  is the signature being built, so a build that meets itself names
+      --  the struct by identity there, as a pointer's pointee does, and
+      --  its answer is the signature's one answer.
+      Signature_Underway : array (Source_Signature) of Boolean :=
+        [others => False];
 
       subtype Source_Evidence is Positive range
         1 .. Positive'Max
@@ -1056,9 +1063,26 @@ package body Landin.Stages.Lowering is
            (1 .. Positive'Max (1, Count * Positive'Max (1, Results'Length))) :=
              [others => (others => 1)];
          Source_Count : Natural := 0;
+         Reentered : constant Boolean :=
+           Signature_Underway (Positive (Source));
 
          function Converted
            (Part : Landin.Checking.Signature_Part) return IR.Signature_Part;
+
+         function Inout_Pointee
+           (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
+
+         function Inout_Pointee
+           (Part : Landin.Checking.Signature_Part) return IR.Field_Shape
+           is (if not Reentered then Neutral_Result_Part (Part)
+               elsif Part.Kind = Ty.Aggregate
+               then (Kind => IR.Aggregate_Field_Shape,
+                     Nominal => Nominal_For (Part.Nominal), others => <>)
+               elsif Part.Kind = Ty.Fixed_Array
+               then IR.Make_Array_Shape
+                 (Unit.all, IR.Element_Total (Part.Length),
+                  Neutral_Element (Part, Identity_Only => True))
+               else Neutral_Result_Part (Part));
 
          function Converted
            (Part : Landin.Checking.Signature_Part)
@@ -1072,8 +1096,7 @@ package body Landin.Stages.Lowering is
             return (Element_Shape => Element,
                Pointee =>
                  (if Part.Convention = Syn.Inout_Convention
-                  then IR.Add_Pointee
-                    (Unit.all, Neutral_Result_Part (Part))
+                  then IR.Add_Pointee (Unit.all, Inout_Pointee (Part))
                   elsif Part.Kind = Ty.Pointer_Value
                   then Pointee_For (Part.Reference)
                   else IR.No_Pointee),
@@ -1128,6 +1151,7 @@ package body Landin.Stages.Lowering is
               "an unfinalized inferred error set reached lowering";
          end if;
 
+         Signature_Underway (Positive (Source)) := True;
          for Index in Parts'Range loop
             Parts (Index) :=
               Converted
@@ -1151,6 +1175,10 @@ package body Landin.Stages.Lowering is
                       (Types.all, Source, Index, Position));
             end loop;
          end loop;
+         Signature_Underway (Positive (Source)) := Reentered;
+         if Signatures (Positive (Source)) /= IR.No_Signature then
+            return Signatures (Positive (Source));
+         end if;
          Signatures (Positive (Source)) :=
            IR.Add_Signature_With_Results
              (Unit.all, Parts, Results,
@@ -2098,11 +2126,14 @@ package body Landin.Stages.Lowering is
 
       --  Which part one step of a chain names: [0750]'s declaration order
       --  for a field, [0520]'s one-based position for a known index.
+      --  Counted as the target counts elements: D18 lets an array be as
+      --  long as its usize addresses, which the host's Natural is not.
       function Step_Position
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Element_Total
         is (if Syn.Kind (Of_Tree, Node) = Syn.Element_Index
-            then Natural (Constant_Index (Of_Tree, Node))
-            else Landin.Checking.Field_Index (Types.all, Of_Tree, Node));
+            then IR.Element_Total (Constant_Index (Of_Tree, Node))
+            else IR.Element_Total
+              (Landin.Checking.Field_Index (Types.all, Of_Tree, Node)));
 
 
       --  One target-neutral shape per checker shape, built bottom up so
@@ -13668,7 +13699,11 @@ package body Landin.Stages.Lowering is
                         if Alias.Which = 0 then
                            if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
                            then
-                              pragma Assert (Index /= IR.No_Value);
+                              if Index = IR.No_Value then
+                                 raise Landin.Compiler_Defect with
+                                   "an array alias element is stored"
+                                   & " without its index";
+                              end if;
                               case Alias.Source.Kind is
                                  when IR.Module_Datum =>
                                     IR.Emit_Store_Element
@@ -13725,7 +13760,11 @@ package body Landin.Stages.Lowering is
                         elsif Syn.Kind (Of_Tree, Place)
                                 = Syn.Element_Index
                         then
-                           pragma Assert (Index /= IR.No_Value);
+                           if Index = IR.No_Value then
+                              raise Landin.Compiler_Defect with
+                                "an array alias element is stored without"
+                                & " its index";
+                           end if;
                            case Alias.Source.Kind is
                               when IR.Module_Datum =>
                                  IR.Emit_Store_Element
@@ -13828,7 +13867,12 @@ package body Landin.Stages.Lowering is
                      return;
                   end if;
 
-                  if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
+                  --  [1420]: `module.name` is the binding it names and no
+                  --  field of anything, so it is written as its name is.
+                  if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, Place)
+                      /= Res.Bound
+                  then
                      declare
                         Indexed : constant Syn.Node_Id :=
                           Chain_Index (Of_Tree, Place);
@@ -14531,6 +14575,20 @@ package body Landin.Stages.Lowering is
                           Has_Computed_Index (Of_Tree, Place)
                           or else Has_Reference_Storage
                             (Of_Tree, Place);
+                        Through_Alias : constant Boolean :=
+                          not Dynamic
+                          and then Syn.Kind (Of_Tree, Place)
+                            = Syn.Element_Index
+                          and then Aliases
+                            (Declared
+                               (Res.Bound_To
+                                  (Meanings.all, Of_Tree,
+                                   Chain_Root
+                                     (Of_Tree,
+                                      Chain_Above
+                                        (Of_Tree,
+                                         Syn.Target_Of
+                                           (Of_Tree, Place)))))).Active;
                      begin
                         if Current /= IR.No_Block then
                            declare
@@ -14575,7 +14633,17 @@ package body Landin.Stages.Lowering is
                                                   Site));
                                        begin
                                           if Address_Slot = IR.No_Slot then
-                                             Write (Place, Result);
+                                             --  D85's array alias stores
+                                             --  through an index value, a
+                                             --  known one included; it is
+                                             --  made here, after the right
+                                             --  side, as it has no effect.
+                                             Write
+                                               (Place, Result,
+                                                Index =>
+                                                  (if Through_Alias
+                                                   then Index_For (Place)
+                                                   else IR.No_Value));
                                           else
                                              IR.Emit_Store_Indirect
                                                (Unit.all, Filling,
@@ -15284,6 +15352,10 @@ package body Landin.Stages.Lowering is
                               Destination : constant IR.Storage :=
                                 Storage_For (Of_Tree, Named);
                            begin
+                              --  A call's result area is a frame slot.
+                              --  Module storage is none, so a call into a
+                              --  module array is one into a temporary and
+                              --  a copy, as a control expression's is.
                               if Syn.Kind (Of_Tree, Value)
                                    in Syn.If_Statement
                                       | Syn.Match_Statement
@@ -15291,6 +15363,11 @@ package body Landin.Stages.Lowering is
                                       | Syn.Loop_Statement
                                       | Syn.While_Statement
                                       | Syn.For_Statement
+                                or else
+                                  (Syn.Kind (Of_Tree, Value)
+                                     in Syn.Call | Syn.Try_Expression
+                                   and then Destination.Kind
+                                     not in IR.Frame_Slot)
                               then
                                  declare
                                     Temporary : constant IR.Slot_Id :=

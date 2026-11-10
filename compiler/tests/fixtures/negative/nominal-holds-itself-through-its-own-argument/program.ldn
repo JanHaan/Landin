@@ -1,0 +1,8 @@
+box: type (t: type) = struct
+    held: t
+end box
+
+node: type = struct
+    value: i32
+    children: box(node)
+end node

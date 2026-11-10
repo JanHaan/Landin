@@ -1,0 +1,59 @@
+-- [0670]: a struct may mention itself in a parameter of its own function
+-- field, and `inout` is one way to.  A mutual pair does the same.
+machine: type = struct
+    state: u32
+    step: (inout self: machine) -> none
+end machine
+
+left: type = struct
+    count: u32
+    pass: (inout other: right) -> none
+end left
+
+right: type = struct
+    count: u32
+    pass: (inout other: left) -> none
+end right
+
+row: type = struct
+    total: u32
+    each: (inout all: [2]row) -> none
+end row
+
+advance: (inout self: machine) -> none =
+    self.state += 1
+end advance
+
+to_right: (inout other: right) -> none =
+    other.count += 2
+end to_right
+
+to_left: (inout other: left) -> none =
+    other.count += 3
+end to_left
+
+bump_all: (inout all: [2]row) -> none =
+    all[0].total += 5
+    all[1].total += 7
+end bump_all
+
+public main: () -> (code: i32) =
+    mut m: machine = (state: 0, step: advance)
+    m.step(m)
+    m.step(m)
+
+    mut l: left = (count: 0, pass: to_right)
+    mut r: right = (count: 0, pass: to_left)
+    l.pass(r)
+    r.pass(l)
+
+    mut rows: [2]row = [(total: 1, each: bump_all), (total: 2, each: bump_all)]
+    rows[0].each(rows)
+
+    code = 1
+    if m.state == 2 and r.count == 2 and l.count == 3
+      and rows[0].total == 6 and rows[1].total == 9
+    then
+        code = 42
+    end if
+end main

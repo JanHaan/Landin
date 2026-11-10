@@ -12754,6 +12754,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & " union is matched normally. Allocator and disposed backi"
                & "ng use named atom/pointer unions; a successful `dispose`"
                & " clears to the atom and a repeat reports `empty`.",
+            when 1104 =>
+               "Chosen: the address of a module `ptr(integer)`, as a bin"
+               & "ding's value, an array element or a struct field, is fol"
+               & "ded like any module integer. A fold that overflows, or a"
+               & " value that the operand's own type or the target's `usiz"
+               & "e` does not hold, is refused with L0300 at the address.",
             when 235 =>
                "Chosen: a union that flattens "
                & Character'Val (226)
@@ -16477,6 +16483,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "t enable [0700]'s scalar conversion form, anonymous stru"
                & "ct types, struct-of-struct fields, heterogeneous `of exp"
                & "ression` or the all-field synonym.",
+            when 1102 =>
+               "Chosen: a construction has no positions. A value without"
+               & " a label in a struct construction or a variant case cons"
+               & "truction is refused with L0334 at the value, beside the "
+               & "construction, and the rest of the construction is not ch"
+               & "ecked. [0720]'s trailing `of` fill is not such a value.",
             when 73 =>
                "Chosen: while reading an ordinary struct body, the parse"
                & "r recognizes the shape of [0680]'s contextual part, repo"
@@ -19162,6 +19174,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "or`. The note says to add the atom or recover the failur"
                & "e where it is raised. Which programs are accepted does n"
                & "ot change.",
+            when 1103 =>
+               "Chosen: an error set that holds a pointer type, alone or"
+               & " beside atoms, is refused with L0338 at the set, beside "
+               & "the signature it is written in.",
             when 406 =>
                "Chosen: `else none` is admitted on a call that returns a"
                & " value when the call is the whole operand of a discard, "
@@ -21272,6 +21288,24 @@ package body Landin.Diagnostics.Citations.Texts is
                & "key. A generic template itself remains unavailable as a "
                & "function value: only a direct call chooses the concrete "
                & "instance signature.",
+            when 1100 =>
+               "Chosen: a type parameter names a type in a type position"
+               & " only. Applied to a value, positionally or with labels, "
+               & "it is refused with L0301 where the routine is instantiat"
+               & "ed, the report naming the parameter and the application."
+               & " A value takes the parameter's type through a typed bind"
+               & "ing, `zero: t = 0`, or through an entry of a concept tha"
+               & "t constrains the parameter.",
+            when 1101 =>
+               "Chosen: a bound in a generic routine's signature is vali"
+               & "dated where the routine is declared, called or not, by D"
+               & "136's one evaluator with every fixed formal unknown, as "
+               & "a type template's bound is. A form D136 refuses is repor"
+               & "ted there once, and a call of that routine is not a seco"
+               & "nd error. When a call evaluates a computed bound, whatev"
+               & "er is not a fixed formal or arithmetic over them is fold"
+               & "ed by the same evaluator, so an immutable module integer"
+               & " counts in a signature's bound as it does in any other.",
             when 142 =>
                "Chosen: `concept` and `is` are contextual words. A conce"
                & "pt declaration carries one nonempty collected type-forma"

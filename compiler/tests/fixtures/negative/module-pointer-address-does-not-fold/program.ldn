@@ -1,0 +1,15 @@
+base: usize = 0x4000_0000
+back: usize = 0x4000_0008
+page: usize = 4294967296
+small: u8 = 200
+
+cell: type = struct
+    at: ptr mut u32
+end cell
+
+status: ptr mut u32 = ptr(base - back)
+top: ptr mut u32 = ptr(page * page)
+narrow: ptr mut u32 = ptr(small + small)
+ports: [2]ptr mut u32 = [ptr(base), ptr(base - back)]
+held: cell = (at: ptr(back - base - 16))
+good: ptr mut u32 = ptr(base + 8)

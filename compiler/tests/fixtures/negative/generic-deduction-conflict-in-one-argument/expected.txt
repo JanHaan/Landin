@@ -1,0 +1,10 @@
+error[L0340]: this makes `count` `2`, but it is already `3`
+  --> ../tests/fixtures/negative/generic-deduction-conflict-in-one-argument/program.ldn:12:11
+   |
+12 |     clear(scratch)
+   |           ^^^^^^^
+  --> ../tests/fixtures/negative/generic-deduction-conflict-in-one-argument/program.ldn:5:21
+  |
+5 | clear: (item: type, fixed count: u32,
+  |                     ^^^^^^^^^^^^^^^^ it is declared here
+  = note: D138: every argument that decides `count` must decide the same

@@ -1,0 +1,28 @@
+public pair: type = struct
+    a: u32
+    b: u32
+end pair
+
+public header: type = struct
+    kind: u8
+    length: u32
+    body: pair
+end header
+
+public shape: type = struct
+    tag: u8
+    kind: variant
+        dot |
+        row: (values: [3]u8)
+    end kind
+end shape
+
+public mut state: u32 = 4
+public mut form: shape = (tag: 1, kind: dot)
+public mut flags: u8 = 1
+public mut both: pair = (a: 1, b: 2)
+public mut cells: [3]u32 = [1, 2, 3]
+
+public read: () -> (value: u32) =
+    value = state
+end read

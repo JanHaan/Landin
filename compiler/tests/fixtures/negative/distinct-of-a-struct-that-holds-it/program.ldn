@@ -1,0 +1,5 @@
+wrapped: type = distinct inner
+
+inner: type = struct
+    again: wrapped
+end inner

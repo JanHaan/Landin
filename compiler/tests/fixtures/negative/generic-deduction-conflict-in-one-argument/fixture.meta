@@ -1,0 +1,9 @@
+class: negative
+summary: D138 reports a fixed formal one argument decides twice, beside the formal and not beside the argument again
+constructs: 0520, 1290, 1920
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0340
+expect: expected.txt
+args: ../tests/fixtures/negative/generic-deduction-conflict-in-one-argument/program.ldn
+status: 1

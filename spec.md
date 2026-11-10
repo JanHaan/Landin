@@ -4531,6 +4531,28 @@ pinned the narrowed arm's origin as well until D288, after which its L0314 is
 the checked `arena_over`'s and the derived parser's entries borrow nothing
 (D189).
 
+### D1104 — A module pointer's address is folded and held to usize
+
+**The tour said** that a module value is an image the compiler builds
+[1460], and [1940] refuses a module integer whose fold its type does not
+hold, since an image has no moment in which to trap. [1975] converts the
+operand of `ptr(integer)` to the target's `usize` and refuses a known zero.
+The module check folded the address only to ask whether it was zero, so a
+negative or overflowing address, `ptr(base - back)` with `back` the larger,
+passed checking and stopped emission with an internal compiler defect.
+
+**Chosen:** the address of a module `ptr(integer)`, as a binding's value, an
+array element or a struct field, is folded like any module integer. A fold
+that overflows, or a value that the operand's own type or the target's
+`usize` does not hold, is refused with L0300 at the address.
+
+**The alternative** was to wrap the address into `usize` as a two's
+complement conversion would. It was declined: the same expression bound to
+a `usize` is refused, and a wrapped device address is a wrong address that
+nothing later reports.
+
+**Pinned by** `negative/module-pointer-address-does-not-fold`.
+
 ### D235 — Several atoms beside a pointer store the atom's own code beside the pointer
 
 **The tour said** that "maybe a pointer" is an ordinary union of an atom and a
@@ -9819,6 +9841,28 @@ work this slice deliberately does not have. All were declined.
 the generated construct, token and IR records; and
 `runtime/struct-construction-order` on Linux x86-64.
 
+### D1102 — A construction's values are all labelled
+
+**The tour said** that a struct or a variant case is built by applying its
+name to its fields [0700], and every example labels each field. The grammar
+lets positional arguments lead a labelled list, `labeled_arguments`,
+because a labelled application is a call or a construction and the parser
+cannot know which. Nothing said what `point(3, y: 4)` means when `point` is
+a struct; the checker looked up a field with no name and ended in an
+internal compiler defect.
+
+**Chosen:** a construction has no positions. A value without a label in a
+struct construction or a variant case construction is refused with L0334 at
+the value, beside the construction, and the rest of the construction is not
+checked. [0720]'s trailing `of` fill is not such a value.
+
+**The alternative** was to let leading positional values fill the first
+fields in declaration order. It was declined: positions would tie every
+construction to the order of the declaration's fields, which a labelled
+construction does not depend on.
+
+**Pinned by** `negative/construction-value-without-a-label`.
+
 ### D73 — A contextual variant part is refused once as a whole
 
 **The tour said** that an ordinary struct may contain one contextual
@@ -13702,6 +13746,25 @@ already shows how to find.
 `negative/fail-outside-declared-set` and
 `negative/for-fallible-undeclared-error`.
 
+### D1103 — An error set names atoms, and a pointer type reached through an alias is refused
+
+**The tour said** that a function fails with one of the atoms after `!`
+[0940]. The error set is written in the grammar of an atom union, and D189
+admits one pointer type in a union of atoms that is the type of a value. A
+pointer written directly after `!` is a syntax error, but an alias reaches
+one unseen: `problems: type = ptr missing`, or a named pointer union. The
+checker then had no atom set for the signature, dropped the signature
+without a report, and lowering met the routine without one.
+
+**Chosen:** an error set that holds a pointer type, alone or beside atoms,
+is refused with L0338 at the set, beside the signature it is written in.
+
+**The alternative** was to take the atoms of a pointer union as the set and
+ignore its pointer. It was declined, because the alias then means two
+different things in a value's type and after `!`.
+
+**Pinned by** `negative/error-set-names-a-pointer-type`.
+
 ### D406 — A discard ignores a value call's failure with `else none`
 
 **The tour said** at [1030] that an `else` discards a call's failure, and at
@@ -15272,6 +15335,63 @@ facts`, the lowering case `generic routines lower once per key`,
 `runtime/diagnostic-loggers-dispatch` on Linux x86-64. The malformed-error
 verifier case uses a generic-instance item to pin that only the finalized
 concrete signature and ordinary failure opcode reach neutral IR.
+
+### D1100 — A type parameter is not applied to a value
+
+**The tour said** that a conversion and a construction are a type applied
+to arguments [0700], and that a generic routine takes its type as an
+ordinary parameter [1290]. It did not say whether the parameter may stand
+where [0700] applies a type: `t(0)` or `t(x)` in a routine whose `t` is a
+type parameter. The checker asked the formal's declaration for a value it
+does not have, and an instantiated routine that wrote the form ended in an
+internal compiler defect.
+
+**Chosen:** a type parameter names a type in a type position only. Applied
+to a value, positionally or with labels, it is refused with L0301 where the
+routine is instantiated, the report naming the parameter and the
+application. A value takes the parameter's type through a typed binding,
+`zero: t = 0`, or through an entry of a concept that constrains the
+parameter.
+
+**The alternative** was to read `t(x)` as [0700]'s conversion to the actual
+type of each instance. It was declined for now, because a conversion's rule
+is chosen by its two types: integer to integer checks a range, float to
+integer truncates, and a distinct type converts only from its base. One
+spelling would then be accepted for some actuals and
+refused for others with nothing in the signature saying which, which is
+what a concept exists to state. This is the conservative choice of the two
+and may be revisited with a program that needs the conversion.
+
+**Pinned by** `negative/type-parameter-applied-to-a-value`.
+
+### D1101 — A generic signature's array bound is D136's, validated at the signature
+
+**The tour said** that fixed parameters are compile-time values [1290] and
+D136 closed the expressions an array bound may hold, which D438 widened by
+an immutable module integer. D138 matches a call against a bound that
+computes with fixed formals only after another occurrence has bound them.
+That matching had its own evaluator, which knew literals, fixed formals,
+unary `-` and the five arithmetic operators and answered every other form
+with a silent mismatch. So `[count << 1]u8` in a signature was reported
+nowhere and its call reached lowering unmatched, and `[count * width]u8`
+with `width` a module integer, which D438 admits everywhere else, could
+not be called at all.
+
+**Chosen:** a bound in a generic routine's signature is validated where the
+routine is declared, called or not, by D136's one evaluator with every
+fixed formal unknown, as a type template's bound is. A form D136 refuses is
+reported there once, and a call of that routine is not a second error. When
+a call evaluates a computed bound, whatever is not a fixed formal or
+arithmetic over them is folded by the same evaluator, so an immutable
+module integer counts in a signature's bound as it does in any other.
+
+**The alternative** was to report the refused form at each call that fails
+to match, which leaves an uncalled routine's signature unchecked and
+repeats one mistake at every call. It was declined, as D136 declined it for
+a type template.
+
+**Pinned by** `negative/generic-signature-bound-operator` and
+`runtime/generic-bound-folds-a-module-integer`.
 
 ### D142 — Concepts and conformances are collected before constrained instantiation
 

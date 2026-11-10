@@ -1,0 +1,16 @@
+total: (t: type, values: []t) -> (sum: t) =
+    sum = t(0)
+    for value in values do
+        sum += value
+    end for
+end total
+
+built: (t: type, seed: t) -> (out: t) =
+    out = t(a: 1)
+end built
+
+use: () -> (code: i32) =
+    readings: [3]i32 = [1, 2, 3]
+    code = total(readings)
+    code += built(code)
+end use

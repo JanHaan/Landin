@@ -1,0 +1,14 @@
+missing: atom
+other: atom
+problems: type = ptr missing
+maybe_byte: type = missing | ptr u8
+
+alone: (base: u16) -> (row: u16) ! problems =
+    fail missing
+end alone
+
+beside: (base: u16) -> (row: u16) ! other | maybe_byte =
+    fail other
+end beside
+
+handler: type = (base: u16) -> (row: u16) ! maybe_byte

@@ -1,0 +1,9 @@
+class: negative
+summary: a packed field of a place that may not be written is refused as a write, for each kind of read-only root
+constructs: 0730, 1900
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0303, L0303, L0303, L0303, L0303
+expect: expected.txt
+args: ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn
+status: 1

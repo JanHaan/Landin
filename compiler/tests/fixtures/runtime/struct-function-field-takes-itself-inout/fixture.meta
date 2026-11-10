@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a struct's function field takes the struct itself `inout`, alone, in a mutual pair and through an array, and lowering ends
+program: main.ldn
+status: 42
+constructs: 0670, 0980, 1000, 1900
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

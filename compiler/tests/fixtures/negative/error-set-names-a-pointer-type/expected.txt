@@ -1,0 +1,30 @@
+error[L0338]: this set of atoms names a pointer type and no atom
+  --> ../tests/fixtures/negative/error-set-names-a-pointer-type/program.ldn:6:34
+  |
+6 | alone: (base: u16) -> (row: u16) ! problems =
+  |                                  ^^^^^^^^^^
+  --> ../tests/fixtures/negative/error-set-names-a-pointer-type/program.ldn:6:1
+  |
+6 | alone: (base: u16) -> (row: u16) ! problems =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the declaration it is written in
+  = note: [0940]/[0640]: an error set and an atom union name atoms, and [0480] admits one pointer type beside at least one
+error[L0338]: an error set holds atoms only, and this one holds a pointer type
+  --> ../tests/fixtures/negative/error-set-names-a-pointer-type/program.ldn:10:35
+   |
+10 | beside: (base: u16) -> (row: u16) ! other | maybe_byte =
+   |                                   ^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/error-set-names-a-pointer-type/program.ldn:10:1
+   |
+10 | beside: (base: u16) -> (row: u16) ! other | maybe_byte =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the signature it is written in
+  = note: [0940]: a routine fails with an atom of its declared set; [0480]'s pointer beside atoms is the type of a value
+error[L0338]: an error set holds atoms only, and this one holds a pointer type
+  --> ../tests/fixtures/negative/error-set-names-a-pointer-type/program.ldn:14:43
+   |
+14 | handler: type = (base: u16) -> (row: u16) ! maybe_byte
+   |                                           ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/error-set-names-a-pointer-type/program.ldn:14:17
+   |
+14 | handler: type = (base: u16) -> (row: u16) ! maybe_byte
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the signature it is written in
+  = note: [0940]: a routine fails with an atom of its declared set; [0480]'s pointer beside atoms is the type of a value

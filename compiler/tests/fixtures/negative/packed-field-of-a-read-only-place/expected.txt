@@ -1,0 +1,52 @@
+error[L0303]: `m` is an `in` or `sink` parameter, so its value may not be replaced
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:9:5
+  |
+9 |     m.enable = true
+  |     ^^^^^^^^
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:8:17
+  |
+8 | set_parameter: (m: control) -> none =
+  |                 ^ declared here
+  = note: [1900]: to change a copy, copy the value into a `mut` local; to change the caller's place, declare the parameter `inout`
+error[L0303]: `m` is not mutable, so it may not be written
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:14:5
+   |
+14 |     m.divider = 3
+   |     ^^^^^^^^^
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:13:5
+   |
+13 |     m: control = zeroed
+   |     ^ declared here
+  = note: [1900]: mutable bindings, named returns and `inout` parameters may be written
+  = help (guess): declare `m` with `mut`
+error[L0303]: `held` is not mutable, so it may not be written
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:18:5
+   |
+18 |     held.enable = true
+   |     ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:6:1
+  |
+6 | held: control = zeroed
+  | ^^^^ declared here
+  = note: [1900]: mutable bindings, named returns and `inout` parameters may be written
+  = help (guess): declare `held` with `mut`
+error[L0303]: this place is reached through a read-only reference
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:22:5
+   |
+22 |     q.val.enable = true
+   |     ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:22:5
+   |
+22 |     q.val.enable = true
+   |     ^ the reference path starts here
+  = note: [0430]/[0570]: only `mut` reference permission permits a write
+error[L0303]: this place is reached through a read-only reference
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:26:5
+   |
+26 |     xs[0].divider = 1
+   |     ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/packed-field-of-a-read-only-place/program.ldn:26:5
+   |
+26 |     xs[0].divider = 1
+   |     ^^ the reference path starts here
+  = note: [0430]/[0570]: only `mut` reference permission permits a write

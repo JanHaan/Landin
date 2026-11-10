@@ -1,0 +1,9 @@
+class: negative
+summary: D137 refuses a struct that holds a template applied to itself by value, and names the template beside the application
+constructs: 0670, 1350
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0313
+expect: expected.txt
+args: ../tests/fixtures/negative/nominal-holds-itself-through-its-own-argument/program.ldn
+status: 1

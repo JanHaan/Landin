@@ -1,0 +1,30 @@
+error[L0334]: a construction names the field each value is for, and this value has no label
+  --> ../tests/fixtures/negative/construction-value-without-a-label/program.ldn:14:22
+   |
+14 |     p: point = point(3, y: 4)
+   |                      ^
+  --> ../tests/fixtures/negative/construction-value-without-a-label/program.ldn:14:16
+   |
+14 |     p: point = point(3, y: 4)
+   |                ^^^^^^^^^^^^^^ the constructed value
+  = note: [0700]: a struct or a variant case is built from labelled fields, in any order; write `field: value`
+error[L0334]: a construction names the field each value is for, and this value has no label
+  --> ../tests/fixtures/negative/construction-value-without-a-label/program.ldn:16:23
+   |
+16 |     cells[at] = point(3, y: 4)
+   |                       ^
+  --> ../tests/fixtures/negative/construction-value-without-a-label/program.ldn:16:17
+   |
+16 |     cells[at] = point(3, y: 4)
+   |                 ^^^^^^^^^^^^^^ the constructed value
+  = note: [0700]: a struct or a variant case is built from labelled fields, in any order; write `field: value`
+error[L0334]: a construction names the field each value is for, and this value has no label
+  --> ../tests/fixtures/negative/construction-value-without-a-label/program.ldn:18:18
+   |
+18 |     s.kind = box(2, high: 3)
+   |                  ^
+  --> ../tests/fixtures/negative/construction-value-without-a-label/program.ldn:18:14
+   |
+18 |     s.kind = box(2, high: 3)
+   |              ^^^^^^^^^^^^^^^ the constructed value
+  = note: [0700]: a struct or a variant case is built from labelled fields, in any order; write `field: value`

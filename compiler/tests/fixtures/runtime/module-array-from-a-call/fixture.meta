@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a call's fixed-array result, plain, tried or recovered, is assigned to a module array and to an array field of a module struct
+program: main.ldn
+status: 42
+constructs: 0520, 0940, 1020, 1460, 1810
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
