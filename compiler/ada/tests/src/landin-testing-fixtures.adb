@@ -604,6 +604,9 @@ package body Landin.Testing.Fixtures is
          elsif Divider = 0 or else Divider + 3 > Row'Last then
             return Matrix & " has a row that is not `CLASS/NAME | TARGETS`: "
               & Row;
+         --  The prototypes' scope rows, which are not fixtures.
+         --  check.py's check_prototype_scopes holds this list to its
+         --  PROTOTYPE_FINDINGS, so a new prototype is added here too.
          elsif Row (Row'First .. Divider - 1) in
            "prototype-1" | "prototype-2" | "prototype-3" | "prototype-4"
              | "prototype-5"

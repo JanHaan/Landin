@@ -2289,6 +2289,31 @@ class Registers(unittest.TestCase):
             with self.subTest(check=check.__name__):
                 self.assertEqual(faults(check, copied=REGISTERS), [])
 
+    def test_the_test_program_lists_every_prototype_scope(self):
+        #  Prototype 5's scope row passed check.py and failed every gate
+        #  job that runs the test program, whose own list lacked it.
+        from check_controls import tree
+        source = checker.PROTOTYPE_SCOPE_SOURCE
+        self.assertEqual(
+            faults(checker.check_prototype_scopes, copied=[source]), [])
+        with tree(copied=[source]) as root:
+            target = root / source
+            text = target.read_text()
+            self.assertIn('| "prototype-5"', text)
+            target.write_text(text.replace('| "prototype-5"', '', 1))
+            missing = [why for _, _, why
+                       in checker.check_prototype_scopes(True)]
+            target.write_text(text.replace('| "prototype-5"',
+                                           '| "prototype-5" | "prototype-9"',
+                                           1))
+            unknown = [why for _, _, why
+                       in checker.check_prototype_scopes(True)]
+        self.assertEqual(len(missing), 1, missing)
+        self.assertIn('does not list the scope "prototype-5" of'
+                      ' prototype-5-server.md', missing[0])
+        self.assertEqual(len(unknown), 1, unknown)
+        self.assertIn('lists the scope "prototype-9"', unknown[0])
+
     def test_a_missing_catalogue_is_reported_rather_than_skipped(self):
         from check_controls import tree
         with tree(copied=REGISTERS) as root:
