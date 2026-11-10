@@ -33,9 +33,9 @@ refuses.  The exit status is 0 when everything emitted assembled.
 
 A positive fixture is only ever compiled by the gate, so its emission for
 a target can be text no assembler takes without any lane noticing.
-KNOWN_REJECTIONS records the ones found when this was written, each with
-why; they are counted apart, and one that assembles after all is a fault,
-so the record cannot outlive its reason.
+KNOWN_REJECTIONS records such a rejection with why; the recorded ones are
+counted apart, and one that assembles after all is a fault, so the record
+cannot outlive its reason.  It is empty when every emission assembles.
 
 What this is evidence of, and what it is not.  Each target's assembler is
 the one ASSEMBLERS names, with the machine arguments `refine` gives that
@@ -93,17 +93,10 @@ ASSEMBLERS = {
         "-Wa,--fatal-warnings") + OBJECT,
 }
 #  (fixture, target): why its assembler refuses what refine emits today.
-KNOWN_REJECTIONS = {
-    ("assembly-operand-forms", "linux-rv64"):
-        "the fixture has no RV64 arm, so RV64 selects its last, whose text "
-        "is arm64's; refine does not read an assembly block's opcodes",
-    ("fixed-array-bound-zero", "cortex-m0"):
-        "a zero-size datum is emitted as `.zero 0`, which GNU as for Arm "
-        "warns it ignores, and firmware assembly makes warnings fatal",
-    ("generic-zero-nominal-array-signatures", "cortex-m0"):
-        "a zero-size datum is emitted as `.zero 0`, which GNU as for Arm "
-        "warns it ignores, and firmware assembly makes warnings fatal",
-}
+#  The three found when this was written are mended: Cortex-M0 emits no
+#  `.zero 0` for a zero-size datum, and `assembly-operand-forms` has its
+#  RV64 arm.  A new one is recorded here with its reason.
+KNOWN_REJECTIONS = {}
 HOSTS = {("Linux", "x86_64"): "linux-x86-64", ("Linux", "aarch64"): "linux-arm64",
          ("Linux", "riscv64"): "linux-rv64", ("Darwin", "arm64"): "darwin-arm64",
          ("FreeBSD", "amd64"): "freebsd-x86-64",

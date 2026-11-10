@@ -109,7 +109,8 @@ package Landin.Diagnostics.Syntactic is
       Star_Pointer,
       Double_Ampersand,
       Double_Bar,
-      Bang_Equal);
+      Bang_Equal,
+      Dot_Dot_Equal);
 
    function Foreign_Spelling (Item : Foreign_Form) return String
      is (case Item is
@@ -125,7 +126,8 @@ package Landin.Diagnostics.Syntactic is
             when Star_Pointer      => "*",
             when Double_Ampersand  => "&&",
             when Double_Bar        => "||",
-            when Bang_Equal        => "!=");
+            when Bang_Equal        => "!=",
+            when Dot_Dot_Equal     => "..=");
 
    --  What the form is written as in Landin, the word a fix writes where
    --  it has one.
@@ -142,7 +144,8 @@ package Landin.Diagnostics.Syntactic is
             when Star_Pointer      => "ptr",
             when Double_Ampersand  => "and",
             when Double_Bar        => "or",
-            when Bang_Equal        => "<>");
+            when Bang_Equal        => "<>",
+            when Dot_Dot_Equal     => "..");
 
    function Foreign_Construct (Item : Foreign_Form)
      return Landin.Tokens.Construct_Reference
@@ -157,7 +160,8 @@ package Landin.Diagnostics.Syntactic is
             when Star_Pointer      => "[0430]",
             when Double_Ampersand
                | Double_Bar        => "[0340]",
-            when Bang_Equal        => "[0350]")
+            when Bang_Equal        => "[0350]",
+            when Dot_Dot_Equal     => "[0360]")
      with Post => Landin.Tokens.Is_Valid_Construct
                     (Foreign_Construct'Result);
 
@@ -176,7 +180,8 @@ package Landin.Diagnostics.Syntactic is
             when Star_Pointer      => "foreign-star-pointer-is-named",
             when Double_Ampersand  => "foreign-double-ampersand-is-named",
             when Double_Bar        => "foreign-double-bar-is-named",
-            when Bang_Equal        => "foreign-bang-equal-is-named");
+            when Bang_Equal        => "foreign-bang-equal-is-named",
+            when Dot_Dot_Equal     => "foreign-dot-dot-equal-is-named");
 
    --  The report's sentence.  Every one begins "Landin writes", which is
    --  also how D261's repair search knows the report is already the
@@ -210,7 +215,10 @@ package Landin.Diagnostics.Syntactic is
             when Double_Bar =>
                "Landin writes `or`, not `||`",
             when Bang_Equal =>
-               "Landin writes `<>` for inequality, not `!=`");
+               "Landin writes `<>` for inequality, not `!=`",
+            when Dot_Dot_Equal =>
+               "Landin writes `..` for a range that includes its end,"
+               & " not `..=`");
 
    function Foreign_Note (Item : Foreign_Form) return String
      is (Foreign_Construct (Item) & ": "
@@ -243,7 +251,10 @@ package Landin.Diagnostics.Syntactic is
                   & " `not`; `&` and `|` are bitwise",
                when Bang_Equal =>
                   "the comparisons are `==`, `<>`, `<`, `<=`, `>` and"
-                  & " `>=`"));
+                  & " `>=`",
+               when Dot_Dot_Equal =>
+                  "`first..last` includes `last`, and `first..<last` stops"
+                  & " before it"));
 
    --  What the parser hands over: a rule, a place, and the sentence a user
    --  reads.  Refused is meaningful only for Construct_Not_Enabled, and

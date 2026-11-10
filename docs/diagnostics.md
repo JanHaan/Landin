@@ -343,7 +343,11 @@ yet [1830]. The two notes name the tour paragraph and whether the form is a
 recorded boundary, withdrawn with a replacement, or transferred to later work.
 Write the program without it, or with what the note says replaces it. A call's
 result is no place, so indexing one is a recorded boundary: bind the result to
-a name, then index the name.
+a name, then index the name. Where another form does the work the report's
+own sentence names it: several names before `:=` with a call on the right
+are bound in parentheses, `(low, high) := pair(2)`, and a count before `of`
+that is not a literal goes in the binding's type, `name: [count]t = [of
+value]`.
 
 ```landin
 point: type = struct
@@ -443,16 +447,19 @@ A spelling another language gives a construct is named for what Landin
 writes instead (D367), under the code the parser would have raised:
 `elif` and `elseif` are `elsif`, `fn name(...)` is `name: (...) -> (...) =`,
 `x as i32` is `i32(x)`, `x++` is `inc x`, `*u8` is `ptr u8`, `&&` and `||`
-are `and` and `or`, and `!=` is `<>`. The report begins "Landin writes", and
+are `and` and `or`, `!=` is `<>`, and `..=` is `..`, which already includes
+its end. The report begins "Landin writes", and
 where one edit writes the Landin form it offers that edit as a likely fix.
 
 ### L0100
 
 A name belongs here and something else stands there [1760]. A keyword is never
 a name, including a control word in any position (D225), and `_` alone is the
-discard. Choose another name, such as `begin_value` for `begin`. A keyword
-written as a binding's name is reported once, and its later uses as a value
-are the same mistake (D368).
+discard. Choose another name, such as `begin_value` for `begin`; the note
+offers that longer spelling of the keyword written. A keyword written as a
+name is reported once for the file, whether it names a binding, a field or
+an argument's label, and its later uses, as a value, a selected field or an
+assigned name, are the same mistake (D368, D1190).
 
 A `match` arm that begins with a number names a value where a case belongs:
 compare values with `if` and `elsif` (D369). Statements on the lines under a
@@ -738,7 +745,10 @@ another permission [0440]. The second label shows where the requirement was
 stated. Change the value, or convert it explicitly where a conversion exists.
 A text literal takes `utf8`, `[]u8`, `utf16` or `cstring` from its context but
 never a pointer; for a `ptr u8` parameter, bind it, `name: []u8 = "..."`, and
-pass `addr name[0]`, since the literal ends in NUL (D442). An atom `else` on a
+pass `addr name[0]`, since the literal ends in NUL (D442). A `[` that begins
+a line indexes the value the line above ends with [1750]; when that value is
+no array the report stands on the `[` and says the line was continued, and
+the value in parentheses, `(name)`, lets the `[` begin a value (D1191). An atom `else` on a
 call that returns a plain pointer does not widen it into a union of several
 atoms and that pointer (D235): the refusal names the one-atom union to
 recover into, whose value widens into the larger one (D874).

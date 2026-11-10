@@ -1,0 +1,6 @@
+thrice: () -> (total: u32) =
+    total = 0
+    for _ in 0..<3 do
+        total += 1
+    end for
+end thrice

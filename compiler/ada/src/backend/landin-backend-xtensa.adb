@@ -73,6 +73,8 @@ package body Landin.Backend.Xtensa is
 
    function Image (Value : Natural) return String
      is (Trimmed (Natural'Image (Value)));
+   function Byte_Image (Value : Landin.Targets.Byte_Count) return String
+     is (Trimmed (Landin.Targets.Byte_Count'Image (Value)));
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
@@ -608,7 +610,7 @@ package body Landin.Backend.Xtensa is
         (if Pairs then ".long" else ".quad");
       Atomics : constant Boolean :=
         False;
-      Native_Frame_Bytes : Natural := 0;
+      Native_Frame_Bytes : Landin.Targets.Byte_Count := 0;
       Native_Scratch_Registers : Boolean := False;
 
       procedure Put (Line : String);
@@ -664,7 +666,7 @@ package body Landin.Backend.Xtensa is
       end Emit;
 
       function Native_Word_Offset (Word : Natural) return String is
-        (Image (Landin.Backend.Xtensa_Machine.Word_Offset
+        (Byte_Image (Landin.Backend.Xtensa_Machine.Word_Offset
            (Word, Native_Scratch_Registers)));
 
       function Reg (Spelling : String) return
@@ -1317,7 +1319,7 @@ package body Landin.Backend.Xtensa is
         Local_Prefix & "landin_stack_entered";
       --  All 64 physical AR words, architectural state, stack limit,
       --  padding and the window ABI's top 32 spill bytes.
-      Stack_Frame_Bytes : constant Positive := 336;
+      Stack_Frame_Bytes : constant Landin.Targets.Byte_Count := 336;
 
       --  Internal code labels use the collision-checked ELF prefix.
       Step_Prefix : constant String :=
@@ -3601,16 +3603,16 @@ package body Landin.Backend.Xtensa is
                         Emit ("andi x6, x6, -16");
                         Emit ("sub x6, x6, x5");
                         Immediate ("x7", Pattern
-                          (Landin.Targets.Byte_Count (Stack_Frame_Bytes)
-                           + Limit_Margin));
+                          (Stack_Frame_Bytes + Limit_Margin));
                         Emit ("blt x6, x7, " & Trap);
                         Emit ("add x5, x5, x6");
-                        Emit ("addi x5, x5, -" & Image (Stack_Frame_Bytes));
+                        Emit ("addi x5, x5, -"
+                              & Byte_Image (Stack_Frame_Bytes));
                         Emit ("mv x28, x5");
-                        Zero_Bytes
-                          (Landin.Targets.Byte_Count (Stack_Frame_Bytes));
+                        Zero_Bytes (Stack_Frame_Bytes);
                         Emit ("mv x5, x28");
-                        Emit ("addi x7, x5, " & Image (Stack_Frame_Bytes));
+                        Emit ("addi x7, x5, "
+                              & Byte_Image (Stack_Frame_Bytes));
                         Emit ("sw x7, 292(x5)"); --  Root backchain.
                         Emit ("addi x7, x7, -32");
                         Emit ("sw x7, 4(x5)"); --  Root ABI spill space.
@@ -4780,7 +4782,7 @@ package body Landin.Backend.Xtensa is
                 (Extent (Layout) + (if Has_Assembly then 240 else 128),
                  16, 16#7fff_ffff#);
          begin
-            Native_Frame_Bytes := Natural (Total);
+            Native_Frame_Bytes := Total;
             --  Incoming a2-a7 are homed before any selected instruction.
             --  CALL8 preserves the current window's a2-a6; opaque source
             --  assembly keeps the original complete scratch-bank path.
@@ -5123,14 +5125,12 @@ package body Landin.Backend.Xtensa is
          --  No value or slot is held in a register: every one has its
          --  home, and the saved registers are selection's fixed scratch.
          Append_Statistics
-           ((Item => Item, Frame_Bytes =>
-               Landin.Targets.Byte_Count (Native_Frame_Bytes),
+           ((Item => Item, Frame_Bytes => Native_Frame_Bytes,
              Spill_Bytes => Spill_Bytes (Layout),
              Save_Bytes => Save_Bytes (Layout),
              Register_Count => 0,
              Spill_Count => Plan.Homes,
-             Stack_Bytes => Landin.Targets.Byte_Count (Native_Frame_Bytes)
-               + 16 + Deepest_Area,
+             Stack_Bytes => Native_Frame_Bytes + 16 + Deepest_Area,
              Calls_Panic => not Edges.Is_Empty
                or else (Limit_Trapped and then Panic /= null
                         and then Landin.Panics.Calls_Out (Panic.all)),
@@ -6741,7 +6741,7 @@ package body Landin.Backend.Xtensa is
                Put (Character'Val (9) & Line);
             end Native;
          begin
-            Native ("entry a1, " & Image (Stack_Frame_Bytes));
+            Native ("entry a1, " & Byte_Image (Stack_Frame_Bytes));
             --  Preserve a0 before using it as the sole scratch word.
             Native ("s32i a0, a1, 0");
             Native ("s32i a1, a2, 0");

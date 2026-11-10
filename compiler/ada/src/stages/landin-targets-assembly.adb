@@ -225,7 +225,7 @@ package body Landin.Targets.Assembly is
                return "x" & Wide (Wide'First + 1 .. Wide'Last);
             end;
          when Synthetic_32_Architecture =>
-            raise Program_Error with "the synthetic model has no registers";
+            raise Compiler_Defect with "the synthetic model has no registers";
       end case;
    end General_Register;
 
@@ -275,7 +275,7 @@ package body Landin.Targets.Assembly is
                           else Index + 11),
             when Cortex_M0 => Index - 1,
             when RV32 | Xtensa | Synthetic_32_Architecture =>
-              raise Program_Error with "the target has no float registers");
+              raise Compiler_Defect with "the target has no float registers");
       Image : constant String := Natural'Image (Number);
       Digits_Of : constant String := Image (Image'First + 1 .. Image'Last);
    begin
@@ -297,7 +297,7 @@ package body Landin.Targets.Assembly is
               (if Landin.Targets.Firmware.Double_Precision (Unit) then 64
                else 32),
             when RV32 | Xtensa | Synthetic_32_Architecture =>
-              raise Program_Error with "the target has no float registers");
+              raise Compiler_Defect with "the target has no float registers");
 
    function Canonical
      (Facts : Target_Facts; Word : String;
@@ -584,7 +584,7 @@ package body Landin.Targets.Assembly is
                   when others => "");
             end if;
          when Synthetic_32_Architecture =>
-            raise Program_Error with "the synthetic model has no registers";
+            raise Compiler_Defect with "the synthetic model has no registers";
       end case;
    end Spelled;
 
@@ -620,7 +620,7 @@ package body Landin.Targets.Assembly is
                end;
             end loop;
             if Ada.Strings.Unbounded.Length (Operand.Register) = 0 then
-               raise Program_Error with
+               raise Compiler_Defect with
                  "an assembly block asked a class for too many registers";
             end if;
          end if;
@@ -664,7 +664,7 @@ package body Landin.Targets.Assembly is
                   end if;
                end loop;
                if not Found then
-                  raise Program_Error with
+                  raise Compiler_Defect with
                     "an assembly slot names no operand";
                end if;
                Position := Close + 1;

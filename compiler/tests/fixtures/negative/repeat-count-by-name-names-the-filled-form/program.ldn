@@ -1,0 +1,5 @@
+openings: usize = 4
+
+none_open: () -> (closed: [openings]bool) =
+    closed = [openings of false]
+end none_open

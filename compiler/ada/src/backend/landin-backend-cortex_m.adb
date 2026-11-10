@@ -1130,9 +1130,10 @@ package body Landin.Backend.Cortex_M is
       Stack_Start : constant String := Routine_Prefix & "stack_start";
       --  D620: with a float unit the frame also holds d8-d15, FPSCR and a
       --  word keeping it aligned, between the limit and r8 to r11.
-      VFP_Frame : constant Natural :=
+      VFP_Frame : constant Landin.Targets.Byte_Count :=
         (if Hard then Landin.Backend.VFP_Switch_Bytes else 0);
-      Stack_Frame : constant Natural := 48 + VFP_Frame;
+      VFP_Words : constant Natural := Natural (VFP_Frame / 4);
+      Stack_Frame : constant Landin.Targets.Byte_Count := 48 + VFP_Frame;
       Prepares : constant Boolean := Landin.Backend.Prepares_Stacks (Of_Unit);
       Unchecked_Bytes : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Unchecked_Stack_Bytes (Facts);
@@ -4936,30 +4937,31 @@ package body Landin.Backend.Cortex_M is
                         Emit ("bics r1, r2");
                         Emit ("subs r1, r1, r0");
                         Immediate ("r2", Pattern
-                          (Landin.Targets.Byte_Count (Stack_Frame)
-                           + Limit_Margin));
+                          (Stack_Frame + Limit_Margin));
                         Emit ("cmp r1, r2");
                         Branch ("lt", Trap);
                         Immediate ("r2", Pattern (Limit_Margin));
                         Emit ("adds r2, r2, r0");
                         Emit ("adds r0, r0, r1");
-                        Emit ("subs r0, #" & Trimmed (Natural'Image
-                          (Stack_Frame)));
+                        Emit ("subs r0, #" & Trimmed (Stack_Frame'Image));
                         --  D620: with a float unit, d8-d15 and FPSCR zero,
                         --  FPSCR's reset default, between r11 and the
                         --  limit, which moves up by their 72 bytes.
                         Emit ("str r2, [r0, #"
-                          & Trimmed (Natural'Image (24 + VFP_Frame)) & "]");
+                          & Trimmed (Landin.Targets.Byte_Count'Image
+                              (24 + VFP_Frame)) & "]");
                         Load_Value (Operand (4), "r1");
                         Emit ("str r1, [r0, #"
-                          & Trimmed (Natural'Image (28 + VFP_Frame)) & "]");
+                          & Trimmed (Landin.Targets.Byte_Count'Image
+                              (28 + VFP_Frame)) & "]");
                         Load_Value (Operand (3), "r1");
                         Emit ("str r1, [r0, #"
-                          & Trimmed (Natural'Image (32 + VFP_Frame)) & "]");
+                          & Trimmed (Landin.Targets.Byte_Count'Image
+                              (32 + VFP_Frame)) & "]");
                         Emit ("movs r1, #0");
-                        for Offset in 1 .. 10 + VFP_Frame / 4 loop
+                        for Offset in 1 .. 10 + VFP_Words loop
                            if Offset not in
-                             6 + VFP_Frame / 4 .. 8 + VFP_Frame / 4
+                             6 + VFP_Words .. 8 + VFP_Words
                            then
                               Emit ("str r1, [r0, #"
                                 & Trimmed (Natural'Image (4 * Offset))
@@ -4970,7 +4972,8 @@ package body Landin.Backend.Cortex_M is
                         Emit ("str r1, [r0]");
                         Address ("r1", Stack_Start & " + 2");
                         Emit ("str r1, [r0, #"
-                          & Trimmed (Natural'Image (44 + VFP_Frame)) & "]");
+                          & Trimmed (Landin.Targets.Byte_Count'Image
+                              (44 + VFP_Frame)) & "]");
                         Stack_Used := True;
                         Store_Value (Value);
                      elsif M = Stack_Switch then
@@ -6802,7 +6805,12 @@ package body Landin.Backend.Cortex_M is
          --  lane identifies fibre backing in static RAM by it (D470).
          Emit (".type " & Symbol (Item) & ", %object");
          Put (Symbol (Item) & ":");
-         Emit (".zero " & Trimmed (Size'Image));
+         --  An empty datum keeps its aligned, zero-sized symbol, without
+         --  a zero-count space directive: GNU as for Arm warns that it
+         --  ignores one, and firmware assembly makes warnings fatal.
+         if Size > 0 then
+            Emit (".zero " & Trimmed (Size'Image));
+         end if;
          Emit (".size " & Symbol (Item) & ", " & Trimmed (Size'Image));
       end Emit_Reserved;
 
@@ -7137,8 +7145,9 @@ package body Landin.Backend.Cortex_M is
             Emit (".cfi_def_cfa_offset " & Trimmed (Stack_Frame'Image));
             for Reg in 8 .. 11 loop
                Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
-                 & Trimmed (Integer'Image
-                   (Stack_Frame - 4 * (Reg - 7))));
+                 & Trimmed (Landin.Targets.Byte_Count'Image
+                   (Stack_Frame
+                    - Landin.Targets.Byte_Count (4 * (Reg - 7)))));
             end loop;
          end if;
          Emit ("mov r2, sp");
@@ -7157,7 +7166,8 @@ package body Landin.Backend.Cortex_M is
          Emit ("pop {r3, r4, r5, r6, r7}");
          if Debug /= null then
             Emit (".cfi_def_cfa_offset "
-              & Trimmed (Natural'Image (28 + VFP_Frame)));
+              & Trimmed (Landin.Targets.Byte_Count'Image
+                  (28 + VFP_Frame)));
             for Reg in 8 .. 11 loop
                Emit (".cfi_register r" & Trimmed (Reg'Image) & ", r"
                  & Trimmed (Integer'Image (Reg - 4)));

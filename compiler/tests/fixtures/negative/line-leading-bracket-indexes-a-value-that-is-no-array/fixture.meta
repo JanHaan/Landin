@@ -1,0 +1,9 @@
+class: negative
+summary: [1750] lets a `[` that begins a line continue the line above as an index, and the index of a value that is no array is reported at that `[`, naming the continuation, once for each: no second report for the handler value or the return that never arrived
+program: program.ldn
+codes: L0301, L0301
+constructs: 0520, 1030, 1750, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/line-leading-bracket-indexes-a-value-that-is-no-array/program.ldn
+status: 1

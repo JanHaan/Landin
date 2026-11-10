@@ -518,6 +518,7 @@ negative/float-width-conversion-known-out-of-range | linux-x86-64, linux-arm64, 
 negative/for-any-element-read-only | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/for-array-element-read-only | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/for-collection-element-read-only | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/for-discard-binding-names-the-counting-loops | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/for-fallible-requires-try | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/for-fallible-undeclared-error | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/for-iterable-ambiguous-evidence | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -530,6 +531,7 @@ negative/for-source-view-holds-its-source | linux-x86-64, linux-arm64, darwin-ar
 negative/foreign-as-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/foreign-bang-equal-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/foreign-block-comment-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/foreign-dot-dot-equal-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/foreign-double-ampersand-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/foreign-double-bar-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/foreign-elif-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -689,6 +691,8 @@ negative/integer-runs-into-a-name | linux-x86-64, linux-arm64, darwin-arm64, syn
 negative/integer-to-bool-known-out-of-range | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/iterable-retained-item-source | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/keyword-as-a-binding-name-is-reported-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/keyword-as-a-declared-name-is-reported-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/keyword-as-a-field-name-is-reported-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/keyword-as-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/labelled-call-result-dropped-by-omission | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/latin1-byte-in-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -715,6 +719,7 @@ negative/library-platform-riscv-reference-cortex-m | cortex-m0
 negative/library-platform-xtensa-reference-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 negative/library-platform-xtensa-reference-rv32 | rv32
 negative/line-leading-bracket-continues-as-an-index | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/line-leading-bracket-indexes-a-value-that-is-no-array | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-minus-continues-the-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-parenthesis-argument-is-not-declared-yet | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-parenthesis-continues-as-a-call | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1372,6 +1377,7 @@ negative/region-placement-unknown | cortex-m0
 negative/region-release-live-handle | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/register-class-as-operand-type-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/remainder-by-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/repeat-count-by-name-names-the-filled-form | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/reset-stage-uses-the-stack | cortex-m0
 negative/reset-stage-uses-the-stack-rv32 | rv32
 negative/reset-stage-without-reset | cortex-m0
@@ -1402,6 +1408,7 @@ negative/selection-from-a-call | linux-x86-64, linux-arm64, darwin-arm64, freebs
 negative/selection-from-a-scalar | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/selection-from-a-scalar-element | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/several-independent-errors | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/shared-inferred-names-before-a-call-name-the-destructuring | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/shared-link-symbol-duplicates | cortex-m0
 negative/shared-packed-fields-overlap | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/shared-type-names-nothing | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

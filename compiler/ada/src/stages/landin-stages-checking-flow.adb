@@ -4032,8 +4032,24 @@ package body Landin.Stages.Checking.Flow is
                  and then
                    (for all Position in 1 .. Syn.Slot_Count (Of_Tree, Block)
                       => Syn.Slot (Of_Tree, Block, Position) = Syn.No_Node);
+               --  [1750]: the block's last line began with `[` and so
+               --  indexed the line above it, and that index was refused
+               --  where it is written, naming the line end.
+               Last_Item : constant Syn.Node_Id :=
+                 (if Syn.Slot_Count (Of_Tree, Block) = 0 then Syn.No_Node
+                  else Syn.Slot
+                    (Of_Tree, Block, Syn.Slot_Count (Of_Tree, Block)));
+               Joined : constant Syn.Node_Id :=
+                 (if Last_Item = Syn.No_Node then Syn.No_Node
+                  else Syn.Continued_Within (Of_Tree, Last_Item));
             begin
-               if Empty then
+               if Joined /= Syn.No_Node
+                 and then Syn.Kind (Of_Tree, Joined) = Syn.Element_Index
+                 and then Landin.Checking.Type_Of (Types.all, Of_Tree, Joined)
+                   = Ty.Ill_Typed
+               then
+                  null;
+               elsif Empty then
                   Bad.Report
                     (Item    => Bad.Control_Value,
                      Source  => Syn.Source_Of (Of_Tree),
@@ -4154,13 +4170,14 @@ package body Landin.Stages.Checking.Flow is
          begin
             if Joined /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Joined)
-                in Syn.Call | Syn.Labeled_Application
+                in Syn.Call | Syn.Labeled_Application | Syn.Element_Index
               and then Landin.Checking.Type_Of (Types.all, Of_Tree, Joined)
                 = Ty.Ill_Typed
             then
-               --  The call that line made is refused where it is written,
-               --  and that report names the line end; a second one for
-               --  the value that never arrived would only repeat it.
+               --  The call or index that line made is refused where it is
+               --  written, and that report names the line end; a second
+               --  one for the value that never arrived would only repeat
+               --  it.
                null;
             elsif Joined /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Joined)

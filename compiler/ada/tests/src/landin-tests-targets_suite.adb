@@ -2065,6 +2065,39 @@ package body Landin.Tests.Targets_Suite is
            and then Asm.Text_Error (Linux_RV64, "c.ebreak") /= ""
            and then Asm.Text_Error (Linux_RV64, "mret") /= "",
          "the system call has one standing on every hosted architecture");
+
+      --  A block the checker has already refused is the compiler's own
+      --  mistake if it arrives here, and is raised as every other one is:
+      --  Compiler_Defect, which the driver reports, and not Program_Error.
+      declare
+         Block : Asm.Operand_Register_Array :=
+           [1 .. Asm.General_Count (Cortex_M) + 1 => Operand ("a", "", 32)];
+         Named : constant Asm.Operand_Register_Array :=
+           [Operand ("a", "x1", 32)];
+         Too_Many, No_Operand : Boolean := False;
+      begin
+         begin
+            Asm.Choose (Cortex_M, "nop", Block);
+         exception
+            when Landin.Compiler_Defect =>
+               Too_Many := True;
+         end;
+         begin
+            declare
+               Text : constant String :=
+                 Asm.Substituted (Linux_Arm64, "mov {z}, x0", Named);
+            begin
+               No_Operand := Text'Length < 0;
+            end;
+         exception
+            when Landin.Compiler_Defect =>
+               No_Operand := True;
+         end;
+         Landin.Testing.Check
+           (Item, Too_Many and then No_Operand,
+            "a class asked for too many registers and a slot naming no"
+            & " operand are compiler defects");
+      end;
    end Assembly_Registers;
 
    --  D597: each target's own line comment is removed before the

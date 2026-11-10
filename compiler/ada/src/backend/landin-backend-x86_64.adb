@@ -1621,6 +1621,14 @@ package body Landin.Backend.X86_64 is
             and then Operand (Operand'First .. Operand'First + 3)
               = "%xmm");
 
+         --  Whether an operand is a register's own name.  `%` begins one,
+         --  and begins a segment-prefixed memory operand as well: D496's
+         --  `%fs:datum@tpoff` is storage, which the colon tells apart.
+         function Is_Register (Operand : String) return Boolean is
+           (Operand'Length > 1
+            and then Operand (Operand'First) = '%'
+            and then (for all Letter of Operand => Letter /= ':'));
+
          --  One float move.  Between two XMM registers it copies the
          --  whole register: movss and movsd merge into the destination's
          --  upper lanes and so wait for whatever wrote it last, which is
@@ -2322,9 +2330,9 @@ package body Landin.Backend.X86_64 is
                     "a non-float carrier reached an XMM register";
                end if;
                if (Is_XMM (From) and then not Is_XMM (To)
-                    and then To (To'First) = '%')
+                    and then Is_Register (To))
                  or else (Is_XMM (To) and then not Is_XMM (From)
-                   and then From (From'First) = '%')
+                   and then Is_Register (From))
                then
                   Emit ((if Size = Landin.Targets.Byte_4
                          then "movd " else "movq ")
@@ -2333,8 +2341,8 @@ package body Landin.Backend.X86_64 is
                   Emit (Float_Move (Size = Landin.Targets.Byte_4, From, To));
                end if;
             elsif Optimized
-              and then (From (From'First) in '%' | '$'
-                        or else To (To'First) = '%')
+              and then (Is_Register (From) or else From (From'First) = '$'
+                        or else Is_Register (To))
             then
                Emit (Move (Size, From, To));
             else
@@ -2359,7 +2367,9 @@ package body Landin.Backend.X86_64 is
 
          procedure Store_Through (Size : Held_Size; From, To : String) is
          begin
-            if not Optimized or else From (From'First) in '%' | '$' then
+            if not Optimized or else Is_Register (From)
+              or else From (From'First) = '$'
+            then
                Carry (Size, From, To);
             else
                Carry (Size, From, Staging (Size));
@@ -5474,20 +5484,17 @@ package body Landin.Backend.X86_64 is
                      Kind : constant Landin.Types.Scalar_Name :=
                        Landin.IR.Result_Of (Of_Unit, Datum);
                      Held : constant Held_Size := Size_Of (Kind, Facts);
-                     --  D496: a thread's instance is reached from the
-                     --  thread pointer, which %rcx holds: no value lives
-                     --  there, and Carry reads an operand that begins
-                     --  with `%` as a register, so `%fs:` cannot be one.
+                     --  D496: a thread's instance is at its offset from
+                     --  the thread pointer, which the one `%fs`-relative
+                     --  operand names in the local-exec model, as D497's
+                     --  limit cell is named.
                      Thread : constant Boolean :=
                        Landin.Backend.In_Thread_Storage
                          (Of_Unit, Facts, Datum);
                      Place : constant String :=
-                       (if Thread then Symbol (Datum) & "@tpoff(%rcx)"
+                       (if Thread then "%fs:" & Symbol (Datum) & "@tpoff"
                         else Symbol (Datum) & "(%rip)");
                   begin
-                     if Thread then
-                        Emit ("movq %fs:0, %rcx");
-                     end if;
                      if Op = Landin.IR.Load_Datum then
                         Carry (Held, Place, Value_Operand (Value));
                      else
@@ -5945,18 +5952,16 @@ package body Landin.Backend.X86_64 is
                              Landin.Backend.In_Thread_Storage
                                (Of_Unit, Facts, Datum);
                            Place : constant String :=
-                             Symbol (Datum)
+                             (if Thread then "%fs:" else "")
+                             & Symbol (Datum)
                              & (if Thread then "@tpoff" else "")
                              & (if At_Offset = 0 then ""
                                 else "+"
                                      & Trimmed
                                          (Landin.Targets.Byte_Count'Image
                                             (At_Offset)))
-                             & (if Thread then "(%rcx)" else "(%rip)");
+                             & (if Thread then "" else "(%rip)");
                         begin
-                           if Thread then
-                              Emit ("movq %fs:0, %rcx");
-                           end if;
                            if Op = Landin.IR.Load_Field then
                               Carry (Held, Place, Value_Operand (Value));
                            else

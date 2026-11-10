@@ -73,6 +73,8 @@ package body Landin.Backend.RiscV is
 
    function Image (Value : Natural) return String
      is (Trimmed (Natural'Image (Value)));
+   function Byte_Image (Value : Landin.Targets.Byte_Count) return String
+     is (Trimmed (Landin.Targets.Byte_Count'Image (Value)));
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
@@ -1417,10 +1419,12 @@ package body Landin.Backend.RiscV is
       --  x18 to x27 in four-byte words with the limit's word below them,
       --  64 bytes for the stack's alignment, and no float register.
       Stack_Saved : constant Positive := (if Pairs then 13 else 25);
-      Stack_Frame_Bytes : constant Positive := (if Pairs then 64 else 208);
+      Stack_Frame_Bytes : constant Landin.Targets.Byte_Count :=
+        (if Pairs then 64 else 208);
 
-      function Stack_Save_Offset (Index : Positive) return Natural
-        is (Stack_Frame_Bytes - Word * Index);
+      function Stack_Save_Offset
+        (Index : Positive) return Landin.Targets.Byte_Count
+        is (Stack_Frame_Bytes - Landin.Targets.Byte_Count (Word * Index));
 
       --  The Nth saved register's number within its bank, whether it is a
       --  float register, and its DWARF register number.
@@ -4265,31 +4269,34 @@ package body Landin.Backend.RiscV is
                         Emit ("sub x6, x6, x5");
                         Emit ("li x7, " & Trimmed
                           (Landin.Targets.Byte_Count'Image
-                             (Landin.Targets.Byte_Count (Stack_Frame_Bytes)
-                              + Limit_Margin)));
+                             (Stack_Frame_Bytes + Limit_Margin)));
                         Emit ("blt x6, x7, " & Trap);
                         Emit ("add x5, x5, x6");
-                        Emit ("addi x5, x5, -" & Image (Stack_Frame_Bytes));
-                        for Index in 1 .. Stack_Frame_Bytes / Word - 1 loop
+                        Emit ("addi x5, x5, -"
+                              & Byte_Image (Stack_Frame_Bytes));
+                        for Index in
+                          1 .. Natural (Stack_Frame_Bytes) / Word - 1
+                        loop
                            Emit (Store_Word & " zero, " & Image (Word * Index)
                                  & "(x5)");
                         end loop;
                         --  The base is the frame's top less the aligned
                         --  length.
-                        Emit ("addi x7, x5, " & Image (Stack_Frame_Bytes));
+                        Emit ("addi x7, x5, "
+                              & Byte_Image (Stack_Frame_Bytes));
                         Emit ("sub x7, x7, x6");
                         Emit ("addi x7, x7, " & Trimmed
                           (Landin.Targets.Byte_Count'Image (Limit_Margin)));
                         Emit (Store_Word & " x7, 0(x5)");
                         Load_Value (Operand (3), "x7");
                         Emit (Store_Word & " x7, "
-                              & Image (Stack_Save_Offset (3)) & "(x5)");
+                              & Byte_Image (Stack_Save_Offset (3)) & "(x5)");
                         Load_Value (Operand (4), "x7");
                         Emit (Store_Word & " x7, "
-                              & Image (Stack_Save_Offset (4)) & "(x5)");
+                              & Byte_Image (Stack_Save_Offset (4)) & "(x5)");
                         Emit ("lla x7, " & Stack_Entered);
                         Emit (Store_Word & " x7, "
-                              & Image (Stack_Save_Offset (1)) & "(x5)");
+                              & Byte_Image (Stack_Save_Offset (1)) & "(x5)");
                         Stack_Used := True;
                         Store_Value (Value, "x5");
                      elsif M = Stack_Switch then
@@ -7407,15 +7414,15 @@ package body Landin.Backend.RiscV is
          if Debug /= null then
             Emit (".cfi_startproc");
          end if;
-         Emit ("addi sp, sp, -" & Image (Stack_Frame_Bytes));
+         Emit ("addi sp, sp, -" & Byte_Image (Stack_Frame_Bytes));
          if Debug /= null then
-            Emit (".cfi_def_cfa_offset " & Image (Stack_Frame_Bytes));
+            Emit (".cfi_def_cfa_offset " & Byte_Image (Stack_Frame_Bytes));
          end if;
          for Index in 1 .. Stack_Saved loop
             Emit ((if Stack_Float (Index) then "fsd f"
                    else Store_Word & " x")
                   & Image (Stack_Register (Index)) & ", "
-                  & Image (Stack_Save_Offset (Index)) & "(sp)");
+                  & Byte_Image (Stack_Save_Offset (Index)) & "(sp)");
             if Debug /= null then
                Emit (".cfi_offset " & Image (Stack_Dwarf (Index)) & ", -"
                      & Image (Word * Index));
@@ -7433,12 +7440,12 @@ package body Landin.Backend.RiscV is
             Emit ((if Stack_Float (Index) then "fld f"
                    else Load_Word & " x")
                   & Image (Stack_Register (Index)) & ", "
-                  & Image (Stack_Save_Offset (Index)) & "(sp)");
+                  & Byte_Image (Stack_Save_Offset (Index)) & "(sp)");
             if Debug /= null then
                Emit (".cfi_restore " & Image (Stack_Dwarf (Index)));
             end if;
          end loop;
-         Emit ("addi sp, sp, " & Image (Stack_Frame_Bytes));
+         Emit ("addi sp, sp, " & Byte_Image (Stack_Frame_Bytes));
          if Debug /= null then
             Emit (".cfi_def_cfa_offset 0");
          end if;

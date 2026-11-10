@@ -127,6 +127,9 @@ CORPORA = ("positive", "runtime", "cortex-m")
 #  refusal must not become evidence of equal assembly merely by agreeing on
 #  every host.
 REFUSAL_PAIRS = {
+    #  An array of 2**31 - 1 elements is no object of a 32-bit target.
+    ("array-longer-than-a-host-natural", "cortex-m0"),
+    ("array-longer-than-a-host-natural", "rv32"),
     ("fixed-conditional-cross-file-forward", "cortex-m0"),
     ("fixed-conditional-cross-file-forward", "darwin-arm64"),
     ("fixed-conditional-cross-file-forward", "linux-arm64"),

@@ -1,0 +1,18 @@
+missing: atom
+
+open_file: (path: u32) -> (rows: [1]usize) ! missing =
+    fail missing when path == 0
+    rows = [0]
+end open_file
+
+picked: (path: u32, i: usize) -> (rows: [1]usize) =
+    rows = open_file(path) else (e)
+        _ = e
+        [i]
+    end
+end picked
+
+listed: (e: u32, i: usize) -> (rows: [1]usize) =
+    _ = e
+    [i]
+end listed

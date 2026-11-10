@@ -31,6 +31,20 @@ elsif compiler.arch == x86_64 then
         assembler.block("movq {value}, %rbx", in value: u64 at general = value,
                         out _ at rbx)
     end clobbers
+elsif compiler.arch == rv64 then
+    sum: (left: u64, right: u64) -> (total: u64) =
+        total = assembler.block("add {total}, {left}, {right}",
+                                out total: u64 at general,
+                                in left: u64 at general = left,
+                                in right: u64 at general = right)
+    end sum
+    add_seven: (value: u32) -> (sum: u32) =
+        sum = assembler.block("addiw x10, x10, 7", inout sum: u32 at x10 = value)
+    end add_seven
+    clobbers: (value: u64) -> none =
+        assembler.block("mv x17, {value}", in value: u64 at general = value,
+                        out _ at x17)
+    end clobbers
 else
     counter: () -> (count: u64) =
         count = assembler.block("mrs {count}, cntvct_el0",

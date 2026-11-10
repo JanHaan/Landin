@@ -1,0 +1,12 @@
+reading: type = struct
+    from: u32
+    count: u32
+end reading
+
+window: type = (from: u32, count: u32)
+
+start: () -> (at: u32) =
+    r := reading(from: 2, count: 1)
+    w := window(count: 1, from: 2)
+    at = r.from + w.from
+end start

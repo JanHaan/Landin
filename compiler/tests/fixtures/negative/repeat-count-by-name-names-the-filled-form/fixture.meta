@@ -1,0 +1,9 @@
+class: negative
+summary: [0560] a named count before `of` is the recorded boundary, and the refusal names the form that takes the length from the binding's type, `[of value]`
+program: program.ldn
+codes: L0010
+constructs: 0560
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/repeat-count-by-name-names-the-filled-form/program.ldn
+status: 1

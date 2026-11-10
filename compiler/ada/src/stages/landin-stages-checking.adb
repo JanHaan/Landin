@@ -25225,7 +25225,29 @@ package body Landin.Stages.Checking is
                   --  [0520]/[0570]: fixed arrays and slices are indexable.
                   --  A slice carries its runtime length; the backend checks
                   --  that bound rather than this compile-time array rule.
-                  if Held not in Ty.Fixed_Array | Ty.Slice_Value then
+                  if Held not in Ty.Fixed_Array | Ty.Slice_Value
+                    and then Syn.Continued_At (Of_Tree, Node)
+                               /= Landin.Source.Empty_Span
+                  then
+                     --  [1750]: the `[` began a line, and the line above
+                     --  ran on into it; that is the mistake to name.
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Continued_At (Of_Tree, Node),
+                        Message => "this line begins with `[`, which"
+                                   & " continues the line above as an index"
+                                   & " of a value that is no array",
+                        Note    => "[1750]: a line end ends no statement; to"
+                                   & " begin a value with `[`, write the"
+                                   & " value that ends the line above in"
+                                   & " parentheses, as `(name)`, so nothing"
+                                   & " indexes it",
+                        Related => Syn.Origin (Of_Tree, From),
+                        Because => "the line above ends with this",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  elsif Held not in Ty.Fixed_Array | Ty.Slice_Value then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Of_Tree),

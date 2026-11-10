@@ -1,0 +1,7 @@
+error[L0010]: an inferred binding names one binding; a call's results are bound by the names in parentheses, `(low, high) := ...`
+  --> ../tests/fixtures/negative/shared-inferred-names-before-a-call-name-the-destructuring/program.ldn:7:5
+  |
+7 |     low, high := pair(2)
+  |     ^^^
+  = note: the tour describes it at [0100]
+  = note: this is a recorded source-form boundary
