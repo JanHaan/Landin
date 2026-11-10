@@ -1,9 +1,8 @@
 class: negative
 summary: D1084 the source a for loop walks is a view in use until the loop is done, so what it views is not passed inout or sink in the body
-program: main.ldn
 codes: L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315
 constructs: 0800, 0830, 0900, 1150, 1160, 1320, 1910
 targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
-args: ../tests/fixtures/negative/for-source-view-holds-its-source/main.ldn
+args: --root=../.. ../tests/fixtures/negative/for-source-view-holds-its-source
 status: 1

@@ -1,9 +1,8 @@
 class: negative
 summary: D1084 a view given to a call is in use until the call returns, so its source is not passed inout or sink beside it or while it waits
-program: main.ldn
 codes: L0315, L0315, L0315, L0315, L0315, L0315, L0315
 constructs: 0410, 0570, 0800, 0830, 0900, 1910
 targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
-args: ../tests/fixtures/negative/view-argument-beside-its-source/main.ldn
+args: --root=../.. ../tests/fixtures/negative/view-argument-beside-its-source
 status: 1
