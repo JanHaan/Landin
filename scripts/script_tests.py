@@ -13,7 +13,8 @@ order, with its time, so the log reads as the serial loop's did and says
 which module took the time.  The exit status is 1 if any process failed,
 or printed a ResourceWarning.
 
-    python3 scripts/script_tests.py [--jobs N] [MODULE | DIRECTORY]...
+    python3 scripts/script_tests.py [--jobs N] [--gate-environment]
+                                    [MODULE | DIRECTORY]...
 
 With no operand every test_*.py module in scripts/tests runs.  An operand
 is a directory, whose test_*.py modules run, or one module: its path, or
@@ -24,13 +25,29 @@ Several operands run together in one invocation, in the order given.
 Each module reads its standard input from /dev/null, so whether a test
 passes does not depend on what the caller's standard input is: a socket
 there once made bash read its startup files in a test that ran `bash -c`.
+
+The gate's `scripts`, `release` and `arm64-release` jobs run this on a
+runner, outside the development shell, and a test that leans on a tool
+only the shell carries passes here and fails there first: one expected a
+refusal the runners never reached, having no `lldb`.  --gate-environment
+runs the modules as those jobs do, as far as a local host can: PATH holds
+only GATE_TOOLS, the tools the tests may assume on a runner, each found on
+the caller's PATH and linked into a scratch directory, and the environment
+holds only GATE_VARIABLES, so nothing the shell exports reaches a test.
+A tool the host lacks is named before any test runs.  It does not make the
+host a runner: a tool a runner has and GATE_TOOLS does not name is hidden
+too, so a test that newly needs one adds it there, which is the decision
+that the gate's jobs have it.
 """
 import argparse
 import concurrent.futures
+import contextlib
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -63,6 +80,55 @@ def case_names(path):
 
 
 DEFAULT = ROOT / "scripts" / "tests"
+
+#  The tools a script test may assume on PATH in the gate's jobs, which
+#  run on GitHub's ubuntu-24.04 and macOS runners with nothing installed
+#  for these tests.  The development shell's own tools are not here:
+#  gprbuild, gnat, lldb, gdb, qemu, clang, nix, tree-sitter, node.
+GATE_TOOLS = (
+    "python3", "git", "sh", "bash", "env",
+    #  What the scripts under test and the tests' own stand-ins call.
+    "awk", "basename", "cat", "chmod", "cmp", "cp", "cut", "date", "df",
+    "diff", "dirname", "expr", "find", "grep", "head", "id", "ln", "ls",
+    "mkdir", "mktemp", "mv", "od", "printf", "readlink", "rm", "rmdir",
+    "sed", "sha256sum", "sleep", "sort", "stat", "tail", "tar", "tee",
+    "touch", "tr", "true", "false", "uname", "uniq", "wc", "xargs",
+    "gzip", "nproc", "seq", "timeout", "realpath", "install", "dd", "du",
+    "echo", "test", "kill", "ps", "which", "flock", "getconf", "tty",
+    "cksum",
+    #  The runners' C compiler, which two tests build a helper with, and
+    #  the binutils the packaging test splits debug information with.
+    "cc", "objcopy", "readelf",
+)
+#  The variables kept from the caller's environment.  Everything else,
+#  the development shell's exports among them, is dropped.
+GATE_VARIABLES = ("HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
+                  "TERM", "TMPDIR", "TZ", "SHELL")
+
+
+def gate_environment(scratch, environ=None, tools=GATE_TOOLS):
+    """The environment --gate-environment gives each module.
+
+    SCRATCH receives a link to each of TOOLS as found on the caller's
+    PATH, and is the whole PATH.  A tool the host lacks raises ValueError
+    naming every one, since a missing `git` would fail a hundred tests
+    with no word of why.
+    """
+    environ = os.environ if environ is None else environ
+    missing = []
+    for tool in tools:
+        found = shutil.which(tool, path=environ.get("PATH", ""))
+        if found is None:
+            missing.append(tool)
+        else:
+            os.symlink(os.path.abspath(found), os.path.join(scratch, tool))
+    if missing:
+        raise ValueError(
+            "--gate-environment needs %s on PATH, which the gate's runners"
+            " have; this host does not" % ", ".join(missing))
+    kept = {name: environ[name] for name in GATE_VARIABLES if name in environ}
+    kept["PATH"] = scratch
+    return kept
 
 
 def modules(operands):
@@ -112,10 +178,10 @@ def plan(paths, shards):
     return work
 
 
-def run(command, cwd):
+def run(command, cwd, env=None):
     started = time.monotonic()
     result = subprocess.run(command, cwd=cwd, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE,
+                            stdout=subprocess.PIPE, env=env,
                             stderr=subprocess.STDOUT, text=True)
     return result.returncode, result.stdout, time.monotonic() - started
 
@@ -124,6 +190,10 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--jobs", type=int,
                         default=min(16, os.cpu_count() or 1))
+    parser.add_argument("--gate-environment", action="store_true",
+                        help="run as the gate's jobs do, outside the"
+                        " development shell: only the tools and variables"
+                        " a runner has")
     parser.add_argument("operands", nargs="*", metavar="MODULE | DIRECTORY",
                         help="a test module, by path or by its name in"
                         " scripts/tests, or a directory of them;"
@@ -137,8 +207,34 @@ def main(argv):
         parser.error(str(refusal))
     work = plan(paths, args.jobs)
     started = time.monotonic()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(run, command, ROOT) for _, command in work]
+    environment = None
+    with contextlib.ExitStack() as stack:
+        if args.gate_environment:
+            scratch = stack.enter_context(tempfile.TemporaryDirectory(
+                prefix="landin-gate-path-"))
+            try:
+                environment = gate_environment(scratch)
+            except ValueError as refusal:
+                parser.error(str(refusal))
+            print("== gate environment: PATH holds %d tools, %d variables"
+                  " kept" % (len(GATE_TOOLS), len(environment) - 1))
+        status = run_all(work, args.jobs, environment)
+    print("== %d processes at --jobs=%d in %.1f s"
+          % (len(work), args.jobs, time.monotonic() - started))
+    for label in status:
+        print("FAILED: %s" % label)
+    if status and args.gate_environment:
+        print("== in the gate environment: a failure that passes without"
+              " --gate-environment leans on a tool or variable only the"
+              " development shell has")
+    return 1 if status else 0
+
+
+def run_all(work, jobs, environment):
+    """Run WORK's processes, print each whole in order; the failed labels."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+        futures = [pool.submit(run, command, ROOT, environment)
+                   for _, command in work]
         failed = []
         for (label, _), future in zip(work, futures):
             status, output, seconds = future.result()
@@ -152,11 +248,7 @@ def main(argv):
                 #  failures in this output; one is a failure here.
                 failed.append("%s (left a file or socket open; see its"
                               " ResourceWarning)" % label)
-    print("== %d processes at --jobs=%d in %.1f s"
-          % (len(work), args.jobs, time.monotonic() - started))
-    for label in failed:
-        print("FAILED: %s" % label)
-    return 1 if failed else 0
+    return failed
 
 
 if __name__ == "__main__":

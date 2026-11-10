@@ -18,6 +18,7 @@ have, and Bundles the provenance the rig checks before a board runs.
 from datetime import datetime, timedelta, timezone
 import hashlib
 import importlib.util
+import io
 import itertools
 import json
 import os
@@ -25,21 +26,31 @@ from pathlib import Path
 import re
 import shutil
 import shlex
+import socket
 import subprocess
 import sys
 import tempfile
 import unittest
 from unittest import mock
+import urllib.error
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("gate_inputs", ROOT / "scripts/gate_inputs.py")
 gate_inputs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate_inputs)
+#  Seconds before a subprocess here is called hung.  It ends in well under
+#  a second on an idle host; the limit only stops a hang, and is wide
+#  because scripts/script_tests.py's own workers load the host.
+HANG = 300
 
 
 def git(cwd, *arguments):
+    #  No detached maintenance after a commit: it can outlive the case and
+    #  be at work under .git while the cleanup removes the repository.
     environment = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
-                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
+                       GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="maintenance.auto",
+                       GIT_CONFIG_VALUE_0="false")
     return subprocess.run(["git", *arguments], cwd=cwd, env=environment, check=True,
                           stdout=subprocess.PIPE, text=True).stdout.strip()
 
@@ -159,9 +170,14 @@ class Decide(unittest.TestCase):
             #  latest filter once answered three of a run's 47 jobs.
             self.assertIn("filter=all", path)
             total = len(self.jobs) if self.total is None else self.total
+            #  In pages GitHub answers: a hundred-job page of a long run
+            #  was answered 502.
+            self.assertIn("per_page=%d&" % gate_inputs.PAGE, path)
+            self.assertLessEqual(gate_inputs.PAGE, 30)
             page = int(path.rsplit("page=", 1)[1])
+            size = gate_inputs.PAGE
             return {"total_count": total,
-                    "jobs": self.jobs[(page - 1) * 100:page * 100]}
+                    "jobs": self.jobs[(page - 1) * size:page * size]}
         for tip, messages in self.histories.items():
             if path == "compare/%s...%s" % (BASE, tip):
                 commits = [{"sha": "%040d" % n, "commit": {"message": m}}
@@ -271,6 +287,17 @@ class Decide(unittest.TestCase):
                       for n in range(150)]
         self.assertTrue(self.decide())
         self.assertTrue(any(path.endswith("page=2") for path in self.asked))
+
+    def test_a_run_of_four_attempts_is_read_whole(self):
+        #  193 jobs over four attempts was the run whose listing GitHub
+        #  refused in hundred-job pages; more than one such run fits.
+        self.jobs = [{"name": name, "conclusion": "success", "run_attempt": n}
+                     for n in (1, 2, 3, 4) for name in LANES] * 40
+        self.jobs = [dict(job, name="%s %d" % (job["name"], index // 4))
+                     if index >= len(LANES) * 4 else job
+                     for index, job in enumerate(self.jobs)]
+        self.assertGreater(len(self.jobs), 193 * 2)
+        self.assertTrue(self.decide())
 
     def test_a_job_counts_by_its_latest_attempt(self):
         #  A leg that failed and passed on its rerun is a pass, and one
@@ -388,6 +415,79 @@ class Decide(unittest.TestCase):
                 env=dict(os.environ, **environment), stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
         self.assertEqual((result.returncode, result.stdout), (0, "reuse=false\n"))
+
+    def refusing(self, code, answers=0):
+        """A fetch refusing with CODE, for ever or until ANSWERS requests."""
+        made = []
+
+        def fetch(path):
+            made.append(path)
+            if answers and len(made) >= answers:
+                return {"answered": len(made)}
+            raise urllib.error.HTTPError("https://example/" + path, code,
+                                         "Bad Gateway", None, None)
+        return fetch, made
+
+    def test_a_server_error_is_asked_again(self):
+        fetch, made = self.refusing(502, answers=3)
+        waits = []
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as said:
+            answer = gate_inputs.asked("actions/runs/1/jobs?page=1", fetch,
+                                       sleep=waits.append)
+        self.assertEqual(answer, {"answered": 3})
+        self.assertEqual(len(waits), 2)
+        self.assertIn("GET actions/runs/1/jobs?page=1: HTTP 502 Bad Gateway; "
+                      "asking again (2 of 4)", said.getvalue())
+
+    def test_a_server_error_is_asked_a_bounded_number_of_times(self):
+        fetch, made = self.refusing(502)
+        with mock.patch("sys.stderr", new_callable=io.StringIO), \
+                self.assertRaises(gate_inputs.Unanswered) as raised:
+            gate_inputs.asked("actions/runs/1/jobs?page=1", fetch,
+                              sleep=lambda seconds: None)
+        self.assertEqual(len(made), gate_inputs.TRIES)
+        self.assertEqual(str(raised.exception),
+                         "GET actions/runs/1/jobs?page=1: HTTP 502 Bad Gateway, "
+                         "asked 4 times")
+
+    def test_a_refusal_that_is_no_server_error_is_not_asked_again(self):
+        fetch, made = self.refusing(403)
+        with self.assertRaises(gate_inputs.Unanswered) as raised:
+            gate_inputs.asked("compare/a...b", fetch, sleep=self.fail)
+        self.assertEqual(len(made), 1)
+        self.assertIn("GET compare/a...b: HTTP 403", str(raised.exception))
+
+    def test_a_check_that_cannot_ask_says_so_and_runs_every_lane(self):
+        #  Nothing listens on the port, so the first request to the API
+        #  this names gets no answer.  No request leaves the host.
+        with tempfile.TemporaryDirectory() as directory:
+            git(directory, "init", "-q")
+            Path(directory, "file").write_text("content\n")
+            git(directory, "add", "file")
+            git(directory, "commit", "-q", "-m", "one")
+            event = Path(directory, "event.json")
+            event.write_text(json.dumps({
+                "ref": "refs/heads/candidate",
+                "after": git(directory, "rev-parse", "HEAD")}))
+            listener = socket.socket()
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+            listener.close()
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/gate_inputs.py"), "reuse",
+                 "gate.yml", "compiler"], cwd=directory, text=True,
+                env=dict(os.environ, GITHUB_EVENT_PATH=str(event),
+                         GITHUB_EVENT_NAME="push", GH_TOKEN="none",
+                         GITHUB_REPOSITORY="example/example",
+                         GITHUB_API_URL="http://127.0.0.1:%d" % port),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=HANG)
+        self.assertEqual((result.returncode, result.stdout), (0, "reuse=false\n"))
+        self.assertIn("gate_inputs: could not ask GitHub whether a pass may "
+                      "be reused, so every lane runs (GET actions/workflows/"
+                      "gate.yml/runs?event=push&status=success&per_page=30: "
+                      "URLError", result.stderr)
+        self.assertIn("::warning title=The reuse check could not ask GitHub::",
+                      result.stderr)
 
 
 class Candidate(unittest.TestCase):
@@ -507,6 +607,18 @@ def matrix_scalar(value):
     raise ValueError("unsupported matrix scalar: " + value)
 
 
+#  What `matrix_rows` reads, said in each refusal of a matrix that mixes
+#  the forms: a matrix was once rewritten after reading this parser to
+#  learn them.
+MATRIX_FORMS = (
+    "this reader takes a matrix in one of two forms: only axis lines "
+    "`name: [a, b]`, enumerated as their product, or only one `include:` "
+    "list whose rows are `- {key: value, ...}` on one line or `- key: value` "
+    "with further `key: value` lines; axes beside `include`, a second "
+    "`include` and `exclude` are not read, so write every leg as an "
+    "`include` row")
+
+
 def matrix_rows(body):
     starts = [n for n, line in enumerate(body) if line == "      matrix:"]
     if not starts:
@@ -525,11 +637,13 @@ def matrix_rows(body):
         axis = re.fullmatch(r"        ([\w-]+): \[(.*)\]", line)
         if axis:
             if included or axis[1] in axes or axis[1] in ("include", "exclude"):
-                raise ValueError("mixed or duplicate matrix axes")
+                raise ValueError("mixed or duplicate matrix axes at `%s`: %s"
+                                 % (line.strip(), MATRIX_FORMS))
             axes[axis[1]] = [matrix_scalar(v) for v in axis[2].split(",")]
         elif line == "        include:":
             if axes or included:
-                raise ValueError("mixed or repeated matrix include")
+                raise ValueError("mixed or repeated matrix include: "
+                                 + MATRIX_FORMS)
             included.append(None)  # Distinguish an empty include from no matrix.
         elif included and line.startswith("          - {") and line.endswith("}"):
             row = {}
@@ -748,6 +862,28 @@ class Workflow(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(ValueError):
                 workflow_reuse_gaps(source, {})
 
+    def test_a_matrix_mixing_forms_is_refused_naming_the_forms_read(self):
+        combined = self.sample().replace(
+            "        shard: [1, 2]",
+            "        shard: [1, 2]\n        include:\n          - {shard: 3}")
+        reversed_ = self.sample().replace(
+            "        shard: [1, 2]",
+            "        include:\n          - {shard: 3}\n        shard: [1, 2]")
+        for source, first in ((combined, "mixed or repeated matrix include: "),
+                              (reversed_, "mixed or duplicate matrix axes at "
+                                          "`shard: [1, 2]`: ")):
+            with self.subTest(first=first), \
+                    self.assertRaises(ValueError) as raised:
+                workflow_reuse_gaps(source, {})
+            self.assertTrue(str(raised.exception).startswith(first),
+                            raised.exception)
+            for form in ("only axis lines `name: [a, b]`",
+                         "only one `include:` list",
+                         "`- {key: value, ...}` on one line",
+                         "axes beside `include`",
+                         "write every leg as an `include` row"):
+                self.assertIn(form, str(raised.exception))
+
     def test_cartesian_axes_enumerate_every_combination(self):
         source = self.sample().replace("name: compiler-${{ matrix.shard }}",
             "name: compiler-${{ matrix.shard }}-${{ matrix.mode }}").replace(
@@ -842,6 +978,65 @@ def scope_gaps(workflow):
                        or job_field(body, "runs-on") != "[landin-rig]"):
             gaps.append("%s: only a physical job runs on the rig" % identity)
     return gaps
+
+
+#  Where docs/process.md names the controls that hold gate.yml's jobs.
+INVENTORY_HEADING = "### The controls that hold the job inventory"
+
+
+def gate_readers():
+    """The test files that name gate.yml: scripts/tests and each
+    environment's own tests."""
+    found = []
+    for path in (sorted((ROOT / "scripts/tests").glob("*.py"))
+                 + sorted((ROOT / "environments").glob("*/test.py"))):
+        if "gate.yml" in path.read_text(encoding="utf-8"):
+            found.append(path.relative_to(ROOT).as_posix())
+    return found
+
+
+class Inventory(unittest.TestCase):
+    """The gate's inventory controls are named in one place.
+
+    They are in five files, and a scope change once found each by failing
+    it.  The gate reference lists them, and this holds the list to every
+    test file that names the workflow, so a new control is added to it.
+    """
+
+    def section(self):
+        text = (ROOT / "docs/process.md").read_text(encoding="utf-8")
+        self.assertEqual(text.count(INVENTORY_HEADING + "\n"), 1)
+        return text.split(INVENTORY_HEADING + "\n", 1)[1].split("\n#", 1)[0]
+
+    def test_every_test_file_naming_the_gate_is_in_the_reference(self):
+        section = self.section()
+        readers = gate_readers()
+        self.assertIn("scripts/tests/test_gate_inputs.py", readers)
+        self.assertIn("environments/cortex-m/test.py", readers)
+        for name in readers:
+            self.assertIn("`%s`" % name, section,
+                          "%s names gate.yml and docs/process.md's \"%s\" "
+                          "does not name it; say there what it holds of the "
+                          "workflow, or that it holds nothing"
+                          % (name, INVENTORY_HEADING.lstrip("# ")))
+
+    def test_the_reference_names_no_file_that_is_gone(self):
+        named = re.findall(r"`((?:scripts/tests|environments)/[\w./-]+\.py)`",
+                           self.section())
+        self.assertGreaterEqual(len(named), 5)
+        for name in named:
+            self.assertTrue((ROOT / name).is_file(), name)
+            self.assertIn(name, gate_readers())
+
+    def test_the_scope_condition_is_held_in_one_control(self):
+        #  The conjuncts of the event's scope are spelt in this file and in
+        #  no other test, so a scope change edits one control.
+        for name in gate_readers():
+            if name == "scripts/tests/test_gate_inputs.py":
+                continue
+            text = (ROOT / name).read_text(encoding="utf-8")
+            for conjunct in SOFTWARE_IF + (BOARDS_IF,):
+                self.assertNotIn(conjunct, text, name)
 
 
 class Physical(unittest.TestCase):

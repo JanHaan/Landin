@@ -1627,8 +1627,10 @@ Prototype 5's firmware counterpart lives in
 `firmware/derived-counterpart` row. Both are entries of `check.py`'s
 `FIRMWARE_DERIVATIONS`, which names each record, its input and file fields
 and the `environments/cortex-m/run.py` call that makes its lane mandatory;
-a new firmware derivation is registered there, and its mapping is added to
-`LIVE_DOCS`.
+a new firmware derivation is registered there. Its mapping, like every
+derivation's, is a file named `DERIVATION.md` under `compiler/tests`:
+`check.py` reads each file of that name as a live document, held to the
+checks the other documents are, so a map needs no entry in a list.
 The shared `runtime/r690-recovery-loop-context` fixture separately checks
 inferred recovery break/continue and cleanup on both hosted targets and Cortex.
 

@@ -1,0 +1,31 @@
+{
+ "ROADMAP.md": [
+  "## R9 — ",
+  "| Guarded cleanups can expand",
+  "Work that waits for its activation,",
+  "| A measured cleanup workload with unacceptable growth. |",
+  "- **Release readiness:**"
+ ],
+ "docs/diagnostics.md": [
+  "### L0003\n",
+  "Retired. An internal call",
+  "```landin\n-- refine: --target=cortex-m0\n",
+  "```landin\nmask: u64 = 1u64\n"
+ ],
+ "docs/format.md": [
+  "## Rules\n",
+  "```landin\n    counter: u32 = 0\n",
+  "r = a * (b + -1) - -a",
+  "\n## "
+ ],
+ "docs/library.md": [
+  "Concepts for reading, writing, files and the process"
+ ],
+ "spec.md": [
+  "```landin-grammar\nprogram",
+  "\"match\""
+ ],
+ "tour.md": [
+  "### [0590]"
+ ]
+}

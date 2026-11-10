@@ -5,7 +5,8 @@
 #
 # The retained evidence, measurements.json, goes to DIR, and by default to
 # the build tree's quality directory; every other file the measurement
-# makes is private scratch that is removed when it ends.
+# makes is private scratch that is removed when it ends.  Standard output
+# gets a summary: where the record is and each workload's text size.
 . "$(dirname -- "$0")/env.sh"
 Output="$LANDIN_BUILD_DIR/quality"
 Expect_Output=

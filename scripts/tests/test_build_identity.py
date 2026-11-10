@@ -175,7 +175,8 @@ class BuildIdentity(unittest.TestCase):
         rows = manifest.splitlines()
         self.assertEqual(rows[-1], 'identity '
                          + hashlib.sha256(output.read_bytes()).hexdigest()
-                         + ' ' + self.git('rev-parse', 'HEAD') + ' clean')
+                         + ' ' + self.git('rev-parse', 'HEAD') + ' clean '
+                         + IDENTITY.identity(self.root, 'debug')[1])
         self.assertEqual([row.split()[0] + ' ' + row.split()[2]
                           for row in rows[:-1]],
                          ['project compiler/ada/landin_tests.gpr',
@@ -229,6 +230,40 @@ class BuildIdentity(unittest.TestCase):
                 (ada / 'refine.gpr').write_text(text)
                 with self.assertRaisesRegex(IDENTITY.ProjectError, said):
                     IDENTITY.project_inputs(self.root)
+
+    def test_provenance_only_is_a_change_no_compiler_input_shares(self):
+        base = ['project 1 compiler/ada/refine.gpr',
+                'source 2 compiler/ada/src/a.adb',
+                'identity 3 abc clean d1', 'mode debug tag t']
+
+        def only(after):
+            return IDENTITY.provenance_only('\n'.join(base), '\n'.join(after))
+        #  A document edited, a commit made, or both: the digest is one.
+        for row in ('identity 4 abc dirty d1', 'identity 5 def clean d1',
+                    'identity 6 def dirty d1'):
+            with self.subTest(row=row):
+                self.assertTrue(only(base[:2] + [row] + base[3:]))
+        #  Nothing changed is not a change; a build script's edit moves the
+        #  digest; a source row, a fixed row or a row count is a change; and
+        #  a row without its digest, as an older build wrote, proves nothing.
+        self.assertFalse(only(base))
+        self.assertFalse(only(base[:2] + ['identity 4 abc clean d2'] + base[3:]))
+        self.assertFalse(only([base[0], 'source 9 compiler/ada/src/a.adb',
+                               'identity 4 abc dirty d1', base[3]]))
+        self.assertFalse(only(base[:2] + ['identity 4 abc dirty d1',
+                                          'mode release tag t']))
+        self.assertFalse(only(base[:2] + ['identity 4 abc dirty'] + base[3:]))
+        self.assertFalse(only(base[:2] + base[3:]))
+
+    def test_a_document_edit_changes_the_manifest_in_provenance_alone(self):
+        output = Path(self.temp.name) / 'generated' / 'landin-build_identity.ads'
+        before = IDENTITY.manifest(self.root, 'debug', output)
+        (self.root / 'README.md').write_text('edited beside a build\n')
+        document = IDENTITY.manifest(self.root, 'debug', output)
+        self.assertTrue(IDENTITY.provenance_only(before, document))
+        (self.root / 'scripts/build.sh').write_text('edited\n')
+        script = IDENTITY.manifest(self.root, 'debug', output)
+        self.assertFalse(IDENTITY.provenance_only(before, script))
 
     def test_changed_names_what_moved(self):
         base = ['project 1 compiler/ada/refine.gpr',

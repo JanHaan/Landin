@@ -115,12 +115,20 @@ Before an item closes:
    writer had already seen is what the row was written about. Each listed
    row names the commits that met it, the rows left out for that reason are
    named, and `--whole-window` counts every change since REV for every row.
+   A commit marked `[beside the row's statement]` was made on a parallel
+   branch and merged, by the merge it names: it counts, but it may be the
+   very change the row records, so read it before taking the row.
 
    It is a heuristic and says so: it matches paths an activation writes,
    in backticks or bare, base names of tracked files, Ada unit names and a
    few names of an area that always mean one file. A row that names an area
    in words is counted and not matched; `--unmatched` lists those rows, to
-   be read against the item's changes by hand.
+   be read against the item's changes by hand. A base name several tracked
+   files share, such as `run.py`, matches none of them and is reported with
+   the files it could mean, so write the path in the row. A directory
+   written as an owner, "`core/io`'s `make_temporary`", is matched by every
+   change under it; a row only such a directory matched is listed apart,
+   to be read rather than taken.
 2. When the item changed the compiler's lowering, emission or backends,
    added a target or added positive fixtures, run the three checks only the
    gate otherwise runs on them, each of which has found defects after a
@@ -499,14 +507,26 @@ python3 check.py
 # Every scripts/tests module at once, check.py's controls in shards, as the
 # gate's scripts job runs them; about two minutes on sixteen workers.
 # Name modules, by path or by name, to run only those in one invocation.
+# A subprocess timeout in a script test is a hang guard of at least 60
+# seconds, which scripts/tests/test_hang_guards.py states and holds.
 python3 scripts/script_tests.py
 python3 scripts/script_tests.py test_fuzz_close test_scaling
+# The gate's jobs run them on a runner, outside the development shell.
+# This runs them with only the tools and variables a runner has, so a test
+# leaning on one the shell alone carries, lldb for instance, fails here
+# first; script_tests.py's GATE_TOOLS names what a test may assume.
+python3 scripts/script_tests.py --gate-environment
 
 # Follow HEAD's gate run and return at its first failed job, rather than
 # when its last lane ends; with --all, follow it to its end and name every
-# failed job, when a round's fixes should go in one push.
+# failed job, when a round's fixes should go in one push.  Its first line
+# names the run it follows with its event and branch.  A commit can have
+# several runs, so after a promotion name main's: without --event and
+# --branch the newest listed run is followed, which for the first seconds
+# is the branch's finished one.
 python3 scripts/gate_watch.py
 python3 scripts/gate_watch.py --all
+python3 scripts/gate_watch.py --all --commit HEAD --event push --branch main
 
 # Regenerate every generated file: the matrices, catalogue, token dump and
 # editor files.  A stale one is named by the full run above.
@@ -550,6 +570,20 @@ LANDIN_BUILD_VARIANT=inliner ./scripts/dev-build.sh
     --suite='fixture execution'
 QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh --target=linux-rv64 \
     --runner=qemu-riscv64 --suite='fixture execution'
+
+# Whether a backend change's emission still assembles for the targets this
+# host cannot run: emit the positive fixtures for every target but the
+# host's, Darwin and FreeBSD among them, and assemble each with the
+# shell's assembler for that target.  No VM, Mac, sysroot or emulator, and
+# nothing is linked or run, so it says the text is accepted by an assembler
+# of the target's kind and no more; the gate's lanes say the rest.  Name
+# targets, --corpus= or --fixture=KIND/NAME for less; --keep=DIR keeps each
+# refused assembly.
+python3 scripts/assemble_targets.py \
+    "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" .
+python3 scripts/assemble_targets.py \
+    "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" . \
+    darwin-arm64,freebsd-arm64 --corpus=runtime --keep=/tmp/refused
 
 # Render the documents selected in docs/site/render_html.py as HTML,
 # verify their text was not dropped, and package them. It does not publish:
@@ -830,6 +864,25 @@ tree keeps `bin/`: executables are linked into `link/` and published into
 `bin/` by a rename, only while no corpus lane or manifest run holds the
 build's readers lock (`scripts/build_lock.py`). A compiler-only build records `refine` as current without claiming that
 `landin_tests` is current; the next full build still builds the test program.
+
+### The controls that hold the job inventory
+
+A change to a gate job's name, matrix, condition or needs is held by
+controls in several files. Read this list before the change, and run them
+together afterwards: `python3 scripts/script_tests.py test_gate_inputs
+test_rv64_lanes test_build_inventory test_host_determinism
+test_rig_runner_hook test_release`, and `python3
+environments/cortex-m/test.py`, which `check.py` runs.
+
+| file | what it holds of `gate.yml` |
+|---|---|
+| `scripts/tests/test_gate_inputs.py` | `Workflow`: the reuse list is exactly the jobs the aggregate needs, every matrix leg by its rendered name. `Physical`: every job's condition follows the event's scope, a software lane skipping for a reused pass and a boards-only event and a board job running by the boards scope alone, the board matrix is every port once, and the aggregate keeps documents and scripts always. `Inventory`: this list names every test file that names the workflow. Its matrix reader takes axis lines or one `include:` list, never both. |
+| `scripts/tests/test_rv64_lanes.py` | the RV64 jobs: the two hardware jobs are suspended, by a `false` conjunct in their condition, and absent from the aggregate and the reuse list; the emulated job is not suspended, has both shards and its packages, and its evidence is packaged. It compares conditions by that conjunct alone, so a scope change does not concern it. |
+| `scripts/tests/test_build_inventory.py` | `BuildArchives`: the archives the build jobs hand to their consumers hold the executables and both stamps. |
+| `scripts/tests/test_host_determinism.py` | `Workflows`: the `build-modes` matrix compares every mode target once, and `determinism.yml`'s parts emit every target once on each host. |
+| `environments/cortex-m/test.py` | the `cortex-m` job's `part` matrix is the runner's parts, and it passes `--part`. |
+| `scripts/tests/test_rig_runner_hook.py` | nothing of the jobs: it passes the workflow's path to the rig runner's hook. |
+| `scripts/tests/test_release.py` | nothing of the jobs: it names the workflow in the API path the release check asks for main's run. |
 
 ### Physical boards and promotion
 

@@ -18,6 +18,13 @@
 #  refine.debug, which the stripped refine names by its .gnu_debuglink, and
 #  on Darwin refine.dSYM.  The 0.2.8 compiler was 100 MB with it and 27.6
 #  MB without.  The BINARY given is never changed.
+#
+#  The archive is whatever BINARY is.  One that requests a program
+#  interpreter outside the system's own directories, as a compiler built in
+#  `nix develop` does, is packaged with a warning that names the path: the
+#  archive starts only where that path exists.  An archive for others is
+#  packaged from a compiler built with the pinned toolchain outside nix
+#  (the README, "From source"), as the release workflow's is.
 set -euo pipefail
 
 usage() {
@@ -37,6 +44,29 @@ asset=$2
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 test -x "$binary" || { echo "package: $binary is not an executable" >&2; exit 1; }
+
+if command -v python3 > /dev/null; then
+    inspected=0
+    loader=$(python3 "$root/scripts/program_interpreter.py" "$binary") \
+        || inspected=$?
+    if [ "$inspected" = 3 ]; then
+        cat >&2 <<EOF
+package: warning: $binary requests the program interpreter
+package:   $loader
+package: which is not a system path. The archive will start only on a machine
+package: that has that path; on any other the shell says "cannot execute:
+package: required file not found". A compiler built in nix develop is linked
+package: this way. For an archive that starts elsewhere, package a compiler
+package: built with the pinned toolchain outside nix, as the README's "From
+package: source" builds it and the release workflow does.
+EOF
+    elif [ "$inspected" != 0 ]; then
+        exit "$inspected"
+    fi
+else
+    echo "package: python3 is not on PATH, so the program interpreter" \
+         "$binary requests was not inspected" >&2
+fi
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

@@ -189,6 +189,41 @@ class Archive(unittest.TestCase):
             with tarfile.open(debug) as opened:
                 self.assertEqual(opened.getnames(), ["refine.debug"])
 
+    @unittest.skipUnless(sys.platform.startswith("linux"),
+                         "a program interpreter is an ELF matter")
+    def test_a_loader_that_is_no_system_path_is_named(self):
+        #  A compiler built in nix develop names a loader in the Nix
+        #  store, and its archive started on no machine without that path.
+        with TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            source = directory / "main.c"
+            source.write_text("int main(void) { return 0; }\n")
+            for loader, warned in (
+                    ("/opt/store/abc-glibc-2.42/lib/ld-linux-x86-64.so.2", True),
+                    ("/lib64/ld-linux-x86-64.so.2", False)):
+                with self.subTest(loader=loader):
+                    binary = directory / "refine"
+                    subprocess.run(
+                        ["cc", "-o", str(binary), str(source),
+                         "-Wl,--dynamic-linker=" + loader], check=True)
+                    asset = directory / "landin.tar.gz"
+                    asset.unlink(missing_ok=True)
+                    ran = subprocess.run(
+                        [str(ROOT / "scripts/package.sh"), str(binary),
+                         str(asset)], capture_output=True, text=True)
+                    #  Named, not refused: the archive is still written.
+                    self.assertEqual(ran.returncode, 0, ran.stderr)
+                    self.assertTrue(asset.is_file())
+                    if warned:
+                        self.assertIn("package: warning: %s requests the "
+                                      "program interpreter\npackage:   %s\n"
+                                      % (binary, loader), ran.stderr)
+                        self.assertIn("is not a system path", ran.stderr)
+                        self.assertIn("the README's \"From\npackage: source\"",
+                                      ran.stderr)
+                    else:
+                        self.assertEqual(ran.stderr, "")
+
     def test_a_missing_binary_is_refused(self):
         with TemporaryDirectory() as scratch:
             directory = Path(scratch)

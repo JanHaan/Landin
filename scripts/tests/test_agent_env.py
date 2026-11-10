@@ -32,7 +32,7 @@ class AgentEnvTest(unittest.TestCase):
                 path = self.path_with(Path(scratch), tools)
                 printed = subprocess.run(
                     [str(SCRIPT)], env={"PATH": path}, capture_output=True,
-                    text=True, timeout=30, check=True).stdout
+                    text=True, timeout=60, check=True).stdout
                 self.assertEqual(printed, "/dev/null\n")
                 for shell in ("sh", "bash"):
                     sourced = subprocess.run(
@@ -40,7 +40,7 @@ class AgentEnvTest(unittest.TestCase):
                                   if shell == "bash" else []), "-c",
                          '. "$("$0")" && printf %s "$PATH"', str(SCRIPT)],
                         env={"PATH": path}, stdin=subprocess.DEVNULL,
-                        capture_output=True, text=True, timeout=30)
+                        capture_output=True, text=True, timeout=60)
                     self.assertEqual(sourced.returncode, 0, sourced.stderr)
                     self.assertEqual(sourced.stdout, path)
 

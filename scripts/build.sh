@@ -446,15 +446,32 @@ fi
 
 Finished="$(landin_manifest)" || landin_failed
 if [ "$Finished" != "$Current" ]; then
-    printf 'failed\n' > "$State"
     printf '%s\n' "$Finished" > "$LANDIN_BUILD_DIR/finished-manifest.txt"
-    echo "landin: sources changed while this build ran, so what it built is" \
-         "left unverified:" >&2
-    python3 "$LANDIN_ROOT/scripts/build_identity.py" --changed "$Attempt" \
-        "$LANDIN_BUILD_DIR/finished-manifest.txt" | sed 's/^/landin:   /' >&2
-    rm -f "$LANDIN_BUILD_DIR/finished-manifest.txt"
-    echo "landin: run the build again; it recompiles only what changed" >&2
-    exit 1
+    #  A document edited beside the build, or a commit made during it,
+    #  changes what `refine --version` would report for the checkout now
+    #  and nothing the compiler is built from.  The build is of the tree as
+    #  it began, which is what the manifest written below records, so it
+    #  stays verified; the next build sees the new state and recompiles
+    #  the provenance unit alone.
+    if python3 "$LANDIN_ROOT/scripts/build_identity.py" --provenance-only \
+        "$Attempt" "$LANDIN_BUILD_DIR/finished-manifest.txt"
+    then
+        echo "landin: the checkout changed while this build ran, in nothing" \
+             "the compiler is built from:"
+        python3 "$LANDIN_ROOT/scripts/build_identity.py" --changed "$Attempt" \
+            "$LANDIN_BUILD_DIR/finished-manifest.txt" | sed 's/^/landin:   /'
+        echo "landin: the build is verified as of the tree it began from"
+        rm -f "$LANDIN_BUILD_DIR/finished-manifest.txt"
+    else
+        printf 'failed\n' > "$State"
+        echo "landin: sources changed while this build ran, so what it built is" \
+             "left unverified:" >&2
+        python3 "$LANDIN_ROOT/scripts/build_identity.py" --changed "$Attempt" \
+            "$LANDIN_BUILD_DIR/finished-manifest.txt" | sed 's/^/landin:   /' >&2
+        rm -f "$LANDIN_BUILD_DIR/finished-manifest.txt"
+        echo "landin: run the build again; it recompiles only what changed" >&2
+        exit 1
+    fi
 fi
 
 #  shellcheck disable=SC2086 # two fixed words

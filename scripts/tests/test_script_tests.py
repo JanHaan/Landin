@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Hold the parallel scripts/tests runner to what the serial loop did."""
+import importlib.util
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +25,90 @@ if __name__ == "__main__":
 CASE = '''    def test_%d(self):
         open(os.path.join(os.environ["RAN"], "%d"), "x").close()
 '''
+
+
+#  A module that says what it can see of the caller's shell.
+SEES = '''import os, shutil, unittest
+
+class Cases(unittest.TestCase):
+    def test_sees(self):
+        with open(os.path.join(os.environ.get("HOME", "."), "seen"), "w") as out:
+            out.write("%s %s %s" % (shutil.which("shell-only-tool") is not None,
+                                    shutil.which("git") is not None,
+                                    os.environ.get("SHELL_ONLY", "unset")))
+
+if __name__ == "__main__":
+    unittest.main()
+'''
+
+
+class GateEnvironment(unittest.TestCase):
+    """--gate-environment hides what only the development shell carries."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="landin-gate-")
+        self.addCleanup(self.temporary.cleanup)
+        self.area = Path(self.temporary.name)
+        spec = importlib.util.spec_from_file_location("script_tests", RUNNER)
+        self.runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.runner)
+
+    def test_only_the_named_tools_and_variables_are_kept(self):
+        tools = self.area / "tools"
+        scratch = self.area / "scratch"
+        for directory in (tools, scratch):
+            directory.mkdir()
+        for name in ("python3", "git", "lldb"):
+            (tools / name).write_text("#!/bin/sh\n")
+            (tools / name).chmod(0o755)
+        kept = self.runner.gate_environment(
+            str(scratch), {"PATH": str(tools), "HOME": "/home/someone",
+                           "LANDIN_GNAT_HOME": "/nix/store/gnat",
+                           "LLDB_DEBUGSERVER_PATH": "/nix/store/lldb"},
+            tools=("python3", "git"))
+        self.assertEqual(kept, {"PATH": str(scratch), "HOME": "/home/someone"})
+        self.assertEqual(sorted(path.name for path in scratch.iterdir()),
+                         ["git", "python3"])
+        self.assertEqual(os.readlink(scratch / "git"), str(tools / "git"))
+
+    def test_a_tool_the_host_lacks_is_named_before_any_test(self):
+        scratch = self.area / "scratch"
+        scratch.mkdir()
+        with self.assertRaisesRegex(
+                ValueError, "needs git, sh on PATH, which the gate's "
+                "runners have; this host does not"):
+            self.runner.gate_environment(str(scratch), {"PATH": str(scratch)},
+                                         tools=("git", "sh"))
+
+    def test_a_module_run_so_sees_no_shell_only_tool_or_variable(self):
+        #  The incident: a test passed in the shell because `lldb` was
+        #  there, and the gate's job, without it, took another path.
+        lacking = [tool for tool in self.runner.GATE_TOOLS
+                   if shutil.which(tool) is None]
+        if lacking:
+            #  The mode describes the gate's Linux runners; a host without
+            #  one of their tools is refused by it, as the case above holds.
+            self.skipTest("this host lacks " + ", ".join(lacking))
+        tests = self.area / "tests"
+        tools = self.area / "tools"
+        home = self.area / "home"
+        for directory in (tests, tools, home):
+            directory.mkdir()
+        (tests / "test_sees.py").write_text(SEES)
+        (tools / "shell-only-tool").write_text("#!/bin/sh\n")
+        (tools / "shell-only-tool").chmod(0o755)
+        environment = {**os.environ, "HOME": str(home), "SHELL_ONLY": "set",
+                       "PATH": str(tools) + os.pathsep + os.environ["PATH"]}
+        for arguments, seen in (((), "True True set"),
+                                (("--gate-environment",), "False True unset")):
+            with self.subTest(arguments=arguments):
+                result = subprocess.run(
+                    [sys.executable, str(RUNNER), *arguments, str(tests)],
+                    capture_output=True, text=True, timeout=60,
+                    env=environment)
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertEqual((home / "seen").read_text(), seen)
+        self.assertIn("== gate environment: PATH holds", result.stdout)
 
 
 class ScriptTests(unittest.TestCase):

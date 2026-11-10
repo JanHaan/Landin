@@ -116,6 +116,29 @@ class QualityTests(unittest.TestCase):
         return {"-".join(profile): copy.deepcopy(sample)
                 for profile in CHECK.profiles_for("derived-parser")}
 
+    def test_standard_output_is_a_summary_and_the_record_is_in_its_file(self):
+        #  The whole record, disassembly included, was once printed too.
+        measured = self.parser_measurements()
+        for profile in measured.values():
+            profile["disassembly"] = "push %rbp\n" * 4096
+        result = {"schema": 1, "tools": {}, "compiler_sha256": "c" * 64,
+                  "measurements": {"derived-parser": measured}}
+        with tempfile.TemporaryDirectory() as directory:
+            record = Path(directory) / "measurements.json"
+            record.write_text(json.dumps(result))
+            said = CHECK.summary(result, record)
+            self.assertIn(f"record: {record} ({record.stat().st_size} bytes)",
+                          said)
+        self.assertNotIn("push %rbp", said)
+        self.assertLess(len(said), 2048)
+        self.assertIn("derived-parser", said)
+        for profile in CHECK.profiles_for("derived-parser"):
+            self.assertIn("-".join(profile) + " 1", said)
+        #  And main prints that, not the record.
+        source = Path(CHECK.__file__).read_text()
+        self.assertIn("print(summary(result, record))", source)
+        self.assertNotIn("print(json.dumps(result", source)
+
     def test_complete_parser_measurements_pass(self):
         CHECK.check_parser_measurements(self.parser_measurements())
 

@@ -120,6 +120,23 @@ the same document, its command fences included; once the path exists the
 check refuses the word, so the proposal is reworded in the change that
 adds it.
 
+Three rules follow from how the checks themselves are tested and fed.
+Every `DERIVATION.md` under `compiler/tests` is a live document by its
+name, held to the same checks as the pages listed in `check.py`'s
+`LIVE_DOCS`; a new derivation's map needs no entry there. A published
+example whose routine other fixtures carry a copy of (`SHARED_ROUTINES`)
+is the source of each copy: after editing the routine, `python3
+scripts/sync_routines.py` writes it into the copies, and the refusal of a
+differing copy names that command. And the controls in `scripts/tests`
+that show a check fires copy a real document and change one place in it,
+which they find by the document's own words; those words are listed in
+`scripts/tests/control_quotes.json`, and `python3 check.py` reports a
+document that no longer says them, naming the list, so a rewording that
+reaches a control is seen before the gate's `scripts` job. Reword the
+quote in the list and in the control with the document. A quote a control
+assembles at run time is not listed, so `python3 scripts/script_tests.py
+test_check_controls` remains the full answer after rewording a page.
+
 `check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. `check.py` does not parse the corpus with the structural editor grammar in `highlight/tree-sitter`; the gate's `editor-grammar` job does, and `./highlight/test.sh --integration` runs that pass inside `nix develop`, which `python3 scripts/activations.py` names whenever the changes reach the grammar, a positive, runtime or ABI fixture or `core/`. A change to the editor grammar or its queries takes two commits, the second moving the editors' pins with `python3 highlight/grammar_pin.py` (`highlight/README.md`). Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
 A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` began in lexical refusal and is now raised only by the parser.
