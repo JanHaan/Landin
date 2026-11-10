@@ -1,0 +1,9 @@
+class: negative
+summary: D1077 a bidirectional control character in a line comment, a block comment, a text literal, a character literal and a raw literal is warned about once for each, the program is accepted, and the same character written as its escape is not warned about
+program: program.ldn
+codes: L0628, L0628, L0628, L0628, L0628
+constructs: 0250, 0260, 0270, 0280, 1750, 1780
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn
+expect: expected.txt
+status: 0

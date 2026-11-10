@@ -1497,6 +1497,21 @@ package body Landin.Diagnostics.Explanations is
                & "are valid by construction, because the program has just "
                & "checked them or wrote only whole scalars, put the call i"
                & "n an `unchecked` region.",
+            when Catalogue.Bidirectional_Control =>
+               "A comment or a literal holds a bidirectional control cha"
+               & "racter: U+061C, U+200E, U+200F, U+202A to U+202E or U+20"
+               & "66 to U+2069 (D1077). These reorder what an editor, a te"
+               & "rminal or a review page shows around them, so a comment "
+               & "can appear to end before code that is in fact inside it,"
+               & " and a text literal can appear to hold something other t"
+               & "han its bytes. The program means what its bytes say and "
+               & "is accepted; the warning is given once for each comment "
+               & "or literal, at its first such character. Remove the char"
+               & "acter, or in a text or character literal write its escap"
+               & "e: `""\u{202E}""` where text is meant, and its bytes, `""\x"
+               & "E2\x80\xAE""`, in a `[]u8`. `--allow=L0628` suppresses th"
+               & "e warning for a source that writes right-to-left text on"
+               & " purpose; `--deny=L0628` makes it an invocation error.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -2914,6 +2929,8 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end trusted"
                & LF,
+            when Catalogue.Bidirectional_Control =>
+               "",
             when Catalogue.No_Toolchain =>
                "",
             when Catalogue.Toolchain_Failed =>

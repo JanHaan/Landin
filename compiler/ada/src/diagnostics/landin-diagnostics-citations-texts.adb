@@ -24261,6 +24261,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "spelling of a construct is D367's, and a report that nam"
                & "es one is not tried: removing one `&` of `&&` mends the "
                & "line into a bitwise operation nobody wrote.",
+            when 1077 =>
+               "Chosen: a comment or a literal holding one of those elev"
+               & "en characters is reported once, at its first, as the war"
+               & "ning L0628. The program is accepted and means what its b"
+               & "ytes say; `--allow=L0628` is for a source that writes ri"
+               & "ght-to-left text on purpose and `--deny=L0628` refuses. "
+               & "A text or character literal can carry the character as a"
+               & "n escape, `\u{...}` where text is meant and `\xNN` bytes"
+               & " in a `[]u8`, which is not warned about. Every report wr"
+               & "ites these characters, where it quotes them, as the `\xN"
+               & "N` of their bytes, as it writes a control character.",
             when 1075 =>
                "Chosen: the removal of `(`, `)`, `[` or `]` is Likely, h"
                & "owever few repairs were found. Exact remains for a token"

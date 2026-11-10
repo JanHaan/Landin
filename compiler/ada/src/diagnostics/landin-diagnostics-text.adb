@@ -155,7 +155,24 @@ package body Landin.Diagnostics.Text is
               or else (Text (Index) = Character'Val (194)
                        and then Length = 2
                        and then Character'Pos
-                         (Text (Index + 1)) in 128 .. 159);
+                         (Text (Index + 1)) in 128 .. 159)
+              --  The bidirectional controls, which reorder what a
+              --  terminal shows around text quoted from a source:
+              --  U+061C, U+200E, U+200F, U+202A .. U+202E and
+              --  U+2066 .. U+2069.
+              or else (Text (Index) = Character'Val (16#D8#)
+                       and then Length = 2
+                       and then Text (Index + 1) = Character'Val (16#9C#))
+              or else (Text (Index) = Character'Val (16#E2#)
+                       and then Length = 3
+                       and then
+                         ((Text (Index + 1) = Character'Val (16#80#)
+                           and then Character'Pos (Text (Index + 2))
+                             in 16#8E# .. 16#8F# | 16#AA# .. 16#AE#)
+                          or else
+                            (Text (Index + 1) = Character'Val (16#81#)
+                             and then Character'Pos (Text (Index + 2))
+                               in 16#A6# .. 16#A9#)));
          begin
             if Length > 1 and then not Control then
                Unbounded.Append (Result, Text (Index .. Index + Length - 1));

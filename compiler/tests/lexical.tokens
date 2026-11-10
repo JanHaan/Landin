@@ -36976,6 +36976,66 @@ file positive/written-type-text-conversions/main.ldn tokens 302
   1136 1138 if
   1139 1142 end
   1143 1147 main
+file negative/a-bidirectional-control-is-warned-about/program.ldn tokens 59
+  281 286 shown
+  286 287 :
+  288 289 [
+  289 290 ]
+  290 292 u8
+  293 294 =
+  295 310 "adminâ®â¦--"
+  311 315 mark
+  315 316 :
+  317 320 u32
+  321 322 =
+  323 328 'â'
+  329 332 raw
+  332 333 :
+  334 335 [
+  335 336 ]
+  336 338 u8
+  339 340 =
+  341 359 """asâ®written"""
+  360 367 spelled
+  367 368 :
+  369 373 utf8
+  374 375 =
+  376 391 "admin\u{202E}"
+  392 397 bytes
+  397 398 :
+  399 400 [
+  400 401 ]
+  401 403 u8
+  404 405 =
+  406 425 "admin\xE2\x80\xAE"
+  427 433 length
+  433 434 :
+  435 436 (
+  436 437 )
+  438 440 ->
+  441 442 (
+  442 443 r
+  443 444 :
+  445 450 usize
+  450 451 )
+  452 453 =
+  458 459 r
+  460 461 =
+  462 467 lenof
+  468 473 shown
+  474 475 +
+  476 481 lenof
+  482 485 raw
+  486 487 +
+  488 493 lenof
+  494 499 bytes
+  500 501 +
+  502 507 usize
+  507 508 (
+  508 512 mark
+  512 513 )
+  514 517 end
+  518 524 length
 file negative/a-concept-entry-names-its-public-operation/main.ldn tokens 48
   205 211 import
   212 216 core

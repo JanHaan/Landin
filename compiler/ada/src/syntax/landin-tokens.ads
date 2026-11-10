@@ -207,6 +207,10 @@ package Landin.Tokens is
       Unknown_Byte_Run,
       Capitalised_Identifier,
       Invalid_Comment_Encoding,
+      --  D1077: a bidirectional control character in a comment or a
+      --  literal.  The one kind that is an observation and not a refusal:
+      --  the bytes are well-formed and the token or comment stands.
+      Bidirectional_Control,
       Unterminated_Block_Comment,
       Unterminated_Literal);
 

@@ -14,6 +14,7 @@ package body Landin.Formatting is
    use type Landin.Source.Byte_Offset;
    use type Syn.Node_Id;
    use type Syn.Node_Kind;
+   use type Tok.Fault_Kind;
    use type Tok.Space_Kind;
    use type Tok.Token_Kind;
 
@@ -911,9 +912,16 @@ package body Landin.Formatting is
       Parses := True;
       Tok.Lexer.Lex
         (Sources.Get (Sources.Add ("formatted", Text)), Names, Stream);
-      if Tok.Fault_Count (Stream) > 0 then
-         return False;
-      end if;
+      --  A refusal in the scan of the layout is a change to what was
+      --  scanned before; D1077's observation is not one, being about bytes
+      --  the layout keeps.
+      for Index in 1 .. Tok.Fault_Count (Stream) loop
+         if Tok.Kind (Tok.Nth_Fault (Stream, Index))
+           /= Tok.Bidirectional_Control
+         then
+            return False;
+         end if;
+      end loop;
       for Index in 1 .. Tok.Count (Stream) loop
          declare
             Leading : constant Tok.Space_Range := Tok.Leading (Stream, Index);

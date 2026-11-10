@@ -110,6 +110,7 @@ end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, darwin-arm64, linux-rv64
 end-to-end/run-another-target | cortex-m0
+negative/a-bidirectional-control-is-warned-about | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-concept-entry-names-its-public-operation | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-control-value-missing-twice-reports-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-doubled-closing-bracket-is-a-guess | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

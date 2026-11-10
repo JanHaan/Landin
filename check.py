@@ -3576,6 +3576,12 @@ def check_grammar_corpus(full_run):
                         must_derive = True
             if kind == "negative" and name in STATED_IN_PROSE:
                 must_derive = True
+            #  A fixture `refine` accepts, its codes all warnings, is legal
+            #  source whichever stage warns: a scanner's warning (L0628)
+            #  refuses nothing, so the grammar derives the program.
+            if (kind == "negative" and os.path.exists(meta)
+                    and fixture_fields(meta).get("status") == "0"):
+                must_derive = True
 
             #  A fix's result is a program that compiles clean, so it
             #  derives however the program it was made from was refused.

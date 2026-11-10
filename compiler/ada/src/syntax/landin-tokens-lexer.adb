@@ -551,6 +551,39 @@ package body Landin.Tokens.Lexer is
          end if;
       end Reserve;
 
+      --  D1077: the first bidirectional control in a comment or literal
+      --  that spans First .. Stop, if it holds one.  U+061C, U+200E,
+      --  U+200F, U+202A .. U+202E and U+2066 .. U+2069 reorder what an
+      --  editor or a review page shows around them, so the text a person
+      --  reads can end somewhere other than where the scanner ends it.
+      --  One observation for each comment or literal, at its first.
+      procedure Note_Bidirectional (First, Stop : Natural);
+
+      procedure Note_Bidirectional (First, Stop : Natural) is
+         At_Byte : Natural := First;
+
+         function Byte (Offset : Natural) return Natural
+           is (Character'Pos (Text (At_Byte + Offset)));
+      begin
+         while At_Byte < Stop loop
+            if Byte (0) = 16#D8# and then Byte (1) = 16#9C# then
+               Complain (Bidirectional_Control, At_Byte, At_Byte + 1);
+               return;
+            elsif Byte (0) = 16#E2# and then At_Byte + 2 <= Stop
+              and then
+                ((Byte (1) = 16#80#
+                  and then Byte (2) in 16#8E# .. 16#8F# | 16#AA# .. 16#AE#)
+                 or else
+                   (Byte (1) = 16#81#
+                    and then Byte (2) in 16#A6# .. 16#A9#))
+            then
+               Complain (Bidirectional_Control, At_Byte, At_Byte + 2);
+               return;
+            end if;
+            At_Byte := At_Byte + 1;
+         end loop;
+      end Note_Bidirectional;
+
       procedure Scan_Quoted;
 
       --  The quote-delimited literals: character [0250], text [0260] and
@@ -608,6 +641,7 @@ package body Landin.Tokens.Lexer is
          end loop;
 
          Emit (Refused, First, Position - 1);
+         Note_Bidirectional (First, Position - 1);
 
          if Closed then
             if Refused = Text_Literal then
@@ -718,6 +752,7 @@ package body Landin.Tokens.Lexer is
                --  One never closed is still one piece, to the end of the
                --  file, so the bytes after its opener are kept too.
                Keep (Block_Comment, First, Position - 1);
+               Note_Bidirectional (First, Position - 1);
 
                if Depth > 0 then
                   --  The opener and the end of the file are the two places
@@ -753,6 +788,7 @@ package body Landin.Tokens.Lexer is
             end loop;
 
             Keep ((if Doc then Doc_Comment else Line_Comment), First, Stop);
+            Note_Bidirectional (First, Stop);
             if Stop < Position - 1 then
                Keep (Blanks, Stop + 1, Position - 1);
             end if;

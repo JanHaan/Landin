@@ -1,0 +1,14 @@
+--  D1077: each comment or literal that holds a bidirectional control is
+--  warned about once, and the program is accepted.  An escape spells the
+--  same character and is not warned about.
+--  a line comment ‮ with an override
+--( a block comment ⁦ with two ⁩ isolates )--
+shown: []u8 = "admin‮⁦--"
+mark: u32 = '‏'
+raw: []u8 = """as‮written"""
+spelled: utf8 = "admin\u{202E}"
+bytes: []u8 = "admin\xE2\x80\xAE"
+
+length: () -> (r: usize) =
+    r = lenof shown + lenof raw + lenof bytes + usize(mark)
+end length

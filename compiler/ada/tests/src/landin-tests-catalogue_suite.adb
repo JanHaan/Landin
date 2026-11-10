@@ -28,6 +28,7 @@ package body Landin.Tests.Catalogue_Suite is
 
    use type Landin.Diagnostics.Severity;
    use type Rows.Code_Name;
+   use type Landin.Tokens.Fault_Kind;
    use type Rows.Disposition;
    use type Landin.Source.Byte_Offset;
 
@@ -153,9 +154,17 @@ package body Landin.Tests.Catalogue_Suite is
             Landin.Testing.Check
               (Item, Rows.State (Named) = Rows.Live,
                Kind'Image & " raises a live code");
-            Landin.Testing.Check
-              (Item, Rows.Level (Named) = Landin.Diagnostics.Error,
-               Kind'Image & " is an error");
+            --  D1077's is the one observation among them: the bytes are
+            --  well-formed and the program is accepted.
+            if Kind = Landin.Tokens.Bidirectional_Control then
+               Landin.Testing.Check
+                 (Item, Rows.Level (Named) = Landin.Diagnostics.Warning,
+                  Kind'Image & " is a warning");
+            else
+               Landin.Testing.Check
+                 (Item, Rows.Level (Named) = Landin.Diagnostics.Error,
+                  Kind'Image & " is an error");
+            end if;
          end;
       end loop;
    end Every_Fault_Has_A_Code;

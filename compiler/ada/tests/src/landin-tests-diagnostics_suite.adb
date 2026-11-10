@@ -1028,6 +1028,52 @@ package body Landin.Tests.Diagnostics_Suite is
         (Item, Count (Found), 1, "and nothing is added for it");
    end A_Fixed_Note_Code_Takes_No_Note;
 
+   --  D1077: a bidirectional control quoted from a source reorders what
+   --  a terminal shows as it does what an editor shows, so a report
+   --  writes it as its bytes.  Right-to-left letters themselves are text
+   --  and are kept.
+   procedure Bidirectional_Controls_Are_Escaped
+     (Item : in out Landin.Testing.Context);
+
+   procedure Bidirectional_Controls_Are_Escaped
+     (Item : in out Landin.Testing.Context)
+   is
+      function Bytes (A, B, C : Natural) return String
+        is (Character'Val (A) & Character'Val (B) & Character'Val (C));
+
+      Alef : constant String :=
+        Character'Val (16#D7#) & Character'Val (16#90#);
+      Raw : constant String :=
+        Alef
+        & Bytes (16#E2#, 16#80#, 16#AE#)    --  U+202E
+        & Bytes (16#E2#, 16#81#, 16#A6#)    --  U+2066
+        & Bytes (16#E2#, 16#81#, 16#A9#)    --  U+2069
+        & Bytes (16#E2#, 16#80#, 16#8F#)    --  U+200F
+        & Character'Val (16#D8#) & Character'Val (16#9C#)   --  U+061C
+        & Bytes (16#E2#, 16#80#, 16#94#);   --  U+2014, a dash: text
+      Shown : constant String :=
+        Alef & "\xE2\x80\xAE\xE2\x81\xA6\xE2\x81\xA9\xE2\x80\x8F\xD8\x9C"
+        & Bytes (16#E2#, 16#80#, 16#94#);
+      Sources : Landin.Source.Sets.Source_Set;
+      Id : constant Landin.Source.Source_Id := Sources.Add ("bidi.ldn", "x");
+      Report : Diagnostic := Make ("L0100", Error, Id, (0, 1), Raw);
+   begin
+      Add_Note (Report, Raw);
+      declare
+         Rendered : constant String :=
+           Landin.Diagnostics.Text.Render (Report, Sources);
+      begin
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Count (Rendered, Shown) = 2,
+            "the message and the note write each control as its bytes");
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index
+              (Rendered, Bytes (16#E2#, 16#80#, 16#AE#)) = 0,
+            "no override reaches the display");
+      end;
+   end Bidirectional_Controls_Are_Escaped;
+
    procedure Terminal_Controls_Are_Display_Only
      (Item : in out Landin.Testing.Context);
 
@@ -1100,6 +1146,9 @@ package body Landin.Tests.Diagnostics_Suite is
       Landin.Testing.Register
         (Into, "diagnostics", "short presentation escapes controls",
          Short_Presentation_Escapes_Controls'Access);
+      Landin.Testing.Register
+        (Into, "diagnostics", "bidirectional controls are escaped",
+         Bidirectional_Controls_Are_Escaped'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "terminal controls are display only",
          Terminal_Controls_Are_Display_Only'Access);

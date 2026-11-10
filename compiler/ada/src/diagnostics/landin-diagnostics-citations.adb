@@ -2051,6 +2051,9 @@ package body Landin.Diagnostics.Citations is
             when 261 =>
                "A refused statement is reported as the smallest change t"
                & "hat mends it",
+            when 1077 =>
+               "A bidirectional control in a comment or a literal is war"
+               & "ned about",
             when 1075 =>
                "Removing one of two brackets is a guess",
             when 1076 =>
@@ -3776,6 +3779,8 @@ package body Landin.Diagnostics.Citations is
             when 1074 =>
                "Decisions: The toolchain, C and the machine",
             when 261 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1077 =>
                "Decisions: The toolchain, C and the machine",
             when 1075 =>
                "Decisions: The toolchain, C and the machine",
@@ -5566,6 +5571,9 @@ package body Landin.Diagnostics.Citations is
             when 261 =>
                "https://www.701.dev/spec.html#d261-a-refused-statement-i"
                & "s-reported-as-the-smallest-change-that-mends-it",
+            when 1077 =>
+               "https://www.701.dev/spec.html#d1077-a-bidirectional-cont"
+               & "rol-in-a-comment-or-a-literal-is-warned-about",
             when 1075 =>
                "https://www.701.dev/spec.html#d1075-removing-one-of-two-"
                & "brackets-is-a-guess",

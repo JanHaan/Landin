@@ -18968,6 +18968,35 @@ repair the `fixes` suite compiles clean; `positive/value-continued-at-any-indent
 continued value the grammar accepts to being accepted; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
 
+### D1077 — A bidirectional control in a comment or a literal is warned about
+
+**The discrepancy:** [1750] admits any well-formed UTF-8 inside comments and
+literals, and the scanner checked nothing more. U+202A to U+202E, U+2066 to
+U+2069, U+200E, U+200F and U+061C reorder what an editor or a review page
+shows around them, so a comment can appear to end before code that is
+inside it and a literal can appear to hold other text than its bytes: what
+a reviewer reads is not what is compiled. Nothing was reported. The
+compiler's own notes and help lines, which quote source, passed the same
+characters to the terminal.
+
+**Chosen:** a comment or a literal holding one of those eleven characters
+is reported once, at its first, as the warning L0628. The program is
+accepted and means what its bytes say; `--allow=L0628` is for a source that
+writes right-to-left text on purpose and `--deny=L0628` refuses. A text or
+character literal can carry the character as an escape, `\u{...}` where
+text is meant and `\xNN` bytes in a `[]u8`, which is not warned about. Every report writes these characters, where it quotes
+them, as the `\xNN` of their bytes, as it writes a control character.
+
+**The alternatives:** refusing them, which would change [1750] and refuse
+right-to-left text in a comment that holds a mark to keep its punctuation
+in place. Warning only where the controls of a line do not balance, which
+is the rule of the Unicode algorithm restated in a scanner and still shows
+a reviewer reordered text. Saying nothing and leaving it to editors, which
+is where it stood.
+
+**Pinned by** `negative/a-bidirectional-control-is-warned-about`, whose
+report is recorded, and `diagnostics/bidirectional controls are escaped`.
+
 ### D1075 — Removing one of two brackets is a guess
 
 **The discrepancy:** D261 makes a repair Exact when every change that mends
