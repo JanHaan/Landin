@@ -23,6 +23,7 @@
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Unbounded;
 with Landin.Platform;
+with Landin.Targets;
 
 private with Ada.Containers.Indefinite_Ordered_Maps;
 private with Ada.Containers.Indefinite_Ordered_Sets;
@@ -59,6 +60,11 @@ package Landin.Bindings is
 
    --  `lp64` or `ilp32`, as the policy's `abi.data_model` names it.
    function Data_Model (Of_Target : Target) return String;
+
+   --  The refine target a row binds for, as Landin.Targets describes it:
+   --  its pointer's width and the greatest object it can hold are read
+   --  from there and spelled nowhere else.
+   function Facts (Of_Target : Target) return Landin.Targets.Target_Facts;
 
    --  The bytes of a C long, a pointer and a size_t.
    function Word_Size (Of_Target : Target) return Positive;

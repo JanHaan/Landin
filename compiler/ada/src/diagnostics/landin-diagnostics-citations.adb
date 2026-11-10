@@ -2312,6 +2312,13 @@ package body Landin.Diagnostics.Citations is
                "Vendor inputs are pinned by URL and SHA-256 and fetched",
             when 820 =>
                "`refine bindings` is the binding generator",
+            when 1065 =>
+               "An attribute Clang adds to one of its builtins is not th"
+               & "e header's",
+            when 1066 =>
+               "A C name that is one of Landin's scalar names takes `c_`",
+            when 1067 =>
+               "A C record's layout is counted in the target's bytes",
             when 821 =>
                "Clang runs in an environment of its own, through `Landin"
                & ".Platform`",
@@ -3983,6 +3990,12 @@ package body Landin.Diagnostics.Citations is
             when 559 =>
                "Decisions: The toolchain, C and the machine",
             when 820 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1065 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1066 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1067 =>
                "Decisions: The toolchain, C and the machine",
             when 821 =>
                "Decisions: The toolchain, C and the machine",
@@ -5880,6 +5893,15 @@ package body Landin.Diagnostics.Citations is
             when 820 =>
                "https://www.701.dev/spec.html#d820-refine-bindings-is-th"
                & "e-binding-generator",
+            when 1065 =>
+               "https://www.701.dev/spec.html#d1065-an-attribute-clang-a"
+               & "dds-to-one-of-its-builtins-is-not-the-header-s",
+            when 1066 =>
+               "https://www.701.dev/spec.html#d1066-a-c-name-that-is-one"
+               & "-of-landin-s-scalar-names-takes-c",
+            when 1067 =>
+               "https://www.701.dev/spec.html#d1067-a-c-record-s-layout-"
+               & "is-counted-in-the-target-s-bytes",
             when 821 =>
                "https://www.701.dev/spec.html#d821-clang-runs-in-an-envi"
                & "ronment-of-its-own-through-landin-platform",

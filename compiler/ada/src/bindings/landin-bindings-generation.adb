@@ -3,6 +3,7 @@ with GNAT.SHA256;
 with Landin.Bindings.Clang;
 with Landin.Bindings.Policies;
 with Landin.Bindings.Texts;
+with Landin.Targets;
 
 package body Landin.Bindings.Generation is
 
@@ -70,6 +71,21 @@ package body Landin.Bindings.Generation is
 
    function Number (Value : Natural) return String is
      (T.Image (Long_Long_Integer (Value)));
+
+   --  A count of the target's bytes: a size, an alignment or an offset.
+   --  Not Natural, whose width is the host compiler's; a C object may be
+   --  larger than that holds.
+   subtype Byte_Count is Landin.Targets.Byte_Count;
+
+   use type Landin.Targets.Byte_Count;
+
+   function Bytes_Text (Value : Byte_Count) return String;
+
+   function Bytes_Text (Value : Byte_Count) return String is
+      Image : constant String := Byte_Count'Image (Value);
+   begin
+      return Image (Image'First + 1 .. Image'Last);
+   end Bytes_Text;
 
    --  A position as a key that sorts as the number does.
    function Padded (Value : Natural) return String;
@@ -172,8 +188,8 @@ package body Landin.Bindings.Generation is
    function Record_Classification (S : Handle; Index : Positive)
      return String;
    function Flexible_Field (S : Handle; Index : Positive) return J.Value;
-   function Layout_Size (S : Handle; Id : Type_Id) return Natural;
-   function Layout_Alignment (S : Handle; Id : Type_Id) return Natural;
+   function Layout_Size (S : Handle; Id : Type_Id) return Byte_Count;
+   function Layout_Alignment (S : Handle; Id : Type_Id) return Byte_Count;
    function Pointer_Only
      (S : Handle; Id : Type_Id;
       Visiting : String_Sets.Set := String_Sets.Empty_Set) return Boolean;
@@ -563,20 +579,66 @@ package body Landin.Bindings.Generation is
         C.Text (S, C.Field (S, Node, "type"), "qualType");
       Names : String_Sets.Set;
 
-      procedure Validate_Attributes (Value : J.Value);
+      --  Whether any declaration of the function writes an attribute of
+      --  this kind itself.
+      function Written (Attribute_Kind : String) return Boolean;
 
-      procedure Validate_Attributes (Value : J.Value) is
+      function Written (Attribute_Kind : String) return Boolean is
+         Named : constant String := C.Text (S, Node, "name");
+      begin
+         if not S.Functions.Contains (Named) then
+            return False;
+         end if;
+         for Declaration of S.Functions (Named) loop
+            for Item of C.Inner (S, Declaration) loop
+               if C.Text (S, Item, "kind") = Attribute_Kind
+                 and then not C.Truthy (S, Item, "implicit")
+                 and then not C.Truthy (S, Item, "inherited")
+               then
+                  return True;
+               end if;
+            end loop;
+         end loop;
+         return False;
+      end Written;
+
+      --  D1065: an attribute Clang added itself.  For a declaration whose
+      --  name and type are one of its library builtins, strlen or printf,
+      --  Clang records what it knows of the function as attributes marked
+      --  implicit, on a declaration of its own that the header's then
+      --  inherits them from.  These six kinds say what the function does
+      --  and nothing of how it is called, and no header wrote them, so
+      --  they are passed over.  The same kind written in a header, on any
+      --  declaration of the function, is still the header's attribute, and
+      --  any other kind Clang adds is refused as before: returns_twice,
+      --  which Clang knows of setjmp and vfork, is a way of returning that
+      --  no Landin call can keep.
+      function Added_By_Clang
+        (Value : J.Value; Value_Kind : String; Direct : Boolean)
+         return Boolean
+      is (Value_Kind in "BuiltinAttr" | "NoThrowAttr" | "ConstAttr"
+              | "PureAttr" | "FormatAttr" | "AllocSizeAttr"
+          and then (C.Truthy (S, Value, "implicit")
+                    or else (Direct
+                             and then C.Truthy (S, Value, "inherited")
+                             and then not Written (Value_Kind))));
+
+      procedure Validate_Attributes (Value : J.Value; Direct : Boolean);
+
+      procedure Validate_Attributes (Value : J.Value; Direct : Boolean) is
          Value_Kind : constant String := C.Text (S, Value, "kind");
       begin
          if Value_Kind = "CompoundStmt" then
             return;
          end if;
-         if T.Ends_With (Value_Kind, "Attr") then
+         if T.Ends_With (Value_Kind, "Attr")
+           and then not Added_By_Clang (Value, Value_Kind, Direct)
+         then
             Fail (S, Where & ": unsupported calling convention or"
                   & " parameter/function attribute " & Value_Kind);
          end if;
          for Child of C.Inner (S, Value) loop
-            Validate_Attributes (Child);
+            Validate_Attributes (Child, Direct => Value = Node);
          end loop;
       end Validate_Attributes;
    begin
@@ -600,7 +662,7 @@ package body Landin.Bindings.Generation is
          Fail (S, Where & ": unsupported calling convention or function type"
                & " attribute: " & Text);
       end if;
-      Validate_Attributes (Node);
+      Validate_Attributes (Node, Direct => False);
       Result := Function_Result (S, Node, Where);
       Ensure_Supported (S, Result, Where & " result", Allow_Void => True);
       for Index in 1 .. Natural (Params.Length) loop
@@ -1613,7 +1675,7 @@ package body Landin.Bindings.Generation is
 
    type Field_Offset is record
       Name : US.Unbounded_String;
-      Offset : Natural;
+      Offset : Byte_Count;
    end record;
 
    package Offset_Vectors is new Ada.Containers.Vectors
@@ -1621,33 +1683,80 @@ package body Landin.Bindings.Generation is
 
    procedure Layout_Of
      (S : Handle; Id : Type_Id; Stack : String_Sets.Set;
-      Size, Alignment : out Natural);
+      Size, Alignment : out Byte_Count);
 
    procedure Record_Layout
      (S : Handle; Index : Positive; Stack : String_Sets.Set;
-      Size, Alignment : out Natural; Offsets : out Offset_Vectors.Vector);
+      Size, Alignment : out Byte_Count; Offsets : out Offset_Vectors.Vector);
 
-   function Align_Up (Value, Alignment : Natural) return Natural is
-     ((Value + Alignment - 1) / Alignment * Alignment);
+   --  D1067: the greatest object the target holds, D18's bound, which is
+   --  what its usize counts.  A size is compared with it before it is
+   --  made, so no sum or product is formed that the count cannot hold, and
+   --  What, the array or the record and field that would pass it, is
+   --  named in the refusal.
+   function Greatest_Object (S : Handle) return Byte_Count is
+     (Landin.Targets.Maximum_Object_Size (Facts (S.Chosen)));
+
+   procedure Too_Large (S : Handle; What : String) with No_Return;
+
+   procedure Too_Large (S : Handle; What : String) is
+   begin
+      Fail (S, What & " is larger than any object of the target, which"
+            & " holds at most " & Bytes_Text (Greatest_Object (S))
+            & " bytes");
+   end Too_Large;
+
+   function Sum
+     (S : Handle; Left, Right : Byte_Count; What : String) return Byte_Count;
+
+   function Sum
+     (S : Handle; Left, Right : Byte_Count; What : String) return Byte_Count
+   is
+      Most : constant Byte_Count := Greatest_Object (S);
+   begin
+      if Left > Most or else Right > Most - Left then
+         Too_Large (S, What);
+      end if;
+      return Left + Right;
+   end Sum;
+
+   function Product
+     (S : Handle; Size, Count : Byte_Count; What : String) return Byte_Count;
+
+   function Product
+     (S : Handle; Size, Count : Byte_Count; What : String) return Byte_Count
+   is
+   begin
+      if Count /= 0 and then Size > Greatest_Object (S) / Count then
+         Too_Large (S, What);
+      end if;
+      return Size * Count;
+   end Product;
+
+   function Align_Up
+     (S : Handle; Value, Alignment : Byte_Count; What : String)
+      return Byte_Count
+   is (if Value mod Alignment = 0 then Value
+       else Sum (S, Value, Alignment - Value mod Alignment, What));
 
    procedure Layout_Of
      (S : Handle; Id : Type_Id; Stack : String_Sets.Set;
-      Size, Alignment : out Natural)
+      Size, Alignment : out Byte_Count)
    is
       Resolved : constant Type_Id := Resolve (S, Id);
       Item : constant C_Type := Get (S, Resolved);
    begin
       case Item.Kind is
          when Builtin_Type =>
-            Size := Builtin_Size (S, US.To_String (Item.Name));
+            Size := Byte_Count (Builtin_Size (S, US.To_String (Item.Name)));
             if Size = 0 then
                Fail (S, "unsupported layout for "
                      & US.To_String (Item.Spelling));
             end if;
             Alignment := Size;
          when Pointer_Type | Callback_Type =>
-            Size := Word_Size (S.Chosen);
-            Alignment := Word_Size (S.Chosen);
+            Size := Byte_Count (Word_Size (S.Chosen));
+            Alignment := Byte_Count (Word_Size (S.Chosen));
          when Enum_Type =>
             Layout_Of (S, Enum_Underlying (S, Enum_For (S, Resolved)), Stack,
                        Size, Alignment);
@@ -1657,7 +1766,9 @@ package body Landin.Bindings.Generation is
                      & US.To_String (Item.Spelling));
             end if;
             Layout_Of (S, Item.Child, Stack, Size, Alignment);
-            Size := Size * Natural (Item.Count);
+            Size := Product
+              (S, Size, Byte_Count (Item.Count),
+               "array type " & T.Repr (US.To_String (Item.Spelling)));
          when Record_Type =>
             if Stack.Contains (US.To_String (Item.Name)) then
                Fail (S, "recursive by-value record layout");
@@ -1683,7 +1794,7 @@ package body Landin.Bindings.Generation is
    --  flexible array member has size zero and its element's alignment.
    procedure Record_Layout
      (S : Handle; Index : Positive; Stack : String_Sets.Set;
-      Size, Alignment : out Natural; Offsets : out Offset_Vectors.Vector)
+      Size, Alignment : out Byte_Count; Offsets : out Offset_Vectors.Vector)
    is
       Flexible : constant J.Value := Flexible_Field (S, Index);
       Nested : String_Sets.Set := Stack;
@@ -1696,7 +1807,10 @@ package body Landin.Bindings.Generation is
       for Field of C.Record_Fields (S, Index) loop
          declare
             Item : constant Type_Id := Type_Of (S, Field);
-            Field_Size, Field_Alignment : Natural;
+            Field_Size, Field_Alignment : Byte_Count;
+            What : constant String :=
+              "record " & Record_Display (S, Index) & " field "
+              & T.Repr (C.Text (S, Field, "name"));
          begin
             if Field = Flexible then
                Layout_Of (S, Get (S, Resolve (S, Item)).Child, Nested,
@@ -1708,27 +1822,28 @@ package body Landin.Bindings.Generation is
             if Packed then
                Field_Alignment := 1;
             end if;
-            Size := Align_Up (Size, Field_Alignment);
+            Size := Align_Up (S, Size, Field_Alignment, What);
             Offsets.Append
               (Field_Offset'(Name => US.To_Unbounded_String (C.Text (S, Field,
                 "name")),
                 Offset => Size));
-            Size := Size + Field_Size;
-            Alignment := Natural'Max (Alignment, Field_Alignment);
+            Size := Sum (S, Size, Field_Size, What);
+            Alignment := Byte_Count'Max (Alignment, Field_Alignment);
          end;
       end loop;
-      Size := Align_Up (Size, Alignment);
+      Size := Align_Up
+        (S, Size, Alignment, "record " & Record_Display (S, Index));
    end Record_Layout;
 
-   function Layout_Size (S : Handle; Id : Type_Id) return Natural is
-      Size, Alignment : Natural;
+   function Layout_Size (S : Handle; Id : Type_Id) return Byte_Count is
+      Size, Alignment : Byte_Count;
    begin
       Layout_Of (S, Id, String_Sets.Empty_Set, Size, Alignment);
       return Size;
    end Layout_Size;
 
-   function Layout_Alignment (S : Handle; Id : Type_Id) return Natural is
-      Size, Alignment : Natural;
+   function Layout_Alignment (S : Handle; Id : Type_Id) return Byte_Count is
+      Size, Alignment : Byte_Count;
    begin
       Layout_Of (S, Id, String_Sets.Empty_Set, Size, Alignment);
       return Alignment;
@@ -2225,6 +2340,15 @@ package body Landin.Bindings.Generation is
       T.Put (S, Object, Key, T.Integer_Meta (S, Long_Long_Integer (Value)));
    end Put_Number;
 
+   procedure Put_Bytes
+     (S : Handle; Object : Meta_Id; Key : String; Value : Byte_Count);
+
+   procedure Put_Bytes
+     (S : Handle; Object : Meta_Id; Key : String; Value : Byte_Count) is
+   begin
+      T.Put (S, Object, Key, T.Number_Meta (S, Bytes_Text (Value)));
+   end Put_Bytes;
+
    function Type_Metadata
      (S : Handle; Id : Type_Id; Note : Annotation; Site : String)
       return Meta_Id;
@@ -2600,8 +2724,9 @@ package body Landin.Bindings.Generation is
       declare
          Underlying : constant Type_Id := Enum_Underlying (S, Index);
          Named : constant String := Landin_Name_For_Enum (S, Index);
-         Size : constant Natural := Layout_Size (S, Underlying);
-         Alignment : constant Natural := Layout_Alignment (S, Underlying);
+         Size : constant Byte_Count := Layout_Size (S, Underlying);
+         Alignment : constant Byte_Count :=
+           Layout_Alignment (S, Underlying);
          C_Name : constant String := C.Enum_C_Name (S, Index);
          Underlying_Text : constant String := C_Type_Text (S, Underlying);
          Lines : String_Vectors.Vector;
@@ -2616,12 +2741,13 @@ package body Landin.Bindings.Generation is
                & " compatible type disagrees with its generated integer"
                & " alias"");");
             S.C_Assertions.Append
-              ("_Static_assert(sizeof(" & C_Name & ") == " & Number (Size)
+              ("_Static_assert(sizeof(" & C_Name & ") == "
+               & Bytes_Text (Size)
                & ", """ & C_Name & " size disagrees with its generated"
                & " integer alias"");");
             S.C_Assertions.Append
               ("_Static_assert(_Alignof(" & C_Name & ") == "
-               & Number (Alignment) & ", """ & C_Name & " alignment"
+               & Bytes_Text (Alignment) & ", """ & C_Name & " alignment"
                & " disagrees with its generated integer alias"");");
          end if;
          Lines.Append
@@ -2653,8 +2779,8 @@ package body Landin.Bindings.Generation is
          Put_Text (S, Object, "landin_name", Named);
          Put_Text (S, Object, "underlying_c_type", Underlying_Text);
          Put_Text (S, Object, "representation", "integer-alias");
-         Put_Number (S, Object, "size", Size);
-         Put_Number (S, Object, "alignment", Alignment);
+         Put_Bytes (S, Object, "size", Size);
+         Put_Bytes (S, Object, "alignment", Alignment);
          T.Put (S, Object, "constants", Constants);
          Put_Flag (S, Object, "selected", Choice /= 0);
          S.Meta_Declarations.Append (Object);
@@ -3152,7 +3278,7 @@ package body Landin.Bindings.Generation is
       Lines.Append ("end " & Named);
       S.Type_Blocks.Append (T.Join (Lines, [1 => LF]));
       declare
-         Size, Alignment : Natural;
+         Size, Alignment : Byte_Count;
          Offsets : Offset_Vectors.Vector;
          C_Name : constant String := C.Record_C_Name (S, Index);
          Flexible : constant J.Value := Flexible_Field (S, Index);
@@ -3168,28 +3294,30 @@ package body Landin.Bindings.Generation is
          Record_Layout (S, Index, String_Sets.Empty_Set, Size, Alignment,
                         Offsets);
          S.C_Assertions.Append
-           ("_Static_assert(sizeof(" & C_Name & ") == " & Number (Size)
+           ("_Static_assert(sizeof(" & C_Name & ") == " & Bytes_Text (Size)
             & ", """ & C_Name & " size disagrees with Landin " & Layout
             & """);");
          S.C_Assertions.Append
-           ("_Static_assert(_Alignof(" & C_Name & ") == " & Number (Alignment)
+           ("_Static_assert(_Alignof(" & C_Name & ") == "
+            & Bytes_Text (Alignment)
             & ", """ & C_Name & " alignment disagrees with Landin " & Layout
             & """);");
          for Each of Offsets loop
             S.C_Assertions.Append
               ("_Static_assert(__builtin_offsetof(" & C_Name & ", "
-               & US.To_String (Each.Name) & ") == " & Number (Each.Offset)
+               & US.To_String (Each.Name) & ") == "
+               & Bytes_Text (Each.Offset)
                & ", """ & C_Name & "." & US.To_String (Each.Name)
                & " offset disagrees with Landin " & Layout & """);");
-            Put_Number (S, Offsets_Meta, US.To_String (Each.Name),
+            Put_Bytes (S, Offsets_Meta, US.To_String (Each.Name),
               Each.Offset);
          end loop;
          Put_Text (S, Object, "kind", "record");
          Put_Text (S, Object, "c_name", C_Name);
          Put_Text (S, Object, "landin_name", Named);
          Put_Text (S, Object, "representation", Native_Layout);
-         Put_Number (S, Object, "size", Size);
-         Put_Number (S, Object, "alignment", Alignment);
+         Put_Bytes (S, Object, "size", Size);
+         Put_Bytes (S, Object, "alignment", Alignment);
          Put_Flag (S, Object, "packed", Packed);
          if J.Is_Present (Flexible) then
             Put_Text (S, Object, "flexible_member",

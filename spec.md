@@ -22828,6 +22828,91 @@ gate's `bindings` job. Signature collision consumers are pinned by
 `test_incoming_handler_prototype_avoids_typedef_shadowing` and, on the
 adapter-backed Cortex-M paths, `test_cortex_adapter_names_stay_consistent`.
 
+### D1065 — An attribute Clang adds to one of its builtins is not the header's
+
+**The tour said** at [1580] that the generator reads headers. D820 refuses
+a selected function that carries an attribute, because an attribute may
+change how the function is called and none is guessed. For a declaration
+whose name and type are one of its library builtins Clang records what it
+knows of the function as attributes of its own, marked implicit, on a
+declaration it makes itself and the header's then inherits them from:
+`BuiltinAttr` on every one, `NoThrowAttr`, `ConstAttr`, `PureAttr`,
+`FormatAttr` and `AllocSizeAttr` on those they describe. They were read as
+the header's, so `strlen`, `malloc`, `abs`, `sqrt`, `memcpy` and `printf`,
+declared with no attribute at all, were each refused on every hosted target
+for an attribute no header wrote.
+
+**Chosen:** those six kinds are passed over on a selected function when
+Clang added them: the node is marked implicit, or is inherited and no
+declaration of the function writes an attribute of that kind itself. They
+say what a function does and nothing of how it is called. The same kind
+written in the header, on any declaration of the function, is refused as
+before, and so is every other kind Clang adds: `ReturnsTwiceAttr`, which it
+knows of `setjmp` and `vfork`, is a way of returning no Landin call can
+keep. A builtin Clang knows not to return, `exit` or `abort`, has
+`noreturn` in its type rather than as an attribute, and stays refused with
+every `noreturn` function.
+
+**The alternatives:** passing over every implicit attribute, which admits
+`returns_twice`; `-fno-builtin` for the AST run, which stops Clang adding
+them and also changes what it says of every other declaration, in a
+command whose outputs are compared byte for byte; and passing over the six
+kinds wherever they stand, which admits a header's own `format` or `pure`
+and is a wider change than the defect.
+
+**Pinned by** `bindings/test.py`'s
+`test_attributes_clang_adds_to_its_builtins_are_not_the_headers`.
+
+### D1066 — A C name that is one of Landin's scalar names takes `c_`
+
+**The tour said** at [1790] that the scalar names are predeclared and are
+not keywords, so a module may declare one again. D820 gives a C name that
+is a keyword `c_` before it. A C typedef named `usize`, `u8` or `u32` was
+written under that name, and every other line of the same module that the
+generator wrote meaning the scalar then meant the typedef: an opaque
+pointer's `ptr mut u8`, and the `usize` an adapter's size, alignment and
+index are declared with beside C's `__SIZE_TYPE__`.
+
+**Chosen:** the thirteen scalar names, as `Landin.Types` spells them, are
+avoided as the keywords are: such a C name becomes `c_usize`, and a
+policy's `landin_name` may not be one. Nothing else in a binding changes,
+and a header without such a name generates what it did.
+
+**The alternatives:** writing every generated use of a scalar so that no
+declaration of the module can capture it, which Landin has no spelling
+for; refusing such a typedef unless the policy renames it, which refuses
+`typedef unsigned char u8;`, the commonest of them and a harmless one; and
+leaving it, which reads a 64-bit `size_t` result at the typedef's width.
+
+**Pinned by** `bindings/test.py`'s
+`test_a_typedef_named_as_a_landin_scalar_does_not_redefine_it`.
+
+### D1067 — A C record's layout is counted in the target's bytes
+
+**The tour said** nothing of how large a C record may be. D18 bounds one
+array by the greatest byte count the target's `usize` holds, and layout
+arithmetic counts target bytes in `Landin.Targets.Byte_Count` everywhere
+but here: the generator laid records out in the host compiler's `Natural`,
+so a record of 2 GiB or more, which LP64 C admits, ended the command in an
+internal defect that named neither the record nor the field.
+
+**Chosen:** sizes, alignments and offsets are `Byte_Count`s, and each sum
+and product is compared with the target's greatest object before it is
+formed. A record or array past that is L0581, naming the array type or the
+record and the field that passes it; one within it is laid out, asserted
+against C and recorded, whatever the host's integers hold. The greatest
+object and the width of a pointer are read from `Landin.Targets`' facts for
+the row's target, where the generator spelled its own 4 and 8.
+
+**The alternatives:** a 64-bit count with no bound, which wraps where this
+refuses; and refusing at the host's 2 GiB with a diagnostic, which makes a
+property of the machine running the compiler a limit on the target's C.
+
+**Pinned by** the `bindings` suite's `a record is laid out in target
+bytes`, whose refusals are a fake Clang's because the real one refuses such
+a record first, and `bindings/test.py`'s
+`test_a_record_past_two_gibibytes_is_laid_out`.
+
 ### D821 — Clang runs in an environment of its own, through `Landin.Platform`
 
 **The tour said** nothing. The Python generator ran Clang with an

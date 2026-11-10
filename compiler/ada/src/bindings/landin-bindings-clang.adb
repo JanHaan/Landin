@@ -150,6 +150,35 @@ package body Landin.Bindings.Clang is
             end loop;
          end;
       end Walk;
+
+      --  Clang gives every declaration of a tag a node and an id of its
+      --  own, each later one naming the one before it as `previousDecl`:
+      --  `struct S { ... }; struct S;` is two.  They are one record or
+      --  enum, so the index of the entry an earlier declaration of Node's
+      --  tag made, or of the entry this id already has, or zero for a
+      --  tag's first declaration.  The nodes are met in the order they are
+      --  declared, so the one before is always known.
+      function Earlier
+        (By_Id : Index_Maps.Map; Node : J.Value; Identity : String)
+         return Natural;
+
+      function Earlier
+        (By_Id : Index_Maps.Map; Node : J.Value; Identity : String)
+         return Natural
+      is
+         Previous : constant String := Text (Within, Node, "previousDecl");
+      begin
+         if By_Id.Contains (Identity) then
+            return By_Id (Identity);
+         elsif Previous /= "" and then By_Id.Contains (Previous) then
+            return By_Id (Previous);
+         end if;
+         return 0;
+      end Earlier;
+
+      function Lists_Constants (Node : J.Value) return Boolean is
+        (for some Item of Inner (Within, Node) =>
+           Text (Within, Item, "kind") = "EnumConstantDecl");
    begin
       Walk (J.Root (Within.Ast), False);
       for Node of Nodes loop
@@ -168,44 +197,57 @@ package body Landin.Bindings.Clang is
             --  prototype scope.
             if not Local_Ids.Contains (Identity) then
                if Kind = "RecordDecl" and then Identity /= "" then
-                  if not Within.Records_By_Id.Contains (Identity) then
-                     Within.Records.Append
-                       (Record_Info'
-                          (Node => Node,
-                         Identity => US.To_Unbounded_String (Identity),
-                         Tag => US.To_Unbounded_String (Name),
-                         others => <>));
-                     Within.Records_By_Id.Insert
-                       (Identity, Within.Records.Last_Index);
-                  else
-                     declare
-                        Index : constant Positive :=
-                          Within.Records_By_Id (Identity);
-                     begin
+                  declare
+                     Index : constant Natural :=
+                       Earlier (Within.Records_By_Id, Node, Identity);
+                  begin
+                     if Index = 0 then
+                        Within.Records.Append
+                          (Record_Info'
+                             (Node => Node,
+                            Identity => US.To_Unbounded_String (Identity),
+                            Tag => US.To_Unbounded_String (Name),
+                            others => <>));
+                        Within.Records_By_Id.Insert
+                          (Identity, Within.Records.Last_Index);
+                     else
+                        --  The definition is the tag's node, wherever it
+                        --  stands among the declarations.
+                        Within.Records_By_Id.Include (Identity, Index);
                         if not Truthy
                             (Within, Within.Records (Index).Node,
                              "completeDefinition")
                           and then Truthy (Within, Node, "completeDefinition")
                         then
-                           Within.Records (Index) :=
-                             (Node => Node,
-                              Identity => US.To_Unbounded_String (Identity),
-                              Tag => US.To_Unbounded_String (Name),
-                              others => <>);
+                           Within.Records (Index).Node := Node;
                         end if;
-                     end;
-                  end if;
+                     end if;
+                  end;
                elsif Kind = "EnumDecl" and then Identity /= "" then
-                  if not Within.Enums_By_Id.Contains (Identity) then
-                     Within.Enums.Append
-                       (Enum_Info'
-                          (Node => Node,
-                         Identity => US.To_Unbounded_String (Identity),
-                         Tag => US.To_Unbounded_String (Name),
-                         others => <>));
-                     Within.Enums_By_Id.Insert
-                       (Identity, Within.Enums.Last_Index);
-                  end if;
+                  declare
+                     Index : constant Natural :=
+                       Earlier (Within.Enums_By_Id, Node, Identity);
+                  begin
+                     if Index = 0 then
+                        Within.Enums.Append
+                          (Enum_Info'
+                             (Node => Node,
+                            Identity => US.To_Unbounded_String (Identity),
+                            Tag => US.To_Unbounded_String (Name),
+                            others => <>));
+                        Within.Enums_By_Id.Insert
+                          (Identity, Within.Enums.Last_Index);
+                     else
+                        --  An enum's definition is the declaration that
+                        --  lists its constants.
+                        Within.Enums_By_Id.Include (Identity, Index);
+                        if not Lists_Constants (Within.Enums (Index).Node)
+                          and then Lists_Constants (Node)
+                        then
+                           Within.Enums (Index).Node := Node;
+                        end if;
+                     end if;
+                  end;
                elsif Kind = "TypedefDecl" and then not Implicit
                  and then Name /= ""
                then
@@ -761,11 +803,29 @@ package body Landin.Bindings.Clang is
          end;
       end if;
       if Kind in "RecordType" | "EnumType" then
-         return Make
-           (Within,
-            Simple ((if Kind = "RecordType" then Record_Type else Enum_Type),
-                    Spelling,
-                    Text (Within, Field (Within, Node, "decl"), "id")));
+         --  Clang may name any declaration of the tag; the type is named
+         --  by its entry's identity, so that two spellings of one record
+         --  are one type to whoever compares names.
+         declare
+            Declared : constant String :=
+              Text (Within, Field (Within, Node, "decl"), "id");
+         begin
+            return Make
+              (Within,
+               Simple
+                 ((if Kind = "RecordType" then Record_Type else Enum_Type),
+                  Spelling,
+                  (if Kind = "RecordType"
+                     and then Within.Records_By_Id.Contains (Declared)
+                   then US.To_String
+                     (Within.Records
+                        (Within.Records_By_Id (Declared)).Identity)
+                   elsif Kind = "EnumType"
+                     and then Within.Enums_By_Id.Contains (Declared)
+                   then US.To_String
+                     (Within.Enums (Within.Enums_By_Id (Declared)).Identity)
+                   else Declared)));
+         end;
       end if;
       if Kind in "FunctionProtoType" | "FunctionNoProtoType" then
          if Has (Within, Node, "cc") and then Text (Within, Node, "cc")
@@ -1006,10 +1066,14 @@ package body Landin.Bindings.Clang is
       Found := False;
       Const := False;
       Pointee_Text := US.Null_Unbounded_String;
-      for Split in Text'First + 1 .. Text'Last - 1 loop
-         if Text (Split .. Split + 1) = " *" then
+      --  The pointer is the last star, and only qualifiers follow it.
+      --  Clang writes a space before the first star of a run and none
+      --  between two, `char **`, so the star itself is what is looked for
+      --  and not a space before it.
+      for Split in Text'First + 1 .. Text'Last loop
+         if Text (Split) = '*' then
             declare
-               Index : Positive := Split + 2;
+               Index : Positive := Split + 1;
                Qualifiers : String_Vectors.Vector;
             begin
                while Index <= Text'Last and then T.Is_Space (Text (Index))
@@ -1035,7 +1099,9 @@ package body Landin.Bindings.Clang is
                      Index := Index + 1;
                   end loop;
                end loop;
-               if Index > Text'Last then
+               if Index > Text'Last
+                 and then T.Strip (Text (Text'First .. Split - 1)) /= ""
+               then
                   Found := True;
                   Const := Qualifiers.Contains ("const");
                   Pointee_Text := US.To_Unbounded_String
@@ -1047,6 +1113,83 @@ package body Landin.Bindings.Clang is
       end loop;
    end Match_Pointer;
 
+   --  What a word of a type's spelling says the type is, among the forms
+   --  no binding is generated for.
+   type Word_Meaning is
+     (No_Word, Attribute_Word, Complex_Word, Wide_Integer_Word, Va_List_Word,
+      Qualifier_Word);
+
+   --  The first such word of Whole, read as identifiers and not as
+   --  substrings.  C's own keywords and the implementation's reserved
+   --  names mean what they say wherever they stand.  `complex`,
+   --  `vector_size` and `va_list` are ordinary identifiers that a header
+   --  may give a tag or a typedef: after `struct`, `union` or `enum`, or
+   --  as the name of one of the header's typedefs, each is that
+   --  declaration's name and is resolved as one.
+   function Unsupported_Word (Within : Handle; Whole : String)
+     return Word_Meaning;
+
+   function Unsupported_Word (Within : Handle; Whole : String)
+     return Word_Meaning
+   is
+      function Is_Word_Character (Item : Character) return Boolean is
+        (Item in 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '_' | '$'
+         or else Character'Pos (Item) >= 16#80#);
+
+      Index : Positive := Whole'First;
+      After_Tag : Boolean := False;
+   begin
+      while Index <= Whole'Last loop
+         if not Is_Word_Character (Whole (Index)) then
+            Index := Index + 1;
+         else
+            declare
+               First : constant Positive := Index;
+            begin
+               while Index <= Whole'Last
+                 and then Is_Word_Character (Whole (Index))
+               loop
+                  Index := Index + 1;
+               end loop;
+               declare
+                  Word : constant String := Whole (First .. Index - 1);
+                  Named : constant Boolean :=
+                    After_Tag or else Within.Typedefs.Contains (Word);
+               begin
+                  if Word in "__attribute__" | "__attribute" | "__vector"
+                       | "__vector_size__"
+                  then
+                     return Attribute_Word;
+                  elsif Word in "_Complex" | "__complex__" | "__complex" then
+                     return Complex_Word;
+                  elsif Word in "__int128" | "__int128_t" | "__uint128_t"
+                  then
+                     return Wide_Integer_Word;
+                  elsif Word in "__builtin_va_list" | "__va_list_tag"
+                       | "__va_list"
+                  then
+                     return Va_List_Word;
+                  elsif Word in "volatile" | "_Atomic" | "__volatile"
+                       | "__volatile__"
+                  then
+                     return Qualifier_Word;
+                  elsif not Named then
+                     if Word = "vector_size" then
+                        return Attribute_Word;
+                     elsif Word = "complex" then
+                        return Complex_Word;
+                     elsif Word in "va_list" | "__gnuc_va_list" then
+                        return Va_List_Word;
+                     end if;
+                  end if;
+                  After_Tag := Word in "struct" | "union" | "enum";
+               end;
+            end;
+         end if;
+      end loop;
+      return No_Word;
+   end Unsupported_Word;
+
    function Parse (Within : Handle; Spelling : String)
      return Type_Id
    is
@@ -1055,32 +1198,29 @@ package body Landin.Bindings.Clang is
       if Whole = "" then
          Fail (Within, "Clang AST supplied an empty type");
       end if;
-      if T.Contains (Whole, "__attribute__") or else T.Contains (Whole,
-        "__vector")
-        or else T.Contains (Whole, "vector_size")
-      then
-         return Make (Within, Unsupported
-                        (Whole, "vector or calling-convention attribute"));
-      end if;
-      if T.Contains (Whole, "_Complex") or else T.Contains (Whole, "complex")
-      then
-         return Make (Within, Unsupported (Whole, "complex type"));
-      end if;
+      --  What the spelling's own words say it is.  A word is a whole
+      --  identifier, and one that names a tag or a typedef of the header
+      --  says nothing: `struct complex_number` and a typedef `va_list_box`
+      --  are the header's names, not C's.
+      case Unsupported_Word (Within, Whole) is
+         when Attribute_Word =>
+            return Make (Within, Unsupported
+                           (Whole, "vector or calling-convention attribute"));
+         when Complex_Word =>
+            return Make (Within, Unsupported (Whole, "complex type"));
+         when Wide_Integer_Word =>
+            return Make (Within, Unsupported (Whole, "128-bit integer type"));
+         when Va_List_Word =>
+            return Make (Within, Unsupported (Whole, "va_list forwarding"));
+         when Qualifier_Word =>
+            return Make (Within, Unsupported
+                           (Whole, "atomic or volatile qualified type"));
+         when No_Word =>
+            null;
+      end case;
       if Whole in "long double" | "__float128" | "_Float16" | "__fp16" then
          return Make (Within, Unsupported
                         (Whole, "extended or x87 floating type"));
-      end if;
-      if T.Contains (Whole, "__int128") then
-         return Make (Within, Unsupported (Whole, "128-bit integer type"));
-      end if;
-      if T.Contains (Whole, "va_list") then
-         return Make (Within, Unsupported (Whole, "va_list forwarding"));
-      end if;
-      if T.Starts_With (Whole, "_Atomic")
-        or else T.Contains (" " & Whole, " volatile")
-      then
-         return Make (Within, Unsupported
-                        (Whole, "atomic or volatile qualified type"));
       end if;
 
       --  An array: C's first bracket is the outer array, not its last.

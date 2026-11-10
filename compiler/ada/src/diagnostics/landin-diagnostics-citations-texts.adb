@@ -26552,6 +26552,35 @@ package body Landin.Diagnostics.Citations.Texts is
                & "cannot be used as asked L0580, a selection that cannot b"
                & "e bound L0581, outputs in the way L0582, and a replaceme"
                & "nt that fails L0005.",
+            when 1065 =>
+               "Chosen: those six kinds are passed over on a selected fu"
+               & "nction when Clang added them: the node is marked implici"
+               & "t, or is inherited and no declaration of the function wr"
+               & "ites an attribute of that kind itself. They say what a f"
+               & "unction does and nothing of how it is called. The same k"
+               & "ind written in the header, on any declaration of the fun"
+               & "ction, is refused as before, and so is every other kind "
+               & "Clang adds: `ReturnsTwiceAttr`, which it knows of `setjm"
+               & "p` and `vfork`, is a way of returning no Landin call can"
+               & " keep. A builtin Clang knows not to return, `exit` or `a"
+               & "bort`, has `noreturn` in its type rather than as an attr"
+               & "ibute, and stays refused with every `noreturn` function.",
+            when 1066 =>
+               "Chosen: the thirteen scalar names, as `Landin.Types` spe"
+               & "lls them, are avoided as the keywords are: such a C name"
+               & " becomes `c_usize`, and a policy's `landin_name` may not"
+               & " be one. Nothing else in a binding changes, and a header"
+               & " without such a name generates what it did.",
+            when 1067 =>
+               "Chosen: sizes, alignments and offsets are `Byte_Count`s,"
+               & " and each sum and product is compared with the target's "
+               & "greatest object before it is formed. A record or array p"
+               & "ast that is L0581, naming the array type or the record a"
+               & "nd the field that passes it; one within it is laid out, "
+               & "asserted against C and recorded, whatever the host's int"
+               & "egers hold. The greatest object and the width of a point"
+               & "er are read from `Landin.Targets`' facts for the row's t"
+               & "arget, where the generator spelled its own 4 and 8.",
             when 821 =>
                "Chosen: `Landin.Platform`'s tool runner has `Run_In_Envi"
                & "ronment`, which runs a program with exactly the environm"

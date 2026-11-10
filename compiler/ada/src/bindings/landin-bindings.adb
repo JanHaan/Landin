@@ -58,10 +58,16 @@ package body Landin.Bindings is
    function Data_Model (Of_Target : Target) return String is
      (if Word_Size (Of_Target) = 4 then "ilp32" else "lp64");
 
-   function Word_Size (Of_Target : Target) return Positive is
+   function Facts (Of_Target : Target) return Landin.Targets.Target_Facts is
      (case Of_Target is
-         when Cortex_M_AAPCS | Cortex_M_AAPCS_VFP => 4,
-         when others => 8);
+         when Linux_X86_64 => Landin.Targets.Linux_X86_64,
+         when Darwin_Arm64 => Landin.Targets.Darwin_Arm64,
+         when Linux_Arm64 => Landin.Targets.Linux_Arm64,
+         when Cortex_M_AAPCS | Cortex_M_AAPCS_VFP => Landin.Targets.Cortex_M);
+
+   --  Every row's data model gives a long and a size_t the pointer's size.
+   function Word_Size (Of_Target : Target) return Positive is
+     (Landin.Targets.Bytes (Landin.Targets.Pointer_Size (Facts (Of_Target))));
 
    function Unsigned_Char (Of_Target : Target) return Boolean is
      (Of_Target in Linux_Arm64 | Cortex_M_AAPCS | Cortex_M_AAPCS_VFP);
