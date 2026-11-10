@@ -536,8 +536,10 @@ class OwnTarget(unittest.TestCase):
                           "positive/own": ("linux-arm64",)})
 
 
-def modes(debug_body, release_body):
-    """Run `modes` over a small corpus with two stub compilers."""
+def modes(debug_body, release_body, executed_row=None):
+    """Run `modes` over a small corpus with two stub compilers.
+
+    EXECUTED_ROW adds to the inventory's row of `runtime/executed`."""
     with tempfile.TemporaryDirectory() as tmp:
         area = Path(tmp)
         tests = area / "compiler/tests"
@@ -559,7 +561,7 @@ def modes(debug_body, release_body):
         (replaced / "fixture.meta").write_text(
             "program: main.ldn\ntargets: linux-x86-64\n")
         (tests / "cortex-m/corpus.json").write_text(json.dumps({"fixtures": {
-            "runtime/executed": {"mode": "execute"},
+            "runtime/executed": dict({"mode": "execute"}, **(executed_row or {})),
             "runtime/replaced": {"mode": "execute", "counterpart": "counterpart"},
             "runtime/hosted": {"mode": "refuse", "codes": ["L0015"]}}}))
         stubs = []
@@ -615,14 +617,55 @@ class BuildModes(unittest.TestCase):
         self.assertIn("runtime/hosted|linux-x86-64|optimize=none|specialize=off",
                       result.stderr)
 
-    def test_a_refusal_must_be_said_the_same_way(self):
-        refuse = "if where == 'counterpart':\n    print('%s'); sys.exit(1)\n"
-        result = modes(refuse % "no" + self.SAME, refuse % "no" + self.SAME)
+    #  The inventory records `runtime/executed` as refused on the RV32 lane
+    #  whose level `--target=rv32` builds, and on Xtensa.
+    REFUSED_ON = {"lanes": {"esp32c3": {"mode": "refuse", "codes": ["L0346"]},
+                            "sifive-e": {"mode": "execute"}},
+                  "targets": {"xtensa": {"mode": "refuse", "codes": ["L0346"]}}}
+    REFUSE = ("if where == 'executed' and (%s):\n"
+              "    print('%s'); sys.exit(1)\n")
+    THERE = "'--target=rv32' in args or '--target=xtensa' in args"
+
+    def test_a_refusal_the_inventory_records_must_be_said_the_same_way(self):
+        refuse = self.REFUSE % (self.THERE, "%s")
+        result = modes(refuse % "no" + self.SAME, refuse % "no" + self.SAME,
+                       self.REFUSED_ON)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("refused alike 16", result.stdout)
-        result = modes(refuse % "no" + self.SAME, refuse % "not so" + self.SAME)
+        #  rv32 once and both Xtensa configurations, at four profiles.
+        self.assertIn("refused as expected 12  unexpected 0", result.stdout)
+        result = modes(refuse % "no" + self.SAME, refuse % "not so" + self.SAME,
+                       self.REFUSED_ON)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("cortex-m/counterpart|cortex-m0", result.stderr)
+        self.assertIn("runtime/executed|rv32|", result.stderr)
+
+    def test_a_refusal_both_builds_share_is_not_agreement(self):
+        #  Both builds refusing a program the corpus expects to compile
+        #  agree with each other, and that passed as "refused alike".
+        refuse = "if where == 'counterpart':\n    print('no'); sys.exit(1)\n"
+        result = modes(refuse + self.SAME, refuse + self.SAME)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unexpected 16", result.stdout)
+        self.assertIn("cortex-m/counterpart|cortex-m0|optimize=none|specialize=off: "
+                      "both compilers refuse it, and it is not in the expected refusals",
+                      result.stderr)
+        #  The reference target executes the fixture: a refusal there is
+        #  never the one its row records for another target.
+        refuse = self.REFUSE % ("'--target=cortex-m0' in args", "no")
+        result = modes(refuse + self.SAME, refuse + self.SAME, self.REFUSED_ON)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("runtime/executed|cortex-m0|", result.stderr)
+
+    def test_two_builds_that_crash_alike_do_not_agree(self):
+        #  A compiler killed by a signal has refused nothing, even where a
+        #  refusal is expected.
+        crash = ("if where == 'executed' and (%s):\n"
+                 "    import os, signal\n"
+                 "    os.kill(os.getpid(), signal.SIGSEGV)\n" % self.THERE)
+        result = modes(crash + self.SAME, crash + self.SAME, self.REFUSED_ON)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unexpected 12", result.stdout)
+        self.assertIn("both compilers ended with status -11, which is no refusal",
+                      result.stderr)
 
     def test_builds_that_refuse_everything_alike_fail(self):
         result = modes("sys.exit(1)\n", "sys.exit(1)\n")

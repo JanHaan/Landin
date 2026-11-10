@@ -540,6 +540,38 @@ def emit_both(job):
     return key, results
 
 
+#  The firmware corpus's lane that runs at the level `--target=rv32` builds
+#  when no `--level` is given, rv32imc (D690): the lane whose refusals the
+#  inventory records for that request.
+MODE_LANES = {"rv32": "esp32c3"}
+
+
+def mode_refusals(root, targets):
+    """What `modes` expects both compilers to refuse, as (source, target).
+
+    They are the positive fixtures `emit` expects refused, and each
+    runtime fixture the firmware corpus executes on its reference and
+    records as refused on another firmware target, in its inventory's
+    `lanes` or `targets`.  Nothing else may be refused by both: a shared
+    refusal outside this list is a program the corpus expects to compile.
+    """
+    found = {("positive/" + fixture, target)
+             for fixture, target in REFUSAL_PAIRS}
+    inventory = Path(root).resolve() / "compiler/tests/cortex-m/corpus.json"
+    if any(target in FIRMWARE_TARGETS for target in targets):
+        rows = json.loads(inventory.read_text())["fixtures"]
+        for name, row in rows.items():
+            if row["mode"] != "execute":
+                continue
+            for target in targets:
+                own = (row.get("lanes", {}).get(MODE_LANES[target])
+                       if target in MODE_LANES
+                       else row.get("targets", {}).get(target))
+                if own and own.get("mode") == "refuse":
+                    found.add((name, target))
+    return found
+
+
 def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
     for compiler in (debug, release):
         build_lock.reading(compiler)
@@ -547,7 +579,8 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
     if workers is None:
         workers = os.cpu_count() or 1
     entries = mode_entries(root, targets)
-    disagree, emitted, refused = [], 0, 0
+    expected = mode_refusals(root, targets)
+    disagree, unexpected, emitted, refused = [], [], 0, 0
     with tempfile.TemporaryDirectory() as tmp:
         jobs = []
         for name, directory, sources, wanted, level in entries:
@@ -571,12 +604,29 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
                     disagree.append("%s: debug %s, release %s"
                                     % (key, first[:24], second[:24]))
                 elif first.startswith("refused:"):
-                    refused += 1
+                    #  Agreeing is not enough.  Two compilers that both
+                    #  crash, or both refuse a program the corpus expects
+                    #  to compile, agree too, and would pass as evidence
+                    #  that the builds compile alike.
+                    status = first.split(":")[1]
+                    name, target = key.split("|")[:2]
+                    if status != "1":
+                        unexpected.append(
+                            "%s: both compilers ended with status %s, which "
+                            "is no refusal" % (key, status))
+                    elif (name, target) not in expected:
+                        unexpected.append(
+                            "%s: both compilers refuse it, and it is not in "
+                            "the expected refusals" % key)
+                    else:
+                        refused += 1
                 else:
                     emitted += 1
-    print("sources %d  requests %d  emitted %d  refused alike %d  disagree %d"
-          % (len(entries), len(jobs), emitted, refused, len(disagree)))
-    faults = sorted(disagree)
+    print("sources %d  requests %d  emitted %d  refused as expected %d  "
+          "unexpected %d  disagree %d"
+          % (len(entries), len(jobs), emitted, refused, len(unexpected),
+             len(disagree)))
+    faults = sorted(disagree) + sorted(unexpected)
     if not emitted:
         faults.insert(0, "no assembly digest was emitted")
     if faults:
