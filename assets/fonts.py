@@ -24,17 +24,33 @@ without one.  Transcribing thirty unicode ranges into Python would be
 thirty chances to mistype one, and the subsetting is the reason a reader
 of an English page fetches one subset of a family instead of all of it.
 
+A stylesheet is read, not trusted.  What it says ends up inside a
+`<style>` element on every page, and the licensed one is fetched at
+publish time from storage outside the repository, so nothing of it is
+copied through as text: a rule is rebuilt from the descriptors named in
+`DESCRIPTORS`, each value held to `VALUE`, a face's file name to `FILE`,
+and a licence header that could end the element is refused.  Anything
+else stops the build.  `licensed.sha256` beside the vendored family pins
+the licensed family's stylesheet and faces by SHA-256 once it exists;
+`--pin` writes it from a checkout the maintainer trusts.
+
     python3 fonts.py            what is available, and what it covers
     python3 fonts.py --require  exit 1 naming any family that is not
+    python3 fonts.py --pin      record the licensed family's digests
+    python3 fonts.py --fetch BASE DEST
+                                fetch the licensed family from BASE into
+                                the new directory DEST, and verify it
 
 Standard library only, like everything else the site build reads.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import sys
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -77,6 +93,29 @@ URL = re.compile(r"url\(\s*['\"]?([^'\")]+?)['\"]?\s*\)")
 DECL = re.compile(r"([a-z-]+)\s*:\s*([^;]+?)\s*(?:;|$)", re.S)
 RANGE = re.compile(r"U\+([0-9A-Fa-f]+)(?:-([0-9A-Fa-f]+))?")
 
+#  What a face may declare besides its `src`, and what a value may be
+#  made of: names, numbers, quotes, and the punctuation of a weight
+#  range, a percentage and a unicode range.  No `<`, no `\`, no `(`, no
+#  `;`, no `}` and no `/`, so a value cannot leave its declaration, its
+#  rule or the page's `<style>` element.
+DESCRIPTORS = frozenset((
+    "font-family", "font-style", "font-weight", "font-stretch",
+    "font-display", "unicode-range", "font-feature-settings",
+    "font-variation-settings", "ascent-override", "descent-override",
+    "line-gap-override", "size-adjust"))
+VALUE = re.compile(r"[A-Za-z0-9 ,.+%?'\"-]+")
+#  A face's file, as a name with no directory in it.
+FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\.woff2")
+
+#  The licensed family's stylesheet and faces by SHA-256, one
+#  `DIGEST  PATH` line each as sha256sum writes them, the path relative
+#  to the licensed root.  The files are not in the repository; what they
+#  must be is.
+PINS = VENDOR / "licensed.sha256"
+#  What the publishing workflow fetches besides the stylesheet and the
+#  faces it names.
+FETCHED_BESIDE = ("README.md", "monolisa/LICENSE.md")
+
 
 class Face:
     """One subset of one family: the file, and what it is for."""
@@ -108,7 +147,7 @@ class Face:
         whitespace.
         """
         parts = [f"src:url({prefix}{self.name}) format(\"woff2\")"]
-        parts += [f"{k}:{v}" for k, v in self.decls.items() if k != "src"]
+        parts += [f"{k}:{v}" for k, v in self.decls.items()]
         return "@font-face{%s}" % ";".join(parts)
 
 
@@ -133,24 +172,83 @@ def missing() -> list[str]:
     return [spec["family"] for spec in FAMILIES if not available(spec)]
 
 
+def pins() -> dict[str, str] | None:
+    """The pinned digests by path, or None while nothing is pinned."""
+    if not PINS.is_file():
+        return None
+    out = {}
+    for number, line in enumerate(
+            PINS.read_text(encoding="utf-8").splitlines(), 1):
+        found = re.fullmatch(r"([0-9a-f]{64})  (\S+)", line)
+        if not found:
+            raise ValueError(f"{PINS.name}:{number}: not a DIGEST  PATH line")
+        out[found.group(2)] = found.group(1)
+    if not out:
+        raise ValueError(f"{PINS.name}: pins nothing")
+    return out
+
+
+def _digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _hold_to_pins(spec, paths) -> None:
+    """Refuse a licensed file that is not the one pinned."""
+    pinned = pins()
+    if pinned is None or not spec["licensed"]:
+        return
+    root = licensed_root()
+    for path in paths:
+        relative = path.relative_to(root).as_posix()
+        if relative not in pinned:
+            raise ValueError(f"{relative} is not pinned in {PINS.name}")
+        if _digest(path) != pinned[relative]:
+            raise ValueError(
+                f"{relative} is not the file {PINS.name} pins")
+
+
 def _read(spec) -> tuple[str, list[Face]]:
     """Read a family's own stylesheet into its license and its faces."""
     source = stylesheet(spec)
+    _hold_to_pins(spec, [source])
     text = source.read_text(encoding="utf-8")
     header = "".join(m.group(0) for m in PRESERVED.finditer(text))
+    #  The header is the one piece of text carried into the page as it
+    #  was written, inside `<style>`, which only `</style` ends.
+    if "<" in header:
+        raise ValueError(
+            f"{spec['css']}: its preserved header holds a '<', which a "
+            "page's <style> element cannot carry")
 
     faces = []
     for body in FACE.findall(text):
         decls = {}
+        src = None
         for key, value in DECL.findall(body):
-            decls[key] = " ".join(value.split())
+            value = " ".join(value.split())
+            if key == "src":
+                src = value
+            elif key not in DESCRIPTORS:
+                raise ValueError(
+                    f"{spec['css']}: an @font-face declares {key}, which "
+                    "is not a descriptor the pages carry")
+            elif not VALUE.fullmatch(value):
+                raise ValueError(
+                    f"{spec['css']}: {key} is {value!r}, which is more "
+                    "than a descriptor's value")
+            else:
+                decls[key] = value
 
-        found = URL.search(decls.get("src", ""))
+        found = URL.search(src or "")
         if not found:
             raise ValueError(f"{spec['css']}: an @font-face with no src url")
         #  Only the file name is taken: a source may write an absolute
         #  path (MonoLisa's does, `/woff2/0-...`) that means nothing here.
-        path = source.parent / "woff2" / Path(found.group(1)).name
+        name = found.group(1).rsplit("/", 1)[-1]
+        if not FILE.fullmatch(name):
+            raise ValueError(
+                f"{spec['css']}: a face's file is named {name!r}")
+        path = source.parent / "woff2" / name
         if not path.is_file():
             raise FileNotFoundError(
                 f"{spec['css']} asks for {path.name}, which is not there")
@@ -167,6 +265,7 @@ def _read(spec) -> tuple[str, list[Face]]:
 
     if not faces:
         raise ValueError(f"{spec['css']}: no @font-face in it")
+    _hold_to_pins(spec, sorted({face.path for face in faces}))
     return header, faces
 
 
@@ -282,7 +381,93 @@ def uncovered(text: str, role: str | None = None) -> set[str]:
     return found
 
 
+def pin() -> int:
+    """Write PINS from the licensed families this host has."""
+    root = licensed_root()
+    lines = []
+    for spec in FAMILIES:
+        if not spec["licensed"]:
+            continue
+        if not available(spec):
+            print(f"fonts: {spec['family']} is not available; nothing pinned")
+            return 1
+        if PINS.exists():
+            PINS.unlink()
+        paths = [stylesheet(spec)] + sorted(
+            {face.path for face in _read(spec)[1]})
+        lines += [f"{_digest(path)}  {path.relative_to(root).as_posix()}"
+                  for path in paths]
+    PINS.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"fonts: pinned {len(lines)} files in {PINS}")
+    return 0
+
+
+def _download(url: str, into: Path) -> None:
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "landin-site-build"})
+    with urllib.request.urlopen(request, timeout=120) as answer:
+        data = answer.read()
+    into.parent.mkdir(parents=True, exist_ok=True)
+    into.write_bytes(data)
+
+
+def fetch(base: str, dest: Path) -> int:
+    """Fetch the licensed families from `base` into the new `dest`.
+
+    The stylesheet is the list of faces, so a subset added at the source
+    arrives without editing the workflow.  It is also text from outside
+    the repository, so a face is fetched only under the name `woff2/FILE`
+    and written only as that file, and what arrived is then read exactly
+    as a render reads it, pins included, before anything uses it.
+    """
+    base = base.rstrip("/")
+    if dest.exists():
+        print(f"fonts: {dest} exists; --fetch wants a new directory")
+        return 1
+    try:
+        for relative in FETCHED_BESIDE:
+            _download(f"{base}/{relative}", dest / relative)
+        for spec in FAMILIES:
+            if not spec["licensed"]:
+                continue
+            sheet = dest / spec["css"]
+            _download(f"{base}/{spec['css']}", sheet)
+            names = set()
+            for target in URL.findall(sheet.read_text(encoding="utf-8")):
+                found = re.fullmatch(r"/?woff2/(.+)", target)
+                if not found or not FILE.fullmatch(found.group(1)):
+                    raise ValueError(
+                        f"{spec['css']} names a face {target!r}, which is "
+                        "not woff2/FILE.woff2")
+                names.add(found.group(1))
+            folder = spec["css"].rsplit("/", 1)[0]
+            for name in sorted(names):
+                _download(f"{base}/{folder}/woff2/{name}",
+                          sheet.parent / "woff2" / name)
+        os.environ[LICENSED_VAR] = str(dest)
+        for spec in FAMILIES:
+            if spec["licensed"]:
+                _read(spec)
+    except (OSError, ValueError) as error:
+        print(f"fonts: the licensed family was not fetched: {error}")
+        return 1
+    if pins() is None:
+        #  GitHub Actions shows this line on the run's summary.
+        print(f"::warning::the licensed face is not pinned: {PINS.name} "
+              "does not exist, so its files are checked for form only. "
+              "python3 assets/fonts.py --pin writes it.")
+    print(f"fonts: fetched into {dest}")
+    return 0
+
+
 def main(argv) -> int:
+    if argv[:1] == ["--pin"] and len(argv) == 1:
+        return pin()
+    if argv[:1] == ["--fetch"] and len(argv) == 3:
+        return fetch(argv[1], Path(argv[2]))
+    if argv and argv != ["--require"]:
+        print(__doc__)
+        return 2
     absent = missing()
     if "--require" in argv:
         for name in absent:

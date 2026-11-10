@@ -95,18 +95,12 @@ jobs:
         run: |
           set -eu
           dest="${RUNNER_TEMP}/landin-fonts"
-          mkdir -p "$dest/monolisa"
-          curl -fsS -o "$dest/README.md"            "$FONTS_BASE/README.md"
-          curl -fsS -o "$dest/monolisa/LICENSE.md"  "$FONTS_BASE/monolisa/LICENSE.md"
-          curl -fsS -o "$dest/monolisa/monolisa.css" "$FONTS_BASE/monolisa/monolisa.css"
           #  The stylesheet is the list of faces, so a subset added upstream
-          #  arrives without editing this workflow.
-          grep -oE 'url\([^)]*\)' "$dest/monolisa/monolisa.css" \
-            | sed 's|url(||; s|)||; s|^/||' | sort -u \
-            | while read -r face; do
-                curl -fsS --create-dirs -o "$dest/monolisa/$face" \
-                     "$FONTS_BASE/monolisa/$face"
-              done
+          #  arrives without editing this workflow.  It is text from outside
+          #  the repository, so fonts.py fetches a face only as woff2/FILE,
+          #  reads what arrived as a render will, and holds it to
+          #  assets/fonts/licensed.sha256 when that file exists.
+          python3 assets/fonts.py --fetch "$FONTS_BASE" "$dest"
           echo "LANDIN_FONTS=$dest" >> "$GITHUB_ENV"
 
       - name: Render and verify
