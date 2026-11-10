@@ -662,6 +662,12 @@ its result, in its preflight, is still written as a `result.json` under
 `--output`; one its argument parser raises is not, and the gate reports
 that step `incomplete`.
 
+A probe command whose open is refused with "permission denied (errno 13)"
+is asked again for up to 15 seconds, each attempt in a log of its own. A
+unit that comes back after a power cycle is listed by its hub before udev
+has given its new node the group, and an open in between is refused; a node
+still refused after the wait fails the step as the command does.
+
 SIGINT or SIGTERM stops a tool at its next point. A power cycle or a
 download under way finishes first, because one cut short leaves a port off
 or a chip halted in its boot ROM. A boot check cancelled before its fixed

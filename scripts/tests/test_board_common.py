@@ -446,6 +446,52 @@ class HelperIdentity(unittest.TestCase):
                 describe.assert_not_called()
 
 
+class ProbeRegrouping(unittest.TestCase):
+    """A probe command refused for permissions is asked again: udev
+    regroups a unit's new node after its hub lists it."""
+
+    def refusing(self, directory, refusals, then):
+        script = Path(directory) / 'probe'
+        script.write_text('#!/bin/sh\n'
+                          'count=$(cat "$0.count" 2>/dev/null || echo 0)\n'
+                          'echo $((count + 1)) > "$0.count"\n'
+                          'if [ "$count" -lt %d ]; then\n'
+                          '  echo "Error: open probe" >&2\n'
+                          '  echo "    2: permission denied (errno 13)" >&2\n'
+                          '  exit 1\n'
+                          'fi\n%s\n' % (refusals, then))
+        script.chmod(0o755)
+        return script
+
+    def test_a_refused_open_is_repeated_and_each_attempt_keeps_its_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = COMMON.Run(Path(directory))
+            script = self.refusing(directory, 2, 'echo words')
+            with mock.patch.object(COMMON, 'PROBE_REGROUP_INTERVAL', 0):
+                self.assertEqual(COMMON.probe_command(run, 'read', [script]), 'words\n')
+            self.assertEqual([c['status'] for c in run.commands], [1, 1, 0])
+            self.assertEqual([c['log'] for c in run.commands],
+                             ['read.log', 'read-2.log', 'read-3.log'])
+
+    def test_another_failure_is_not_repeated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = COMMON.Run(Path(directory))
+            script = self.refusing(directory, 0, 'echo "Error: no chip" >&2; exit 1')
+            with self.assertRaises(COMMON.Failed):
+                COMMON.probe_command(run, 'read', [script])
+            self.assertEqual(len(run.commands), 1)
+
+    def test_a_node_refused_past_the_wait_fails_as_the_command_does(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = COMMON.Run(Path(directory))
+            script = self.refusing(directory, 1000, 'echo words')
+            with mock.patch.object(COMMON, 'PROBE_REGROUP_INTERVAL', 0), \
+                    mock.patch.object(COMMON, 'PROBE_REGROUP_SECONDS', 0):
+                with self.assertRaisesRegex(COMMON.Failed, r'read failed \(1\)'):
+                    COMMON.probe_command(run, 'read', [script])
+            self.assertEqual(len(run.commands), 1)
+
+
 class Probes(unittest.TestCase):
     def test_xtensa_boot_reads_observe_cpu1_but_ram_reads_require_stall_proof(self):
         for board in ('esp32', 'esp32s3'):

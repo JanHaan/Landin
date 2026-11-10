@@ -1058,7 +1058,8 @@ def ram_load(run, args, board, elf):
     write_json(plan, dict(format_version=1, board=board, mode='ram',
                           probe=args.probe, elf=str(elf.resolve())))
     args.pace.before('RAM load')
-    run.command('ram-load', [args.ram_loader, '--plan', plan, '--output', output], timeout=120)
+    probe_command(run, 'ram-load', [args.ram_loader, '--plan', plan, '--output', output],
+                  timeout=120)
     report = json.loads(output.read_text())
     require(report.get('format_version') == 1 and report.get('status') == 'passed'
             and report.get('mode') == 'warm' and report.get('flash_written') is False
@@ -1348,6 +1349,42 @@ def stlink(serial, vid_pid='0483:374e'):
     return '%s:%s' % (vid_pid, serial)
 
 
+PROBE_REFUSED = 'permission denied (errno 13)'
+PROBE_REGROUP_SECONDS = 15
+PROBE_REGROUP_INTERVAL = 0.5
+
+
+def probe_command(run, name, argv, **kw):
+    """RUN's command NAME, which opens a debug probe, asked again while the
+    probe's USB node refuses the open for permissions.  A unit that comes
+    back after a power cycle or a reset is listed by its hub before udev
+    has given the new node its group, and an open in between is errno 13,
+    as `listing` meets with uhubctl.  The open failed before anything
+    reached the target, so the command is safe to repeat; each attempt
+    keeps its own log, a node still refused after PROBE_REGROUP_SECONDS is
+    the command's failure, and so at once is any other."""
+    deadline = time.time() + PROBE_REGROUP_SECONDS
+    while True:
+        try:
+            return run.command(name, argv, **kw)
+        except Failed:
+            if not probe_refused(run) or time.time() >= deadline:
+                raise
+            time.sleep(PROBE_REGROUP_INTERVAL)
+
+
+def probe_refused(run):
+    """Whether RUN's last command was refused its probe for permissions,
+    read from the log that command kept; a run that keeps none is not."""
+    commands = getattr(run, 'commands', None)
+    log = commands[-1].get('log') if commands else None
+    if not log:
+        return False
+    path = Path(run.out) / log
+    return path.is_file() and PROBE_REFUSED in path.read_text(encoding='utf-8',
+                                                              errors='replace')
+
+
 class Probe:
     """probe-rs for one CHIP through one PROBE, as probe-rs's --probe names it."""
     def __init__(self, run, probe_rs, chip, probe, ram_loader=None, *, require_hart1_halted=False,
@@ -1390,7 +1427,7 @@ class Probe:
             pace = getattr(self.run, 'pace', None)
             if pace:
                 pace.before('probe read')
-            self.run.command(name, [self.ram_loader, '--plan', plan, '--output', output])
+            probe_command(self.run, name, [self.ram_loader, '--plan', plan, '--output', output])
             report = json.loads(output.read_text())
             words = report.get('words')
             require(report.get('format_version') == 1 and report.get('status') == 'passed'
@@ -1420,7 +1457,8 @@ class Probe:
             if pace:
                 pace.before('probe read completion')
             return words
-        text = self.run.command(name, self.argv('read', 'b32', hex(address), str(count)))
+        text = probe_command(self.run, name,
+                             self.argv('read', 'b32', hex(address), str(count)))
         # Each line begins with its address and a colon.
         words = [int(w, 16) for w in text.split() if not w.endswith(':')]
         require(len(words) == count, '%s read %d words, not %d' % (name, len(words), count))
@@ -1429,9 +1467,10 @@ class Probe:
     def download_bin(self, image, base):
         """Write the raw IMAGE to flash at BASE and verify it, as an ESP
         image goes where its ROM reads it (D685)."""
-        self.run.command('flash', self.argv('download', '--binary-format', 'bin',
-                                            '--base-address', hex(base), '--verify', image),
-                         timeout=300)
+        probe_command(self.run, 'flash',
+                      self.argv('download', '--binary-format', 'bin',
+                                '--base-address', hex(base), '--verify', image),
+                      timeout=300)
 
     def read_bytes(self, name, address, size):
         """SIZE bytes from ADDRESS, a multiple of four, read as words."""
@@ -1441,7 +1480,7 @@ class Probe:
     def flash(self, elf, address, expected, what):
         """Flash ELF and verify it, then read len(EXPECTED) bytes back from
         ADDRESS, which must be EXPECTED: WHAT says which bytes they are."""
-        self.run.command('flash', self.argv('download', '--verify', elf), timeout=300)
+        probe_command(self.run, 'flash', self.argv('download', '--verify', elf), timeout=300)
         count = len(expected) // 4
         back = struct.pack('<%dI' % count, *self.read_words('flash-readback', address, count))
         require(back == expected, 'flash does not hold %s' % what)
