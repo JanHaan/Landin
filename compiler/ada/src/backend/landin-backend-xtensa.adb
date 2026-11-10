@@ -703,8 +703,34 @@ package body Landin.Backend.Xtensa is
          end if;
       end Add_Offset;
 
+      --  D1110: the window handlers keep the caller's a0 to a3 in the
+      --  sixteen bytes below this routine's SP, wherever SP is when the
+      --  caller's window is taken and wherever it is at RETW.  A call's
+      --  outgoing area moves SP between the two, so the three words the
+      --  selected SP write does not form go with it: down after SP has
+      --  moved and up before it moves back, which keeps both copies above
+      --  the SP an interrupt's handler stack starts 32 bytes below.  a7
+      --  is the frame's SP, the only one an area is reserved from.
+      procedure Move_Base_Save (From, To : String);
+
+      procedure Move_Base_Save (From, To : String) is
+      begin
+         for Offset in 1 .. 4 loop
+            --  The a1 word, at -12, is the CFA every SP write stores.
+            if Offset /= 2 then
+               Put (Character'Val (9) & "l32e a8, " & From & ", -"
+                    & Image (20 - Offset * 4));
+               Put (Character'Val (9) & "s32e a8, " & To & ", -"
+                    & Image (20 - Offset * 4));
+            end if;
+         end loop;
+      end Move_Base_Save;
+
       procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count) is
       begin
+         if Bytes > 0 then
+            Move_Base_Save (From => "a1", To => "a7");
+         end if;
          Add_Offset ("sp", Bytes);
       end Restore_Stack;
 
@@ -841,6 +867,7 @@ package body Landin.Backend.Xtensa is
                Immediate ("x5", Pattern (Bytes));
                Emit ("sub sp, sp, x5");
             end if;
+            Move_Base_Save (From => "a7", To => "a1");
          end if;
       end Reserve;
 
@@ -6705,8 +6732,11 @@ package body Landin.Backend.Xtensa is
             --  Preserve a0 before using it as the sole scratch word.
             Native ("s32i a0, a1, 0");
             Native ("s32i a1, a2, 0");
-            Native ("wsr a1, EXCSAVE1");
+            --  Masked before EXCSAVE1 names this context: an interrupt's
+            --  entry and return leave their own context's address there,
+            --  and every save below reads the register back.
             Native ("rsil a0, 15");
+            Native ("wsr a1, EXCSAVE1");
             Native ("s32i a0, a1, 256");
             Native ("rsr a0, PS");
             Native ("slli a0, a0, 14"); --  Clear PS.WOE.

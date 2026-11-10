@@ -28,7 +28,8 @@ control and an intentional trap control:
 python3 environments/xtensa/backend.py \
   --refine "$REFINE" --tools "$TOOLS" --output "$OUT/controls" \
   --chip esp32 --control status-control --control trap-control \
-  --control window-depth --control window-switch --control scalars \
+  --control window-depth --control window-switch --control window-arguments \
+  --control scalars \
   --control software-float --control assembly-operands --control feature-level \
   --control break-control --control early-stop-control --control premature-stop-control
 ```
@@ -42,7 +43,9 @@ exercise an illegal instruction, a debug break, an early debugger stop and
 a premature firmware stop; the latter two cannot count as completion even
 with zero status and no recorded trap. Trap controls also check the recorded
 PC against the emitted instruction. The window controls exercise overflow and
-underflow, and round trips between two stacks with live recursive frames.
+underflow, round trips between two stacks with live recursive frames, and a
+caller whose window is taken while its callee's SP is lowered for stack
+arguments.
 
 The corpus adapter reads the sole shared
 [inventory](../../compiler/tests/cortex-m/corpus.json) and its retained

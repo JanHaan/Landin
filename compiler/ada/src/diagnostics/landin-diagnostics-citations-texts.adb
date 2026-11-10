@@ -24664,6 +24664,22 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Sources are Espressif's pinned GCC layout and ABI defini"
                & "tions, argument and frame implementation, configuration "
                & "overlays and tool wrappers.",
+            when 1110 =>
+               "Chosen: the backend carries the other three words with t"
+               & "he stack pointer. After lowering it copies them from bel"
+               & "ow the frame's stack pointer to below the lowered one, a"
+               & "nd before raising it copies them back, so the words the "
+               & "underflow handler reads at `retw` are the caller's wheth"
+               & "er its window was taken before the area was reserved, wh"
+               & "ile it was, or never, when the copy moves bytes nobody r"
+               & "eads. Both copies are made while the stack pointer is th"
+               & "e lower of the two: a compiler-owned interrupt saves eve"
+               & "ry physical register in its own context and starts its h"
+               & "andler's stack 32 bytes below the interrupted stack poin"
+               & "ter, so it takes no window of the interrupted stack and "
+               & "writes above neither copy. The stack pointer word is the"
+               & " frame's canonical frame address, which every stack-poin"
+               & "ter write already stores.",
             when 661 =>
                "Chosen: on `rv32` the loader adds `platform/riscv/refere"
                & "nce` as D543 adds the Cortex-M reference, and its submod"
@@ -25585,7 +25601,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & " a 16-byte ABI spill cushion bring that to 304 bytes, be"
                & "low its conservative 416-byte allowance. Window exceptio"
                & "ns use the existing ABI spill areas and recorded backcha"
-               & "ins without reserving another frame."
+               & "ins without reserving another frame; D1110 keeps a calle"
+               & "r's spill area with the stack pointer when an outgoing a"
+               & "rea moves it."
                & LF
                & LF
                & "| Target | Margin | Unchecked | Switch frame | Before th"

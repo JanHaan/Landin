@@ -2071,6 +2071,9 @@ package body Landin.Diagnostics.Citations is
             when 903 =>
                "Xtensa levels share the windowed ABI and retain distinct"
                & " instruction configurations",
+            when 1110 =>
+               "On Xtensa a caller's base save moves with the stack poin"
+               & "ter around an outgoing area",
             when 661 =>
                "An rv32 program that reaches no description is given the"
                & " RISC-V reference",
@@ -3784,6 +3787,8 @@ package body Landin.Diagnostics.Citations is
             when 660 =>
                "Decisions: The toolchain, C and the machine",
             when 903 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1110 =>
                "Decisions: The toolchain, C and the machine",
             when 661 =>
                "Decisions: The toolchain, C and the machine",
@@ -5577,6 +5582,10 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d903-xtensa-levels-share-t"
                & "he-windowed-abi-and-retain-distinct-instruction-configur"
                & "ations",
+            when 1110 =>
+               "https://www.701.dev/spec.html#d1110-on-xtensa-a-caller-s"
+               & "-base-save-moves-with-the-stack-pointer-around-an-outgoi"
+               & "ng-area",
             when 661 =>
                "https://www.701.dev/spec.html#d661-an-rv32-program-that-"
                & "reaches-no-description-is-given-the-risc-v-reference",
