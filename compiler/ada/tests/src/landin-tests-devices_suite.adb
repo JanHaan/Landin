@@ -9,6 +9,8 @@
 --  the fake filesystem: written whole, left alone when unchanged, stale
 --  files removed, and nothing replaced when anything is in the way.
 
+with Ada.Execution_Time;
+with Ada.Real_Time;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with GNAT.SHA256;
@@ -1182,6 +1184,47 @@ package body Landin.Tests.Devices_Suite is
                            "{""../../escape"": ""0""}");
          end Foreign_Manifest;
 
+         --  D1064: the old manifest names a file this run does not make,
+         --  a developer's, a module edited since it was written, or one
+         --  whose entry records no hash; none is the bytes its entry
+         --  records, and none is removed.
+         procedure Foreign_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+
+         procedure Foreign_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+         begin
+            Host.Add_File ("out/descriptions/toy1/memory.ldn", "mine");
+            Host.Add_File
+              ("out/toy1/outputs.json",
+               "{""descriptions/toy1/memory.ldn"": """
+               & [1 .. 64 => '0'] & """}");
+         end Foreign_Stale;
+
+         procedure Edited_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+
+         procedure Edited_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+         begin
+            Host.Add_File ("out/toy1/old/device.ldn", "edited" & LF);
+            Host.Add_File
+              ("out/toy1/outputs.json",
+               "{""toy1/old/device.ldn"": """
+               & GNAT.SHA256.Digest ("generated" & LF) & """}");
+         end Edited_Stale;
+
+         procedure Unhashed_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+
+         procedure Unhashed_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+         begin
+            Host.Add_File ("out/toy1/old/device.ldn", "generated" & LF);
+            Host.Add_File
+              ("out/toy1/outputs.json", "{""toy1/old/device.ldn"": 1}");
+         end Unhashed_Stale;
+
          procedure No_Svd
            (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
 
@@ -1201,6 +1244,61 @@ package body Landin.Tests.Devices_Suite is
          Refused (Unwritable'Access, "L0531", "unwritable");
          Refused (Foreign_Manifest'Access, "L0531", "not a path below it");
          Refused (No_Svd'Access, "L0003", "cannot read the SVD");
+         Refused (Foreign_Stale'Access, "L0531",
+                  "names out/descriptions/toy1/memory.ldn, which this run"
+                  & " no longer makes and would remove, but it is not the"
+                  & " file the manifest says refine svd wrote");
+         Refused (Edited_Stale'Access, "L0531",
+                  "names out/toy1/old/device.ldn, which this run no longer"
+                  & " makes");
+         Refused (Unhashed_Stale'Access, "L0531",
+                  "names out/toy1/old/device.ldn, which this run no longer"
+                  & " makes");
+      end;
+      --  What a refusal for a stale file leaves is the file.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Prepare (Host);
+         Host.Add_File ("out/descriptions/toy1/memory.ldn", "mine");
+         Host.Add_File ("out/toy1/old/device.ldn", "generated" & LF);
+         Host.Add_File
+           ("out/toy1/outputs.json",
+            "{""descriptions/toy1/memory.ldn"": """
+            & [1 .. 64 => '0'] & """, ""toy1/old/device.ldn"": """
+            & GNAT.SHA256.Digest ("generated" & LF) & """}");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Content_Of (Host, "out/descriptions/toy1/memory.ldn")
+                 = "mine"
+               and then Host.Exists ("out/toy1/old/device.ldn")
+               and then not Host.Exists ("out/toy1/uarta/device.ldn"),
+               "a developer's file the manifest names is kept, and nothing"
+               & " is replaced: " & Code_Of (Result));
+         end;
+         --  With only the file it wrote named, that file goes.
+         Host.Add_File
+           ("out/toy1/outputs.json",
+            "{""toy1/old/device.ldn"": """
+            & GNAT.SHA256.Digest ("generated" & LF) & """}");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = 0
+               and then Contains (US.To_String (Result.Output),
+                                  "1 no longer made removed")
+               and then not Host.Exists ("out/toy1/old/device.ldn")
+               and then Content_Of (Host, "out/descriptions/toy1/memory.ldn")
+                 = "mine",
+               "a stale file that is still what was written is removed: "
+               & Code_Of (Result));
+         end;
       end;
    end Outputs_Are_Replaced_Whole;
 
@@ -1252,6 +1350,504 @@ package body Landin.Tests.Devices_Suite is
                  """UARTB.CR""", """UARTC.CR"""), "L0530", "toy.svd:");
    end Each_Fault_Has_Its_Code;
 
+   --  One refusal of the projection: its kind, words of its message, and
+   --  the line of the SVD it points at when one is given.
+   procedure Expect_Refusal
+     (Item : in out Landin.Testing.Context;
+      Text : String; Kind : Dev.Fault_Kind; Words : String;
+      Line : Natural := 0; Policy : String := "");
+
+   procedure Expect_Refusal
+     (Item : in out Landin.Testing.Context;
+      Text : String; Kind : Dev.Fault_Kind; Words : String;
+      Line : Natural := 0; Policy : String := "")
+   is
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+      Document : Landin.Xml.Document;
+   begin
+      Dev.Projection.Project
+        (Text, (if Policy = "" then Policy_For (Text) else Policy),
+         Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Kind
+         and then Contains (US.To_String (Problem.Message), Words)
+         and then Made.Outputs.Is_Empty,
+         Dev.Fault_Kind'Image (Kind) & " " & Words & ", not "
+         & Dev.Fault_Kind'Image (Problem.Kind) & " "
+         & US.To_String (Problem.Message));
+      if Line /= 0 then
+         Landin.Xml.Parse (Document, Text);
+         Landin.Testing.Check
+           (Item, Problem.Has_Offset and then Problem.Within = Dev.Svd_Input,
+            "placed in the SVD: " & Words);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Xml.Line_Of (Document, Problem.Offset), Line,
+            "where: " & Words);
+      end if;
+   end Expect_Refusal;
+
+   --  The toy with a register array PIN%s of three, indexed 4 to 6, and a
+   --  policy for it that selects one more register of UARTA.
+   Arrayed_Svd : constant String :=
+     Replaced (Svd, "      </registers>" & LF & "    </peripheral>" & LF
+               & "    <peripheral derivedFrom",
+               "        <register><name>PIN%s</name><dim>3</dim>"
+               & "<dimIncrement>0x4</dimIncrement><dimIndex>4-6"
+               & "</dimIndex><addressOffset>0x10</addressOffset>"
+               & "<fields><field><name>LVL</name><bitRange>[0:0]"
+               & "</bitRange><access>read-write</access></field></fields>"
+               & "</register>" & LF
+               & "      </registers>" & LF & "    </peripheral>" & LF
+               & "    <peripheral derivedFrom");
+
+   function Selecting (Text, Name : String) return String is
+     (Replaced
+        (Replaced (Policy_For (Text), """UARTA"": [""CR"", ""CR_IN""]",
+                   """UARTA"": [""CR"", ""CR_IN"", """ & Name & """]"),
+         """UARTB.CR"":", """UARTA." & Name & """: {""read"":"
+         & " ""normal"", ""write"": ""normal"", ""reserved"": ""zero""},"
+         & " ""UARTB.CR"":"));
+
+   procedure What_An_Svd_Omits_Or_Overstates_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   --  D1062: a child the projection reads and the SVD omits is refused at
+   --  its element, and each of an SVD's 64-bit numbers is bounded before
+   --  it is added to another, so neither ends in an exception or passes a
+   --  wrapped sum as a bit position, an address or a vector count.
+   procedure What_An_Svd_Omits_Or_Overstates_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Expect
+        (Text : String; Kind : Dev.Fault_Kind; Words : String;
+         Line : Natural := 0; Policy : String := "");
+
+      procedure Expect
+        (Text : String; Kind : Dev.Fault_Kind; Words : String;
+         Line : Natural := 0; Policy : String := "") is
+      begin
+         Expect_Refusal (Item, Text, Kind, Words, Line, Policy);
+      end Expect;
+
+      No_Increment : constant String :=
+        Replaced (Arrayed_Svd, "<dimIncrement>0x4</dimIncrement>", "");
+      Far_Increment : constant String :=
+        Replaced (Arrayed_Svd, "<dimIncrement>0x4</dimIncrement>",
+                  "<dimIncrement>0xFFFFFFFFFFFFFFFC</dimIncrement>");
+      Far_Array : constant String :=
+        Replaced (Arrayed_Svd, "<addressOffset>0x10</addressOffset>",
+                  "<addressOffset>0xFFFFFFFF00000010</addressOffset>");
+   begin
+      --  An interrupt of a peripheral nothing selects is read too.
+      Expect (Replaced (Svd, "<name>UARTB_IRQ</name><value>3</value>",
+                        "<name>UARTB_IRQ</name>"),
+              Dev.Inconsistent_Device,
+              "an interrupt's value is missing: this <interrupt> has no"
+              & " <value>", 43);
+      Expect (No_Increment, Dev.Inconsistent_Device,
+              "PIN%s's dimIncrement is missing: this <register> has no"
+              & " <dimIncrement>", 38,
+              Policy => Selecting (No_Increment, "PIN5"));
+      --  bitOffset + bitWidth wraps to 0 and to 16.
+      Expect (Replaced (Svd, "<bitOffset>1</bitOffset><bitWidth>2</bitWidth>",
+                        "<bitOffset>0xFFFFFFFFFFFFFFFF</bitOffset>"
+                        & "<bitWidth>1</bitWidth>"),
+              Dev.Inconsistent_Device, "lies outside its 32-bit register",
+              24);
+      Expect (Replaced (Svd, "<bitOffset>1</bitOffset><bitWidth>2</bitWidth>",
+                        "<bitOffset>0xFFFFFFFFFFFFFFF0</bitOffset>"
+                        & "<bitWidth>0x20</bitWidth>"),
+              Dev.Inconsistent_Device, "lies outside its 32-bit register",
+              24);
+      Expect (Replaced (Svd, "<bitOffset>1</bitOffset><bitWidth>2</bitWidth>",
+                        "<bitOffset>31</bitOffset><bitWidth>2</bitWidth>"),
+              Dev.Inconsistent_Device, "lies outside its 32-bit register",
+              24);
+      --  0x40001000 + 0xFFFFFFFFC0000004 wraps to 0x00001004.
+      Expect (Replaced (Svd, "<name>CR</name>" & LF
+                        & "          <addressOffset>0x4</addressOffset>",
+                        "<name>CR</name>" & LF & "          <addressOffset>"
+                        & "0xFFFFFFFFC0000004</addressOffset>"),
+              Dev.Inconsistent_Device, "not a word-aligned 32-bit address",
+              20);
+      Expect (Far_Increment, Dev.Inconsistent_Device,
+              "PIN%s's dimIncrement is beyond 32 bits", 38,
+              Policy => Selecting (Far_Increment, "PIN5"));
+      Expect (Far_Array, Dev.Inconsistent_Device,
+              "not a word-aligned 32-bit address", 38,
+              Policy => Selecting (Far_Array, "PIN5"));
+      --  16 + deviceNumInterrupts wraps to 15.
+      Expect (Replaced (Svd, "<deviceNumInterrupts>4<",
+                        "<deviceNumInterrupts>0xFFFFFFFFFFFFFFFF<"),
+              Dev.Inconsistent_Device, "beyond any vector table", 8);
+      declare
+         Made : Dev.Projection.Result;
+         Problem : Dev.Fault;
+         Most : constant String :=
+           Replaced (Svd, "<deviceNumInterrupts>4<",
+                     "<deviceNumInterrupts>65536<");
+      begin
+         Dev.Projection.Project (Most, Policy_For (Most), Made, Problem);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Dev.No_Fault
+            and then Contains
+              (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+               "compiler.vectors(65552)" & LF),
+            "the largest table is read: " & US.To_String (Problem.Message));
+      end;
+   end What_An_Svd_Omits_Or_Overstates_Is_Refused;
+
+   procedure An_Ambiguous_Svd_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   --  D1062: where a selected name has two readings in the SVD, the second
+   --  is refused rather than the first taken.
+   procedure An_Ambiguous_Svd_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      Second_Register : constant String :=
+        Replaced (Svd, "        <register>" & LF
+                  & "          <name>CR_IN</name>",
+                  "        <register><name>CR</name><addressOffset>0x40"
+                  & "</addressOffset><fields><field><name>X</name>"
+                  & "<bitRange>[31:28]</bitRange></field></fields>"
+                  & "</register>" & LF
+                  & "        <register>" & LF
+                  & "          <name>CR_IN</name>");
+      Second_Peripheral : constant String :=
+        Replaced (Svd, "  </peripherals>",
+                  "    <peripheral><name>UARTA</name><baseAddress>0x50000000"
+                  & "</baseAddress></peripheral>" & LF & "  </peripherals>");
+      --  PIN5 is the second element of PIN%s, and now a register too.
+      Named_And_Element : constant String :=
+        Replaced (Arrayed_Svd, "        <register><name>PIN%s</name>",
+                  "        <register><name>PIN5</name><addressOffset>0x80"
+                  & "</addressOffset><fields><field><name>X</name>"
+                  & "<bitRange>[0:0]</bitRange></field></fields>"
+                  & "</register>" & LF
+                  & "        <register><name>PIN%s</name>");
+      Two_Arrays : constant String :=
+        Replaced (Arrayed_Svd, "        <register><name>PIN%s</name>",
+                  "        <register><name>P%s5</name><dim>2</dim>"
+                  & "<dimIncrement>4</dimIncrement><dimIndex>IN,OUT"
+                  & "</dimIndex><addressOffset>0x80</addressOffset>"
+                  & "<fields><field><name>X</name><bitRange>[0:0]"
+                  & "</bitRange></field></fields></register>" & LF
+                  & "        <register><name>PIN%s</name>");
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+   begin
+      Expect_Refusal
+        (Item, Second_Register, Dev.Inconsistent_Device,
+         "the SVD gives UARTA.CR twice, and does not say which is meant",
+         32);
+      Expect_Refusal
+        (Item, Second_Peripheral, Dev.Inconsistent_Device,
+         "the SVD has two peripherals named UARTA", 46);
+      --  The peripheral a selected one is derived from is one too.
+      Expect_Refusal
+        (Item, Second_Peripheral, Dev.Inconsistent_Device,
+         "the SVD has two peripherals named UARTA", 46,
+         Policy => Replaced
+           (Replaced (Policy_For (Second_Peripheral),
+                      """UARTA"": [""CR"", ""CR_IN""], ", ""),
+            """UARTA.CR"": {""read"": ""normal"", ""write"": ""one_clears"","
+            & " ""reserved"": ""zero"", ""write_mask"": ""0x00000001""},"
+            & """UARTA.CR_IN"": {""read"": ""normal"", ""write"":"
+            & " ""refused"", ""reserved"": ""zero""},", ""));
+      Expect_Refusal
+        (Item, Named_And_Element, Dev.Inconsistent_Device,
+         "the SVD gives UARTA.PIN5 twice, as a register of that name or as"
+         & " an element of an array (dim)", 39,
+         Policy => Selecting (Named_And_Element, "PIN5"));
+      Expect_Refusal
+        (Item, Two_Arrays, Dev.Inconsistent_Device,
+         "the SVD gives UARTA.PIN5 twice, as a register of that name or as"
+         & " an element of an array (dim)", 39,
+         Policy => Selecting (Two_Arrays, "PIN5"));
+      --  Another element of the same array is not ambiguous.
+      Dev.Projection.Project
+        (Named_And_Element, Selecting (Named_And_Element, "PIN6"),
+         Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                            "public pin6_offset: usize = 0x18" & LF),
+         "PIN6 has one reading: " & US.To_String (Problem.Message));
+      --  A field's position given in two forms.
+      Expect_Refusal
+        (Item, Replaced (Svd, "<bitRange>[0:0]</bitRange>",
+                         "<bitRange>[0:0]</bitRange><lsb>3</lsb>"
+                         & "<msb>3</msb>"),
+         Dev.Inconsistent_Device,
+         "UARTA.CR.EN gives its position in two forms that disagree: bits"
+         & " 0 to 0, and bits 3 to 3", 29);
+      Expect_Refusal
+        (Item, Replaced (Svd, "<lsb>8</lsb><msb>15</msb>",
+                         "<lsb>8</lsb><msb>15</msb><bitOffset>8</bitOffset>"
+                         & "<bitWidth>4</bitWidth>"),
+         Dev.Inconsistent_Device, "two forms that disagree: bits 8 to 11,"
+         & " and bits 8 to 15", 36);
+      declare
+         Agreeing : constant String :=
+           Replaced (Svd, "<bitRange>[0:0]</bitRange>",
+                     "<bitRange>[0:0]</bitRange><lsb>0</lsb><msb>0</msb>"
+                     & "<bitOffset>0</bitOffset><bitWidth>1</bitWidth>");
+      begin
+         Dev.Projection.Project
+           (Agreeing, Policy_For (Agreeing), Made, Problem);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Dev.No_Fault
+            and then Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                               "    f_en: u1 at 0..0" & LF),
+            "three forms that agree are one position: "
+            & US.To_String (Problem.Message));
+      end;
+   end An_Ambiguous_Svd_Is_Refused;
+
+   procedure A_Reserved_Name_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   --  D1063: a name the importer writes with nothing added is refused
+   --  when Landin reserves it, rather than written into a module that no
+   --  program can compile or import.
+   procedure A_Reserved_Name_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      function Esp (Text : String; Rest : String := "") return String is
+        (Policy_For (Text, ", ""core"": ""esp-rv32imc""" & Rest));
+
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+   begin
+      for Name of Landin.Platform.Path_List'
+        ["END", "Type", "match", "COMPILER", "linker"]
+      loop
+         declare
+            Keyword : constant String :=
+              Replaced (Svd, "<name>UARTB_IRQ</name>",
+                        "<name>" & Name & "</name>");
+         begin
+            Expect_Refusal
+              (Item, Keyword, Dev.Unsupported_Form,
+               "the interrupt " & Name & " would be the source "
+               & Dev.Lowered (Name) & ", a name Landin reserves",
+               Policy => Esp (Keyword));
+            --  As a slot its name is a string, and no declaration.
+            Dev.Projection.Project
+              (Keyword, Policy_For (Keyword), Made, Problem);
+            Landin.Testing.Check
+              (Item, Problem.Kind = Dev.No_Fault
+               and then Contains
+                 (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+                  "compiler.interrupt(""" & Name & """, 3)" & LF),
+               Name & " is a slot's name: "
+               & US.To_String (Problem.Message));
+            --  And the policy can leave the source out.
+            Dev.Projection.Project
+              (Keyword,
+               Esp (Keyword, ", ""interrupt_corrections"": {""" & Name
+                    & """: {""omit"": true, ""source"": ""reserved""}}"),
+               Made, Problem);
+            Landin.Testing.Check
+              (Item, Problem.Kind = Dev.No_Fault
+               and then Contains
+                 (Output_Of (Made, "toy1/sources/device.ldn"),
+                  "public uarta_irq: u32 = 2" & LF),
+               Name & " omitted: " & US.To_String (Problem.Message));
+         end;
+      end loop;
+      declare
+         Module : constant String :=
+           Replaced (Svd, "<name>UARTB</name>", "<name>End</name>");
+      begin
+         Expect_Refusal
+           (Item, Module, Dev.Unsupported_Form,
+            "the peripheral End would be the module end, a name Landin"
+            & " reserves", 40,
+            Policy => Replaced
+              (Replaced (Policy_For (Module), """UARTB"": [""CR""]",
+                         """End"": [""CR""]"),
+               """UARTB.CR""", """End.CR"""));
+      end;
+      Expect_Refusal
+        (Item, Svd, Dev.Invalid_Policy,
+         "the policy's prefix has the part type, a name Landin reserves",
+         Policy => Policy_For (Svd, ", ""prefix"": ""chips/type"""));
+   end A_Reserved_Name_Is_Refused;
+
+   procedure Outputs_Do_Not_Overlap (Item : in out Landin.Testing.Context);
+
+   --  D1064: the policy's paths are compared as they are written, the
+   --  modules' root included, and none may be another or lie below it.
+   procedure Outputs_Do_Not_Overlap (Item : in out Landin.Testing.Context)
+   is
+      procedure Expect (Rest, Words : String);
+
+      procedure Expect (Rest, Words : String) is
+      begin
+         Expect_Refusal (Item, Svd, Dev.Invalid_Policy, Words,
+                         Policy => Policy_For (Svd, Rest));
+      end Expect;
+
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+   begin
+      Expect (", ""modules"": ""gen"", ""manifest"":"
+              & " ""toy1/uarta/device.ldn""",
+              "write two outputs to gen/toy1/uarta/device.ldn");
+      Expect (", ""manifest"": ""toy1/uarta/device.ldn""",
+              "write two outputs to toy1/uarta/device.ldn");
+      Expect (", ""modules"": ""gen"", ""correspondence"":"
+              & " ""toy1/uartb/device.ldn""",
+              "write two outputs to gen/toy1/uartb/device.ldn");
+      Expect (", ""modules"": ""gen"", ""description"": ""gen/toy1"","
+              & " ""manifest"": ""toy1/interrupts.ldn""",
+              "write two outputs to gen/toy1/interrupts.ldn");
+      Expect (", ""modules"": ""gen"", ""manifest"":"
+              & " ""toy1/uarta/device.ldn/x.json""",
+              "write gen/toy1/uarta/device.ldn as a file and"
+              & " gen/toy1/uarta/device.ldn/x.json below it");
+      Expect (", ""correspondence"": ""toy1/uarta""",
+              "write toy1/uarta as a file and toy1/uarta/device.ldn below"
+              & " it");
+      Expect (", ""description"": ""toy1/outputs.json""",
+              "write toy1/outputs.json as a file and"
+              & " toy1/outputs.json/interrupts.ldn below it");
+      --  A name that only begins as another does is no directory above it.
+      Dev.Projection.Project
+        (Svd, Policy_For (Svd, ", ""modules"": ""gen"", ""manifest"":"
+                          & " ""toy1/uarta/device.ldn.json"","
+                          & " ""correspondence"": ""toy1/uarta-map"""),
+         Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then US.To_String (Made.Manifest)
+           = "gen/toy1/uarta/device.ldn.json"
+         and then Contains
+           (Output_Of (Made, "gen/toy1/uarta/device.ldn.json"),
+            """toy1/uarta-map"": """)
+         and then not Contains
+           (Output_Of (Made, "gen/toy1/uarta/device.ldn.json"),
+            "device.ldn.json"),
+         "distinct paths are written, the manifest under the root and not"
+         & " listing itself: " & US.To_String (Problem.Message));
+   end Outputs_Do_Not_Overlap;
+
+   procedure A_Large_Svd_Costs_In_Proportion
+     (Item : in out Landin.Testing.Context);
+
+   --  D1062: an element's attributes, a field's enumerated values and a
+   --  device's interrupts are each read in time that grows with their
+   --  number, not with its square.  Four times as many may take four times
+   --  as long and a logarithm more; the comparisons each of the three once
+   --  made of every item with every other took sixteen.  Processor time is
+   --  measured, which other work on the host does not lengthen.
+   procedure A_Large_Svd_Costs_In_Proportion
+     (Item : in out Landin.Testing.Context)
+   is
+      use type Ada.Execution_Time.CPU_Time;
+
+      Small : constant := 8_000;
+      Large : constant := 4 * Small;
+
+      function Image (Value : Natural) return String is
+        (Dev.Decimal (Dev.Word (Value)));
+
+      function Attributes (Count : Positive) return String;
+
+      function Attributes (Count : Positive) return String is
+         Text : US.Unbounded_String;
+      begin
+         for Index in 1 .. Count loop
+            US.Append (Text, " a" & Image (Index) & "=""x""");
+         end loop;
+         return Replaced (Svd, "<cpu>", "<cpu" & US.To_String (Text) & ">");
+      end Attributes;
+
+      function Values (Count : Positive) return String;
+
+      function Values (Count : Positive) return String is
+         Text : US.Unbounded_String;
+      begin
+         for Index in 1 .. Count loop
+            US.Append (Text, "<enumeratedValue><name>V" & Image (Index)
+                       & "</name><value>" & Image (Index)
+                       & "</value></enumeratedValue>");
+         end loop;
+         return Replaced
+           (Svd, "<field><name>LEVEL</name><lsb>8</lsb><msb>15</msb>",
+            "<field><name>LEVEL</name><lsb>0</lsb><msb>31</msb>"
+            & "<enumeratedValues>" & US.To_String (Text)
+            & "</enumeratedValues>");
+      end Values;
+
+      --  Descending, the order a search from the front is slowest in.
+      function Interrupts (Count : Positive) return String;
+
+      function Interrupts (Count : Positive) return String is
+         Text : US.Unbounded_String;
+      begin
+         for Index in 1 .. Count loop
+            US.Append (Text, "<interrupt><name>I" & Image (Index)
+                       & "</name><value>" & Image (Count - Index + 4)
+                       & "</value></interrupt>");
+         end loop;
+         return Replaced (Svd, "<name>UARTB</name>",
+                          "<name>UARTB</name>" & US.To_String (Text));
+      end Interrupts;
+
+      function Seconds (Text, Expected : String) return Duration;
+
+      function Seconds (Text, Expected : String) return Duration is
+         Policy : constant String := Policy_For (Text);
+         Made : Dev.Projection.Result;
+         Problem : Dev.Fault;
+         Began : constant Ada.Execution_Time.CPU_Time :=
+           Ada.Execution_Time.Clock;
+         Took : Duration;
+      begin
+         Dev.Projection.Project (Text, Policy, Made, Problem);
+         Took := Ada.Real_Time.To_Duration (Ada.Execution_Time.Clock - Began);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Dev.No_Fault
+            and then (for some Output of Made.Outputs =>
+                        Contains (US.To_String (Output.Content), Expected)),
+            "the large SVD is read: " & Expected & " "
+            & US.To_String (Problem.Message));
+         return Took;
+      end Seconds;
+
+      procedure Compare (What : String; Lesser, Greater : Duration);
+
+      procedure Compare (What : String; Lesser, Greater : Duration) is
+      begin
+         --  A floor under the lesser keeps a clock's grain from deciding.
+         Landin.Testing.Check
+           (Item, Greater <= 10 * Duration'Max (Lesser, 0.02),
+            What & ": " & Image (Small) & " took"
+            & Duration'Image (Lesser) & " s and " & Image (Large) & " took"
+            & Duration'Image (Greater) & " s, more than ten times as long");
+      end Compare;
+   begin
+      Compare ("attributes of one element",
+               Seconds (Attributes (Small), "public cr_offset"),
+               Seconds (Attributes (Large), "public cr_offset"));
+      Compare ("enumerated values of one field",
+               Seconds (Values (Small),
+                        "public cr_in_level_v" & Image (Small) & ": atom"),
+               Seconds (Values (Large),
+                        "public cr_in_level_v" & Image (Large) & ": atom"));
+      Compare ("interrupts of one device",
+               Seconds (Interrupts (Small),
+                        "compiler.interrupt(""I1"", " & Image (Small + 3)
+                        & ")"),
+               Seconds (Interrupts (Large),
+                        "compiler.interrupt(""I1"", " & Image (Large + 3)
+                        & ")"));
+   end A_Large_Svd_Costs_In_Proportion;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1284,6 +1880,21 @@ package body Landin.Tests.Devices_Suite is
       Landin.Testing.Register
         (Into, "devices", "each fault has its code",
          Each_Fault_Has_Its_Code'Access);
+      Landin.Testing.Register
+        (Into, "devices", "what an SVD omits or overstates is refused",
+         What_An_Svd_Omits_Or_Overstates_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "devices", "an ambiguous SVD is refused",
+         An_Ambiguous_Svd_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "devices", "a reserved name is refused",
+         A_Reserved_Name_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "devices", "outputs do not overlap",
+         Outputs_Do_Not_Overlap'Access);
+      Landin.Testing.Register
+        (Into, "devices", "a large SVD costs in proportion",
+         A_Large_Svd_Costs_In_Proportion'Access);
    end Register;
 
 end Landin.Tests.Devices_Suite;

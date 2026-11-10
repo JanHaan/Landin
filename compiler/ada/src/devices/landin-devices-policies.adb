@@ -498,6 +498,23 @@ package body Landin.Devices.Policies is
               & " description name distinct paths below the output"
               & " directory");
          end if;
+         --  The modules are imported by the prefix's parts.
+         declare
+            Said : constant String := US.To_String (Into.Prefix);
+            First : Positive := Said'First;
+         begin
+            for Index in Said'First .. Said'Last + 1 loop
+               if Index > Said'Last or else Said (Index) = '/' then
+                  if Is_Reserved (Said (First .. Index - 1)) then
+                     Fail ("the policy's prefix has the part "
+                       & Said (First .. Index - 1) & ", a name Landin"
+                       & " reserves, so no program could import the"
+                       & " modules under it");
+                  end if;
+                  First := Index + 1;
+               end if;
+            end loop;
+         end;
       end;
       declare
          Selection : constant J.Value :=

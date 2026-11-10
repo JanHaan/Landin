@@ -26368,7 +26368,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & " does not fit or is given twice, a property given nowher"
                & "e it is inherited from, an address that is not a word-al"
                & "igned 32-bit address, and an alternate at another addres"
-               & "s."
+               & "s. D1062 adds what an SVD omits, overstates or says twic"
+               & "e, and D1063 a name Landin reserves."
                & LF
                & LF
                & "What is written is the text the RP2040 fixture was first"
@@ -26396,10 +26397,64 @@ package body Landin.Diagnostics.Citations.Texts is
                & "k. A file whose bytes are already the new ones is left a"
                & "lone. The manifest is how refine knows which files are i"
                & "ts own: a file the old manifest names that this run does"
-               & " not make is removed with the rest. A refusal before wri"
-               & "ting is L0531; a write that fails is L0005. This recover"
-               & "s from a failure; it is not a snapshot for a concurrent "
-               & "reader.",
+               & " not make is removed with the rest, while it is still th"
+               & "e bytes the manifest records (D1064). A refusal before w"
+               & "riting is L0531; a write that fails is L0005. This recov"
+               & "ers from a failure; it is not a snapshot for a concurren"
+               & "t reader.",
+            when 1062 =>
+               "Chosen: each is L0529, placed at the element. A child th"
+               & "e projection reads as a number and the element lacks is "
+               & "refused naming both, whichever caller reads it: an inter"
+               & "rupt's `value`, read for every peripheral of the file wh"
+               & "ether or not it is selected, and an array's `dimIncremen"
+               & "t` were the two unguarded. Each number is bounded before"
+               & " it meets another: a `bitWidth` is 1 to 32 and a `bitOff"
+               & "set` at most 32 less it, an `addressOffset` and a `dimIn"
+               & "crement` are each 32-bit before one is multiplied by an "
+               & "element's position and added to the other and to the bas"
+               & "e, and `deviceNumInterrupts` is at most 65536, one more "
+               & "than the highest number an interrupt may have. A selecte"
+               & "d name has one reading: two peripherals of the name a po"
+               & "licy selects or a peripheral derives from, two registers"
+               & " of a selected name, and a selected name that is both a "
+               & "register and an element of an array, or an element of tw"
+               & "o arrays, are refused at the second. A field that gives "
+               & "its position in more than one of the three forms gives t"
+               & "he same bits in each. A field has at most two `enumerate"
+               & "dValues`, the one read and the one written that CMSIS-SV"
+               & "D admits; a third is L0528."
+               & LF
+               & LF
+               & "The reader and the projection also take time that grows "
+               & "with the file and not with its square: an element's attr"
+               & "ibutes, a field's enumerated values and a device's inter"
+               & "rupts are each looked up in an ordered set, where each w"
+               & "as compared with every one before it, and a few hundred "
+               & "kilobytes ran for minutes.",
+            when 1063 =>
+               "Chosen: such a name is refused when it is generated. A r"
+               & "eserved name is a keyword, as `Landin.Tokens` has them, "
+               & "or one of the toolchain's three namespaces. An interrupt"
+               & " that would be a source of that name is L0528, and the p"
+               & "olicy's `interrupt_corrections` can omit it; as a slot o"
+               & "f a core without a matrix its name is a string and is wr"
+               & "itten. A selected peripheral whose lowercased name is re"
+               & "served is L0528, and a part of the policy's `prefix` tha"
+               & "t is reserved is L0526, because no import can name eithe"
+               & "r.",
+            when 1064 =>
+               "Chosen: every output's path is compared as it is written"
+               & ", the modules' root included. Two outputs at one path, o"
+               & "r one at a path another lies below, are refused before a"
+               & "nything is prepared: L0526 when the clash is between the"
+               & " policy's `modules`, `prefix`, `correspondence`, `manife"
+               & "st` and `description`. A file the old manifest names tha"
+               & "t this run does not make is removed only while its SHA-2"
+               & "56 is the one the manifest records; one that differs, ca"
+               & "nnot be read, or whose entry is not a hash is L0531, nam"
+               & "ing the file, and nothing is replaced. The developer rem"
+               & "oves the file or its entry.",
             when 559 =>
                "Chosen: no vendor input is in the tree. `devices/inputs."
                & "json` pins each SVD and each vendor header the generated"

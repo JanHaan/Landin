@@ -22560,7 +22560,9 @@ run. L0529 refuses
 what cannot be generated as it is said: overlapping fields, a field outside
 its register, an enumerated value that does not fit or is given twice, a
 property given nowhere it is inherited from, an address that is not a
-word-aligned 32-bit address, and an alternate at another address.
+word-aligned 32-bit address, and an alternate at another address. D1062
+adds what an SVD omits, overstates or says twice, and D1063 a name Landin
+reserves.
 
 What is written is the text the RP2040 fixture was first generated in,
 byte for byte: one module per selected peripheral, `PREFIX/NAME/device.ldn`;
@@ -22598,7 +22600,8 @@ what this invocation replaced without clobbering a concurrent change, or names t
 copy it could not put back. A file whose bytes are already the new ones is
 left alone. The manifest is how refine knows which files are its own: a file
 the old manifest names that this run does not make is removed with the
-rest. A refusal before writing is L0531; a write that fails is L0005.
+rest, while it is still the bytes the manifest records (D1064). A refusal
+before writing is L0531; a write that fails is L0005.
 This recovers from a failure; it is not a snapshot for a concurrent reader.
 
 **The alternatives:** writing in place, which the interrupted run defeats;
@@ -22608,6 +22611,111 @@ deselected module behind, which a program could still import.
 
 **Pinned by** the `devices` suite's `outputs are replaced whole` and
 `devices/test.py`'s `a changed output is put back and a stale one removed`.
+
+### D1062 — What an SVD omits, overstates or says twice is refused where it says it
+
+**The tour said** nothing. D557 lists what cannot be generated as it is
+said, and its list was of what the two first devices' files could get
+wrong. A vendor's file that is well-formed XML can also leave out a child
+its schema requires, give a number no register holds, or give one name
+twice, and the projection read each without asking: an absent child ended
+the command in an internal defect that named no element, two of an SVD's
+64-bit numbers were added before their sum was compared, so a wrapped sum
+passed as a bit position, a 32-bit address or a vector count, and the first
+of two elements of one name was taken in silence.
+
+**Chosen:** each is L0529, placed at the element. A child the projection
+reads as a number and the element lacks is refused naming both, whichever
+caller reads it: an interrupt's `value`, read for every peripheral of the
+file whether or not it is selected, and an array's `dimIncrement` were the
+two unguarded. Each number is bounded before it meets another: a
+`bitWidth` is 1 to 32 and a `bitOffset` at most 32 less it, an
+`addressOffset` and a `dimIncrement` are each 32-bit before one is
+multiplied by an element's position and added to the other and to the
+base, and `deviceNumInterrupts` is at most 65536, one more than the highest
+number an interrupt may have. A selected name has one reading: two
+peripherals of the name a policy selects or a peripheral derives from, two
+registers of a selected name, and a selected name that is both a register
+and an element of an array, or an element of two arrays, are refused at the
+second. A field that gives its position in more than one of the three
+forms gives the same bits in each. A field has at most two
+`enumeratedValues`, the one read and the one written that CMSIS-SVD admits;
+a third is L0528.
+
+The reader and the projection also take time that grows with the file and
+not with its square: an element's attributes, a field's enumerated values
+and a device's interrupts are each looked up in an ordered set, where each
+was compared with every one before it, and a few hundred kilobytes ran for
+minutes.
+
+**The alternatives:** taking the first of two, which generates a plausible
+module at an offset nobody reviewed; preferring `bitRange` over a
+disagreeing `lsb` and `msb`, the same silence; arithmetic in a wider type,
+which moves the wrap rather than removing it; and a cap on attributes and
+values instead of the sets, which refuses a file for its size rather than
+reading it.
+
+**Pinned by** the `devices` suite's `what an SVD omits or overstates is
+refused`, `an ambiguous SVD is refused` and `a large SVD costs in
+proportion`, which fails when four times the attributes, values or
+interrupts take more than ten times the processor time.
+
+### D1063 — A name refine svd writes unprefixed is not one Landin reserves
+
+**The tour said** nothing. D557 keeps the names a module declares from the
+keyword rule by construction, `f_` before a field and a suffix after a
+register, and D701's module of interrupt-matrix sources declares each
+interrupt under its own lowercased name, as a peripheral's module is
+imported under its own. An interrupt named `END` or `TYPE` was written as
+`public end: u32 = 1`, the command reported success, and every program
+importing the module was refused.
+
+**Chosen:** such a name is refused when it is generated. A reserved name is
+a keyword, as `Landin.Tokens` has them, or one of the toolchain's three
+namespaces. An interrupt that would be a source of that name is L0528, and
+the policy's `interrupt_corrections` can omit it; as a slot of a core
+without a matrix its name is a string and is written. A selected
+peripheral whose lowercased name is reserved is L0528, and a part of the
+policy's `prefix` that is reserved is L0526, because no import can name
+either.
+
+**The alternatives:** a prefix on every source, as fields have, which
+renames the sources of the four ESP devices already generated and every
+program that reads them, for names no vendor's file has yet; and writing
+the module and leaving the refusal to the compiler, which is the success
+that was false.
+
+**Pinned by** the `devices` suite's `a reserved name is refused`.
+
+### D1064 — refine svd's outputs are distinct paths, and it removes only what it wrote
+
+**The tour said** nothing. D558 has the old manifest say which files are
+refine's own, and D556 lets a policy name the correspondence, the manifest
+and the description. The manifest's path was compared with the other
+outputs' before the modules' root was put before it, so under a root other
+than `.` a manifest named like a module replaced the module and the command
+reported success; an output named below another failed only at publication,
+after directories were made; and whatever regular file an old manifest
+named below the root was removed, the hash beside its name unread.
+
+**Chosen:** every output's path is compared as it is written, the modules'
+root included. Two outputs at one path, or one at a path another lies
+below, are refused before anything is prepared: L0526 when the clash is
+between the policy's `modules`, `prefix`, `correspondence`, `manifest` and
+`description`. A file the old manifest names that this run does not make is
+removed only while its SHA-256 is the one the manifest records; one that
+differs, cannot be read, or whose entry is not a hash is L0531, naming the
+file, and nothing is replaced. The developer removes the file or its entry.
+
+**The alternatives:** leaving a changed stale file in place and going on,
+which leaves a deselected module a program can still import while the
+command reports success; removing it as before, which trusts a manifest's
+keys over the bytes they name, and a manifest carried over from another
+layout names a developer's files; and checking only that a stale path is
+not a hand-written `memory.ldn`, one case of the class.
+
+**Pinned by** the `devices` suite's `outputs do not overlap` and `outputs
+are replaced whole`.
 
 ### D559 — Vendor inputs are pinned by URL and SHA-256 and fetched
 

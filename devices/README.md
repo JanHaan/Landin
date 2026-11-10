@@ -261,13 +261,20 @@ is selected by its name with one of the array's indices and generated at its
 own offset (D703). Arrays of fields and peripherals, clusters, derived
 registers and fields, alternate groups, default enumerated values and widths
 other than 32 are refused by name (L0528), and what cannot be generated as
-described, such as overlapping fields, is L0529.
+described, such as overlapping fields, is L0529. So is what the SVD omits,
+overstates or says twice (D1062): an interrupt without a value, a number
+beyond a 32-bit register or address, two peripherals or registers of a
+selected name, and a field whose position is given in two forms that
+disagree. Each refusal points at the element.
 
 On the ESP cores the SVD's interrupts are the interrupt matrix's
 sources, not slots: `interrupts.ldn` holds the core's 32 or 48 slots and no
 interrupt, and the sources are a module of their own, `PREFIX/sources`, of
 `public NAME: u32 = N`, the number of each source's mapping register
-(D701).
+(D701). A source takes no prefix, so an interrupt whose lowercased name
+Landin reserves, such as `END` or `TYPE`, is refused (L0528, D1063) until
+the policy's `interrupt_corrections` omits it; a selected peripheral of
+such a name is refused too, because its module could not be imported.
 
 Each module exports `base`, and for each register `_offset`, `_address`,
 `_named_mask`, `_reset_mask`, `_reset_value`, `_image`, `_decode` and
@@ -287,9 +294,14 @@ change is restored without clobbering a newly occupied name, or retained at
 the recovery path the diagnostic names. An earlier retained transaction is
 diagnosed, not deleted.
 A file whose bytes are already the new ones is left alone, and a file the old
-manifest names that is no longer made is removed. Files beside them that the
+manifest names that is no longer made is removed, while its SHA-256 is still
+the one the manifest records. One that has changed since, or that the
+manifest names without `refine svd` having written it, is refused (L0531,
+D1064) and nothing is replaced: remove the file, or its entry in the
+manifest to keep it. Files beside them that the
 manifest does not name, such as a description's `memory.ldn`, are the
-developer's and are not touched. A group is not an atomic snapshot for
+developer's and are not touched. The policy's paths must be distinct and
+none below another, compared with the `modules` root before them (L0526). A group is not an atomic snapshot for
 concurrent readers, and output names can briefly be absent. Simultaneous
 writes through another descriptor to the same inode remain unsupported.
 

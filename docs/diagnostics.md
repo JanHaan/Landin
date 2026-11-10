@@ -1989,6 +1989,11 @@ or gives one of the wrong shape, such as a read policy other than `normal`,
 names the member. A reviewer's notes belong under `provenance`, which is not
 read. `devices/README.md` describes every member.
 
+It is also a policy whose paths cannot all be written (D1064): two of
+`modules`, `prefix`, `correspondence`, `manifest` and `description` put two
+outputs at one path, or one output at a path another lies below; or whose
+`prefix` has a part Landin reserves, which no import could name (D1063).
+
 ### L0527
 
 The SVD `refine svd` was given is not the one its policy was reviewed against
@@ -2014,6 +2019,13 @@ atom. Every selected field with one is named in a single refusal, each with
 its first such name; list each in the policy's `numeric_enums`, which reads
 the field as a plain number.
 
+A name written with nothing added must not be one Landin reserves, a
+keyword or `compiler`, `assembler` or `linker` (D1063): an interrupt that
+would be an interrupt-matrix source of that name, which the policy's
+`interrupt_corrections` can omit, and a selected peripheral, whose module
+is imported by its name. A field with more than two `enumeratedValues` is
+refused too (D1062).
+
 ### L0529
 
 The SVD describes a selected register in a way that cannot be generated as
@@ -2024,6 +2036,16 @@ word-aligned 32-bit address, an alternate register is at another address, or
 two vendor names become one Landin name once lowercased and joined. The
 message names the element. Leave the register out of the selection, or
 record a reviewed correction.
+
+It is also what the SVD omits, overstates or says twice (D1062): an
+interrupt without a `value` or an array without a `dimIncrement`; a
+`bitOffset`, an `addressOffset`, a `dimIncrement` or a
+`deviceNumInterrupts` beyond what a 32-bit register, a 32-bit address or a
+vector table holds; two peripherals or two registers of a selected name, or
+a selected name that is both a register and an element of an array; and a
+field whose `bitRange`, `bitOffset` and `bitWidth`, and `lsb` and `msb` do
+not give the same bits. A missing interrupt value is refused whatever the
+policy selects, because every interrupt of the file is read.
 
 ### L0530
 
@@ -2037,7 +2059,10 @@ peripheral has arrays. Correct the selection's spelling against the SVD.
 `refine svd` cannot prepare its output group (D558, D907): the output
 root is missing, a link or not a directory; a destination is a directory or
 link, or aliases a protected input; a retained publication needs recovery;
-or the manifest names a file outside the output directory. Correct the
+or the manifest names a file outside the output directory, or one this run
+no longer makes that is not the bytes the manifest records (D1064): a
+generated module edited since, or a file `refine svd` never wrote. Remove
+that file, or its entry in the manifest to keep it. Correct the
 named path or manifest, or choose another `--out-dir`. For a retained
 `.refine-publication-...` workspace, inspect its `destination-...` records
 and recover the previous or new output before removing it and retrying.

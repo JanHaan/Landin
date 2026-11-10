@@ -1,4 +1,5 @@
 with Ada.Containers.Indefinite_Ordered_Sets;
+with Ada.Containers.Ordered_Sets;
 with Ada.Strings.Fixed;
 with GNAT.SHA256;
 
@@ -15,6 +16,10 @@ package body Landin.Devices.Projection is
    package Name_Sets is new Ada.Containers.Indefinite_Ordered_Sets
      (Element_Type => String);
 
+   package Word_Sets is new Ada.Containers.Ordered_Sets
+     (Element_Type => Interfaces.Unsigned_64,
+      "<" => Interfaces."<", "=" => Interfaces."=");
+
    use type Interfaces.Unsigned_64;
    use type US.Unbounded_String;
    use type P.Read_Policy;
@@ -28,6 +33,9 @@ package body Landin.Devices.Projection is
 
    function Under (Directory, Path : String) return String is
      (if Directory = "." then Path else Directory & "/" & Path);
+
+   function Sha256 (Text : String) return String is
+     (GNAT.SHA256.Digest (Text));
 
    ------------------------------------------------------------------
    --  Python's json.dumps (indent=2, sort_keys=True): the bytes the
@@ -189,8 +197,6 @@ package body Landin.Devices.Projection is
    --  The projection.
    ------------------------------------------------------------------
 
-   function Sha256 (Text : String) return String is
-     (GNAT.SHA256.Digest (Text));
 
    type Encoding is record
       Name : US.Unbounded_String;
@@ -207,6 +213,16 @@ package body Landin.Devices.Projection is
 
    package Interrupt_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Interrupt);
+
+   --  By value, then by name.
+   function Precedes (Left, Right : Interrupt) return Boolean is
+     (Left.Value < Right.Value
+      or else (Left.Value = Right.Value
+               and then US.To_String (Left.Name)
+                 < US.To_String (Right.Name)));
+
+   package Interrupt_Sets is new Ada.Containers.Ordered_Sets
+     (Element_Type => Interrupt, "<" => Precedes);
 
    procedure Project
      (Svd_Text, Policy_Text : String;
@@ -293,27 +309,52 @@ package body Landin.Devices.Projection is
          return Number (Said);
       end Number_Of;
 
+      --  The number Item's child Name gives.  An element without the child
+      --  is refused here, at the element, so that no caller reads the text
+      --  of a child that is absent.
       function Child_Number
-        (Item : X.Element; Name, What : String) return Word
-      is (Number_Of (Child (Item, Name), What));
+        (Item : X.Element; Name, What : String) return Word;
+
+      function Child_Number
+        (Item : X.Element; Name, What : String) return Word is
+      begin
+         if not Has (Item, Name) then
+            Fail (Inconsistent_Device, What & " is missing: "
+                  & (if X.Is_Present (Item)
+                     then "this <" & X.Name (Document, Item) & "> has no <"
+                       & Name & ">"
+                     else "the SVD has no element to give a <" & Name
+                       & ">"), Item);
+         end if;
+         return Number_Of (Child (Item, Name), What);
+      end Child_Number;
 
       function Lookup_Peripheral (Name : String) return X.Element;
 
+      --  The one peripheral of that name.  A second is refused rather
+      --  than passed over: the SVD does not say which of the two the
+      --  policy's reviewer read.
       function Lookup_Peripheral (Name : String) return X.Element is
          Current : X.Element :=
            (if Has (Device, "peripherals")
             then X.First_Child (Document, Child (Device, "peripherals"))
             else X.No_Element);
+         Found : X.Element := X.No_Element;
       begin
          while X.Is_Present (Current) loop
             if X.Name (Document, Current) = "peripheral"
               and then Value_Of (Current, "name") = Name
             then
-               return Current;
+               if X.Is_Present (Found) then
+                  Fail (Inconsistent_Device, "the SVD has two peripherals"
+                        & " named " & Name & ", and does not say which is"
+                        & " meant", Current);
+               end if;
+               Found := Current;
             end if;
             Current := X.Next_Sibling (Document, Current);
          end loop;
-         return X.No_Element;
+         return Found;
       end Lookup_Peripheral;
 
       --  Each name a module declares, so that two vendor names that
@@ -334,19 +375,35 @@ package body Landin.Devices.Projection is
 
       Manifest_Entries : Output_Vectors.Vector;
 
-      procedure Add (Path, Content : String; In_Manifest : Boolean);
+      --  Every output's path below the output directory, as it is written.
+      Output_Paths : Name_Sets.Set;
 
-      procedure Add (Path, Content : String; In_Manifest : Boolean) is
+      --  One output.  Path is below the modules' root when the manifest
+      --  lists it, and below the output directory otherwise.  Named says
+      --  the policy chose the path itself, so that a clash is the
+      --  policy's.
+      procedure Add
+        (Path, Content : String; In_Manifest : Boolean;
+         Named : Boolean := False);
+
+      procedure Add
+        (Path, Content : String; In_Manifest : Boolean;
+         Named : Boolean := False)
+      is
          Whole : constant String :=
            (if In_Manifest then Under (US.To_String (Chosen.Modules), Path)
             else Path);
       begin
-         for Existing of Made.Outputs loop
-            if US.To_String (Existing.Path) = Whole then
-               Fail (Inconsistent_Device,
-                     "two outputs are both written to " & Whole);
+         if Output_Paths.Contains (Whole) then
+            if Named then
+               Fail (Invalid_Policy, "the policy's modules, prefix,"
+                     & " correspondence, manifest and description write"
+                     & " two outputs to " & Whole);
             end if;
-         end loop;
+            Fail (Inconsistent_Device,
+                  "two outputs are both written to " & Whole);
+         end if;
+         Output_Paths.Insert (Whole);
          Made.Outputs.Append
            (Output'(Path => US.To_Unbounded_String (Whole),
              Content => US.To_Unbounded_String (Content)));
@@ -397,7 +454,36 @@ package body Landin.Devices.Projection is
         (Field : X.Element; Where : String; Low, High : out Natural);
 
       procedure Field_Bits
-        (Field : X.Element; Where : String; Low, High : out Natural) is
+        (Field : X.Element; Where : String; Low, High : out Natural)
+      is
+         Forms : Natural := 0;
+
+         procedure Outside with No_Return;
+
+         procedure Outside is
+         begin
+            Fail (Inconsistent_Device, Where & " lies outside its 32-bit"
+                  & " register", Field);
+         end Outside;
+
+         --  One form's answer.  The first is kept, and a later form that
+         --  disagrees with it is refused rather than passed over.
+         procedure Take (Form_Low, Form_High : Natural);
+
+         procedure Take (Form_Low, Form_High : Natural) is
+         begin
+            if Forms = 0 then
+               Low := Form_Low;
+               High := Form_High;
+            elsif Form_Low /= Low or else Form_High /= High then
+               Fail (Inconsistent_Device, Where & " gives its position in"
+                     & " two forms that disagree: bits "
+                     & Decimal (Word (Low)) & " to " & Decimal (Word (High))
+                     & ", and bits " & Decimal (Word (Form_Low)) & " to "
+                     & Decimal (Word (Form_High)), Field);
+            end if;
+            Forms := Forms + 1;
+         end Take;
       begin
          Low := 0;
          High := 0;
@@ -424,24 +510,37 @@ package body Landin.Devices.Projection is
                         & " [HIGH:LOW]", Child (Field, "bitRange"),
                         At_Text => True);
                end if;
-               High := Natural'Value (Said (Said'First + 1 .. Colon - 1));
-               Low := Natural'Value (Said (Colon + 1 .. Said'Last - 1));
+               declare
+                  Range_High : constant Natural :=
+                    Natural'Value (Said (Said'First + 1 .. Colon - 1));
+                  Range_Low : constant Natural :=
+                    Natural'Value (Said (Colon + 1 .. Said'Last - 1));
+               begin
+                  if Range_Low > Range_High or else Range_High > 31 then
+                     Outside;
+                  end if;
+                  Take (Range_Low, Range_High);
+               end;
             end;
-         elsif Has (Field, "bitOffset") and then Has (Field, "bitWidth") then
+         end if;
+         if Has (Field, "bitOffset") and then Has (Field, "bitWidth") then
             declare
                First_Bit : constant Word :=
                  Child_Number (Field, "bitOffset", Where & "'s bitOffset");
                Count : constant Word :=
                  Child_Number (Field, "bitWidth", Where & "'s bitWidth");
             begin
-               if Count = 0 or else First_Bit + Count > 32 then
-                  Fail (Inconsistent_Device, Where & " lies outside its"
-                        & " 32-bit register", Field);
+               --  Each is bounded before they are added: the sum of two
+               --  of an SVD's numbers wraps at 64 bits.
+               if Count = 0 or else Count > 32
+                 or else First_Bit > 32 - Count
+               then
+                  Outside;
                end if;
-               Low := Natural (First_Bit);
-               High := Natural (First_Bit + Count - 1);
+               Take (Natural (First_Bit), Natural (First_Bit + Count - 1));
             end;
-         elsif Has (Field, "lsb") and then Has (Field, "msb") then
+         end if;
+         if Has (Field, "lsb") and then Has (Field, "msb") then
             declare
                Least : constant Word :=
                  Child_Number (Field, "lsb", Where & "'s lsb");
@@ -449,19 +548,14 @@ package body Landin.Devices.Projection is
                  Child_Number (Field, "msb", Where & "'s msb");
             begin
                if Most > 31 or else Least > Most then
-                  Fail (Inconsistent_Device, Where & " lies outside its"
-                        & " 32-bit register", Field);
+                  Outside;
                end if;
-               Low := Natural (Least);
-               High := Natural (Most);
+               Take (Natural (Least), Natural (Most));
             end;
-         else
+         end if;
+         if Forms = 0 then
             Fail (Inconsistent_Device, Where & " gives no bitRange,"
                   & " bitOffset and bitWidth, or lsb and msb", Field);
-         end if;
-         if Low > High or else High > 31 then
-            Fail (Inconsistent_Device, Where & " lies outside its 32-bit"
-                  & " register", Field);
          end if;
       end Field_Bits;
 
@@ -475,6 +569,8 @@ package body Landin.Devices.Projection is
          Values : out Encoding_Vectors.Vector)
       is
          Block : X.Element := X.First_Child (Document, Field);
+         Blocks : Natural := 0;
+         Encoded : Word_Sets.Set;
 
          function Resolved (Given : X.Element) return X.Element;
 
@@ -532,6 +628,16 @@ package body Landin.Devices.Projection is
          Values.Clear;
          while X.Is_Present (Block) loop
             if X.Name (Document, Block) = "enumeratedValues" then
+               --  CMSIS-SVD admits two, one read and one written.  The
+               --  bound also keeps a field's derivations, each a search of
+               --  its register, from growing with the file.
+               Blocks := Blocks + 1;
+               if Blocks > 2 then
+                  Fail (Unsupported_Form, Where & " has more than two"
+                        & " enumeratedValues, and CMSIS-SVD gives a field"
+                        & " at most one that is read and one written",
+                        Block);
+               end if;
                declare
                   Item : X.Element :=
                     X.First_Child (Document, Resolved (Block));
@@ -562,18 +668,18 @@ package body Landin.Devices.Projection is
             end if;
             Block := X.Next_Sibling (Document, Block);
          end loop;
-         for A in 1 .. Values.Last_Index loop
-            if Values (A).Value >= Interfaces.Shift_Left (1, Width) then
+         --  Each value is looked up in a set rather than compared with
+         --  every other: a 32-bit field admits any number of them.
+         for Value of Values loop
+            if Value.Value >= Interfaces.Shift_Left (1, Width) then
                Fail (Inconsistent_Device, Where & "'s enumerated value "
-                     & US.To_String (Values (A).Name)
+                     & US.To_String (Value.Name)
                      & " does not fit its field", Field);
+            elsif Encoded.Contains (Value.Value) then
+               Fail (Inconsistent_Device, Where & " encodes "
+                     & Decimal (Value.Value) & " twice", Field);
             end if;
-            for B in A + 1 .. Values.Last_Index loop
-               if Values (A).Value = Values (B).Value then
-                  Fail (Inconsistent_Device, Where & " encodes "
-                        & Decimal (Values (A).Value) & " twice", Field);
-               end if;
-            end loop;
+            Encoded.Insert (Value.Value);
          end loop;
       end Read_Encodings;
 
@@ -991,13 +1097,32 @@ package body Landin.Devices.Projection is
            (if Has (Template, "registers")
             then X.First_Child (Document, Child (Template, "registers"))
             else X.No_Element);
+         --  A second register the name spells is refused rather than passed
+         --  over, whether it has the name or is an array with that element:
+         --  the SVD does not say which of the two the policy's reviewer
+         --  read.
+         procedure Take (Candidate : X.Element);
+
+         procedure Take (Candidate : X.Element) is
+         begin
+            if X.Is_Present (Found) then
+               Fail (Inconsistent_Device, "the SVD gives " & Key & " twice"
+                     & (if Value_Of (Candidate, "name") = Name
+                          and then Value_Of (Found, "name") = Name
+                        then ""
+                        else ", as a register of that name or as an element"
+                          & " of an array (dim)")
+                     & ", and does not say which is meant", Candidate);
+            end if;
+            Found := Candidate;
+         end Take;
       begin
          while X.Is_Present (Current) loop
             if X.Name (Document, Current) = "register" then
-               if not X.Is_Present (Found)
-                 and then Value_Of (Current, "name") = Name
-               then
-                  Found := Current;
+               if Value_Of (Current, "name") = Name then
+                  Take (Current);
+               elsif Array_Element (Current, Name, Element) then
+                  Take (Current);
                end if;
                if Has (Current, "dim") then
                   Arrays := Arrays + 1;
@@ -1007,17 +1132,6 @@ package body Landin.Devices.Projection is
             end if;
             Current := X.Next_Sibling (Document, Current);
          end loop;
-         if not X.Is_Present (Found) and then Has (Template, "registers") then
-            Current := X.First_Child (Document, Child (Template, "registers"));
-            while X.Is_Present (Current) loop
-               if X.Name (Document, Current) = "register"
-                 and then Array_Element (Current, Name, Element)
-               then
-                  return Current;
-               end if;
-               Current := X.Next_Sibling (Document, Current);
-            end loop;
-         end if;
          if not X.Is_Present (Found) then
             if In_Cluster then
                Fail (Unsupported_Form, Key & " is in a cluster, which"
@@ -1072,6 +1186,15 @@ package body Landin.Devices.Projection is
                      Child (Element, Form));
             end if;
          end Refuse_Form;
+
+         procedure Not_An_Address with No_Return;
+
+         procedure Not_An_Address is
+         begin
+            Fail (Inconsistent_Device, Key & "'s address is not a"
+                  & " word-aligned 32-bit address",
+                  Child (Element, "addressOffset"));
+         end Not_An_Address;
       begin
          if X.Attribute_Count (Document, Element) /= 0 then
             Fail (Unsupported_Form, Key & " has the attribute "
@@ -1105,10 +1228,25 @@ package body Landin.Devices.Projection is
          end if;
          Offset := Child_Number (Element, "addressOffset",
                                  Key & "'s addressOffset");
+         --  Each of an SVD's numbers is bounded before it is added to or
+         --  multiplied by another: they are 64-bit and their sums wrap,
+         --  which would pass a wrapped address as a 32-bit one.
          if Is_Element then
-            Offset := Offset + Word (Arrayed.Position)
-              * Child_Number (Element, "dimIncrement",
-                              Element_Name & "'s dimIncrement");
+            declare
+               Increment : constant Word :=
+                 Child_Number (Element, "dimIncrement",
+                               Element_Name & "'s dimIncrement");
+            begin
+               --  An array has at most 1024 elements.
+               if Offset > 16#FFFF_FFFF# then
+                  Not_An_Address;
+               elsif Increment > 16#FFFF_FFFF# then
+                  Fail (Inconsistent_Device, Element_Name & "'s"
+                        & " dimIncrement is beyond 32 bits",
+                        Child (Element, "dimIncrement"));
+               end if;
+               Offset := Offset + Word (Arrayed.Position) * Increment;
+            end;
          end if;
          --  D704: a reviewed offset in place of the SVD's.
          if Policy.Has_Offset then
@@ -1119,10 +1257,10 @@ package body Landin.Devices.Projection is
                      & " gives the offset the SVD already gives it");
             end if;
          end if;
-         if Offset mod 4 /= 0 or else Base + Offset > 16#FFFF_FFFF# then
-            Fail (Inconsistent_Device, Key & "'s address is not a"
-                  & " word-aligned 32-bit address",
-                  Child (Element, "addressOffset"));
+         if Offset mod 4 /= 0 or else Offset > 16#FFFF_FFFF#
+           or else Base + Offset > 16#FFFF_FFFF#
+         then
+            Not_An_Address;
          end if;
          if Has (Element, "alternateRegister") then
             Alternate := US.To_Unbounded_String
@@ -1426,6 +1564,12 @@ package body Landin.Devices.Projection is
             Fail (Unsupported_Form, "the peripheral " & Peripheral_Name
                   & " is an array (dim), which refine svd does not expand",
                   Child (Instance, "dim"));
+         elsif Is_Reserved (Lowered (Peripheral_Name)) then
+            --  Its module is imported by its lowercased name.
+            Fail (Unsupported_Form, "the peripheral " & Peripheral_Name
+                  & " would be the module " & Lowered (Peripheral_Name)
+                  & ", a name Landin reserves, so no program could import"
+                  & " it", Instance);
          end if;
          for Position in 1 .. X.Attribute_Count (Document, Instance) loop
             if X.Attribute_Name (Document, Instance, Position)
@@ -1499,6 +1643,7 @@ package body Landin.Devices.Projection is
       --  the module of those sources (D701).
       procedure Project_Interrupts is
          Text : US.Unbounded_String;
+         Ordered : Interrupt_Sets.Set;
          Pairs : Interrupt_Vectors.Vector;
          Original_Pairs : Interrupt_Vectors.Vector;
          Cpu : constant X.Element := Child (Device, "cpu");
@@ -1588,6 +1733,14 @@ package body Landin.Devices.Projection is
          if Has (Cpu, "deviceNumInterrupts") then
             Declared_Count := Child_Number
               (Cpu, "deviceNumInterrupts", "the cpu's deviceNumInterrupts");
+            --  An interrupt is numbered at most 65535, so no table has more
+            --  than 65536; a count is bounded before 16 is added to it,
+            --  which wraps at 64 bits.
+            if Declared_Count > 16#1_0000# then
+               Fail (Inconsistent_Device, "the cpu's deviceNumInterrupts is "
+                     & Decimal (Declared_Count) & ", beyond any vector"
+                     & " table", Child (Cpu, "deviceNumInterrupts"));
+            end if;
          end if;
          declare
             Current : X.Element :=
@@ -1610,7 +1763,6 @@ package body Landin.Devices.Projection is
                                    (Value_Of (Item, "name")));
                               Said : constant String :=
                                 US.To_String (Pair.Name);
-                              Place : Natural := 0;
                            begin
                               if not Is_Vendor_Name (Said)
                                 or else Said'Length > 64
@@ -1625,27 +1777,10 @@ package body Landin.Devices.Projection is
                                        & Said & " is numbered beyond any"
                                        & " vector table", Item);
                               end if;
-                              --  Kept in order of value, then of name.
-                              for Index in 1 .. Pairs.Last_Index loop
-                                 if Pairs (Index).Value = Pair.Value
-                                   and then Pairs (Index).Name = Pair.Name
-                                 then
-                                    Place := Natural'Last;
-                                    exit;
-                                 elsif Pairs (Index).Value > Pair.Value
-                                   or else (Pairs (Index).Value = Pair.Value
-                                            and then US.To_String
-                                              (Pairs (Index).Name) > Said)
-                                 then
-                                    Place := Index;
-                                    exit;
-                                 end if;
-                              end loop;
-                              if Place = 0 then
-                                 Pairs.Append (Pair);
-                              elsif Place /= Natural'Last then
-                                 Pairs.Insert (Place, Pair);
-                              end if;
+                              --  Kept in order of value, then of name, each
+                              --  pair once; a set, so that an SVD's
+                              --  interrupts cost no search of those before.
+                              Ordered.Include (Pair);
                            end;
                         end if;
                         Item := X.Next_Sibling (Document, Item);
@@ -1655,6 +1790,9 @@ package body Landin.Devices.Projection is
                Current := X.Next_Sibling (Document, Current);
             end loop;
          end;
+         for Pair of Ordered loop
+            Pairs.Append (Pair);
+         end loop;
          --  Remove every corrected source before inserting any replacement.
          --  Moving SHA away from AES's number must not depend on which
          --  JSON member the policy writes first. Notes retain policy order.
@@ -1792,6 +1930,17 @@ package body Landin.Devices.Projection is
                         Fail (Inconsistent_Device, "two of the SVD's"
                               & " interrupts are both the source "
                               & Spelling & " once lowercased", Device);
+                     elsif Is_Reserved (Spelling) then
+                        --  A source is declared under its own name, with
+                        --  nothing added that would keep it from one
+                        --  Landin reserves.
+                        Fail (Unsupported_Form, "the interrupt "
+                              & US.To_String (Pair.Name) & " would be the"
+                              & " source " & Spelling & ", a name Landin"
+                              & " reserves, so the module declaring it"
+                              & " would not compile; the policy's"
+                              & " interrupt_corrections can omit it",
+                              Device);
                      end if;
                      Names.Insert (Spelling);
                      US.Append (Lines_Of, "public " & Spelling & ": u32 = "
@@ -1912,7 +2061,8 @@ package body Landin.Devices.Projection is
       Close (Rows, In_Array);
       Project_Interrupts;
       Add (US.To_String (Chosen.Correspondence),
-           US.To_String (Rows.Text) & LF, In_Manifest => True);
+           US.To_String (Rows.Text) & LF, In_Manifest => True,
+           Named => True);
       declare
          Manifest : Writer;
          Order : array (1 .. Manifest_Entries.Last_Index) of Positive;
@@ -1942,13 +2092,30 @@ package body Landin.Devices.Projection is
               (Manifest, US.To_String (Manifest_Entries (Index).Content));
          end loop;
          Close (Manifest, In_Object);
-         Add (US.To_String (Chosen.Manifest),
-              US.To_String (Manifest.Text) & LF, In_Manifest => False);
-         --  Add placed it outside the modules' root; it is under it.
-         Made.Outputs (Made.Outputs.Last_Index).Path := Made.Manifest;
+         --  The manifest does not list itself, and is under the modules'
+         --  root as what it lists is: its whole path is what is compared
+         --  with the other outputs'.
+         Add (US.To_String (Made.Manifest),
+              US.To_String (Manifest.Text) & LF, In_Manifest => False,
+              Named => True);
       end;
       Add (US.To_String (Chosen.Description) & "/interrupts.ldn",
-           US.To_String (Description_Text), In_Manifest => False);
+           US.To_String (Description_Text), In_Manifest => False,
+           Named => True);
+      --  No output may be a directory another is written under: the one
+      --  would be published as a file where the other needs a directory.
+      for Path of Output_Paths loop
+         for Index in Path'Range loop
+            if Path (Index) = '/'
+              and then Output_Paths.Contains (Path (Path'First .. Index - 1))
+            then
+               Fail (Invalid_Policy, "the policy's modules, prefix,"
+                     & " correspondence, manifest and description write "
+                     & Path (Path'First .. Index - 1) & " as a file and "
+                     & Path & " below it");
+            end if;
+         end loop;
+      end loop;
    exception
       when Refused =>
          Made := (others => <>);

@@ -2299,6 +2299,15 @@ package body Landin.Diagnostics.Citations is
                "What the projection reads, and what it writes",
             when 558 =>
                "`refine svd` replaces its outputs whole or not at all",
+            when 1062 =>
+               "What an SVD omits, overstates or says twice is refused w"
+               & "here it says it",
+            when 1063 =>
+               "A name refine svd writes unprefixed is not one Landin re"
+               & "serves",
+            when 1064 =>
+               "refine svd's outputs are distinct paths, and it removes "
+               & "only what it wrote",
             when 559 =>
                "Vendor inputs are pinned by URL and SHA-256 and fetched",
             when 820 =>
@@ -3964,6 +3973,12 @@ package body Landin.Diagnostics.Citations is
             when 557 =>
                "Decisions: The toolchain, C and the machine",
             when 558 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1062 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1063 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1064 =>
                "Decisions: The toolchain, C and the machine",
             when 559 =>
                "Decisions: The toolchain, C and the machine",
@@ -5850,6 +5865,15 @@ package body Landin.Diagnostics.Citations is
             when 558 =>
                "https://www.701.dev/spec.html#d558-refine-svd-replaces-i"
                & "ts-outputs-whole-or-not-at-all",
+            when 1062 =>
+               "https://www.701.dev/spec.html#d1062-what-an-svd-omits-ov"
+               & "erstates-or-says-twice-is-refused-where-it-says-it",
+            when 1063 =>
+               "https://www.701.dev/spec.html#d1063-a-name-refine-svd-wr"
+               & "ites-unprefixed-is-not-one-landin-reserves",
+            when 1064 =>
+               "https://www.701.dev/spec.html#d1064-refine-svd-s-outputs"
+               & "-are-distinct-paths-and-it-removes-only-what-it-wrote",
             when 559 =>
                "https://www.701.dev/spec.html#d559-vendor-inputs-are-pin"
                & "ned-by-url-and-sha-256-and-fetched",

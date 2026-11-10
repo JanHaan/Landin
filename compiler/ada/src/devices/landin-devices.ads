@@ -87,6 +87,12 @@ package Landin.Devices is
    --  Lowercase ASCII.
    function Lowered (Text : String) return String;
 
+   --  Whether a lowercased name is one Landin lets no module declare and
+   --  no import name: a keyword, or one of the toolchain's namespaces.  A
+   --  name the importer writes with nothing added must not be one, or the
+   --  module it writes cannot be compiled or imported.
+   function Is_Reserved (Name : String) return Boolean;
+
    --  `0x` and eight lowercase digits; `0x` and as few as the value needs.
    function Hex8 (Value : Word) return String;
 
