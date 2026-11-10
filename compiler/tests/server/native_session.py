@@ -166,14 +166,33 @@ def run(refine, name):
         return "\n".join(problems)
 
 
+def inventory(root):
+    """The sessions under ROOT, and each directory there that is none.
+
+    A session is a directory holding `session.lsp`, as the test program's
+    `Landin.Testing.Sessions.Inventory` has it.  A directory without one is
+    a session nobody runs: a transcript misnamed by a merge or a rename was
+    dropped from the run without a word, and the run got shorter, not red.
+    A directory whose name begins with `.` or `_` is not a session.
+    """
+    names, missing = [], []
+    for entry in sorted(root.iterdir(), key=lambda one: one.name):
+        if not entry.is_dir() or entry.name[:1] in (".", "_"):
+            continue
+        (names if (entry / "session.lsp").is_file() else missing).append(entry.name)
+    return names, missing
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--refine", required=True)
     arguments = parser.parse_args()
     refine = os.path.abspath(arguments.refine)
-    failed = 0
-    names = sorted(entry.name for entry in HERE.iterdir()
-                   if (entry / "session.lsp").is_file())
+    names, missing = inventory(HERE)
+    for name in missing:
+        print("%-24s FAIL" % name)
+        print("  %s holds no session.lsp, so the session is not run" % (HERE / name))
+    failed = len(missing)
     for name in names:
         problem = run(refine, name)
         print("%-24s %s" % (name, "FAIL" if problem else "ok"))

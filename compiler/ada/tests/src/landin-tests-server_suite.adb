@@ -6,8 +6,9 @@
 --  compile.  The corpus cases read the real fixture tree and the fuzzer's
 --  reproducers, which is their deliberate exception to the fake host.
 
+with Ada.Directories;
+with Ada.Environment_Variables;
 with Ada.Strings.Fixed;
-with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
 with Landin.Driver;
@@ -1249,29 +1250,202 @@ package body Landin.Tests.Server_Suite is
    procedure Every_Session_Runs_As_Written
      (Item : in out Landin.Testing.Context)
    is
-      Real    : Landin.Platform.Native.Native_Filesystem;
-      Entries : Landin.Platform.Path_List;
-      Listed  : Landin.Platform.List_Status;
+      Names   : Landin.Platform.Path_List;
+      Missing : Unbounded.Unbounded_String;
       Ran     : Natural := 0;
    begin
-      Real.List_Directory (Sessions_Root, Entries, Listed);
-      for Name of Entries loop
-         if Real.Exists (Sessions_Root & "/" & Name & "/session.lsp") then
-            declare
-               Result : constant Landin.Testing.Sessions.Outcome :=
-                 Landin.Testing.Sessions.Run (Sessions_Root & "/" & Name);
-            begin
-               Ran := Ran + 1;
-               Landin.Testing.Check_Equal
-                 (Item, Unbounded.To_String (Result.Problem), "",
-                  Name & " (once the difference is read, re-record it"
-                  & " alone with ./scripts/dev-test.sh --record=server/"
-                  & Name & ")");
-            end;
-         end if;
+      Landin.Testing.Sessions.Inventory (Sessions_Root, Names, Missing);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Missing), "",
+         "every directory under " & Sessions_Root & " is a session");
+      for Name of Names loop
+         declare
+            Result : constant Landin.Testing.Sessions.Outcome :=
+              Landin.Testing.Sessions.Run (Sessions_Root & "/" & Name);
+         begin
+            Ran := Ran + 1;
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Result.Problem), "",
+               Name & " (once the difference is read, re-record it"
+               & " alone with ./scripts/dev-test.sh --record=server/"
+               & Name & ")");
+         end;
       end loop;
       Landin.Testing.Check (Item, Ran > 0, "the sessions were found");
    end Every_Session_Runs_As_Written;
+
+   --  Scratch sessions on the real filesystem, inside this host's own
+   --  build tree as every native case writes: the inventory and the
+   --  recorder read and write real files, which is these cases'
+   --  deliberate exception to the fake host.
+   Scratch_Sessions : constant String :=
+     "build/"
+     & Ada.Environment_Variables.Value ("LANDIN_BUILD_TAG", "host")
+     & "/"
+     & Ada.Environment_Variables.Value ("LANDIN_BUILD_MODE", "debug")
+     & "/server-session-controls";
+
+   procedure Fresh_Scratch (Root : String);
+
+   procedure Fresh_Scratch (Root : String) is
+   begin
+      if Ada.Directories.Exists (Root) then
+         Ada.Directories.Delete_Tree (Root);
+      end if;
+      Ada.Directories.Create_Path (Root);
+   end Fresh_Scratch;
+
+   procedure Put (Path, Text : String);
+
+   procedure Put (Path, Text : String) is
+      Real   : Landin.Platform.Native.Native_Filesystem;
+      Status : Landin.Platform.Write_Status;
+   begin
+      Ada.Directories.Create_Path
+        (Ada.Directories.Containing_Directory (Path));
+      Real.Write_File (Path, Text, Status);
+      if Status /= Landin.Platform.Write_Ok then
+         raise Program_Error with "cannot write " & Path;
+      end if;
+   end Put;
+
+   function Get (Path : String) return String;
+
+   function Get (Path : String) return String is
+      Real    : Landin.Platform.Native.Native_Filesystem;
+      Content : Unbounded.Unbounded_String;
+      Status  : Landin.Platform.Read_Status;
+   begin
+      Real.Read_File (Path, Content, Status);
+      return (if Status = Landin.Platform.Read_Ok
+              then Unbounded.To_String (Content) else "<unreadable>");
+   end Get;
+
+   procedure A_Session_Directory_Without_A_Transcript_Is_A_Fault
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Session_Directory_Without_A_Transcript_Is_A_Fault
+     (Item : in out Landin.Testing.Context)
+   is
+      Root    : constant String := Scratch_Sessions & "/inventory";
+      Names   : Landin.Platform.Path_List;
+      Problem : Unbounded.Unbounded_String;
+   begin
+      Fresh_Scratch (Root);
+      Put (Root & "/kept/session.lsp", "exit: 0" & LF);
+      Put (Root & "/runner.py", "");
+      Ada.Directories.Create_Path (Root & "/__pycache__");
+      Landin.Testing.Sessions.Inventory (Root, Names, Problem);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Problem), "",
+         "files and the interpreter's cache are no sessions");
+      Landin.Testing.Check
+        (Item, Natural (Names.Length) = 1
+           and then Names.First_Element = "kept",
+         "the one session is found");
+
+      --  A transcript a merge or a rename left under another name, and a
+      --  directory left holding only its tree.
+      Put (Root & "/renamed/session.lsp.orig", "exit: 0" & LF);
+      Put (Root & "/emptied/workspace/main.ldn", "");
+      Landin.Testing.Sessions.Inventory (Root, Names, Problem);
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Problem),
+            "/renamed holds no session.lsp") > 0
+         and then Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Problem),
+            "/emptied holds no session.lsp") > 0,
+         "each directory without a transcript is named: "
+         & Unbounded.To_String (Problem));
+      Landin.Testing.Check
+        (Item, Natural (Names.Length) = 1, "and is no session to run");
+
+      Landin.Testing.Sessions.Inventory (Root & "/absent", Names, Problem);
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Problem), "cannot be listed") > 0,
+         "a root that cannot be listed is a fault and not an empty run");
+   end A_Session_Directory_Without_A_Transcript_Is_A_Fault;
+
+   procedure Record_In
+     (Root  : String;
+      Name  : String;
+      Found : out Boolean;
+      Wrote : out Boolean;
+      Said  : out Unbounded.Unbounded_String);
+
+   procedure A_Recording_Never_Replaces_What_It_Could_Not_Run
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Recording_Never_Replaces_What_It_Could_Not_Run
+     (Item : in out Landin.Testing.Context)
+   is
+      Root     : constant String := Scratch_Sessions & "/recording";
+      Written  : constant String :=
+        Get (Sessions_Root & "/lifecycle/session.lsp");
+      Exit_At  : constant Natural :=
+        Ada.Strings.Fixed.Index (Written, LF & "exit: 0" & LF);
+      Found    : Boolean;
+      Wrote    : Boolean;
+      Said     : Unbounded.Unbounded_String;
+
+      procedure Refused (Name, Text, Why, About : String);
+
+      procedure Refused (Name, Text, Why, About : String) is
+         Path : constant String := Root & "/" & Name & "/session.lsp";
+      begin
+         Put (Path, Text);
+         Record_In (Root, Name, Found, Wrote, Said);
+         Landin.Testing.Check
+           (Item, Found and then not Wrote, About & " is not recorded");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Unbounded.To_String (Said), Why) > 0,
+            About & " says why: " & Unbounded.To_String (Said));
+         Landin.Testing.Check_Equal
+           (Item, Get (Path), Text, About & " keeps every byte");
+      end Refused;
+   begin
+      Landin.Testing.Check
+        (Item, Exit_At > 0, "the lifecycle session ends with exit: 0");
+      if Exit_At = 0 then
+         return;
+      end if;
+      Fresh_Scratch (Root);
+
+      --  A session that runs as written records to the bytes it has.
+      Put (Root & "/sound/session.lsp", Written);
+      Record_In (Root, "sound", Found, Wrote, Said);
+      Landin.Testing.Check
+        (Item, Found and then Wrote, "a session that runs is recorded");
+      Landin.Testing.Check_Equal
+        (Item, Get (Root & "/sound/session.lsp"), Written,
+         "and its recording is what it was");
+
+      --  Requests typed by hand, before the transcript is complete: once
+      --  each of these was replaced by an empty file, with "wrote".
+      Refused
+        ("no-exit", Written (Written'First .. Exit_At),
+         "names no exit status", "a transcript with no exit line yet");
+      Refused
+        ("no-line-end", Written (Written'First .. Written'Last - 1),
+         "does not end in a line end", "a transcript without its line end");
+      Refused
+        ("mistyped", "paus" & LF & Written,
+         "none of its forms", "a transcript with a mistyped directive");
+
+      --  The status is the transcript's verdict, not a message.
+      Refused
+        ("other-exit",
+         Written (Written'First .. Exit_At) & "exit: 1" & LF,
+         "ended with 0 and its exit line says 1",
+         "a session that ends with another status");
+
+      Record_In (Root, "absent", Found, Wrote, Said);
+      Landin.Testing.Check
+        (Item, not Found and then not Wrote, "no session, nothing written");
+   end A_Recording_Never_Replaces_What_It_Could_Not_Run;
 
    --  The same analyses are needed for diagnostics whether or not
    --  navigation follows them.  No query should repeat one.
@@ -1312,13 +1486,21 @@ package body Landin.Tests.Server_Suite is
       end loop;
    end Navigation_Reuses_Checked_Modules;
 
-   procedure Record_Session
-     (Name : String; Found : out Boolean; Wrote : out Boolean)
+   procedure Record_In
+     (Root  : String;
+      Name  : String;
+      Found : out Boolean;
+      Wrote : out Boolean;
+      Said  : out Unbounded.Unbounded_String)
    is
       Real : Landin.Platform.Native.Native_Filesystem;
-      Path : constant String := Sessions_Root & "/" & Name & "/session.lsp";
+      Path : constant String := Root & "/" & Name & "/session.lsp";
+
+      function Image (Status : Integer) return String
+        is (Ada.Strings.Fixed.Trim (Status'Image, Ada.Strings.Both));
    begin
       Wrote := False;
+      Said := Unbounded.Null_Unbounded_String;
       Found := Name /= ""
         and then (for all C of Name => C not in '/' | '\')
         and then Name /= "." and then Name /= ".."
@@ -1326,28 +1508,68 @@ package body Landin.Tests.Server_Suite is
       if Found then
          declare
             Result : constant Landin.Testing.Sessions.Outcome :=
-              Landin.Testing.Sessions.Run (Sessions_Root & "/" & Name);
+              Landin.Testing.Sessions.Run (Root & "/" & Name);
             Status : Landin.Platform.Write_Status;
          begin
-            Real.Write_File
-              (Path, Unbounded.To_String (Result.Recorded), Status);
-            Wrote := Status = Landin.Platform.Write_Ok;
+            if Result.Malformed
+              or else Unbounded.Length (Result.Recorded) = 0
+            then
+               Said := Unbounded.To_Unbounded_String
+                 (Path & " is left as it is: "
+                  & Unbounded.To_String (Result.Problem)
+                  & ", so the session did not run and there is nothing to"
+                  & " record");
+            elsif Result.Ended_With /= Result.Wanted_Exit then
+               Said := Unbounded.To_Unbounded_String
+                 (Path & " is left as it is: the session ended with "
+                  & Image (Result.Ended_With) & " and its exit line says "
+                  & Image (Result.Wanted_Exit) & "; a recording replaces"
+                  & " messages and never the status, so change that line"
+                  & " by hand if the new status is the right one");
+            else
+               Real.Write_File
+                 (Path, Unbounded.To_String (Result.Recorded), Status);
+               Wrote := Status = Landin.Platform.Write_Ok;
+               if not Wrote then
+                  Said := Unbounded.To_Unbounded_String
+                    ("could not write " & Path);
+               end if;
+            end if;
          end;
       end if;
+   end Record_In;
+
+   procedure Record_Session
+     (Name  : String;
+      Found : out Boolean;
+      Wrote : out Boolean;
+      Said  : out Ada.Strings.Unbounded.Unbounded_String) is
+   begin
+      Record_In (Sessions_Root, Name, Found, Wrote, Said);
    end Record_Session;
 
-   procedure Record_Sessions (Wrote : out Boolean) is
-      Real    : Landin.Platform.Native.Native_Filesystem;
-      Entries : Landin.Platform.Path_List;
-      Listed  : Landin.Platform.List_Status;
-      Found   : Boolean;
-      One     : Boolean;
+   procedure Record_Sessions
+     (Wrote : out Boolean;
+      Said  : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      Names : Landin.Platform.Path_List;
+      Found : Boolean;
+      One   : Boolean;
+      Why   : Unbounded.Unbounded_String;
    begin
-      Wrote := True;
-      Real.List_Directory (Sessions_Root, Entries, Listed);
-      for Name of Entries loop
-         Record_Session (Name, Found, One);
-         Wrote := Wrote and then (One or else not Found);
+      --  A directory without a transcript, or a root that cannot be
+      --  listed, is said and is not a recording of everything.
+      Landin.Testing.Sessions.Inventory (Sessions_Root, Names, Said);
+      Wrote := Unbounded.Length (Said) = 0;
+      for Name of Names loop
+         Record_Session (Name, Found, One, Why);
+         if not One then
+            Wrote := False;
+            if Unbounded.Length (Said) > 0 then
+               Unbounded.Append (Said, LF);
+            end if;
+            Unbounded.Append (Said, Why);
+         end if;
       end loop;
    end Record_Sessions;
 
@@ -2004,6 +2226,12 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "every session runs as written",
          Every_Session_Runs_As_Written'Access);
+      Landin.Testing.Register
+        (Into, "server", "a session directory without a transcript is a fault",
+         A_Session_Directory_Without_A_Transcript_Is_A_Fault'Access);
+      Landin.Testing.Register
+        (Into, "server", "a recording never replaces what it could not run",
+         A_Recording_Never_Replaces_What_It_Could_Not_Run'Access);
       Landin.Testing.Register
         (Into, "server", "opening a missing import refreshes its importer",
          Opening_A_Missing_Import_Refreshes_Its_Importer'Access);

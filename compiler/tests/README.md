@@ -598,11 +598,23 @@ transcript in the test program against the fake channel and filesystem.
 runs the same transcripts through the executable over pipes, with each
 workspace copied into a temporary directory and its URI written in place of
 `file:///workspace`; the gate runs it beside the native report identity, with
-both build modes on Linux and on macOS. `./scripts/test.sh --record` rewrites
-every `<-` line and exit status with what the server sends now, as it does
-`lowering.ir`, and `./scripts/test.sh --record=server/NAME` rewrites only the
-session named; read the difference before keeping it, because a recording is
-not a verdict.
+both build modes on Linux and on macOS. Both runners take every directory
+under `server/` as a session, apart from one whose name begins with `.` or
+`_`, and fail on a directory that holds no `session.lsp`: a transcript
+misnamed by a merge or a rename is a session nobody runs. A session whose
+`workspace/` or `library/` tree cannot be read whole fails too.
+
+`./scripts/test.sh --record` rewrites every `<-` line with what the server
+sends now, as it does `lowering.ir`, and `./scripts/test.sh
+--record=server/NAME` rewrites only the session named; read the difference
+before keeping it, because a recording is not a verdict. It replaces the
+messages of a session that ran and nothing else. A transcript that cannot be
+run yet, one with no `exit:` line, no final line end or a line that is none
+of its forms, is left as it is and the command says why and exits 1; so is a
+session that ended with another status than its `exit:` line names, since
+the status is the transcript's verdict and is changed by hand. A new session
+is therefore written with its `->` lines and its `exit:` line, and recorded
+to fill in the `<-` lines.
 
 ## Complete programs to try
 

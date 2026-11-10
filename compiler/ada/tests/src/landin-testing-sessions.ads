@@ -23,6 +23,8 @@
 
 with Ada.Strings.Unbounded;
 
+with Landin.Platform;
+
 package Landin.Testing.Sessions is
 
    type Outcome is record
@@ -33,7 +35,26 @@ package Landin.Testing.Sessions is
       --  What the server logged, for a person reading a failure.
       Log      : Ada.Strings.Unbounded.Unbounded_String;
       Analyses : Natural := 0;
+      --  True when the session could not be run as it is written: the
+      --  transcript or its tree is unreadable, or a line is none of the
+      --  transcript's forms.  Recorded is then empty, and is no recording.
+      Malformed : Boolean := False;
+      --  The status the transcript's `exit:` line names and the one the
+      --  session ended with; both -1 until the session has run.
+      Wanted_Exit : Integer := -1;
+      Ended_With  : Integer := -1;
    end record;
+
+   --  The sessions under Root: the name of each directory there that holds
+   --  a `session.lsp`.  Problem is empty unless Root cannot be listed or a
+   --  directory holds no `session.lsp`, which is then a session nobody
+   --  runs: a transcript misnamed by a merge or a rename was dropped from
+   --  every run without a word, and the run got shorter, not red.  A
+   --  directory whose name begins with `.` or `_` is not a session.
+   procedure Inventory
+     (Root    : String;
+      Names   : out Landin.Platform.Path_List;
+      Problem : out Ada.Strings.Unbounded.Unbounded_String);
 
    --  Run the session in Directory, read through the real filesystem.
    --  With navigation omitted, the same edits still publish diagnostics.
