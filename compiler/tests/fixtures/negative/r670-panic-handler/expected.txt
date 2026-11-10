@@ -1,1 +1,1 @@
-error[L0506]: panic_handler must be public, ordinary, non-generic and infallible: (core/panic.panic_kind, u32) -> noreturn
+error[L0506]: panic_handler must be public, ordinary, non-generic and infallible: (core/panic.panic_kind, u32) -> noreturn; its first parameter, the kind, is not core/panic.panic_kind

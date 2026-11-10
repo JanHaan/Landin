@@ -1,0 +1,14 @@
+import core/panic
+
+public panic_handler: (kind: panic.panic_kind, site: u32, more: u32)
+                      -> noreturn =
+    _ = kind
+    _ = site
+    _ = more
+    loop do
+    end loop
+end panic_handler
+
+public main: () -> (code: i32) =
+    code = 0
+end main
