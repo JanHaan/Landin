@@ -2155,6 +2155,17 @@ package body Landin.Testing.Fakes is
             Gone : Landin.Platform.Remove_Status;
          begin
             if not Edit.Removes then
+               --  A file written where no directory is yet makes the
+               --  directories above it, as the native runner does.
+               for Index in Path'First + 1 .. Path'Last loop
+                  if Path (Index) = '/'
+                    and then not Host.Files.Is_Directory
+                      (Path (Path'First .. Index - 1))
+                  then
+                     Add_Directory
+                       (Host.Files.all, Path (Path'First .. Index - 1));
+                  end if;
+               end loop;
                Add_File
                  (Host.Files.all, Path, Unbounded.To_String (Edit.Content));
             elsif Host.Files.Is_Directory (Path) then

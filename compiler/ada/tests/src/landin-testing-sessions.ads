@@ -17,7 +17,7 @@
 --  sent before it is a burst the server sees all at once, and the server
 --  catches up there, as it would while a person stops typing.  `disk: `,
 --  a file URI, ` | ` and bytes write a file there when the input resumes
---  after the last pause, and `gone: ` and a URI remove the file or the
+--  after the last pause, with the directories above it, and `gone: ` and a URI remove the file or the
 --  directory there at the same moment.  `link: `, a file URI, ` | ` and a
 --  file URI make the first a symbolic link to the second before the
 --  session starts, with the directories above it.

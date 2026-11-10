@@ -590,8 +590,9 @@ the server must send, byte for byte, `pause` where the editor waits and the
 server catches up, `chunk: N` to feed the input N bytes at a time, `raw: `
 and bytes for a frame that is wrong on purpose, `#` for a comment, and
 `exit: N` last, the status the session must end with. After a `pause`,
-`disk: URI | BYTES` writes a file and `gone: URI` removes a file, or a
-directory with what it holds, before the input resumes. `link: URI | URI`
+`disk: URI | BYTES` writes a file, with the directories above it, and
+`gone: URI` removes a file, or a directory with what it holds, before the
+input resumes. `link: URI | URI`
 makes the first a symbolic link to the second before the session starts,
 with the directories above it; the test program's fake host follows a link
 only at the end of a path, so a session links a file, not a directory. Every message the

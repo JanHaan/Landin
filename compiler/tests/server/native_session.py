@@ -159,6 +159,7 @@ def run(refine, name):
                     quiet_since = time.monotonic()
             for path, content in edits[index]:
                 if content is not None:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
                     Path(path).write_bytes(content)
                 elif os.path.isdir(path):
                     shutil.rmtree(path)
