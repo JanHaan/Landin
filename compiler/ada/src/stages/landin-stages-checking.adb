@@ -42239,6 +42239,16 @@ package body Landin.Stages.Checking is
                end;
             end if;
          end loop;
+         --  D1113: `link(symbol: "main")` on the native hosted entry
+         --  names the linkage it has without it.  Noted, it would stand
+         --  beside C's view of the entry, which the library declares, as
+         --  a second and incompatible declaration of one symbol.
+         if Spelled (Symbol) = "main"
+           and then not Landin.Targets.Is_Firmware (Facts)
+           and then Id = Selected_Hosted_Main
+         then
+            return;
+         end if;
          Landin.Checking.Note_Link_Symbol (Types.all, Id, Symbol);
       end Check_External_Declaration;
 

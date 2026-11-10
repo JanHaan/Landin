@@ -1,0 +1,8 @@
+--  D1113, [1970]: `link(symbol: "main")` on the hosted entry names the
+--  linkage the entry has without it, as a program moved from firmware,
+--  where the prefix is how an entry gets that symbol, still spells it.
+--  It stands beside the library's own C view of `main` as the entry, not
+--  as a second declaration of the symbol.
+link(symbol: "main") public main: () -> (code: i32) =
+    code = 0
+end main

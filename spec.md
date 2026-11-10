@@ -1862,6 +1862,9 @@ Beside the selected entry, a bodyless `extern(c) link(symbol: "main")` of
 `(i32, ptr ptr u8, ptr ptr u8) -> i32` is admitted as C's view of the same
 symbol; it is how `platform/linux`'s process entry calls `main` under a static
 Linux link, which passes the returned code to `exit_group` (D279).
+The entry may spell the link name it has, `link(symbol: "main")`; the prefix
+changes nothing, and any other symbol on it leaves the program without an
+entry, L0502 (D1113).
 A `public main` in the entry module that is not this shape is refused when
 the program is checked or emitted as assembly, as when it is linked (D443).
 
@@ -2453,7 +2456,8 @@ begins with `#`. A number is the assembler's syntax and takes no digit
 separator; the refusal names the number to write. Directives, statement
 separators, labels and symbol assignments
 are refused in an ordinary block, which is straight-line: it cannot branch,
-call, return or change control mode, except that Cortex-M0 `svc` enters the
+call, return or change control mode, on x86-64 behind an instruction prefix
+or in a far form either (D1117), except that Cortex-M0 `svc` enters the
 SVC exception handler at vector 11. That handler decides whether execution
 resumes after `svc`; this exception does not admit other control transfers
 in an ordinary block. At the default `armv6-m` level the
@@ -10762,6 +10766,40 @@ is read-only, which gives one spelling two meanings. Both are declined.
 
 **Pinned by** `negative/inout-payload-binding-of-read-only-subject`.
 
+### D1112 — A match reached again binds its payload names afresh
+
+**The tour said** [1220] that an arm may replace the variant, or an object
+containing it, only after the aliases' last use, and D85 that a binding
+exists only in the arm for the selected case. The check that asks whether a
+binding is still in use followed a loop's back edge into the match that
+binds it and counted that arm's reads as uses of the binding being asked
+about. So inside a loop, any statement of the body that replaced the
+variant, selected a case of it or passed it `inout` was refused with L0315,
+whether it stood before the match or after it, although the arm had ended
+and its binding no longer existed. "Update the tagged value, then match on
+it and use what the case holds" could not be written in one loop.
+
+**Chosen:** a match reached from outside its arms, along the straight line
+or along a back edge, begins new bindings: what its arms read is theirs,
+and the binding of an earlier iteration ended with its arm, as a local's
+does when its declaration is reached again. Nothing else changes. A
+replacement inside the arm, before a later read of the binding there,
+stays L0315, in statement and in expression position; and so does a
+replacement anywhere while a view of the payload that an outer name
+carries, a pointer taken with `addr` in the arm for one, is read
+afterwards, in this iteration or the next.
+
+**The alternative:** leaving it, and having a program move the match into
+a routine the loop calls, which the same check accepted; that is a
+workaround for a refusal whose message names a binding that is out of
+scope. Dropping a binding's record when its arm ends was also considered:
+the views other names took from it must stay tracked past the arm, and
+they are found through that record.
+
+**Pinned by** `runtime/variant-replaced-beside-a-loop-match`, the four
+shapes run; and `negative/payload-alias-outlives-a-loop-match`, the three
+that stay refused.
+
 ### D86 — A named ordinary struct field has a measured layout
 
 **The tour said** that fields stay in written order with their natural
@@ -18722,6 +18760,33 @@ names the number without its separators. L0330 carries each refusal.
 are each target's own`, `cortex ABI/assembly comments are not emitted`, and
 RP2040's `boot2.ldn`, whose assembled stage keeps its bytes and checksum.
 
+### D1117 — On x86-64 the straight-line rule reads past instruction prefixes
+
+**The tour said** nothing; [1990] has an ordinary block unable to branch,
+call, return or change control mode, and the rule was applied to the first
+word of each line. On x86-64 an instruction may be written behind
+prefixes, each a word of its own, and the far transfers have mnemonics of
+their own, so `rep ret`, the two-byte return AMD's guides once recommended,
+`repz ret`, `data16 ret`, `notrack jmp`, `bnd call` and `lret` were
+accepted: a return in the middle of a routine, before the block's output
+is stored and before the frame is released.
+
+**Chosen:** on x86-64 the mnemonic the rule tests is the first word that
+is not a prefix: `rep`, `repe`, `repz`, `repne`, `repnz`, `lock`, `data16`,
+`data32`, `addr16`, `addr32`, `notrack`, `bnd`, `xacquire`, `xrelease`,
+`wait`, `fwait`, a segment override, a `rex` spelling or a `{...}`
+pseudo-prefix. The refused mnemonics gain `lret`, `ljmp`, `lcall`, and
+`xbegin` and `xabort`, which transfer to an abort address. A prefix on an
+instruction that transfers nothing, `lock addq`, stays accepted. The other
+targets have no prefix syntax and compare whole mnemonics as they did.
+
+**The alternative:** an allowlist of x86-64 instructions, as `armv6-m`
+has, which would close the class rather than its known members; it is a
+table of an instruction set the project does not otherwise keep.
+
+**Pinned by** `negative/assembly-x86-64-prefixed-transfers`, six refusals
+and the accepted prefix.
+
 ### D598 — A naked body on a hosted target may label what it branches to
 
 **The tour said** at [1630] that a naked body owns its control flow, so its
@@ -20645,6 +20710,51 @@ superset; or selecting a generic assembler with neither exact configuration.
 `backend/Xtensa verifier refuses invalid registers` and
 `xtensa backend/windowed routines carry paired scalars`.
 
+### D1110 — On Xtensa a caller's base save moves with the stack pointer around an outgoing area
+
+**From** D903 and D472.
+
+**The discrepancy:** D903's "every windowed frame includes the ABI's spill
+space" and D472's "window exceptions use the existing ABI spill areas and
+recorded backchains" held only while a routine's stack pointer stayed where
+its prologue left it. The window handlers keep a caller's `a0` to `a3` in
+the sixteen bytes below the callee's stack pointer: the overflow handler
+stores them there when the caller's window is taken, and the underflow
+handler reads them from there at the callee's `retw`. A call whose
+arguments need more than six words lowers the stack pointer for its
+outgoing area and raises it afterwards, and each move rewrote only the
+caller's stack-pointer word. A caller whose window was taken while the
+area was reserved, which happens once the call nests six frames deep on
+the 64-register cores, was restored from sixteen bytes that had never been
+written, and returned through whatever `a0` they held.
+
+**Chosen:** the backend carries the other three words with the stack
+pointer. After lowering it copies them from below the frame's stack pointer
+to below the lowered one, and before raising it copies them back, so the
+words the underflow handler reads at `retw` are the caller's whether its
+window was taken before the area was reserved, while it was, or never, when
+the copy moves bytes nobody reads. Both copies are made while the stack
+pointer is the lower of the two: a compiler-owned interrupt saves every
+physical register in its own context and starts its handler's stack 32
+bytes below the interrupted stack pointer, so it takes no window of the
+interrupted stack and writes above neither copy. The stack pointer word is
+the frame's canonical frame address, which every stack-pointer write
+already stores.
+
+**The alternatives:** reserving the routine's largest outgoing area in its
+frame, so that the stack pointer never moves after the prologue, which is
+what the vendor compiler does and costs no instructions at a call, but the
+backend lays a frame out before it has lowered the calls that say how large
+the area is, and its stack carriers are addressed from the moving stack
+pointer as its RISC-V origin's are; and `movsp`, which raises an exception
+the compiler-owned vectors would have to handle by the same copy. Both were
+declined for now; the first remains the better code.
+
+**Pinned by** `xtensa backend/an outgoing area carries the base save`, the
+copies and their order in the emitted text, and the `window-arguments`
+control of `environments/xtensa/backend.py`, a caller six frames above a
+routine that passes eight argument words, executed on both chips' machines.
+
 ### D661 — An rv32 program that reaches no description is given the RISC-V reference
 
 **The tour said** nothing; D543 gives a Cortex-M program that reaches no
@@ -21823,6 +21933,34 @@ sound but no help to the import that left it out. Both were declined.
 
 **Pinned by** `negative/c-symbol-differs-only-in-escaping`.
 
+### D1113 — `link(symbol: "main")` on the hosted entry is the linkage it has
+
+**The tour said** nothing; [1970] selects the entry module's public
+`main: () -> (code: i32)`, and the checker and the backends already took an
+entry that "retains main linkage", with no link name or with `main`, as
+that entry. The spelled form was accepted by checking and then ended the
+lowering stage with an internal defect on the Linux targets, exit status
+70 and no source position: the name was recorded as a link symbol of the
+entry, where it met `platform/linux`'s bodyless C view of `main` ([1970],
+D279) as a second declaration of one symbol with another signature, which
+the IR's verifier refuses. Firmware programs write the prefix, since that
+is how a firmware routine gets the symbol, so a program moved to a hosted
+target met it.
+
+**Chosen:** on a hosted target the selected entry's `link(symbol: "main")`
+is redundant and is not recorded as a link symbol: the entry is lowered,
+named and called exactly as it is without the prefix. A second definition
+or an incompatible import of `main` is still refused against the selected
+entry, and another symbol on `main` still leaves the program without an
+entry, L0502. Firmware keeps the prefix's meaning.
+
+**The alternative:** refusing a link name on the hosted entry with a
+located diagnostic. That turns away a spelling that says only what is
+already true, and one the entry's own selection rule was written to admit.
+
+**Pinned by** `positive/hosted-main-names-its-own-link-symbol`, checked and
+lowered for every hosted target.
+
 ### D443 — A check and an assembly refuse what the link would refuse first
 
 **The tour said** at [1970] that a hosted program's entry is one public
@@ -22362,10 +22500,11 @@ than the unchecked figure keeps the frame record its check needs. A program
 with no `compiler.stack_prepare` has no check and no cell, and its code is
 byte for byte what it was. The cell is the running thread's (D497). A check
 is one load, one compare and one branch, with the instructions that form
-the frame's address and the cell's: three instructions on x86-64, whose
-load is `%fs`-relative; six on Linux and FreeBSD arm64 and eight on
-Darwin, which read the thread pointer first (D506); and eight on RV64 and
-on Cortex-M0, whose branch to the trap is a far one.
+the frame's address and the cell's and the test of that address's borrow
+(D1111): five instructions on x86-64, whose load is `%fs`-relative; six
+on Linux and FreeBSD arm64 and eight on Darwin, which read the thread
+pointer first (D506); and nine on RV64 and on Cortex-M0, whose branch to
+the trap is a far one.
 
 **The alternatives:** the check at the switch alone, with a room sized per
 target from the depth report, which bounds the provider's path but not a
@@ -22389,6 +22528,54 @@ runtime fixture's assembly, for six targets at every profile, was compared
 before and after this decision, 3,949 files, and differed only for the
 fixture that prepares a stack and, in debug builds, in the hash of the
 library sources this decision edited.
+
+### D1111 — A frame larger than the stack pointer's own value is past the limit
+
+**The tour said** nothing, and D471 said "compares the stack pointer less
+its frame with one cell". Every backend formed that difference in the
+machine word and compared it unsigned, so a frame larger than the stack
+pointer's value left a difference that had wrapped past zero and was above
+every limit: the check answered that the frame fitted, and the routine
+moved its stack pointer to the wrapped address. The precondition is a
+prepared stack within one frame of address zero, which is not rare: a
+static Linux executable's module storage, where a fibre's stack usually
+is, lies 4 MiB above zero on x86-64 and arm64 and 86 KiB above it on RV64,
+and the STM32H753's ITCM is writable memory at zero. There the process
+died of a segmentation fault where `stack_exhausted` was specified, a
+selected handler was never entered, and arm64's and RV64's page probes
+first stored zeros through the module data below the stack.
+
+**Chosen:** the difference's borrow is part of the comparison, on every
+target and for a call's argument area as for a frame. x86-64 subtracts in
+a register and branches on the carry before it compares, where `lea` set
+no flag; arm64 subtracts with flags and makes the comparison conditional
+on no borrow, reading as below otherwise; RISC-V and the Xtensa routines
+derived from it branch when the difference is above the stack pointer it
+was taken from, as Xtensa's own windowed prologue does; and Cortex-M
+branches on the carry of the subtraction it already made. That is no
+instruction more on arm64, one on RISC-V, Xtensa and Cortex-M and two on
+x86-64. A program that prepares no stack still has no check, and its code
+is what it was.
+
+**The alternatives:** comparing the stack pointer less the limit with the
+frame, which needs the same second test, because a routine running inside
+the margin may have its stack pointer below the limit already; adding the
+frame to the limit instead, which wraps at the other end of the address
+space, where some parts have their RAM; and keeping the wrapping
+comparison for frames below a page, on the ground that no stack lies in
+page zero, which is true of a hosted process and false of firmware. All
+were declined.
+
+**Pinned by** `backend/a limit check tests the borrow`, the test's place in
+the emitted text of the four hosted and Cortex-M emitters for a frame an
+immediate holds and one it does not, and `xtensa backend/the stack switch
+masks before its context`, the same in Xtensa's prologue. The review's
+programs, D471's own fixture with a frame larger than its static stack's
+address, end with the handler's status on Linux x86-64, arm64 and RV64 and
+with the trap on Cortex-M3 and RV32 under QEMU. No fixture executes it:
+the firmware corpus has no disposition for a runtime fixture whose frame
+L0507 refuses under a firmware entry, and the frame that wraps on a hosted
+target is larger than any firmware stack.
 
 ### D472 — A saved context carries its limit, a margin above its stack's base
 
@@ -22419,7 +22606,9 @@ Xtensa: it checks every ordinary frame, including call-free routines. Its
 unchecked outgoing area is at most 256 bytes; the failed callee's 32-byte
 ENTRY and a 16-byte ABI spill cushion bring that to 304 bytes, below its
 conservative 416-byte allowance. Window exceptions use the existing ABI
-spill areas and recorded backchains without reserving another frame.
+spill areas and recorded backchains without reserving another frame; D1110
+keeps a caller's spill area with the stack pointer when an outgoing area
+moves it.
 
 | Target | Margin | Unchecked | Switch frame | Before the handler | Left for the handler |
 |---|---|---|---|---|---|
@@ -26568,8 +26757,10 @@ two and no less than 128 bytes, fits its region past the boot kind's
 prefix; the table is no longer than the core's architecture allows, 48
 words on ARMv6-M and 512 on ARMv7-M, and on a RISC-V core what D662 gives
 it; each interrupt's slot is inside it;
-and the stack fits its region. Those are L0514. `.ramtext` is placed with
-`data`, and every load image in the region `text` is placed in.
+and the stack fits its region; and in an image that boots from its own
+memory, `text` is with the vectors or in a region that may not be written,
+and `rodata` there or with `text` (D1116). Those are L0514. `.ramtext` is
+placed with `data`, and every load image in the region `text` is placed in.
 
 A description's core must execute what the request builds: the target is
 its core's family's, `cortex-m0` for an Arm core and `rv32` for a RISC-V
@@ -26651,8 +26842,10 @@ prefix, then text, read-only data and the unwind tables in their regions,
 initialized data and RAM code in the data region loaded from the text
 region, BSS, and each region a `link(region: ...)` uses (D547). It asserts
 the vector address and length, the stack's alignment, that nothing placed
-in the stack's region reaches the stack, and that the last load image ends
-inside the text region. Reset copies and clears what the script places, by
+in the stack's region reaches the stack, whichever sections those are
+(D1114), and that the last load image ends inside the text region. A
+section that would begin at address zero leaves its first eight bytes
+unused (D1115). Reset copies and clears what the script places, by
 the `_landin_firmware_*` symbols. For the constrained reference the script
 is, byte for byte, the one D229 fixed.
 
@@ -26687,6 +26880,106 @@ select their profiles`, the latter holding the reference's derived script
 to D229's text, and `environments/cortex-m/descriptions.py`, which holds the
 linked `.boot2` and vector addresses and the build report's facts to
 `environments/cortex-m/descriptions.json`.
+
+### D1114 — The stack's reservation is asserted against whatever shares its region
+
+**The tour said** nothing; D545 has the derived script assert "that nothing
+placed in the stack's region reaches the stack". The assertion was written
+only when `data` or `bss` was placed in the stack's region, or a used
+`link(region:)` region was the stack's. A description whose stack shares
+its region with `text`, `rodata` or the vector table and keeps data and BSS
+elsewhere got no assertion at all: a 12000-byte constant lay 4532 bytes
+into a reserved 8 KiB stack, the link succeeded, and the build report gave
+the region's whole length as free.
+
+**Chosen:** the assertion is on the end of the section the script writes
+last into the stack's region, whichever that is: the vector table, entry
+word or image block, text, RAM code placed with text, read-only data, the
+unwind tables, data, RAM code, BSS, a used region's sections, or an
+archive's initializer array. The linker fills a region in the script's
+order, so that section's end is the region's use. Where it is data, RAM
+code, BSS or a used region the assertion is spelled as it was, and the
+reference's script is still D229's byte for byte.
+
+**The alternative:** one assertion a section, which says the same thing up
+to ten times, and a location-counter symbol after the last section, which
+the linker does not keep per region.
+
+**Pinned by** `rv32 firmware/the derived script guards its placements`,
+the assertion on `.rodata` for a stack that shares its region with code
+and constants alone. The review's description of that shape, which linked,
+is refused by the linker with the assertion's message.
+
+### D1115 — Nothing a program declares is placed at address zero
+
+**The tour said** [0480] that the atom of a one-atom pointer union is
+stored as zero, and D97 that a zero in a by-value aggregate argument's
+position is the zero carrier, on which the callee clears its parameter
+instead of copying. Both hold only while no object has address zero. This
+register's note that "Cortex-M0 flash begins at address zero with the
+vector table, so small addresses are real pointers there" covers flash,
+whose first bytes are the compiler's own table; a writable region at zero
+has no such tenant. The STM32H753's ITCM is one, and the first datum a
+program placed there with `link(region: "ITCM")` had address zero: passed
+by value it was read as all zeros, and its address was the absent case of
+a maybe-pointer. Which datum that was depended on link order.
+
+**Chosen:** in the derived script, a section of the program's that could
+begin at address zero leaves its first eight bytes unused: text, read-only
+data, data, BSS and a used region's sections, in any region that begins at
+zero other than the vectors' region, where the table or the entry word
+always comes first. The padding is inside the section, after its start
+symbol, so reset copies or clears it with the rest and the load image
+keeps its shape; it is written only when the section does begin at zero,
+and a description with no such region derives the script it did. Eight
+bytes is the sections' alignment.
+
+**The alternatives:** refusing `link(region:)` data for a region at zero,
+which gives up the STM32H753's ITCM, memory a program has reason to use,
+for the sake of its first word; and changing the carrier or the union's
+representation, which every backend and every by-value call would pay for.
+A developer's own `--linker-script` is not yet held to the rule; D546's
+contract reads the image's segments, not where its symbols lie.
+
+**Pinned by** `rv32 firmware/the derived script guards its placements`,
+the padding in the data and BSS sections of a region at zero and its
+absence elsewhere. The review's program on `descriptions/stm32h753` now
+links its datum at address 8.
+
+### D1116 — A flash image keeps code and constants where reset need not put them
+
+**The tour said** nothing; D543 asks that code and the vector table be in
+a region that may execute and data, BSS and the stack in one that may be
+written, and had no rule for `rodata`. The derived script gives `.text`
+and `.rodata` no load address of their own, and reset copies `.data`, RAM
+code and a used region's data out of the region `text` is placed in and
+nothing else. So `linker.place("rodata", RAM)` under a boot kind that
+starts from flash linked an image whose constants, strings and evidence
+tables had no bytes in flash, and `linker.place("text", RAM)` with the
+vectors in flash one whose reset vector pointed into RAM. Both links
+succeeded; an image loaded by a debugger, which writes every segment, ran,
+and failed after a power cycle.
+
+**Chosen:** L0514 at the placement. In an image that boots from its own
+memory, `text` is placed with the vectors or in a region that may not be
+written, and `rodata` likewise or with `text`. A description that keeps
+everything in one region, as a chip whose loader writes the whole image
+does, is unchanged, and so is one built with `--firmware-layout=ram`,
+whose image a debugger loads; an `esp-app-image` and every Xtensa image
+are loaded segment by segment by a ROM and keep their constants in data
+RAM as they did (D903). A routine that must run from RAM has `.ramtext`,
+which has a load image.
+
+**The alternative:** supporting the placement, giving such a section a
+load image in flash and having reset copy it before anything reads it, as
+`.ramtext` is. Constants in tightly coupled memory are a real wish, and
+that is the way to grant it, but it is new startup code on every firmware
+target and not a repair; until it exists the placement is refused rather
+than accepted and wrong. This is a maintainer's choice to confirm.
+
+**Pinned by** `negative/description-places-code-where-nothing-loads`, both
+refusals, and `rv32 firmware/the derived script guards its placements`,
+each alone.
 
 ### D546 — A developer's linker script is held to a written contract
 

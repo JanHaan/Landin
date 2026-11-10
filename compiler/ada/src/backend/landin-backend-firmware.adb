@@ -921,8 +921,11 @@ package body Landin.Backend.Firmware is
             Line ("j _landin_firmware_high_interrupt_" & N (Level));
          end if;
       end loop;
+      --  Kernel, user and double exception: both configurations vector
+      --  the last to 0x3C0, not to the next 64-byte slot.
       for Offset in 0 .. 2 loop
-         Line (".org " & N (16#300# + Offset * 64));
+         Line (".org " & N (if Offset = 2 then 16#3C0#
+                            else 16#300# + Offset * 64));
          Line ("wsr a0, EXCSAVE1");
          Line ("j " & (if Offset = 2
                        then "_landin_firmware_double_exception"
@@ -1340,6 +1343,44 @@ package body Landin.Backend.Firmware is
       Last_Load : US.Unbounded_String :=
         US.To_Unbounded_String
           (if Ramtext_With_Text then ".data" else ".ramtext");
+
+      --  D1114: the stack's region may hold any part of the image, and
+      --  the linker fills a region in the script's order, so the section
+      --  written last into that region is the one that must end below the
+      --  stack.  Each section is noted in that order with where it ends.
+      procedure Note_End (Region : Profiles.Region_Count; Ends : String);
+
+      procedure Note_End (Region : Profiles.Region_Count; Ends : String) is
+      begin
+         if Region = Stack_At then
+            In_Stack_Region := US.To_Unbounded_String (Ends);
+         end if;
+      end Note_End;
+
+      function End_Of (Section : String) return String is
+        ("ADDR(" & Section & ") + SIZEOF(" & Section & ")");
+
+      --  D1115: address zero is the zero carrier of a by-value argument
+      --  and the absent case of a pointer union, so nothing a program
+      --  declares may stand there.  The compiler's own table or entry
+      --  word comes first in the vectors' region; in any other region
+      --  that begins at zero, the section that would begin there leaves
+      --  its first eight bytes unused.
+      function Clear_Of_Zero (Region : Profiles.Region_Count) return String
+        is (if Region /= 0
+              and then Region /= Profile.Placed (Profiles.Vectors)
+              and then Profile.Regions (Region).Origin = 0
+            then " . = . + (ABSOLUTE(.) < 8 ? 8 - ABSOLUTE(.) : 0);"
+            else "");
+
+      Text_At : constant Profiles.Region_Count :=
+        Profile.Placed (Profiles.Text);
+      Rodata_At : constant Profiles.Region_Count :=
+        Profile.Placed (Profiles.Rodata);
+      Data_At : constant Profiles.Region_Count :=
+        Profile.Placed (Profiles.Data);
+      BSS_At : constant Profiles.Region_Count :=
+        Profile.Placed (Profiles.BSS);
    begin
       for Index in 1 .. Profile.Count loop
          US.Append (Memory, "  "
@@ -1348,16 +1389,25 @@ package body Landin.Backend.Firmware is
            & ") : ORIGIN = " & Number (Profile.Regions (Index).Origin)
            & ", LENGTH = " & Number (Profile.Regions (Index).Length) & LF);
       end loop;
-      if Profile.Placed (Profiles.Data) = Stack_At then
-         In_Stack_Region := US.To_Unbounded_String
-           (if Ramtext_With_Text
-            then "_landin_firmware_data_end"
-            else "_landin_firmware_ramtext_end");
+      Note_End
+        (Profile.Placed (Profiles.Vectors),
+         End_Of (if Profiles.Takes_Image_Block (Profile.Boot)
+                 then ".embedded_block"
+                 elsif Xtensa then ".landin_entry" else ".isr_vector"));
+      Note_End
+        (Text_At,
+         (if Ramtext_With_Text then "_landin_firmware_ramtext_end"
+          else End_Of (".text")));
+      Note_End (Rodata_At, End_Of (".rodata"));
+      if not Segmented then
+         Note_End (Text_At, End_Of (".ARM.exidx"));
       end if;
-      if Profile.Placed (Profiles.BSS) = Stack_At then
-         In_Stack_Region := US.To_Unbounded_String
-           ("_landin_firmware_bss_end");
-      end if;
+      Note_End
+        (Data_At,
+         (if Ramtext_With_Text
+          then "_landin_firmware_data_end"
+          else "_landin_firmware_ramtext_end"));
+      Note_End (BSS_At, "_landin_firmware_bss_end");
       for Index in 1 .. Profile.Count loop
          if Used (Index) then
             declare
@@ -1369,7 +1419,7 @@ package body Landin.Backend.Firmware is
                   US.Append (Sections,
                     "  " & Section & "_data : ALIGN(8) {" & LF
                     & "    " & Region_Symbol (Name, "data_start")
-                    & " = .;" & LF
+                    & " = .;" & Clear_Of_Zero (Index) & LF
                     & "    *(.landin_region." & Name & ".data.*)" & LF
                     & "    " & Region_Symbol (Name, "data_end")
                     & " = .;" & LF
@@ -1381,7 +1431,7 @@ package body Landin.Backend.Firmware is
                     & "  " & Section & "_bss (NOLOAD) : AT(ADDR(" & Section
                     & "_bss)) ALIGN(8) {" & LF
                     & "    " & Region_Symbol (Name, "bss_start")
-                    & " = .;" & LF
+                    & " = .;" & Clear_Of_Zero (Index) & LF
                     & "    *(.landin_region." & Name & ".bss.*)" & LF
                     & "    " & Region_Symbol (Name, "bss_end")
                     & " = .;" & LF
@@ -1390,23 +1440,25 @@ package body Landin.Backend.Firmware is
                   Last_Load := US.To_Unbounded_String (Section & "_data");
                   US.Append (Segments, "  region_" & Name & "_data PT_LOAD;"
                     & LF & "  region_" & Name & "_bss PT_LOAD;" & LF);
-                  if Index = Stack_At then
-                     In_Stack_Region := US.To_Unbounded_String
-                       (Region_Symbol (Name, "bss_end"));
-                  end if;
+                  Note_End (Index, Region_Symbol (Name, "bss_end"));
                else
                   US.Append (Sections,
-                    "  " & Section & " : {" & LF
+                    "  " & Section & " : {"
+                    & Clear_Of_Zero (Index) & LF
                     & "    *(.landin_region." & Name & ".text.*"
                     & " .landin_region." & Name & ".rodata.*)" & LF
                     & (if Xtensa then Image_Alignment & LF else "")
                     & "  } > " & Name & Segment ("region_" & Name) & LF);
                   US.Append (Segments, "  region_" & Name & " PT_LOAD;"
                     & LF);
+                  Note_End (Index, End_Of (Section));
                end if;
             end;
          end if;
       end loop;
+      if Archives then
+         Note_End (Text_At, End_Of (".init_array"));
+      end if;
       return (if Xtensa
               then "OUTPUT_FORMAT(""elf32-xtensa-le"")" & LF
                 & "OUTPUT_ARCH(xtensa)" & LF
@@ -1461,7 +1513,7 @@ package body Landin.Backend.Firmware is
            then "  .embedded_block : { KEEP(*(.embedded_block)) } > "
              & Vectors & LF
            else "")
-        & "  .text : { "
+        & "  .text : {" & Clear_Of_Zero (Text_At) & " "
         & (if Xtensa then "*(.literal .literal.*) " else "")
         & "*(.text .text.*)" & Image_Alignment & " } > "
         & Flash & Segment ("text")
@@ -1471,7 +1523,8 @@ package body Landin.Backend.Firmware is
         & (if Ramtext_With_Text
            then Ramtext & "  } > " & Flash & Segment ("text") & LF
            else "")
-        & "  .rodata : { *(.rodata .rodata.*"
+        & "  .rodata : {" & Clear_Of_Zero (Rodata_At)
+        & " *(.rodata .rodata.*"
         & (if RV32 then " .srodata .srodata.*" else "")
         & ")" & Image_Alignment & " } > "
         & Placed (Profiles.Rodata)
@@ -1481,7 +1534,8 @@ package body Landin.Backend.Firmware is
            else "  .ARM.extab : { *(.ARM.extab*) } > " & Flash & LF
              & "  .ARM.exidx : { *(.ARM.exidx*) } > " & Flash & LF)
         & "  .data : ALIGN(8) {" & LF
-        & "    _landin_firmware_data_start = .;" & LF
+        & "    _landin_firmware_data_start = .;" & Clear_Of_Zero (Data_At)
+        & LF
         & "    *(.data .data.*" & (if RV32 then " .sdata .sdata.*" else "")
         & ")" & LF
         & (if Xtensa then Image_Alignment & LF else "")
@@ -1492,7 +1546,8 @@ package body Landin.Backend.Firmware is
            else Ramtext & "  } > " & Data & Load_From_Text & LF)
         & "  _landin_firmware_ramtext_load = LOADADDR(.ramtext);" & LF
         & "  .bss (NOLOAD) : AT(ADDR(.bss)) ALIGN(8) {" & LF
-        & "    _landin_firmware_bss_start = .;" & LF
+        & "    _landin_firmware_bss_start = .;" & Clear_Of_Zero (BSS_At)
+        & LF
         --  D656: the trap record first, at the same address in every
         --  image of the profile.
         & (if Segmented then "    KEEP(*(.bss.landin_firmware_trap))" & LF

@@ -2788,9 +2788,13 @@ package body Landin.Backend.X86_64 is
             if Bytes = 0 then
                Emit ("cmpq " & Limit_Cell & ", %rsp");
             else
-               Emit ("leaq -" & Trimmed
-                     (Landin.Targets.Byte_Count'Image (Bytes))
-                     & "(%rsp), %r11");
+               --  A frame larger than the stack pointer's own value
+               --  borrows, and the difference it leaves is above every
+               --  limit; LEA would not say.
+               Emit ("movq %rsp, %r11");
+               Emit ("subq $" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Bytes)) & ", %r11");
+               Emit ("jb " & Limit_Trap);
                Emit ("cmpq " & Limit_Cell & ", %r11");
             end if;
             Emit ("jb " & Limit_Trap);

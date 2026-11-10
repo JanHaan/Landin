@@ -1,0 +1,27 @@
+-- D1110. `report` passes eight argument words, so it lowers SP for the
+-- call and raises it afterwards; `l5`, six frames further down, takes
+-- the window of `report`'s caller while SP is low. `main` returns
+-- through the a0 that was stored then.
+mut drain: u32 = 0
+l6: (x: u32) -> (r: u32) =
+    drain +%= x
+    r = x + 1
+end l6
+l5: (x: u32) -> (r: u32) = l6(x) + 1 end l5
+l4: (x: u32) -> (r: u32) = l5(x) + 1 end l4
+l3: (x: u32) -> (r: u32) = l4(x) + 1 end l3
+l2: (x: u32) -> (r: u32) = l3(x) + 1 end l2
+l1: (x: u32) -> (r: u32) = l2(x) + 1 end l1
+sum4: (a: u64, b: u64, c: u64, d: u64) -> (r: u64) =
+    r = a + b + c + d + u64(l1(u32(a)))
+end sum4
+report: (seed: u64) -> (r: u64) =
+    r = sum4(seed, 2, 3, 4) + 1
+end report
+main: () -> (status: i32) =
+    if report(1) == 18 and report(10) == 36 then
+        status = 0
+    else
+        status = 1
+    end if
+end main

@@ -1,0 +1,9 @@
+class: negative
+summary: D1112 a loop's next match binds afresh, and a view an outer name carries into the next iteration, or the binding inside its own arm in statement or expression position, still keeps the payload storage live
+program: main.ldn
+codes: L0315, L0315, L0315
+constructs: 0830, 1130, 1150, 1220
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/payload-alias-outlives-a-loop-match/main.ldn
+status: 1

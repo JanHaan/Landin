@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a module struct value with a fixed-array field before a slice field keeps both images, plain, with a scalar in front and two of each, nested, and as a table of records
+constructs: 0520, 0540, 0670, 1940
+program: main.ldn
+status: 0
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

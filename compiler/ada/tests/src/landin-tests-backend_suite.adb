@@ -1475,6 +1475,150 @@ package body Landin.Tests.Backend_Suite is
       end loop;
    end A_Pointer_From_A_Usize_Tests_Only_Nonnull;
 
+   --  D471's check forms the stack pointer less the frame, and a frame
+   --  larger than the stack pointer's own value leaves a difference that
+   --  wrapped past zero, above every limit.  Every backend tests the
+   --  borrow before, or together with, the comparison against the limit,
+   --  for a frame small enough for an immediate and for one that is not.
+   procedure A_Limit_Check_Tests_The_Borrow
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Limit_Check_Tests_The_Borrow
+     (Item : in out Landin.Testing.Context)
+   is
+      function Source (Bytes : String) return String is
+        ("mut memory: [8192]u8 = zeroed" & LF
+         & "mut saved: usize = 0" & LF
+         & "large: (seed: u8) -> (sum: u32) =" & LF
+         & "    mut table: [" & Bytes & "]u8 = zeroed" & LF
+         & "    table[usize(seed)] = seed" & LF
+         & "    sum = u32(table[0]) + u32(table[usize(seed)])" & LF
+         & "end large" & LF
+         & "fibre: (argument: usize) -> noreturn =" & LF
+         & "    grow := large" & LF
+         & "    _ = grow(u8(argument))" & LF
+         & "    loop do" & LF
+         & "    end loop" & LF
+         & "end fibre" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    saved = compiler.stack_prepare(memory[0..<8192], fibre, 7)"
+         & LF
+         & "    code = 0" & LF
+         & "end main" & LF);
+
+      type Backend_Kind is (X86_64, Arm64, RV64, Cortex_M);
+
+      procedure One
+        (Facts : Landin.Targets.Target_Facts;
+         Kind  : Backend_Kind;
+         Bytes : String);
+
+      procedure One
+        (Facts : Landin.Targets.Target_Facts;
+         Kind  : Backend_Kind;
+         Bytes : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+         Options : constant Landin.Optimization.Options :=
+           Landin.Optimization.Reference_Options;
+         Name : constant String :=
+           Backend_Kind'Image (Kind) & " " & Bytes;
+      begin
+         Lower (Work, Source (Bytes), Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, Name & ": five stages ran");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         case Kind is
+            when X86_64 =>
+               Landin.Backend.X86_64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+            when Arm64 =>
+               Landin.Backend.Arm64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+            when RV64 =>
+               Landin.Backend.RiscV.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+            when Cortex_M =>
+               Landin.Backend.Cortex_M.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+         end case;
+         declare
+            Whole : constant String :=
+              Ada.Strings.Unbounded.To_String (Assembly);
+            Large_Start : constant Natural := Index (Whole, "large:" & LF);
+            Fibre_Start : constant Natural := Index (Whole, "fibre:" & LF);
+            Text : constant String :=
+              (if Large_Start = 0 or else Fibre_Start <= Large_Start then ""
+               else Whole (Large_Start .. Fibre_Start - 1));
+            Tested : Boolean;
+         begin
+            case Kind is
+               when X86_64 =>
+                  --  SUB sets the carry LEA would not.
+                  Tested := Contains
+                    (Text, HT & "movq %rsp, %r11" & LF & HT & "subq $")
+                    and then Contains (Text, ", %r11" & LF & HT & "jb ");
+               when Arm64 =>
+                  Tested := Contains (Text, HT & "subs x16, sp, ")
+                    and then Contains
+                      (Text, LF & HT & "ccmp x16, x17, #0, hs" & LF
+                       & HT & "b.lo ");
+               when RV64 =>
+                  Tested := Contains (Text, HT & "bltu sp, x5, ")
+                    and then Index (Text, HT & "bltu sp, x5, ")
+                      < Index (Text, HT & "bgeu x5, x6, ");
+               when Cortex_M =>
+                  --  The branch is long or shortened; either stands
+                  --  between the subtraction and the comparison.
+                  Tested := Contains (Text, HT & "subs r6, ")
+                    and then Index (Text, HT & "cmp r6, r7" & LF)
+                      > Index (Text, HT & "subs r6, ")
+                    and then
+                      (Contains
+                         (Text (Index (Text, HT & "subs r6, ")
+                                .. Index (Text, HT & "cmp r6, r7" & LF)),
+                          HT & "bcs ")
+                       or else Contains
+                         (Text (Index (Text, HT & "subs r6, ")
+                                .. Index (Text, HT & "cmp r6, r7" & LF)),
+                          HT & "bcc "));
+            end case;
+            Landin.Testing.Check
+              (Item, Text /= "", Name & ": the routine was found");
+            Landin.Testing.Check
+              (Item, Tested,
+               Name & ": a wrapped difference goes to the limit trap"
+               & LF & Text);
+         end;
+      end One;
+   begin
+      One (Landin.Targets.Linux_X86_64, X86_64, "2048");
+      One (Landin.Targets.Linux_X86_64, X86_64, "1048576");
+      One (Landin.Targets.Linux_Arm64, Arm64, "2048");
+      One (Landin.Targets.Linux_Arm64, Arm64, "1048576");
+      One (Landin.Targets.Darwin_Arm64, Arm64, "1048576");
+      One (Landin.Targets.Linux_RV64, RV64, "1024");
+      One (Landin.Targets.Linux_RV64, RV64, "1048576");
+      One (Landin.Targets.Cortex_M, Cortex_M, "128");
+      One (Landin.Targets.Cortex_M, Cortex_M, "2048");
+   end A_Limit_Check_Tests_The_Borrow;
+
    --  A copy into one field of a struct datum is word-aligned when the
    --  datum's own placement says so.  A whole struct datum has no array
    --  shape, so its alignment is read from its placed fields; asking for
@@ -11493,6 +11637,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a frame follows the target and not the host",
          A_Frame_Follows_The_Target_And_Not_The_Host'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a limit check tests the borrow",
+         A_Limit_Check_Tests_The_Borrow'Access);
       Landin.Testing.Register
         (Into, "backend", "helper membership is exact",
          Helper_Membership_Is_Exact'Access);

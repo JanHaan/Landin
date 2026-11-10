@@ -229,6 +229,7 @@ negative/assembly-synthetic-target | synthetic-32
 negative/assembly-tab-led-line | linux-x86-64
 negative/assembly-tab-led-line-cortex | cortex-m0
 negative/assembly-template-names | cortex-m0
+negative/assembly-x86-64-prefixed-transfers | linux-x86-64
 negative/assigned-on-one-path-only | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assignment-as-expression | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assignment-to-a-parameter | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -423,6 +424,7 @@ negative/description-esp-image-missing | rv32
 negative/description-float-unit-core | cortex-m0
 negative/description-float-unit-level | cortex-m0
 negative/description-float-unit-unknown | cortex-m0
+negative/description-places-code-where-nothing-loads | cortex-m0
 negative/description-regions-overlap | cortex-m0
 negative/description-unknown-core | cortex-m0
 negative/destructured-local-escape | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -943,6 +945,7 @@ negative/parameterized-struct-unused-unknown | linux-x86-64, linux-arm64, darwin
 negative/parameterized-struct-used-actual-overflow | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/parenthesised-name-after-a-call-else-is-its-recovery | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/payload-alias-outlives-a-loop-match | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-case-arm-is-not-an-atom | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-comparison-referent-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-to-cstring-conversion | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1709,6 +1712,7 @@ positive/generic-routine-formals | linux-x86-64, linux-arm64, darwin-arm64, free
 positive/generic-structural-deduction | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/generic-zero-nominal-array-signatures | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/hosted-initializer-normalized | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+positive/hosted-main-names-its-own-link-symbol | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 positive/identifier-underscore | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/if-elsif-else | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/if-one-line | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2375,6 +2379,7 @@ runtime/module-known-short-circuit-bools | linux-x86-64, linux-arm64, darwin-arm
 runtime/module-mixed-array-repetition-holds-hybrid | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/module-range-subtype-negative-mask-operand | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/module-scalar-zeroed-reads-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/module-struct-array-before-slice | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/module-struct-initializers-copy-images | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/module-struct-literal-array-image-copy-is-independent | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/module-struct-literal-array-image-is-loaded | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2791,6 +2796,7 @@ runtime/variant-module-array-payload-image-copy-is-distinct | linux-x86-64, linu
 runtime/variant-module-array-payload-image-selects-case | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/variant-module-case-image-is-distinct | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/variant-part-measurements-answer-for-the-target | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/variant-replaced-beside-a-loop-match | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/variant-returns-cross-calls | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/variant-runtime-array-payload-writes-target-storage | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/variant-selected-payload-representation | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -906,6 +906,62 @@ package body Landin.Targets.Assembly is
          declare
             Mnemonic : constant String := Clean (Clean'First .. Stop - 1);
 
+            --  D1117: an x86-64 instruction may stand behind prefixes,
+            --  each a word of its own, so the mnemonic is the first word
+            --  that is not one: `rep ret` and `notrack jmp` transfer
+            --  control as `ret` and `jmp` do.  The far forms have
+            --  mnemonics of their own.
+            function X86_64_Transfers (Line : String) return Boolean;
+
+            function X86_64_Transfers (Line : String) return Boolean is
+               First : Natural := Line'First;
+               Last : Natural;
+            begin
+               loop
+                  while First <= Line'Last
+                    and then Line (First) in ' ' | ASCII.HT
+                  loop
+                     First := First + 1;
+                  end loop;
+                  if First > Line'Last then
+                     return False;
+                  end if;
+                  Last := First;
+                  while Last < Line'Last
+                    and then Line (Last + 1) not in ' ' | ASCII.HT
+                  loop
+                     Last := Last + 1;
+                  end loop;
+                  declare
+                     Word : constant String := Line (First .. Last);
+
+                     function Begins (Prefix : String) return Boolean
+                       is (Word'Length >= Prefix'Length
+                           and then Word
+                             (Word'First
+                              .. Word'First + Prefix'Length - 1) = Prefix);
+                  begin
+                     if Word in "rep" | "repe" | "repz" | "repne" | "repnz"
+                          | "lock" | "data16" | "data32" | "addr16"
+                          | "addr32" | "notrack" | "bnd" | "xacquire"
+                          | "xrelease" | "cs" | "ds" | "es" | "fs" | "gs"
+                          | "ss" | "wait" | "fwait"
+                       or else Begins ("rex")
+                       or else Word (Word'First) = '{'
+                     then
+                        First := Last + 1;
+                     else
+                        return Begins ("j") or else Begins ("call")
+                          or else Begins ("ret") or else Begins ("iret")
+                          or else Begins ("loop") or else Begins ("sysret")
+                          or else Begins ("sysexit") or else Begins ("lret")
+                          or else Begins ("ljmp") or else Begins ("lcall")
+                          or else Begins ("xbegin") or else Begins ("xabort");
+                     end if;
+                  end;
+               end loop;
+            end X86_64_Transfers;
+
             function Starts (Prefix : String) return Boolean
               is (Mnemonic'Length >= Prefix'Length
                   and then Mnemonic
@@ -915,11 +971,7 @@ package body Landin.Targets.Assembly is
             --  A naked body owns its control flow: it is how a process
             --  entry reaches the routine it runs.
             if not Naked and then (case Architecture_Of (Facts) is
-                  when X86_64 =>
-                     Starts ("j") or else Starts ("call")
-                     or else Starts ("ret") or else Starts ("iret")
-                     or else Starts ("loop") or else Starts ("sysret")
-                     or else Starts ("sysexit"),
+                  when X86_64 => X86_64_Transfers (Clean),
                   when Arm64 =>
                      Mnemonic in "b" | "bl" | "blr" | "br" | "ret" | "cbz"
                        | "cbnz" | "tbz" | "tbnz" | "eret" | "braa" | "brab"

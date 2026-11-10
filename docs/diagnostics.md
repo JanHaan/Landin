@@ -1942,7 +1942,9 @@ linker.region("FLASH", 0, 32 * 1024, "rx")
 A device description's parts do not fit together (D543): two regions
 overlap, a placement names a region the description does not have or one
 whose access does not fit, as code in an `"rw"` region or data in an `"rx"`
-one, the vector table does not fit its region or would start unaligned, an
+one, a flash image's code or constants are placed in writable memory that
+reset does not fill (D1116), the vector table does not fit its region or
+would start unaligned, an
 interrupt's slot lies past the vector table, the table is longer than the
 core's architecture allows, or the stack is larger than its region. The
 message names the region or the slot.
