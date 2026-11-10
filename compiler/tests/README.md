@@ -728,6 +728,7 @@ emits assembly text.
 | `c-archives` | no, and runtime only | comma-separated, ordered C sources relative to the fixture directory, each compiled alone with the lane's C driver (`-std=c11 -Wall -Wextra -Werror -fPIC -O2 -c`) and archived alone as `lib<stem>.a` in its own directory of the fixture's work copy, a fresh directory holding the program and its `with` files, which refine compiles, so the program's `linker.directory` finds them; entries follow `c-sources`' path rules and no two may build one archive. A fixture that names it says `link: libc` and has no `root` |
 | `library-directories` | no, runtime only and only with `c-archives` | comma-separated directories of the work copy, each relative and below it, no two alike, given to refine in order as `-L <work copy>/<dir>`, absolute, before the program |
 | `link` | no, and runtime only | `static` or `libc`: how a hosted lane links the executable, passed as `--link=`; absent means the target's default, static on Linux. A program that calls the C library names `libc`. An ABI fixture is always emitted with `--link=libc`, because the C driver links its assembly with the C runtime |
+| `layout` | no, and positive, runtime or ABI only | `evidence`: the fixture's layout is what it shows, so `formatting/the corpus is formatted` does not hold its sources to `refine fmt`'s layout and `scripts/add_fixture.py` does not reformat them. A fixture whose `constructs` name [1750], the layout rule, is exempt without it |
 | `expect` | no | the file holding the expected bytes, which `fixture execution/recorded expectations hold` compares and `./scripts/test.sh --record=CLASS/NAME` rewrites |
 | `args` | no | the arguments `refine` is run with; for a rooted fixture, only the options before the module its `root` gives, such as `--target=darwin-arm64` |
 | `run_args` | no | words handed to a compiled runtime or ABI program as written, before its `run_files`; it names no file of the fixture's |
@@ -1063,7 +1064,8 @@ It reads the metadata as the test program does and stops on any fault. It
 gives a runtime or ABI fixture its row in `cortex-m/corpus.json`. It puts a
 positive, runtime or ABI fixture's sources in the layout `refine fmt` gives,
 which `formatting/the corpus is formatted` holds the corpus to, unless the
-fixture names [1750] and its layout is its evidence. It regenerates every
+fixture says `layout: evidence` or names [1750] and its layout is its
+evidence. It regenerates every
 file a fixture is read into (`check.py --generate`: `targets.matrix`,
 `constructs.matrix`, the diagnostic matrix and `lexical.tokens` among
 them). Last, it says what only a person can decide: that a Linux x86-64

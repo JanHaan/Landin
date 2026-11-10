@@ -250,6 +250,13 @@ package Landin.Testing.Fixtures is
 
    function Stream (Item : Fixture) return Stream_Choice;
 
+   --  Whether the fixture's layout is what it shows: it says `layout:
+   --  evidence`, or its `constructs` name [1750], the layout rule itself.
+   --  `formatting/the corpus is formatted` does not hold such a fixture's
+   --  sources to the layout, and scripts/add_fixture.py, which reads the
+   --  same key, does not reformat them.
+   function Layout_Evidence (Item : Fixture) return Boolean;
+
    type Catalogue is limited private;
 
    --  With empty Only, read every fixture's metadata.  With a class/name
@@ -351,6 +358,7 @@ private
       Input_Directories : Ada.Strings.Unbounded.Unbounded_String;
       Link      : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;
+      Layout_Evidence : Boolean := False;
       Profiles  : Profile_Policy := Standard;
       Levels    : Ada.Strings.Unbounded.Unbounded_String;
       Level_Status : Ada.Strings.Unbounded.Unbounded_String;

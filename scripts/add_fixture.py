@@ -27,7 +27,8 @@ fixture.  This then
    hand, held to refine's own;
 3. puts a positive, runtime or ABI fixture's sources in the layout
    `refine fmt` gives, which `formatting/the corpus is formatted` holds
-   them to, unless the fixture names [1750] and its layout is its
+   them to, unless the fixture says `layout: evidence` or names [1750]
+   and its layout is its
    evidence;
 4. regenerates every file a fixture is read into, `check.py --generate`:
    the coverage, the matrices, the diagnostic catalogue's owners and the
@@ -61,10 +62,6 @@ sys.path.insert(0, str(ROOT / "compiler/tests"))
 import fixture_meta  # noqa: E402
 
 CORPUS = ROOT / "compiler/tests/cortex-m/corpus.json"
-#  The fixtures `formatting/the corpus is formatted` exempts by name, beside
-#  every one naming [1750]: their layout is what they show.
-LAYOUT_EVIDENCE = ("value-continued-at-any-indentation",
-                   "r490-lexical-module-observation")
 ARM64_PARITY = ROOT / "compiler/tests/linux-arm64/parity.json"
 GENERATED = ("--generate",)
 
@@ -106,8 +103,7 @@ def held_to_layout(meta):
     the layout refine fmt gives: a positive, runtime or ABI fixture's are,
     unless the fixture's layout is its evidence."""
     return (meta.cls in ("positive", "runtime", "abi")
-            and "1750" not in meta.get("constructs", "")
-            and meta.name not in LAYOUT_EVIDENCE)
+            and not meta.layout_evidence)
 
 
 def format_sources(meta, directory, refine):

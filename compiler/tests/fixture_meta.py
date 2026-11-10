@@ -227,6 +227,15 @@ class Metadata(dict):
         return self.get("traps") == "yes"
 
     @property
+    def layout_evidence(self):
+        """Whether the fixture's layout is what it shows: `layout:
+        evidence`, or a `constructs:` naming [1750], the layout rule
+        itself.  Such a fixture's sources are not held to refine fmt's
+        layout, and nothing reformats them."""
+        return (self.get("layout") == "evidence"
+                or "1750" in self.get("constructs", ""))
+
+    @property
     def stream(self):
         return self.get("stream", "merged")
 
@@ -592,6 +601,14 @@ def _link(meta, value, cls, complain):
         complain("link is not static or libc: " + value)
 
 
+def _layout(meta, value, cls, complain):
+    if cls not in ("positive", "runtime", "abi"):
+        complain("layout belongs only to a positive, runtime or ABI fixture,"
+                 " whose sources are held to refine fmt's layout")
+    elif value != "evidence":
+        complain("layout is not evidence: " + value)
+
+
 def _constructs(meta, value, cls, complain):
     ok = value != "" and not value.endswith(",")
     for one in value.split(","):
@@ -647,6 +664,7 @@ KEYS = {
     "c-inputs": _c_inputs,
     "c-args": _c_args,
     "link": _link,
+    "layout": _layout,
     "constructs": _constructs,
     "traps": _traps,
     "trap_report": _nothing,

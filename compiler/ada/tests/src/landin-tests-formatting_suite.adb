@@ -798,13 +798,6 @@ package body Landin.Tests.Formatting_Suite is
       Files : Natural := 0;
       Exempt : Natural := 0;
 
-      function Is_Layout_Evidence (Fixture : Fixtures.Fixture) return Boolean
-      is
-        (Ada.Strings.Fixed.Index (Fixtures.Constructs (Fixture), "1750") > 0
-         or else Fixtures.Name (Fixture)
-                   in "value-continued-at-any-indentation"
-                    | "r490-lexical-module-observation");
-
       procedure Visit (Path, Text : String);
 
       procedure Visit (Path, Text : String) is
@@ -814,8 +807,9 @@ package body Landin.Tests.Formatting_Suite is
          Landin.Testing.Check
            (Item, Answer.Outcome = Landin.Formatting.Formatted
                   and then Answer.Edits.Is_Empty,
-            Path & " is formatted; run refine fmt on it, or say in"
-            & " The_Corpus_Is_Formatted why its layout is its evidence");
+            Path & " is formatted; run refine fmt on it, or say `layout:"
+            & " evidence` in its fixture.meta when its layout is what it"
+            & " shows (compiler/tests/README.md)");
       end Visit;
    begin
       Fixtures.Discover (Found, Root & "/compiler/tests/fixtures", Host);
@@ -828,7 +822,7 @@ package body Landin.Tests.Formatting_Suite is
             if Class in Fixtures.Positive_Program | Fixtures.Runtime
                       | Fixtures.Abi
             then
-               if Is_Layout_Evidence (Fixture) then
+               if Fixtures.Layout_Evidence (Fixture) then
                   Exempt := Exempt + 1;
                else
                   Walk_Sources

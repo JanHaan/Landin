@@ -18,7 +18,7 @@
 #
 # A key's field is its value as written.  The others: `status`, the status
 # a program must return, and `status@LEVEL` at that level; `traps`, `yes`
-# or `no`; `stream`; `profile-count`; `codes-normalized`; `levels@TARGET`,
+# or `no`; `stream`; `profile-count`; `layout-evidence`, `yes` or `no`; `codes-normalized`; `levels@TARGET`,
 # the levels TARGET's lane builds at; `c-args@TARGET`, the `c-args` as
 # TARGET's lane passes them, spelled by compiler/tests/c-args.targets;
 # `source-arguments`, what refine is
@@ -486,4 +486,61 @@ fixture unit/unknown-class
 | summary: an unknown class
 | targets: linux-x86-64
 problem unknown class: widget
+end
+
+case a fixture whose layout is its evidence says so
+fixture positive/odd-layout
+| class: positive
+| summary: a continuation at an indentation the layout would not write
+| program: main.ldn
+| layout: evidence
+| constructs: 0300
+| targets: linux-x86-64
+field layout-evidence = yes
+end
+
+case a fixture about the layout rule is evidence without saying so
+fixture positive/layout-rule
+| class: positive
+| summary: every form of the layout rule
+| program: main.ldn
+| constructs: 1750
+| targets: linux-x86-64
+field layout-evidence = yes
+end
+
+case an ordinary fixture is held to the layout
+fixture runtime/ordinary
+| class: runtime
+| summary: a program in the one layout
+| profiles: standard
+| program: main.ldn
+| constructs: 0300
+| targets: linux-x86-64
+field layout-evidence = no
+end
+
+case layout takes one value and belongs to a formatted class
+fixture negative/odd-layout
+| class: negative
+| summary: a refused program
+| program: main.ldn
+| layout: evidence
+| codes: L0100
+| constructs: 0300
+| targets: linux-x86-64
+problem layout belongs only to a positive, runtime or ABI fixture, whose sources are held to refine fmt's layout
+end
+
+case layout names nothing but evidence
+fixture positive/odd-layout
+| class: positive
+| summary: a continuation at an indentation the layout would not write
+| program: main.ldn
+| layout: free
+| layout: evidence
+| constructs: 0300
+| targets: linux-x86-64
+problem layout is not evidence: free
+problem duplicate key: layout
 end

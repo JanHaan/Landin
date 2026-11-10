@@ -496,6 +496,10 @@ package body Landin.Testing.Fixtures is
 
    function Stream (Item : Fixture) return Stream_Choice is (Item.Stream);
 
+   function Layout_Evidence (Item : Fixture) return Boolean
+     is (Item.Layout_Evidence
+         or else Ada.Strings.Fixed.Index (Constructs (Item), "1750") > 0);
+
    function Count (In_Catalogue : Catalogue) return Natural
      is (Natural (In_Catalogue.Items.Length));
 
@@ -773,6 +777,7 @@ package body Landin.Testing.Fixtures is
       Seen_Library_Directories : Boolean := False;
       Seen_C_Inputs : Boolean := False;
       Seen_Link    : Boolean := False;
+      Seen_Layout  : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Profiles : Boolean := False;
       Seen_Levels : Boolean := False;
@@ -1471,6 +1476,23 @@ package body Landin.Testing.Fixtures is
                   Item.Link := Unbounded.To_Unbounded_String (Value);
                end if;
 
+            elsif Key = "layout" then
+               if Seen_Layout then
+                  Complain ("duplicate key: layout");
+                  return;
+               end if;
+               Seen_Layout := True;
+
+               if Expected not in Positive_Program | Runtime | Abi then
+                  Complain ("layout belongs only to a positive, runtime or"
+                            & " ABI fixture, whose sources are held to"
+                            & " refine fmt's layout");
+               elsif Value /= "evidence" then
+                  Complain ("layout is not evidence: " & Value);
+               else
+                  Item.Layout_Evidence := True;
+               end if;
+
             elsif Key = "constructs" then
                if Seen_Constructs then
                   Complain ("duplicate key: constructs");
@@ -1593,6 +1615,7 @@ package body Landin.Testing.Fixtures is
                Input_Directories => Unbounded.Null_Unbounded_String,
                Link    => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
+               Layout_Evidence => False,
                Profiles => Standard,
                Levels  => Unbounded.Null_Unbounded_String,
                Level_Status => Unbounded.Null_Unbounded_String);

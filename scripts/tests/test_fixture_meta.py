@@ -66,6 +66,7 @@ def field(meta, key):
         "traps": lambda: "yes" if meta.traps else "no",
         "stream": lambda: meta.stream,
         "profile-count": lambda: str(meta.profile_count),
+        "layout-evidence": lambda: "yes" if meta.layout_evidence else "no",
         "codes-normalized": lambda: ", ".join(meta.codes),
         "module-arguments": lambda: " ".join(meta.module_arguments(base)),
         "source-arguments": lambda: " ".join(meta.source_arguments(base)),
