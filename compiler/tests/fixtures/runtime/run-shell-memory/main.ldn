@@ -16,14 +16,12 @@ import core/text
 import core/time
 
 --  Read what the child writes to its output and its errors into the two
---  builders, from whichever has something, until both have ended, and
---  wait for it.  Reading both while it runs is what lets a child write
---  more than a pipe holds to either.
-capture: (provider: type is io.programs, host: provider,
-          sink started: io.child, inout output: text.builder,
-          inout errors: text.builder)
-         -> (ended: io.ending) ! ... =
-    mut running: io.child = started
+--  builders, from whichever has something, until both have ended.
+--  Reading both while it runs is what lets a child write more than a pipe
+--  holds to either.
+gather: (provider: type is io.programs, host: provider,
+         inout running: io.child, inout output: text.builder,
+         inout errors: text.builder) -> none ! ... =
     mut buffer: [256]u8 = zeroed
     loop do
         part: io.child_read = try io.read_child(host, running, buffer)
@@ -34,6 +32,22 @@ capture: (provider: type is io.programs, host: provider,
             try text.append(output, buffer[0..<part.count])
         end if
     end loop
+end gather
+
+--  Read everything the child writes into the two builders, and wait for
+--  it, however the reading went.
+capture: (provider: type is io.programs, host: provider,
+          sink started: io.child, inout output: text.builder,
+          inout errors: text.builder)
+         -> (ended: io.ending) ! ... =
+    mut running: io.child = started
+    gather(host, running, output, errors) else (problem)
+        _ = io.wait(host, running) else (again)
+            _ = again
+            fail problem
+        end
+        fail problem
+    end
     ended = try io.wait(host, running)
 end capture
 
@@ -170,6 +184,27 @@ read_fails: (host: io.scripted_programs, state: ptr mut io.memory_space)
     _ = part
 end read_fails
 
+--  A capture that fails, here because the builder for the output fills,
+--  has still waited for the child: the program, which cannot start again
+--  while it runs, starts again.
+capture_waits: (host: io.scripted_programs) -> (yes: bool) ! ... =
+    yes = false
+    started: io.child = try started_at(host, "/bin/sh", io.capturing)
+    mut output_room: [4]u8 = zeroed
+    mut errors_room: [64]u8 = zeroed
+    mut output := text.over(output_room[0..<4])
+    mut errors := text.over(errors_room[0..<64])
+    ended: io.ending = capture(host, started, output, errors) else (problem)
+        return when problem <> text.no_space
+        again: io.child = try started_at(host, "/bin/sh", io.capturing)
+        after: io.ending = try io.wait(host, again)
+        _ = after
+        yes = true
+        return
+    end
+    _ = ended
+end capture_waits
+
 --  A program scripted to be signalled is, and a running one cannot start
 --  again until it has been waited for.
 signalled_once: (host: io.scripted_programs) -> (yes: bool) ! ... =
@@ -275,6 +310,12 @@ public main: () -> (code: i32) =
         return
     end
     return when not failing or programs[0].running
+    code = 7
+    waited: bool = capture_waits(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not waited or programs[0].running
     code = 4
     once: bool = signalled_once(host) else (problem)
         _ = problem

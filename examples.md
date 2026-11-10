@@ -1257,6 +1257,9 @@ which reads from it.
   other is read.
 - `io.wait` consumes the child [0910] and says how it ended, a variant
   [0680]: `exited` with a code, or `signalled`.
+- `capture` waits for the child on its failing way out too, when a read
+  fails or a builder fills. Nothing waits for a child the program drops:
+  it would keep its pipes open and its place in the system's table.
 - `time.now` and `time.elapsed` time the child on the monotonic clock.
 - `search_path` passes on the parent's `PATH`, and its `else` supplies a
   fallback value when there is none [1030].
@@ -1289,15 +1292,13 @@ script: []u8 = """
     exit 3
     """
 
---- Read what the child `started` writes to its output and its errors into
+--- Read what the child `running` writes to its output and its errors into
 --- `output` and `errors`, from whichever has something, until both have
---- ended, and wait for it.  Reading both while it runs is what lets a child
---- write more than a pipe holds to either.
-capture: (provider: type is io.programs, host: provider,
-          sink started: io.child, inout output: text.builder,
-          inout errors: text.builder)
-         -> (ended: io.ending) ! ... =
-    mut running: io.child = started
+--- ended.  Reading both while it runs is what lets a child write more than
+--- a pipe holds to either.
+gather: (provider: type is io.programs, host: provider,
+         inout running: io.child, inout output: text.builder,
+         inout errors: text.builder) -> none ! ... =
     mut buffer: [256]u8 = zeroed
     loop do
         part: io.child_read = try io.read_child(host, running, buffer)
@@ -1308,6 +1309,26 @@ capture: (provider: type is io.programs, host: provider,
             try text.append(output, buffer[0..<part.count])
         end if
     end loop
+end gather
+
+--- Read everything the child `started` writes into `output` and `errors`,
+--- and wait for it.  The child is waited for however the reading went, a
+--- builder that filled among the ways it can fail: there are no
+--- destructors, so a child left unwaited keeps its pipes open and its
+--- place in the system's table.  The wait closes the pipes it still has,
+--- which ends a child that is still writing to them.
+capture: (provider: type is io.programs, host: provider,
+          sink started: io.child, inout output: text.builder,
+          inout errors: text.builder)
+         -> (ended: io.ending) ! ... =
+    mut running: io.child = started
+    gather(host, running, output, errors) else (problem)
+        _ = io.wait(host, running) else (again)
+            _ = again
+            fail problem
+        end
+        fail problem
+    end
     ended = try io.wait(host, running)
 end capture
 
@@ -2059,7 +2080,21 @@ What the copy leaves out:
 
 - It does not keep the owner unless the process is root, the time a file
   last changed, extended attributes, or that two names are one file.
+- It keeps the set-user-ID and set-group-ID bits only when it gave the
+  copy its owner, as `cp -a` does: on a copy owned by whoever ran the
+  program they would lend that person's identity.
 - It skips anything that is not a file, a directory or a link.
+
+What the copy refuses at the destination:
+
+- A directory of the copy is made, or is already there from an earlier
+  copy. Anything else under its name is in the way and stops the copy, a
+  symbolic link to a directory included: the copy would write through it,
+  and set the owner, bits and times of a directory outside the
+  destination.
+- The check reads the name once. Like the rest of the program it assumes
+  the destination stays put, so it is no defence against someone who
+  changes the destination while the copy runs.
 
 Fixture source: `compiler/tests/fixtures/runtime/tree-copy/main.ldn`.
 
@@ -2084,7 +2119,9 @@ import platform/posix
 --- Copy the directory `from_path` to `to_path`, every entry in it and
 --- below it, and then its owner when the process may, its permission bits
 --- and its times, which adding its entries changed.  A directory already
---- there from an earlier copy is copied into.  `done` counts what it did.
+--- there from an earlier copy is copied into; anything else there is in
+--- the way, a symbolic link to a directory too, which the copy would
+--- follow out of the destination.  `done` counts what it did.
 copy_directory: (host: blocking.host, from_path: []u8, to_path: []u8,
                  inout done: tally) -> none ! ... =
     found: posix.status = try posix.status_at(posix.working_directory,
@@ -2092,6 +2129,10 @@ copy_directory: (host: blocking.host, from_path: []u8, to_path: []u8,
                                               false)
     io.make_directory(host, text.host_over(to_path)) else (problem)
         fail problem when problem <> io.already_exists
+        there: posix.status = try posix.status_at(posix.working_directory,
+                                                  text.host_over(to_path),
+                                                  false)
+        fail in_the_way when there.kind <> posix.directory
     end
     mut entries: [256]kept = [256 of blank]
     count: usize = try entries_of(host, from_path, entries)
@@ -2118,8 +2159,7 @@ copy_directory: (host: blocking.host, from_path: []u8, to_path: []u8,
         try posix.change_owner_at(posix.working_directory, target, found.user,
                                   found.group, true)
     end if
-    try posix.change_mode_at(posix.working_directory, target,
-                             found.permissions)
+    try posix.change_mode_at(posix.working_directory, target, kept_bits(found))
     try posix.set_times_at(posix.working_directory, target, found.accessed,
                            found.modified, true)
     inc done.directories
@@ -2181,7 +2221,7 @@ filled: (host: blocking.host, input: io.file, target: io.file,
     if privileged() then
         try posix.change_owner(made, found.user, found.group)
     end if
-    try posix.change_mode(made, found.permissions)
+    try posix.change_mode(made, kept_bits(found))
     try posix.set_times(made, found.accessed, found.modified)
     try io.synchronize(host, target, io.data_only)
 end filled
@@ -2245,6 +2285,9 @@ too_long: atom
 
 --- A destination is the source directory or is below it.
 inside_source: atom
+
+--- Something that is not a directory is where the copy needs one.
+in_the_way: atom
 
 --- An entry kept past the read that gave it: a directory lends a name only
 --- until its next read.
@@ -2316,6 +2359,18 @@ end parent_of
 privileged: () -> (yes: bool) =
     yes = posix.effective_user() == posix.user_id(0)
 end privileged
+
+--- The permission bits a copy of `found` is given.  The set-user-ID and
+--- set-group-ID bits say whose identity a program runs with and whose
+--- group a directory's new entries get, so they are kept only on a copy
+--- that was given its owner and group too, as `cp -a` keeps them: on any
+--- other they would name whoever made the copy.
+kept_bits: (found: posix.status) -> (bits: u32) =
+    bits = found.permissions
+    if not privileged() then
+        bits = bits & 0o1777
+    end if
+end kept_bits
 
 --- Whether every byte of `bytes` is zero: a block the copy need not write.
 zeros: (bytes: []u8) -> (yes: bool) =
@@ -2397,12 +2452,13 @@ end copy_named
 --- Say on standard error why the copy stopped.  `posix.words` words an
 --- errno and, through `core/failure`, the library's own failures.
 complain: (host: blocking.host, problem: too_many | too_long | inside_source
-           | differs
+           | in_the_way | differs
            | posix.reason) -> none =
     reason: []u8 = match problem
         too_many: "a directory holds more entries than the copy keeps"
         too_long: "a name is longer than the copy keeps"
         inside_source: "the destination is the source directory or lies inside it"
+        in_the_way: "something that is not a directory is where the copy needs one"
         differs: "the copy differs from what was copied"
         _ (rest): posix.words(rest)
     end match
@@ -2805,10 +2861,51 @@ edge_cases: (host: blocking.host) -> none ! ... =
     fail differs when first.links <> 2 or second.links <> 1
 end edge_cases
 
+--- What the copy guards against.  A symbolic link where a directory of
+--- the copy goes is refused, and nothing reaches the directory it points
+--- to.  A set-user-ID file is copied with the bit only by a process that
+--- gave the copy its owner.
+guards: (host: blocking.host) -> none ! ... =
+    try io.make_directory(host, text.host_over("tree-copy-scratch/elsewhere"))
+    try io.make_directory(host, text.host_over("tree-copy-scratch/trap"))
+    try posix.symbolic_link_at(text.host_over("../elsewhere"),
+                               posix.working_directory,
+                               text.host_over("tree-copy-scratch/trap/notes"))
+    mut done: tally = (files: 0, links: 0, directories: 0, skipped: 0,
+                       replaced: 0)
+    mut refused: bool = false
+    copy_directory(host, source, "tree-copy-scratch/trap", done) else (problem)
+        fail problem when problem <> in_the_way
+        refused = true
+    end
+    fail differs when not refused
+    mut entries: [16]kept = [16 of blank]
+    reached: usize = try entries_of(host, "tree-copy-scratch/elsewhere",
+                                    entries)
+    fail differs when reached <> 0
+
+    tool: text.host_string = text.host_over("tree-copy-scratch/tool")
+    opened: io.file = try io.open_write(host, tool)
+    try io.close(host, opened)
+    try posix.change_mode_at(posix.working_directory, tool, 0o4755)
+    original: posix.status = try posix.status_at(posix.working_directory,
+                                                 tool, false)
+    try copy_file(host, "tree-copy-scratch/tool", "tree-copy-scratch/tool-copy",
+                  done)
+    copied: posix.status =
+        try posix.status_at(posix.working_directory,
+                            text.host_over("tree-copy-scratch/tool-copy"),
+                            false)
+    wanted: u32 = if privileged() then original.permissions
+                  else original.permissions & 0o1777 end if
+    fail differs when copied.permissions <> wanted
+end guards
+
 --- What the program checked, which `report` prints after the listing.
 checked: []u8 = """readme has two names in the source and one in the copy
     locked is read-only and refuses a write
     sparse.bin reads as zeros in its hole and as nothing past its end
+    a link where a directory goes is refused, and set-ID bits need the owner
     """
 
 --- Write to `out` what the two copies did, `first` and `second`, and what
@@ -2850,6 +2947,7 @@ demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
     try copy_directory(host, source, copy, second)
     try same_tree(host, source, copy)
     try edge_cases(host)
+    try guards(host)
     try show(host, out, copy, "", io.subdirectory)
     try report(out, first, second)
     try remove_tree(host, top)
@@ -2908,6 +3006,7 @@ the second copy replaced 6 files and 3 links in place
 readme has two names in the source and one in the copy
 locked is read-only and refuses a write
 sparse.bin reads as zeros in its hole and as nothing past its end
+a link where a directory goes is refused, and set-ID bits need the owner
 ```
 
 The number after each `+` is the entry's time in seconds after the start

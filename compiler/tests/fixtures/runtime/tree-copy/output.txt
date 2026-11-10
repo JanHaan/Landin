@@ -14,3 +14,4 @@ the second copy replaced 6 files and 3 links in place
 readme has two names in the source and one in the copy
 locked is read-only and refuses a write
 sparse.bin reads as zeros in its hole and as nothing past its end
+a link where a directory goes is refused, and set-ID bits need the owner
