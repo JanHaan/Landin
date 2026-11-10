@@ -10,7 +10,11 @@ the editor's extensions directory while developing. The extension also
 starts `refine lsp`, the compiler's language server, through
 `vscode-languageclient`: diagnostics, go to definition, hover, formatting and
 quick fixes. `refine` must be on the path, or `landin.server.path` must name
-it; `landin.server.enable` turns the server off. `npm install` fetches the
+it; `landin.server.enable` turns the server off. `landin.server.path` is a
+user setting only: a workspace's `.vscode/settings.json` cannot set it, so a
+project does not choose the program that starts when one of its files is
+opened. In a window that is not trusted the extension highlights and starts
+no server until the folder is trusted. `npm install` fetches the
 client, and the VSIX carries it. `npm test` drives the
 grammar through VS Code's own TextMate and Oniguruma libraries; `npm run
 package:check` validates the files that will enter the extension.
@@ -38,6 +42,7 @@ use **Developer: Reload Window**
 to start it with the new values. The server reports invalid values in an
 editor message.
 
-Sublime Text and TextMate can load `syntaxes/landin.tmLanguage.json` directly.
+Sublime Text takes the same grammar as a property list, which is what its
+package under [`../sublime`](../sublime/README.md) holds as `Landin.tmLanguage`.
 JetBrains IDEs with the TextMate Bundles plugin can import this entire
 directory.

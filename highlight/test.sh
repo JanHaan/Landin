@@ -14,6 +14,22 @@ esac
 test_tmp=$(mktemp -d "${TMPDIR:-/tmp}/landin-highlight-tests.XXXXXX")
 trap 'rm -rf -- "$test_tmp"' EXIT HUP INT TERM
 
+#  A smoke whose tool is not on this host is not run, and the run says so
+#  where it ends: "clean" alone, after eight of them were skipped one line
+#  each far above, read as if they had passed.  LANDIN_HIGHLIGHT_REQUIRE
+#  names the smokes, separated by spaces, that a caller will not have
+#  skipped; `all` names every one.
+not_run=
+skip() {
+    not_run="${not_run:+$not_run, }$1"
+    echo "$2"
+    case " ${LANDIN_HIGHLIGHT_REQUIRE-} " in
+        *" $1 "*|*" all "*)
+            echo "$0: LANDIN_HIGHLIGHT_REQUIRE names $1, and it did not run" >&2
+            exit 1 ;;
+    esac
+}
+
 if test "$lsp_emacs" = true; then
     if test -z "${LANDIN_REFINE-}" || ! test -x "$LANDIN_REFINE"; then
         echo "$0: --lsp-emacs needs an executable LANDIN_REFINE" >&2
@@ -46,12 +62,17 @@ if test -d "$root/highlight/textmate/node_modules" && command -v node >/dev/null
     test -s "$extension_tmp/landin-language.vsix"
     echo "TextMate tokenizer and VSIX packaging clean"
 else
-    echo "TextMate test dependencies absent; tokenizer smoke skipped"
+    skip textmate "TextMate test dependencies absent; tokenizer smoke skipped"
 fi
 
 #  The pinned CLI is the grammar package's own, as the gate installs it, or
-#  the one `nix develop` puts on PATH -- the same release binary, held to
-#  the same checksum.  Another version on PATH is not the pinned CLI.
+#  the one `nix develop` puts on PATH -- the same release, which the gate
+#  and the flake each hold to the checksum in environments/pins.sh before
+#  it gets here.  Nothing here checks a checksum: a candidate is taken on
+#  the version it prints, so one that `npm install`'s own script
+#  downloaded is taken unverified, which is why the grammar package's
+#  README does not give that command.  Another version on PATH is not the
+#  pinned CLI.
 tree_pin=$(sed -n 's/^LANDIN_TREE_SITTER_VERSION=//p' "$root/environments/pins.sh")
 #  The grammar package's own comes first, but only when it runs and is the
 #  pinned version: on NixOS the binary npm installs there is linked for a
@@ -127,23 +148,65 @@ if test -x "$tree_cli"; then
             cat "$tree_work/highlight-errors" >&2
             exit 1
         fi
-        for query in queries/*.scm; do
+        #  The external scanner looks ahead from a `(` that begins a line
+        #  for the `:=` of a destructuring binding, and no further than its
+        #  bound.  Unbounded it read to the end of the file from each such
+        #  line that is never closed, and 40000 of them took half a minute
+        #  where they now take a moment.  The file has parse errors, so
+        #  only the time is judged.
+        awk 'BEGIN { for (i = 0; i < 40000; i++) print "(" }' \
+          > "$tree_work/unclosed.ldn"
+        unclosed_started=$(date +%s)
+        "$tree_cli" parse --quiet "$tree_work/unclosed.ldn" >/dev/null 2>&1 || :
+        unclosed_seconds=$(( $(date +%s) - unclosed_started ))
+        if test "$unclosed_seconds" -gt 12; then
+            echo "$0: 40000 unclosed line-initial parentheses took" \
+                 "$unclosed_seconds s to parse; the scanner's look-ahead" \
+                 "for a destructuring binding is not bounded" >&2
+            exit 1
+        fi
+        #  The grammar's own queries, and every query an editor package
+        #  ships: most are copies generate.py holds to these, and one, Zed's
+        #  outline, is its package's own and was compiled by nothing.
+        for query in queries/*.scm \
+                     "$root"/highlight/zed/languages/landin/*.scm \
+                     "$root"/highlight/helix/runtime/queries/landin/*.scm \
+                     "$root"/highlight/nvim/queries/landin/*.scm; do
+            test -f "$query" || {
+                echo "$0: no query at $query" >&2
+                exit 1
+            }
             "$tree_cli" query "$query" \
               "$root/highlight/tests/structural.ldn" >/dev/null
         done
         if test "$integration" = true; then
-            find "$root/compiler/tests/fixtures/positive" \
-                 "$root/compiler/tests/fixtures/runtime" \
-                 "$root/compiler/tests/fixtures/abi" \
-                 "$root/core" -name '*.ldn' -print \
-              | sort \
-              | xargs "$tree_cli" parse --quiet
-            echo "tree-sitter compiler/core integration corpus clean"
+            #  Each root is listed on its own and must hold a file.  One
+            #  pipeline from find to the CLI passed on xargs's status
+            #  alone: a root that was gone cost one line on standard
+            #  error, and a list of nothing ran the CLI with no file,
+            #  which it calls success.
+            : > "$tree_work/corpus"
+            for corpus_root in compiler/tests/fixtures/positive \
+                               compiler/tests/fixtures/runtime \
+                               compiler/tests/fixtures/abi \
+                               core; do
+                find "$root/$corpus_root" -name '*.ldn' -print \
+                  > "$tree_work/corpus-root"
+                if ! test -s "$tree_work/corpus-root"; then
+                    echo "$0: the corpus root $corpus_root holds no .ldn file" >&2
+                    exit 1
+                fi
+                cat "$tree_work/corpus-root" >> "$tree_work/corpus"
+            done
+            sort "$tree_work/corpus" > "$tree_work/corpus-sorted"
+            xargs "$tree_cli" parse --quiet < "$tree_work/corpus-sorted"
+            echo "tree-sitter compiler/core integration corpus clean:" \
+                 "$(wc -l < "$tree_work/corpus-sorted" | tr -d ' ') files"
         fi
         echo "tree-sitter isolated parser and queries clean"
     )
 else
-    echo "tree-sitter CLI absent; structural checks skipped"
+    skip tree-sitter "tree-sitter CLI absent; structural checks skipped"
 fi
 
 if command -v vim >/dev/null 2>&1; then
@@ -151,7 +214,7 @@ if command -v vim >/dev/null 2>&1; then
       vim -Nu NONE -n -es -i NONE -S "$root/highlight/tests/vim-smoke.vim"
     echo "Vim filetype and syntax smoke clean"
 else
-    echo "Vim absent; native Vim smoke skipped"
+    skip vim "Vim absent; native Vim smoke skipped"
 fi
 
 if command -v luac >/dev/null 2>&1; then
@@ -160,7 +223,7 @@ if command -v luac >/dev/null 2>&1; then
       | xargs -n 1 luac -p
     echo "Neovim Lua syntax clean"
 else
-    echo "Lua compiler absent; Neovim Lua syntax check skipped"
+    skip lua "Lua compiler absent; Neovim Lua syntax check skipped"
 fi
 
 if command -v nvim >/dev/null 2>&1; then
@@ -168,6 +231,8 @@ if command -v nvim >/dev/null 2>&1; then
       --cmd "set runtimepath^=$root/highlight/nvim" \
       -l "$root/highlight/tests/nvim-opt-out.lua"
     echo "Neovim LSP preference smoke clean"
+else
+    skip nvim-preference "Neovim absent; LSP preference smoke skipped"
 fi
 
 if command -v nvim >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
@@ -195,7 +260,7 @@ if command -v nvim >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
       '+lua dofile(assert(os.getenv("LANDIN_NVIM_SMOKE")))'
     echo "Neovim parser and query smoke clean"
 else
-    echo "Neovim or C compiler absent; live Neovim smoke skipped"
+    skip nvim-parser "Neovim or C compiler absent; live Neovim smoke skipped"
 fi
 
 if command -v emacs >/dev/null 2>&1; then
@@ -224,10 +289,11 @@ if command -v emacs >/dev/null 2>&1; then
           emacs --batch -Q -l "$root/highlight/tests/emacs-treesit-smoke.el"
         echo "Emacs tree-sitter mode and highlighting smoke clean"
     else
-        echo "C compiler or Emacs tree-sitter support absent; live Emacs tree-sitter smoke skipped"
+        skip emacs-treesit "C compiler or Emacs tree-sitter support absent; live Emacs tree-sitter smoke skipped"
     fi
 else
-    echo "Emacs absent; native Emacs smoke skipped"
+    skip emacs "Emacs absent; native Emacs smoke skipped"
+    skip emacs-treesit "Emacs absent; live Emacs tree-sitter smoke skipped"
 fi
 
 if command -v pwsh >/dev/null 2>&1; then
@@ -235,6 +301,8 @@ if command -v pwsh >/dev/null 2>&1; then
       pwsh -NoProfile -Command \
       '$tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:LANDIN_SCRIPT, [ref]$tokens, [ref]$errors) > $null; if ($errors.Count) { exit 1 }'
     echo "Visual Studio installer syntax clean"
+else
+    skip visual-studio "PowerShell absent; Visual Studio installer syntax check skipped"
 fi
 fi
 
@@ -283,6 +351,8 @@ if test -n "${LANDIN_REFINE-}"; then
           --cmd "set runtimepath^=$root/highlight/nvim" \
           -l "$root/highlight/tests/nvim-lsp-smoke.lua")
         echo "Neovim language server smoke clean"
+    elif test "$lsp_emacs" = false; then
+        skip nvim-lsp "Neovim absent; language server smoke skipped"
     fi
     if command -v emacs >/dev/null 2>&1; then
         (cd "$server_work" && PATH="$server_bin:$PATH" \
@@ -290,10 +360,19 @@ if test -n "${LANDIN_REFINE-}"; then
           emacs --batch -Q -L "$root/highlight/emacs" \
           -l "$root/highlight/tests/emacs-lsp-smoke.el")
         echo "Emacs language server smoke clean"
+    else
+        skip emacs-lsp "Emacs absent; language server smoke skipped"
     fi
+else
+    skip nvim-lsp "LANDIN_REFINE names no refine; Neovim language server smoke skipped"
+    skip emacs-lsp "LANDIN_REFINE names no refine; Emacs language server smoke skipped"
 fi
 
 if test "$lsp_emacs" = false; then
     python3 "$root/highlight/grammar_pin.py" --check
-    echo "highlight packages clean"
+    if test -z "$not_run"; then
+        echo "highlight packages clean"
+    else
+        echo "highlight packages clean in what ran; NOT run on this host: $not_run"
+    fi
 fi

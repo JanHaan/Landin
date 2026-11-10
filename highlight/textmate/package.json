@@ -30,6 +30,13 @@
   "categories": ["Programming Languages"],
   "keywords": ["Landin", "language", "syntax"],
   "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "restrictedConfigurations": ["landin.server.path"],
+      "description": "Highlighting works in Restricted Mode. The language server starts only in a trusted window, and never from a path a workspace names."
+    }
+  },
   "scripts": {
     "test": "node ../tests/textmate-smoke.mjs && node ../tests/textmate-client.mjs",
     "package:check": "vsce ls"
@@ -65,7 +72,8 @@
         "landin.server.path": {
           "type": "string",
           "default": "",
-          "description": "The refine compiler to run as `refine lsp`; empty finds refine on the path."
+          "scope": "machine",
+          "description": "The refine compiler to run as `refine lsp`; empty finds refine on the path. A user setting only: a workspace cannot name the program this extension starts."
         },
         "landin.server.target": {
           "type": "string",

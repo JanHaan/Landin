@@ -533,6 +533,20 @@ def paced(args, what, action):
     return common.paced(args.pace, what, action, args.arty_serial, args.cascade)
 
 
+def power_cycle(args, off, on, wait=lambda: None):
+    """A power cycle: OFF, args.off_seconds, WAIT for the hubs, and ON, the
+    two switches each paced.  It is one action to a cancellation, which
+    waits for its end.  Each switch alone already was; the port was off
+    between them, and a SIGINT or SIGTERM arriving then, or deferred by
+    the first switch and raised as it ended, stopped the tool with the
+    port off, where no later run switches it on."""
+    with common.uninterrupted():
+        paced(args, 'power off', off)
+        time.sleep(args.off_seconds)
+        wait()
+        paced(args, 'power on', on)
+
+
 def restore_fixed(run, args, chip, probe, console_for, cycle, settle):
     """Flash, cold-start and prove the fixed image reached its park loop."""
     paced(args, 'restore resident image', lambda: probe.download_bin(args.fixed_image, chip.offset))

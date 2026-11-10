@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 #  One size, in image bytes, for the shapes `.zero` and `.fill` write and
@@ -128,20 +129,40 @@ def assemble_args(target: str) -> list[str]:
     return []
 
 
-def peak_of(command: list[str], cwd: str) -> tuple[int, int, float]:
+#  Seconds one assembly may take before it is ended and reported.  The
+#  largest shape assembles in seconds; this only bounds a driver that hangs.
+ASSEMBLY_SECONDS = 900
+
+
+def peak_of(command: list[str], cwd: str,
+            seconds: float = ASSEMBLY_SECONDS) -> tuple[int, int, float, str]:
     """Exit status, peak resident bytes of the command and what it waited
-    for, and wall seconds.  wait4's maximum covers the driver's own child,
-    the assembler, which is what is measured."""
+    for, wall seconds, and the last lines it wrote to standard error.
+    wait4's maximum covers the driver's own child, the assembler, which is
+    what is measured.
+
+    Standard error goes to a file and not a pipe: nothing reads a pipe
+    while wait4 waits, so an assembler with more to say than a pipe holds,
+    one diagnostic for each line of a repeated body, would block in its
+    write and never exit.  A command still running after `seconds` is
+    killed, and its status is then the signal's."""
     started = time.monotonic()
-    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.PIPE)
-    _, status, usage = os.wait4(process.pid, 0)
-    if process.stderr is not None:
-        process.stderr.close()
-    process.returncode = os.waitstatus_to_exitcode(status)
+    with tempfile.TemporaryFile() as said:
+        process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL,
+                                   stderr=said)
+        timer = threading.Timer(seconds, process.kill)
+        timer.start()
+        try:
+            _, status, usage = os.wait4(process.pid, 0)
+        finally:
+            timer.cancel()
+        process.returncode = os.waitstatus_to_exitcode(status)
+        said.seek(max(0, said.seek(0, os.SEEK_END) - 16384))
+        lines = said.read().decode(errors="replace").splitlines()[-12:]
     #  Linux reports kilobytes; Darwin, bytes.
     scale = 1 if sys.platform == "darwin" else 1024
-    return process.returncode, usage.ru_maxrss * scale, time.monotonic() - started
+    return (process.returncode, usage.ru_maxrss * scale,
+            time.monotonic() - started, "\n".join(lines))
 
 
 def check_shape(refine: str, driver: str, target: str, name: str,
@@ -160,10 +181,12 @@ def check_shape(refine: str, driver: str, target: str, name: str,
             cwd=directory, capture_output=True, text=True)
         if result.returncode != 0:
             return ["%s: refine refused the in-budget image: %s" % (name, result.stderr.strip())]
-        status, peak, _ = peak_of(
+        status, peak, _, said = peak_of(
             [driver, *assemble_args(target), "-c", "image.s", "-o", "image.o"], directory)
         if status != 0:
-            return ["%s: the assembler failed at scale %d" % (name, scale)]
+            return ["%s: the assembler failed at scale %d with status %d%s"
+                    % (name, scale, status,
+                       ", its last lines:\n" + said if said else "")]
         text = os.path.getsize(os.path.join(directory, "image.s"))
         size = os.path.getsize(os.path.join(directory, "image.o"))
         measured.append((text, size, peak, written, kind))

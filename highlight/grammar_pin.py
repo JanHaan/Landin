@@ -113,14 +113,19 @@ def check() -> int:
     sys.path.insert(0, str(ROOT))
     import test_adapters
     try:
-        test_adapters.check_grammar_revision(
+        skipped = test_adapters.check_grammar_revision(
             test_adapters.load_toml("helix/languages.toml"),
             test_adapters.load_toml("zed/extension.toml"),
             (ROOT / "emacs/landin-mode.el").read_text(encoding="utf-8"))
     except AssertionError as failure:
         print(f"editor grammar pin: {failure}", file=sys.stderr)
         return 1
-    print("editor grammar pins name the committed grammar and queries")
+    if skipped:
+        #  The three pins agree and are a commit ID; nothing more is known.
+        print("editor grammar pins agree with each other; the grammar and "
+              f"queries were NOT compared with the pinned commit: {skipped}")
+    else:
+        print("editor grammar pins name the committed grammar and queries")
     return 0
 
 

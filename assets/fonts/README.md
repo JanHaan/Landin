@@ -27,6 +27,8 @@ or beside this repository as `../landin-fonts`.
 ```sh
 python3 assets/fonts.py            # what is available, and what a page will ask for
 python3 assets/fonts.py --require  # exit 1 naming any family this host lacks
+python3 assets/fonts.py --pin      # record the licensed family's digests
+python3 assets/fonts.py --fetch BASE DEST  # what pages.yml runs
 ```
 
 ## Why the declarations are read rather than written
@@ -43,6 +45,32 @@ So the only thing rewritten is the `src` url, which named a path that
 means nothing here, and the only thing added is `font-display:swap` to a
 face that came without one. Re-vendoring a family is: replace its `woff2/`
 and its `.css`, run the check.
+
+## Read, not trusted
+
+What `fonts.py` makes of a stylesheet is inlined into a `<style>` element
+on every page, and the licensed stylesheet is fetched at publish time from
+storage outside the repository. So no text of it is copied through. A rule
+is rebuilt from the descriptors `fonts.py` lists in `DESCRIPTORS`, each
+value made only of names, numbers, quotes and the punctuation of a range;
+a face's file is a bare `NAME.woff2`; and a preserved header holding a `<`
+is refused, since `</style` is the one thing that ends the element. A
+stylesheet that says anything else stops the build with the declaration it
+objected to.
+
+`--fetch` applies the same to where files are written: it fetches a face
+only when the stylesheet names it `woff2/FILE.woff2`, writes it only as
+that file under a directory it created, and then reads the result as a
+render will.
+
+`licensed.sha256` in this directory, when it exists, pins the licensed
+stylesheet and each face by SHA-256, in `sha256sum`'s format with paths
+relative to the licensed root. A render or a fetch then refuses a file
+that differs and a face that is not pinned. `python3 assets/fonts.py
+--pin` writes it from the checkout `LANDIN_FONTS` names, and must be run
+again when the foundry's package is replaced. While the file does not
+exist the licensed family is held to its form only, and `--fetch` says so
+in a warning on the workflow run.
 
 ## Why the subsets are shipped whole
 
@@ -84,9 +112,9 @@ face is the site quietly not being itself, which no word count can see.
 No job clones `landin-fonts` any more. The pages task that did, with a
 deploy key held as a builds.sr.ht secret, is retired with the SourceHut
 gate. `.github/workflows/pages.yml` fetches the family from the
-maintainer's object storage instead, reading the faces to fetch out of
-the family's own stylesheet; a developer still works from the checkout
-beside this repository.
+maintainer's object storage instead, with `fonts.py --fetch`, which reads
+the faces to fetch out of the family's own stylesheet; a developer still
+works from the checkout beside this repository.
 
 ## What is not inlined
 

@@ -81,12 +81,36 @@ class GrammarRevision(unittest.TestCase):
         git(self.repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
             "commit", "-qm", "Later change")
 
-    def check(self, root: Path, revision: str | None = None) -> None:
+    def check(self, root: Path, revision: str | None = None) -> str | None:
         with patch.object(test_adapters, "ROOT", root / "highlight"):
-            test_adapters.check_grammar_revision(*sources(revision or self.revision))
+            return test_adapters.check_grammar_revision(
+                *sources(revision or self.revision))
+
+    def test_a_checkout_git_cannot_read_is_a_failure_and_not_a_pass(self) -> None:
+        #  The shipped grammar is not what the pinned commit holds.  With
+        #  git answering, that is reported; with git refusing the checkout
+        #  or missing, the check used to return in silence and its caller
+        #  printed that the pins name the committed grammar.
+        (self.repo / "highlight/tree-sitter/grammar.js").write_text(
+            "another grammar\n", encoding="utf-8")
+        with self.assertRaisesRegex(AssertionError, "differ from the pinned"):
+            self.check(self.repo)
+        with patch.dict(os.environ, {"GIT_TEST_ASSUME_DIFFERENT_OWNER": "1",
+                                     "GIT_CONFIG_GLOBAL": os.devnull,
+                                     "GIT_CONFIG_SYSTEM": os.devnull}):
+            with self.assertRaisesRegex(AssertionError, "git cannot read this checkout"):
+                self.check(self.repo)
+        with patch.dict(os.environ, {"PATH": str(Path(self.tmp.name) / "no-tools")}):
+            with self.assertRaisesRegex(AssertionError, "git is not on PATH"):
+                self.check(self.repo)
+
+    def test_a_source_archive_says_that_nothing_was_compared(self) -> None:
+        archive = Path(self.tmp.name) / "archive"
+        (archive / "highlight").mkdir(parents=True)
+        self.assertIn("not a git checkout", self.check(archive))
 
     def test_full_checkout_compares_grammar_and_queries(self) -> None:
-        self.check(self.repo)
+        self.assertIsNone(self.check(self.repo))
         query = self.repo / "highlight/helix/runtime/queries/landin/highlights.scm"
         query.write_text("changed query\n", encoding="utf-8")
         with self.assertRaisesRegex(AssertionError, "shipped grammar or queries differ.*"
@@ -107,7 +131,7 @@ class GrammarRevision(unittest.TestCase):
              f"{self.revision}^{{commit}}"], capture_output=True).returncode, 0)
         output = io.StringIO()
         with contextlib.redirect_stderr(output):
-            self.check(shallow)
+            self.assertIn("shallow checkout", self.check(shallow))
         self.assertIn("comparison skipped", output.getvalue())
         with patch.object(test_adapters, "ROOT", shallow / "highlight"):
             helix, zed, emacs = sources(self.revision)

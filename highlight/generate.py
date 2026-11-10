@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import plistlib
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -293,11 +294,21 @@ def notepad_plus_plus() -> str:
 '''
 
 
+def property_list(grammar_json: str) -> str:
+    """The TextMate grammar as the property list a `.tmLanguage` file is.
+
+    Sublime Text reads a file of that name as a property list, as the
+    package's `Comments.tmPreferences` is one.  The package shipped the
+    JSON text under the name, which is no property list.
+    """
+    return plistlib.dumps(json.loads(grammar_json), sort_keys=False).decode("utf-8")
+
+
 def outputs() -> dict[Path, str]:
     tm = textmate()
     result = {
         ROOT / "textmate/syntaxes/landin.tmLanguage.json": tm,
-        ROOT / "sublime/Landin.tmLanguage": tm,
+        ROOT / "sublime/Landin.tmLanguage": property_list(tm),
         ROOT / "vim/syntax/landin.vim": vim(),
         ROOT / "nano/landin.nanorc": nano(),
         ROOT / "kate/landin.xml": kate(),

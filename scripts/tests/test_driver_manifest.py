@@ -165,6 +165,31 @@ class RecordedArguments(unittest.TestCase):
             self.assertEqual(driver_manifest.emit(
                 refine, root, root / "work", output), 0)
             manifest = json.loads(output.read_text())
+            self.assertFalse((root / "work").exists())
+
+            #  WORK is removed afterwards, so one that holds anything is
+            #  refused before a file of it is touched: the checkout, a
+            #  directory of earlier manifests, ROOT and WORK transposed.
+            kept = root / "earlier"
+            kept.mkdir()
+            (kept / "manifest.json").write_text("an earlier manifest\n")
+            output.unlink()
+            for held in (kept, kept / "manifest.json", root):
+                with contextlib.redirect_stderr(io.StringIO()) as said:
+                    self.assertEqual(driver_manifest.emit(refine, root, held, output), 2)
+                self.assertIn("is not an empty directory", said.getvalue())
+            self.assertEqual((kept / "manifest.json").read_text(), "an earlier manifest\n")
+            self.assertFalse(output.exists())
+            #  A ROOT that is no checkout is refused too, with WORK untouched.
+            with contextlib.redirect_stderr(io.StringIO()) as said:
+                self.assertEqual(driver_manifest.emit(refine, kept, root / "new", output), 2)
+            self.assertIn("holds no compiler/tests/fixtures", said.getvalue())
+            #  An empty one is used and left empty.
+            empty = root / "empty"
+            empty.mkdir()
+            self.assertEqual(driver_manifest.emit(refine, root, empty, output), 0)
+            self.assertEqual(list(empty.iterdir()), [])
+            self.assertEqual(sorted(json.loads(output.read_text())), sorted(manifest))
 
             recorded = manifest["end-to-end/level|recorded"]
             invocation = (str(ada) + "\n--level=x86-64-v3 "

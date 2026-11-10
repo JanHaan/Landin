@@ -760,6 +760,42 @@ class StageBodyDependencies(unittest.TestCase):
         self.assertTrue(faults(checker.check_stage_body_dependencies))
 
 
+class LoweringVerifies(unittest.TestCase):
+    BODY = "compiler/ada/src/stages/landin-stages-lowering.adb"
+    CALL = "      Landin.IR.Verifier.Verify (Unit.all, Facts);\n"
+
+    def said(self, change):
+        from check_controls import tree
+        with tree(copied=[self.BODY]) as root:
+            path = root / self.BODY
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count(self.CALL), 1)
+            path.write_text(change(text), encoding="utf-8")
+            return checker.lowering_verifies()
+
+    def test_the_real_stage_verifies(self):
+        self.assertEqual(self.said(lambda text: text), [])
+
+    def test_a_deleted_call_is_reported(self):
+        self.assertTrue(self.said(lambda text: text.replace(self.CALL, "")))
+
+    def test_a_call_commented_out_is_no_call(self):
+        self.assertTrue(self.said(lambda text: text.replace(
+            self.CALL, "      null;  --  Landin.IR.Verifier.Verify (Unit.all, Facts);\n")))
+
+    def test_a_call_under_a_condition_is_reported(self):
+        self.assertTrue(self.said(lambda text: text.replace(
+            self.CALL, "      if Checked then\n   " + self.CALL + "      end if;\n")))
+
+    def test_a_call_outside_run_is_reported(self):
+        self.assertTrue(self.said(lambda text: text.replace(self.CALL, "").replace(
+            "   end Run;\n", "   end Run;\n\n   procedure Later is\n   begin\n"
+            + self.CALL + "   end Later;\n")))
+
+    def test_a_missing_stage_is_reported(self):
+        self.assertTrue(faults(lambda full_run: checker.lowering_verifies()))
+
+
 class SiteDocuments(unittest.TestCase):
     """Every rendered page has a group, a publishing path and, for a
     prototype, a page at all, before the renderer runs."""
@@ -1132,6 +1168,12 @@ class CodeRules(unittest.TestCase):
                     self.assertEqual(said, status, printed.getvalue())
                     self.assertIn(verdict, printed.getvalue())
                     self.assertNotIn("keyword", printed.getvalue())
+                    #  A run over named files never claims the full run's
+                    #  verdict: most checks that read a language file run
+                    #  only there, and "all clean" hid that.
+                    self.assertNotIn("all clean", printed.getvalue())
+                    self.assertIn("only the per-file rules ran",
+                                  printed.getvalue())
         finally:
             os.chdir(here)
 

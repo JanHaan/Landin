@@ -67,6 +67,17 @@ stops. So it stops on a fence that is never closed, a table row whose cell
 count does not match its header, and a nested list — each of which it used to
 absorb silently, losing structure that no word count could miss.
 
+A fence may be indented, as one that continues a list item is. It is a block
+of its own after the list, closed by a fence line at the same indentation,
+and its lines lose that indentation. Read only at the margin, such a fence
+was a paragraph with inline markup applied to its code.
+
+A link's target is an `http`, `https` or `mailto` address or a path of this
+repository, written without a space, a quote, an angle bracket, a backtick
+or a backslash. Anything else stops the build: the target lands in a quoted
+attribute of a page that has no content security policy, so a `javascript:`
+target or a quote that ended the attribute would be script on the site.
+
 ## Building and publishing
 
 ```sh
@@ -120,6 +131,14 @@ Rewritten links retain their written source target in `data-source-href`.
 Verification counts that target once in place of its rendered destination;
 link-resolution tests independently check the destination. Missing visible
 link text still fails the word check.
+
+It also holds every fragment to an id. A link to a heading of another page,
+or of its own, is rewritten by file while its fragment passes through as
+written, and the ids are the renderer's own: lower case, each run of other
+characters one hyphen, or a construct's number. An anchor right for another
+Markdown view, or for a heading since renamed, would land at the top of the
+page with every word still there. So each local `href` with a fragment must
+name an id of the page it leads to, and no page may carry an id twice.
 
 It reads the document's own region — `<main>` without the navigation, the bar
 or the footer. Over the whole page it counted the furniture as content: the
@@ -181,7 +200,10 @@ the compiler dispatches on, the codes out of the catalogue `check.py`
 generates, the installation steps out of the README's `Installing` section,
 with its links pointed at the published page, and the invocation out of
 `examples.md`. Nothing in it is transcribed by hand; each part is
-regenerated from the source it describes. The full file is the primer followed by the tour,
+regenerated from the source it describes. A reading that comes back empty
+stops the build, and so does a refusal table read for fewer names than its
+enumeration declares: one table short leaves the other's rows, which is
+enough to hide it. The full file is the primer followed by the tour,
 the specification and the worked programs; it is over a megabyte, mostly
 the specification's decision register, which is why the primer is also
 written on its own.

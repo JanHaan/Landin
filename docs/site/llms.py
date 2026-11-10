@@ -135,6 +135,34 @@ def cases(text, function, kind):
     return out
 
 
+def literals(text, kind):
+    """The enumeration literals of an Ada type, in order; none if absent."""
+    found = re.search(r"type %s is\s*\((.*?)\);" % re.escape(kind),
+                      re.sub(r"--[^\n]*", "", text), re.S)
+    return re.findall(r"[A-Za-z0-9_]+", found.group(1)) if found else []
+
+
+def whole(text, path, function, kind):
+    """`cases`, held to an arm for every literal of the kind.
+
+    `cases` returns nothing when its pattern stops matching, after a
+    parameter is renamed or an expression function is given a body, and a
+    table that reads as nothing leaves the primer short of every refusal
+    it owns with no word of it: the other table still yields rows.  So a
+    reading that does not cover its enumeration stops the build.
+    """
+    names = literals(text, kind)
+    got = cases(text, function, kind)
+    missing = [name for name in names if name not in got]
+    if not names or missing:
+        raise SystemExit(
+            "llms: %s: %s over %s was read for %d of its %d literals%s -- "
+            "the primer would ship without the rest"
+            % (path, function, kind, len(names) - len(missing), len(names),
+               ", not for " + ", ".join(missing[:6]) if missing else ""))
+    return got
+
+
 def refusals(source):
     """Every spelling the compiler refuses by name, with its paragraph.
 
@@ -147,11 +175,17 @@ def refusals(source):
     for whose, path, kind in REFUSAL_TABLES:
         text = read(source, path)
         if not text:
-            continue
-        where = cases(text, "Construct", kind)
-        standing = cases(text, "Standing", kind)
-        spelling = cases(text, "Spelling", "Refused_Type_Name")
-        names = cases(text, "Refusal", "Refused_Type_Name")
+            raise SystemExit("llms: %s's refusal table, %s, is not there -- "
+                             "the primer would ship without its refusals"
+                             % (whose, path))
+        where = whole(text, path, "Construct", kind)
+        standing = whole(text, path, "Standing", kind)
+        #  Only the checker's table spells type names.
+        spelt = bool(literals(text, "Refused_Type_Name"))
+        spelling = (whole(text, path, "Spelling", "Refused_Type_Name")
+                    if spelt else {})
+        names = (whole(text, path, "Refusal", "Refused_Type_Name")
+                 if spelt else {})
         written = {}
         for name, refused in names.items():
             written.setdefault(refused, []).append(spelling.get(name, name))
@@ -340,11 +374,13 @@ def primer(source, release, site_url):
     return "\n".join(out)
 
 
-def index(pages, site_url, release, sizes):
+def index(pages, site_url, release, sizes, programs):
     """The convention: a title, a summary, then annotated links.
 
     The link list is built from the site's own page table, so a page that
-    is added or renamed cannot leave a stale entry here.
+    is added or renamed cannot leave a stale entry here.  PROGRAMS is how
+    many programs examples.md holds, counted there: written here by hand
+    it said eleven while the page held twenty-three.
     """
     def link(key, note):
         for page in pages:
@@ -371,9 +407,9 @@ def index(pages, site_url, release, sizes):
             ("tour", "the language explained construct by numbered "
                      "construct, teaching by example. Teaches; does not "
                      "decide."),
-            ("examples", "eleven complete programs the compiler emits and the "
+            ("examples", "%d complete programs the compiler emits and the "
                          "gates run. Each is known to compile and run, so "
-                         "each is safe to copy from."),
+                         "each is safe to copy from." % programs),
         ]),
         ("Deciding what is legal", [
             ("spec", "normative. The grammar of the enabled kernel, the "
@@ -451,8 +487,15 @@ def write(site, source, pages, site_url):
     #  rather than guessed, because a size written by hand is one that
     #  drifts the first time a document grows.
     sizes = {"primer": measure(brief), "full": measure(full)}
+    #  A program on the examples page is a section with a fixture line.
+    programs = len(re.findall(r"^Fixture source: ", read(source, "examples.md"),
+                              re.M))
+    if not programs:
+        raise SystemExit("llms: examples.md names no `Fixture source:`, so "
+                         "the index cannot say how many programs it holds")
     (site / "llms.txt").write_text(
-        index(pages, site_url, release, sizes) + "\n", encoding="utf-8")
+        index(pages, site_url, release, sizes, programs) + "\n",
+        encoding="utf-8")
     (site / "llms-primer.txt").write_text(brief, encoding="utf-8")
     (site / "llms-full.txt").write_text(full, encoding="utf-8")
     return ("llms.txt", "llms-primer.txt", "llms-full.txt")

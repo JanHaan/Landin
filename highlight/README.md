@@ -162,6 +162,16 @@ LANDIN_REFINE=/absolute/path/to/refine ./highlight/test.sh --lsp-emacs
                                     # require Emacs to launch refine lsp
 ```
 
+A smoke whose editor or tool is not on the host does not run, and `test.sh`
+then ends "clean in what ran; NOT run on this host:" with their names, not
+"highlight packages clean". `LANDIN_HIGHLIGHT_REQUIRE` names the smokes a
+caller will not have skipped, separated by spaces, or `all`: `textmate`,
+`tree-sitter`, `vim`, `lua`, `nvim-preference`, `nvim-parser`, `emacs`,
+`emacs-treesit`, `visual-studio`, `nvim-lsp` and `emacs-lsp`. The gate's
+`editor-grammar` job has the pinned tree-sitter CLI and no editor, so the
+TextMate, Vim, Emacs and Neovim parser smokes run only where a developer
+has those tools.
+
 `test.sh` checks the editor pins last, after every other pass, so a grammar
 change that is not yet committed still gets its structural and
 `--integration` verdicts, each printed as it passes; the run then fails on the

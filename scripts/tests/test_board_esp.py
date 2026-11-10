@@ -623,6 +623,43 @@ class Paced(unittest.TestCase):
         self.assertEqual(done, [1])
         pace.after.assert_called_once_with('download')
 
+    def test_a_cancellation_during_a_power_cycle_waits_until_the_port_is_on_again(self):
+        import signal
+        previous = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+        for number, handler in previous.items():
+            self.addCleanup(signal.signal, number, handler)
+        patcher = mock.patch.object(COMMON, 'CANCELLATION', None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        COMMON.handle_cancellation()
+        args = SimpleNamespace(arty_serial=None, cascade=None, pace=mock.Mock(), off_seconds=0)
+        # Whenever the signal arrives, while the port goes off, while it is
+        # off or while the hub is awaited, the port is switched on first.
+        for moment in ('off', 'wait'):
+            with self.subTest(moment=moment):
+                COMMON.CANCELLATION = None
+                done = []
+
+                def step(name):
+                    done.append(name)
+                    if name == moment:
+                        os.kill(os.getpid(), signal.SIGTERM)
+                with mock.patch('sys.stderr', new=io.StringIO()), \
+                        self.assertRaises(COMMON.Cancelled):
+                    ESP.power_cycle(args, lambda: step('off'), lambda: step('on'),
+                                    lambda: step('wait'))
+                    done.append('never')
+                self.assertEqual(done, ['off', 'wait', 'on'])
+        # A cycle nothing interrupts raises nothing, and one whose hub does
+        # not come back fails as itself.
+        COMMON.CANCELLATION = None
+        ESP.power_cycle(args, lambda: None, lambda: None)
+
+        def absent():
+            raise COMMON.Unavailable('the hub did not list')
+        with self.assertRaises(COMMON.Unavailable):
+            ESP.power_cycle(args, lambda: None, lambda: None, absent)
+
 
 class Recover(unittest.TestCase):
     def test_download_mode_is_esptool_s_usb_jtag_serial_sequence(self):

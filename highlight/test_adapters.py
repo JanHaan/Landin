@@ -60,8 +60,16 @@ def load_toml(relative: str) -> object:
     return tomllib.loads((ROOT / relative).read_text(encoding="utf-8"))
 
 
-def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> None:
-    """Keep fetched grammar and local queries at the same checked-in revision."""
+def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> str | None:
+    """Keep fetched grammar and local queries at the same checked-in revision.
+
+    Returns None when the shipped grammar and queries were compared with
+    the pinned commit, and otherwise why they were not: a source archive
+    has no history, and a shallow checkout may lack the commit.  A
+    checkout that git cannot read is neither.  It is a failure, with git's
+    own words: returning in silence there let a caller say the pins name
+    the committed grammar when nothing had been compared.
+    """
     helix_source = helix["grammar"][0]["source"]
     zed_source = zed["grammars"]["landin"]
     assert helix_source["subpath"] == zed_source["path"] == "highlight/tree-sitter"
@@ -76,13 +84,22 @@ def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> None:
     # Source archives have no history. In a checkout with the pinned object,
     # also compare the files that determine parsing and the shipped queries.
     checkout = ROOT.parent
+    if not (checkout / ".git").exists():
+        return "this is not a git checkout, so there is no pinned commit to read"
     try:
         top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=checkout,
                              capture_output=True, text=True, check=False)
     except FileNotFoundError:
-        return
-    if top.returncode != 0 or Path(top.stdout.strip()).resolve() != checkout:
-        return
+        raise AssertionError(
+            "this is a git checkout and git is not on PATH, so the shipped "
+            "grammar and queries cannot be compared with the pinned "
+            "revision") from None
+    assert top.returncode == 0, (
+        "git cannot read this checkout, so the shipped grammar and queries "
+        "cannot be compared with the pinned revision: "
+        + (top.stderr.strip() or "git rev-parse failed"))
+    assert Path(top.stdout.strip()).resolve() == checkout.resolve(), (
+        f"git reads {top.stdout.strip()} as the checkout, not {checkout}")
     pinned = subprocess.run(["git", "cat-file", "-e", f"{revision}^{{commit}}"],
                             cwd=checkout, capture_output=True, text=True,
                             check=False)
@@ -93,7 +110,7 @@ def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> None:
         if shallow.returncode == 0 and shallow.stdout.strip() == "true":
             print("pinned grammar commit unavailable in shallow checkout; "
                   "grammar/query comparison skipped", file=sys.stderr)
-            return
+            return "the pinned commit is not in this shallow checkout"
         raise AssertionError(
             f"pinned grammar commit {revision} is unavailable; fetch it to "
             "compare the shipped grammar and queries, or, if a rebase "
@@ -115,6 +132,7 @@ def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> None:
         f"pinned grammar commit {revision} is not on this branch, as a "
         "rebase leaves it; " + _repair(checkout)
         if ancestor.returncode == 1 else ancestor.stderr.strip())
+    return None
 
 
 def _repair(checkout: Path) -> str:
@@ -156,6 +174,19 @@ def scanner_smoke(source: str) -> None:
         assert has("b", module), f"scanner omits builtin module {module}"
     assert has("s", "member")
     assert has("n", "0x2a")
+
+
+def scanner_unterminated_string_smoke() -> None:
+    #  One token, however long: scanned on from each quote in turn, this
+    #  line took a quarter of its length squared in regex steps, a second at
+    #  8 kB and minutes at 100 kB, in the site build and in any Pygments
+    #  host that highlights files it did not write.
+    line = '"' + '\\"' * 200_000
+    assert list(Scanner().scan(line)) == [("q", line)]
+    assert list(Scanner().scan('x = "open')) == [
+        (None, "x"), (None, " "), ("o", "="), (None, " "), ("q", '"open')]
+    assert list(Scanner().scan('"closed" "open\\')) == [
+        ("q", '"closed"'), (None, " "), ("q", '"open'), ("o", "\\")]
 
 
 def scanner_declaration_smoke() -> None:
@@ -326,11 +357,24 @@ def main(argv: list[str]) -> int:
     notepad = ET.parse(ROOT / "notepad-plus-plus/Landin.xml")
     with (ROOT / "sublime/Comments.tmPreferences").open("rb") as stream:
         plistlib.load(stream)
+    #  A `.tmLanguage` file is a property list, and holds the one grammar.
+    with (ROOT / "sublime/Landin.tmLanguage").open("rb") as stream:
+        assert plistlib.load(stream) == grammar, (
+            "the Sublime Text grammar is not the TextMate grammar")
 
     assert grammar["scopeName"] == "source.landin"
     assert grammar["fileTypes"] == ["ldn"]
     assert package["contributes"]["languages"][0]["extensions"] == [".ldn"]
     assert package["contributes"]["grammars"][0]["scopeName"] == "source.landin"
+    #  Which program the extension starts is the user's choice, never a
+    #  workspace's, and Restricted Mode keeps the highlighting.
+    settings = package["contributes"]["configuration"]["properties"]
+    assert settings["landin.server.path"]["scope"] == "machine"
+    untrusted = package["capabilities"]["untrustedWorkspaces"]
+    assert untrusted["supported"] == "limited"
+    assert untrusted["restrictedConfigurations"] == ["landin.server.path"]
+    extension = (ROOT / "textmate/extension.js").read_text(encoding="utf-8")
+    assert "vscode.workspace.isTrusted === false" in extension
     assert tree_sitter["grammars"][0]["file-types"] == ["ldn"]
     assert helix["language"][0]["file-types"] == ["ldn"]
     assert zed["grammars"]["landin"]["path"] == "highlight/tree-sitter"
@@ -349,6 +393,7 @@ def main(argv: list[str]) -> int:
         ("c", comment)]
     scanner_smoke(lexical)
     scanner_declaration_smoke()
+    scanner_unterminated_string_smoke()
     symbol_collection_smoke()
     pygments_smoke(lexical)
     samples = {

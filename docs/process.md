@@ -250,7 +250,10 @@ limit: a 600-second tool call can use the default, while a tool limited to
 60 seconds can use `--timeout 45`. A tool that yields a process session can
 resume that session instead of opening another wait. Exit 124 means the
 logged command is still running, not that it failed. A run whose wrapper
-died without a result exits 125 at once. Do not wait with `sleep`
+died without a result exits 125 at once. Those two statuses are the wait's
+own: a finished run whose command itself exited 124 or 125, as `timeout`
+does, makes the wait exit 1 and say so, and the first line it prints is
+`state=finished`, `state=running` or `state=lost`. Do not wait with `sleep`
 loops over the log, nor with `pgrep -f`, whose pattern also matches the
 waiting shell's own command line, so the wait never ends. A live progress
 inspection is appropriate when diagnosing a stall, rather than as a timer.
@@ -630,7 +633,7 @@ still succeed. The linked full run contains the target-test results.
 | `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, outside-user-stock, build-modes, Cortex-M and scaling jobs |
 | `release` | `ubuntu-24.04` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
 | `outside-user-stock` | `ubuntu-24.04` | the release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
-| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 and RV32 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2`; `build-modes-1` also compares both Xtensa configurations |
+| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1: Linux x86-64 and RV32 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2`; `build-modes-1` also compares both Xtensa configurations |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI, then the Neovim LSP preference smoke under the distribution's Neovim |
 | `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, the native and Pi board RAM helpers built (including native Rust controls), every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, a full-scope dispatch included (D585) |
@@ -695,7 +698,17 @@ checks changed documents on a push and every document weekly or manually.
 Changes to link checker configuration and unknown changed ranges also check
 every document.
 `release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
-assets that `nix build .#refine-bin` consumes.
+assets that `nix build .#refine-bin` consumes. Its first job,
+`scripts/release.py gated`, refuses a tag whose commit is not on `main` or
+whose own push gate on `main` did not succeed, so a tag on an unmerged or
+ungated commit publishes nothing. Its last, `scripts/release.py publish`,
+makes the release a draft, uploads every asset, reads the list back and
+only then publishes it; a run that stops part-way leaves a draft that the
+next run empties and fills, and an asset of a published release is never
+replaced. The archives record root as every member's owner. Who may push a
+`v*` tag, a required reviewer on the publishing job and a signed
+attestation of the assets are repository settings and are not established
+by the workflow.
 
 The repository submits no build manifests. GitHub is canonical and takes
 pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
@@ -810,9 +823,18 @@ runner. The control is the runner's job-started hook,
 which accepts only a push to `main`, a schedule on `main` or a dispatch
 from a branch by the maintainer, each of `gate.yml` at the run's own ref
 with no pull request in its environment or payload. GitHub fails a job
-whose pre-job script exits nonzero before any of its steps
+whose pre-job script exits nonzero
 ([running scripts before or after a job](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/run-scripts)),
-so nothing from a refused job's checkout runs on the rig. A second layer is
+but a failed job is not a job none of whose steps ran: a step under
+`if: always()` and an action's `pre:` entry have conditions a failed
+earlier step can satisfy. A refusal therefore does not rest on the exit
+status. The hook removes the actions the runner downloaded for the job and
+kills the runner's worker process for it before exiting, and no step runs
+without the worker, so nothing from a refused job's checkout runs on the
+rig. The hook's controls run that against a stand-in worker; a refused job
+on the deployed runner has not been observed since the change, and the
+[hook's page](../environments/rig-runner/README.md#what-a-refusal-does)
+gives the one experiment that does. A second layer is
 the repository's setting that a fork's pull request waits for approval
 before its workflows run, set for all external contributors as GitHub
 recommends. The board jobs read no

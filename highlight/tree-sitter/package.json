@@ -30,8 +30,5 @@
       ],
       "injection-regex": "^landin$"
     }
-  ],
-  "allowScripts": {
-    "tree-sitter-cli@0.26.9": true
-  }
+  ]
 }

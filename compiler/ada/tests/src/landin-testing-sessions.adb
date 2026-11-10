@@ -1,7 +1,6 @@
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Fixed;
 
-with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Server.Documents;
 with Landin.Server.Sessions;
@@ -55,24 +54,39 @@ package body Landin.Testing.Sessions is
    end Unescaped;
 
    --  Every file under Real_Directory, added to Host under Fake_Directory.
+   --  Unread names the first directory or file that could not be read,
+   --  and stays empty when the whole tree was loaded: a session run
+   --  against less than its tree is not the session in the repository.
    procedure Load_Tree
      (Real           : Landin.Platform.Native.Native_Filesystem;
       Host           : in out Landin.Testing.Fakes.Fake_Filesystem;
       Real_Directory : String;
-      Fake_Directory : String);
+      Fake_Directory : String;
+      Unread         : in out Unbounded.Unbounded_String);
 
    procedure Load_Tree
      (Real           : Landin.Platform.Native.Native_Filesystem;
       Host           : in out Landin.Testing.Fakes.Fake_Filesystem;
       Real_Directory : String;
-      Fake_Directory : String)
+      Fake_Directory : String;
+      Unread         : in out Unbounded.Unbounded_String)
    is
       Entries : Landin.Platform.Path_List;
       Listed  : Landin.Platform.List_Status;
+
+      procedure Note (Path : String);
+
+      procedure Note (Path : String) is
+      begin
+         if Unbounded.Length (Unread) = 0 then
+            Unread := Unbounded.To_Unbounded_String (Path);
+         end if;
+      end Note;
    begin
       Host.Add_Directory (Fake_Directory);
       Real.List_Directory (Real_Directory, Entries, Listed);
       if Listed /= Landin.Platform.List_Ok then
+         Note (Real_Directory);
          return;
       end if;
       for Name of Entries loop
@@ -81,7 +95,7 @@ package body Landin.Testing.Sessions is
             To   : constant String := Fake_Directory & "/" & Name;
          begin
             if Real.Is_Directory (From) then
-               Load_Tree (Real, Host, From, To);
+               Load_Tree (Real, Host, From, To, Unread);
             else
                declare
                   Content : Unbounded.Unbounded_String;
@@ -90,6 +104,8 @@ package body Landin.Testing.Sessions is
                   Real.Read_File (From, Content, Read);
                   if Read = Landin.Platform.Read_Ok then
                      Host.Add_File (To, Unbounded.To_String (Content));
+                  else
+                     Note (From);
                   end if;
                end;
             end if;
@@ -158,10 +174,22 @@ package body Landin.Testing.Sessions is
             Answer.Problem := Unbounded.To_Unbounded_String (Text);
          end if;
       end Problem;
+
+      --  The session cannot be run as written; nothing is recorded.
+      procedure Malformed (Text : String);
+
+      procedure Malformed (Text : String) is
+      begin
+         Problem (Text);
+         Answer.Malformed := True;
+         Answer.Recorded := Unbounded.Null_Unbounded_String;
+      end Malformed;
+
+      Unread : Unbounded.Unbounded_String;
    begin
       Real.Read_File (Directory & "/session.lsp", Content, Read);
       if Read /= Landin.Platform.Read_Ok then
-         Problem ("session.lsp is unreadable");
+         Malformed ("session.lsp is unreadable");
          return Answer;
       end if;
       declare
@@ -175,13 +203,14 @@ package body Landin.Testing.Sessions is
             end if;
          end loop;
          if First <= Text'Last then
-            Problem ("session.lsp does not end in a line end");
+            Malformed ("session.lsp does not end in a line end");
             return Answer;
          end if;
       end;
 
       if Real.Is_Directory (Directory & "/workspace") then
-         Load_Tree (Real, Host, Directory & "/workspace", "/workspace");
+         Load_Tree (Real, Host, Directory & "/workspace", "/workspace",
+                    Unread);
       end if;
       --  A server finds its library beside itself, and a Cortex-M module
       --  that imports no description reaches the library's reference
@@ -191,7 +220,12 @@ package body Landin.Testing.Sessions is
       --  that needs `core` without the whole of it.
       if Real.Is_Directory (Directory & "/library") then
          Load_Tree (Real, Host, Directory & "/library",
-                    "/opt/landin/lib/landin");
+                    "/opt/landin/lib/landin", Unread);
+      end if;
+      if Unbounded.Length (Unread) > 0 then
+         Malformed ("the session's tree could not be read whole: "
+                    & Unbounded.To_String (Unread) & " is unreadable");
+         return Answer;
       end if;
 
       for Line of Lines loop
@@ -226,7 +260,7 @@ package body Landin.Testing.Sessions is
                  (Line, " | ");
             begin
                if not Has_Pause or else Split = 0 then
-                  Problem ("disk edit needs a preceding pause: " & Line);
+                  Malformed ("disk edit needs a preceding pause: " & Line);
                   return Answer;
                end if;
                declare
@@ -234,7 +268,7 @@ package body Landin.Testing.Sessions is
                     (Line (Line'First + 6 .. Split - 1));
                begin
                   if Path = "" then
-                     Problem ("disk edit needs a file URI: " & Line);
+                     Malformed ("disk edit needs a file URI: " & Line);
                      return Answer;
                   end if;
                   Landin.Testing.Fakes.Edit_At
@@ -283,13 +317,13 @@ package body Landin.Testing.Sessions is
                Host.Add_Symbolic_Link (Path, Target);
             end;
          elsif Line'Length > 0 and then not Starts (Line, "#") then
-            Problem ("session.lsp has a line that is none of its forms: "
-                     & Line);
+            Malformed ("session.lsp has a line that is none of its forms: "
+                       & Line);
             return Answer;
          end if;
       end loop;
       if Wanted < 0 then
-         Problem ("session.lsp names no exit status");
+         Malformed ("session.lsp names no exit status");
          return Answer;
       end if;
 
@@ -305,6 +339,8 @@ package body Landin.Testing.Sessions is
             On_Analysis => Count_Analysis'Access);
          Answer.Log := Unbounded.To_Unbounded_String
            (Landin.Testing.Fakes.Logged (Channel));
+         Answer.Wanted_Exit := Wanted;
+         Answer.Ended_With := Integer (Status);
          declare
             Sent : constant Line_Vectors.Vector :=
               Messages (Landin.Testing.Fakes.Output (Channel));
@@ -355,5 +391,40 @@ package body Landin.Testing.Sessions is
       end;
       return Answer;
    end Run;
+
+   procedure Inventory
+     (Root    : String;
+      Names   : out Landin.Platform.Path_List;
+      Problem : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      Real    : Landin.Platform.Native.Native_Filesystem;
+      Entries : Landin.Platform.Path_List;
+      Listed  : Landin.Platform.List_Status;
+   begin
+      Names.Clear;
+      Problem := Unbounded.Null_Unbounded_String;
+      Real.List_Directory (Root, Entries, Listed);
+      if Listed /= Landin.Platform.List_Ok then
+         Problem := Unbounded.To_Unbounded_String
+           (Root & " cannot be listed, so no session in it is run");
+         return;
+      end if;
+      for Name of Entries loop
+         if Name'Length > 0 and then Name (Name'First) not in '.' | '_'
+           and then Real.Is_Directory (Root & "/" & Name)
+         then
+            if Real.Exists (Root & "/" & Name & "/session.lsp") then
+               Names.Append (Name);
+            else
+               if Unbounded.Length (Problem) > 0 then
+                  Unbounded.Append (Problem, "; ");
+               end if;
+               Unbounded.Append
+                 (Problem, Root & "/" & Name & " holds no session.lsp, so"
+                  & " the session is not run");
+            end if;
+         end if;
+      end loop;
+   end Inventory;
 
 end Landin.Testing.Sessions;

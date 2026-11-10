@@ -33,14 +33,37 @@ on:
 permissions:
   contents: read
 
-#  One run per tag, and never cancel one in flight: a cancelled publish can
-#  leave a release holding one platform's asset without the others'.
+#  One run per tag, and never cancel one in flight: two publications of one
+#  tag would each empty the other's draft.
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  #  A tag is a name on any commit.  The build below ties the binary to the
+  #  tag; this ties the tag to a tree that was tested: the commit is on
+  #  main, and the gate passed on main's own push of it.  The script comes
+  #  from the workflow's ref and the commit from the tag, so a tag older
+  #  than the script is still judged.
+  gated:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          path: released
+      - name: The commit is on main and its gate passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release.py gated released
+
   build:
+    needs: gated
     strategy:
       fail-fast: false
       matrix:
@@ -212,22 +235,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          set -eu
-          notes="The refine compiler, built from $TAG by the release"
-          notes="$notes workflow. Verify each asset against the .sha256"
-          notes="$notes published beside it."
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            published=$(gh release view "$TAG" --json assets --jq '.assets[].name')
-            for file in release-assets/*; do
-              name=$(basename "$file")
-              if printf '%s\n' "$published" | grep -qxF "$name"; then
-                echo "$TAG already publishes $name; refusing to replace it" >&2
-                exit 1
-              fi
-            done
-          else
-            gh release create "$TAG" --verify-tag \
-              --title "Landin $TAG" --notes "$notes"
-          fi
-          gh release upload "$TAG" release-assets/*
+        #  A draft until it holds every file, so the releases page never
+        #  shows part of a release, and a run that stopped part-way is
+        #  completed by running again.  A published release is final: a
+        #  file of a name it already holds is refused.
+        run: python3 scripts/release.py publish "$TAG" release-assets

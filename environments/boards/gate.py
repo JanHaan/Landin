@@ -53,6 +53,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -175,9 +176,13 @@ def tail(path, lines=5):
 class Forwarder:
     """SIGINT and SIGTERM passed on to the running step, which stops of
     itself and records its cancellation; between steps the first raises
-    Cancelled here."""
+    Cancelled here.  While a step is being started its process may exist
+    and not be known here yet, so a signal then is kept for it and raises
+    nothing: Cancelled there would leave the tool running, unsignalled and
+    unwaited for, while the gate gave up the rig lock it runs under."""
     def __init__(self):
         self.child, self.signals, self.previous = None, [], {}
+        self.starting, self.pending = False, []
 
     def __call__(self, number, frame):
         name = signal.Signals(number).name
@@ -188,8 +193,28 @@ class Forwarder:
             except ProcessLookupError:
                 pass
             return
+        if self.starting:
+            self.pending.append(number)
+            return
         if len(self.signals) == 1:
             raise common.Cancelled(name)
+
+    def start(self, launch):
+        """The process LAUNCH starts, as the running step; a signal that
+        arrived while it started reaches it now."""
+        self.starting = True
+        try:
+            process = launch()
+            self.child = process
+        finally:
+            self.starting = False
+        pending, self.pending = self.pending, []
+        for number in pending:
+            try:
+                os.kill(process.pid, number)
+            except ProcessLookupError:
+                pass
+        return process
 
     def install(self):
         for number in (signal.SIGINT, signal.SIGTERM):
@@ -198,6 +223,41 @@ class Forwarder:
     def restore(self):
         for number, handler in self.previous.items():
             signal.signal(number, handler)
+
+
+# How long a tool that was told to stop may take over the action it will
+# not cut short, a download or a power cycle, before its group is killed.
+STOP_SECONDS = 300
+
+
+def stopped(process, seconds):
+    """End PROCESS's tool and wait until it has ended: the caller releases
+    the rig lock the tool runs under, and a tool still flashing or reading
+    then would share the probe and the hubs with whoever takes it next."""
+    if process.poll() is not None:
+        return
+
+    def drain():
+        # The tool writes while it stops; nothing else reads it now.
+        try:
+            for _ in process.stdout:
+                pass
+        except (OSError, ValueError):
+            pass
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    for number in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(process.pid, number)
+        except (ProcessLookupError, PermissionError):
+            pass
+        try:
+            process.wait(seconds)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    process.wait()
+    reader.join(5)
 
 
 def run_step(root, board, mode, directory, output, arguments, forwarder, environ):
@@ -215,10 +275,9 @@ def run_step(root, board, mode, directory, output, arguments, forwarder, environ
     with log.open('wb') as stream:
         stream.write(('$ ' + shlex.join(argv) + '\n').encode())
         stream.flush()
-        process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                   stdin=subprocess.DEVNULL, start_new_session=True,
-                                   cwd=str(root), env=dict(environ))
-        forwarder.child = process
+        process = forwarder.start(lambda: subprocess.Popen(
+            argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            start_new_session=True, cwd=str(root), env=dict(environ)))
         try:
             for line in process.stdout:
                 stream.write(line)
@@ -227,6 +286,9 @@ def run_step(root, board, mode, directory, output, arguments, forwarder, environ
                 sys.stdout.flush()
             code = process.wait()
         finally:
+            # Reached with the tool alive only when copying its output
+            # failed: the log's disk full, or this process's own output gone.
+            stopped(process, STOP_SECONDS)
             forwarder.child = None
             process.stdout.close()
             # Anything the tool left in its group once it has ended; a

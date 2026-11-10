@@ -170,6 +170,32 @@ class Framing(unittest.TestCase):
         self.assertEqual(COMMON.frame_record(b'\x02b r=00fa0000 v=08000000\x03\n'),
                          [dict(tag='b', r='00fa0000', v='08000000')])
 
+    def test_a_malformed_frame_fails_the_run_and_is_no_other_exception(self):
+        # What a line carries around a reset, and what miscompiled firmware
+        # may send: an empty frame, and a byte that is not ASCII.
+        for stream, words in ((b'\x02\x03\n', 'nothing between'),
+                              (b'\x02\xff\x03', 'not ASCII'),
+                              (b'\x02\xfe\x02b r=00000100\x03\n', 'not ASCII')):
+            for read in (COMMON.frames, COMMON.frames_safe, COMMON.echo_of,
+                         lambda s: COMMON.tagged(s, 'b')):
+                with self.assertRaisesRegex(COMMON.Failed, words):
+                    read(stream)
+
+    def test_a_result_writes_a_malformed_frame_as_its_bytes_and_never_fails(self):
+        # The tools write the frames while they clean up, before a fixed
+        # image is restored, the lock released and the result written.
+        self.assertEqual(
+            COMMON.frame_record(b'\x02\x03\n\x02b r=00000100\x03\n\x02\xfe\x41\x03'),
+            [dict(tag='b', r='00000100'), dict(tag=None, malformed=''),
+             dict(tag=None, malformed='fe41')])
+
+    def test_a_field_the_board_did_not_send_fails_the_run_by_name(self):
+        boot = COMMON.tagged(b'\x02b v=08000000\x03\n', 'b')[0]
+        self.assertEqual(boot['v'], 0x08000000)
+        self.assertEqual(boot.get('r', -1), -1)
+        with self.assertRaisesRegex(COMMON.Failed, "no field 'r'; its fields are v"):
+            boot['r']
+
     def test_asking_sends_the_command_and_waits_for_its_frame(self):
         class Line:
             def __init__(self):
@@ -915,6 +941,12 @@ class Bridges(unittest.TestCase):
         self.assertEqual(COMMON.bridged(4442), '0000:0001:127.0.0.1:4442')
 
 
+def kernel_name(path):
+    """PATH as /proc/locks names a file: MAJ:MIN:INODE, the device in hex."""
+    status = os.stat(path)
+    return '%02x:%02x:%d' % (os.major(status.st_dev), os.minor(status.st_dev), status.st_ino)
+
+
 class Pins(unittest.TestCase):
     def test_the_shell_is_found_without_touching_the_pin(self):
         class Shell:
@@ -922,10 +954,33 @@ class Pins(unittest.TestCase):
 
             def command(self, name, argv, **kw):
                 self.calls.append(name)
-                return 'building\n["/nix/store/python3", {"PYTHONPATH": "/litex"}]\n'
-        pins = COMMON.ProbehivePins(Shell(), '/src/probehive', '/build', 'IO32')
-        self.assertEqual((Shell.calls, pins.python, pins.env),
-                         (['gpio-environment'], '/nix/store/python3', {'PYTHONPATH': '/litex'}))
+                # The stand-in runs what the shell is asked to run.
+                self.said = COMMON.subprocess.run(
+                    [sys.executable, *[str(a) for a in argv[argv.index('python3') + 1:]]],
+                    capture_output=True, text=True, check=True,
+                    env=dict(PYTHONPATH=str(self.litex), RUNNER_SECRET='not for a log')).stdout
+                self.answer = Path(argv[-1])
+                return self.said
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'litex.py').write_text('')
+            shell = Shell()
+            shell.litex = tmp
+            pins = COMMON.ProbehivePins(shell, '/src/probehive', '/build', 'IO32')
+            self.assertEqual((Shell.calls, pins.python), (['gpio-environment'], sys.executable))
+            self.assertEqual(pins.env['PYTHONPATH'], tmp)
+        # What the command printed is what its log keeps, and the gate
+        # uploads the log: the environment is in neither, nor left behind.
+        self.assertEqual(pins.env['RUNNER_SECRET'], 'not for a log')
+        self.assertNotIn('not for a log', shell.said)
+        self.assertNotIn('RUNNER_SECRET', shell.said)
+        self.assertFalse(shell.answer.exists())
+
+    def test_a_shell_that_wrote_no_answer_fails_the_run(self):
+        class Silent:
+            def command(self, name, argv, **kw):
+                return ''
+        with self.assertRaisesRegex(COMMON.Failed, 'did not say where its Python is'):
+            COMMON.ProbehivePins(Silent(), '/src/probehive', '/build', 'IO32')
 
     def test_a_shell_that_does_not_open_names_how_to_build_it(self):
         class Building:
@@ -974,8 +1029,8 @@ class RigLock(unittest.TestCase):
             reported, done = threading.Event(), threading.Event()
             path.touch()
             locks = Path(tmp) / 'locks'
-            locks.write_text('1: FLOCK  ADVISORY  WRITE 31 00:22:%d 0 EOF\n'
-                             % os.stat(path).st_ino)
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 31 %s 0 EOF\n'
+                             % kernel_name(path))
 
             def report(text):
                 said.append(text)
@@ -1012,8 +1067,8 @@ class RigLock(unittest.TestCase):
             path = Path(tmp) / 'rig.lock'
             with COMMON.RigLock('flock by hand', path):
                 locks = Path(tmp) / 'locks'
-                locks.write_text('1: FLOCK  ADVISORY  WRITE 41 00:22:%d 0 EOF\n'
-                                 % os.stat(path).st_ino)
+                locks.write_text('1: FLOCK  ADVISORY  WRITE 41 %s 0 EOF\n'
+                                 % kernel_name(path))
                 flock = COMMON.fcntl.flock
 
                 def nonblocking_only(file, operation):
@@ -1031,17 +1086,36 @@ class RigLock(unittest.TestCase):
                 with path.open() as contender, self.assertRaises(BlockingIOError):
                     COMMON.fcntl.flock(contender, COMMON.fcntl.LOCK_EX | COMMON.fcntl.LOCK_NB)
 
-    def test_holders_are_read_by_inode(self):
+    def test_holders_are_read_by_device_and_inode(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'rig.lock'
             path.write_text('')
-            inode = os.stat(path).st_ino
+            status = os.stat(path)
+            inode = status.st_ino
+            here = '%02x:%02x' % (os.major(status.st_dev), os.minor(status.st_dev))
+            # Another filesystem's file of the same inode number is not the lock.
+            other = 'fe:fd' if here != 'fe:fd' else 'fe:fc'
             locks = Path(tmp) / 'locks'
-            locks.write_text('1: FLOCK  ADVISORY  WRITE 41 00:22:%d 0 EOF\n'
-                             '2: POSIX  ADVISORY  WRITE 42 00:22:%d 0 EOF\n'
-                             '3: FLOCK  ADVISORY  WRITE 43 00:22:%d 0 EOF\n'
-                             % (inode, inode, inode + 1))
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 41 %s:%d 0 EOF\n'
+                             '2: POSIX  ADVISORY  WRITE 42 %s:%d 0 EOF\n'
+                             '3: FLOCK  ADVISORY  WRITE 43 %s:%d 0 EOF\n'
+                             '4: FLOCK  ADVISORY  WRITE 44 %s:%d 0 EOF\n'
+                             % (here, inode, here, inode, here, inode + 1, other, inode))
             self.assertEqual(COMMON.lock_holders(path, locks), {41})
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 44 %s:%d 0 EOF\n' % (other, inode))
+            self.assertEqual(COMMON.lock_holders(path, locks), set())
+
+    @unittest.skipUnless(sys.platform == 'linux', 'the device is read from Linux /proc/locks')
+    def test_the_lock_s_device_is_the_one_the_kernel_writes_for_its_filesystem(self):
+        # Deliberate Linux kernel integration: a filesystem whose files'
+        # stat device is not the one /proc/locks writes still finds its
+        # holder, because the device is read off a flock taken beside it.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            with COMMON.RigLock('device discovery', path):
+                device = COMMON.lock_device(path)
+                self.assertIn((os.getpid(), device, str(os.stat(path).st_ino)), COMMON.flocks())
+            self.assertEqual(list(Path(tmp).glob('.lock-device-*')), [])
 
     def test_ancestors_follow_parent_ids_after_a_command_with_parentheses(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1691,7 +1765,7 @@ class BoundedLock(unittest.TestCase):
         holder = COMMON.RigLock('esp32 board.py', path, report=lambda _: None).acquire()
         self.addCleanup(holder.release)
         locks = Path(tmp) / 'locks'
-        locks.write_text('1: FLOCK  ADVISORY  WRITE 31 00:22:%d 0 EOF\n' % os.stat(path).st_ino)
+        locks.write_text('1: FLOCK  ADVISORY  WRITE 31 %s 0 EOF\n' % kernel_name(path))
         stack = contextlib.ExitStack()
         self.addCleanup(stack.close)
         stack.enter_context(mock.patch.object(COMMON, 'ancestors', return_value=[1234, 5678]))
@@ -1737,7 +1811,7 @@ class BoundedLock(unittest.TestCase):
             legacy.parent.mkdir(parents=True)
             legacy.write_text('old tool, process 77\n')
             locks = Path(tmp) / 'locks'
-            locks.write_text('1: FLOCK  ADVISORY  WRITE 77 00:22:%d 0 EOF\n' % os.stat(legacy).st_ino)
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 77 %s 0 EOF\n' % kernel_name(legacy))
             system = Path(tmp) / 'system'
             system.mkdir()
             with mock.patch.object(COMMON, 'ancestors', return_value=[1234, 5678]), \

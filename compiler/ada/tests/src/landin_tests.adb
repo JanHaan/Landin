@@ -439,20 +439,33 @@ begin
                Wrote_Or_Not (Wrote, "compiler/tests/layout.targets");
             end if;
             if Wrote and then What = "" then
-               Landin.Tests.Server_Suite.Record_Sessions (Wrote);
-               Wrote_Or_Not (Wrote, "compiler/tests/server");
+               declare
+                  Said : Unbounded.Unbounded_String;
+               begin
+                  Landin.Tests.Server_Suite.Record_Sessions (Wrote, Said);
+                  if Wrote then
+                     Text_IO.Put_Line ("wrote compiler/tests/server");
+                  else
+                     Text_IO.Put_Line
+                       (Text_IO.Standard_Error, Unbounded.To_String (Said));
+                  end if;
+               end;
             elsif Starts_With (What, "server/") then
                declare
                   Name  : constant String :=
                     What (What'First + 7 .. What'Last);
                   Found : Boolean;
+                  Said  : Unbounded.Unbounded_String;
                begin
                   Landin.Tests.Server_Suite.Record_Session
-                    (Name, Found, Wrote);
-                  if Found then
-                     Wrote_Or_Not
-                       (Wrote,
-                        "compiler/tests/server/" & Name & "/session.lsp");
+                    (Name, Found, Wrote, Said);
+                  if Found and then Wrote then
+                     Text_IO.Put_Line
+                       ("wrote compiler/tests/server/" & Name
+                        & "/session.lsp");
+                  elsif Found then
+                     Text_IO.Put_Line
+                       (Text_IO.Standard_Error, Unbounded.To_String (Said));
                   else
                      Text_IO.Put_Line
                        (Text_IO.Standard_Error,

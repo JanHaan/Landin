@@ -34290,6 +34290,56 @@ package body Landin.Diagnostics.Citations.Texts is
                & "rror prints addresses, which a debugger or `addr2line` g"
                & "iven the debug asset resolves. Checkout, Nix and debug b"
                & "uilds keep their information.",
+            when 1132 =>
+               "Chosen: a refusal does not rest on step conditions. The "
+               & "hook removes the actions the runner downloaded for the j"
+               & "ob while it set the job up, finds the runner's worker pr"
+               & "ocess for the job among its own ancestors, the nearest w"
+               & "hose command name or first two arguments contain `Runner"
+               & ".Worker`, and kills it before exiting nonzero. The worke"
+               & "r is the process that evaluates and runs every step and "
+               & "waits for the hook meanwhile, so no step of a refused jo"
+               & "b runs whatever its condition. With no such ancestor, as"
+               & " when the hook is run by hand, it says that only its exi"
+               & "t status refuses. A job whose acceptance the hook's log "
+               & "cannot record is refused the same way.",
+            when 1133 =>
+               "Chosen: the workflow's first job refuses a commit that i"
+               & "s not an ancestor of `main`, and one for which no `gate."
+               & "yml` run of `main`'s own push of that commit succeeded. "
+               & "Its last makes the release a draft, uploads every asset,"
+               & " reads back what the release holds and only then publish"
+               & "es it; a draft an earlier run left is emptied and filled"
+               & " again, since the build is not reproducible and its file"
+               & "s are not this build's. A published release is final, as"
+               & " it was: an asset of a name it already holds is refused."
+               & " Each archive records root, by number and with no name, "
+               & "as every member's owner, with modes set by the packaging"
+               & " script.",
+            when 1134 =>
+               "Chosen: a recording replaces the messages of a session t"
+               & "hat ran. A transcript that cannot be run is left as it i"
+               & "s, and so is a session that ended with another status th"
+               & "an its `exit:` line names: the status is the transcript'"
+               & "s verdict, as a fixture's expected status is, and is cha"
+               & "nged by hand. Either is said on standard error with exit"
+               & " status 1. Each directory under `compiler/tests/server` "
+               & "is a session, apart from one whose name begins with `.` "
+               & "or `_`, and one without a `session.lsp` fails both sessi"
+               & "on runners.",
+            when 1135 =>
+               "Chosen: a link's target is an `http`, `https` or `mailto"
+               & "` address or a path of the repository, written without a"
+               & " space, a quote, an angle bracket, a backtick or a backs"
+               & "lash; any other stops the build. A family's `@font-face`"
+               & " rules are rebuilt from a fixed set of descriptors whose"
+               & " values are names, numbers, quotes and the punctuation o"
+               & "f a range, a face's file is a bare `NAME.woff2`, and a p"
+               & "reserved header holding `<` is refused. The fetch takes "
+               & "a face only as `woff2/FILE` and writes it only as that f"
+               & "ile. `assets/fonts/licensed.sha256`, once the maintainer"
+               & " records it from the licensed files, pins the stylesheet"
+               & " and each face by SHA-256.",
             when 571 =>
                "Chosen: `sweep` empties the ended entries and counts the"
                & " unfinished in one pass that calls nothing; `round_yield"

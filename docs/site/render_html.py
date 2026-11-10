@@ -1725,7 +1725,12 @@ figure.panel .out .listing pre{padding-right:3rem}
 #  With \w the opener never matched, so the CLOSING fence opened a block
 #  that swallowed the next heading -- which showed up as every other
 #  construct in spec.md losing its anchor.
-FENCE = re.compile(r"^```([\w-]*)\s*$")
+#
+#  A fence may be indented, as one that continues a list item is.  Read
+#  only at the margin, an indented one was no fence: it, its body and its
+#  closing line became one run-on paragraph with inline markup applied to
+#  the code, and every word was still on the page.
+FENCE = re.compile(r"^(?P<indent> *)```(?P<language>[\w-]*)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 BULLET = re.compile(r"^[-*]\s+(.*)$")
 #  CommonMark limits ordered markers to nine digits.  A roadmap paragraph once
@@ -1781,9 +1786,34 @@ def guide_targets(docs, source=""):
     return GuideTargets(docs, source)
 
 
+#  What a link may lead to, and what its target may be written with.  A
+#  target lands in a quoted attribute, and the site has no content policy
+#  and inline scripts of its own, so nothing on a page would stop a
+#  `javascript:` target or a handler written after a quote that ended the
+#  attribute.  A target that is neither is not passed through: the build
+#  stops, as it does for a table or a list it cannot read.
+LINK_SCHEMES = ("http", "https", "mailto")
+UNSAFE_TARGET = re.compile(r"[\x00-\x20\x7f\"'<>`\\]")
+
+
+def link_target(href):
+    """HREF, a link's target as it was written, or the end of the build."""
+    if UNSAFE_TARGET.search(href):
+        raise SystemExit(
+            "render_html: a link's target holds a quote, a space or another "
+            "character no address is written with:\n  " + href)
+    scheme = urlsplit(href).scheme
+    if scheme and scheme.lower() not in LINK_SCHEMES:
+        raise SystemExit(
+            "render_html: a link leads to %s:, and only %s and a path of "
+            "this repository are linked:\n  %s"
+            % (scheme, ", ".join(LINK_SCHEMES), href))
+    return href
+
+
 def rewrite_link(match, targets):
     label, original = match.group(1), match.group(2)
-    href = esc(targets.resolve(html.unescape(original)))
+    href = attr(targets.resolve(link_target(html.unescape(original))))
     # Retain the written target for content verification, whose word count
     # must not mistake a correctly rewritten source path for dropped prose.
     source = f' data-source-href="{original}"' if href != original else ""
@@ -1896,12 +1926,20 @@ def parse_guide(text):
             continue
 
         if fence:
-            language = fence.group(1)
+            language = fence.group("language")
+            indent = fence.group("indent")
             body = []
             opened = index + 1
             index += 1
-            while index < len(lines) and not FENCE.match(lines[index]):
-                body.append(lines[index])
+            #  A block ends at a fence line indented as its opener is, and
+            #  its lines lose that indentation, which is the list's and
+            #  not the code's.
+            while index < len(lines) and not (
+                    FENCE.match(lines[index])
+                    and FENCE.match(lines[index]).group("indent") == indent):
+                body.append(lines[index][len(indent):]
+                            if lines[index].startswith(indent)
+                            else lines[index].lstrip(" "))
                 index += 1
             if index >= len(lines):
                 #  It used to run to the end of the file and take every
@@ -1943,6 +1981,10 @@ def parse_guide(text):
                     #  Changing marker kind starts another list.  Folding a
                     #  bullet into an ordered list (or vice versa) invents a
                     #  relationship the source did not write.
+                    break
+                elif FENCE.match(lines[index]):
+                    #  A fence under an item is a block of its own, after
+                    #  the list; folded into the item it would be prose.
                     break
                 elif lines[index].startswith("  ") and items:
                     #  An indented line continues the item it sits under.
@@ -3159,7 +3201,9 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         if context:
             box += ('<p class="status-context">'
                     + README_LINK.sub(
-                        r'<a href="readme.html\2">\1</a>',
+                        lambda m: '<a href="readme.html%s">%s</a>' % (
+                            attr(link_target(html.unescape(m.group(2)))),
+                            m.group(1)),
                         prose_html(context, lambda ref: None))
                     + '</p>')
         box += ('<p class="status-links">'
@@ -3390,7 +3434,7 @@ def verify(src: Path, out: Path):
     #  A fence's info string names the language of the block; it is markup
     #  and not content, so it is not on the page and must not be counted as
     #  missing from it.  `landin` appears 145 times in the tour as a tag.
-    text = re.sub(r"(?m)^```\S*$", "```", src.read_text())
+    text = re.sub(r"(?m)^( *)```\S*$", r"\1```", src.read_text())
     want = Counter(WORD.findall(text))
     #  A link's target lives in an attribute rather than in the text, and
     #  stripping tags takes it with them, so the targets are collected and
@@ -3497,6 +3541,71 @@ def verify_library_links(out, documents):
             if not path.is_file() or unquote(parts.fragment) not in read(parts.path).ids:
                 print(f"{document['out']}: missing library destination {href}")
                 ok = False
+    return ok
+
+
+def verify_fragments(out, names, complete):
+    """Hold every page's ids distinct and every local fragment to an id.
+
+    A link from one page to a heading of another, or of its own, is
+    rewritten by file and its fragment passed through as written, while
+    the ids are this renderer's own slugs: an anchor right for another
+    Markdown view, or for a heading since renamed, lands at the top of
+    the page or nowhere, and every word is still there.  Two headings of
+    one text get one id, and the second cannot be reached.  NAMES are the
+    pages to read; a link to a page that is not in OUT is a fault only of
+    a COMPLETE render.
+    """
+    from html.parser import HTMLParser
+
+    class Page(HTMLParser):
+        def __init__(self, text):
+            super().__init__()
+            self.links, self.ids, self.twice = [], set(), []
+            self.feed(text)
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if attrs.get("id") is not None:
+                if attrs["id"] in self.ids:
+                    self.twice.append(attrs["id"])
+                self.ids.add(attrs["id"])
+            if tag == "a" and attrs.get("href"):
+                self.links.append(attrs["href"])
+
+    pages = {}
+
+    def read(name):
+        if name not in pages:
+            path = out / name
+            pages[name] = Page(path.read_text()) if path.is_file() else None
+        return pages[name]
+
+    ok = True
+    for name in names:
+        page = read(name)
+        for twice in sorted(set(page.twice)):
+            print(f"  {name}: the id {twice!r} is on the page more than once")
+            ok = False
+        dead = []
+        for href in page.links:
+            parts = urlsplit(href)
+            if parts.scheme or parts.netloc or not parts.fragment:
+                continue
+            if parts.path and not parts.path.endswith(".html"):
+                continue
+            target = read(parts.path or name)
+            if target is None:
+                if complete:
+                    dead.append(href + " (no such page)")
+            elif unquote(parts.fragment) not in target.ids:
+                dead.append(href)
+        for href in sorted(set(dead)):
+            print(f"  {name}: {href} leads to no id")
+            ok = False
+    if ok:
+        print(f"  every fragment on {len(names)} pages leads to an id, "
+              "and no id is on a page twice")
     return ok
 
 
@@ -3755,6 +3864,9 @@ def main(argv):
         structure = all([verify_structure(SITE / d["out"],
                                           source / d["src"])
                          for d in docs + guides])
+        ok = verify_fragments(
+            SITE, [d["out"] for d in docs + guides]
+            + (["index.html", "404.html"] if front else []), bool(front)) and ok
         if front:
             ok = verify_library_links(SITE, docs + guides) and ok
             structure = verify_structure(SITE / "index.html") and structure

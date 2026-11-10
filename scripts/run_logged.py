@@ -5,7 +5,11 @@
     python3 scripts/run_logged.py --wait DIRECTORY [--timeout SECONDS]
 
 Use the agent's background-command facility for completion notifications.
-This wrapper stays attached to the command and forwards interruption signals.
+This wrapper stays attached to the command and forwards the signals that end
+it: an interruption, a termination, a hangup and a quit all reach the
+command, which runs in a session of its own and would otherwise outlive a
+wrapper whose terminal or harness went away, holding its build lock with no
+result ever written.
 It does not select tests, enter an environment, or supply acceptance evidence.
 
 `--wait` is the blocking wait for an agent that receives no notification, a
@@ -17,6 +21,14 @@ result exits 125, rather than being waited for until the timeout.  It
 replaces sleep loops over the log and `pgrep -f`, whose pattern matches the
 polling shell's own command line, so that a wait on a process ending never
 ends.
+
+124 and 125 are therefore `--wait`'s own, and a finished run never answers
+with either.  They are also what `timeout` exits with when it stops its
+command or cannot run it, so a finished run whose command exited 124 or 125
+makes `--wait` exit 1 and say which status it stood in for; `result.json`
+keeps the command's own.  The first line `--wait` prints is `state=finished`,
+`state=running` or `state=lost`, for a caller that reads rather than
+branches on the status.
 """
 import argparse
 import datetime
@@ -36,6 +48,9 @@ def timestamp():
 
 STILL_RUNNING = 124
 NO_RESULT = 125
+#  What --wait exits with for a finished run whose own status is one of the
+#  two above.
+FINISHED_AS_WAIT_STATUS = 1
 
 
 def alive(pid):
@@ -91,8 +106,16 @@ def wait(output, timeout, parser):
     while True:
         if result_path.exists():
             result = json.loads(result_path.read_text())
+            print("state=finished")
             print("log: %s" % result["log"])
-            return summarise(result, Path(result["log"]), result_path)
+            status = summarise(result, Path(result["log"]), result_path)
+            if status in (STILL_RUNNING, NO_RESULT):
+                print("the command itself exited %d, which from --wait would mean"
+                      " %s; this wait exits %d instead"
+                      % (status, "still running" if status == STILL_RUNNING
+                         else "no result", FINISHED_AS_WAIT_STATUS))
+                return FINISHED_AS_WAIT_STATUS
+            return status
         try:
             pid = json.loads(running.read_text())["pid"]
         except (FileNotFoundError, ValueError, KeyError):
@@ -105,6 +128,7 @@ def wait(output, timeout, parser):
                 # more before calling the run lost.
                 if result_path.exists():
                     continue
+                print("state=lost")
                 print("run in %s ended without a result: its wrapper, pid %d,"
                       " is gone (killed?); see %s"
                       % (output, pid, output / "command.log"))
@@ -113,6 +137,7 @@ def wait(output, timeout, parser):
             parser.error("%s holds no run_logged.py run" % output)
         if time.monotonic() >= deadline:
             line = last_line(output / "command.log")
+            print("state=running")
             print("still running after %ds: %s" % (timeout, output))
             if line:
                 print("last log line: %s" % line)
@@ -168,7 +193,8 @@ def main(argv=None):
                 pass
 
     previous = {number: signal.signal(number, forward)
-                for number in (signal.SIGINT, signal.SIGTERM)}
+                for number in (signal.SIGINT, signal.SIGTERM,
+                               signal.SIGHUP, signal.SIGQUIT)}
     # Written whole, as the result is: a waiter reading a file that is
     # still being written would see no run, or half of one.
     starting = output / "running.json.tmp"

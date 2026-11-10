@@ -22,7 +22,9 @@ invocation does not request the extra artifacts of a manifest compilation.
 
 The two revisions must see the same bytes under the same spellings, so the
 fixtures are read from one ROOT for both.  Manifest compilations run from
-each fixture directory and write under WORK; recorded invocations run from
+each fixture directory and write under WORK, a new or empty directory that
+is removed or emptied afterwards and refused if it holds anything; recorded
+invocations run from
 ROOT/compiler/ada, as the fixture harness does.  Tier 2 of the determinism
 contract holds under exactly that relation.
 
@@ -335,8 +337,20 @@ def emit(refine, root, work, out, targets=TARGETS):
     refine = Path(refine).resolve()
     root = Path(root).resolve()
     work = Path(work).resolve()
-    if work.exists():
-        shutil.rmtree(work)
+    #  WORK is one of four adjacent paths, and everything under it is
+    #  removed at the end.  So it is a directory this run makes, or one
+    #  that holds nothing: never one somebody else filled, which a
+    #  transposed argument or `.` would name.
+    made = not work.exists()
+    if not made and (not work.is_dir() or any(work.iterdir())):
+        print("driver_manifest.py: WORK %s exists and is not an empty "
+              "directory; name a new one, since it is removed afterwards"
+              % work, file=sys.stderr)
+        return 2
+    if not (root / "compiler/tests/fixtures").is_dir():
+        print("driver_manifest.py: ROOT %s holds no compiler/tests/fixtures"
+              % root, file=sys.stderr)
+        return 2
     jobs = []
     recorded = []
     for klass in CLASSES:
@@ -371,7 +385,11 @@ def emit(refine, root, work, out, targets=TARGETS):
             for f, args in recorded})
         for done in concurrent.futures.as_completed(futures):
             manifest[futures[done]] = done.result()
-    shutil.rmtree(work, ignore_errors=True)
+    if made:
+        shutil.rmtree(work, ignore_errors=True)
+    else:
+        for child in work.iterdir():
+            shutil.rmtree(child, ignore_errors=True)
     Path(out).write_text(json.dumps(manifest, indent=1, sort_keys=True)
                          + "\n")
     refused = sum(1 for e in manifest.values() if e["status"] != 0)

@@ -96,11 +96,35 @@ class Documents(unittest.TestCase):
 
 
 class Archive(unittest.TestCase):
-    def package(self, directory, binary, name):
+    def package(self, directory, binary, name, umask=None):
         asset = directory / name
         subprocess.run([str(ROOT / "scripts/package.sh"), str(binary),
-                        str(asset)], check=True)
+                        str(asset)], check=True,
+                       preexec_fn=None if umask is None
+                       else lambda: os.umask(umask))
         return asset
+
+    def test_members_are_root_s_with_modes_no_account_or_umask_chose(self):
+        #  tar restores recorded ownership when root unpacks: an archive
+        #  that recorded the packaging account gave the compiler to
+        #  whichever local account has that number.
+        with TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            binary = directory / "refine"
+            binary.write_text("#!/bin/sh\n")
+            os.chmod(binary, 0o700)
+            open_ = self.package(directory, binary, "open.tar.gz", umask=0o022)
+            closed = self.package(directory, binary, "closed.tar.gz",
+                                  umask=0o077)
+            self.assertEqual(open_.read_bytes(), closed.read_bytes())
+            with tarfile.open(closed) as archive:
+                members = archive.getmembers()
+            self.assertEqual({(m.uid, m.gid, m.uname, m.gname) for m in members},
+                             {(0, 0, "", "")})
+            self.assertEqual({m.mode for m in members if m.isdir()}, {0o755})
+            self.assertEqual({m.name: m.mode for m in members
+                              if m.isfile() and m.mode != 0o644},
+                             {"bin/refine": 0o755})
 
     def test_the_archive_is_an_installed_prefix_and_reproducible(self):
         with TemporaryDirectory() as scratch:

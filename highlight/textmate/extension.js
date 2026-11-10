@@ -3,6 +3,12 @@
 // from the compiler's own stages.  `landin.server.path` names the compiler
 // when `refine` is not on the path; an empty `landin.server.path` and no
 // `refine` leaves the extension highlighting only, and says so once.
+//
+// The server is a program started when a Landin file is opened, so which
+// program is the user's choice and never a project's: the manifest scopes
+// `landin.server.path` to the machine, where a workspace's settings cannot
+// set it, and in a window that is not trusted nothing is started until the
+// user trusts it.  Highlighting needs neither.
 "use strict";
 
 const vscode = require("vscode");
@@ -11,6 +17,19 @@ const { LanguageClient } = require("vscode-languageclient/node");
 let client;
 
 async function activate(context) {
+  if (vscode.workspace.isTrusted === false) {
+    context.subscriptions.push(
+      vscode.workspace.onDidGrantWorkspaceTrust(() => start())
+    );
+    return;
+  }
+  await start();
+}
+
+async function start() {
+  if (client) {
+    return;
+  }
   const settings = vscode.workspace.getConfiguration("landin");
   if (!settings.get("server.enable", true)) {
     return;

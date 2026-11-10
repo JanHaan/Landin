@@ -192,11 +192,10 @@ def main():
         # The two ports are on two hubs, so they are switched one after the
         # other, each while the other is already off or not yet on: the
         # board has power from neither between the two offs and the two ons.
-        esp.paced(args, 'power off', off)
-        time.sleep(args.off_seconds)
-        common.wait_for_hub(hub, args.hub, [guard], args.enumerate_seconds)
-        common.wait_for_hub(hub, args.console_hub, [console_guard], args.enumerate_seconds)
-        esp.paced(args, 'power on', on)
+        def hubs():
+            common.wait_for_hub(hub, args.hub, [guard], args.enumerate_seconds)
+            common.wait_for_hub(hub, args.console_hub, [console_guard], args.enumerate_seconds)
+        esp.power_cycle(args, off, on, hubs)
         settle(run)
         common.wait_for_tty_at(jtag_location, args.enumerate_seconds)
         power_on = power_on_boot(probe, names) if names else None

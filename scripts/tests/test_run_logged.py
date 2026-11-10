@@ -92,6 +92,18 @@ class LoggedCommands(unittest.TestCase):
         self.assertEqual(self.result()["returncode"], -signal.SIGTERM)
 
     def test_cancellation_reaches_the_command_and_records_a_result(self):
+        self.cancelled_by(signal.SIGTERM)
+
+    def test_a_hangup_or_quit_ends_the_command_too(self):
+        #  The command is in a session of its own, so a hangup that only
+        #  ended the wrapper left it running with no result.
+        base = self.output
+        for number in (signal.SIGHUP, signal.SIGQUIT):
+            with self.subTest(signal=number):
+                self.output = base.parent / ("run %d" % number)
+                self.cancelled_by(number)
+
+    def cancelled_by(self, number):
         process = subprocess.Popen(self.command(
             sys.executable, "-c", "import time; print('ready', flush=True); "
             "time.sleep(60)"), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -108,12 +120,11 @@ class LoggedCommands(unittest.TestCase):
         while not log.exists() or "ready" not in log.read_text():
             self.assertLess(time.monotonic(), deadline)
             time.sleep(0.01)
-        process.terminate()
+        process.send_signal(number)
         stdout, stderr = process.communicate(timeout=HANG)
-        self.assertEqual(process.returncode, 128 + signal.SIGTERM,
-                         (stdout, stderr))
-        self.assertEqual(self.result()["interrupted_by"], signal.SIGTERM)
-        self.assertEqual(self.result()["returncode"], -signal.SIGTERM)
+        self.assertEqual(process.returncode, 128 + number, (stdout, stderr))
+        self.assertEqual(self.result()["interrupted_by"], number)
+        self.assertEqual(self.result()["returncode"], -number)
 
     def start(self, code):
         """Start a logged run without waiting for it, as in the background."""
@@ -142,6 +153,23 @@ class LoggedCommands(unittest.TestCase):
         self.assertIn("exit=23", result.stdout)
         self.assertIn("failure-marker", result.stdout)
         self.assertIn(str(self.output / "result.json"), result.stdout)
+        self.assertEqual(result.stdout.splitlines()[0], "state=finished")
+
+    def test_a_finished_run_never_answers_with_the_waits_own_statuses(self):
+        #  timeout(1) exits 124 when it stops its command and 125 when it
+        #  cannot run it; from --wait those mean "wait again" and "lost".
+        base = self.output
+        for status in (124, 125):
+            with self.subTest(status=status):
+                self.output = base.parent / ("run %d" % status)
+                process = self.start("raise SystemExit(%d)" % status)
+                self.assertEqual(process.wait(timeout=HANG), status)
+                result = self.wait("--timeout=%d" % HANG)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertEqual(result.stdout.splitlines()[0], "state=finished")
+                self.assertIn("exit=%d" % status, result.stdout)
+                self.assertIn("the command itself exited %d" % status, result.stdout)
+                self.assertEqual(self.result()["exit_status"], status)
 
     def test_wait_reads_a_run_file_still_being_written_as_no_run_yet(self):
         #  A wait that reads running.json while a wrapper is writing it sees
@@ -179,6 +207,7 @@ class LoggedCommands(unittest.TestCase):
         self.until(lambda: self.logged("progress-marker"))
         result = self.wait("--timeout=1")
         self.assertEqual(result.returncode, 124, result.stdout)
+        self.assertEqual(result.stdout.splitlines()[0], "state=running")
         self.assertIn("still running", result.stdout)
         self.assertIn("progress-marker", result.stdout)
         release.write_text("")
@@ -199,6 +228,7 @@ class LoggedCommands(unittest.TestCase):
         process.wait(timeout=HANG)
         result = self.wait("--timeout=%d" % HANG)
         self.assertEqual(result.returncode, 125, result.stdout)
+        self.assertEqual(result.stdout.splitlines()[0], "state=lost")
         self.assertIn("ended without a result", result.stdout)
 
     def test_wait_refuses_a_directory_no_run_writes(self):
