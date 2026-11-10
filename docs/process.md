@@ -455,7 +455,11 @@ work against live state before acting on a remembered status.
 The repository's [landin-change skill](../.agents/skills/landin-change/SKILL.md)
 connects these recipes for implementation and candidate preparation. Its
 source lives in `.agents/skills/landin-change`; the Claude project alias in
-`.claude/skills/landin-change` resolves to that source. Check discovery from
+`.claude/skills/landin-change` resolves to that source. The
+[landin-docs-rewrite skill](../.agents/skills/landin-docs-rewrite/SKILL.md)
+rewrites a document for its reader and keeps every piece of its meaning;
+its Claude alias is `.claude/skills/landin-docs-rewrite`, made the same
+way. Check discovery from
 the checkout where the provider will work. Skill discovery does not replace
 the root guide, and a changed skill may require a fresh session or catalog
 reload before it appears.
