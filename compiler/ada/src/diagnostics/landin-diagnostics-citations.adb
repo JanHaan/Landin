@@ -1637,6 +1637,8 @@ package body Landin.Diagnostics.Citations is
             when 1085 =>
                "An `inout` payload binding needs a matched value that ma"
                & "y be written",
+            when 1112 =>
+               "A match reached again binds its payload names afresh",
             when 86 =>
                "A named ordinary struct field has a measured layout",
             when 87 =>
@@ -2061,6 +2063,9 @@ package body Landin.Diagnostics.Citations is
                "Assembly operands name their registers",
             when 597 =>
                "Assembly text takes its target's own line comment",
+            when 1117 =>
+               "On x86-64 the straight-line rule reads past instruction "
+               & "prefixes",
             when 598 =>
                "A naked body on a hosted target may label what it branch"
                & "es to",
@@ -2170,6 +2175,9 @@ package body Landin.Diagnostics.Citations is
             when 903 =>
                "Xtensa levels share the windowed ABI and retain distinct"
                & " instruction configurations",
+            when 1110 =>
+               "On Xtensa a caller's base save moves with the stack poin"
+               & "ter around an outgoing area",
             when 661 =>
                "An rv32 program that reaches no description is given the"
                & " RISC-V reference",
@@ -2267,6 +2275,9 @@ package body Landin.Diagnostics.Citations is
                & "records, and types their pointers",
             when 441 =>
                "`escaping` stays part of C-symbol compatibility",
+            when 1113 =>
+               "`link(symbol: ""main"")` on the hosted entry is the linkag"
+               & "e it has",
             when 443 =>
                "A check and an assembly refuse what the link would refus"
                & "e first",
@@ -2304,6 +2315,9 @@ package body Landin.Diagnostics.Citations is
                & "s",
             when 471 =>
                "Every routine checks its frame against its stack's limit",
+            when 1111 =>
+               "A frame larger than the stack pointer's own value is pas"
+               & "t the limit",
             when 472 =>
                "A saved context carries its limit, a margin above its st"
                & "ack's base",
@@ -2622,6 +2636,14 @@ package body Landin.Diagnostics.Citations is
             when 545 =>
                "The linker script is derived from the description, and b"
                & "oot kinds are the compiler's",
+            when 1114 =>
+               "The stack's reservation is asserted against whatever sha"
+               & "res its region",
+            when 1115 =>
+               "Nothing a program declares is placed at address zero",
+            when 1116 =>
+               "A flash image keeps code and constants where reset need "
+               & "not put them",
             when 546 =>
                "A developer's linker script is held to a written contrac"
                & "t",
@@ -3579,6 +3601,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Structs, variants and nesting",
             when 1085 =>
                "Decisions: Structs, variants and nesting",
+            when 1112 =>
+               "Decisions: Structs, variants and nesting",
             when 86 =>
                "Decisions: Structs, variants and nesting",
             when 87 =>
@@ -3915,6 +3939,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 597 =>
                "Decisions: The toolchain, C and the machine",
+            when 1117 =>
+               "Decisions: The toolchain, C and the machine",
             when 598 =>
                "Decisions: The toolchain, C and the machine",
             when 1054 =>
@@ -3995,6 +4021,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 903 =>
                "Decisions: The toolchain, C and the machine",
+            when 1110 =>
+               "Decisions: The toolchain, C and the machine",
             when 661 =>
                "Decisions: The toolchain, C and the machine",
             when 662 =>
@@ -4073,6 +4101,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 441 =>
                "Decisions: The toolchain, C and the machine",
+            when 1113 =>
+               "Decisions: The toolchain, C and the machine",
             when 443 =>
                "Decisions: The toolchain, C and the machine",
             when 446 =>
@@ -4102,6 +4132,8 @@ package body Landin.Diagnostics.Citations is
             when 469 =>
                "Decisions: The toolchain, C and the machine",
             when 471 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1111 =>
                "Decisions: The toolchain, C and the machine",
             when 472 =>
                "Decisions: The toolchain, C and the machine",
@@ -4334,6 +4366,12 @@ package body Landin.Diagnostics.Citations is
             when 544 =>
                "Decisions: The toolchain, C and the machine",
             when 545 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1114 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1115 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1116 =>
                "Decisions: The toolchain, C and the machine",
             when 546 =>
                "Decisions: The toolchain, C and the machine",
@@ -5294,6 +5332,9 @@ package body Landin.Diagnostics.Citations is
             when 1085 =>
                "https://www.701.dev/spec.html#d1085-an-inout-payload-bin"
                & "ding-needs-a-matched-value-that-may-be-written",
+            when 1112 =>
+               "https://www.701.dev/spec.html#d1112-a-match-reached-agai"
+               & "n-binds-its-payload-names-afresh",
             when 86 =>
                "https://www.701.dev/spec.html#d86-a-named-ordinary-struc"
                & "t-field-has-a-measured-layout",
@@ -5806,6 +5847,9 @@ package body Landin.Diagnostics.Citations is
             when 597 =>
                "https://www.701.dev/spec.html#d597-assembly-text-takes-i"
                & "ts-target-s-own-line-comment",
+            when 1117 =>
+               "https://www.701.dev/spec.html#d1117-on-x86-64-the-straig"
+               & "ht-line-rule-reads-past-instruction-prefixes",
             when 598 =>
                "https://www.701.dev/spec.html#d598-a-naked-body-on-a-hos"
                & "ted-target-may-label-what-it-branches-to",
@@ -5934,6 +5978,10 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d903-xtensa-levels-share-t"
                & "he-windowed-abi-and-retain-distinct-instruction-configur"
                & "ations",
+            when 1110 =>
+               "https://www.701.dev/spec.html#d1110-on-xtensa-a-caller-s"
+               & "-base-save-moves-with-the-stack-pointer-around-an-outgoi"
+               & "ng-area",
             when 661 =>
                "https://www.701.dev/spec.html#d661-an-rv32-program-that-"
                & "reaches-no-description-is-given-the-risc-v-reference",
@@ -6053,6 +6101,9 @@ package body Landin.Diagnostics.Citations is
             when 441 =>
                "https://www.701.dev/spec.html#d441-escaping-stays-part-o"
                & "f-c-symbol-compatibility",
+            when 1113 =>
+               "https://www.701.dev/spec.html#d1113-link-symbol-main-on-"
+               & "the-hosted-entry-is-the-linkage-it-has",
             when 443 =>
                "https://www.701.dev/spec.html#d443-a-check-and-an-assemb"
                & "ly-refuse-what-the-link-would-refuse-first",
@@ -6098,6 +6149,9 @@ package body Landin.Diagnostics.Citations is
             when 471 =>
                "https://www.701.dev/spec.html#d471-every-routine-checks-"
                & "its-frame-against-its-stack-s-limit",
+            when 1111 =>
+               "https://www.701.dev/spec.html#d1111-a-frame-larger-than-"
+               & "the-stack-pointer-s-own-value-is-past-the-limit",
             when 472 =>
                "https://www.701.dev/spec.html#d472-a-saved-context-carri"
                & "es-its-limit-a-margin-above-its-stack-s-base",
@@ -6476,6 +6530,15 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d545-the-linker-script-is-"
                & "derived-from-the-description-and-boot-kinds-are-the-comp"
                & "iler-s",
+            when 1114 =>
+               "https://www.701.dev/spec.html#d1114-the-stack-s-reservat"
+               & "ion-is-asserted-against-whatever-shares-its-region",
+            when 1115 =>
+               "https://www.701.dev/spec.html#d1115-nothing-a-program-de"
+               & "clares-is-placed-at-address-zero",
+            when 1116 =>
+               "https://www.701.dev/spec.html#d1116-a-flash-image-keeps-"
+               & "code-and-constants-where-reset-need-not-put-them",
             when 546 =>
                "https://www.701.dev/spec.html#d546-a-developer-s-linker-"
                & "script-is-held-to-a-written-contract",
