@@ -326,6 +326,15 @@ package body Landin.Diagnostics.Text is
       Append (Buffer, Image (Level (Item)) & "[" & Code (Item) & "]: ");
       Append (Buffer, Escaped (Message (Primary (Item))));
       Append (Buffer, LF & "");
+      --  A tool's own words, a line each under the message.  Every line
+      --  is escaped and carries the margin, so none can pass for a line
+      --  of this report.
+      for Index in 1 .. Transcript_Count (Item) loop
+         exit when Buffer.Full;
+         Append (Buffer, Transcript_Margin);
+         Append (Buffer, Escaped (Nth_Transcript_Line (Item, Index)));
+         Append (Buffer, LF & "");
+      end loop;
       if Buffer.Full then
          return;
       end if;

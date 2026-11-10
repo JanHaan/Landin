@@ -419,10 +419,14 @@ package body Landin.Backend.X86_64 is
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Optimized : constant Boolean :=
         Options.Optimize /= Landin.Optimization.None;
-      Bodies : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
+      --  Everything this keeps for each item is on the heap: a table in
+      --  this frame grows with the program, and some twenty thousand
+      --  routines' did not fit the eight megabytes a process's stack is
+      --  given, which ended the build as the host exhausted.
+      type Body_Array is array (Positive range <>) of
         Unbounded.Unbounded_String;
-      Streams : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Machine.Stream;
-      Statistics : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
+      type Stream_Array is array (Positive range <>) of Machine.Stream;
+      type Statistics_Array is array (Positive range <>) of
         Landin.Build_Reports.Routine_Statistics;
       type Plan_Array is array (Positive range <>) of Dwarf.Plan_Access;
       type Frame_Array is array (Positive range <>) of Dwarf.Frame_Access;
@@ -435,29 +439,63 @@ package body Landin.Backend.X86_64 is
       type Trap_Array is array (Positive range <>) of Trap_Mask;
       procedure Free_Traps is new Ada.Unchecked_Deallocation
         (Home_Mask, Trap_Mask);
-      type Retained_Facts (Last : Natural) is
-        new Ada.Finalization.Limited_Controlled with record
-         Plans : Plan_Array (1 .. Last) := [others => null];
-         Frames : Frame_Array (1 .. Last) := [others => null];
-         Traps : Trap_Array (1 .. Last) := [others => null];
+      type Item_Tables (Last : Natural) is limited record
+         Bodies : Body_Array (1 .. Last);
+         Streams : Stream_Array (1 .. Last);
+         Statistics : Statistics_Array (1 .. Last);
+         Plans : Plan_Array (1 .. Last);
+         Frames : Frame_Array (1 .. Last);
+         Traps : Trap_Array (1 .. Last);
+         Shareable : Home_Mask (1 .. Last);
+         Has_Inline_Map_Table : Home_Mask (1 .. Last);
       end record;
+      type Tables_Access is access Item_Tables;
+      procedure Free_Tables is new Ada.Unchecked_Deallocation
+        (Item_Tables, Tables_Access);
+      type Retained_Facts is
+        new Ada.Finalization.Limited_Controlled with record
+         Tables : Tables_Access;
+      end record;
+      overriding procedure Initialize (Owned : in out Retained_Facts);
       overriding procedure Finalize (Owned : in out Retained_Facts);
+      overriding procedure Initialize (Owned : in out Retained_Facts) is
+      begin
+         Owned.Tables :=
+           new Item_Tables (Landin.IR.Item_Count (Of_Unit));
+         --  In loops, so that no aggregate the size of a table is built
+         --  in this frame on its way to the heap.
+         for Index in 1 .. Owned.Tables.Last loop
+            Owned.Tables.Plans (Index) := null;
+            Owned.Tables.Frames (Index) := null;
+            Owned.Tables.Traps (Index) := null;
+            Owned.Tables.Shareable (Index) := False;
+            Owned.Tables.Has_Inline_Map_Table (Index) := False;
+         end loop;
+      end Initialize;
       overriding procedure Finalize (Owned : in out Retained_Facts) is
       begin
-         for Index in Owned.Plans'Range loop
-            if Owned.Traps (Index) /= null then
-               Free_Traps (Owned.Traps (Index));
+         if Owned.Tables = null then
+            return;
+         end if;
+         for Index in Owned.Tables.Plans'Range loop
+            if Owned.Tables.Traps (Index) /= null then
+               Free_Traps (Owned.Tables.Traps (Index));
             end if;
             --  Frame_For can fail after the plan has been retained.
-            if Owned.Frames (Index) /= null then
-               Free_Frame (Owned.Frames (Index));
+            if Owned.Tables.Frames (Index) /= null then
+               Free_Frame (Owned.Tables.Frames (Index));
             end if;
-            if Owned.Plans (Index) /= null then
-               Free_Plan (Owned.Plans (Index));
+            if Owned.Tables.Plans (Index) /= null then
+               Free_Plan (Owned.Tables.Plans (Index));
             end if;
          end loop;
+         Free_Tables (Owned.Tables);
       end Finalize;
-      Saved : Retained_Facts (Bodies'Length);
+      Owner : Retained_Facts;
+      Saved : Item_Tables renames Owner.Tables.all;
+      Bodies : Body_Array renames Saved.Bodies;
+      Streams : Stream_Array renames Saved.Streams;
+      Statistics : Statistics_Array renames Saved.Statistics;
       Capturing : Landin.IR.Item_Id := Landin.IR.No_Item;
       --  Whether the last instruction emitted is an unconditional transfer,
       --  so that nothing falls through into what follows it until the next
@@ -466,13 +504,11 @@ package body Landin.Backend.X86_64 is
       Transferred : Boolean := False;
       --  The emission unit is immutable. One retained-reference traversal
       --  excludes exposed routines before final-body equality comparisons.
-      Shareable : Home_Mask (1 .. Landin.IR.Item_Count (Of_Unit)) :=
-        [others => False];
+      Shareable : Home_Mask renames Saved.Shareable;
       --  Inline mapping words are assembly directives and therefore absent
       --  from Machine's final-instruction comparison.  A routine carrying
       --  them cannot use instruction-only body sharing.
-      Has_Inline_Map_Table : Home_Mask
-        (1 .. Landin.IR.Item_Count (Of_Unit)) := [others => False];
+      Has_Inline_Map_Table : Home_Mask renames Saved.Has_Inline_Map_Table;
 
       procedure Exclude_Exposed (Item : Landin.IR.Item_Id);
 

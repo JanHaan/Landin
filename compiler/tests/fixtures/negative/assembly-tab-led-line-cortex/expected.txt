@@ -1,0 +1,60 @@
+error[L0330]: assembly text holds no directive
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:2:5
+  |
+2 |     assembler.block("nop\n\t.incbin \"/dev/null\"")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:2:5
+  |
+2 |     assembler.block("nop\n\t.incbin \"/dev/null\"")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly requires straight-line control flow
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:3:5
+  |
+3 |     assembler.block("\tb there")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:3:5
+  |
+3 |     assembler.block("\tb there")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and defines no label; a naked routine's body may
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:4:5
+  |
+4 |     assembler.block("\tthere: nop")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:4:5
+  |
+4 |     assembler.block("\tthere: nop")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: assembly text holds no directive
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:5:5
+  |
+5 |     assembler.block(" \t .globl leaked")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:5:5
+  |
+5 |     assembler.block(" \t .globl leaked")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and defines no label; a naked routine's body may
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:6:5
+  |
+6 |     assembler.block("there\t: nop")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:6:5
+  |
+6 |     assembler.block("there\t: nop")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and defines no symbol; a naked routine's body may
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:7:5
+  |
+7 |     assembler.block("leaked = 0x1234")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:7:5
+  |
+7 |     assembler.block("leaked = 0x1234")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

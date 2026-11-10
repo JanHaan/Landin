@@ -1971,9 +1971,14 @@ package body Landin.Diagnostics.Citations is
             when 563 =>
                "An empty first directory does not hide a later root's mo"
                & "dule",
+            when 1055 =>
+               "An import of a named entry's directory is refused",
             when 732 =>
                "A module the compiler adds is spelt as an import of it w"
                & "ould be",
+            when 1056 =>
+               "A module the compiler adds is not added when the program"
+               & " already holds its directory",
             when 772 =>
                "A thread's instance's address is not kept in a module bi"
                & "nding every thread reads",
@@ -2025,6 +2030,9 @@ package body Landin.Diagnostics.Citations is
             when 598 =>
                "A naked body on a hosted target may label what it branch"
                & "es to",
+            when 1054 =>
+               "A tab around a line of assembly text is margin, as a bla"
+               & "nk is",
             when 630 =>
                "Float assembly operands are a second class, `float`",
             when 252 =>
@@ -2034,6 +2042,21 @@ package body Landin.Diagnostics.Citations is
             when 907 =>
                "A command publishes its outputs without destroying confl"
                & "icting inputs or saves",
+            when 1057 =>
+               "What a tool said is shown a line each under the report o"
+               & "f its failure",
+            when 1058 =>
+               "A depfile names the file the build wrote, and holds no p"
+               & "ath Make cannot read back",
+            when 1059 =>
+               "A tool's text inputs are each scanned once, and a build "
+               & "names a bounded number",
+            when 1060 =>
+               "An assembly input's file directives are found wherever t"
+               & "he word stands",
+            when 1061 =>
+               "A standard output that cannot be written is the host's f"
+               & "ailure",
             when 359 =>
                "`refine fmt --check` names every line, and `--stdout` pr"
                & "ints the layout",
@@ -3739,7 +3762,11 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Modules and compile time",
             when 563 =>
                "Decisions: Modules and compile time",
+            when 1055 =>
+               "Decisions: Modules and compile time",
             when 732 =>
+               "Decisions: Modules and compile time",
+            when 1056 =>
                "Decisions: Modules and compile time",
             when 772 =>
                "Decisions: Modules and compile time",
@@ -3785,6 +3812,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 598 =>
                "Decisions: The toolchain, C and the machine",
+            when 1054 =>
+               "Decisions: The toolchain, C and the machine",
             when 630 =>
                "Decisions: The toolchain, C and the machine",
             when 252 =>
@@ -3792,6 +3821,16 @@ package body Landin.Diagnostics.Citations is
             when 358 =>
                "Decisions: The toolchain, C and the machine",
             when 907 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1057 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1058 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1059 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1060 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1061 =>
                "Decisions: The toolchain, C and the machine",
             when 359 =>
                "Decisions: The toolchain, C and the machine",
@@ -5513,9 +5552,16 @@ package body Landin.Diagnostics.Citations is
             when 563 =>
                "https://www.701.dev/spec.html#d563-an-empty-first-direct"
                & "ory-does-not-hide-a-later-root-s-module",
+            when 1055 =>
+               "https://www.701.dev/spec.html#d1055-an-import-of-a-named"
+               & "-entry-s-directory-is-refused",
             when 732 =>
                "https://www.701.dev/spec.html#d732-a-module-the-compiler"
                & "-adds-is-spelt-as-an-import-of-it-would-be",
+            when 1056 =>
+               "https://www.701.dev/spec.html#d1056-a-module-the-compile"
+               & "r-adds-is-not-added-when-the-program-already-holds-its-d"
+               & "irectory",
             when 772 =>
                "https://www.701.dev/spec.html#d772-a-thread-s-instance-s"
                & "-address-is-not-kept-in-a-module-binding-every-thread-re"
@@ -5583,6 +5629,9 @@ package body Landin.Diagnostics.Citations is
             when 598 =>
                "https://www.701.dev/spec.html#d598-a-naked-body-on-a-hos"
                & "ted-target-may-label-what-it-branches-to",
+            when 1054 =>
+               "https://www.701.dev/spec.html#d1054-a-tab-around-a-line-"
+               & "of-assembly-text-is-margin-as-a-blank-is",
             when 630 =>
                "https://www.701.dev/spec.html#d630-float-assembly-operan"
                & "ds-are-a-second-class-float",
@@ -5596,6 +5645,23 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d907-a-command-publishes-i"
                & "ts-outputs-without-destroying-conflicting-inputs-or-save"
                & "s",
+            when 1057 =>
+               "https://www.701.dev/spec.html#d1057-what-a-tool-said-is-"
+               & "shown-a-line-each-under-the-report-of-its-failure",
+            when 1058 =>
+               "https://www.701.dev/spec.html#d1058-a-depfile-names-the-"
+               & "file-the-build-wrote-and-holds-no-path-make-cannot-read-"
+               & "back",
+            when 1059 =>
+               "https://www.701.dev/spec.html#d1059-a-tool-s-text-inputs"
+               & "-are-each-scanned-once-and-a-build-names-a-bounded-numbe"
+               & "r",
+            when 1060 =>
+               "https://www.701.dev/spec.html#d1060-an-assembly-input-s-"
+               & "file-directives-are-found-wherever-the-word-stands",
+            when 1061 =>
+               "https://www.701.dev/spec.html#d1061-a-standard-output-th"
+               & "at-cannot-be-written-is-the-host-s-failure",
             when 359 =>
                "https://www.701.dev/spec.html#d359-refine-fmt-check-name"
                & "s-every-line-and-stdout-prints-the-layout",

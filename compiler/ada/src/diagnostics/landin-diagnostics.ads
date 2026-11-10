@@ -81,6 +81,19 @@ package Landin.Diagnostics is
    function Nth_Note (Item : Diagnostic; Index : Positive) return String
      with Pre => Index <= Note_Count (Item);
 
+   --  What a tool the compiler ran said, a line each as the tool wrote
+   --  them, kept apart from the message: a message is one line, in which
+   --  a line feed is shown as a control byte so that a name cannot forge
+   --  a report, and an assembler or linker says what is wrong in several.
+   --  Text is cut at its line feeds, and its last empty lines are left
+   --  out.  A presentation still escapes each line on its own.
+   procedure Set_Transcript (Item : in out Diagnostic; Text : String);
+
+   function Transcript_Count (Item : Diagnostic) return Natural;
+   function Nth_Transcript_Line
+     (Item : Diagnostic; Index : Positive) return String
+     with Pre => Index <= Transcript_Count (Item);
+
    --  One replacement: the bytes of Where in Source become Replacement.  An
    --  insertion is an empty span and a deletion an empty replacement.
    type Edit is private;
@@ -246,6 +259,7 @@ private
       Labels  : Label_Vectors.Vector;
       Notes   : Note_Vectors.Vector;
       Fixes   : Fix_Vectors.Vector;
+      Transcript : Note_Vectors.Vector;
    end record;
 
    package Diagnostic_Vectors is new Ada.Containers.Indefinite_Vectors

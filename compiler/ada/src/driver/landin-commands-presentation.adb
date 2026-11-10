@@ -119,6 +119,11 @@ package body Landin.Commands.Presentation is
                     then " (warning denied by command-line policy)"
                     else "")
                  & ASCII.LF);
+               for Line in 1 .. D.Transcript_Count (Item) loop
+                  US.Append (Text, D.Text.Transcript_Margin
+                    & D.Text.Escaped (D.Nth_Transcript_Line (Item, Line))
+                    & ASCII.LF);
+               end loop;
             else
                declare
                   Into : J.Builder;
@@ -151,6 +156,17 @@ package body Landin.Commands.Presentation is
                      J.Write_String (Into, D.Nth_Note (Item, Position));
                   end loop;
                   J.End_Array (Into);
+                  --  Present only for a tool's failure, so every other
+                  --  diagnostic keeps the members it had.
+                  if D.Transcript_Count (Item) > 0 then
+                     J.Name (Into, "tool_output");
+                     J.Begin_Array (Into);
+                     for Line in 1 .. D.Transcript_Count (Item) loop
+                        J.Write_String
+                          (Into, D.Nth_Transcript_Line (Item, Line));
+                     end loop;
+                     J.End_Array (Into);
+                  end if;
                   J.Name (Into, "fixes");
                   J.Begin_Array (Into);
                   for Position in 1 .. D.Fix_Count (Item) loop

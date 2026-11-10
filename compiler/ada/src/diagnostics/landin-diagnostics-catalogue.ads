@@ -111,6 +111,9 @@ package Landin.Diagnostics.Catalogue is
       --  D563: the first directory an import names holds no source, and a
       --  later root's directory of the same path holds the module.
       Empty_Module_Hides_Root,
+      --  D1055: an import selects the directory of a source the request
+      --  named as the entry module.
+      Import_Of_Named_Entry,
       --  `refine fmt --check`: a source that parses and is not in the
       --  layout.  Whose rule is D252, not a language rule, and no program
       --  is refused for it.
@@ -446,6 +449,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D563: an import's first directory holds no source and a"
                    & " later root holds its module")),
+      Import_Of_Named_Entry =>
+        (Code => "L0616", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D1055: an import selects the directory of a source the"
+                   & " request named as the entry module")),
       --  The first line out of the layout, which may be one whose only fault
       --  is its missing line end, and so empty; the note is what a reader runs
       --  to put the file right.

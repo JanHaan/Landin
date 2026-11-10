@@ -181,6 +181,12 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Appearance_Action := Action;
    end Appear_On_Publication;
 
+   procedure Number_Identities_From
+     (Host : in out Fake_Filesystem; First : Interfaces.Unsigned_64) is
+   begin
+      Host.Writes.Data.Next_Identity := First;
+   end Number_Identities_From;
+
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String) is
    begin
       Add (Host, Directory_Path (Path), "", A_Directory);

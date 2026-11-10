@@ -66,6 +66,8 @@ package body Landin.Tests.Backend_Scale_Suite is
      (Work : in out Landin.Stages.Compilation; Objective : Opt.Objective;
       Text : out US.Unbounded_String; Report : in out Reports.Report);
    procedure Many_Private_Bodies (Item : in out Landin.Testing.Context);
+   procedure Item_Tables_Are_Off_The_Stack
+     (Item : in out Landin.Testing.Context);
    procedure Exposure_Channels (Item : in out Landin.Testing.Context);
    procedure Streaming_Counts (Item : in out Landin.Testing.Context);
    procedure Large_Routine (Item : in out Landin.Testing.Context);
@@ -145,6 +147,56 @@ package body Landin.Tests.Backend_Scale_Suite is
         (Item, Contains (US.To_String (Text), ".set duplicate, private_800"),
          "an equivalent private body still folds after the distinct run");
    end Many_Private_Bodies;
+
+   --  What the emitter keeps for each item is on the heap.  In its frame
+   --  those tables took some four hundred bytes a routine, so twenty
+   --  thousand routines did not fit a process's eight megabytes and the
+   --  build ended as the host exhausted.  Emitted here on a stack of one
+   --  megabyte, four thousand routines would not have fitted either.
+   procedure Item_Tables_Are_Off_The_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+      Routines : constant := 4000;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Targets.Linux_X86_64);
+      Source : US.Unbounded_String;
+      Text : US.Unbounded_String;
+      Report : Reports.Report;
+      Overflowed : Boolean := False;
+      Failure : US.Unbounded_String;
+   begin
+      for Index in 1 .. Routines loop
+         US.Append
+           (Source, "private_" & Image (Index)
+            & ": (x: i64) -> (r: i64) = r = x +% " & Image (Index)
+            & " end private_" & Image (Index) & LF);
+      end loop;
+      Lower (Item, Work, US.To_String (Source));
+      declare
+         task Bounded with Storage_Size => 1024 * 1024;
+
+         task body Bounded is
+         begin
+            Emit (Work, Opt.None, Text, Report);
+         exception
+            when Storage_Error =>
+               Overflowed := True;
+            when Error : others =>
+               Failure := US.To_Unbounded_String
+                 (Ada.Exceptions.Exception_Information (Error));
+         end Bounded;
+      begin
+         null;
+      end;
+      Landin.Testing.Check
+        (Item, not Overflowed,
+         "the emitter's stack does not grow with the number of routines");
+      Landin.Testing.Check
+        (Item, US.Length (Failure) = 0
+           and then Contains (US.To_String (Text), LF & "private_"
+                              & Image (Routines) & ":" & LF),
+         "every routine is emitted: " & US.To_String (Failure));
+   end Item_Tables_Are_Off_The_Stack;
 
    procedure Exposure_Channels (Item : in out Landin.Testing.Context) is
       Bodies : constant String :=
@@ -1074,6 +1126,9 @@ package body Landin.Tests.Backend_Scale_Suite is
       Landin.Testing.Register
         (Into, "backend scale", "many private bodies",
          Many_Private_Bodies'Access);
+      Landin.Testing.Register
+        (Into, "backend scale", "item tables are off the stack",
+         Item_Tables_Are_Off_The_Stack'Access);
       Landin.Testing.Register
         (Into, "backend scale", "exposure channels", Exposure_Channels'Access);
       Landin.Testing.Register

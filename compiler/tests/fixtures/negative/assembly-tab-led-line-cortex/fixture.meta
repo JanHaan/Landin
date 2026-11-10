@@ -1,0 +1,9 @@
+class: negative
+summary: D1054 holds at a Thumb-2 level, where no instruction allowlist stands behind the text rules: a tab-led directive, branch and label are refused, and with them a label whose colon follows a tab and a symbol assignment
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 --level=armv7-m ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn
+codes: L0330, L0330, L0330, L0330, L0330, L0330
+status: 1
+constructs: 1630, 1990
+targets: cortex-m0

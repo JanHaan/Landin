@@ -88,6 +88,15 @@ package Landin.Modules is
    function Is_Implicit (Of_Table : Table; Id : Module_Id) return Boolean
      with Pre => Contains (Of_Table, Id);
 
+   --  A module the loader would have added was part of the program
+   --  already, as the entry module, which has no logical path, or under
+   --  another import name: the path is noted, so that what needs the
+   --  module finds it supplied and the directory is read once.
+   procedure Note_Supplied (Into : in out Table; Logical : String);
+
+   --  Whether a module has the logical path or was noted as supplying it.
+   function Supplies (Of_Table : Table; Logical : String) return Boolean;
+
    --  Source identities are attached in the reached program's canonical
    --  order: entry first, sorted files, source-order imports and FIFO module
    --  discovery.  All later stages retain that order by walking Source_Id.
@@ -159,6 +168,8 @@ private
    type Table is tagged limited record
       Modules       : Module_Vectors.Vector;
       Logical_Index : Logical_Maps.Map;
+      --  The logical paths Note_Supplied was given.
+      Supplied      : Logical_Maps.Map;
       Sources       : Source_Module_Vectors.Vector;
       Imports       : Import_Maps.Map;
    end record;

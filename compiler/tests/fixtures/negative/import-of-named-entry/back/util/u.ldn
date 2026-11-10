@@ -1,0 +1,6 @@
+import app
+
+public twice: () -> none =
+    app.bump()
+    app.bump()
+end twice

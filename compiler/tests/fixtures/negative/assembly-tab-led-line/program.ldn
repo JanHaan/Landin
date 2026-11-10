@@ -1,0 +1,8 @@
+f: (value: u64) -> none =
+    assembler.block("nop\n\t.incbin \"/dev/null\"", in v: u64 at rax = value)
+    assembler.block("\tjmp 1f", in v: u64 at rax = value)
+    assembler.block("\tagain: nop", in v: u64 at rax = value)
+    assembler.block(" \t .globl leaked", in v: u64 at rax = value)
+    assembler.block("again\t: nop", in v: u64 at rax = value)
+    assembler.block("leaked = 0x1234", in v: u64 at rax = value)
+end f

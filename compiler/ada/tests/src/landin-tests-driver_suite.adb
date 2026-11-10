@@ -2,6 +2,7 @@ with Ada.Assertions;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Interfaces;
 
 with Landin.Byte_Encoding;
 with Landin.Diagnostics;
@@ -8894,6 +8895,546 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Cortex_Model_Refusals_Name_Target_And_Level;
 
+   --  A static Linux link adds the library's platform/linux.  The entry
+   --  module has no logical path, so when it is that directory the loader
+   --  added the same directory a second time, which the module table
+   --  refuses; named by its files, the module was read twice and its
+   --  start symbol collided with itself.
+   procedure The_Implicit_Module_May_Be_The_Entry
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Implicit_Module_May_Be_The_Entry
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_One (Label : String; Args : Landin.Platform.Path_List);
+
+      procedure Check_One (Label : String; Args : Landin.Platform.Path_List)
+      is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_Directory ("lib");
+         Host.Add_Directory ("lib/platform");
+         Host.Add_Directory ("lib/platform/linux");
+         Host.Add_File
+           ("lib/platform/linux/linux.ldn",
+            "fixed if compiler.os == linux then" & LF
+            & "    public extern(naked) _landin_start: () -> none =" & LF
+            & "        assembler.block(""ud2"")" & LF
+            & "    end _landin_start" & LF
+            & "end if" & LF);
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            Label & ": " & Unbounded.To_String (Result.Report));
+      end Check_One;
+   begin
+      Check_One
+        ("the entry directory is the implicit module",
+         ["--target=linux-x86-64", "--library=lib", "--root=lib",
+          "lib/platform/linux"]);
+      Check_One
+        ("on another Linux target",
+         ["--target=linux-arm64", "--library=lib", "--root=lib",
+          "lib/platform/linux"]);
+      Check_One
+        ("the entry's files are the implicit module's",
+         ["--target=linux-x86-64", "--library=lib",
+          "lib/platform/linux/linux.ldn"]);
+      Check_One
+        ("and under a root",
+         ["--target=linux-x86-64", "--library=lib", "--root=lib",
+          "lib/platform/linux/linux.ldn"]);
+   end The_Implicit_Module_May_Be_The_Entry;
+
+   --  D1055: an entry named by its files is no module of the graph by its
+   --  directory, so an import that selected the directory read the files a
+   --  second time, as a second module with its own copy of their state.
+   procedure An_Import_Of_A_Named_Entry_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Import_Of_A_Named_Entry_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      function Run
+        (Operand : String; Cyclic : Boolean := True)
+         return Landin.Driver.Outcome;
+
+      function Run
+        (Operand : String; Cyclic : Boolean := True)
+         return Landin.Driver.Outcome
+      is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_Directory ("back");
+         Host.Add_Directory ("back/app");
+         Host.Add_Directory ("back/util");
+         Host.Add_File
+           ("back/app/main.ldn",
+            "import util" & LF
+            & "mut counter: i32 = 0" & LF
+            & "public bump: () -> none =" & LF
+            & "    counter = counter + 1" & LF
+            & "end bump" & LF
+            & "public main: () -> (code: i32) =" & LF
+            & "    util.twice()" & LF
+            & "    code = counter" & LF
+            & "end main" & LF);
+         Host.Add_File
+           ("back/util/u.ldn",
+            (if Cyclic
+             then "import app" & LF
+               & "public twice: () -> none =" & LF
+               & "    app.bump()" & LF
+               & "    app.bump()" & LF
+               & "end twice" & LF
+             else "public twice: () -> none =" & LF
+               & "end twice" & LF));
+         return Landin.Driver.Execute
+           (["--target=linux-x86-64", "--link=libc", "--root=back", Operand],
+            Host, Tools);
+      end Run;
+
+      By_Directory : constant Landin.Driver.Outcome := Run ("back/app");
+      By_File : constant Landin.Driver.Outcome := Run ("back/app/main.ldn");
+      Report : constant String := Unbounded.To_String (By_File.Report);
+      Acyclic : constant Landin.Driver.Outcome :=
+        Run ("back/app/main.ldn", Cyclic => False);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, By_Directory.Status, Landin.Driver.Status_Success,
+         "a cycle through an entry directory is the entry module again: "
+         & Unbounded.To_String (By_Directory.Report));
+      Landin.Testing.Check_Equal
+        (Item, By_File.Status, Landin.Driver.Status_Reported,
+         "an import of the named entry's directory is refused");
+      Landin.Testing.Check
+        (Item, Contains (Report, "error[L0616]: `app` is back/app, which"
+                         & " holds back/app/main.ldn, a source this request"
+                         & " named as the entry module")
+           and then Contains (Report, "--> back/util/u.ldn:1:1")
+           and then Contains (Report, "name the directory back/app as the"
+                              & " entry")
+           and then Occurrences (Report, "error[") = 1,
+         "the refusal names the import, the directory and the file: "
+         & Report);
+      Landin.Testing.Check_Equal
+        (Item, Acyclic.Status, Landin.Driver.Status_Success,
+         "a named entry nothing imports back is one module, as before: "
+         & Unbounded.To_String (Acyclic.Report));
+   end An_Import_Of_A_Named_Entry_Is_Refused;
+
+   --  XFS, NFS and FUSE number inodes past 2 ** 32, and the loader's hash
+   --  of a directory identity converted the number to a 32-bit modular
+   --  type, which checks its range.
+   procedure Wide_Inode_Numbers_Load
+     (Item : in out Landin.Testing.Context);
+
+   procedure Wide_Inode_Numbers_Load
+     (Item : in out Landin.Testing.Context)
+   is
+      use type Interfaces.Unsigned_64;
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Number_Identities_From (2 ** 33 + 5);
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/one");
+      Host.Add_Directory ("root/two");
+      Host.Add_File ("root/one/part.ldn", "import two" & LF);
+      Host.Add_File ("root/two/part.ldn", "import one" & LF);
+      Host.Add_File
+        ("entry/main.ldn",
+         "import one" & LF & "import two" & LF
+         & "public main: () -> (code: i32) = code = 0 end main" & LF);
+      Result := Landin.Driver.Execute
+        (["--target=linux-x86-64", "--link=libc", "--root=root", "entry"],
+         Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, Landin.Driver.Status_Success,
+         "directories numbered past 2 ** 32 are keyed and found: "
+         & Unbounded.To_String (Result.Report));
+      Landin.Testing.Check
+        (Item, Host.Existing_Identity ("root/one").Inode >= 2 ** 33,
+         "the fake numbers them there");
+   end Wide_Inode_Numbers_Load;
+
+   --  `.//x` is `./x` to the host that checked it, and the tool was given
+   --  `/x`.
+   procedure A_Doubled_Slash_Stays_Relative
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Doubled_Slash_Stays_Relative
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Result : Landin.Driver.Outcome;
+      Seen, Rooted : Boolean := False;
+   begin
+      Host.Add_File (".//operand.s", "nop" & LF);
+      Result := Landin.Driver.Execute
+        (["--target=linux-x86-64", "--link=libc", "--emit=exe",
+          ".//operand.s", "-o=program"], Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, Landin.Driver.Status_Success,
+         "the operand links: " & Unbounded.To_String (Result.Report));
+      for Index in 1 .. Tools.Run_Count loop
+         for Argument of Tools.Call_At (Index).Arguments loop
+            Seen := Seen
+              or else Argument = Host.Working_Directory & "/operand.s";
+            Rooted := Rooted or else Argument = "/operand.s";
+         end loop;
+      end loop;
+      Landin.Testing.Check
+        (Item, Seen and then not Rooted,
+         "the tool is given the working directory's file, not the root's");
+   end A_Doubled_Slash_Stays_Relative;
+
+   --  The depfile's rule is for the file the build wrote, and D1058 holds
+   --  its paths to what Make reads back as one name.
+   procedure A_Depfile_Names_What_Make_Can_Read
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Depfile_Names_What_Make_Can_Read
+     (Item : in out Landin.Testing.Context)
+   is
+      Program : constant String :=
+        "public main: () -> (code: i32) = code = 0 end main" & LF;
+
+      procedure Refused (Name, Byte : String; Output : String := "");
+
+      procedure Refused (Name, Byte : String; Output : String := "") is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Meter : Landin.Platform.Unmetered;
+         Args : Landin.Platform.Path_List :=
+           ["compile", "--target=linux-x86-64", "--link=libc", "--emit=asm",
+            Name, "--depfile=out.d"];
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File (Name, Program);
+         if Output /= "" then
+            Args.Append ("-o=" & Output);
+         end if;
+         Result := Landin.Commands.Execute (Args, Host, Tools, Meter);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then Contains
+                (Unbounded.To_String (Result.Report),
+                 "a Make depfile cannot carry `" & Byte & "` in "
+                 & (if Output = "" then "a dependency: " & Name
+                    else "its target: " & Output))
+              and then Host.Write_Count = 0,
+            "`" & Byte & "` is refused before anything is written: "
+            & Unbounded.To_String (Result.Report));
+      end Refused;
+   begin
+      for Emit of Landin.Platform.Path_List'(["ir", "ir-annotated", "asm"])
+      loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Meter : Landin.Platform.Unmetered;
+            Result : Landin.Driver.Outcome;
+            Product : constant String :=
+              (if Emit = "asm" then Landin.Driver.Default_Assembly
+               else Landin.Driver.Default_IR);
+         begin
+            Host.Add_File ("main.ldn", Program);
+            Result := Landin.Commands.Execute
+              (["compile", "--target=linux-x86-64", "--link=libc",
+                "--emit=" & Emit, "main.ldn", "--depfile=out.d"],
+               Host, Tools, Meter);
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+                 and then Host.Written (Product) /= ""
+                 and then Contains
+                   (LF & Host.Written ("out.d"), LF & Product & ": main.ldn"),
+               "--emit=" & Emit & " names the file it wrote: "
+               & Host.Written ("out.d")
+               & Unbounded.To_String (Result.Report));
+         end;
+      end loop;
+      declare
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Meter : Landin.Platform.Unmetered;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("a b$c#d:e.ldn", Program);
+         Result := Landin.Commands.Execute
+           (["compile", "--target=linux-x86-64", "--link=libc", "--emit=asm",
+             "a b$c#d:e.ldn", "-o=out.s", "--depfile=out.d"],
+            Host, Tools, Meter);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success
+              and then Contains (Host.Written ("out.d"),
+                                 "out.s: a\ b$$c\#d\:e.ldn"),
+            "what Make has a spelling for is written in it: "
+            & Host.Written ("out.d") & Unbounded.To_String (Result.Report));
+      end;
+      Refused ("a;echo>PWNED;.ldn", ";");
+      Refused ("pipe|x.ldn", "|");
+      Refused ("back\slash.ldn", "\");
+      Refused ("a=b.ldn", "=");
+      Refused ("a&.ldn", "&");
+      Refused ("pct%.ldn", "%");
+      Refused ("star*.ldn", "*");
+      Refused ("what?.ldn", "?");
+      Refused ("set[ab].ldn", "[");
+      Refused ("~home.ldn", "~");
+      Refused ("main.ldn", "#", Output => "out#.s");
+      Refused ("main.ldn", ":", Output => "out:.s");
+      Refused ("main.ldn", ";", Output => "out;.s");
+   end A_Depfile_Names_What_Make_Can_Read;
+
+   --  A tool says what is wrong in several lines, and a message is one:
+   --  its line feeds were shown as control bytes, so a screen of undefined
+   --  references was a single line.
+   procedure Tool_Output_Keeps_Its_Lines
+     (Item : in out Landin.Testing.Context);
+
+   procedure Tool_Output_Keeps_Its_Lines
+     (Item : in out Landin.Testing.Context)
+   is
+      Said : constant String :=
+        "ld: main.o: in function `main':" & CR & LF
+        & "(.text+0x1): undefined reference to `missing_one'" & LF
+        & "error[L0001]: forged " & ASCII.ESC & "[31m" & LF
+        & "collect2: error: ld returned 1 exit status" & LF & LF;
+
+      function Run (Format : String) return Landin.Driver.Outcome;
+
+      function Run (Format : String) return Landin.Driver.Outcome is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Meter : Landin.Platform.Unmetered;
+      begin
+         Host.Add_File ("operand.s", "nop" & LF);
+         Tools.Set_Result (1, Said);
+         return Landin.Commands.Execute
+           (["compile", "--target=linux-x86-64", "--link=libc",
+             "--diagnostics=" & Format, "operand.s", "-o=program"],
+            Host, Tools, Meter);
+      end Run;
+
+      Text : constant String := Unbounded.To_String (Run ("human").Report);
+      Short : constant String := Unbounded.To_String (Run ("short").Report);
+      Json : constant String := Unbounded.To_String (Run ("json").Report);
+      Lines : constant String :=
+        "  | ld: main.o: in function `main':" & LF
+        & "  | (.text+0x1): undefined reference to `missing_one'" & LF
+        & "  | error[L0001]: forged \x1B[31m" & LF
+        & "  | collect2: error: ld returned 1 exit status" & LF;
+   begin
+      Landin.Testing.Check
+        (Item, Contains (Text, " failed with status 1" & LF & Lines)
+           and then not Contains (Text, "\x0A")
+           and then not Contains (Text, LF & "error[L0001]")
+           and then Occurrences (Text, "error[") = 2,
+         "each line of the tool's output is a line under the message,"
+         & " escaped and in the margin: " & Text);
+      Landin.Testing.Check
+        (Item, Contains (Short, " failed with status 1" & LF & Lines)
+           and then not Contains (Short, "\x0A"),
+         "the short form keeps them too: " & Short);
+      Landin.Testing.Check
+        (Item, Contains (Json, " failed with status 1"",")
+           and then Contains
+             (Json, """tool_output"":[""ld: main.o: in function `main':"","
+              & """(.text+0x1): undefined reference to `missing_one'"",")
+           and then Contains (Json, """collect2: error: ld returned 1 exit"
+                              & " status""]"),
+         "JSON carries the lines as an array: " & Json);
+   end Tool_Output_Keeps_Its_Lines;
+
+   --  D1060: an assembly input's file directives are found wherever the
+   --  word stands, whatever the target's assembler takes for a comment,
+   --  and D1059: each input is scanned once and their number is bounded.
+   procedure Assembly_Directives_Cannot_Hide
+     (Item : in out Landin.Testing.Context);
+
+   procedure Assembly_Directives_Cannot_Hide
+     (Item : in out Landin.Testing.Context)
+   is
+      NUL : constant Character := ASCII.NUL;
+
+      procedure Scan
+        (Label, Text, Expected : String; Output : String := "program";
+         Succeeds : Boolean := False);
+
+      procedure Scan
+        (Label, Text, Expected : String; Output : String := "program";
+         Succeeds : Boolean := False)
+      is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+         Content : Unbounded.Unbounded_String;
+         Read : Landin.Platform.Read_Status;
+      begin
+         Host.Add_File ("/external.inc", "nop");
+         Host.Add_File ("operand.s", Text);
+         Result := Landin.Driver.Execute
+           (["--target=linux-x86-64", "--emit=exe", "--link=libc",
+             "operand.s", "-o=" & Output], Host, Tools);
+         Landin.Testing.Check
+           (Item, (Result.Status = Landin.Driver.Status_Success) = Succeeds
+              and then (Expected = "" or else Contains
+                (Unbounded.To_String (Result.Report), Expected))
+              and then (Succeeds or else Tools.Run_Count = 0),
+            Label & ": " & Unbounded.To_String (Result.Report));
+         Host.Read_File ("/external.inc", Content, Read);
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Content), "nop",
+            Label & ": the named input is unchanged");
+      end Scan;
+
+      Relative : constant String := "relative or indirect file directive:"
+        & " secret.txt";
+   begin
+      Scan ("behind a label", "x:.incbin ""secret.txt""" & LF, Relative);
+      Scan ("after x86-64's `@`",
+            ".type f, @function; .incbin ""secret.txt""" & LF, Relative);
+      Scan ("after arm64's `#`",
+            "add x0, x0, #1; .incbin ""secret.txt""" & LF, Relative);
+      Scan ("after an escaped quote",
+            ".ascii ""\""""" & LF & ".incbin ""secret.txt""" & LF, Relative);
+      Scan ("after a character constant",
+            ".byte 'a" & LF & ".byte '""" & LF
+            & ".incbin ""secret.txt""" & LF, Relative);
+      Scan ("after a quote in a comment",
+            "/* "" */ .incbin ""secret.txt""" & LF, Relative);
+      Scan ("in another case", "nop" & LF & HT & ".INCBIN ""secret.txt""",
+            Relative);
+      Scan ("with a NUL in the text",
+            "# " & NUL & LF & ".incbin ""secret.txt""" & LF, Relative);
+      Scan ("formed by a macro",
+            ".macro m a" & LF & ".\a ""secret.txt""" & LF & ".endm" & LF
+            & "m incbin" & LF,
+            "operand.s line 1 uses `.macro`, and a macro can form a file"
+            & " directive");
+      Scan ("formed by a repeat",
+            "nop" & LF & ".irpc c,x" & LF & ".endr" & LF,
+            "operand.s line 2 uses `.irpc`");
+      Scan ("without a plain file",
+            "nop" & LF & LF & ".include secret" & LF,
+            "operand.s line 3 names `.include` where the file it reads"
+            & " cannot be established");
+      Scan ("with an escape in its file",
+            ".incbin ""\057external.inc""" & LF,
+            "relative or indirect file directive");
+      --  A hidden absolute directive is an input like any other: the
+      --  output that names it is refused, where it used to replace it.
+      Scan ("an absolute file behind a label is protected",
+            "x:.incbin ""/external.inc""" & LF, "", Output => "/external.inc");
+      Scan ("and with a NUL before it",
+            "# " & NUL & LF & ".incbin ""/external.inc""" & LF, "",
+            Output => "/external.inc");
+      --  What is no directive stays accepted.
+      Scan ("a string that holds the word",
+            ".asciz ""/home/u/.include/x .incbin y""" & LF
+            & ".file ""a\"".incbin"" " & LF
+            & "mov foo.include, %rax" & LF & "nop" & LF,
+            "", Succeeds => True);
+      Scan ("a plain absolute directive",
+            "x: .incbin ""/external.inc"", 0, 1" & LF
+            & ".INCLUDE ""/external.inc""" & LF,
+            "", Succeeds => True);
+
+      --  Fifteen files, each naming the next six times: 6 ** 14 reads of
+      --  the last when every mention was read again.
+      for Assembly in Boolean loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+
+            function Name (Level : Positive) return String
+              is ("/dag/l" & Ada.Strings.Fixed.Trim
+                    (Level'Image, Ada.Strings.Both)
+                  & (if Assembly then ".s" else ".ld"));
+
+            function Mentions (Level : Positive) return String;
+
+            function Mentions (Level : Positive) return String is
+               Text : Unbounded.Unbounded_String;
+            begin
+               for Count in 1 .. 6 loop
+                  Unbounded.Append
+                    (Text,
+                     (if Assembly then ".include """ & Name (Level) & """"
+                      else "INCLUDE " & Name (Level)) & LF);
+               end loop;
+               return Unbounded.To_String (Text);
+            end Mentions;
+         begin
+            Host.Add_Directory ("/dag");
+            for Level in 2 .. 15 loop
+               Host.Add_File
+                 (Name (Level),
+                  (if Level = 15 then "" else Mentions (Level + 1)));
+            end loop;
+            if Assembly then
+               Host.Add_File ("operand.s", Mentions (2));
+               Result := Landin.Driver.Execute
+                 (["--target=linux-x86-64", "--emit=exe", "--link=libc",
+                   "operand.s", "-o=program"], Host, Tools);
+            else
+               Host.Add_Directory ("/libraries");
+               Host.Add_File ("/libraries/libfan.so", Mentions (2));
+               Host.Add_File
+                 ("main.ldn", "linker.library(""fan"")" & LF
+                  & "public main: () -> (code: i32) = code = 0 end main");
+               Result := Landin.Driver.Execute
+                 (["main.ldn", "--target=linux-x86-64", "--emit=exe",
+                   "--link=libc", "-L=/libraries", "-o=program"],
+                  Host, Tools);
+            end if;
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "a shared input is scanned once: "
+               & Unbounded.To_String (Result.Report));
+         end;
+      end loop;
+
+      --  More inputs than one build may name.
+      declare
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+         Text : Unbounded.Unbounded_String;
+      begin
+         Host.Add_Directory ("/many");
+         for Index in 1 .. 4100 loop
+            declare
+               Name : constant String := "/many/f" & Ada.Strings.Fixed.Trim
+                 (Index'Image, Ada.Strings.Both) & ".s";
+            begin
+               Host.Add_File (Name, "nop" & LF);
+               Unbounded.Append (Text, ".include """ & Name & """" & LF);
+            end;
+         end loop;
+         Host.Add_File ("operand.s", Unbounded.To_String (Text));
+         Result := Landin.Driver.Execute
+           (["--target=linux-x86-64", "--emit=exe", "--link=libc",
+             "operand.s", "-o=program"], Host, Tools);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+              and then Contains (Unbounded.To_String (Result.Report),
+                                 "tool inputs exceed 4096 files or 64 MiB"
+                                 & " of text at /many/f")
+              and then Tools.Run_Count = 0,
+            "the inputs of one build are bounded: "
+            & Unbounded.To_String (Result.Report));
+      end;
+   end Assembly_Directives_Cannot_Hide;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -9230,6 +9771,27 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "Darwin emits native code and keeps debug refusal",
          Darwin_Contracts'Access);
+      Landin.Testing.Register
+        (Into, "driver", "the implicit module may be the entry",
+         The_Implicit_Module_May_Be_The_Entry'Access);
+      Landin.Testing.Register
+        (Into, "driver", "an import of a named entry is refused",
+         An_Import_Of_A_Named_Entry_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "driver", "wide inode numbers load",
+         Wide_Inode_Numbers_Load'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a doubled slash stays relative",
+         A_Doubled_Slash_Stays_Relative'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a depfile names what Make can read",
+         A_Depfile_Names_What_Make_Can_Read'Access);
+      Landin.Testing.Register
+        (Into, "driver", "tool output keeps its lines",
+         Tool_Output_Keeps_Its_Lines'Access);
+      Landin.Testing.Register
+        (Into, "driver", "assembly directives cannot hide",
+         Assembly_Directives_Cannot_Hide'Access);
    end Register;
 
 end Landin.Tests.Driver_Suite;

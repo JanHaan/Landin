@@ -48,6 +48,11 @@ package Landin.Testing.Fakes is
      (Host : in out Fake_Filesystem;
       Action : Landin.Platform.Publication_Action; Path, Target : String);
 
+   --  Number the entries added from now on from FIRST, as a filesystem
+   --  whose inode numbers pass 2 ** 32 does.
+   procedure Number_Identities_From
+     (Host : in out Fake_Filesystem; First : Interfaces.Unsigned_64);
+
    --  A path that exists, can be listed, and cannot be read as a file.
    --  Trailing directory separators do not create a different entry.
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String);

@@ -2163,6 +2163,134 @@ package body Landin.Tests.Targets_Suite is
          "a directive is refused as before");
    end Assembly_Comments;
 
+   --  D1054: a TAB is a margin as a blank is, so a line that begins with
+   --  one meets every rule the same line meets without it, on the hosted
+   --  rules and on Cortex-M's at both of its instruction sets.
+   procedure Assembly_Tabs (Item : in out Landin.Testing.Context);
+
+   procedure Assembly_Tabs (Item : in out Landin.Testing.Context) is
+      package Asm renames Landin.Targets.Assembly;
+      HT : constant Character := ASCII.HT;
+      LF : constant Character := ASCII.LF;
+      Directive : constant String := "assembly text holds no directive";
+
+      type Facts_List is array (Positive range <>) of Target_Facts;
+      Hosted : constant Facts_List :=
+        [Linux_X86_64, Linux_Arm64, Darwin_Arm64, Linux_RV64,
+         Target_Facts'(RV32),
+         Target_Facts'(Xtensa)];
+
+      function Cortex
+        (Text : String; Level : String; Naked : Boolean := False)
+        return String
+        is (Landin.Targets.Firmware.Assembly_Error
+              (Text, Naked, Landin.Targets.Levels.Level_Named
+                 (Cortex_M, Level)));
+
+      function Holds (Text, Part : String) return Boolean
+        is (Ada.Strings.Fixed.Index (Text, Part) > 0);
+   begin
+      for Facts of Hosted loop
+         Landin.Testing.Check
+           (Item, Asm.Text_Error (Facts, HT & ".globl leaked") = Directive
+              and then Asm.Text_Error
+                (Facts, "nop" & LF & HT & ".incbin ""/etc/passwd""")
+                  = Directive
+              and then Asm.Text_Error (Facts, " " & HT & " .set a, 1")
+                = Directive
+              and then Asm.Text_Error
+                (Facts, HT & ".word 1", Naked => True) = Directive
+              and then Asm.Text_Error
+                (Facts, "here:" & HT & ".word 1", Naked => True)
+                  = Directive
+              and then Holds (Asm.Text_Error (Facts, HT & "here: nop"),
+                              "defines no label")
+              and then Holds (Asm.Text_Error (Facts, HT & "here:"),
+                              "defines no label")
+              and then Holds (Asm.Text_Error (Facts, "here :"),
+                              "defines no label")
+              and then Holds (Asm.Text_Error (Facts, "here" & HT & ": nop"),
+                              "defines no label")
+              and then Asm.Text_Error (Facts, "leaked = 0x1234")
+                = Asm.Symbol_Refusal
+              and then Asm.Text_Error (Facts, HT & "main=0")
+                = Asm.Symbol_Refusal
+              and then Asm.Text_Error
+                (Facts, "here" & HT & ":" & HT & "nop", Naked => True) = ""
+              and then Asm.Text_Error
+                (Facts, "here = 4", Naked => True) = ""
+              and then Asm.Text_Error (Facts, HT & "nop" & HT) = ""
+              and then Asm.Text_Error
+                (Facts, HT & "here:" & HT & "nop", Naked => True) = "",
+            "a tab-led directive and label are refused on "
+            & Landin.Targets.Name (Facts));
+      end loop;
+      Landin.Testing.Check
+        (Item, Holds (Asm.Text_Error (Linux_X86_64, HT & "jmp there"),
+                      "transfers no control")
+           and then Holds (Asm.Text_Error (Linux_X86_64, HT & "ret"),
+                           "transfers no control")
+           and then Holds (Asm.Text_Error (Linux_Arm64, HT & "b there"),
+                           "transfers no control")
+           and then Holds (Asm.Text_Error (Darwin_Arm64, HT & "ret"),
+                           "transfers no control")
+           and then Holds (Asm.Text_Error (Linux_RV64, HT & "j there"),
+                           "transfers no control")
+           and then Holds
+             (Asm.Text_Error (Target_Facts'(RV32), HT & "ecall"),
+              "transfers no control")
+           and then Holds
+             (Asm.Text_Error (Target_Facts'(Xtensa), HT & "ret"),
+              "transfers no control")
+           and then Holds (Asm.Text_Error (Linux_Arm64, HT & "# no"),
+                           "comment is `//`")
+           and then Asm.Text_Error (Linux_X86_64, "mov %fs:0, %rax") = ""
+           and then Asm.Text_Error
+             (Linux_Arm64, "add x0, x0, :lo12:there") = ""
+           and then Asm.Text_Error (Linux_Arm64, "ldr x0, =there") = "",
+         "a tab-led control transfer and foreign comment are refused");
+      for Level of Landin.Targets.Levels.Family_Levels (Cortex_M) loop
+         declare
+            Name : constant String := Landin.Targets.Levels.Name (Level);
+         begin
+            Landin.Testing.Check
+              (Item, Cortex (HT & ".globl leaked", Name) = Directive
+                 and then Cortex
+                   ("nop" & LF & HT & ".incbin ""/etc/passwd""", Name)
+                     = Directive
+                 and then Cortex (HT & ".word 1", Name, Naked => True)
+                   = Directive
+                 and then Cortex
+                   ("here:" & HT & ".word 1", Name, Naked => True)
+                     = Directive
+                 and then Holds (Cortex (HT & "here: nop", Name),
+                                 "defines no label")
+                 and then Holds (Cortex ("here" & HT & ": nop", Name),
+                                 "defines no label")
+                 and then Cortex ("leaked = 0x1234", Name)
+                   = Asm.Symbol_Refusal
+                 and then Cortex (HT & "main=0", Name) = Asm.Symbol_Refusal
+                 and then Cortex ("ldr r0, =0x1234", Name) = ""
+                 and then Cortex (HT & "b there", Name) /= ""
+                 and then Cortex (HT & "bx lr", Name) /= ""
+                 and then Holds (Cortex (HT & "# no", Name),
+                                 "comment is `@`")
+                 and then Cortex (HT & "nop" & HT, Name) = ""
+                 and then Cortex ("cpsid" & HT & "i", Name) = ""
+                 and then Cortex
+                   ("mrs" & HT & "r0," & HT & "primask", Name) = ""
+                 and then Cortex
+                   (HT & "here:" & HT & "nop", Name, Naked => True) = "",
+               "a tab is a margin in Cortex-M text at " & Name);
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, Asm.Without_Margins (HT & " nop " & HT) = "nop"
+           and then Asm.Statement (" " & HT & "NOP") = "nop"
+           and then Asm.Statement (HT & " ") = "",
+         "a statement is its line without blanks and tabs around it");
+   end Assembly_Tabs;
+
    --  D255's table is stated three times: in spec.md, in the compiler's
    --  level model and in `platform/linux`, whose entry check restates each
    --  level's name and, in D255's order, the features it holds a processor
@@ -2800,6 +2928,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "assembly comments are each target's own",
          Assembly_Comments'Access);
+      Landin.Testing.Register
+        (Into, "targets", "a tab is a margin of assembly text",
+         Assembly_Tabs'Access);
    end Register;
 
 end Landin.Tests.Targets_Suite;

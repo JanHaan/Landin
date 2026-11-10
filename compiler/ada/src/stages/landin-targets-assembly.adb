@@ -1,5 +1,6 @@
 with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
+with Ada.Strings.Maps;
 
 package body Landin.Targets.Assembly is
 
@@ -757,8 +758,7 @@ package body Landin.Targets.Assembly is
             when RV32 => "RV32",
             when Xtensa => "Xtensa",
             when Synthetic_32_Architecture => "synthetic");
-      Clean : constant String := Ada.Strings.Fixed.Trim
-        (Line, Ada.Strings.Both);
+      Clean : constant String := Without_Margins (Line);
 
       function Not_A_Comment (Form : String) return String
         is ("`" & Form & "` begins no comment in " & Assembly
@@ -793,6 +793,46 @@ package body Landin.Targets.Assembly is
       return "";
    end Foreign_Comment;
 
+   Margin : constant Ada.Strings.Maps.Character_Set :=
+     Ada.Strings.Maps.To_Set (' ' & ASCII.HT);
+
+   function Without_Margins (Line : String) return String
+     is (Ada.Strings.Fixed.Trim (Line, Margin, Margin));
+
+   function Statement (Line : String) return String
+     is (Without_Margins (Ada.Characters.Handling.To_Lower (Line)));
+
+   function Statement_Refusal (On : Architecture; Clean : String)
+     return String is
+   begin
+      if Clean'Length = 0 then
+         return "";
+      elsif Clean (Clean'First) = '.' then
+         return "assembly text holds no directive";
+      elsif Foreign_Comment (On, Clean) /= "" then
+         return Foreign_Comment (On, Clean);
+      elsif Separated_Number (Clean) /= "" then
+         return Separator_Refusal (Separated_Number (Clean));
+      end if;
+      return "";
+   end Statement_Refusal;
+
+   function Assigns_Symbol (Clean : String) return Boolean is
+      Stop : Natural := Clean'First;
+   begin
+      while Stop <= Clean'Last and then Clean (Stop) not in ' ' | ASCII.HT
+      loop
+         if Clean (Stop) = '=' then
+            return True;
+         end if;
+         Stop := Stop + 1;
+      end loop;
+      while Stop <= Clean'Last and then Clean (Stop) in ' ' | ASCII.HT loop
+         Stop := Stop + 1;
+      end loop;
+      return Stop <= Clean'Last and then Clean (Stop) = '=';
+   end Assigns_Symbol;
+
    function Separator_Refusal (Number : String) return String is
       Written : String (1 .. Number'Length);
       Last : Natural := 0;
@@ -821,27 +861,32 @@ package body Landin.Targets.Assembly is
       function Check_Line (Line : String) return String;
 
       function Check_Line (Line : String) return String is
-         Clean : constant String := Ada.Strings.Fixed.Trim
-           (Ada.Characters.Handling.To_Lower (Line), Ada.Strings.Both);
+         Clean : constant String := Statement (Line);
          Stop : Natural := Clean'First;
+         Colon : Natural;
       begin
          if Clean'Length = 0 then
             return "";
          end if;
          Seen := True;
-         if Clean (Clean'First) = '.' then
-            return "assembly text holds no directive";
-         elsif Foreign_Comment (Architecture_Of (Facts), Clean) /= "" then
-            return Foreign_Comment (Architecture_Of (Facts), Clean);
-         elsif Separated_Number (Clean) /= "" then
-            return Separator_Refusal (Separated_Number (Clean));
+         if Statement_Refusal (Architecture_Of (Facts), Clean) /= "" then
+            return Statement_Refusal (Architecture_Of (Facts), Clean);
          end if;
          while Stop <= Clean'Last
            and then Clean (Stop) not in ' ' | ASCII.HT | ':'
          loop
             Stop := Stop + 1;
          end loop;
-         if Stop <= Clean'Last and then Clean (Stop) = ':' then
+         --  GNU as reads `name :` as it reads `name:`, so the colon is
+         --  looked for past the blanks and tabs after the first word.
+         --  An operand's colon, x86-64's `%fs:0` or arm64's `:lo12:`,
+         --  comes after more than blanks.
+         Colon := Stop;
+         while Colon <= Clean'Last and then Clean (Colon) in ' ' | ASCII.HT
+         loop
+            Colon := Colon + 1;
+         end loop;
+         if Colon <= Clean'Last and then Clean (Colon) = ':' then
             --  A naked body owns its control flow, so it may label a
             --  target as it may branch to one (D598); the rest of the
             --  line is an instruction like any other.
@@ -854,7 +899,9 @@ package body Landin.Targets.Assembly is
             then
                return "a naked label requires an ASCII identifier";
             end if;
-            return Check_Line (Clean (Stop + 1 .. Clean'Last));
+            return Check_Line (Clean (Colon + 1 .. Clean'Last));
+         elsif not Naked and then Assigns_Symbol (Clean) then
+            return Symbol_Refusal;
          end if;
          declare
             Mnemonic : constant String := Clean (Clean'First .. Stop - 1);

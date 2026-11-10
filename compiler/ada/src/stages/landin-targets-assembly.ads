@@ -197,6 +197,35 @@ package Landin.Targets.Assembly is
    --  The refusal of a separated number, naming the number to write.
    function Separator_Refusal (Number : String) return String;
 
+   --  Line without the blanks and tabs around it.  [1990]'s byte rule
+   --  admits a TAB, and an assembler reads one as it reads a blank, so a
+   --  per-line rule that trimmed blanks alone tested the TAB instead of
+   --  the statement after it (D1054).
+   function Without_Margins (Line : String) return String;
+
+   --  One line as the per-line rules read it: Without_Margins, in lower
+   --  case.
+   function Statement (Line : String) return String;
+
+   --  What every target refuses of a statement before it reads a label or
+   --  a mnemonic, or the empty string: a directive, a comment form or a
+   --  statement separator that is not On's, and a separated number.  The
+   --  hosted rules and Cortex-M's share it, so neither can lose one.
+   function Statement_Refusal (On : Architecture; Clean : String)
+     return String
+     with Pre => Clean = Statement (Clean);
+
+   --  Whether Clean, a statement with no label before it, defines a
+   --  symbol as `name = value` does, with or without blanks around the
+   --  sign.  No instruction of any target has `=` in or straight after
+   --  its mnemonic; Arm's `ldr r0, =value` has it in an operand.
+   function Assigns_Symbol (Clean : String) return Boolean;
+
+   --  The refusal of a symbol an ordinary block would define.
+   Symbol_Refusal : constant String :=
+     "ordinary assembly is straight-line and defines no symbol; a naked"
+     & " routine's body may";
+
    --  [1990]'s uniform text rules on a hosted target and on RV32, or the
    --  empty string:
    --  at most 4096 ASCII bytes (32768 in a naked Xtensa body) in LF lines,

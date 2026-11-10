@@ -49,6 +49,15 @@ package body Landin.Diagnostics.Explanations is
                & "empty value and may be given only once."
                & LF
                & LF
+               & "With `--depfile`, a path the depfile would hold is refus"
+               & "ed when Make has no spelling that reads back as that one"
+               & " name (D1058): a line break, `;`, `|`, `=`, `&`, `%`, `*"
+               & "`, `?`, `[`, a backslash or a leading `~`, and in the ou"
+               & "tput's own path also `#` and `:`. The message names the "
+               & "byte and the path. Rename the file or directory, or buil"
+               & "d without `--depfile`."
+               & LF
+               & LF
                & "`--link=static|libc` chooses how a hosted executable is "
                & "linked, and under `refine check` which C runtime the pro"
                & "gram is checked with; `static` needs a Linux target, and"
@@ -65,7 +74,22 @@ package body Landin.Diagnostics.Explanations is
                & "the tool runs in private staging. Replace relative or in"
                & "direct forms with plain absolute paths, or supply a stan"
                & "dalone assembly input or linker script. Nested text inpu"
-               & "ts are limited to sixteen levels.",
+               & "ts are limited to sixteen levels, each input is scanned "
+               & "once, and one build names at most 4,096 of them and 64 M"
+               & "iB of their text (D1059)."
+               & LF
+               & LF
+               & "In an assembly input the word `.include` or `.incbin` is"
+               & " the directive wherever it stands outside a double-quote"
+               & "d string and a `/* */` comment, behind a label, a separa"
+               & "tor or a line comment's marker alike, since no character"
+               & " begins a comment on every target (D1060). It must be fo"
+               & "llowed on its line by a double-quoted absolute path; the"
+               & " message gives the line otherwise. An assembly input tha"
+               & "t uses `.macro`, `.irp`, `.irpc` or `.altmacro` is refus"
+               & "ed, since a macro can form a file directive from its arg"
+               & "uments where it cannot be found: expand the macros first"
+               & ", with the assembler's listing or by hand.",
             when Catalogue.Unknown_Target =>
                "`--target=` names no target the compiler describes, or n"
                & "one was named and this compiler's own host is not a desc"
@@ -217,6 +241,20 @@ package body Landin.Diagnostics.Explanations is
                & "ater one. Name the root that holds the module first, or "
                & "give the empty directory its source. An empty module no "
                & "later root rivals is still legal.",
+            when Catalogue.Import_Of_Named_Entry =>
+               "An import selected the directory of a source the request"
+               & " named as the entry module (D1055). Files named on the c"
+               & "ommand line are one module of their own, apart from the "
+               & "directory they lie in, so loading that directory for the"
+               & " import would read and compile the same files a second t"
+               & "ime as another module: two copies of every binding and r"
+               & "outine in them, the entry's `main` using one and the imp"
+               & "orting module the other. The message names the import, t"
+               & "he directory and the named source it holds. Name the dir"
+               & "ectory as the entry in place of its files, under `--root"
+               & "`, and the import is the entry module again: with `--roo"
+               & "t=src`, `refine check src/app` where `refine check src/a"
+               & "pp/main.ldn` was refused.",
             when Catalogue.Not_Formatted =>
                "`refine fmt --check` found a line that is not in the lay"
                & "out D252 decides and `docs/format.md` shows. There is on"
@@ -1536,13 +1574,16 @@ package body Landin.Diagnostics.Explanations is
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"
                & "utput could not be produced, verified, or restored. The "
-               & "note describes the failure, names paths needed for recov"
-               & "ery, and includes tool output when available. refine sta"
-               & "rts no tool while `SIGCHLD` is ignored or `SA_NOCLDWAIT`"
-               & " is set, since either discards the tool's exit status; i"
-               & "t leaves the inherited setting as it is, and the message"
-               & " gives the fix before any path. Start refine with `SIGCH"
-               & "LD` at its default disposition and `SA_NOCLDWAIT` clear.",
+               & "message says which tool failed and how it ended, or name"
+               & "s the paths needed for recovery; what the tool wrote fol"
+               & "lows it a line each, behind `  | ` in the text and the s"
+               & "hort presentation and as the `tool_output` array in JSON"
+               & " (D1057). refine starts no tool while `SIGCHLD` is ignor"
+               & "ed or `SA_NOCLDWAIT` is set, since either discards the t"
+               & "ool's exit status; it leaves the inherited setting as it"
+               & " is, and the message gives the fix before any path. Star"
+               & "t refine with `SIGCHLD` at its default disposition and `"
+               & "SA_NOCLDWAIT` clear.",
             when Catalogue.Entry_Point_Missing =>
                "`--emit=exe` needs an entry: a hosted `main` of the one "
                & "shape [1970] in the entry module, or the firmware routin"
@@ -1922,6 +1963,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Root_Holds_Library_Module =>
                "",
             when Catalogue.Empty_Module_Hides_Root =>
+               "",
+            when Catalogue.Import_Of_Named_Entry =>
                "",
             when Catalogue.Not_Formatted =>
                "",

@@ -2416,8 +2416,9 @@ and establishes neither device completion nor cache coherence. D227's
 external-writer obligations remain.
 
 The text is at most 4096 decoded ASCII bytes, or 32768 in a naked Xtensa
-body (D903), using LF, horizontal tabs and printable characters. A line may
-end in the selected target's own line
+body (D903), using LF, horizontal tabs and printable characters. Every
+rule below reads a line without the blanks and tabs around it (D1054). A
+line may end in the selected target's own line
 comment, from its marker to the end of the line: `@` on Cortex-M0, `//` on
 arm64 and `#` on x86-64, RV64, RV32 and Xtensa, the spelling that target's GNU or Apple
 assembler reads (D597). In an ordinary and a naked block alike the comment
@@ -2427,7 +2428,7 @@ does not hold it. Every other comment form is refused, naming the target's
 own: `/*`, another target's marker, and on Cortex-M0 and arm64 a line that
 begins with `#`. A number is the assembler's syntax and takes no digit
 separator; the refusal names the number to write. Directives, statement
-separators and labels
+separators, labels and symbol assignments
 are refused in an ordinary block, which is straight-line: it cannot branch,
 call, return or change control mode, except that Cortex-M0 `svc` enters the
 SVC exception handler at vector 11. That handler decides whether execution
@@ -16304,7 +16305,10 @@ holds no source while a later root's holds the module. Discovery visits the entr
 source order and newly selected modules FIFO. A selected directory is loaded
 once, so cycles are legal. Symlink identity and root defaults are outside this
 guarantee. The explicit-file request remains a compatibility mode forming one
-synthetic module when no roots are supplied.
+synthetic module when no roots are supplied. Named files are a module apart
+from the directory they lie in: an import that selects that directory is
+refused (D1055), and a module the compiler adds itself is not added when
+its directory is the entry module's (D1056).
 
 If a root or intermediate directory cannot be listed, the import reports that
 failure before considering later roots. An absent directory or missing exact
@@ -16969,6 +16973,44 @@ refusal, the next root's module beyond an empty second directory, and the
 empty module that stays legal with no rival, with an empty one, and when
 the first directory has a source.
 
+### D1055 — An import of a named entry's directory is refused
+
+**From** [1410], [1420], D150 and D383.
+
+**The tour said** that a module is one directory [1410]. D383 lets a
+rooted request name the entry module by its source files instead, "one
+module, as without a root", and D150 loads a selected directory once, so a
+cycle through the entry is legal. The loader knew the entry's directory
+only when the request named it. Named by its files, the entry was no
+module of the graph by any directory, so when a module it imported
+imported it back, the directory was selected as a new module and the same
+files were read and compiled a second time: two copies of every module
+binding and routine, the entry's `main` using one and the importer the
+other. `refine run --root src src/app` exited 2 and
+`refine run --root src src/app/main.ldn` exited 0 for one program, each
+with nothing reported.
+
+**Chosen:** named files stay one module apart from their directory, as
+D383 says, and an import that selects a directory holding a named entry
+source is refused as L0616, at the import, naming the directory, the
+source and the request that would load it once: the directory as the
+entry, under `--root`. The directory is compared by spelling and by host
+identity. A named entry that nothing imports back is unchanged, with or
+without a root.
+
+**The alternatives:** treating the named files' directory as the entry
+module, so the import resolves to it, which is right only when the files
+named are all of the directory's sources and would otherwise make an
+import of `app` mean a module holding part of `app`, against [1410]; doing
+that when they are all of them and refusing otherwise, which gives one
+request two outcomes by what else lies in the directory; and leaving the
+second copy with a warning, which still builds a program that differs
+from the same sources named by their directory.
+
+**Pinned by** `negative/import-of-named-entry`, and the driver case `an
+import of a named entry is refused`, which also holds the directory form
+of the same program and a named entry nothing imports back.
+
 ### D732 — A module the compiler adds is spelt as an import of it would be
 
 **The tour said** nothing of how a source is named. The compiler adds two
@@ -16998,6 +17040,34 @@ firmware program imports nothing and whose root names the library by an
 alias, and the fixture execution case that holds the debugger workloads to
 their recorded source closures, which reads every source relative to the
 root.
+
+### D1056 — A module the compiler adds is not added when the program already holds its directory
+
+**From** D150, D363, D543 and D732.
+
+**The tour said** nothing. The loader adds the hosted entry's platform
+module, and on a firmware target the reference description, when no
+module of the program has that logical path. The entry module has no
+logical path, so when the entry was that directory, as it is for whoever
+checks the library's `platform/linux` on its own, the same directory was
+added again, which the module table refuses: `refine check --root .
+platform/linux` ended as an internal compiler defect. Named by its files,
+the module was read twice and its start symbol reported as colliding with
+itself.
+
+**Chosen:** before adding such a module the loader asks whether its
+directory is part of the program already, by spelling and host identity,
+as an import does: as the entry module, as the directory of a named entry
+source, or under another import name. When it is, nothing is added and
+the graph notes the logical path as supplied, which is what a static
+link's check for its start module reads.
+
+**The alternatives:** refusing the request, which would keep the
+library's own modules from being checked alone with the default link; and
+giving the entry module the logical path, which would make one directory
+both the unnamed entry and an importable module.
+
+**Pinned by** the driver case `the implicit module may be the entry`.
 
 ### D772 — A thread's instance's address is not kept in a module binding every thread reads
 
@@ -18295,6 +18365,60 @@ instruction, called through the C import of its symbol on every hosted
 target, and `negative/assembly-hosted-straight-line`, an ordinary block's
 label refused naming the naked body that may have one.
 
+### D1054 — A tab around a line of assembly text is margin, as a blank is
+
+**From** [1630], [1990], D248, D597 and D598.
+
+**The tour said** at [1630] that a block's text is the platform
+assembler's, and [1990] admits LF, horizontal tabs and printable characters
+and then states the rules of a line: no directive, no label in an ordinary
+block, no control transfer. The admission read each line after removing the
+blanks around it and no tab. A line that began with a tab therefore began,
+to every rule, with the tab: it was no directive because its first
+character was not `.`, its mnemonic was the empty text before the tab, and
+its label was looked for at the tab. `"\t.incbin \"/any/file\""` was
+accepted and assembled, copying a file of the build host into the program;
+`"\tjmp there"` and `"\tthere: nop"` left an ordinary block. Cortex-M's
+admission held the same test in a copy of its own, protected at the
+default `armv6-m` level only because its instruction allowlist refused the
+empty mnemonic.
+
+**Chosen:** the blanks and tabs around a line are margin, on every target
+and at every level, and every rule of a line reads the line without them:
+the directive, comment-form, separator and digit-separator refusals, the
+label, the mnemonic and Cortex-M's operand rules. A tab inside the line
+separates a mnemonic from its operands as a blank does. One function
+removes the margin and one makes the refusals every target makes before it
+reads a label or a mnemonic, and the hosted rules and Cortex-M's both call
+them, so the two cannot differ again. The text an accepted block emits is
+unchanged.
+
+Two more spellings met the same rules from the side, and are refused with
+them. GNU as reads `name :` as the label `name:`, so a label's colon is
+looked for past the blanks and tabs after the line's first word; an
+operand's colon, `%fs:0` or `:lo12:`, comes after more than blanks. And
+`name = value` defines a symbol as a label does, one that could stand for
+a symbol the program imports, so an ordinary block refuses it as "ordinary
+assembly is straight-line and defines no symbol"; a naked body, which may
+define labels (D598), may assign one. No instruction of a supported target
+has `=` in or straight after its mnemonic.
+
+**The alternatives:** refusing a tab in block text, which [1990] admits
+and which assembly sources indent with, so a port would have to rewrite
+its indentation; and keeping two tests with the tab added to each, which
+is the copy that let the firmware rule fall behind the hosted one's
+history once already.
+
+**Pinned by** `negative/assembly-tab-led-line`, a tab-led file directive,
+branch, label and symbol directive, a label with a tab before its colon
+and a symbol assignment on x86-64,
+`negative/assembly-tab-led-line-cortex`, the same at `--level=armv7-m`
+where no allowlist stands behind the rule, and the targets case `a tab is a
+margin of assembly text`, which holds the refusals on every architecture
+and at every Cortex-M level, and that a tab between a mnemonic and its
+operand, a segment or relocation colon and Arm's `=value` operand are
+still accepted.
+
 ### D630 — Float assembly operands are a second class, `float`
 
 **From** [1560], [1630], [1990], D248, D256, D265, D615, D616 and D617.
@@ -18616,6 +18740,158 @@ Unsupported operations refuse rather than use unchecked replacement.
 `compiler/tests/test_tool_cancellation.py`,
 `compiler/tests/test_formatter_write_safety.py`, the `bindings` and `devices`
 publication cases, and the driver and command input-preservation cases.
+
+### D1057 — What a tool said is shown a line each under the report of its failure
+
+**From** [1550] and D907.
+
+**The tour said** nothing. L0501 carried an assembler's or linker's
+captured output inside its message, after a line feed, and a message is
+one line: every control byte in one is shown as `\xNN`, so that a file
+name cannot forge a line of a report. A link with a screen of undefined
+references was therefore a single line with `\x0A` between its parts.
+
+**Chosen:** a diagnostic may carry a transcript beside its message: the
+lines a tool wrote, in order, without the empty lines at their end. The
+message is the one line that says which tool and how it ended. The text
+and the short presentation print each transcript line under it behind the
+margin `  | `, each escaped on its own, so no line of a tool's output can
+pass for a line of the report; the JSON presentation carries the lines as
+the array `tool_output`, a member present only when there is a transcript.
+
+**The alternatives:** leaving line feeds unescaped in every message,
+which gives a file name with a line feed in it a line of its own; and
+notes, one for each line, which would call a linker's words the
+compiler's advice and number them among a code's notes.
+
+**Pinned by** the driver case `tool output keeps its lines`, in all three
+presentations, with a forged report line and an escape sequence in the
+tool's output.
+
+### D1058 — A depfile names the file the build wrote, and holds no path Make cannot read back
+
+**From** D907.
+
+**The tour said** nothing. `--depfile` writes one Make rule. Its target was
+computed apart from the artifact's own name, so `--emit=ir` wrote `a.ir`
+and a rule for `a.s`. Its paths were written with `$` doubled and a
+backslash before a blank, a tab, `#`, `:` and `\`, which left `;`, `|` and
+the wildcards as Make reads them, and doubled a backslash Make does not
+unescape: a source named `main.ldn;echo>PWNED;.ldn`, which a module
+directory may hold since every `.ldn` in it is a source, gave the next
+`make` a recipe to run.
+
+**Chosen:** the rule's target is the artifact's name, whatever `--emit`
+chose. A path the depfile would hold is refused, as misuse and before
+anything is written, when it holds a byte Make gives no spelling that
+every GNU make reads back as that name: `;`, `|`, `=`, `&`, `%`, `*`, `?`,
+`[`, a backslash, and a leading `~`; and in the target also `#` and `:`.
+The refusal names the byte and the path, and says to rename it or build
+without `--depfile`. `$`, a blank, a tab, and in a prerequisite `#` and
+`:`, are written in Make's spelling as before. The set was measured
+against GNU make 4.4.1 by writing each printable byte into a
+prerequisite and a target and reading the rule back from `make -p`.
+
+**The alternatives:** escaping more, which Make has no syntax for: there
+is no quoted prerequisite, and a backslash before an ordinary character
+stays in the name; and writing such a name anyway, as GCC's `-MMD` does
+for `;`, which leaves the injection.
+
+**Pinned by** the driver case `a depfile names what Make can read`.
+
+### D1059 — A tool's text inputs are each scanned once, and a build names a bounded number
+
+**From** D907.
+
+**The tour said** nothing. Before a tool runs, the driver follows the
+absolute `.include`, `INCLUDE`, `INPUT` and `GROUP` references of an
+assembly operand, a linker script and a text library, to protect what
+they name. A file reached twice was read and scanned twice, bounded only
+by a nesting depth of sixteen, so fifteen files that each named the next
+six times were 6 ** 14 reads, which a source tree could arrange with
+`linker.library` and a text file standing for the library.
+
+**Chosen:** an input is scanned once in a build, remembered by the path
+it was named by and by its host identity; an assembly input and a linker
+input are remembered apart, since they are read by different rules. One
+build scans at most 4,096 inputs and 64 MiB of text, and is refused as
+L0003 past either. The nesting bound stays.
+
+**The alternatives:** the nesting bound alone, which bounds a chain and
+not a fan; and a bound on time, which no other part of the compiler has.
+
+**Pinned by** the driver case `assembly directives cannot hide`, whose
+fifteen-level fan succeeds as an assembly operand and as a library, and
+whose 4,100 inputs are refused.
+
+### D1060 — An assembly input's file directives are found wherever the word stands
+
+**From** D597 and D907.
+
+**The tour said** nothing. The scan for `.include` and `.incbin` in an
+assembly operand, and in the assembly the compiler emits, was a tokenizer
+of its own: it took `#`, `@` and `//` for comments on every target, read a
+string to the next quote and a `'` as opening one, split tokens at blanks
+and a few marks, and skipped a file holding a NUL as an object. D597
+records that no character is a comment on every target, and each of those
+choices hid a directive: behind a label, `x:.incbin "f"`; after x86-64's
+`@function` or arm64's `#1`; after `.ascii "\""` or `.byte 'a`; in a file
+with a NUL in a comment; and in a macro whose argument is the directive's
+name. A hidden absolute directive named an input that was not protected,
+so an output of that name replaced it.
+
+**Chosen:** the scan decides nothing an assembler might read otherwise.
+It skips only what every assembler the targets link with skips: a `/* */`
+comment, a double-quoted string with its backslash escapes, which the
+scan ends at the end of its line at the latest, and the character after a
+`'`. Everywhere else the word `.include` or `.incbin`, in either case and
+not continuing a symbol, is the directive: behind a label or a separator,
+and also behind what one target reads as a comment marker. It names its
+file plainly, a double-quoted absolute path without a backslash on the
+same line, or the input is refused as L0003. An input that uses `.macro`,
+`.irp`, `.irpc` or `.altmacro` is refused, since a macro can form the word
+from its arguments where no scan finds it. An assembly input is text
+whatever bytes it holds. The assembly the compiler emits holds no file
+directive at all, and one found there is refused: no backend writes one
+and [1990] keeps directives out of block text. A linker script keeps its
+own tokens, where `#` and `/* */` are comments to the linker as they are
+to the scan.
+
+This refuses inputs that were accepted: an assembly operand that defines
+a macro, and one that mentions a file directive in a line comment.
+
+**The alternatives:** following each target's assembler exactly, which
+is the lexer of GNU as for five architectures and of LLVM's assembler for
+two more, held to them by nothing; documenting that only a plain
+directive at the start of a line is seen, which leaves the protection the
+scan exists for to the goodwill of the input; and expanding macros, which
+is the assembler.
+
+**Pinned by** the driver case `assembly directives cannot hide`, each
+hiding place refused before any tool runs, a hidden absolute directive's
+file protected from the output, and a string holding the word accepted,
+and `tool file directives protect their inputs`, the plain forms.
+
+### D1061 — A standard output that cannot be written is the host's failure
+
+**The tour said** nothing. `refine version > /dev/full`, or any command
+whose standard output was closed or full, ended as "internal compiler
+defect" with status 70, the status kept for the compiler finding itself
+wrong: the write raised past every handler but the last.
+
+**Chosen:** a command's output is written and flushed where the failure
+can be told, and a failure is reported on standard error as "refine:
+cannot write to standard output" with status 71, the status of a host
+that failed the compiler, which the language server's channel already
+uses. What the command reported is still written to standard error, and
+a `refine run` whose output was lost does not start its program.
+
+**The alternatives:** ignoring the failure, as many tools do, which
+tells a script that reads `refine version --json` nothing when it reads
+an empty answer; and status 1, which is a program's refusal.
+
+**Pinned by** the fixture execution case `a lost standard output is the
+host's fault`, on the real executable.
 
 ### D359 — `refine fmt --check` names every line, and `--stdout` prints the layout
 

@@ -35,6 +35,10 @@ package Landin.Diagnostics.Text is
    --  UTF-8 text. Source snippets use their byte-oriented display instead.
    function Escaped (Text : String) return String;
 
+   --  What begins each line of a diagnostic's transcript, in the text and
+   --  the short presentation alike.
+   Transcript_Margin : constant String := "  | ";
+
    --  "error", "warning", "note".  Kept here rather than in the transport
    --  so that Severity'Image never leaks into output.
    function Image (Level : Severity) return String;

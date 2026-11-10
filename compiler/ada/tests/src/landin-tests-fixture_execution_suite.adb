@@ -1173,6 +1173,47 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  this reason: accepted, emitted, executed.
    ------------------------------------------------------------------
 
+   --  A full disk or a closed reader is the host's fault, and was said
+   --  to be the compiler's: the write raised past every handler but the
+   --  one that reports a defect.  Deliberately the real executable on the
+   --  real host, since only its entry point writes to standard output.
+   procedure A_Lost_Standard_Output_Is_The_Hosts_Fault
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Lost_Standard_Output_Is_The_Hosts_Fault
+     (Item : in out Landin.Testing.Context)
+   is
+      Host   : Landin.Platform.Native.Native_Filesystem;
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+
+      procedure Check_One (Command, Redirection : String);
+
+      procedure Check_One (Command, Redirection : String) is
+         Ran : Landin.Platform.Tool_Result;
+      begin
+         Runner.Run
+           ("/bin/sh",
+            ["-c", "exec ""$0"" " & Command & " " & Redirection, Refine_Path],
+            Ran, Landin.Platform.Merged);
+         Landin.Testing.Check
+           (Item, Ran.Ended = Landin.Platform.Exited
+              and then Ran.Exit_Code = 71
+              and then Unbounded.To_String (Ran.Output)
+                = "refine: cannot write to standard output" & ASCII.LF,
+            "refine " & Command & " " & Redirection & " exits"
+            & Integer'Image (Ran.Exit_Code) & " saying: "
+            & Unbounded.To_String (Ran.Output));
+      end Check_One;
+   begin
+      Check_One ("version", ">&-");
+      Check_One ("help reference", ">&-");
+      Check_One ("explain L0003", ">&-");
+      if Host.Exists ("/dev/full") then
+         Check_One ("version", ">/dev/full");
+         Check_One ("targets --json", ">/dev/full");
+      end if;
+   end A_Lost_Standard_Output_Is_The_Hosts_Fault;
+
    procedure Hosted_Library_Links_And_Runs
      (Item : in out Landin.Testing.Context);
 
@@ -4462,6 +4503,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "recorded expectations hold",
          Recorded_Expectations_Hold'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "a lost standard output is the host's fault",
+         A_Lost_Standard_Output_Is_The_Hosts_Fault'Access);
       if Include_Target_Workloads then
          Landin.Testing.Register
            (Into, "fixture execution", "hosted library links and runs",
