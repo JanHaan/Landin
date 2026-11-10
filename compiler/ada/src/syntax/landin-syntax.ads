@@ -1181,8 +1181,9 @@ package Landin.Syntax is
    --  a later stage refusing what the parser accepted can say what the
    --  line end did.  Continued_At is the `(` of a call, the `[` of an
    --  index, or the operator of a binary expression, that begins its line
-   --  and so continues the line above [1750]; Else_Left_At is the `else` written after a call that
-   --  divided an enclosing `if` instead of recovering the call [1820].
+   --  and so continues the line above [1750]; Else_Left_At is the `else`
+   --  written after a call that divided an enclosing `if` instead of
+   --  recovering the call [1820].
    --  Each is Empty_Span when the node has none, which is nearly always.
    function Continued_At (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Span
@@ -1809,8 +1810,8 @@ private
    type Line_Fact_Kind is (Continues_Line, Leaves_Else);
 
    --  Sparse, beside the nodes: a parser records one only where a line
-   --  end met a call's `(`, an index's `[` or an operator, or where a call left its
-   --  `else` to an enclosing `if`.
+   --  end met a call's `(`, an index's `[` or an operator, or where a
+   --  call left its `else` to an enclosing `if`.
    type Line_Fact is record
       Node  : Node_Id := No_Node;
       Kind  : Line_Fact_Kind := Continues_Line;
