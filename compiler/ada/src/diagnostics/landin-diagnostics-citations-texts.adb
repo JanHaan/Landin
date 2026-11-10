@@ -10277,10 +10277,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "32, ptr ptr u8, ptr ptr u8) -> i32` is admitted as C's v"
                & "iew of the same symbol; it is how `platform/linux`'s pro"
                & "cess entry calls `main` under a static Linux link, which"
-               & " passes the returned code to `exit_group` (D279). A `pub"
-               & "lic main` in the entry module that is not this shape is "
-               & "refused when the program is checked or emitted as assemb"
-               & "ly, as when it is linked (D443).",
+               & " passes the returned code to `exit_group` (D279). The en"
+               & "try may spell the link name it has, `link(symbol: ""main"""
+               & ")`; the prefix changes nothing, and any other symbol on "
+               & "it leaves the program without an entry, L0502 (D1113). A"
+               & " `public main` in the entry module that is not this shap"
+               & "e is refused when the program is checked or emitted as a"
+               & "ssembly, as when it is linked (D443).",
             when 1975 =>
                "`extern(c)` selects a function convention, not an import"
                & " or a visibility. Without a body the declaration imports"
@@ -17093,6 +17096,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e backend replays D74's target-dependent payload placeme"
                & "nt and the payload element width for both module and fra"
                & "me storage; no offset or width enters the IR.",
+            when 1112 =>
+               "Chosen: a match reached from outside its arms, along the"
+               & " straight line or along a back edge, begins new bindings"
+               & ": what its arms read is theirs, and the binding of an ea"
+               & "rlier iteration ended with its arm, as a local's does wh"
+               & "en its declaration is reached again. Nothing else change"
+               & "s. A replacement inside the arm, before a later read of "
+               & "the binding there, stays L0315, in statement and in expr"
+               & "ession position; and so does a replacement anywhere whil"
+               & "e a view of the payload that an outer name carries, a po"
+               & "inter taken with `addr` in the arm for one, is read afte"
+               & "rwards, in this iteration or the next.",
             when 86 =>
                "Chosen: a top-level field of an ordinary struct may name"
                & " a laid-out child ordinary struct whose own fields are s"
@@ -25262,6 +25277,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "of one symbol differ in nothing but `escaping`, L0347 sa"
                & "ys so, names the parameter and says to repeat it on both"
                & ".",
+            when 1113 =>
+               "Chosen: on a hosted target the selected entry's `link(sy"
+               & "mbol: ""main"")` is redundant and is not recorded as a lin"
+               & "k symbol: the entry is lowered, named and called exactly"
+               & " as it is without the prefix. A second definition or an "
+               & "incompatible import of `main` is still refused against t"
+               & "he selected entry, and another symbol on `main` still le"
+               & "aves the program without an entry, L0502. Firmware keeps"
+               & " the prefix's meaning.",
             when 443 =>
                "Chosen: a `public main` in a hosted program's entry modu"
                & "le that is not [1970]'s entry, a result named other than"

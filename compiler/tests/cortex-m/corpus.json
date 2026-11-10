@@ -3318,6 +3318,9 @@
     "runtime/module-scalar-zeroed-reads-zero": {
       "mode": "execute"
     },
+    "runtime/module-struct-array-before-slice": {
+      "mode": "execute"
+    },
     "runtime/module-struct-initializers-copy-images": {
       "mode": "execute"
     },
@@ -5113,6 +5116,9 @@
       "counterpart": "variant-part-measurements-answer-for-the-target",
       "mode": "execute",
       "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/variant-replaced-beside-a-loop-match": {
+      "mode": "execute"
     },
     "runtime/variant-returns-cross-calls": {
       "mode": "execute"

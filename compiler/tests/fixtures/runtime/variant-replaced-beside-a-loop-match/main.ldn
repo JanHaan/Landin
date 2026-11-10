@@ -1,0 +1,97 @@
+--  D1112, [1220]: a payload binding exists only in its arm (D85), so a
+--  loop body may replace the variant, select a case of it or pass it
+--  `inout` before or after the match that reads its payload: the next
+--  iteration's match binds the name afresh.  Each routine is the ordinary
+--  step of a state machine, "update the tagged value, then match on it
+--  and use what the case holds".
+state: type = struct
+    turns: u8
+    kind: variant
+        idle |
+        counting: (reached: u16)
+    end kind
+end state
+
+advance: (inout machine: state) -> none =
+    machine.turns += 1
+    machine.kind = counting(reached: u16(machine.turns))
+end advance
+
+--  The case is selected before the match.
+select_before: () -> (total: u16) =
+    mut machine: state = (turns: 0, kind: idle)
+    total = 0
+    mut turn: u16 = 0
+    while turn < 3 do
+        machine.kind = counting(reached: turn + 4)
+        match machine.kind
+            idle: total += 100
+            counting(reached): total += reached
+        end match
+        turn += 1
+    end while
+end select_before
+
+--  The whole object is replaced after the match.
+replace_after: () -> (total: u16) =
+    mut machine: state = (turns: 0, kind: counting(reached: 7))
+    rest: state = (turns: 1, kind: idle)
+    total = 0
+    mut turn: u16 = 0
+    while turn < 3 do
+        match machine.kind
+            idle: total += 100
+            counting(reached): total += reached
+        end match
+        machine = rest
+        turn += 1
+    end while
+end replace_after
+
+--  The object is passed `inout` before the match.
+call_before: () -> (total: u16) =
+    mut machine: state = (turns: 0, kind: idle)
+    total = 0
+    mut turn: u16 = 0
+    while turn < 3 do
+        advance(machine)
+        match machine.kind
+            idle: total += 100
+            counting(reached): total += reached
+        end match
+        turn += 1
+    end while
+end call_before
+
+--  A `for` loop, and a match in expression position.
+for_value: () -> (total: u16) =
+    mut machine: state = (turns: 0, kind: idle)
+    total = 0
+    for turn in 0..<3 do
+        machine.kind = counting(reached: u16(turn) + 10)
+        total += match machine.kind
+            idle: 100
+            counting(reached): reached
+        end match
+    end for
+end for_value
+
+public main: () -> (code: i32) =
+    code = 0
+    --  4 + 5 + 6.
+    if select_before() <> 15 then
+        code = 1
+    end if
+    --  7, then idle twice.
+    if replace_after() <> 207 then
+        code = 2
+    end if
+    --  1 + 2 + 3.
+    if call_before() <> 6 then
+        code = 3
+    end if
+    --  10 + 11 + 12.
+    if for_value() <> 33 then
+        code = 4
+    end if
+end main

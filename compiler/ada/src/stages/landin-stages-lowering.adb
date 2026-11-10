@@ -19405,7 +19405,16 @@ package body Landin.Stages.Lowering is
                if Given /= Syn.No_Node
                  and then Type_At (Of_Tree, Given) = Ty.Slice_Value
                then
-                  Put (Position, Static_Slice_Image (Of_Tree, Given));
+                  --  A slice's image takes no element, and like every
+                  --  other field's stands at the run's present end: zero
+                  --  only while no array field has come before it.
+                  declare
+                     Image : IR.Aggregate_Field_Image :=
+                       Static_Slice_Image (Of_Tree, Given);
+                  begin
+                     Image.Offset := Element_Cursor;
+                     Put (Position, Image);
+                  end;
                   return;
                end if;
                case Shape.Kind is

@@ -1839,6 +1839,9 @@ Beside the selected entry, a bodyless `extern(c) link(symbol: "main")` of
 `(i32, ptr ptr u8, ptr ptr u8) -> i32` is admitted as C's view of the same
 symbol; it is how `platform/linux`'s process entry calls `main` under a static
 Linux link, which passes the returned code to `exit_group` (D279).
+The entry may spell the link name it has, `link(symbol: "main")`; the prefix
+changes nothing, and any other symbol on it leaves the program without an
+entry, L0502 (D1113).
 A `public main` in the entry module that is not this shape is refused when
 the program is checked or emitted as assembly, as when it is linked (D443).
 
@@ -10595,6 +10598,40 @@ only scalar value an expression needs.
 `negative/variant-match-array-binding-index-out-of-range`; the generated token
 and IR records; and
 `runtime/variant-match-array-payload-bindings-update-storage` on Linux x86-64.
+
+### D1112 — A match reached again binds its payload names afresh
+
+**The tour said** [1220] that an arm may replace the variant, or an object
+containing it, only after the aliases' last use, and D85 that a binding
+exists only in the arm for the selected case. The check that asks whether a
+binding is still in use followed a loop's back edge into the match that
+binds it and counted that arm's reads as uses of the binding being asked
+about. So inside a loop, any statement of the body that replaced the
+variant, selected a case of it or passed it `inout` was refused with L0315,
+whether it stood before the match or after it, although the arm had ended
+and its binding no longer existed. "Update the tagged value, then match on
+it and use what the case holds" could not be written in one loop.
+
+**Chosen:** a match reached from outside its arms, along the straight line
+or along a back edge, begins new bindings: what its arms read is theirs,
+and the binding of an earlier iteration ended with its arm, as a local's
+does when its declaration is reached again. Nothing else changes. A
+replacement inside the arm, before a later read of the binding there,
+stays L0315, in statement and in expression position; and so does a
+replacement anywhere while a view of the payload that an outer name
+carries, a pointer taken with `addr` in the arm for one, is read
+afterwards, in this iteration or the next.
+
+**The alternative:** leaving it, and having a program move the match into
+a routine the loop calls, which the same check accepted; that is a
+workaround for a refusal whose message names a binding that is out of
+scope. Dropping a binding's record when its arm ends was also considered:
+the views other names took from it must stay tracked past the arm, and
+they are found through that record.
+
+**Pinned by** `runtime/variant-replaced-beside-a-loop-match`, the four
+shapes run; and `negative/payload-alias-outlives-a-loop-match`, the three
+that stay refused.
 
 ### D86 — A named ordinary struct field has a measured layout
 
@@ -20713,6 +20750,34 @@ hole above; and letting an import add `escaping` but never drop it, which is
 sound but no help to the import that left it out. Both were declined.
 
 **Pinned by** `negative/c-symbol-differs-only-in-escaping`.
+
+### D1113 — `link(symbol: "main")` on the hosted entry is the linkage it has
+
+**The tour said** nothing; [1970] selects the entry module's public
+`main: () -> (code: i32)`, and the checker and the backends already took an
+entry that "retains main linkage", with no link name or with `main`, as
+that entry. The spelled form was accepted by checking and then ended the
+lowering stage with an internal defect on the Linux targets, exit status
+70 and no source position: the name was recorded as a link symbol of the
+entry, where it met `platform/linux`'s bodyless C view of `main` ([1970],
+D279) as a second declaration of one symbol with another signature, which
+the IR's verifier refuses. Firmware programs write the prefix, since that
+is how a firmware routine gets the symbol, so a program moved to a hosted
+target met it.
+
+**Chosen:** on a hosted target the selected entry's `link(symbol: "main")`
+is redundant and is not recorded as a link symbol: the entry is lowered,
+named and called exactly as it is without the prefix. A second definition
+or an incompatible import of `main` is still refused against the selected
+entry, and another symbol on `main` still leaves the program without an
+entry, L0502. Firmware keeps the prefix's meaning.
+
+**The alternative:** refusing a link name on the hosted entry with a
+located diagnostic. That turns away a spelling that says only what is
+already true, and one the entry's own selection rule was written to admit.
+
+**Pinned by** `positive/hosted-main-names-its-own-link-symbol`, checked and
+lowered for every hosted target.
 
 ### D443 — A check and an assembly refuse what the link would refuse first
 

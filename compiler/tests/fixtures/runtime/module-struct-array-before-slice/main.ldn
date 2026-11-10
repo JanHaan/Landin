@@ -1,0 +1,65 @@
+--  A module struct value whose fixed-array field stands before a slice
+--  field: the slice's static image takes no element of the datum's image
+--  run and stands where the run has got to, after the array's elements.
+--  It was laid at the run's start, which only a slice before every array
+--  agrees with, and the verifier refused the datum.  The shapes below are
+--  the plain one, a wider array with a scalar in front, a nested struct,
+--  and a table of records that each hold a small array and a name.
+holder: type = struct
+    wide: [2]u8
+    name: []u8
+end holder
+
+padded: type = struct
+    lead: u8
+    wide: [2]u64
+    name: []u8
+    tail: [3]u16
+    again: []u8
+end padded
+
+outer: type = struct
+    first: [2]u8
+    inner: holder
+    last: []u8
+end outer
+
+plain: holder = (wide: [1, 2], name: "hi")
+mut wider: padded = (lead: 9, wide: [300, 70000], name: "name",
+                     tail: [4, 5, 6], again: "again")
+nested: outer = (first: [7, 8], inner: (wide: [3, 4], name: "in"),
+                 last: "out")
+table: [3]holder = [(wide: [1, 1], name: "a"),
+                    (wide: [2, 3], name: "bc"),
+                    (wide: [5, 8], name: "def")]
+
+public main: () -> (code: i32) =
+    code = 0
+    if plain.wide[0] <> 1 or plain.wide[1] <> 2 or lenof plain.name <> 2
+      or plain.name[1] <> 105 then
+        code = 1
+    end if
+    if wider.lead <> 9 or wider.wide[1] <> 70000 or lenof wider.name <> 4
+      or wider.name[0] <> 110 or wider.tail[2] <> 6
+      or lenof wider.again <> 5 or wider.again[4] <> 110 then
+        code = 2
+    end if
+    wider.wide[0] = 301
+    if wider.wide[0] <> 301 or wider.name[3] <> 101 then
+        code = 3
+    end if
+    if nested.first[1] <> 8 or nested.inner.wide[1] <> 4
+      or lenof nested.inner.name <> 2 or nested.inner.name[0] <> 105
+      or lenof nested.last <> 3 or nested.last[2] <> 116 then
+        code = 4
+    end if
+    mut total: usize = 0
+    for entry in table do
+        total += usize(entry.wide[0]) + usize(entry.wide[1])
+                 + lenof entry.name
+    end for
+    --  2 + 5 + 13 for the arrays and 1 + 2 + 3 for the names.
+    if total <> 26 or table[2].name[2] <> 102 then
+        code = 5
+    end if
+end main

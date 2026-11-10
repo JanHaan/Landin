@@ -1622,6 +1622,8 @@ package body Landin.Diagnostics.Citations is
             when 85 =>
                "A match-arm name aliases a fixed-array payload by elemen"
                & "t",
+            when 1112 =>
+               "A match reached again binds its payload names afresh",
             when 86 =>
                "A named ordinary struct field has a measured layout",
             when 87 =>
@@ -2171,6 +2173,9 @@ package body Landin.Diagnostics.Citations is
                & "records, and types their pointers",
             when 441 =>
                "`escaping` stays part of C-symbol compatibility",
+            when 1113 =>
+               "`link(symbol: ""main"")` on the hosted entry is the linkag"
+               & "e it has",
             when 443 =>
                "A check and an assembly refuse what the link would refus"
                & "e first",
@@ -3435,6 +3440,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Structs, variants and nesting",
             when 85 =>
                "Decisions: Structs, variants and nesting",
+            when 1112 =>
+               "Decisions: Structs, variants and nesting",
             when 86 =>
                "Decisions: Structs, variants and nesting",
             when 87 =>
@@ -3870,6 +3877,8 @@ package body Landin.Diagnostics.Citations is
             when 426 =>
                "Decisions: The toolchain, C and the machine",
             when 441 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1113 =>
                "Decisions: The toolchain, C and the machine",
             when 443 =>
                "Decisions: The toolchain, C and the machine",
@@ -5045,6 +5054,9 @@ package body Landin.Diagnostics.Citations is
             when 85 =>
                "https://www.701.dev/spec.html#d85-a-match-arm-name-alias"
                & "es-a-fixed-array-payload-by-element",
+            when 1112 =>
+               "https://www.701.dev/spec.html#d1112-a-match-reached-agai"
+               & "n-binds-its-payload-names-afresh",
             when 86 =>
                "https://www.701.dev/spec.html#d86-a-named-ordinary-struc"
                & "t-field-has-a-measured-layout",
@@ -5710,6 +5722,9 @@ package body Landin.Diagnostics.Citations is
             when 441 =>
                "https://www.701.dev/spec.html#d441-escaping-stays-part-o"
                & "f-c-symbol-compatibility",
+            when 1113 =>
+               "https://www.701.dev/spec.html#d1113-link-symbol-main-on-"
+               & "the-hosted-entry-is-the-linkage-it-has",
             when 443 =>
                "https://www.701.dev/spec.html#d443-a-check-and-an-assemb"
                & "ly-refuse-what-the-link-would-refuse-first",

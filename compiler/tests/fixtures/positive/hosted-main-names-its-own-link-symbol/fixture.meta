@@ -1,0 +1,5 @@
+class: positive
+summary: D1113 the hosted entry may spell the link name it already has, link(symbol: "main"), and is lowered as the entry beside the library's C view of that symbol
+program: program.ldn
+constructs: 1610, 1970
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

@@ -1,0 +1,30 @@
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/payload-alias-outlives-a-loop-match/main.ldn:21:9
+   |
+21 |         value.kind = empty
+   |         ^^^^^^^^^^
+  --> ../tests/fixtures/negative/payload-alias-outlives-a-loop-match/main.ldn:18:5
+   |
+18 |     mut saved: ptr mut i32 = addr spare
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/payload-alias-outlives-a-loop-match/main.ldn:38:23
+   |
+38 |                 clear(value)
+   |                       ^^^^^
+  --> ../tests/fixtures/negative/payload-alias-outlives-a-loop-match/main.ldn:37:31
+   |
+37 |             pair(first, inout second): begin
+   |                               ^^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/payload-alias-outlives-a-loop-match/main.ldn:55:17
+   |
+55 |                 value.kind = empty
+   |                 ^^^^^^^^^^
+  --> ../tests/fixtures/negative/payload-alias-outlives-a-loop-match/main.ldn:54:18
+   |
+54 |             pair(first, second): begin
+   |                  ^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage

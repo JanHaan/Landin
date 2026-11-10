@@ -2104,6 +2104,18 @@ package body Landin.Stages.Checking.References is
                  /= Res.Pattern_Binding
                and then Root_Declaration (Of_Tree, Place) = Borrower);
 
+         --  D85: a payload binding exists only in its arm, so a match
+         --  reached from outside it, along the straight line or a loop's
+         --  back edge, binds the name afresh: what its arm reads is the
+         --  new binding, and the one asked about ended with its arm.
+         function Binds_Borrower (Match : Syn.Node_Id) return Boolean
+           is (Pattern_Block (Borrower) /= Syn.No_Node
+               and then
+                 (for some Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Match)
+                  => Syn.Body_Of
+                       (Of_Tree, Syn.Nth_Match_Arm (Of_Tree, Match, Arm))
+                     = Pattern_Block (Borrower)));
+
          procedure Absorb (Into_Summary : in out Summary; Arm : Summary);
 
          procedure Absorb (Into_Summary : in out Summary; Arm : Summary) is
@@ -2123,6 +2135,12 @@ package body Landin.Stages.Checking.References is
          begin
             if Node = Syn.No_Node
               or else Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function
+              or else (Syn.Kind (Of_Tree, Node) = Syn.Match_Statement
+                       and then Binds_Borrower (Node)
+                       --  Not the match the question is asked inside.
+                       and then (From = 0
+                                 or else Syn.Where (Of_Tree, Node).First
+                                           >= From))
             then
                return False;
             end if;
@@ -2315,6 +2333,10 @@ package body Landin.Stages.Checking.References is
                   end if;
 
                when Syn.Match_Statement =>
+                  if Binds_Borrower (Node) then
+                     Result.Falls := False;
+                     return Result;
+                  end if;
                   if Reads_In (Syn.Match_Subject (Of_Tree, Node), Since) then
                      return Reading;
                   end if;

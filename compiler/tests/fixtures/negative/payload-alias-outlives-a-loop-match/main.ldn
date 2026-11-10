@@ -1,0 +1,62 @@
+--  D1112: a match reached again binds its payload names afresh, so the
+--  binding of one iteration is not in use in the next.  What still is in
+--  use stays refused: a view of the payload that an outer name carries
+--  into the next iteration, and the binding itself inside its own arm,
+--  in statement and in expression position.
+choice: type = struct
+    kind: variant
+        pair: (first: i32, second: i32) | empty
+    end kind
+end choice
+clear: (inout value: choice) -> none = value.kind = empty end clear
+
+--  The view taken in one iteration is written through in the next, after
+--  the replacement at the top of the body.
+holder_across: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    mut spare: i32 = 0
+    mut saved: ptr mut i32 = addr spare
+    mut turn: u8 = 0
+    while turn < 2 do
+        value.kind = empty
+        saved.val = 42
+        match value.kind
+            pair(first, inout second): saved = addr second
+            empty: _ = 0
+        end match
+        turn += 1
+    end while
+end holder_across
+
+--  Inside the arm the binding is still the one the replacement ends.
+inside_arm: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    mut turn: u8 = 0
+    while turn < 2 do
+        match value.kind
+            pair(first, inout second): begin
+                clear(value)
+                second = 42
+            end
+            empty: _ = 0
+        end match
+        turn += 1
+    end while
+end inside_arm
+
+--  A match in expression position binds for its arm's value alone.
+inside_value: () -> (total: i32) =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    mut turn: u8 = 0
+    total = 0
+    while turn < 2 do
+        total = match value.kind
+            pair(first, second): begin
+                value.kind = empty
+                first + second
+            end
+            empty: 0
+        end match
+        turn += 1
+    end while
+end inside_value
