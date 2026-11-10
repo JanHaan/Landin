@@ -1952,7 +1952,11 @@ How a round runs:
   fibres it started, in the order they were started.
 - `start` prepares and returns, and the fibre runs at its first turn.
 - The table holds one entry more than the fibres that may be unfinished
-  at once.
+  at once. It needs no initial value: the round reads only the entries it
+  has written, and a `start` it refuses writes none.
+- A fibre that ends hands its turn to the entry after it, so a fibre that
+  yields resumes only when every other unfinished one has run, whichever
+  of them ended meanwhile.
 - When every unfinished fibre has yielded since anything last started or
   ended, the round calls its `stacks.idler` before it goes on: a device
   waits for an interrupt there, and `stacks.spin` returns at once.

@@ -34797,6 +34797,38 @@ the fibre fixtures, `runtime/fibre-turns-interleave` and
 the Cortex-M corpus; and the `capacity` control of
 `environments/cortex-m/evidence.py` (D470).
 
+### D1124 — A fibre that ends in a round hands its turn to the entry after it
+
+**The tour said** nothing; `fibre.turns` promises that a fibre that yields
+lets every other unfinished fibre of the provider run before it resumes.
+D450's first frame switches to one record when a task ends, and
+`stacks.round` names entry 0, the stack the round was made on, which resumed
+inside its own `yield` and went on as if its turn had come. So every fibre
+that ended sent the lap back to entry 1: entries after the one that ended
+lost that turn, a fibre in a late entry was not run at all while short tasks
+kept ending before it, and `core/io/fake`'s network, which takes one `yield`
+for a whole round, reported `timed_out` to a receiver whose sender had not
+had its turn.
+
+**Chosen:** a fibre that yields names the entry it switches to before it
+switches; one that ends does not. Entry 0, resumed with another entry still
+named, knows a fibre ended there, and continues the search from that entry,
+switching to the next unfinished one after it and resuming itself only when
+the search comes round to it. The search stays written out in `round_yield`,
+as D571 requires. A start the round refuses counts no entry: the entry is
+written before the count grows, so the round reads only entries it wrote and
+the caller's table needs no initial value.
+
+**The alternatives:** having the first frame switch to the next entry
+itself, which puts the round's table and search into `prepare`'s frame and
+under every provider built on it; and a counter of the laps in the round's
+state that `yield` waits on, which costs every yield a comparison to repair
+an ending.
+
+**Pinned by** `runtime/fibre-turns-end-keeps-lap`, whose order is `abAc`
+without the rule and whose refused start is followed into a table that was
+never zeroed.
+
 ### D572 — A check decides whether a handler fits from the frames it would emit
 
 **The tour said** nothing. D474 refuses a selected panic handler that does

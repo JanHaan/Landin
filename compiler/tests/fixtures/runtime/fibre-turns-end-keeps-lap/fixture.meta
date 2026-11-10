@@ -1,0 +1,8 @@
+class: runtime
+profiles: specialization
+summary: D1124 a fibre that ends in a round hands its turn to the entry after it: of three tasks, the one that yields resumes only after both others have run though one of them ended in between, a long-lived fibre in a late entry gets a turn for each of the home stack's while short tasks keep ending in the entry before it, and a start the round refuses counts no entry, so a table that was never zeroed is not read as records
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
