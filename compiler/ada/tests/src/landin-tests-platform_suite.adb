@@ -582,6 +582,103 @@ package body Landin.Tests.Platform_Suite is
         (Item, Listed = Landin.Platform.Not_A_Directory,
          "a native file is not a directory");
 
+      --  Entries a listing has no interest in must not cost it the
+      --  directory: a link that loops, a link to nothing, and a file dated
+      --  outside Ada's calendar each made the whole directory unlistable
+      --  when the names were taken from Ada.Directories, which reads every
+      --  entry's status and time.  A link counts as what it leads to.
+      declare
+         use type Interfaces.C.int;
+         function Symlink
+           (Target, Link : Interfaces.C.char_array) return Interfaces.C.int
+           with Import, Convention => C, External_Name => "symlink";
+         type Times is array (1 .. 4) of Interfaces.C.long
+           with Convention => C;
+         function Set_Times
+           (Name : Interfaces.C.char_array; Value : Times)
+            return Interfaces.C.int
+           with Import, Convention => C, External_Name => "utimes";
+         Odd : constant String := Listing & "-odd";
+         --  The year 2500, in seconds.
+         Far : constant Interfaces.C.long := 16_725_225_600;
+         Removed : Landin.Platform.Remove_Status;
+      begin
+         Ada.Directories.Create_Path (Odd);
+         for Name of Landin.Platform.Path_List'
+           (["loop", "gone", "to-file", "future.txt", "plain.txt"])
+         loop
+            Host.Remove_File (Odd & "/" & Name, Removed);
+         end loop;
+         Host.Write_File (Odd & "/plain.txt", "p", Written);
+         Host.Write_File (Odd & "/future.txt", "f", Written);
+         Landin.Testing.Check
+           (Item,
+            Symlink (Interfaces.C.To_C ("loop"),
+                     Interfaces.C.To_C (Odd & "/loop")) = 0
+            and then Symlink (Interfaces.C.To_C ("nowhere"),
+                              Interfaces.C.To_C (Odd & "/gone")) = 0
+            and then Symlink (Interfaces.C.To_C ("plain.txt"),
+                              Interfaces.C.To_C (Odd & "/to-file")) = 0
+            and then Set_Times
+              (Interfaces.C.To_C (Odd & "/future.txt"), [Far, 0, Far, 0]) = 0,
+            "the odd entries are made");
+         Host.List_Directory (Odd, Entries, Listed);
+         Landin.Testing.Check
+           (Item, Listed = Landin.Platform.List_Ok,
+            "a looping link, a dangling link and a far-future file leave"
+            & " their directory listable");
+         Landin.Testing.Check
+           (Item, Natural (Entries.Length) = 3
+            and then Entries.Element (1) = "future.txt"
+            and then Entries.Element (2) = "plain.txt"
+            and then Entries.Element (3) = "to-file",
+            "the listing holds the files, a link to one among them, and"
+            & " neither broken link");
+         for Name of Landin.Platform.Path_List'
+           (["loop", "gone", "to-file", "future.txt", "plain.txt"])
+         loop
+            Host.Remove_File (Odd & "/" & Name, Removed);
+         end loop;
+      end;
+
+      --  A name holding a NUL names no file.  Given to the system it would
+      --  end at the NUL and name another: here the file just written.
+      declare
+         Cut : constant String := Path & Character'Val (0) & ".other";
+         Lease : Landin.Platform.Update_Handle;
+         Reason : Unbounded.Unbounded_String;
+         Removed : Landin.Platform.Remove_Status;
+      begin
+         Landin.Testing.Check
+           (Item, not Host.Exists (Cut) and then not Host.Is_Directory (Cut)
+            and then not Host.Is_Link (Cut),
+            "a name with a NUL in it does not exist");
+         Host.Read_File (Cut, Content, Read);
+         Landin.Testing.Check
+           (Item, Read = Landin.Platform.Not_Found,
+            "a name with a NUL in it reads as not found, not as its prefix");
+         Host.Read_For_Update (Cut, Content, Lease, Read, Reason);
+         Landin.Testing.Check
+           (Item, Read = Landin.Platform.Not_Found
+            and then Unbounded.Length (Reason) > 0,
+            "a name with a NUL in it is not leased for rewriting");
+         Host.Write_File (Cut, "clobbered", Written, Reason);
+         Landin.Testing.Check
+           (Item, Written = Landin.Platform.Not_Writable
+            and then Unbounded.Length (Reason) > 0,
+            "a name with a NUL in it is not written");
+         Host.Remove_File (Cut, Removed);
+         Landin.Testing.Check
+           (Item, Removed = Landin.Platform.Already_Absent
+            and then Host.Exists (Path),
+            "removing a name with a NUL in it removes nothing");
+         Host.List_Directory (Scratch & Character'Val (0) & "x", Entries,
+                              Listed);
+         Landin.Testing.Check
+           (Item, Listed = Landin.Platform.Directory_Not_Found,
+            "a directory name with a NUL in it is not listed");
+      end;
+
       Host.Read_File (Scratch & "/absent", Content, Read);
       Landin.Testing.Check
         (Item, Read = Landin.Platform.Not_Found,
@@ -1808,6 +1905,38 @@ package body Landin.Tests.Platform_Suite is
            ("caf" & Character'Val (16#C3#) & Character'Val (16#A9#),
             "cafe", Unknown) = Indeterminate,
          "names an unknown filesystem could equate stay indeterminate");
+      --  A name and that name continued in ASCII are two names whatever
+      --  they share: the executable and its assembly, for a program whose
+      --  name is not ASCII or ends in a dot or a space.
+      declare
+         E_Acute : constant String :=
+           Character'Val (16#C3#) & Character'Val (16#A9#);
+      begin
+         Landin.Testing.Check
+           (Item, Answer ("caf" & E_Acute, "caf" & E_Acute & ".s", Unknown)
+              = Distinct
+            and then Answer ("caf" & E_Acute & ".s", "caf" & E_Acute,
+                             Case_Insensitive) = Distinct
+            and then Answer ("caf" & E_Acute, "caf" & E_Acute & ".dSYM", 2)
+              = Distinct
+            and then Answer ("prog.", "prog..s", Unknown) = Distinct
+            and then Answer ("prog ", "prog .s", Unknown) = Distinct,
+            "a name and its ASCII continuation are distinct anywhere");
+         Landin.Testing.Check
+           (Item, Answer ("caf" & E_Acute, "caf" & E_Acute & ".", Unknown)
+              = Indeterminate
+            and then Answer ("caf" & E_Acute, "caf" & E_Acute & " ", Unknown)
+              = Indeterminate
+            and then Answer ("caf" & E_Acute, "caf" & E_Acute & E_Acute,
+                             Unknown) = Indeterminate
+            and then Answer ("prog~1", "prog~1.s", Unknown) = Indeterminate
+            and then Answer ("a:b", "a:b.s", Unknown) = Indeterminate
+            and then Answer ("caf" & E_Acute & ".s", "CAF" & E_Acute & ".s",
+                             Unknown) = Indeterminate,
+            "a continuation of dots and spaces, one that is not ASCII, a"
+            & " short-name or stream marker, and a different stem prove"
+            & " nothing");
+      end;
       Landin.Testing.Check
         (Item, Answer ("Prog", "prog", Case_Insensitive) = Alias
          and then Answer ("Prog", "prog", Byte_Sensitive) = Distinct

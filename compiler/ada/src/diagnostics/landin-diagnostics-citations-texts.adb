@@ -24046,6 +24046,73 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ectory exists the write fails instead, the directory is "
                & "removed, and refine exits with 128 plus the signal's num"
                & "ber.",
+            when 1048 =>
+               "Chosen: a staged file is created with mode 0666 less the"
+               & " caller's umask, the workspace being what keeps it priva"
+               & "te until it is installed. An unchanged output keeps its "
+               & "file, as D907 says, and is given the mode the build made"
+               & "; a file whose mode is not the caller's to change is rep"
+               & "laced by the staged one instead, and a rollback puts the"
+               & " old mode back. A replaced file's own mode is not carrie"
+               & "d over.",
+            when 1049 =>
+               "Chosen: an entry that is not a directory, and a director"
+               & "y another user owns, is passed over: it cannot hold the "
+               & "invoking user's earlier output, and installation never r"
+               & "eplaces what is in the directory whatever such an entry "
+               & "holds. The invoking user's own directory that cannot be "
+               & "opened is refused, in words that say so. The inspector's"
+               & " shared lock is asked for without waiting, for two secon"
+               & "ds, and a lock still held then refuses the output with t"
+               & "he route of retrying; a destination record larger than a"
+               & " megabyte is refused unread.",
+            when 1050 =>
+               "Chosen: a workspace has a third directory, `work`, and a"
+               & " tool is started there and names its outputs `../stage/N"
+               & "AME`. The stage holds only what the records explain, as "
+               & "before. `work` is scratch: when the workspace is retired"
+               & " everything in it is deleted, through descriptors and ne"
+               & "ver through a link, and an inspector takes no notice of "
+               & "it.",
+            when 1051 =>
+               "Chosen: each refusal names what was found and the rule: "
+               & "a symbolic link, FIFO, device or socket where an output "
+               & "would replace a file; a file that cannot be read and so "
+               & "could not be put back; an output whose directory is itse"
+               & "lf a symbolic link, with the route of naming the directo"
+               & "ry it points to; a relative output when the working dire"
+               & "ctory no longer exists. The caller says whether an artif"
+               & "act is a directory tree; only a Darwin debug bundle is. "
+               & "An existing directory is read only for that, and a file "
+               & "artifact named where a directory stands is refused when "
+               & "it is prepared.",
+            when 1052 =>
+               "Chosen: a name and that name followed by ASCII bytes, at"
+               & " least one of them neither a dot nor a space, are distin"
+               & "ct under every rule: folding and normalization work char"
+               & "acter by character and an ASCII character neither combin"
+               & "es with what precedes it nor folds to nothing, and dropp"
+               & "ing trailing dots and spaces cannot remove a tail that h"
+               & "olds another character. A name holding `~` or `:`, the m"
+               & "arks of a generated short name and of a stream, stays in"
+               & "determinate, and the refusal now says that the filesyste"
+               & "m's rules are unknown and which characters matter. A bar"
+               & "e tool name is looked for along `PATH` and nowhere else,"
+               & " so once `PATH` answers it reserves that file and not th"
+               & "e working directory's entry of the same name; and a refu"
+               & "sal that could only not prove an output separate from a "
+               & "tool's name says that, instead of that the output names "
+               & "the tool.",
+            when 1053 =>
+               "Chosen: a name holding a NUL names no file: it does not "
+               & "exist, reads as not found, and is not written, removed o"
+               & "r given to a tool. A listing asks the system for names a"
+               & "nd each entry only for its kind; it holds the regular fi"
+               & "les and directories, a link counting as what it leads to"
+               & ", and leaves out an entry that is neither or whose kind "
+               & "cannot be told. The working directory is empty when the "
+               & "host cannot name it, as the interface allowed a host to "
+               & "leave it, and only a relative output needs it (D1051).",
             when 359 =>
                "Chosen: `--check` reports L0008 for every line the layou"
                & "t changes, in line order, and each report shows the line"

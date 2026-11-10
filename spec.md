@@ -18690,8 +18690,174 @@ ignoring `SIGPIPE` throughout, which turns `refine check | head` from a
 quiet end into a reported write failure.
 
 **Pinned by** `compiler/tests/test_formatter_write_safety.py`'s
-`test_file_size_signal_does_not_cut_the_source` and
-`compiler/tests/test_tool_cancellation.py`'s `limit` and `pipe` controls.
+`test_file_size_signal_does_not_cut_the_source`,
+`compiler/tests/test_compile_publication.py`'s `host-file-size-signal` and
+`host-closed-pipe-run`, and `compiler/tests/test_tool_cancellation.py`'s
+`limit` and `pipe` controls.
+
+### D1048 — A published file has the mode a fresh build gives it
+
+**D907 said** nothing of an output's mode. A staged file was created for
+its owner alone, and that file is the one installed, so every output refine
+wrote itself, the assembly, the reports and the depfile, was published
+unreadable to anyone else whatever the umask, beside an executable the
+linker had created by it; and an output whose bytes had not changed kept
+its old file with its old mode, so an executable restored without its
+execute bit stayed unrunnable after a build that reported success.
+
+**Chosen:** a staged file is created with mode 0666 less the caller's umask,
+the workspace being what keeps it private until it is installed. An
+unchanged output keeps its file, as D907 says, and is given the mode the
+build made; a file whose mode is not the caller's to change is replaced by
+the staged one instead, and a rollback puts the old mode back. A replaced
+file's own mode is not carried over.
+
+**The alternatives:** giving a replacement the mode of the file it
+replaces, which keeps a deliberately widened mode and equally keeps the
+lost execute bit this is meant to repair; and comparing modes when deciding
+whether an output changed, which gives up the unchanged file's identity for
+a difference `fchmod` settles.
+
+**Pinned by** `compiler/tests/test_compile_publication.py`'s
+`host-output-modes` and `host-unchanged-output-mode`.
+
+### D1049 — Only a directory of the invoking user's is inspected as an earlier publication
+
+**D907 said** that earlier retained transactions are diagnosed rather than
+removed. The inspection took every entry of the output directory whose name
+begins `.refine-publication-`, and refused the output when one could not be
+opened. A workspace is made for its owner alone, so in a directory several
+users write to, one user's running or retained build refused every other
+user's; a file, a link or an empty directory of that name did the same on
+purpose; and the inspection waited without limit for a lock anyone could
+hold.
+
+**Chosen:** an entry that is not a directory, and a directory another user
+owns, is passed over: it cannot hold the invoking user's earlier output, and
+installation never replaces what is in the directory whatever such an entry
+holds. The invoking user's own directory that cannot be opened is refused,
+in words that say so. The inspector's shared lock is asked for without
+waiting, for two seconds, and a lock still held then refuses the output
+with the route of retrying; a destination record larger than a megabyte is
+refused unread.
+
+**The alternatives:** refusing with a better message, which leaves the
+directory unusable to everyone but the entry's owner; and waiting for the
+lock with a longer limit, which a held lock outlasts.
+
+**Pinned by** `compiler/tests/test_compile_publication.py`'s
+`host-foreign-entries`; no control runs as a second user.
+
+### D1050 — A tool runs in a directory of its own beside the stage
+
+**D907 said** that tool output uses the pinned staging directory, and the
+tool was started in it. Whatever a tool wrote beside itself, a core file, a
+profile, a wrapper's log, was then an entry of the stage no destination
+record explains: the build that had just published its outputs ended as an
+error, and its retained workspace refused every later build into that
+directory.
+
+**Chosen:** a workspace has a third directory, `work`, and a tool is started
+there and names its outputs `../stage/NAME`. The stage holds only what the
+records explain, as before. `work` is scratch: when the workspace is
+retired everything in it is deleted, through descriptors and never through
+a link, and an inspector takes no notice of it.
+
+**The alternatives:** deleting unexplained entries of the stage, which
+gives up the rule that nothing unexplained is removed where outputs are
+staged; and a directory under `TMPDIR`, which may be another file system
+and makes every staged name an absolute path through a public ancestor.
+
+**Pinned by** `compiler/tests/test_compile_publication.py`'s
+`host-tool-litter`, and `compiler/ada/tests/native/publication.c`.
+
+### D1051 — A destination the publication rules refuse is refused in their words, and before anything is generated
+
+**D907 said** that a dangling link is an occupied entry and that lookups do
+not follow links. A destination refused by those rules was reported with
+the text of an unrelated system error set for the purpose, a symbolic-link
+loop, a resource temporarily unavailable, not a directory, each with advice
+for a condition that did not exist. A report or depfile option naming an
+existing directory was not refused at all until the program had been
+compiled, and the directory had first been read whole into memory as the
+tree of a directory artifact.
+
+**Chosen:** each refusal names what was found and the rule: a symbolic
+link, FIFO, device or socket where an output would replace a file; a file
+that cannot be read and so could not be put back; an output whose directory
+is itself a symbolic link, with the route of naming the directory it points
+to; a relative output when the working directory no longer exists. The
+caller says whether an artifact is a directory tree; only a Darwin debug
+bundle is. An existing directory is read only for that, and a file artifact
+named where a directory stands is refused when it is prepared.
+
+**The alternatives:** limiting how much of a directory is read, which
+bounds the cost of the slip and still compiles the program before refusing
+it.
+
+**Pinned by** `compiler/tests/test_compile_publication.py`'s
+`host-refusal-reasons`, `host-directory-for-a-file` and
+`host-removed-working-directory`, and
+`compiler/ada/tests/native/publication.c`.
+
+### D1052 — A name and the same name continued in ASCII are two names on every filesystem
+
+**D907 said** that unknown identity is uncertain separation, refused
+conservatively. On a filesystem whose name rules the adapter does not know,
+which is every one but six on Linux, and for any name outside ASCII on
+every host, two absent names could not be told apart. An executable build
+always has `NAME` and `NAME.s`, so a program whose name holds a byte
+outside ASCII or ends in a dot or a space could not be built at all there.
+A bare tool name was also reserved as a file of the working directory, so
+such an output was refused as naming a tool it did not name.
+
+**Chosen:** a name and that name followed by ASCII bytes, at least one of
+them neither a dot nor a space, are distinct under every rule: folding and
+normalization work character by character and an ASCII character neither
+combines with what precedes it nor folds to nothing, and dropping trailing
+dots and spaces cannot remove a tail that holds another character. A name
+holding `~` or `:`, the marks of a generated short name and of a stream,
+stays indeterminate, and the refusal now says that the filesystem's rules
+are unknown and which characters matter. A bare tool name is looked for
+along `PATH` and nowhere else, so once `PATH` answers it reserves that file
+and not the working directory's entry of the same name; and a refusal that
+could only not prove an output separate from a tool's name says that,
+instead of that the output names the tool.
+
+**The alternatives:** a table of Unicode forms in the compiler, which
+follows no filesystem's version of them; and asking the filesystem by
+creating both names, which the identity adapter does not do to a directory
+it is only asked about.
+
+**Pinned by** `platform/native name rules on unknown filesystems`.
+
+### D1053 — A path the host cannot hold is an outcome, not a defect or another file
+
+**The discrepancy:** three answers of the native adapter were not the
+caller's question. A path holding a NUL was cut at it when given to the
+system, so the file read, written or removed was not the one named. A
+directory was listed through `Ada.Directories`, which reads every entry's
+status and time, so one file dated outside Ada's calendar or one link that
+loops made the whole directory unlistable and its modules unimportable. And
+a process whose working directory had been removed raised an exception the
+driver reported as a compiler defect, even when every path was absolute.
+
+**Chosen:** a name holding a NUL names no file: it does not exist, reads as
+not found, and is not written, removed or given to a tool. A listing asks
+the system for names and each entry only for its kind; it holds the regular
+files and directories, a link counting as what it leads to, and leaves out
+an entry that is neither or whose kind cannot be told. The working
+directory is empty when the host cannot name it, as the interface allowed a
+host to leave it, and only a relative output needs it (D1051).
+
+**The alternatives:** refusing a NUL where arguments become paths, which
+leaves every other source of a path to remember the same; and keeping
+`Ada.Directories` and skipping the entry that raises, which its interface
+does not identify.
+
+**Pinned by** `platform/native round trips bytes`, and
+`compiler/tests/test_compile_publication.py`'s `host-nul-in-path` and
+`host-removed-working-directory`.
 
 ### D359 — `refine fmt --check` names every line, and `--stdout` prints the layout
 

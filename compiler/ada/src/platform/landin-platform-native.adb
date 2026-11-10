@@ -24,6 +24,16 @@ package body Landin.Platform.Native is
    --  syscall count stops mattering and small enough to sit in a frame.
    Chunk_Size : constant := 64 * 1024;
 
+   --  A path is given to the system as a C string, which ends at its first
+   --  NUL.  One holding a NUL would therefore name a different file there
+   --  than it names in every decision made on this side, so it is refused
+   --  at each entry instead: no file has such a name.
+   function Nameable (Path : String) return Boolean is
+     (for all Byte of Path => Byte /= Character'Val (0));
+
+   Unnameable : constant String := "its name holds a NUL byte, which no"
+     & " file name can";
+
    function Diagnostic_Color return Boolean is
       use type Interfaces.C.int;
       function Isatty (Descriptor : Interfaces.C.int) return Interfaces.C.int
@@ -39,7 +49,7 @@ package body Landin.Platform.Native is
    is
       pragma Unreferenced (Host);
    begin
-      return Directories.Exists (Path);
+      return Nameable (Path) and then Directories.Exists (Path);
    exception
       when Ada.IO_Exceptions.Name_Error =>
          return False;
@@ -241,6 +251,11 @@ package body Landin.Platform.Native is
       pragma Unreferenced (Host);
    begin
       return Directories.Current_Directory;
+   exception
+      --  The directory was removed under the process.  It is context for
+      --  debug records and relative names; what needs it says so there.
+      when Ada.IO_Exceptions.Use_Error =>
+         return "";
    end Working_Directory;
 
    overriding function Executable_Directory
@@ -279,7 +294,7 @@ package body Landin.Platform.Native is
    is
       pragma Unreferenced (Host);
    begin
-      return Directories.Exists (Path)
+      return Nameable (Path) and then Directories.Exists (Path)
         and then Directories.Kind (Path) = Directories.Directory;
    exception
       when Ada.IO_Exceptions.Name_Error =>
@@ -291,7 +306,7 @@ package body Landin.Platform.Native is
    is
       pragma Unreferenced (Host);
    begin
-      return GNAT.OS_Lib.Is_Symbolic_Link (Path);
+      return Nameable (Path) and then GNAT.OS_Lib.Is_Symbolic_Link (Path);
    end Is_Link;
 
    ---------------------------------------------------------------------
@@ -367,6 +382,11 @@ package body Landin.Platform.Native is
         [others => Interfaces.C.nul];
    begin
       Reason := Unbounded.Null_Unbounded_String;
+      if not Nameable (Path) then
+         Status := Not_Writable;
+         Reason := Unbounded.To_Unbounded_String (Unnameable);
+         return;
+      end if;
       Staged := Stage_Write
         (Interfaces.C.To_C (Path), Interfaces.C.To_C (Content),
          Content'Length, Said, Said'Length);
@@ -449,7 +469,8 @@ package body Landin.Platform.Native is
       then
          Status := Not_Writable;
          Reason := Ada.Strings.Unbounded.To_Unbounded_String
-           ("its name cannot be given to the system");
+           (if Path = "" then "its name cannot be given to the system"
+            else Unnameable);
       elsif Replace_Existing
         (Interfaces.C.To_C (Path), Data,
          Interfaces.C.size_t (Content'Length), Said, Room) = 0
@@ -468,7 +489,8 @@ package body Landin.Platform.Native is
       Root : String; Handle : out Publication_Handle;
       Stage : out Unbounded.Unbounded_String; Status : out Write_Status;
       Reason : out Unbounded.Unbounded_String;
-      Require_Absent : Boolean := False)
+      Require_Absent : Boolean := False;
+      Directory : Boolean := False)
    is
       pragma Unreferenced (Host);
       package C renames Interfaces.C;
@@ -480,18 +502,34 @@ package body Landin.Platform.Native is
         with Import, Convention => C,
              External_Name => "landin_publication_open";
       Token : C.int;
-      Stage_Buffer, Reason_Buffer : C.char_array (0 .. 8191);
+      --  Terminated before the call: a failure that wrote no reason must
+      --  read as an empty one, never as what the stack held.
+      Stage_Buffer, Reason_Buffer : C.char_array (0 .. 8191) :=
+        [others => C.nul];
       Result : C.int;
    begin
+      if not Nameable (Path) or else not Nameable (Root) then
+         Handle := No_Publication;
+         Stage := Unbounded.Null_Unbounded_String;
+         Status := Not_Writable;
+         Reason := Unbounded.To_Unbounded_String
+           ("cannot prepare " & Path & ": " & Unnameable);
+         return;
+      end if;
       Result := Open_Transaction
         (C.To_C (Path), Boolean'Pos (Delete_Only)
-         + 2 * Boolean'Pos (Require_Absent), C.To_C (Root), Token,
+         + 2 * Boolean'Pos (Require_Absent) + 4 * Boolean'Pos (Directory),
+         C.To_C (Root), Token,
          Stage_Buffer, Stage_Buffer'Length, Reason_Buffer,
          Reason_Buffer'Length);
       Handle := Publication_Handle (Token);
       Stage := Unbounded.To_Unbounded_String (C.To_Ada (Stage_Buffer));
       Reason := Unbounded.To_Unbounded_String (C.To_Ada (Reason_Buffer));
       Status := (if Result = 0 then Write_Ok else Not_Writable);
+      if Result /= 0 and then Unbounded.Length (Reason) = 0 then
+         Reason := Unbounded.To_Unbounded_String
+           ("cannot prepare " & Path & ": the host gave no reason");
+      end if;
    end Open_Publication;
 
    overriding procedure Advance_Publication
@@ -511,7 +549,7 @@ package body Landin.Platform.Native is
         Interfaces.Unsigned_64 with Convention => C;
       Identities : aliased Identity_Array
         (1 .. 2 * Natural (Protected_Identities.Length));
-      Buffer : C.char_array (0 .. 8191);
+      Buffer : C.char_array (0 .. 8191) := [others => C.nul];
       Result : C.int;
       function Step
         (Handle, Action : C.int; Paths : System.Address; Count : C.size_t;
@@ -581,6 +619,10 @@ package body Landin.Platform.Native is
    begin
       Content := Unbounded.Null_Unbounded_String;
       Identity := (others => <>);
+      if not Nameable (Path) then
+         Status := Not_Found;
+         return;
+      end if;
       Result := Read_Actual
         (C.To_C (Path), Bytes, Size, Identity.Device, Identity.Inode);
       if Result = 0 then
@@ -615,9 +657,15 @@ package body Landin.Platform.Native is
       Bytes : Strings.chars_ptr := Strings.Null_Ptr;
       Size : C.size_t;
       Token, Result : C.int;
-      Buffer : C.char_array (0 .. 8191);
+      Buffer : C.char_array (0 .. 8191) := [others => C.nul];
    begin
       Content := Unbounded.Null_Unbounded_String;
+      if not Nameable (Path) then
+         Lease := Update_Handle (0);
+         Status := Not_Found;
+         Reason := Unbounded.To_Unbounded_String (Unnameable);
+         return;
+      end if;
       Result := Open_Update
         (C.To_C (Path), Bytes, Size, Token, Buffer, Buffer'Length);
       Lease := Update_Handle (Token);
@@ -643,7 +691,7 @@ package body Landin.Platform.Native is
          Reason : out C.char_array; Room : C.size_t) return C.int
         with Import, Convention => C,
              External_Name => "landin_replace_update";
-      Buffer : C.char_array (0 .. 8191);
+      Buffer : C.char_array (0 .. 8191) := [others => C.nul];
       Result : C.int;
    begin
       Result := Replace_Lease
@@ -692,6 +740,10 @@ package body Landin.Platform.Native is
         with Import, Convention => C, External_Name => "landin_unlink_file";
       Result : Interfaces.C.int;
    begin
+      if not Nameable (Path) then
+         Status := Already_Absent;
+         return;
+      end if;
       Result := Unlink_File (Interfaces.C.To_C (Path));
       Status := (if Result = 1 then Removed
                  elsif Result = 0 then Already_Absent
@@ -712,6 +764,10 @@ package body Landin.Platform.Native is
              External_Name => "landin_move_file_noreplace";
       Result : Interfaces.C.int;
    begin
+      if not Nameable (From) or else not Nameable (To) then
+         Status := (if Nameable (To) then Move_Source_Absent else Not_Movable);
+         return;
+      end if;
       Result := Move_No_Replace
         (Interfaces.C.To_C (From), Interfaces.C.To_C (To));
       Status := (if Result = 1 then Moved
@@ -736,6 +792,10 @@ package body Landin.Platform.Native is
              External_Name => "landin_publication_stage_mkdir";
       Result : Interfaces.C.int;
    begin
+      if not Nameable (Path) then
+         Status := Not_Writable;
+         return;
+      end if;
       Result := Stage_Mkdir (Interfaces.C.To_C (Path));
       if Result /= -2 then
          Status := (if Result = 0 then Write_Ok else Not_Writable);
@@ -773,11 +833,14 @@ package body Landin.Platform.Native is
          Capacity : Interfaces.C.size_t) return Interfaces.C.int
         with Import, Convention => C,
              External_Name => "landin_private_directory";
-      Made : Interfaces.C.char_array (0 .. 4095);
+      Made : Interfaces.C.char_array (0 .. 4095) :=
+        [others => Interfaces.C.nul];
       Named : constant Interfaces.C.char_array := Interfaces.C.To_C (Prefix);
       Capacity : constant Interfaces.C.size_t := Made'Length;
    begin
-      if Private_Directory (Named, Made, Capacity) = 0 then
+      if Nameable (Prefix)
+        and then Private_Directory (Named, Made, Capacity) = 0
+      then
          Path := Ada.Strings.Unbounded.To_Unbounded_String
            (Interfaces.C.To_Ada (Made));
          Status := Write_Ok;
@@ -798,7 +861,8 @@ package body Landin.Platform.Native is
         return Interfaces.C.int
         with Import, Convention => C, External_Name => "landin_remove_tree";
       Result : constant Interfaces.C.int :=
-        Remove_Directory_Tree (Interfaces.C.To_C (Path));
+        (if Nameable (Path)
+         then Remove_Directory_Tree (Interfaces.C.To_C (Path)) else 0);
    begin
       Status := (if Result = 1 then Removed
                  elsif Result = 0 then Already_Absent
@@ -827,6 +891,10 @@ package body Landin.Platform.Native is
         with Import, Convention => C,
              External_Name => "landin_lock_output_directory";
    begin
+      if not Nameable (Path) then
+         Handle := -1;
+         return;
+      end if;
       Handle := Integer (Lock_Directory (Interfaces.C.To_C (Path)));
    end Lock_Output;
 
@@ -855,60 +923,61 @@ package body Landin.Platform.Native is
       Status  : out List_Status)
    is
       pragma Unreferenced (Host);
-      use type Interfaces.C.int;
+      package C renames Interfaces.C;
+      package Strings renames Interfaces.C.Strings;
+      use type C.int;
+      use type C.size_t;
 
       package Sorting is new Path_Vectors.Generic_Sorting ("<" => "<");
 
-      Search : Directories.Search_Type;
-      Item   : Directories.Directory_Entry_Type;
-      function Access_Denied
-        (Path : Interfaces.C.char_array) return Interfaces.C.int
+      --  The names of Path's regular files and directories, each ended by
+      --  a NUL.  Not Ada.Directories.Start_Search: that reads every
+      --  entry's modification time and status to answer a question nobody
+      --  asked, and one entry it cannot convert (a time outside Ada's
+      --  calendar, a link that loops) refuses the whole directory.
+      function List_Names
+        (Path  : C.char_array;
+         Names : out Strings.chars_ptr;
+         Size  : out C.size_t) return C.int
         with Import, Convention => C,
-             External_Name => "landin_directory_access_denied";
+             External_Name => "landin_list_directory";
+      procedure Free_Names (Names : Strings.chars_ptr)
+        with Import, Convention => C,
+             External_Name => "landin_snapshot_free";
+
+      Names  : Strings.chars_ptr := Strings.Null_Ptr;
+      Size   : C.size_t := 0;
+      Result : C.int;
    begin
       Entries := Path_Vectors.Empty_Vector;
-
-      if not Directories.Exists (Path) then
-         Status :=
-           (if Access_Denied (Interfaces.C.To_C (Path)) /= 0
-            then Directory_Not_Readable else Directory_Not_Found);
+      if not Nameable (Path) then
+         Status := Directory_Not_Found;
          return;
       end if;
-
-      if Directories.Kind (Path) /= Directories.Directory then
-         Status := Not_A_Directory;
+      Result := List_Names (C.To_C (Path), Names, Size);
+      if Result /= 0 then
+         Status := (case Result is
+                       when 1 => Directory_Not_Found,
+                       when 2 => Not_A_Directory,
+                       when others => Directory_Not_Readable);
          return;
       end if;
-
-      Directories.Start_Search
-        (Search, Path, "*",
-         Filter => [Directories.Ordinary_File => True,
-                    Directories.Directory     => True,
-                    Directories.Special_File  => False]);
-
-      while Directories.More_Entries (Search) loop
-         Directories.Get_Next_Entry (Search, Item);
-
-         declare
-            Name : constant String := Directories.Simple_Name (Item);
-         begin
-            if Name /= "." and then Name /= ".." then
-               Entries.Append (Name);
+      declare
+         Listed : constant String :=
+           (if Size = 0 then ""
+            else Unbounded.To_String (Byte_Strings.Copy (Names, Size)));
+         First  : Positive := Listed'First;
+      begin
+         Free_Names (Names);
+         for Index in Listed'Range loop
+            if Listed (Index) = Character'Val (0) then
+               Entries.Append (Listed (First .. Index - 1));
+               First := Index + 1;
             end if;
-         end;
-      end loop;
-
-      Directories.End_Search (Search);
+         end loop;
+      end;
       Sorting.Sort (Entries);
       Status := List_Ok;
-
-   exception
-      when Ada.IO_Exceptions.Name_Error =>
-         Status :=
-           (if Access_Denied (Interfaces.C.To_C (Path)) /= 0
-            then Directory_Not_Readable else Directory_Not_Found);
-      when Ada.IO_Exceptions.Use_Error | Ada.IO_Exceptions.Device_Error =>
-         Status := Directory_Not_Readable;
    end List_Directory;
 
    overriding function Sample (Host : Native_Meter) return Resource_Sample

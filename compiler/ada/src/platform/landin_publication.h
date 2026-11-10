@@ -7,9 +7,14 @@
 typedef void (*landin_publication_hook)(const char *event, const char *path);
 #define LANDIN_PUBLICATION_DELETE_ONLY 1
 #define LANDIN_PUBLICATION_REQUIRE_ABSENT 2
+/* The artifact is a directory tree. Only then is an existing directory at
+   the destination read, to be replaced; without it a directory there
+   refuses the preparation at once. */
+#define LANDIN_PUBLICATION_DIRECTORY 4
 void landin_publication_set_hook(landin_publication_hook hook);
 void landin_publication_notify(const char *, const char *);
-/* The second argument combines DELETE_ONLY and REQUIRE_ABSENT flags. */
+/* The second argument combines the DELETE_ONLY, REQUIRE_ABSENT and
+   DIRECTORY flags. */
 int landin_publication_open(const char *, int, const char *, int *, char *, size_t,
                             char *, size_t);
 /* Successful Finish invalidates the handle. Arena components beginning with

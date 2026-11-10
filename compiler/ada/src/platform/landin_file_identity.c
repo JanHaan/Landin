@@ -44,6 +44,7 @@ int landin_overlaps_any(const char *left, const char *const *rights,
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules);
 int landin_directory_access_denied(const char *path);
+int landin_list_directory(const char *path, char **names, size_t *size);
 int landin_private_directory(const char *prefix, char *path,
                              size_t capacity);
 int landin_remove_tree(const char *path);
@@ -65,6 +66,50 @@ int landin_directory_access_denied(const char *path)
     }
     denied = errno == EACCES || errno == EPERM;
     return denied;
+}
+
+/* The names in PATH of its regular files and directories, a link counting
+   as what it leads to, each ended by a NUL, in a block the caller frees
+   with landin_snapshot_free. Only names are wanted, so an entry is asked
+   for nothing but its kind: one whose kind cannot be told (a link that
+   loops or leads nowhere, an entry removed meanwhile) or that is neither
+   kind is left out, and never makes the directory unlistable.
+   0: listed; 1: no such directory; 2: not a directory; 3: not readable. */
+int landin_list_directory(const char *path, char **names, size_t *size)
+{
+    DIR *directory = opendir(path);
+    struct dirent *item;
+    char *block = NULL;
+    size_t used = 0, room = 0;
+
+    *names = NULL; *size = 0;
+    if (!directory) {
+        struct stat named;
+        if (stat(path, &named) == 0)
+            return S_ISDIR(named.st_mode) ? 3 : 2;
+        return errno == ENOENT || errno == ENOTDIR ? 1 : 3;
+    }
+    while ((errno = 0, item = readdir(directory)) != NULL) {
+        struct stat about;
+        size_t length = strlen(item->d_name);
+        if (!strcmp(item->d_name, ".") || !strcmp(item->d_name, "..")) continue;
+        if (fstatat(dirfd(directory), item->d_name, &about, 0) != 0
+            || (!S_ISREG(about.st_mode) && !S_ISDIR(about.st_mode))) continue;
+        if (used + length + 1 > room) {
+            size_t wanted = room ? room * 2 : 4096;
+            char *larger;
+            while (wanted < used + length + 1) wanted *= 2;
+            larger = realloc(block, wanted);
+            if (!larger) { free(block); closedir(directory); return 3; }
+            block = larger; room = wanted;
+        }
+        memcpy(block + used, item->d_name, length + 1);
+        used += length + 1;
+    }
+    if (errno != 0) { free(block); closedir(directory); return 3; }
+    closedir(directory);
+    *names = block; *size = used;
+    return 0;
 }
 
 /* Metadata observation for selected tools: only ENOENT proves absence.
@@ -649,6 +694,26 @@ static int name_rules(const char *directory)
    SMB dropping a trailing dot or space) each need a folded match, a
    non-ASCII byte, a '~' or ':', or such a trailing byte; those stay
    indeterminate. */
+/* Whether LONGER is SHORTER continued by ASCII bytes, at least one of them
+   neither a dot nor a space: NAME and NAME.s, the pair every executable
+   build has. */
+static int ascii_continuation(const char *shorter, const char *longer)
+{
+    size_t n = strlen(shorter);
+    const unsigned char *rest;
+    int solid = 0;
+
+    if (strncmp(shorter, longer, n) != 0 || !longer[n])
+        return 0;
+    for (rest = (const unsigned char *)longer + n; *rest; ++rest) {
+        if (*rest >= 128)
+            return 0;
+        if (*rest != '.' && *rest != ' ')
+            solid = 1;
+    }
+    return solid;
+}
+
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules)
 {
@@ -659,6 +724,19 @@ int landin_names_alias(const char *left_name, const char *right_name,
     if (strcmp(left_name, right_name) == 0)
         return 1;
     if (rules == 1)
+        return 0;
+    /* A name and the same name continued in ASCII are two names under
+       every rule above, whatever bytes they share and whatever the
+       filesystem, so no table of Unicode forms is needed to say so. Case
+       folding and normalization work character by character, and an ASCII
+       character neither combines with what precedes it nor folds to
+       nothing, so the longer name keeps a nonempty tail the shorter lacks.
+       Dropping trailing dots and spaces cannot remove a tail that holds
+       another character. A generated short name always holds a '~' and a
+       stream name a ':', and both stay indeterminate here as below. */
+    if (!strpbrk(left_name, "~:") && !strpbrk(right_name, "~:")
+        && (ascii_continuation(left_name, right_name)
+            || ascii_continuation(right_name, left_name)))
         return 0;
     /* Host Unicode normalization/folding versions are not a compiler
        table. Without a filesystem proof, non-ASCII missing names remain

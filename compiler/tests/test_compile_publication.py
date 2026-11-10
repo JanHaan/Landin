@@ -2,6 +2,7 @@
 """Native compiler publication controls; every input is in an owned root."""
 import argparse
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import resource
 import shlex
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -27,6 +29,305 @@ def entry_snapshot(path):
     elif path.is_file():
         result['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
     return result
+
+
+def workspaces(directory):
+    return sorted(str(path) for path in directory.rglob('.refine-publication-*'))
+
+
+def readable(text):
+    """Whether a diagnostic is text: no byte a terminal would not print."""
+    return all(byte == 0x0a or 0x20 <= byte < 0x7f for byte in text)
+
+
+def host_controls(refine, root, env, source, driver):
+    """The native adapter's own rules, each control in a directory of its own.
+
+    Each returns None when it holds and what it saw otherwise.  They are the
+    cases the publication, signal and naming rules were found not to cover:
+    the mode an output is published with, entries of other users in the
+    output directory, refusals that borrowed an unrelated error's words,
+    failures that left a workspace or no reason, a tool that writes beside
+    itself, and limits whose signal ends the process."""
+    temporary = Path(env['TMPDIR'])
+
+    def compile_in(directory, *operands, **options):
+        options.setdefault('timeout', 60)
+        return subprocess.run([str(refine), 'compile', *operands],
+                              cwd=directory, env=env, capture_output=True,
+                              **options)
+
+    def output_modes(work):
+        # A staged file is the file that is installed: it is created as any
+        # program creates an output, by the caller's umask, and a rebuild
+        # that changes its bytes does not narrow it to its owner.
+        made = compile_in(work, str(source), '-o', 'program', '--keep-asm',
+                          '--build-report', 'build.json', '--stage-report',
+                          'stage.json', '--depfile', 'program.d',
+                          preexec_fn=lambda: os.umask(0o022))
+        modes = {path.name: stat.S_IMODE(path.stat().st_mode)
+                 for path in work.iterdir()}
+        shared = work / 'shared.s'
+        shared.write_text('previous\n')
+        shared.chmod(0o600)
+        again = compile_in(work, str(source), '--emit', 'asm', '-o', 'shared.s',
+                           preexec_fn=lambda: os.umask(0o027))
+        if (made.returncode == 0 and again.returncode == 0
+                and modes == {'program': 0o755, 'program.s': 0o644,
+                              'build.json': 0o644, 'stage.json': 0o644,
+                              'program.d': 0o644}
+                and stat.S_IMODE(shared.stat().st_mode) == 0o640):
+            return None
+        return dict(modes={name: oct(mode) for name, mode in modes.items()},
+                    shared=oct(stat.S_IMODE(shared.stat().st_mode)),
+                    stderr=(made.stderr + again.stderr).decode(errors='replace'))
+
+    def unchanged_output_mode(work):
+        # The same bytes keep their file, and are given the mode the build
+        # made: an executable restored without its execute bit runs again.
+        program = work / 'program'
+        first = compile_in(work, str(source), '-o', 'program',
+                           preexec_fn=lambda: os.umask(0o022))
+        before = program.stat()
+        program.chmod(0o644)
+        second = compile_in(work, str(source), '-o', 'program',
+                            preexec_fn=lambda: os.umask(0o022))
+        after = program.stat()
+        if (first.returncode == 0 and second.returncode == 0
+                and before.st_ino == after.st_ino
+                and stat.S_IMODE(after.st_mode) == 0o755):
+            return None
+        return dict(mode=oct(stat.S_IMODE(after.st_mode)),
+                    same_file=before.st_ino == after.st_ino,
+                    stderr=second.stderr.decode(errors='replace'))
+
+    def foreign_entries(work):
+        # Only a directory this user made can hold this user's earlier
+        # output.  A file or a link under the reserved prefix is passed
+        # over; this user's own unreadable one is refused for what it is;
+        # and a lock another process holds is not waited for without end.
+        plain = work / '.refine-publication-file'
+        plain.write_text('not a workspace\n')
+        link = work / '.refine-publication-link'
+        link.symlink_to(temporary)
+        passed_over = compile_in(work, str(source), '--emit', 'asm', '-o', 'a.s')
+        plain.unlink()
+        link.unlink()
+        own = work / '.refine-publication-own'
+        own.mkdir()
+        own.chmod(0)
+        refused = compile_in(work, str(source), '--emit', 'asm', '-o', 'b.s')
+        own.chmod(0o700)
+        own.rmdir()
+        held = work / '.refine-publication-held'
+        held.mkdir()
+        lock = os.open(held, os.O_RDONLY)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            waited = compile_in(work, str(source), '--emit', 'asm', '-o', 'c.s',
+                                timeout=30)
+        except subprocess.TimeoutExpired:
+            waited = None
+        finally:
+            os.close(lock)
+        released = compile_in(work, str(source), '--emit', 'asm', '-o', 'c.s')
+        held.rmdir()
+        unreadable = os.geteuid() == 0 or (
+            refused.returncode == 1 and b'cannot be opened' in refused.stderr
+            and os.strerror(errno.EACCES).encode() in refused.stderr
+            and b'recover the previous' not in refused.stderr
+            and not (work / 'b.s').exists())
+        if (passed_over.returncode == 0 and (work / 'a.s').is_file()
+                and unreadable and waited is not None
+                and waited.returncode == 1 and b'holds its lock' in waited.stderr
+                and released.returncode == 0 and (work / 'c.s').is_file()):
+            return None
+        return dict(passed_over=passed_over.stderr.decode(errors='replace'),
+                    refused=refused.stderr.decode(errors='replace'),
+                    waited=None if waited is None
+                    else waited.stderr.decode(errors='replace'),
+                    released=released.stderr.decode(errors='replace'))
+
+    def refusal_reasons(work):
+        # A destination refused by the adapter's own rule is refused in the
+        # rule's words, not in those of an error that did not happen.
+        (work / 'target.txt').write_text('target\n')
+        (work / 'link.s').symlink_to('target.txt')
+        os.mkfifo(work / 'fifo.s')
+        (work / 'unreadable.s').write_text('previous\n')
+        (work / 'unreadable.s').chmod(0o200)
+        (work / 'real').mkdir()
+        (work / 'via').symlink_to('real')
+        expected = [('link.s', b'it is a symbolic link'),
+                    ('fifo.s', b'it is a FIFO'),
+                    ('via/x.s', b'is a symbolic link, and an output is not'
+                                b' written through one')]
+        if os.geteuid() != 0:
+            expected.append(('unreadable.s', b'cannot be read'))
+        borrowed = [os.strerror(number).encode() for number in
+                    (errno.ELOOP, errno.EAGAIN, errno.ENOTDIR)]
+        seen = {}
+        for name, words in expected:
+            result = compile_in(work, str(source), '--emit', 'asm', '-o', name)
+            seen[name] = result.stderr.decode(errors='replace')
+            if (result.returncode != 1 or b'L0005' not in result.stderr
+                    or words not in result.stderr
+                    or any(text in result.stderr for text in borrowed)):
+                return seen
+        if ((work / 'target.txt').read_text() == 'target\n'
+                and not list((work / 'real').iterdir())):
+            return None
+        return seen
+
+    def descriptor_limit(work):
+        # Whatever a descriptor limit stops, the refusal is text and says a
+        # reason, and a workspace is left only where the refusal names it.
+        seen = []
+        for count in range(4, 13):
+            def limit():
+                resource.setrlimit(resource.RLIMIT_NOFILE, (count, count))
+            result = compile_in(work, str(source), '--emit', 'asm', '-o',
+                                'limited-%d.s' % count, preexec_fn=limit)
+            left = workspaces(work)
+            seen.append(dict(limit=count, exit_status=result.returncode,
+                             stderr=result.stderr.decode(errors='replace'),
+                             left=left))
+            if (not readable(result.stderr)
+                    or (result.returncode != 0
+                        and b': \n' in result.stderr)
+                    or (left and b'publication' not in result.stderr)):
+                return seen
+            for path in left:
+                shutil.rmtree(path)
+        refused = [row for row in seen if row['exit_status'] != 0]
+        if refused and all(os.strerror(errno.EMFILE) in row['stderr']
+                           for row in refused):
+            return None
+        return seen
+
+    def closed_pipe_run(work):
+        # refine writing its own trace into a pipe nobody reads, while its
+        # run directory exists, still removes that directory.
+        reader, writer = os.pipe()
+        os.close(reader)
+        try:
+            result = subprocess.run([str(refine), 'run', '-v', str(source)],
+                                    cwd=work, env=env, stdout=subprocess.PIPE,
+                                    stderr=writer, timeout=60)
+        finally:
+            os.close(writer)
+        left = sorted(path.name for path in temporary.iterdir())
+        if result.returncode == 128 + signal.SIGPIPE and not left:
+            return None
+        return dict(exit_status=result.returncode, left=left)
+
+    def nul_in_path(work):
+        # A response file can carry a NUL; the name it is in names no file,
+        # and is never cut down to the file its first part names.
+        response = work / 'arguments.rsp'
+        response.write_bytes(str(source).encode() + b'\0.other\n--emit\nasm\n-o\n'
+                             + str(work / 'out.s').encode() + b'\n')
+        result = compile_in(work, '@' + str(response))
+        if (result.returncode != 0 and b'not found' in result.stderr
+                and not (work / 'out.s').exists()):
+            return None
+        return dict(exit_status=result.returncode,
+                    stderr=result.stderr.decode(errors='replace'))
+
+    def tool_litter(work):
+        # What a tool leaves beside itself is in the directory it was
+        # started in, which is not the stage: the build is published and
+        # the output directory takes the next build.
+        wrapper = work / 'littering-cc'
+        wrapper.write_text('#!/bin/sh\n: > core\nmkdir -p profile\n'
+                           ': > profile/default.profraw\nexec '
+                           + shlex.quote(driver) + ' "$@"\n')
+        wrapper.chmod(0o700)
+        out = work / 'out'
+        out.mkdir()
+        first = compile_in(work, '--toolchain=' + str(wrapper), str(source),
+                           '-o', str(out / 'program'))
+        entries = sorted(path.name for path in out.iterdir())
+        second = compile_in(work, str(source), '--emit', 'asm', '-o',
+                            str(out / 'other.s'))
+        if (first.returncode == 0 and entries == ['program']
+                and second.returncode == 0 and not (work / 'core').exists()):
+            return None
+        return dict(entries=entries, first=first.stderr.decode(errors='replace'),
+                    second=second.stderr.decode(errors='replace'))
+
+    def directory_for_a_file(work):
+        # A report or depfile option that names a directory is refused when
+        # it is prepared.  The FIFO in it is what reading the tree would
+        # have met, and refused in the words of a symbolic-link loop.
+        target = work / 'target'
+        target.mkdir()
+        (target / 'kept.txt').write_text('kept\n')
+        os.mkfifo(target / 'never-read')
+        seen = {}
+        for option in ('--build-report', '--stage-report', '--depfile'):
+            result = compile_in(work, str(source), '--emit', 'asm', '-o',
+                                'program.s', option, str(target))
+            seen[option] = result.stderr.decode(errors='replace')
+            if (result.returncode == 0 or b'cannot prepare' not in result.stderr
+                    or b'is a directory, but the generated artifact is a'
+                       b' regular file' not in result.stderr
+                    or (work / 'program.s').exists()):
+                return seen
+        if sorted(path.name for path in target.iterdir()) == ['kept.txt',
+                                                                'never-read']:
+            return None
+        return seen
+
+    def removed_working_directory(work):
+        # A process whose directory was removed still names its outputs
+        # absolutely; a relative one is refused for that reason, and
+        # neither is a defect of the compiler.
+        def leave():
+            gone = work / 'gone'
+            gone.mkdir()
+            os.chdir(gone)
+            gone.rmdir()
+        absolute = subprocess.run(
+            [str(refine), 'compile', str(source), '-o', str(work / 'program')],
+            env=env, capture_output=True, timeout=60, preexec_fn=leave)
+        relative = subprocess.run(
+            [str(refine), 'compile', str(source), '--emit', 'asm', '-o',
+             'relative.s'], env=env, capture_output=True, timeout=60,
+            preexec_fn=leave)
+        if (absolute.returncode == 0 and (work / 'program').is_file()
+                and relative.returncode not in (0, 70)
+                and b'internal compiler defect' not in relative.stderr):
+            return None
+        return dict(absolute=absolute.stderr.decode(errors='replace'),
+                    relative=relative.stderr.decode(errors='replace'),
+                    relative_exit=relative.returncode)
+
+    def file_size_signal(work):
+        # A file-size limit as ulimit -f sets it, with the signal at its
+        # default: the refusal written for the error is reached, where the
+        # signal's default action would have ended the process in the write
+        # and left the workspace.
+        def limit():
+            signal.signal(signal.SIGXFSZ, signal.SIG_DFL)
+            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+            hard = resource.getrlimit(resource.RLIMIT_FSIZE)[1]
+            resource.setrlimit(resource.RLIMIT_FSIZE, (0, hard))
+        result = compile_in(work, str(source), '--emit', 'asm', '-o',
+                            'limited.s', preexec_fn=limit)
+        if (result.returncode == 1 and b'L0005' in result.stderr
+                and os.strerror(errno.EFBIG).encode() in result.stderr
+                and not workspaces(work) and not (work / 'limited.s').exists()):
+            return None
+        return dict(exit_status=result.returncode, left=workspaces(work),
+                    stderr=result.stderr.decode(errors='replace'))
+
+    return [('host-' + control.__name__.replace('_', '-'), control)
+            for control in (output_modes, unchanged_output_mode,
+                            foreign_entries, refusal_reasons, descriptor_limit,
+                            closed_pipe_run, nul_in_path, tool_litter,
+                            directory_for_a_file, removed_working_directory,
+                            file_size_signal)]
 
 
 def main():
@@ -252,11 +553,14 @@ def main():
             cases.append(('dsym-parent-' + operand + '-' + suffix,
                           [str(input_path), '--link=libc', '--debug=full',
                            '-o', str(product)], input_path, True))
+    host = host_controls(refine, root, env, source, driver)
     if args.case:
-        unknown = set(args.case) - {case[0] for case in cases}
+        unknown = (set(args.case) - {case[0] for case in cases}
+                   - {name for name, _ in host})
         if unknown:
             parser.error('unknown controls: ' + ', '.join(sorted(unknown)))
         cases = [case for case in cases if case[0] in args.case]
+        host = [control for control in host if control[0] in args.case]
     results = []
     for name, operands, protected, succeeds in cases:
         budget_artifacts = [root / 'budget-product', root / 'budget-product.s']
@@ -396,6 +700,19 @@ def main():
                    report_entry_after=report_after,
                    stdout=result.stdout.decode(errors='replace'),
                    stderr=result.stderr.decode(errors='replace'))
+        results.append(row)
+        (root / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
+        print(('PASS ' if passed else 'FAIL ') + name, flush=True)
+        if not passed:
+            raise AssertionError(row)
+    for name, control in host:
+        work = root / name
+        work.mkdir()
+        seen = control(work)
+        passed = (seen is None and not workspaces(work)
+                  and not list(temporary.iterdir()))
+        row = dict(case=name, passed=passed, seen=seen, left=workspaces(work),
+                   temporary=sorted(path.name for path in temporary.iterdir()))
         results.append(row)
         (root / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
         print(('PASS ' if passed else 'FAIL ') + name, flush=True)

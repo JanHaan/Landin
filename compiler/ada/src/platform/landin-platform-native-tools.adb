@@ -166,7 +166,8 @@ package body Landin.Platform.Native.Tools is
      (FD   : out OS.File_Descriptor;
       Name : out OS.String_Access)
    is
-      Path   : Interfaces.C.char_array (0 .. 4095);
+      Path   : Interfaces.C.char_array (0 .. 4095) :=
+        [others => Interfaces.C.nul];
       Opened : constant Interfaces.C.int :=
         Create_Capture (Path, Path'Length);
    begin
@@ -350,7 +351,8 @@ package body Landin.Platform.Native.Tools is
       function Rebased (Argument : String) return String is
          Text : C_Strings.chars_ptr := C_Strings.New_String (Argument);
          Buffer, Private_Buffer :
-           Interfaces.C.char_array (0 .. Argument'Length);
+           Interfaces.C.char_array (0 .. Argument'Length) :=
+             [others => Interfaces.C.nul];
          Answer : Interfaces.C.int;
          Intermediate : C_Strings.chars_ptr;
       begin
@@ -417,7 +419,8 @@ package body Landin.Platform.Native.Tools is
            (File : in out OS.File_Descriptor;
             Path : in out OS.String_Access)
          is
-            Message : Interfaces.C.char_array (0 .. 16383);
+            Message : Interfaces.C.char_array (0 .. 16383) :=
+              [others => Interfaces.C.nul];
             Room : constant Interfaces.C.size_t := Message'Length;
          begin
             if File /= OS.Invalid_FD then
@@ -463,6 +466,19 @@ package body Landin.Platform.Native.Tools is
            ("refine: command cancelled before starting " & Program
             & ASCII.LF);
          return;
+      end if;
+      --  An argument reaches the tool as a C string, which ends at its
+      --  first NUL: the tool would be given a different argument, or read
+      --  a different file, than the one this side decided about.
+      if (for some Byte of Program => Byte = Character'Val (0))
+        or else (for some Argument of Arguments =>
+                   (for some Byte of Argument => Byte = Character'Val (0)))
+        or else (for some Byte of Unbounded.To_String (Host.Input) =>
+                   Byte = Character'Val (0))
+      then
+         raise External_Tool_Failed
+           with "a tool argument holds a NUL byte, which no program can be"
+             & " given: " & Program;
       end if;
       Located := OS.Locate_Exec_On_Path (Program);
 

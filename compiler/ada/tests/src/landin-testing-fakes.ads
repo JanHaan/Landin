@@ -174,7 +174,8 @@ package Landin.Testing.Fakes is
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Landin.Platform.Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String;
-      Require_Absent : Boolean := False);
+      Require_Absent : Boolean := False;
+      Directory : Boolean := False);
    overriding procedure Advance_Publication
      (Host : Fake_Filesystem; Handle : Landin.Platform.Publication_Handle;
       Action : Landin.Platform.Publication_Action;

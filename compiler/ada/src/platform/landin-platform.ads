@@ -39,7 +39,9 @@ package Landin.Platform is
      is abstract;
 
    --  Debug-only path context.  Virtual filesystems may leave it empty;
-   --  native adapters supply the absolute directory without rewriting inputs.
+   --  native adapters supply the absolute directory without rewriting inputs,
+   --  and leave it empty too when the host cannot name it: a process whose
+   --  directory was removed still has one, and no name for it.
    function Working_Directory (Host : Filesystem) return String is abstract;
 
    --  The directory the running compiler's executable is in, with every
@@ -166,13 +168,18 @@ package Landin.Platform is
      (Index_Type => Positive, Element_Type => File_Identity);
    subtype Identity_List is Identity_Vectors.Vector;
 
+   --  Directory says the artifact is a directory tree.  Only then is an
+   --  existing directory at Path read so that it can be replaced; a file
+   --  artifact named where a directory stands is refused here, before
+   --  anything is generated.
    procedure Open_Publication
      (Host : Filesystem; Path : String; Delete_Only : Boolean; Root : String;
       Handle : out Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String;
-      Require_Absent : Boolean := False) is abstract;
+      Require_Absent : Boolean := False;
+      Directory : Boolean := False) is abstract;
    procedure Advance_Publication
      (Host : Filesystem; Handle : Publication_Handle;
       Action : Publication_Action; Protected_Paths : Path_List;
@@ -258,7 +265,10 @@ package Landin.Platform is
    function Removal_Failure_Reason (Host : Filesystem'Class) return String;
 
    --  Entry names only, without the directory prefix, sorted so that two
-   --  runs discover fixtures in the same order on any host.
+   --  runs discover fixtures in the same order on any host.  The entries
+   --  are the regular files and directories, a link counting as what it
+   --  leads to; an entry that is neither, or whose kind the host cannot
+   --  tell, is left out and does not make the directory unlistable.
    procedure List_Directory
      (Host    : Filesystem;
       Path    : String;

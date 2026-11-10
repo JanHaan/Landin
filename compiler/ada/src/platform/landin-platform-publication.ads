@@ -11,12 +11,14 @@ package Landin.Platform.Publication is
    --  be upgraded by repeating Prepare with this flag.
    --  With Root empty, an absence-constrained output pins existing parent
    --  components without following user links or creating public directories.
+   --  Directory says the artifact is a directory tree, the only kind that
+   --  may replace an existing directory.
    procedure Prepare
      (Group : in out Transaction; Files : Filesystem'Class; Path : String;
       Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String;
       Delete_Only : Boolean := False; Root : String := "";
-      Require_Absent : Boolean := False);
+      Require_Absent : Boolean := False; Directory : Boolean := False);
    function Stage_Path (Group : Transaction; Path : String) return String;
    procedure Protect
      (Group : in out Transaction; Files : Filesystem'Class; Path : String);

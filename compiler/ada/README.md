@@ -211,7 +211,7 @@ different responsibilities.
 | `Landin.Platform.Native` | the only filesystem implementation that reaches a disk: D907's descriptor-bound snapshot reads, pinned-directory, no-clobber publication and retained recovery through `landin_publication.c`, retained read leases and inode-preserving formatting through `landin_format_replace.c` (D358), the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
 | `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
 | `Landin.Platform.Native.Byte_Strings` | exact, chunked copying of length-delimited foreign bytes, including embedded zero bytes in source snapshots, binary artifacts and tool captures | interpret bytes as NUL-terminated text or perform another host effect |
-| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning, pinned staging-directory tool output, cancellation forwarded to a tool's process group with bounded shutdown and direct-child reaping before cleanup, an environment of exactly the variables named when one is asked for (D821), and capture files, and GNAT for path lookup; `Landin.Source_Maps`, `Landin.Build_Reports.Sources`, `Landin.Devices.Projection` and `Landin.Bindings.Generation` use `GNAT.SHA256` as pure computation | grow a second host concern |
+| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning, tool output into the pinned stage from the workspace's `work` directory (D1050), cancellation forwarded to a tool's process group with bounded shutdown and direct-child reaping before cleanup, an environment of exactly the variables named when one is asked for (D821), and capture files, and GNAT for path lookup; `Landin.Source_Maps`, `Landin.Build_Reports.Sources`, `Landin.Devices.Projection` and `Landin.Bindings.Generation` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity and each architecture's configuration atom, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | the firmware profile a device description selects, its image budget (D537), the cores and the SVD `cpu/name` of each, their architectural vector slots and the closed set of boot image kinds with their second-stage slot and checksum and the image block's words and its reading (D542-D545, D588, D637), and source assembly admission | name a device, invoke tools or derive target widths from the host |
 | `Landin.Targets.Assembly` | each target's operand register table, the `general` class and the register it chooses, a register's spelling at a width, `{name}` substitution, the registers an ordinary block overwrites and those never named, each target's line comment and its removal from block text (D597), the refusals of other comment forms and digit separators, and hosted assembly text admission | decide an operand's type or read the host's registers |
@@ -1292,7 +1292,10 @@ identities without transcribing Darwin and Linux structure layouts into Ada.
 for report/source/artifact preflight, including hard links, symbolic links and
 not-yet-created output leaves. Two absent ASCII leaves that differ after
 ASCII case folding are distinct on any filesystem, so an `--emit=exe` build
-on XFS, ZFS or NFS is not refused for `prog` beside `prog.s`. An unresolved
+on XFS, ZFS or NFS is not refused for `prog` beside `prog.s`; so are a name
+and that name continued in ASCII, whatever bytes they share, so `prög`
+beside `prög.s` builds there too (D1052). A name holding `~` or `:` stays
+indeterminate on a filesystem whose rules are unknown. An unresolved
 identity is refused conservatively;
 this does not protect against concurrent filesystem replacement. No host
 identity operation determines Landin target layout or emits program code.
@@ -1305,10 +1308,16 @@ absence before generation; `Stage_Path` names its private staging location;
 validates every stage, captures and checks old entries, then installs into
 absent names without clobbering a concurrent entry. `Abort_Transaction`
 recovers in reverse order; `Finish` discards prior versions only after the
-command has verified the group. Directory artifacts have checked trees.
+command has verified the group. Directory artifacts have checked trees,
+and `Prepare` is told when an artifact is one: a file artifact named where a
+directory stands is refused there (D1051). A staged file is created by the
+caller's umask and is the file installed (D1048).
 Stale manifest outputs use the same delete-only preparation. Native recovery
 keeps uncertain entries in a journalled `.refine-publication-...` workspace
-and diagnoses that workspace before another invocation can reuse its outputs.
+and diagnoses that workspace before another invocation can reuse its outputs;
+only a directory of the invoking user's is such a workspace (D1049). A tool
+runs in the workspace's `work` directory, beside the stage it writes into,
+and what it leaves there is deleted with the workspace (D1050).
 A public name may briefly be absent, and readers do not get an atomic group
 snapshot. Synced files and entries do not establish power-loss durability.
 
