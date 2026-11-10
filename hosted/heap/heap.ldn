@@ -16,36 +16,36 @@ system_value: type = struct
     reserved: u8
 end system_value
 
---- Host-heap allocator capability, as a handle that borrows nothing: the heap
---- belongs to the process, and copies share it.  Allocates and frees through
---- size classes over memory it maps through platform/posix.  A block grows
---- in place when its slot or mapping holds the new extent or its mapping
---- can grow where it is, and a resize that cannot moves a mapping's pages
---- with Linux's `mremap` or otherwise copies the block.  Available only on
---- hosted targets.  Threads share it: once the program has started a
---- thread through hosted/thread, its size classes are behind one lock,
---- which a program that has started none never takes, and a block larger
---- than the largest class is a mapping of its own that needs none.  A C
---- thread calling in under `--link=libc` is no thread of the program's,
---- and two of them may not use it at once.
+--- The host heap as an allocator capability. The value is a handle that
+--- borrows nothing: the heap belongs to the process, and copies share
+--- it. It allocates and frees through size classes over memory it maps
+--- through platform/posix. A resize grows a block in place when its slot
+--- or mapping holds the new extent or its mapping can grow where it is;
+--- otherwise it moves the mapping's pages with Linux's `mremap` or
+--- copies the block. Available only on hosted targets. Threads share the
+--- heap: once the program has started a thread through hosted/thread,
+--- one lock guards its size classes, and a program that has started none
+--- never takes it. A block larger than the largest class is a mapping of
+--- its own and needs no lock. A C thread calling in under `--link=libc`
+--- is no thread of the program's, and two of them may not use it at
+--- once.
 ---
---- Every usize alignment is accepted.  Zero and one mean no stricter than
---- byte alignment.  A zero-byte request still returns a distinct, non-null,
---- freeable token on success.  The provider reserves a header plus at most
+--- Every usize alignment is accepted. Zero and one mean no stricter than
+--- byte alignment. A zero-byte request still returns a distinct, non-null,
+--- freeable token on success. The provider reserves a header plus at most
 --- alignment - 1 bytes and refuses an overflow or an extent above the
---- host's PTRDIFF_MAX before asking the host for memory.  Any other failure
+--- host's PTRDIFF_MAX before asking the host for memory. Any other failure
 --- to obtain memory is reported through mem.out_of_memory, before the
 --- provider's own state changes.
 ---
---- Freeing trusts the two words this heap keeps before every block: the
---- extent it frees is the one they hold, and the `size` passed is not
---- read.  So freeing a block it did not give, freeing one twice, or
---- writing below a block's first byte is undefined, as it is with C's
---- `free`; nothing here can tell such a block from one of its own.  A
---- block larger than the largest class is unmapped when it is freed, and
---- a refusal to unmap, which the system gives only for an address or a
---- length it never mapped, keeps the pages, costing their memory and
---- nothing else.
+--- Freeing trusts the two words this heap keeps before every block: it
+--- frees the extent they hold and does not read the `size` passed. So
+--- freeing a block this heap did not give, freeing one twice, or writing
+--- below a block's first byte is undefined, as it is with C's `free`;
+--- nothing here can tell such a block from one of its own. A block larger
+--- than the largest class is unmapped when it is freed, and a refusal to
+--- unmap, which the system gives only for an address or a length it never
+--- mapped, keeps the pages, costing their memory and nothing else.
 public heap: type = system_value
 
 word: usize = sizeof usize

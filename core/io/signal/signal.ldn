@@ -43,19 +43,19 @@ end event
 --- provider of `fibre.turns` supplies it (D477): a fibre waiting for a
 --- signal lets the provider's other fibres run, where over a provider that
 --- runs each task to its end it would hold the program before it served
---- anything. A program that waits for a signal asks for `signals`, and
---- over the blocking host it cannot be written, so a signal there keeps
---- the system's default disposition: SIGTERM ends the process.
+--- anything. A program that waits for a signal asks for `signals`. Over
+--- the blocking host such a program cannot be written, so a signal there
+--- keeps the system's default disposition: SIGTERM ends the process.
 ---
 --- `watch` takes a signal from the system's default disposition and
 --- delivers it as an event from then on. `next_signal` waits as a receive
---- does, taking turns, for the next arrival of a watched signal; each
---- arrival is read once, by one waiter, and two arrivals of one signal
---- before it is read may be one event, as the systems' own queues keep
---- them. `stop_watching` gives every watched signal back to its default
---- disposition and wakes every fibre waiting in `next_signal`, whose call
---- fails `io_failed`, which is how a program stops the fibre that waits
---- (D449). `next_signal` is the only entry that may switch.
+--- does, taking turns, for the next arrival of a watched signal. Each
+--- arrival is read once, by one waiter; two arrivals of one signal before
+--- it is read may be one event, as the systems' own queues keep them.
+--- `stop_watching` gives every watched signal back to its default
+--- disposition and wakes every fibre waiting in `next_signal`. Each such
+--- call fails `io_failed`, which is how a program stops the fibre that
+--- waits (D449). `next_signal` is the only entry that may switch.
 public signals: type = concept (provider: type) is fibre.turns
     --- Deliver `which` as an event from now on.
     watch: (self: provider, which: kind) -> none ! io.io_failed

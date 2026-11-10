@@ -48,9 +48,9 @@ bounded_value: type (fixed capacity: usize) = struct
     errors: usize
 end bounded_value
 
---- Fixed-capacity diagnostic log. Stores entries without allocation, counts
---- messages dropped for capacity or excessive length, and remembers errors even if
---- their entries are dropped.
+--- Fixed-capacity diagnostic log. It stores entries without allocating,
+--- counts the messages it drops because it is full or they are too long,
+--- and remembers an error even when its entry is dropped.
 public bounded: type (fixed capacity: usize) = bounded_value(capacity)
 
 bounded_note: (fixed capacity: usize, self: ptr mut bounded(capacity),
@@ -87,9 +87,9 @@ public new: (fixed capacity: usize) -> (result: bounded(capacity)) =
     result = (notes: uninit, stored: 0, dropped: 0, errors: 0)
 end new
 
---- Return the number of retained diagnostic entries. Read-only pointers let
---- both mutable and immutable log owners query without copying the bounded
---- note array.
+--- Return the number of retained diagnostic entries. The log is passed by
+--- read-only pointer, so the owner of a mutable or an immutable log can ask
+--- without copying the bounded note array.
 public length: (fixed capacity: usize, value: ptr bounded(capacity))
                -> (count: usize) =
     count = value.val.stored
@@ -102,8 +102,8 @@ public dropped: (fixed capacity: usize, value: ptr bounded(capacity))
     count = value.val.dropped
 end dropped
 
---- Copy a retained entry by index. Reports `mem.out_of_bounds` if the index
---- is not stored.
+--- Copy a retained entry by index. Reports `mem.out_of_bounds` when no
+--- entry is stored at `index`.
 public get: (fixed capacity: usize, value: ptr bounded(capacity), index: usize)
             -> (result: entry) ! mem.out_of_bounds =
     fail mem.out_of_bounds when index >= value.val.stored
@@ -131,8 +131,8 @@ public message: (value: ptr entry) -> (bytes: []u8 from value) =
     bytes = value.val.what_bytes[0..<value.val.what_length]
 end message
 
---- Read one retained message byte. Reports `mem.out_of_bounds` past the
---- message length.
+--- Read one retained message byte. Reports `mem.out_of_bounds` when `index`
+--- is at or past the message length.
 public message_byte: (value: entry, index: usize)
                      -> (byte: u8) ! mem.out_of_bounds =
     fail mem.out_of_bounds when index >= value.what_length
@@ -173,9 +173,9 @@ end write_position
 
 --- Create a streaming logger over an erased writer and file identifier. The
 --- logger holds a copy of both; keep the writer's handle and its state alive
---- while logging. A streaming log needs only a writer: a root holding an
---- `any io.world` builds the writer from the same handle, since the two
---- erased values do not convert.
+--- while logging. A streaming log needs only a writer. A root that holds an
+--- `any io.world` builds an `any io.writer` from the same handle, because
+--- one erased value does not convert to the other.
 public stream: (host: any io.writer, where_to: io.file)
                -> (result: streaming from host) =
     result = streaming(host: host, where_to: where_to, errors: 0)

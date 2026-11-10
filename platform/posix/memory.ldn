@@ -20,13 +20,13 @@ public unmap:
     try system_unmap(base, length)
 end unmap
 
---- Make the `length` bytes `map` mapped at `base` `new_length` bytes long,
---- at least `length`, where they are: the pages after them must be free,
---- or it fails with `enomem` and the mapping is as it was.  Linux's
---- `mremap` without `MREMAP_MAYMOVE`.  Darwin and FreeBSD have no `mremap`:
---- there the pages after the mapping are asked for, and kept only when the
---- system puts them there.  A shorter `new_length` fails with `einval`;
---- give a mapping's tail back with `unmap`.
+--- Grow the mapping of `length` bytes that `map` made at `base` to
+--- `new_length` bytes, at least `length`, where it is. The pages after it
+--- must be free, or it fails with `enomem` and the mapping is as it was. On
+--- Linux it is `mremap` without `MREMAP_MAYMOVE`. Darwin and FreeBSD have
+--- no `mremap`: there the pages after the mapping are asked for, and kept
+--- only when the system puts them there. A shorter `new_length` fails with
+--- `einval`; give a mapping's tail back with `unmap`.
 public extend:
     (base: ptr mut u8, length: usize, new_length: usize) -> none ! errno =
     fail einval when new_length < length
@@ -34,13 +34,13 @@ public extend:
     try system_extend(base, length, new_length)
 end extend
 
---- Make the `length` bytes `map` mapped at `base` `new_length` bytes long,
---- at least `length`, and return where they now are: in place, as `extend`
---- does, or else at an address with room, the pages moved rather than their
---- bytes copied, which is Linux's `mremap` with `MREMAP_MAYMOVE`.  Darwin
---- and FreeBSD cannot move a mapping, so there it is `extend`.  A failure
---- leaves the mapping as it was; a shorter `new_length` fails with
---- `einval`.
+--- Grow the mapping of `length` bytes that `map` made at `base` to
+--- `new_length` bytes, at least `length`, and return where it now is. That
+--- is in place, as `extend` does, or else at an address with room, the
+--- pages moved rather than their bytes copied, which is Linux's `mremap`
+--- with `MREMAP_MAYMOVE`. Darwin and FreeBSD cannot move a mapping, so
+--- there it is `extend`. A failure leaves the mapping as it was; a shorter
+--- `new_length` fails with `einval`.
 public remap:
     (base: ptr mut u8, length: usize, new_length: usize)
     -> (moved: ptr mut u8) ! errno =

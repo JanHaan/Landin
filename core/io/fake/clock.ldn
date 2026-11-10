@@ -32,14 +32,14 @@ end manual_value
 --- same answer every run.  Both of its clocks move together.  A provider
 --- of `clock` and `wall_clock`; copies share the state.
 ---
---- Made by `clock_over_beside` beside a network that takes turns, `sleep`
---- takes turns of the network's scheduler instead, and the clock moves only after a
---- whole round in which nothing moved in the network: then the sleeper
---- that saw the round advances it by a millisecond, or by what is left of
---- its sleep when that is less, and the advance is the network's move.
---- So the round's other fibres run while it sleeps, its time passes only
---- when they all wait, and the network fails no call `timed_out` while a
---- fibre sleeps on the clock, since the sleeper will move it (D493).
+--- When `clock_over_beside` made the clock beside a network that takes turns,
+--- `sleep` takes turns of the network's scheduler instead.  The clock then
+--- moves only after a whole round in which nothing moved in the network: the
+--- sleeper that saw the round advances it by a millisecond, or by what is left
+--- of its sleep when that is less, and the advance is the network's move.  So
+--- the round's other fibres run while it sleeps, its time passes only when they
+--- all wait, and the network fails no call `timed_out` while a fibre sleeps on
+--- the clock, since the sleeper will move it (D493).
 public clock: type = manual_value
 
 --- Fill `state` for a manual clock whose monotonic clock reads `start` and

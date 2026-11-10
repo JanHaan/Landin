@@ -102,16 +102,16 @@ events_value: type = struct
     round: stacks.round
 end events_value
 
---- The hosted provider whose waiting operations switch fibres: `io.world`,
---- `io.programs`, `net.network`, the monotonic `time.clock`,
---- `fibre.scheduler` and `fibre.turns`, and `signal.signals`, each of whose
---- waits lets the provider's other fibres run, and every concept
---- `hosted/system` supplies, which it hands the system's handle it is
---- built over: `io.directories`, `io.environment`, `io.file_system`,
---- `io.terminals`, `io.entropy` and `time.wall_clock`. A handle: copies
---- share one round and one loop. Its files are the system's, as
---- `hosted/system`'s `descriptor_of`, `file_of` and `socket_of` give
---- them. Its entries that may switch are `docs/library.md`'s list (D446).
+--- The hosted provider whose waiting operations switch fibres. It implements
+--- `io.world`, `io.programs`, `net.network`, the monotonic `time.clock`,
+--- `fibre.scheduler`, `fibre.turns` and `signal.signals`, and each of their
+--- waits lets the provider's other fibres run. It also implements every
+--- concept `hosted/system` supplies, handing each to the system handle it
+--- is built over: `io.directories`, `io.environment`, `io.file_system`,
+--- `io.terminals`, `io.entropy` and `time.wall_clock`. The value is a
+--- handle: copies share one round and one loop. Its files are the system's:
+--- `hosted/system`'s `descriptor_of`, `file_of` and `socket_of` convert
+--- them. `docs/library.md` lists its entries that may switch (D446).
 public host: type = events_value
 
 --- Return errno captured for the terminal failing provider call, as
@@ -127,16 +127,16 @@ public last_signal: (handle: host) -> (number: i32) =
     number = system.last_signal(services(handle))
 end last_signal
 
---- Fill `state` and return a handle to the event provider over it and
---- over `entries`: a round of turns over that table of the fibres that
---- may be unfinished at once, one more than a group's count, an event
---- queue, closed on exec, and the `hosted/system` handle `system.new`
---- gives, which reports through the calling thread's last-error and
---- last-signal cells. Fails `mem.out_of_memory` when `entries` holds
---- fewer than two, and `io.io_failed` when the system makes no queue,
---- with its errno in the calling thread's cell. Calling this before the hosted entry has
---- established the process's arguments traps, as `hosted/system`'s `new`
---- does. The queue stays open until the process ends.
+--- Fill `state` and return a handle to the event provider over it and over
+--- `entries`. The provider is made of a round of turns over `entries`, the
+--- table of the fibres that may be unfinished at once, one more than a
+--- group's count; an event queue, closed on exec; and the `hosted/system`
+--- handle `system.new` gives, which reports through the calling thread's
+--- last-error and last-signal cells. It fails `mem.out_of_memory` when
+--- `entries` holds fewer than two, and `io.io_failed` when the system makes
+--- no queue, with its errno in the calling thread's cell. Calling this before
+--- the hosted entry has established the process's arguments traps, as
+--- `hosted/system`'s `new` does. The queue stays open until the process ends.
 public over: (inout state: space, entries: []mut usize)
              -> (handle: host from state, entries)
              ! mem.out_of_memory | io.io_failed =

@@ -176,15 +176,15 @@ else
 end if
 
 --- Start a thread that calls `routine(argument)` on `area`, its stack,
---- which holds `thread_start_bytes()` from a byte at
---- `thread_start_alignment()`, keeping its record in `record` until
---- `join_thread`. Every asynchronous signal is blocked while it starts,
---- and the thread begins with them blocked, a fault's own alone not;
---- the caller's own mask is as it was. It fails `einval` for an area too
---- small or not aligned, and with the errno the system refused the thread
---- with, `eagain` when it lacks what another thread needs; a failed start
---- starts nothing. A successful start synchronizes with the thread's first
---- action (D227).
+--- keeping its record in `record` until `join_thread`. `area` holds
+--- `thread_start_bytes()` from a byte at `thread_start_alignment()`. Every
+--- asynchronous signal is blocked while the thread starts, and the thread
+--- begins with them blocked, a fault's own alone not; the caller's own
+--- mask is as it was. It fails `einval` for an area too small or not
+--- aligned, and with the errno the system refused the thread with,
+--- `eagain` when it lacks what another thread needs; a failed start starts
+--- nothing. A successful start synchronizes with the thread's first action
+--- (D227).
 public start_thread:
     (area: []mut u8, record: ptr mut thread, routine: thread_routine,
      argument: usize) -> none ! errno =

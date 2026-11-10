@@ -31,9 +31,9 @@ fixed if compiler.os == linux then
     --- argument, CLONE_SETTLS.
     public clone_settls: u64 = 524288
 
-    --- What a thread `clone_thread` makes runs first: a C routine called
-    --- with the argument it was given, on the stack it was given, with no
-    --- frame below it. It never returns: it ends with `exit_thread`.
+    --- The first routine a thread made by `clone_thread` runs: a C routine
+    --- called with the argument and on the stack the thread was given, with
+    --- no frame below it. It never returns: it ends with `exit_thread`.
     public thread_entry: type = extern(c) (argument: usize) -> none
 
     fixed if compiler.arch == x86_64 then
@@ -123,12 +123,12 @@ fixed if compiler.os == linux then
         end clone_text
     end if
 
-    --- Start a thread with `clone`: `flags` are `clone_thread_flags`, with
-    --- `clone_settls` when `tls` is the new thread's thread pointer; the
-    --- thread runs `entry(argument)` on the stack whose top, sixteen-byte
-    --- aligned, is `stack`, and the kernel writes its thread ID to
-    --- `parent` before this returns and clears `child` when it ends. The
-    --- new thread's ID, or minus the errno. The new thread starts with the
+    --- Start a thread with `clone`. `flags` are `clone_thread_flags`, with
+    --- `clone_settls` when `tls` is the new thread's thread pointer. The
+    --- thread runs `entry(argument)` on the stack whose top is `stack`,
+    --- sixteen-byte aligned. The kernel writes the thread's ID to `parent`
+    --- before this returns and clears `child` when the thread ends. The new
+    --- thread's ID, or minus the errno. The new thread starts with the
     --- creator's signal mask, so a creator that blocks a signal around this
     --- call starts a thread that does not receive it.
     public extern(c) link(symbol: "_landin_linux_clone") clone_thread:

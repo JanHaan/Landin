@@ -13,10 +13,10 @@ public invalid_format: atom
 --- strings as their bytes.  Floats, `f32` and `f64`, are not formattable
 --- yet: scale one to an integer and append the parts, as this module's
 --- reference program does for two decimals.  A type of the program's own
---- conforms with a
---- function that appends its text; a different reading of a supplied type,
---- hexadecimal for one, is a typed `append` call, or a `distinct` wrapper
---- with its own conformance [1280].
+--- conforms with a function that appends its text.  For a different
+--- reading of a supplied type, hexadecimal for one, call a typed
+--- `append` routine, or declare a `distinct` wrapper with its own
+--- conformance [1280].
 public formattable: type = concept (item: type)
     --- Append the value's text, or report `no_space` and leave the
     --- builder as it was.

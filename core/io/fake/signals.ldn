@@ -35,17 +35,17 @@ signals_value: type = struct
     runs: any fibre.turns
 end signals_value
 
---- A source of signals a test raises, a provider of `signal.signals`
---- over the round of turns it is given, which it is also a provider of
---- `fibre.turns` through, as the concept asks: its `start`, `finished`,
---- `wait` and `yield` are the round's. `raise` delivers a signal as the
---- system would, and `next_signal` waits for one by taking turns, so a
---- fibre that waits for a signal lets the test's other fibres run until
---- one of them raises it. A raised signal nobody watches is counted and
---- dropped, where a system would act on it. A signal raised again before
---- it is read is one event, as the systems keep it. The fake numbers
---- each signal as Linux does on x86-64 and arm64. Copies share the
---- state.
+--- A source of signals that a test raises: a provider of
+--- `signal.signals` over the round of turns it is given. It is a
+--- provider of `fibre.turns` through that round too, as the concept
+--- asks: its `start`, `finished`, `wait` and `yield` are the round's.
+--- `raise` delivers a signal as the system would, and `next_signal`
+--- waits for one by taking turns, so a fibre that waits for a signal
+--- lets the test's other fibres run until one of them raises it. A
+--- raised signal nobody watches is counted and dropped, where a system
+--- would act on it. A signal raised again before it is read is one
+--- event, as the systems keep it. The fake numbers each signal as Linux
+--- does on x86-64 and arm64. Copies share the state.
 public signals: type = signals_value
 
 --- Fill `state` for a source of signals whose waits take turns on

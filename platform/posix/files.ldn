@@ -49,15 +49,15 @@ public writing: open_options = (access: write_only, create: true,
                                 exclusive: false, truncate: true,
                                 append: false, directory: false)
 
---- Open the file `path` names, relative to the directory open as `at`
---- (or `working_directory`), with `options`; a file it creates gets the
---- permission bits `permissions`, which the process umask filters.  The
+--- Open the file `path` names, relative to the directory open as `at` (or
+--- `working_directory`), with `options`. A file it creates gets the
+--- permission bits `permissions`, which the process umask filters. The
 --- descriptor is closed when the process executes a program, POSIX's
 --- `O_CLOEXEC`, set as it is opened, and a terminal opened never becomes
---- the process's controlling terminal, `O_NOCTTY`.  The new descriptor,
---- or the errno: `enoent` for a missing name, `enotdir` when a component
---- is not a directory, `eacces` when refused, `eexist` for an `exclusive`
---- name that is taken, `eintr` when a signal came first.
+--- the process's controlling terminal, `O_NOCTTY`. It returns the new
+--- descriptor or fails: `enoent` for a missing name, `enotdir` when a
+--- component is not a directory, `eacces` when refused, `eexist` for an
+--- `exclusive` name that is taken, `eintr` when a signal came first.
 public open_at:
     (at: descriptor, path: text.host_string,
      options: open_options, permissions: u32)
@@ -221,25 +221,25 @@ public truncate:
 end truncate
 
 --- Hand what the system holds of the file open as `opened` to its device
---- before returning, POSIX's `fsync`: its data and its status, or with
---- `data_only` its data and only so much of its status as reading the data
---- back needs, its size among it, `fdatasync`.  On Darwin, whose `fsync`
---- leaves what the device caches in the device, both ask the device to
---- write that too, `F_FULLFSYNC`, and fall back to `fsync` on a file system
---- that refuses it.
+--- before returning. Without `data_only` that is its data and its status,
+--- POSIX's `fsync`. With `data_only` it is its data and only so much of its
+--- status as reading the data back needs, its size among it, `fdatasync`.
+--- Darwin's `fsync` leaves what the device caches in the device, so there
+--- both also ask the device to write that, `F_FULLFSYNC`, and fall back to
+--- `fsync` on a file system that refuses it.
 public synchronize:
     (opened: descriptor, data_only: bool) -> none ! errno =
     try system_synchronize(opened, data_only)
 end synchronize
 
 --- Give the file `old` names, relative to `old_at`, the name `new`,
---- relative to `new_at`, POSIX's `renameat`, in one step: no process sees
---- both names or neither.  A file already named `new` is replaced in the
---- same step, a directory only by a directory and only when it is empty.
---- The errno: `enoent` when `old` or `new`'s parent is missing, `exdev`
---- when the two are on different file systems, which a rename never
---- crosses, `enotempty` or `eexist` for a directory that is not empty,
---- `eisdir` for a file onto a directory and `enotdir` the other way, and
+--- relative to `new_at`, in one step, POSIX's `renameat`: no process sees
+--- both names or neither. A file already named `new` is replaced in the
+--- same step; a directory is replaced only by a directory and only when it
+--- is empty. It fails `enoent` when `old` or `new`'s parent is missing;
+--- `exdev` when the two are on different file systems, which a rename never
+--- crosses; `enotempty` or `eexist` for a directory that is not empty;
+--- `eisdir` for a file onto a directory and `enotdir` the other way; and
 --- `einval` for a directory into itself.
 public rename_at:
     (old_at: descriptor, old: text.host_string, new_at: descriptor,
@@ -253,10 +253,10 @@ end rename_at
 
 --- Give the file `old` names, relative to `old_at`, a second name `new`,
 --- relative to `new_at`, POSIX's `linkat`, a hard link: both names are one
---- file.  A final symbolic link of `old` is linked itself, not followed.
---- The errno: `eexist` when `new` is taken, `exdev` across file systems,
---- `eperm` for a directory, which no system links, and `emlink` for a file
---- with as many names as it may have.
+--- file. A final symbolic link of `old` is linked itself, not followed. It
+--- fails `eexist` when `new` is taken, `exdev` across file systems, `eperm`
+--- for a directory, which no system links, and `emlink` for a file with as
+--- many names as it may have.
 public link_at:
     (old_at: descriptor, old: text.host_string, new_at: descriptor,
      new: text.host_string) -> none ! errno =
@@ -319,11 +319,11 @@ public change_mode:
 end change_mode
 
 --- Set the owner and group of the file `path` names, relative to `at`,
---- POSIX's `fchownat`, `unchanged_user` and `unchanged_group` keeping
---- either; with `follow` false a final symbolic link's own.  `eperm`
---- unless the process may: only a privileged one gives a file away, and
---- an owner may give it only to a group the owner is in.  A system may
---- clear the set-user-ID and set-group-ID bits as it changes the owner.
+--- POSIX's `fchownat`. `unchanged_user` and `unchanged_group` keep either
+--- as it is. With `follow` false it sets a final symbolic link's own. It
+--- fails `eperm` unless the process may: only a privileged one gives a file
+--- away, and an owner may give it only to a group the owner is in. A system
+--- may clear the set-user-ID and set-group-ID bits as it changes the owner.
 public change_owner_at:
     (at: descriptor, path: text.host_string, user: user_id, group: group_id,
      follow: bool) -> none ! errno =
@@ -339,10 +339,10 @@ public change_owner:
     try system_change_owner(opened, user, group)
 end change_owner
 
---- Set when the file `path` names, relative to `at`, was last read and
---- last written, POSIX's `utimensat`, to `accessed` and `modified`; with
---- `follow` false a final symbolic link's own.  The system sets the time
---- it was last changed to now, which nothing else can.  `einval` for
+--- Set when the file `path` names, relative to `at`, was last read and last
+--- written to `accessed` and `modified`, POSIX's `utimensat`. With `follow`
+--- false it sets a final symbolic link's own. The system sets the time it
+--- was last changed to now, which nothing else can. It fails `einval` for
 --- nanoseconds of a second or more; a file system keeping coarser times
 --- rounds them down.
 public set_times_at:
@@ -418,19 +418,19 @@ public unlock:
 end unlock
 
 --- Take a lock of `kind` on `length` bytes of the file open as `opened`
---- from `start`, a `length` of zero reaching however far the file ever
---- will, POSIX's record lock, `fcntl`'s `F_SETLK`, or `F_SETLKW` with
---- `wait`: or the errno, `eagain` or `eacces`, as the system chooses, when
---- another process holds one in the way and `wait` is false, `edeadlk`
---- when waiting would deadlock, and `ebadf` for a shared lock on a file not
---- open for reading or an exclusive one on a file not open for writing.
+--- from `start`; a `length` of zero reaches however far the file ever will.
+--- It is POSIX's record lock, `fcntl`'s `F_SETLK`, or `F_SETLKW` with
+--- `wait`. It fails `eagain` or `eacces`, as the system chooses, when
+--- another process holds one in the way and `wait` is false; `edeadlk` when
+--- waiting would deadlock; and `ebadf` for a shared lock on a file not open
+--- for reading or an exclusive one on a file not open for writing.
 ---
 --- A record lock belongs to the process, not to a descriptor: the process
---- never stands in its own way, through any descriptor, and a lock over
---- one it already holds replaces that part of it.  Closing any descriptor
---- of the file, even one opened elsewhere in the program for a moment,
---- gives up every record lock the process holds on it.  A child does not
---- inherit one.  `lock` has none of these hazards and no byte ranges.
+--- never stands in its own way, through any descriptor, and a lock over one
+--- it already holds replaces that part of it. Closing any descriptor of the
+--- file, even one opened elsewhere in the program for a moment, gives up
+--- every record lock the process holds on it. A child does not inherit one.
+--- `lock` has none of these hazards and no byte ranges.
 public lock_range:
     (opened: descriptor, kind: lock_kind, start: u64, length: u64,
      wait: bool) -> none ! errno =

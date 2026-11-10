@@ -31,10 +31,10 @@ public directory_entry: type = struct
     kind: file_kind
 end directory_entry
 
---- Open the directory `path` names, relative to `at`, for reading, its
---- descriptor closed on exec as `open_at`'s is: `enotdir` when it is not
---- a directory, `enoent` when it is missing.
---- Close it with `close_directory`, which also closes its descriptor.
+--- Open the directory `path` names, relative to `at`, for reading. Its
+--- descriptor is closed on exec, as `open_at`'s is. It fails `enotdir`
+--- when `path` is not a directory and `enoent` when it is missing. Close
+--- it with `close_directory`, which also closes its descriptor.
 public open_directory:
     (at: descriptor, path: text.host_string)
     -> (opened: directory_stream) ! errno =
@@ -43,12 +43,12 @@ public open_directory:
     opened = try system_open_directory(at, terminated)
 end open_directory
 
---- The directory's next entry, read into `buffer`, which must be the
+--- Read the directory's next entry into `buffer`. `buffer` must be the
 --- buffer every earlier read of this stream was given and hold at least
---- `directory_buffer` bytes, or `einval`.  The entry lends its name from
---- `buffer` until the next read.  An entry with an empty name is the end
---- of the directory.  Entries come in the system's order, `.` and `..`
---- among them, as POSIX's `readdir` gives them.
+--- `directory_buffer` bytes, or the read fails `einval`. The entry lends
+--- its name from `buffer` until the next read. An entry with an empty
+--- name is the end of the directory. Entries come in the system's order,
+--- `.` and `..` among them, as POSIX's `readdir` gives them.
 public read_directory:
     (inout opened: directory_stream, buffer: []mut u8)
     -> (item: directory_entry from buffer) ! errno =

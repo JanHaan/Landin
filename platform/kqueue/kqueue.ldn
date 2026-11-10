@@ -139,12 +139,12 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
     public wait_limit: type = none_given | ptr libc.timespec
 
     --- Make the `change_count` changes at `changes` to what `queue`
-    --- watches, then wait until an event comes or `limit` passes and put
-    --- at most `event_count` of them at `events`: how many it put there,
-    --- zero when the limit passed first, or -1 with the reason in errno,
-    --- EINTR when a signal came first.  A change that fails is reported as
-    --- an event with `ev_error` when there is room for it, and fails the
-    --- call when there is none.
+    --- watches, then wait until an event comes or `limit` passes and put at
+    --- most `event_count` events at `events`. It returns how many it put
+    --- there, zero when the limit passed first, or -1 with the reason in
+    --- errno, EINTR when a signal came first. A change that fails is
+    --- reported as an event with `ev_error` when there is room for it, and
+    --- fails the call when there is none.
     public extern(c) kevent: (queue: i32, changes: changes_given,
                               change_count: i32, events: events_filled,
                               event_count: i32, limit: wait_limit)

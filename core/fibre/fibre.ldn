@@ -162,10 +162,10 @@ end group_value
 
 --- Fibres a routine starts and waits for: `count` equal stacks cut from
 --- a backing the caller lends, each with its record at its base, and the
---- provider that runs them. Made by `group_over` or `turns_over`, given
---- tasks by `admit`, and waited for by `join`, which the routine making
---- the group defers as it would a region's release: a group must be
---- joined before its backing goes, and nothing else makes sure it is.
+--- provider that runs them. `group_over` or `turns_over` makes one,
+--- `admit` gives it tasks and `join` waits for them. The routine making
+--- the group defers `join` as it would a region's release: a group must
+--- be joined before its backing goes, and nothing else makes sure it is.
 public group: type = group_value
 
 --  A value rounded down to the alignment stacks are cut to.
@@ -325,10 +325,10 @@ public admit: (state_type: type, inout g: group,
     try start_on(g, record, stack, any(copy))
 end admit
 
---- Wait until every task admitted to `g` has ended. The first failure any
---- of them had is `join`'s, handed on once; the rest ran to their own
---- ends regardless, since nothing cancels a fibre (D449). A group may be
---- joined again, and given more tasks after it is.
+--- Wait until every task admitted to `g` has ended. `join` then fails with
+--- the first failure any of them had, and hands it on once only. The other
+--- tasks ran to their own ends regardless, since nothing cancels a fibre
+--- (D449). A group may be joined again, and given more tasks after it is.
 public join: (inout g: group) -> none ! failure.reason =
     mut index: usize = 0
     while index < g.count do

@@ -58,11 +58,11 @@ draining_value: type = struct
     onto: any outlet
 end draining_value
 
---- Where `format_onto` hands the text it formats, a piece at a time: a
---- value the caller keeps, which takes each piece whole or reports
---- `no_space`, keeping its own reason for the caller, since a builder's
---- appends fail with nothing else.  `io.write_format` makes one over a
---- file.  Only a program that builds an erased `outlet` links any
+--- Where `format_onto` hands the text it formats, a piece at a time.  An
+--- outlet is a value the caller keeps.  It takes each piece whole or
+--- reports `no_space`, and keeps its own reason for the caller, since a
+--- builder's appends fail with nothing else.  `io.write_format` makes one
+--- over a file.  Only a program that builds an erased `outlet` links any
 --- outlet's routines (D374).
 public outlet: type = concept (item: type)
     --- Take all of `bytes`, or report `no_space`.
@@ -70,11 +70,11 @@ public outlet: type = concept (item: type)
 end outlet
 
 --- Text being built: the bytes written so far, in a buffer the caller gave
---- `over` or in storage that `growing` takes from an allocator.  A value
---- the caller keeps and edits, passing it `inout` to every append; `used`
---- lends what it holds.  It is bytes, not `utf8`: an append of bytes or of
---- a host string writes them as they are.  A `utf8_builder` holds only
---- text.
+--- `over` or in storage that `growing` takes from an allocator.  It is a
+--- value the caller keeps and edits, passing it `inout` to every append;
+--- `used` lends what it holds.  It is bytes, not `utf8`: an append of bytes
+--- or of a host string writes them as they are.  A `utf8_builder` holds
+--- only text.
 public builder: type = builder_value
 
 --- A builder over the caller's `buffer`, empty, which never grows: an

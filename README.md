@@ -8,28 +8,28 @@
 macOS and FreeBSD, and firmware builds for Cortex-M, RV32 and windowed Xtensa.**
 
 The language is pre-v1 and still growing. Its compiler, `refine`, runs
-programs on Linux x86-64, arm64 and RV64, FreeBSD x86-64 and arm64 and
-macOS arm64, and builds firmware for Cortex-M, 32-bit RISC-V and windowed
+programs on Linux (x86-64, arm64 and RV64), FreeBSD (x86-64 and arm64) and
+macOS (arm64), and builds firmware for Cortex-M, 32-bit RISC-V and windowed
 Xtensa.
 [Current compiler capabilities](#current-compiler-capabilities) lists what
 works today.
 
 ## What Landin is
 
-A systems programming language, its compiler and a small standard
-library, designed and built from scratch. Named after Peter Landin, who
-coined the term *syntactic sugar* and wrote *The Next 700 Programming
-Languages* in 1966 — this one is the 701st.
+Landin is a systems programming language with its compiler and a small
+standard library, all designed and built from scratch. It is named after
+Peter Landin, who coined the term *syntactic sugar* and wrote *The Next 700
+Programming Languages* in 1966 — this one is the 701st.
 
-One target range, and the same way of writing code across all of it: a
-Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
-at the other. What it is like to write:
+Landin has one target range and the same way of writing code across all of
+it. A Cortex-M0 with 32 KB of flash is at one end, and a hosted desktop
+application is at the other. This is what it is like to write:
 
-- **Manual memory.** Arenas are the idiom, and allocators are passed in as
+- **Manual memory.** Arenas are the idiom, and you pass allocators in as
   arguments. There is no garbage collector, no reference counting and no
   destructors.
 - **Failures in the signature.** A routine declares what can go wrong as a
-  set of atoms; a caller handles them with `else` or passes them on with
+  set of atoms. A caller handles them with `else` or passes them on with
   `try`.
 - **Useful local checks, not a borrow checker.** Pointers and slices get
   origin and escape checks within a routine. The language does not claim
@@ -43,37 +43,56 @@ at the other. What it is like to write:
 ## Installing
 
 `refine` is one executable, with its standard library in a directory
-beside it. There are three ways to get both.
+beside it. There are three ways to get both: from a release, with nix, or
+from source.
 
-**From a release.** The archive for your platform on
+For now, install with nix or from source. No release yet runs
+[the first program](#your-first-program), which needs `refine run` and
+`hosted/blocking`, both newer than 0.2.8.
+
+### From a release
+
+The archive for your platform on
 [the releases page](https://github.com/JanHaan/Landin/releases) holds
 `bin/refine` and the library under `lib/landin`, with no top-level
 directory. Unpack it into a directory of its own and put its `bin` on your
-`PATH`. No release yet runs the first program below, which needs
-`refine run` and `hosted/blocking`, both newer than 0.2.8; until one does,
-install with nix or from source. Archives up to 0.2.7 hold `refine` without
-its library. Later archives leave the compiler's debug information out and
-publish it beside them as `landin-VERSION-PLATFORM-debug.tar.gz`, which you
-need only to read a crash of the compiler itself.
+`PATH`.
 
-**With nix.** This builds `refine` from source and puts it on your `PATH`;
-the first build also fetches the pinned toolchain, which takes a few
-minutes:
+The archives differ by release:
+
+- Archives up to 0.2.7 hold `refine` without its library.
+- Later archives leave the compiler's debug information out and publish it
+  beside them as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
+  only to read a crash of the compiler itself.
+
+### With nix
+
+This command builds `refine` from source and puts it on your `PATH`. The
+first build also fetches the pinned toolchain, which takes a few minutes:
 
 ```sh
 nix --extra-experimental-features 'nix-command flakes' \
     profile install github:JanHaan/Landin
 ```
 
-The `--extra-experimental-features` option is not needed once
+You can leave the `--extra-experimental-features` option out once
 `experimental-features = nix-command flakes` is in `~/.config/nix/nix.conf`.
 In a clone, `nix build .#refine` builds the same into `result/`.
 
-**From source.** On Linux x86-64, Linux arm64 or a Mac, fetch the pinned
-GNAT and GPRbuild and build from a clone. `environments/pins.sh` holds
-their versions, URLs and SHA-256 sums, and its `landin_install_toolchain`
-downloads both archives and checks each against its sum. It needs `curl`, `sha256sum` and `tar`, and the build needs `python3`
-and `git`:
+### From source
+
+On Linux x86-64, Linux arm64 or a Mac, you can fetch the pinned GNAT and
+GPRbuild and build from a clone. Any other host needs nix.
+
+`environments/pins.sh` holds the versions, URLs and SHA-256 sums of GNAT
+and GPRbuild. Its `landin_install_toolchain` downloads both archives and
+checks each against its sum. The archives are about 500 MB together.
+
+You need these tools first:
+
+- `curl`, `sha256sum` and `tar` for `landin_install_toolchain`;
+- `python3` and `git` for the build;
+- on a Mac, Xcode's command-line tools as well.
 
 ```sh
 git clone https://github.com/JanHaan/Landin
@@ -85,28 +104,41 @@ export LANDIN_GPRBUILD_HOME="$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VE
 ./scripts/build.sh --compiler-only
 ```
 
-Name `aarch64-linux` on Linux arm64, and `aarch64-darwin` on a Mac, which
-also needs Xcode's command-line tools; any other host needs nix. The
-archives are about 500 MB together. The build prints where it put `refine`:
-`compiler/ada/build/linux-amd64/debug/bin/refine` on Linux x86-64, where
-`linux-amd64` is the build tag that keeps each host's objects apart. That is
-the debug build, which keeps the compiler's own internal checks on;
-`LANDIN_BUILD_MODE=release` builds the faster release one beside it. This
-`refine` reads the clone's library, so put its directory on your `PATH`
-rather than copying it elsewhere.
+These commands name `x86_64-linux`. Name `aarch64-linux` on Linux arm64
+instead, and `aarch64-darwin` on a Mac.
 
-**Linking on Linux**, and so `refine run`, uses GCC as the linker driver,
-even when the program links no C library: the GCC your distribution
-installs, `x86_64-linux-gnu-gcc` on Debian and Ubuntu,
-`x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which `nix-shell -p gcc`
-provides on NixOS. Without one, `refine` says what to install; checking,
-formatting, the language server and emitting assembly or IR need none.
+The build prints where it put `refine`. On Linux x86-64 that is
+`compiler/ada/build/linux-amd64/debug/bin/refine`, where `linux-amd64` is
+the build tag that keeps each host's objects apart.
+
+That is the debug build, which keeps the compiler's own internal checks
+on. `LANDIN_BUILD_MODE=release` builds the faster release one beside it.
+
+This `refine` reads the clone's library, so put its directory on your
+`PATH` rather than copying it elsewhere.
+
+### The linker on Linux and macOS
+
+Linking on Linux uses GCC as the linker driver, even when the program
+links no C library. `refine run` links, so it needs GCC too. The GCC is
+the one your distribution installs:
+
+- `x86_64-linux-gnu-gcc` on Debian and Ubuntu;
+- `x86_64-redhat-linux-gcc` on Fedora;
+- or `gcc`, which `nix-shell -p gcc` provides on NixOS.
+
+Without one, `refine` says what to install. Checking, formatting, the
+language server and emitting assembly or the intermediate representation
+(IR) need none.
+
 macOS links through the Xcode command-line tools.
 
-**To check the install,** run `refine version`. It names the compiler, a
-release or `refine dev (01234567)` for a build from a clone, and its
-`library: ` line names the directory the standard library is read from:
-the archive's `lib/landin`, or the clone.
+### Checking the install
+
+Run `refine version`. It names the compiler: a release, or
+`refine dev (01234567)` for a build from a clone. Its `library: ` line
+names the directory the standard library is read from: the archive's
+`lib/landin`, or the clone.
 
 ## Your first program
 
@@ -136,19 +168,19 @@ Run it:
 refine run main.ldn
 ```
 
-`refine run` compiles the program into a private temporary directory, runs
-it, exits with its status and removes the directory. To keep the
-executable, compile it instead:
-
-```sh
-refine compile main.ldn -o hello
-./hello
-```
-
 It prints
 
 ```text
 Hello, world!
+```
+
+`refine run` compiles the program into a private temporary directory, runs
+it, exits with its status and removes the directory. To keep the
+executable, compile it instead; the executable prints the same line:
+
+```sh
+refine compile main.ldn -o hello
+./hello
 ```
 
 `blocking.new()` is the program's handle on the operating system, and
@@ -156,13 +188,15 @@ Hello, world!
 it does not matter. [The tour](tour.md) starts from this program and
 explains each line.
 
-A failed check stops the program with its place: an index past the end of
-an array, for example, prints `main.ldn:4:12: trap: out_of_range`. The
-shell then reports an illegal instruction, or on some systems a trace
+### When a check stops your program
+
+A failed check stops the program and prints its place. An index past the
+end of an array, for example, prints `main.ldn:4:12: trap: out_of_range`.
+The shell then reports an illegal instruction, or on some systems a trace
 trap, with a status above 128. That is the check stopping the program, not
 the compiler crashing.
 
-## Next steps
+## What to read next
 
 | read | for |
 | --- | --- |
@@ -186,9 +220,9 @@ it names.
 | `refine compile --debug=full ...` | include source debugging for GDB or LLDB |
 | `refine compile --target=linux-arm64 ...` | compile for another target; `refine targets` lists them |
 | `refine fmt main.ldn` | rewrite a source in the one layout; `--check` only reports |
-| `refine explain L0301` | explain a diagnostic code and what to change; also a numbered paragraph of the tour or `spec.md`, `[1760]`, or a decision recorded in `spec.md`, `D275` |
+| `refine explain L0301` | explain a diagnostic code and what to change. It also explains a numbered paragraph of the tour or `spec.md`, `[1760]`, or a decision recorded in `spec.md`, `D275` |
 | `refine lsp` | the language server an editor starts |
-| `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD; see [devices](devices/README.md) |
+| `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD (System View Description); see [devices](devices/README.md) |
 | `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
 | `refine version` | name the compiler and the library it uses |
 | `refine --help`, `refine compile --help` | every command, and one command's options |
@@ -198,8 +232,16 @@ it names.
 
 ## Current compiler capabilities
 
-[What refine does today](docs/capabilities.md) is the full inventory. In
-short:
+This section is a summary. [What refine does today](docs/capabilities.md)
+is the full inventory.
+
+### Targets
+
+The tables say what `refine` builds for each target and how the gate runs
+it. Every push runs the gate; see
+[Building and checking](#building-and-checking).
+
+Hosted targets:
 
 | target | builds | runs in the gate |
 | --- | --- | --- |
@@ -207,9 +249,16 @@ short:
 | Linux RV64 | hosted executables | under QEMU's user emulation, with GDB |
 | macOS arm64 | hosted executables | natively, with LLDB |
 | FreeBSD x86-64 and arm64 | hosted executables, emitted on Linux | in FreeBSD VMs, with LLDB |
-| Cortex-M | boot or RAM firmware for the device description it imports, or for the reference firmware profile of 32 KiB flash and 16 KiB RAM; RP2040, RP2350 and STM32H753 ports recorded on their boards, the STM32H753's Cortex-M7 using its float unit and caches | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
-| Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7), with one windowed ILP32 ABI and distinct instruction configurations; both boards have recorded RAM and boot checks | chip controls and the complete freestanding inventory on exact Espressif QEMU CPUs with explicitly virtual corpus RAM, plus strict assembler boundaries |
-| RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities; ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each run recorded against its expected output, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
+
+Firmware targets:
+
+| target | builds | on boards | runs in the gate |
+| --- | --- | --- | --- |
+| Cortex-M | boot or RAM firmware for the device description it imports, or for the reference firmware profile of 32 KiB flash and 16 KiB RAM | RP2040, RP2350 and STM32H753 ports recorded on their boards, the STM32H753's Cortex-M7 using its float unit and caches | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
+| Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7), with one windowed ILP32 ABI (application binary interface) and distinct instruction configurations | both boards have recorded RAM and boot checks | chip controls and the complete freestanding inventory on exact Espressif QEMU CPUs with explicitly virtual corpus RAM, plus strict assembler boundaries |
+| RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities | ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each run recorded against its expected output, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
+
+### Language, library and tooling
 
 - **The enabled language:** functions, aggregates and variants, declared
   failures with `else` and `try`, `defer` and `undo`, generics and concepts
@@ -233,45 +282,55 @@ short:
 - **Tooling:** source debugging on every target, a formatter, a language
   server, explained diagnostics with fixes, and stack-depth reports.
 
-## What comes next
+## The roadmap
 
-The first roadmap built the enabled language, hosted Linux, native macOS
-and Cortex-M firmware, and closed with the pre-v1 language feature-complete,
-a claim about coverage and nothing else. The current roadmap
-takes the compiler to an editor, more targets, the microcontrollers people
-buy, concurrency and optimization; a build tool, package acquisition,
-release versioning and self-hosting stay outside it.
-[`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
+[`ROADMAP.md`](ROADMAP.md) is the sole authority for open work. In short:
+
+- **The first roadmap** built the enabled language, hosted Linux, native
+  macOS and Cortex-M firmware. It closed with the pre-v1 language
+  feature-complete, a claim about coverage and nothing else.
+- **The current roadmap** takes the compiler to an editor, more targets,
+  the microcontrollers people buy, concurrency and optimization. A build
+  tool, package acquisition, release versioning and self-hosting stay
+  outside it.
 
 **Next roadmap item: R16.10 — Measure generated code (planned).**
 
 ## Questions, bugs and ideas
 
-Ask questions, report bugs and friction, and propose ideas or changes to the
-language in [Discussions](https://github.com/JanHaan/Landin/discussions);
-each category's form says what a report needs. The repository has no issue
-tracker: a discussion that leads to work becomes an item or a register
-record in `ROADMAP.md`. Report a security vulnerability privately, through
-[GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new),
-and never in a discussion. Everyone taking part follows the
-[code of conduct](CODE_OF_CONDUCT.md).
+Ask questions, report bugs and friction, and propose ideas or changes to
+the language in
+[Discussions](https://github.com/JanHaan/Landin/discussions). Each
+category's form says what a report needs.
+
+- A typo, a mistake in the documentation, a refusal that did not help or
+  an idea each get a thread of their own.
+- Put suggestions for the next roadmap in
+  [its standing thread](https://github.com/JanHaan/Landin/discussions/2).
+- Report a security vulnerability privately, through
+  [GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new),
+  and never in a discussion.
+
+The repository has no issue tracker: a discussion that leads to work
+becomes an item or a register record in `ROADMAP.md`. Everyone taking part
+follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Working on Landin
 
 [`AGENTS.md`](AGENTS.md) is the guide to working in this repository, for
-people and agents alike: the order of authority among the documents, every
-command, the CI gate and the rules the compiler keeps.
-[The validation workflow](docs/process.md) explains the edit, test and push
-loop. Feedback goes to
-[GitHub Discussions](https://github.com/JanHaan/Landin/discussions): a
-typo, a mistake in the documentation, a refusal that did not help or an
-idea, each in a thread of its own, and suggestions for the next roadmap in
-[its standing thread](https://github.com/JanHaan/Landin/discussions/2).
-If you propose a change there, say which checks cover it:
-`python3 check.py` for documentation, or the focused tests the workflow
-describes for code.
+people and agents alike. It holds the order of authority among the
+documents, every command, the continuous-integration (CI) gate and the
+rules the compiler keeps.
 
-### What is here
+[The validation workflow](docs/process.md) explains the edit, test and push
+loop.
+
+Feedback goes to GitHub Discussions, as
+[Questions, bugs and ideas](#questions-bugs-and-ideas) describes. If you
+propose a change there, say which checks cover it: `python3 check.py` for
+documentation, or the focused tests the workflow describes for code.
+
+### What is in the repository
 
 | path | what it is |
 | --- | --- |
@@ -280,13 +339,13 @@ describes for code.
 | `handoff.md` | the design in one page, and which decisions must not be quietly reversed. |
 | `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. |
 | `examples.md` | complete programs, each printing what it computes; the gate runs every one. |
-| `prototype-*.md` | the five design stress tests; see below. |
+| `prototype-*.md` | the five design stress tests; see [The prototypes](#the-prototypes). |
 | `compiler/ada/` | [the Ada 2022 bootstrap compiler](compiler/ada/README.md): `refine`, its frontend, verified IR, native backends and test harness. |
 | `compiler/tests/` | [the fixtures](compiler/tests/README.md), in a format that outlives the implementation checking them. |
 | `core/`, `hosted/`, `platform/` | the standard library. |
 | `docs/` | derived guides, never authorities: [the documents' arrangement](docs/documents.md), [diagnostics](docs/diagnostics.md), [formatting](docs/format.md), [the language server](docs/server.md), [the IR](docs/ir.md), [target contracts](docs/targets.md), [environments](docs/environments.md), and non-normative [design notes](docs/notes/printf-alternative.md). |
 | `examples/` | the programs derived from prototypes 2, 3, 4 and 5: [`config_parser/`](examples/config_parser/), [`derived_containers/`](examples/derived_containers/), [`derived_hosted/`](examples/derived_hosted/) and [`derived_server/`](examples/derived_server/). |
-| [`bindings/`](bindings/README.md) | `refine bindings`' policy, its tests and its documentation: the C binding generator asks an external Clang for a header's AST, so the compiler never parses C. |
+| [`bindings/`](bindings/README.md) | `refine bindings`' policy, its tests and its documentation. The C binding generator asks an external Clang for a header's AST (abstract syntax tree), so the compiler never parses C. |
 | [`highlight/`](highlight/README.md) | highlighting and editor packages, from VS Code and JetBrains IDEs through Vim, Emacs and Notepad++. |
 | `environments/` | `pins.sh`, the one place a toolchain version or checksum is written, and the environments that produce evidence. |
 | `scripts/`, `check.py`, `flake.nix` | build, test and check commands, and `nix develop`. |
@@ -294,14 +353,14 @@ describes for code.
 ### The prototypes
 
 The five `prototype-*.md` files are not tutorials and not example programs.
-Each was written before the compiler could do what it asks, to make the
-specification fail, and ends with its findings, keeping the wording that
-turned out wrong beside its resolution. They are sketches that leave bodies
-out with `...`; what runs is derived from them.
+Each was written before the compiler could do what it asks, in order to
+make the specification fail. Each ends with its findings, and keeps the
+wording that turned out wrong beside its resolution. The prototypes are
+sketches that leave bodies out with `...`; what runs is derived from them.
 
 | prototype | what it presses on | what runs |
 | --- | --- | --- |
-| `prototype-1-driver.md` | a Cortex-M driver from a vendor SVD: registers, DMA, interrupts, a vector table | [the derived driver](compiler/tests/driver/DERIVATION.md) |
+| `prototype-1-driver.md` | a Cortex-M driver from a vendor SVD: registers, DMA (direct memory access), interrupts, a vector table | [the derived driver](compiler/tests/driver/DERIVATION.md) |
 | `prototype-2-parser.md` | a parser that recovers from errors rather than stopping at the first | `examples/config_parser/` |
 | `prototype-3-containers.md` | generic containers, allocators, escape rules | the `core` containers and `examples/derived_containers/` |
 | `prototype-4-app.md` | a hosted application chosen by its command line: runtime dispatch | `examples/derived_hosted/` |
@@ -319,9 +378,11 @@ python3 check.py             # the mechanical checks over documents and fixtures
 
 `check.py` is not a parser. It is the set of invariants that are cheap to
 check and tedious to re-check by hand, and every defect it missed once
-belongs in it. Every push runs [the gate](AGENTS.md#the-mechanical-gate),
-which tests every target in separate jobs; it is a safety net, not a
-verdict on a revision.
+belongs in it.
+
+Every push runs [the gate](AGENTS.md#the-mechanical-gate), which tests
+every target in separate jobs. The gate is a safety net, not a verdict on a
+revision.
 
 [The site](https://www.701.dev) is rendered from these files by
 `./scripts/site.sh` and published only from `main`; see
@@ -331,12 +392,15 @@ git.sr.ht is a mirror.
 ### Where the history is
 
 The design was argued out over a long sequence of numbered revisions, the
-prototypes and two outside reviews, and that archive is kept separately;
-nothing here depends on it. What was worth carrying came along: the tour's
-closing section, WHAT WAS TRIED AND DROPPED, keeps the things that were
-designed and then taken out again, because a reader who does not know them
-will propose them back. The exact-revision acceptance that approved every
-revision through 0.2.0 [is retired](environments/native-ci/README.md).
+prototypes and two outside reviews. That archive is kept separately, and
+nothing here depends on it.
+
+What was worth carrying came along. The tour's closing section, WHAT WAS
+TRIED AND DROPPED, keeps the things that were designed and then taken out
+again, because a reader who does not know them will propose them back.
+
+The exact-revision acceptance that approved every revision through 0.2.0
+[is retired](environments/native-ci/README.md).
 
 ## License
 

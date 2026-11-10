@@ -138,11 +138,11 @@ fixed if compiler.os == freebsd then
     public extern(c) posix_spawnattr_setflags:
         (attributes: ptr mut spawn_object, flags: i16) -> (error: i32)
 
-    --- Start the program at `path`, with the null-terminated `arguments` and
-    --- `environment` tables, in a child, applying `actions` and `attributes`
-    --- first, and put its ID in `child`: 0, or the errno, which a program
-    --- that could not be executed reports too, its child already reaped.
-    --- Nothing searches a path for the program.
+    --- Start the program at `path` in a child, with the null-terminated
+    --- `arguments` and `environment` tables, and put the child's ID in
+    --- `child`.  `actions` and `attributes` are applied first.  0, or the
+    --- errno, which a program that could not be executed reports too, its
+    --- child already reaped.  Nothing searches a path for the program.
     public extern(c) posix_spawn:
         (child: ptr mut i32, path: ptr u8, actions: ptr spawn_object,
          attributes: ptr spawn_object, arguments: ptr ptr u8,
@@ -234,9 +234,9 @@ fixed if compiler.os == freebsd then
                                length: address_length, flags: i32)
                               -> (accepted: i32)
 
-    --- Name the signals whose disposition a child `posix_spawn` starts with
-    --- `posix_spawn_setsigdef` set is reset to the default: 0, or the
-    --- errno.
+    --- Name the signals whose disposition is reset to the default in a
+    --- child that `posix_spawn` starts with the flag
+    --- `posix_spawn_setsigdef` set: 0, or the errno.
     public extern(c) posix_spawnattr_setsigdefault:
         (attributes: ptr mut spawn_object, signals: ptr signal_set)
         -> (error: i32)
@@ -245,8 +245,8 @@ fixed if compiler.os == freebsd then
     --- is the one `posix_spawnattr_setsigmask` gives.
     public posix_spawn_setsigmask: i16 = 32
 
-    --- Give the mask of blocked signals a child `posix_spawn` starts with
-    --- `posix_spawn_setsigmask` set: 0, or the errno.
+    --- Give the mask of blocked signals for a child that `posix_spawn`
+    --- starts with the flag `posix_spawn_setsigmask` set: 0, or the errno.
     public extern(c) posix_spawnattr_setsigmask:
         (attributes: ptr mut spawn_object, signals: ptr signal_set)
         -> (error: i32)
@@ -415,11 +415,11 @@ fixed if compiler.os == freebsd then
     --- FreeBSD's own synchronisation call, `_umtx_op(obj, op, val, uaddr,
     --- uaddr2)`, whose arguments each operation reads its own way.  With
     --- `umtx_op_wait_uint_private` it sleeps while the unsigned int at
-    --- `object` holds `value`, until a wake, a signal or the limit at
-    --- `second`, a `umtx_time` whose size `first` gives, or none for zero:
-    --- 0 when woken, which may be spuriously, and at once when the word
-    --- does not hold `value`, or -1 with the reason in errno, ETIMEDOUT
-    --- when the limit passed and EINTR for a signal.  With
+    --- `object` holds `value`, until a wake, a signal or a limit.  The
+    --- limit is at `second`, a `umtx_time` whose size `first` gives, or
+    --- none for zero.  0 when woken, which may be spuriously, and at once
+    --- when the word does not hold `value`, or -1 with the reason in errno,
+    --- ETIMEDOUT when the limit passed and EINTR for a signal.  With
     --- `umtx_op_wake_private` it wakes at most `value` of those waiting on
     --- the word at `object`: 0, or -1 with the reason in errno.
     public extern(c) _umtx_op: (object: usize, operation: i32, value: u64,

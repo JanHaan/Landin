@@ -21,13 +21,13 @@ arena_value: type = struct
     base: ptr mut u8
 end arena_value
 
---- Monotonic allocator over caller-owned bytes, as a handle: copies share one
---- arena. Individual frees do not reclaim space; only the most recent
---- allocation can grow in place, or give back its tail when it is resized
---- smaller, and a resize that cannot grow in place moves the block to a new
---- allocation, leaving the old bytes spent. Zero-byte requests may consume
---- alignment padding. `reset` gives every allocation back at once,
---- the arena's one free that reclaims anything.
+--- A monotonic allocator over caller-owned bytes. It is a handle: copies
+--- share one arena. Freeing a single block reclaims no space. Only the most
+--- recent allocation can grow in place, or give back its tail when it is
+--- resized smaller. A resize that cannot grow in place moves the block to a
+--- new allocation and leaves the old bytes spent. A zero-byte request may
+--- consume alignment padding. `reset` gives every allocation back at once;
+--- it is the arena's one free that reclaims anything.
 public arena: type = arena_value
 
 --- Fill `state` for an arena over retainable backing and return its handle,
@@ -42,13 +42,13 @@ public over: (inout state: space, escaping base: ptr mut u8, size: usize)
     handle = (state: addr state, base: base)
 end over
 
---- Fill `state` for an arena over local backing with an explicit lifetime
---- opt-out and return its handle. The caller must end every allocated view
---- before that backing ends.
+--- Fill `state` for an arena over local backing and return its handle.
+--- This is an explicit lifetime opt-out for a local extent: the handle
+--- still keeps its tracked origins, but allocations do not.
 ---
---- Explicit lifetime opt-out for a local extent. The handle still keeps its
---- tracked origins, but allocations do not; users must end every allocation
---- before the backing ends, including allocations retained by helpers.
+--- The caller must end every allocation, and every view of one, before
+--- the backing ends. That includes allocations that helpers have
+--- retained.
 public over_unchecked: (inout state: space, base: ptr mut u8, size: usize)
                        -> (handle: arena from state, base) =
     state = (size: size, used: 0)

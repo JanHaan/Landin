@@ -107,7 +107,7 @@
 0830 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A view into a local holds the local still
 0840 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Mixed origins count as the shortest-lived
 0850 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | withdrawn | executed | all | none | none | Volatile access sits outside the borrow rules
-0860 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | What this does not catch
+0860 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | What the lifetime checks do not catch
 0870 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Declaring a function
 0880 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | One-line functions
 0890 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Returning nothing, and never returning
@@ -159,7 +159,7 @@
 1350 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | boundary | executed | all | none | none | Generic types
 1360 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Allocation is a concept
 1370 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | `any C`: a value of some type that satisfies C
-1380 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Building one with `any(...)`
+1380 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Building an `any` with `any(...)`
 1390 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Calls go through the table
 1400 | tour | refused | refused | refused | refused | refused | refused | refused | refused | - | compiled | all | none | none | What `any` can do that generics cannot
 1410 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A module is a directory

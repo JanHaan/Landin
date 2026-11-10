@@ -83,11 +83,11 @@ group_value: type = struct
     area: usize
 end group_value
 
---- Threads a routine starts and waits for: `count` equal stacks cut from
---- a backing the caller lends, each with its record at its base and the
---- area its thread starts on at its top. Made by `group_over`, given
---- tasks by `admit`, and waited for by `join`, which the routine making
---- the group defers as it would a region's release: a group must be
+--- A group of threads that a routine starts and waits for. It is `count`
+--- equal stacks cut from a backing the caller lends, each with its record at
+--- its base and the area its thread starts on at its top. `group_over` makes
+--- one, `admit` gives it tasks and `join` waits for them. The routine making
+--- the group defers `join` as it would a region's release: a group must be
 --- joined before its backing goes, and nothing else makes sure it is.
 public group: type = group_value
 
@@ -106,11 +106,11 @@ record_of: (g: group, index: usize) -> (record: ptr mut slot) =
     record = ptr(g.first + index * g.size)
 end record_of
 
---- The least bytes one stack of a group takes on this system: its
---- record, 4 KiB for the task's own stack and the area the thread starts
---- on, the system's least: 2 KiB and the thread's storage on a static
---- Linux program, glibc's PTHREAD_STACK_MIN, 16 KiB on x86-64 and RV64 and
---- 128 KiB on arm64, under --link=libc, and 16 KiB on Darwin and FreeBSD,
+--- The least bytes one stack of a group takes on this system: its record, 4
+--- KiB for the task's own stack, and the area the thread starts on, the
+--- system's least. That area is 2 KiB and the thread's storage on a static
+--- Linux program; glibc's PTHREAD_STACK_MIN under --link=libc, 16 KiB on
+--- x86-64 and RV64 and 128 KiB on arm64; and 16 KiB on Darwin and FreeBSD,
 --- where Darwin cuts every stack in whole 16 KiB pages (D519).
 public least_stack: () -> (bytes: usize) =
     unit: usize = posix.thread_start_alignment()
@@ -118,10 +118,10 @@ public least_stack: () -> (bytes: usize) =
     bytes += skip_to(bytes, unit)
 end least_stack
 
---- A group of threads over `host`, whose last-error cell keeps the errno
---- of a start the system refused. It cuts `backing` into `count` equal
---- stacks and fails `mem.out_of_memory` when they would be smaller than
---- `least_stack()`, before any thread starts. The group borrows the
+--- Make a group of threads over `host`, whose last-error cell keeps the
+--- errno of a start the system refused. It cuts `backing` into `count`
+--- equal stacks and fails `mem.out_of_memory` when they would be smaller
+--- than `least_stack()`, before any thread starts. The group borrows the
 --- handle and the backing for as long as it is used [0790].
 public group_over: (host: system.host, backing: []mut u8, count: usize)
                    -> (g: group from host, backing) ! mem.out_of_memory =
@@ -248,25 +248,25 @@ free_stack: (g: group) -> (index: usize) =
     index = oldest
 end free_stack
 
---- Start a task: wait until one of the group's stacks is free, joining a
---- thread whose task has ended, or else the one that started first;
---- copy `state` onto the top of that stack's own part, as a call passes
---- an argument; prepare the stack; and start a thread whose first frame
---- calls `work` with the copy. The thread begins with every
---- asynchronous signal blocked, and only a fault's own unblocked (D521). Because each task's state lives on its own stack, one group
---- holds tasks of different state types. The thread runs in parallel with
---- the caller: everything sequenced before `admit` happens before the
---- task's first action, and nothing after it does unless the two
---- synchronize themselves (D227).
+--- Start a task. `admit` waits until one of the group's stacks is free,
+--- joining a thread whose task has ended, or else the one that started first.
+--- It copies `state` onto the top of that stack's own part, as a call passes
+--- an argument, prepares the stack, and starts a thread whose first frame
+--- calls `work` with the copy. The thread begins with every asynchronous
+--- signal blocked, and only a fault's own unblocked (D521). Because each
+--- task's state lives on its own stack, one group holds tasks of different
+--- state types. The thread runs in parallel with the caller: everything
+--- sequenced before `admit` happens before the task's first action, and
+--- nothing after it does unless the two synchronize themselves (D227).
 ---
---- `work`'s failure is kept by the group, the first one only, and `join`
---- fails with it. A task with atoms of its own maps them to
---- `failure.reason` before returning. `state` is kept in the group until
---- the task ends, so what it refers to must outlive the group (D445).
---- It fails `mem.out_of_memory` when the state leaves the stack less than
---- 4 KiB for the task's own calls, and when the system refuses the thread,
---- whose errno the group's handle then keeps for `system.last_errno`; a
---- failed start starts nothing and leaves the stack free.
+--- The group keeps `work`'s failure, the first one only, and `join` fails
+--- with it. A task with atoms of its own maps them to `failure.reason`
+--- before returning. The group keeps `state` until the task ends, so what
+--- it refers to must outlive the group (D445). `admit` fails
+--- `mem.out_of_memory` when the state leaves the stack less than 4 KiB for
+--- the task's own calls, and when the system refuses the thread, whose
+--- errno the group's handle then keeps for `system.last_errno`; a failed
+--- start starts nothing and leaves the stack free.
 public admit: (state_type: type, inout g: group,
                work: (inout state: state_type) -> none ! failure.reason,
                escaping into g state: state_type)

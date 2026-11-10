@@ -55,20 +55,20 @@ keep_signal: (self: host, number: i32) -> none =
     end match
 end keep_signal
 
---- Hosted provider of the services that do not wait: `io.files`,
---- `io.process`, `io.environment`, `io.directories`, `io.file_system`,
---- `io.terminals`, the system's `io.entropy` and the clock
---- `time.wall_clock`, over platform/posix, as a handle: copies share the
---- process's descriptors, arguments and environment, and record into the
---- last-error and last-signal cells they were made with: the calling
---- thread's own for a handle from `new`, the caller's for one from
---- `over`. It reads and writes no
---- stream, so it is no `io.world`, and runs no program, since a child's
---- pipes are read and the child waited for: `hosted/blocking`, built over
---- it, supplies reading and writing, `io.programs` over this provider's
---- `start`, the network, the monotonic clock and the scheduler (D479). File identifiers belong to this provider and
---- to every provider built over it; borrowed arguments and variables
---- refer to process storage.
+--- The hosted provider of the services that do not wait, over
+--- platform/posix: `io.files`, `io.process`, `io.environment`,
+--- `io.directories`, `io.file_system`, `io.terminals`, the system's
+--- `io.entropy` and the clock `time.wall_clock`. The value is a handle:
+--- copies share the process's descriptors, arguments and environment, and
+--- record into the last-error and last-signal cells they were made with,
+--- the calling thread's own for a handle from `new` and the caller's for
+--- one from `over`. It reads and writes no stream, so it is no `io.world`.
+--- It runs no program either, since running one reads the child's pipes and
+--- waits for the child. `hosted/blocking`, built over it, supplies reading
+--- and writing, `io.programs` over this provider's `start`, the network,
+--- the monotonic clock and the scheduler (D479). File identifiers belong to
+--- this provider and to every provider built over it; borrowed arguments
+--- and variables refer to process storage.
 public host: type = system_value
 
 --- A last-error cell and a last-signal cell of the caller's own, for code
@@ -99,13 +99,13 @@ public last_errno: (handle: host) -> (number: i32) =
     end match
 end last_errno
 
---- Return the number of the signal that ended the child this handle's
---- cell last saw end through `io.wait` of a provider built over it,
---- which `ended` keeps, as POSIX numbers it on this system: SIGTERM is
---- 15 and SIGKILL 9 on Linux, Darwin and FreeBSD alike.
---- Zero means that child exited with a code, or that no child has been
---- waited for.  It is the system's detail behind `io.ending`'s portable
---- `signalled`, as `last_errno` is behind an error atom.
+--- Return the number of the signal that ended the child this handle's cell
+--- last saw end. `ended` keeps it when a provider built over this handle
+--- waits for a child through `io.wait`. It is the number POSIX gives the
+--- signal on this system: SIGTERM is 15 and SIGKILL 9 on Linux, Darwin and
+--- FreeBSD alike. Zero means that child exited with a code, or that no child
+--- has been waited for. It is the system's detail behind `io.ending`'s
+--- portable `signalled`, as `last_errno` is behind an error atom.
 public last_signal: (handle: host) -> (number: i32) =
     match handle.signal
         calling_thread: number = thread_signal
@@ -113,17 +113,17 @@ public last_signal: (handle: host) -> (number: i32) =
     end match
 end last_signal
 
---- Clear the handle's last-error cell, as every call of this provider
---- does before it asks the system: for a provider built over this one,
+--- Clear the handle's last-error cell, as every call of this provider does
+--- before it asks the system. It is for a provider built over this one,
 --- whose own calls report through the same cell.
 public clear_errno: (handle: host) -> none =
     keep_failure(handle, 0)
 end clear_errno
 
---- Keep `problem` in the handle's last-error cell, which `last_errno`
---- then reports: for a provider built over this one, whose own calls fail
---- through the same cell.  `unlisted`, which no errno describes, leaves
---- the cell as it is.
+--- Keep `problem` in the handle's last-error cell, which `last_errno` then
+--- reports. It is for a provider built over this one, whose own calls fail
+--- through the same cell. `unlisted`, which no errno describes, leaves the
+--- cell as it is.
 public record_errno: (handle: host, problem: posix.errno) -> none =
     record(handle, problem)
 end record_errno
@@ -167,30 +167,30 @@ end path_failure
 --  `send` takes MSG_NOSIGNAL (D322).
 socket_mark: usize = 0x80000000
 
---- The platform/posix descriptor a file of this provider is, for a call
---- the portable concepts do not make: a file's permission bits, a lock, a
---- terminal's raw mode.  The file stays this provider's, to close through
---- `io.close`.
+--- Return the platform/posix descriptor behind a file of this provider, for
+--- a call the portable concepts do not make: a file's permission bits, a
+--- lock, a terminal's raw mode. The file stays this provider's; close it
+--- through `io.close`.
 public descriptor_of: (opened: io.file) -> (result: posix.descriptor) =
     result = posix.descriptor(i32(usize(opened) & (socket_mark - 1)))
 end descriptor_of
 
---- The file of this provider a platform/posix descriptor is, so its
---- concepts, and `io.read`, `io.write` and the rest of a provider built
---- over it, take one that platform/posix opened.  Close it once, through
---- either.  A socket platform/posix made is written with
---- POSIX's `write` through it, which on Linux raises SIGPIPE when its peer
---- has gone; `socket_of` makes one whose writes are sends.
+--- Return a platform/posix descriptor as a file of this provider. This
+--- provider's concepts then take a file that platform/posix opened, and so
+--- do `io.read`, `io.write` and the rest of a provider built over it. Close
+--- it once, through either. A socket converted this way is written with
+--- POSIX's `write`, which on Linux raises SIGPIPE when its peer has gone;
+--- `socket_of` makes a file whose writes are sends.
 public file_of: (opened: posix.descriptor) -> (result: io.file) =
     result = io.file(usize(i32(opened)))
 end file_of
 
---- The file of this provider a platform/posix socket is: the `io.write`
---- of a provider built over this one sends on it as `net.send` does, so a
---- peer that has gone fails the write with EPIPE on every system and
---- raises no SIGPIPE, beside a C handler too.
---- `net.connect`, `net.listen`, `net.accept` and `net.open_datagram` give
---- their sockets so.
+--- Return a platform/posix socket as a file of this provider. The
+--- `io.write` of a provider built over this one sends on such a file as
+--- `net.send` does, so a peer that has gone fails the write with EPIPE on
+--- every system and raises no SIGPIPE, beside a C handler too.
+--- `net.connect`, `net.listen`, `net.accept` and `net.open_datagram` return
+--- their sockets this way.
 public socket_of: (opened: posix.descriptor) -> (result: io.file) =
     result = io.file(usize(i32(opened)) | socket_mark)
 end socket_of
@@ -356,21 +356,21 @@ host is io.environment
      variable_at: system_variable_at,
      variable_named: system_variable_named)
 
---- Return a handle to the hosted services that do not wait, exposing
+--- Return a handle to the hosted services that do not wait. It exposes the
 --- process arguments and the three standard streams, descriptors 0, 1 and
 --- 2, which a provider built over it reads and writes. Regular open-write
 --- operations create or truncate files; close regular files explicitly. A
---- program that waits on anything mints `hosted/blocking`'s `new`
---- instead, which makes this handle itself. The handle borrows nothing:
---- the argument root and the descriptors belong to the process, and each
---- thread that calls through the handle, or through a copy of it, records
---- into a last-error and last-signal cell of its own (D503), so threads
---- sharing a handle never see each other's failures. Use `over` for a
---- cell of the caller's own.
+--- program that waits on anything mints `hosted/blocking`'s `new` instead,
+--- which makes this handle itself. The handle borrows nothing: the argument
+--- root and the descriptors belong to the process. Each thread that calls
+--- through the handle, or through a copy of it, records into a last-error
+--- and last-signal cell of its own (D503), so threads sharing a handle
+--- never see each other's failures. Use `over` for a cell of the caller's
+--- own.
 ---
---- The arguments are the root platform/posix's
---- `_landin_host_initialize_arguments` established, which the hosted entry
---- establishes before its body runs; calling this before any root exists
+--- The arguments are the root that platform/posix's
+--- `_landin_host_initialize_arguments` established. The hosted entry
+--- establishes it before its body runs; calling this before any root exists
 --- traps.
 public new: () -> (handle: host) =
     _ = posix.arguments()
@@ -378,9 +378,9 @@ public new: () -> (handle: host) =
 end new
 
 --- Fill `state` and return a handle that records its last error there
---- rather than in the calling thread's cell, whichever thread calls. It shares the process's arguments
---- and descriptors like any other handle; calling this before any root
---- exists traps, as `host` does.
+--- rather than in the calling thread's cell, whichever thread calls. It
+--- shares the process's arguments and descriptors like any other handle;
+--- calling this before any root exists traps, as `host` does.
 public over: (inout state: space) -> (handle: host from state) =
     _ = posix.arguments()
     state = (failure: 0, signal: 0)

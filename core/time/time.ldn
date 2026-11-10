@@ -19,9 +19,9 @@ public duration: type = duration_value
 
 --- A reading of a monotonic clock: nanoseconds since a start the provider
 --- fixes, which is the system's boot on Linux.  Only the difference
---- between two readings of one provider means anything, `elapsed`; the
---- count is `u64(at)`.  Two instants compare with `==`, `<>`, `<`, `<=`,
---- `>` and `>=`, as their counts do, and are `cmp.equatable`,
+--- between two readings of one provider means anything, which `elapsed`
+--- gives; the count is `u64(at)`.  Two instants compare with `==`, `<>`,
+--- `<`, `<=`, `>` and `>=`, as their counts do, and are `cmp.equatable`,
 --- `cmp.hashable` and `cmp.ordered` the same way.
 public instant: type = instant_value
 

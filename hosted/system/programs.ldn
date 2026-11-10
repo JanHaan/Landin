@@ -114,18 +114,18 @@ launched: (path: text.host_string, arguments: []text.host_string,
                errors_open: errors.piped)
 end launched
 
---- Start the program at `path` as `io.programs`' `spawn` says, for a
---- provider built over this handle that supplies `io.programs`: it starts
---- the child, which does not wait, and the provider reads, writes and
---- closes the parent's ends of the child's pipes, files of this provider
---- that `descriptor_of` converts, and waits for the child itself, through
---- whatever waiting it does (D479).  A discarded stream is the system's
---- `/dev/null`; a piped one is a pipe made closed on exec, whose child end
---- is closed here once the child has it.  An interrupted spawn is made
---- again.  A missing program is `not_found`, one the caller may not run
---- `no_access`, the rest `io_failed`, each errno kept in the handle's
---- last-error cell; on any failure no child was started and nothing it
---- made is left open.  `io.child`'s `handle` is the child's
+--- Start the program at `path` as `io.programs`' `spawn` says. It is for a
+--- provider built over this handle that supplies `io.programs`: `start`
+--- starts the child and does not wait. The provider itself reads, writes
+--- and closes the parent's ends of the child's pipes, files of this
+--- provider that `descriptor_of` converts, and waits for the child through
+--- whatever waiting it does (D479). A discarded stream is the system's
+--- `/dev/null`. A piped one is a pipe made closed on exec, whose child end
+--- is closed here once the child has it. An interrupted spawn is made
+--- again. It fails `not_found` for a missing program, `no_access` for one
+--- the caller may not run and `io_failed` for the rest, each errno kept in
+--- the handle's last-error cell. On any failure no child was started and
+--- nothing `start` made is left open. `io.child`'s `handle` is the child's
 --- platform/posix `process_id`.
 public start: (handle: host, path: text.host_string,
                arguments: []text.host_string, environment: []io.variable,
@@ -139,7 +139,7 @@ public start: (handle: host, path: text.host_string,
     end
 end start
 
---- The platform/posix process ID of a child `start` started, for a
+--- Return the platform/posix process ID of a child `start` started, for a
 --- provider to wait for.
 public process_of: (started: io.child) -> (child: posix.process_id) =
     child = posix.process_id(i32(started.handle))

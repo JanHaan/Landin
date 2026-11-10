@@ -25,10 +25,10 @@ injector_value: type (inner_provider: type) = struct
     inner: inner_provider
 end injector_value
 
---- Allocator wrapper with deterministic failure injection and cumulative
---- counters, as a handle: copies share one budget. Holds a copy of its inner
---- provider's handle and delegates permitted allocations, resizes,
---- in-place growths and frees.
+--- An allocator wrapper that injects failures deterministically and keeps
+--- cumulative counters. It is a handle: copies share one budget. It holds a
+--- copy of its inner provider's handle and delegates to it the allocations,
+--- resizes and in-place growths the budget permits, and every free.
 public injector: type (inner_provider: type) = injector_value(inner_provider)
 
 --- Fill `state` for an injector over `inner` with a budget of

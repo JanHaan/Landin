@@ -75,21 +75,21 @@ end volume_value
 --- A file system in memory over the caller's nodes and their storage: a
 --- provider of `reader`, `writer`, `files`, `directories` and
 --- `file_system`.  A file grows only into its node's `contents`, and a
---- write that finds no room left is `io_failed`, as a full device is; a
+--- write that finds no room left is `io_failed`, as a full device is.  A
 --- new file takes a free node, and a path longer than its room, or a
 --- volume with no free node, is `io_failed` too.  A symbolic link is a
 --- node the caller makes, followed as a system follows one: always before
---- a path's last part, and in its last part where the call follows links,
---- a target that begins with `/` from the volume's root and any other from
---- the link's own directory.  Opening a dangling link to create a file
---- creates its target.  More than eight links in one path are
---- `io_failed`, as ELOOP is, and a path that grows past 256 bytes as its
---- links' targets are put in it is `io_failed` too.  A node a file is open
---- on cannot be removed or replaced:
---- `io_failed`, where POSIX would keep the open file without its name, and
---- a node whose path is longer than 256 bytes is not renamed.
---- Read-only files refuse writing, `no_access`, as they do to every
---- process but a privileged one.  Copies share the volume.
+--- a path's last part, and in its last part where the call follows links.
+--- A target that begins with `/` is followed from the volume's root, and
+--- any other from the link's own directory.  Opening a dangling link to
+--- create a file creates its target.  More than eight links in one path
+--- are `io_failed`, as ELOOP is, and a path that grows past 256 bytes as
+--- its links' targets are put in it is `io_failed` too.  A node a file is
+--- open on cannot be removed or replaced, which is `io_failed`, where
+--- POSIX would keep the open file without its name; a node whose path is
+--- longer than 256 bytes is not renamed.  Read-only files refuse writing,
+--- `no_access`, as they do to every process but a privileged one.  Copies
+--- share the volume.
 public volume: type = volume_value
 
 --- Fill `state` for a memory volume over `nodes`, whose working directory

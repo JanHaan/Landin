@@ -7,12 +7,12 @@
 import core/text
 import core/time
 
---- How `open_file` opens a file: to `read`, to `write`, or both; to
---- `append`, every write going to the end of the file, which needs
---- `write`; to `create` it when it is missing, and with `exclusive` too to
---- refuse it when it is not, `already_exists`, which no other program can
---- come between; and to `truncate` it to nothing as it is opened, which
---- needs `write`.  Any other combination, and one that neither reads nor
+--- How `open_file` opens a file.  `read` and `write` open it to read, to
+--- write, or both.  `append` sends every write to the end of the file, and
+--- `truncate` cuts it to nothing as it is opened; each needs `write`.
+--- `create` makes the file when it is missing.  `exclusive` with `create`
+--- refuses a file that is there, `already_exists`, and no other program can
+--- come in between.  Any other combination, and one that neither reads nor
 --- writes, is `io_failed` before the provider is asked.
 public open_options: type = struct
     read: bool
@@ -47,18 +47,18 @@ public not_following: atom
 --- What `status_of` does with a symbolic link that ends its path.
 public link_handling: type = following | not_following
 
---- Write a file's data and its status where they last.
+--- Write a file's data and its status to lasting storage.
 public data_and_status: atom
---- Write a file's data and only the status reading it back needs.
+--- Write a file's data and only the status that reading it back needs.
 public data_only: atom
---- What `synchronize` writes where it lasts.
+--- What `synchronize` writes to lasting storage.
 public synchronizing: type = data_and_status | data_only
 
---- What a file is and the little every system says of it alike: its
---- size in bytes, what it is, when it was last written, as the wall clock
---- read then, and whether it is `read_only`, which on POSIX means that no
---- permission bit lets anyone write it.  A directory's own size differs
---- between file systems; a symbolic link's is the length of its target.
+--- The little that every system says alike about a file: its size in bytes,
+--- what it is, when it was last written, as the wall clock read then, and
+--- whether it is `read_only`, which on POSIX means that no permission bit
+--- lets anyone write it.  A directory's own size differs between file
+--- systems; a symbolic link's is the length of its target.
 public status: type = struct
     size: u64
     kind: entry_kind
@@ -66,10 +66,10 @@ public status: type = struct
     read_only: bool
 end status
 
---- A temporary file `make_temporary` made: open for reading and writing,
---- and its path, the directory's and a name of its own, lent from the
---- caller's buffer.  Nothing removes it: close it, then rename it into
---- place or remove it, on every way out.
+--- A temporary file `make_temporary` made: the file, open for reading and
+--- writing, and its path, the directory's path and a name of its own, lent
+--- from the caller's buffer.  Nothing removes it: on every way out, close
+--- it, then rename it into place or remove it.
 public temporary: type = struct
     opened: file
     path: text.host_string
@@ -79,14 +79,14 @@ end temporary
 --- The rest of the file system: a concept that refines `files`, so a
 --- provider of it opens with `open_read`, `open_write` and `open_file` and
 --- closes every one of them with `files`' `close`, the one close a file
---- has; it is outside `world`, beside `directories`.  A path is a host
+--- has.  It is outside `world`, beside `directories`.  A path is a host
 --- string, as `files` takes one, and a file is a `file` of the provider,
 --- which `reader`, `writer` and `files` take too.
 public file_system: type = concept (provider: type) is files
     --- Open the file at `path` as `options` say.  A missing file without
-    --- `create`, and a path through something that is not a directory,
-    --- are `not_found`; a file `exclusive` finds is `already_exists`; a
-    --- file the provider may not open so is `no_access`.
+    --- `create`, and a path through something that is not a directory, are
+    --- `not_found`; a file that `exclusive` finds is `already_exists`; a
+    --- file the provider may not open that way is `no_access`.
     open_file: (self: provider, path: text.host_string,
                 options: open_options)
                -> (opened: file)
@@ -94,13 +94,13 @@ public file_system: type = concept (provider: type) is files
     --- Give the file at `old` the name `new` in one step, replacing a file
     --- already named `new`; a missing `old` or parent of `new` is
     --- `not_found`.  A rename does not cross from one file system to
-    --- another, which is `io_failed`, nor puts a directory where a file is
-    --- or a file where a directory is.
+    --- another, which is `io_failed`, and never puts a directory where a
+    --- file is or a file where a directory is.
     rename: (self: provider, old: text.host_string, new: text.host_string)
             -> none ! not_found | no_access | io_failed
-    --- The status of the file at `path`, of a final symbolic link's target
-    --- when `links` is `following` and of the link itself when it is
-    --- `not_following`.
+    --- The status of the file at `path`.  When the path ends in a symbolic
+    --- link, `following` gives the status of the link's target and
+    --- `not_following` that of the link itself.
     status_of: (self: provider, path: text.host_string,
                 links: link_handling)
                -> (found: status) ! not_found | no_access | io_failed
@@ -111,17 +111,17 @@ public file_system: type = concept (provider: type) is files
     --- writable by its owner again.
     set_read_only: (self: provider, path: text.host_string, read_only: bool)
                    -> none ! not_found | no_access | io_failed
-    --- Have what the provider holds of an open file written where it
-    --- lasts before returning: its data and its status, or with
-    --- `data_only` its data and only what reading it back needs.
+    --- Write what the provider holds of an open file to lasting storage
+    --- before returning: its data and its status, or with `data_only` its
+    --- data and only the status that reading it back needs.
     synchronize: (self: provider, opened: file, writing: synchronizing)
                  -> none ! io_failed
     --- Give a file open for writing the size `size`, cutting it or
     --- extending it with zeros.
     truncate: (self: provider, opened: file, size: u64) -> none ! io_failed
     --- Read at most `lenof into` bytes of an open file from `offset` on,
-    --- without moving the position `read` reads from: the count, zero at or
-    --- past its end.
+    --- without moving the position `read` reads from.  It returns the
+    --- count, which is zero at or past the file's end.
     read_at: (self: provider, opened: file, offset: u64, into: []mut u8)
              -> (count: usize) ! io_failed
     --- Write all of `bytes` into an open file from `offset` on, without
@@ -131,25 +131,25 @@ public file_system: type = concept (provider: type) is files
     write_at: (self: provider, opened: file, offset: u64, bytes: []u8)
               -> none ! io_failed
     --- Make and open a new file in `directory`, empty for the working
-    --- directory, with a name no other file has, made from bytes of
-    --- `names` and tried again when it is taken, and put its path in
-    --- `into`.  It is made exclusively, so no other program's file is ever
+    --- directory, and put its path in `into`.  Its name, which no other
+    --- file has, is made from bytes of `names` and tried again when it is
+    --- taken.  It is made exclusively, so no other program's file is ever
     --- opened in its place, and readable and writable by its owner alone.
     make_temporary: (self: provider, directory: text.host_string,
                      names: any entropy, into: []mut u8)
                     -> (made: temporary from into)
                     ! not_found | no_access | io_failed
-    --- The working directory's path, put in `into`; too long for it is
-    --- `io_failed`.  Nothing here changes the working directory, which is
-    --- the whole process's: a path is made from this one instead.
+    --- The working directory's path, put in `into`; a path too long for it
+    --- is `io_failed`.  Nothing here changes the working directory, which
+    --- is the whole process's: make a path from this one instead.
     current_directory: (self: provider, into: []mut u8)
                        -> (path: text.host_string from into) ! io_failed
 end file_system
 
---- Whether an open can have `options`: it reads or writes, appends or
---- truncates only when it writes, and is `exclusive` only when it may
---- `create`.  A provider refuses any other with `io_failed` before it asks
---- anything.
+--- Whether `options` is a combination an open can have: it reads or writes,
+--- it appends or truncates only when it writes, and it is `exclusive` only
+--- when it may `create`.  A provider refuses any other combination with
+--- `io_failed` before it asks anything.
 public valid_options: (options: open_options) -> (yes: bool) =
     some: bool = options.read or options.write
     writes: bool = options.write or not (options.append or options.truncate)
@@ -176,9 +176,9 @@ public rename: (provider: type is file_system, host: provider,
     try provider.rename(host, old, new)
 end rename
 
---- The status of the file at `path`, of a final symbolic link's target
---- when `links` is `following` and of the link itself when it is
---- `not_following`.
+--- The status of the file at `path`.  When the path ends in a symbolic
+--- link, `following` gives the status of the link's target and
+--- `not_following` that of the link itself.
 public status_of: (provider: type is file_system, host: provider,
                    path: text.host_string, links: link_handling)
                   -> (found: status) ! not_found | no_access | io_failed =
@@ -191,8 +191,8 @@ public status_of_file: (provider: type is file_system, host: provider,
     found = try provider.status_of_file(host, opened)
 end status_of_file
 
---- Make the file at `path` read-only, or writable by its owner again.  A
---- read-only file refuses to be opened for writing, `no_access`, except to
+--- Make the file at `path` read-only, or writable by its owner again.
+--- Opening a read-only file for writing is refused, `no_access`, except for
 --- a process the system lets past every permission, as POSIX's root.
 public set_read_only: (provider: type is file_system, host: provider,
                        path: text.host_string, read_only: bool)
@@ -200,8 +200,8 @@ public set_read_only: (provider: type is file_system, host: provider,
     try provider.set_read_only(host, path, read_only)
 end set_read_only
 
---- Have what the provider holds of an open file written where it lasts,
---- its status too unless `writing` is `data_only`, before returning.
+--- Write what the provider holds of an open file to lasting storage before
+--- returning, its status too unless `writing` is `data_only`.
 public synchronize: (provider: type is file_system, host: provider,
                      opened: file, writing: synchronizing)
                     -> none ! io_failed =
@@ -223,21 +223,21 @@ public read_at: (provider: type is file_system, host: provider,
     count = try provider.read_at(host, opened, offset, into)
 end read_at
 
---- Write all of `bytes` into an open file from `offset` on, a write past
---- the end leaving zeros between; a failure may follow part of them.
+--- Write all of `bytes` into an open file from `offset` on; a write past
+--- the end leaves zeros between.  A failure may follow part of them.
 public write_at: (provider: type is file_system, host: provider,
                   opened: file, offset: u64, bytes: []u8)
                  -> none ! io_failed =
     try provider.write_at(host, opened, offset, bytes)
 end write_at
 
---- Make and open a new file in `directory` whose name no other file has,
---- made from bytes the entropy `names` gives, and put its path in `into`,
---- which must hold the directory, a `/` and the 21 bytes of the name; the
---- name is `.tmp-` and sixteen hexadecimal digits, hidden from an ordinary
---- listing.  The hosted provider is its own entropy too,
---- `io.make_temporary(host, host, directory, buffer)`, and a test passes
---- scripted bytes to see a name that is taken tried again.
+--- Make and open a new file in `directory` under a name no other file has,
+--- made from bytes the entropy `names` gives, and put its path in `into`.
+--- `into` must hold the directory, a `/` and the 21 bytes of the name:
+--- `.tmp-` and sixteen hexadecimal digits, which an ordinary listing hides.
+--- The hosted provider is its own entropy too, `io.make_temporary(host,
+--- host, directory, buffer)`, and a test passes scripted bytes to see a
+--- name that is taken tried again.
 public make_temporary: (provider: type is file_system, host: provider,
                         source: type is entropy, names: source,
                         directory: text.host_string, into: []mut u8)
@@ -261,8 +261,8 @@ public temporary_tries: usize = 16
 
 --- The path `make_temporary` tries, from eight bytes of `names`: the
 --- directory, a `/` unless it is empty or ends in one, `.tmp-` and the
---- bytes as sixteen lower-case hexadecimal digits, put in `into`; one that
---- does not fit is `io_failed`.  For a provider in another module.
+--- bytes as sixteen lower-case hexadecimal digits, put in `into`; a path
+--- that does not fit is `io_failed`.  For a provider in another module.
 public temporary_path: (directory: text.host_string, bytes: [8]u8,
                         into: []mut u8)
                        -> (path: text.host_string from into) ! io_failed =

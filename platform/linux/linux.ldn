@@ -60,13 +60,13 @@ fixed if compiler.os == linux then
         --- directory.  arm64 keeps a value of its own.
         public o_directory: i32 = 65536
 
-        --- The process entry: the kernel starts a static Linux executable
+        --- The process entry.  The kernel starts a static Linux executable
         --- here, with argc on top of the stack and no return address.  It
-        --- clears the frame pointer so a debugger stops at this frame,
-        --- aligns the stack to sixteen bytes, asks `_landin_start_thread`
+        --- clears the frame pointer, so a debugger stops at this frame, and
+        --- aligns the stack to sixteen bytes.  It asks `_landin_start_thread`
         --- for the first thread's storage, makes the thread pointer it
-        --- returns %fs's base with `arch_prctl(ARCH_SET_FS)` and calls `_landin_start_main` with the initial stack's
-        --- address.
+        --- returns %fs's base with `arch_prctl(ARCH_SET_FS)`, and calls
+        --- `_landin_start_main` with the initial stack's address.
         public extern(naked) _landin_start: () -> none =
             assembler.block("xorl %ebp, %ebp\nmovq %rsp, %rbx\nandq $-16, %rsp\nmovq %rbx, %rdi\ncall _landin_start_thread\nmovq %rax, %rsi\nmovl $4098, %edi\nmovl $158, %eax\nsyscall\nmovq %rbx, %rdi\ncall _landin_start_main")
         end _landin_start
@@ -118,13 +118,13 @@ fixed if compiler.os == linux then
         --- directory.  arm64 keeps a value of its own.
         public o_directory: i32 = 16384
 
-        --- The process entry: the kernel starts a static Linux executable
+        --- The process entry.  The kernel starts a static Linux executable
         --- here, with argc at the sixteen-byte-aligned stack pointer and no
-        --- return address.  It clears the frame and link registers so a
-        --- debugger stops at this frame, asks `_landin_start_thread` for the
-        --- first thread's storage, makes the thread pointer it returns
-        --- `tpidr_el0`, and calls `_landin_start_main`
-        --- with the initial stack's address.
+        --- return address.  The entry clears the frame and link registers,
+        --- so a debugger stops at this frame.  It asks
+        --- `_landin_start_thread` for the first thread's storage and makes
+        --- the thread pointer that routine returns `tpidr_el0`.  Then it
+        --- calls `_landin_start_main` with the initial stack's address.
         public extern(naked) _landin_start: () -> none =
             assembler.block("mov x29, #0\nmov x30, #0\nmov x19, sp\nmov x0, sp\nbl _landin_start_thread\nmsr tpidr_el0, x0\nmov x0, x19\nbl _landin_start_main")
         end _landin_start
@@ -175,13 +175,13 @@ fixed if compiler.os == linux then
         --- directory.  arm64 keeps a value of its own.
         public o_directory: i32 = 65536
 
-        --- The process entry: the kernel starts a static Linux executable
-        --- here, with argc on top of the stack and no return address.  It
-        --- clears the frame pointer and return address so a debugger stops
-        --- at this frame, aligns the stack to sixteen bytes, asks
-        --- `_landin_start_thread` for the first thread's storage, makes the
-        --- thread pointer it returns `tp`, and calls
-        --- `_landin_start_main` with the initial stack's address.
+        --- The process entry.  The kernel starts a static Linux executable
+        --- here, with argc on top of the stack and no return address.  The
+        --- entry clears the frame pointer and return address, so a debugger
+        --- stops at this frame, and aligns the stack to sixteen bytes.  It
+        --- asks `_landin_start_thread` for the first thread's storage and
+        --- makes the thread pointer that routine returns `tp`.  Then it
+        --- calls `_landin_start_main` with the initial stack's address.
         public extern(naked) _landin_start: () -> none =
             assembler.block("li x8, 0\nli ra, 0\nmv s1, sp\nmv a0, sp\nandi sp, sp, -16\ncall _landin_start_thread\nmv tp, a0\nmv a0, s1\ncall _landin_start_main")
         end _landin_start
@@ -562,9 +562,9 @@ fixed if compiler.os == linux then
     end clock_gettime
 
     --- Sleep for the time `request` gives, measured on the clock `clock`,
-    --- relative to now when `flags` is zero: zero once it has passed, or
-    --- minus the errno, EINTR when a signal came first, with what was left
-    --- of the request in `remaining`.
+    --- relative to now when `flags` is zero.  Zero once it has passed, or
+    --- minus the errno.  With EINTR, when a signal came first, `remaining`
+    --- holds what was left of the request.
     public clock_nanosleep:
         (clock: i32, flags: i32, request: ptr timespec,
          remaining: ptr mut timespec) -> (result: i32) =
@@ -583,12 +583,12 @@ fixed if compiler.os == linux then
     public futex_limit: type = no_limit | ptr timespec
 
     --- Sleep while the word at `word`, which only this process maps, holds
-    --- `expected`, until `futex_wake` wakes it, a signal comes or `limit`
-    --- passes: zero when woken, which may be spuriously, or minus the
-    --- errno, EAGAIN at once when the word does not hold `expected`,
-    --- ETIMEDOUT when the limit passed and EINTR for a signal.  The kernel
-    --- compares and sleeps in one step, so a wake after the word changed
-    --- is never lost.
+    --- `expected`.  The sleep ends when `futex_wake` wakes it, a signal
+    --- comes or `limit` passes.  Zero when woken, which may be spuriously,
+    --- or minus the errno: EAGAIN at once when the word does not hold
+    --- `expected`, ETIMEDOUT when the limit passed and EINTR for a signal.
+    --- The kernel compares and sleeps in one step, so a wake after the word
+    --- changed is never lost.
     public futex_wait:
         (word: ptr u32, expected: u32, limit: futex_limit) -> (result: i32) =
         address: usize = match limit
@@ -613,10 +613,10 @@ fixed if compiler.os == linux then
     public grnd_nonblock: u32 = 1
 
     --- Fill at most `length` bytes at `into` with random bytes from the
-    --- kernel's pool, waiting at boot until the pool is ready unless
-    --- `flags` holds `grnd_nonblock`: the count filled, which a request
-    --- over 256 bytes may find short, or minus the errno, EINTR when a
-    --- signal came before any byte.
+    --- kernel's pool.  At boot the call waits until the pool is ready,
+    --- unless `flags` holds `grnd_nonblock`.  The count filled, which may
+    --- be short for a request over 256 bytes, or minus the errno, EINTR
+    --- when a signal came before any byte.
     public getrandom:
         (into: ptr mut u8, length: usize, flags: u32) -> (result: isize) =
         result = isize(system_call(getrandom_number, i64(usize(into)),
@@ -695,9 +695,9 @@ fixed if compiler.os == linux then
     end renameat2
 
     --- Give the file `old`, relative to `old_directory`, a second name
-    --- `new`, relative to `new_directory`, a hard link, not following a
-    --- final symbolic link of `old` unless `flags` holds
-    --- `at_symlink_follow`: zero, or minus the errno, EEXIST when `new` is
+    --- `new`, relative to `new_directory`: a hard link.  A final symbolic
+    --- link of `old` is followed only when `flags` holds
+    --- `at_symlink_follow`.  Zero, or minus the errno, EEXIST when `new` is
     --- taken.
     public linkat:
         (old_directory: i32, old: ptr u8, new_directory: i32, new: ptr u8,
@@ -747,10 +747,10 @@ fixed if compiler.os == linux then
     end fchmod
 
     --- Set the owner and group of the file `path` names, relative to
-    --- `directory`, to `user` and `group`, either left as it is when it is
-    --- `0xFFFFFFFF`; a final symbolic link is followed unless `flags` holds
-    --- `at_symlink_nofollow`.  Zero, or minus the errno, EPERM unless the
-    --- process may.
+    --- `directory`, to `user` and `group`.  Either stays as it is when its
+    --- argument is `0xFFFFFFFF`.  A final symbolic link is followed unless
+    --- `flags` holds `at_symlink_nofollow`.  Zero, or minus the errno,
+    --- EPERM unless the process may.
     public fchownat:
         (directory: i32, path: ptr u8, user: u32, group: u32, flags: i32)
         -> (result: i32) =
@@ -773,10 +773,10 @@ fixed if compiler.os == linux then
     --- A path a call may be given, or `no_path`.
     public path_given: type = no_path | ptr u8
 
-    --- Set the last access and modification times of the file `path`
-    --- names, relative to `directory`, or of `directory` itself when the
-    --- path is `no_path`, to the two `timespec`s at `times`, access first:
-    --- zero, or minus the errno.  A final symbolic link is followed unless
+    --- Set the last access and modification times of a file to the two
+    --- `timespec`s at `times`, access first.  The file is the one `path`
+    --- names, relative to `directory`, or `directory` itself for `no_path`.
+    --- Zero, or minus the errno.  A final symbolic link is followed unless
     --- `flags` holds `at_symlink_nofollow`, which sets the link's own.
     public utimensat:
         (directory: i32, path: path_given, times: ptr timespec, flags: i32)

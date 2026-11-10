@@ -263,7 +263,7 @@ package body Landin.Diagnostics.Citations is
             when 850 =>
                "Volatile access sits outside the borrow rules",
             when 860 =>
-               "What this does not catch",
+               "What the lifetime checks do not catch",
             when 1230 =>
                "Declaring a concept",
             when 1240 =>
@@ -296,7 +296,7 @@ package body Landin.Diagnostics.Citations is
             when 1370 =>
                "`any C`: a value of some type that satisfies C",
             when 1380 =>
-               "Building one with `any(...)`",
+               "Building an `any` with `any(...)`",
             when 1390 =>
                "Calls go through the table",
             when 1400 =>

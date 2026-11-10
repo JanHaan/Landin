@@ -10,10 +10,10 @@ import core/mem
 import core/text
 import core/time
 
---- The text of an address could not be read as one: not four decimal
---- parts from 0 to 255, not an IPv6 address's groups, a zone that is
---- empty, longer than `zone_room` or holds a NUL, a zone after an IPv4
---- address, or a port that is missing, above 65535 or not decimal.
+--- The text of an address could not be read as one.  It is neither four
+--- decimal parts from 0 to 255 nor an IPv6 address's groups; its zone is
+--- empty, longer than `zone_room`, holds a NUL or follows an IPv4 address;
+--- or its port is missing, above 65535 or not decimal.
 public invalid_address: atom
 --- Nothing listens at the address a connection was asked for: the system
 --- answered it at once, as a closed port is answered.
@@ -102,10 +102,10 @@ public direction: type = receiving | sending | both_directions
 --- socket does: `accept` for a connection, `receive` for bytes, `send` for
 --- room, unless `set_timeouts` gave the socket a limit.  A listener takes
 --- connections whose handshake the system completes on its own, so one
---- thread can connect to its own listener and then accept, and a
---- connection's sends wait only once the system's buffers are full.
---- Close every socket with `close_socket`; one dropped unclosed is open
---- until the process ends, since there are no destructors.
+--- thread can connect to its own listener and then accept.  A connection's
+--- sends wait only once the system's buffers are full.  Close every socket
+--- with `close_socket`; one dropped unclosed is open until the process
+--- ends, since there are no destructors.
 public network: type = concept (provider: type) is io.reader, io.writer
     --- Connect to a listener at `to` and return the connection.  A port
     --- nothing listens on is `refused`.
@@ -113,16 +113,16 @@ public network: type = concept (provider: type) is io.reader, io.writer
              ! refused | unreachable | address_unavailable | timed_out
              | io.io_failed
     --- Connect as `connect` does, but fail `timed_out` once `limit` has
-    --- passed without the connection being made; a limit of zero is none,
-    --- as `set_timeouts` reads one (D580).
+    --- passed without the connection being made; a limit of zero is no
+    --- limit, as `set_timeouts` reads one (D580).
     connect_within: (self: provider, to: address, limit: time.duration)
                     -> (connected: io.file)
                     ! refused | unreachable | address_unavailable | timed_out
                     | io.io_failed
-    --- Listen for connections at `at`, port 0 for a free one, which
+    --- Listen for connections at `at`; port 0 asks for a free one, which
     --- `local_address` then gives.  A listener may take an address its
-    --- earlier connections still hold while they close, never one another
-    --- socket listens at, `address_in_use`.
+    --- earlier connections still hold while they close, but never one
+    --- another socket listens at, which is `address_in_use`.
     listen: (self: provider, at: address) -> (listener: io.file)
             ! address_in_use | address_unavailable | io.no_access | io.io_failed
     --- Take the next connection made to a listener, waiting for one.
@@ -140,8 +140,8 @@ public network: type = concept (provider: type) is io.reader, io.writer
     --- something: its count, zero once the peer has finished sending.
     receive: (self: provider, connection: io.file, into: []mut u8)
              -> (count: usize) ! disconnected | timed_out | io.io_failed
-    --- Send `bytes` as one datagram to `to`.  One that cannot be sent
-    --- whole, longer than the system takes, is `io_failed`.
+    --- Send `bytes` as one datagram to `to`.  A datagram longer than the
+    --- system takes cannot be sent whole and is `io_failed`.
     send_to: (self: provider, socket: io.file, bytes: []u8, to: address)
              -> none ! unreachable | timed_out | io.io_failed
     --- Receive the next datagram into `into`, waiting for one, and say
@@ -158,12 +158,12 @@ public network: type = concept (provider: type) is io.reader, io.writer
     --- The address and port of a connection's peer.
     peer_address: (self: provider, connection: io.file) -> (at: address)
                   ! io.io_failed
-    --- Limit how long a receive or an accept, and a send, waits on
-    --- `socket`; a span of zero is no limit.
+    --- Limit how long `socket` waits: `receive_limit` for a receive or an
+    --- accept, `send_limit` for a send; a span of zero is no limit.
     set_timeouts: (self: provider, socket: io.file, receive_limit: time.duration,
                    send_limit: time.duration) -> none ! io.io_failed
-    --- Send a connection's small writes at once, `on`, rather than gather
-    --- them while an earlier one is unacknowledged.
+    --- With `on`, send a connection's small writes at once rather than
+    --- gather them while an earlier one is unacknowledged.
     set_no_delay: (self: provider, connection: io.file, on: bool) -> none
                   ! io.io_failed
     --- Close a socket, which is consumed even when this fails.
@@ -215,9 +215,9 @@ public with_port: (at: address, port: u16) -> (result: address) =
 end with_port
 
 --- The address `at` with the zone `name`, an interface's name or its
---- number in decimal: `invalid_address` for an IPv4 address, and for a
---- name `parse_ip` would not read after a `%`.  An empty name takes the
---- zone away.
+--- number in decimal.  It fails `invalid_address` for an IPv4 address, and
+--- for a name `parse_ip` would not read after a `%`.  An empty name takes
+--- the zone away.
 public with_zone: (at: address, name: []u8) -> (result: address)
                   ! invalid_address =
     result = at
@@ -397,13 +397,13 @@ zoned: (inout at: address, source: []u8) -> none ! invalid_address =
 end zoned
 
 --- Read an address without a port from its text, `127.0.0.1`,
---- `2001:db8::1` or `fe80::1%eth0`, with port 0: four decimal parts from 0
---- to 255 without a leading zero, or an IPv6 address's groups of one to
---- four hexadecimal digits in either case, at most one `::` and an IPv4
---- address in the last 32 bits, and after them a zone: `%` and one to
---- `zone_room` bytes, none of them NUL, kept as they are written.
---- Anything else, a zone after an IPv4 address and surrounding spaces
---- among it, is `invalid_address`.
+--- `2001:db8::1` or `fe80::1%eth0`, and give it port 0.  An IPv4 address
+--- is four decimal parts from 0 to 255 without a leading zero.  An IPv6
+--- address is groups of one to four hexadecimal digits in either case,
+--- with at most one `::` and an IPv4 address in the last 32 bits, and
+--- after them a zone: `%` and one to `zone_room` bytes, none of them NUL,
+--- kept as they are written.  Anything else, a zone after an IPv4 address
+--- and surrounding spaces among it, is `invalid_address`.
 public parse_ip: (source: []u8) -> (at: address) ! invalid_address =
     at = unspecified(ipv4, 0)
     if mem.find(source, u8(':')) < lenof source then
@@ -577,10 +577,10 @@ public connect: (provider: type is network, host: provider, to: address)
 end connect
 
 --- Connect to a listener at `to`, failing `timed_out` once `limit` has
---- passed without an answer, as from a peer that never answers; a limit
---- of zero is none.  The socket a limit ends is closed, and a connection
---- made is as `connect` makes it, with no limit of its own on what it
---- sends and receives.
+--- passed without an answer, as from a peer that never answers; a limit of
+--- zero is no limit.  When the limit ends the attempt, its socket is
+--- closed.  A connection that is made is as `connect` makes it, with no
+--- limit of its own on what it sends and receives.
 public connect_within: (provider: type is network, host: provider,
                         to: address, limit: time.duration)
                        -> (connected: io.file)
@@ -620,8 +620,8 @@ public send: (provider: type is network, host: provider, connection: io.file,
     try provider.send(host, connection, bytes)
 end send
 
---- Receive what arrives next on a connection into `into`: its count, zero
---- once the peer has finished sending.
+--- Receive what arrives next on a connection into `into`.  It returns the
+--- count, zero once the peer has finished sending.
 public receive: (provider: type is network, host: provider,
                  connection: io.file, into: []mut u8)
                 -> (count: usize) ! disconnected | timed_out | io.io_failed =

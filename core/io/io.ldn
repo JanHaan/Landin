@@ -15,7 +15,7 @@ public no_access: atom
 public io_failed: atom
 --- The argument index does not identify an available argument.
 public no_argument: atom
---- Something already has the name a directory was to be made at.
+--- The name a directory was to be made at is already taken.
 public already_exists: atom
 --- No environment variable has the name asked for, or the index does not
 --- identify one.
@@ -42,23 +42,23 @@ file_value: type = distinct usize
 --- created it and obey that provider's close rules.
 public file: type = file_value
 
---- Output capability with complete and partial writes. `write` completes all
---- bytes or fails; failure may follow partial output. `write_some` reports
---- positive progress for nonempty input, zero for empty input, and no
---- progress on failure.
+--- Output capability. `write` writes every byte or fails, and a failure may
+--- follow partial output. `write_some` makes one attempt: it reports
+--- positive progress for nonempty input and zero for empty input, and a
+--- failed attempt makes no progress.
 ---
 --  An erased world is not an erased writer: spec.md's D268.
 --- The capability is four narrow concepts over one provider type, so a
---- provider supplies only what it has: a UART is a writer, a read-only
---- image is a reader; system and memory providers also supply files and
---- process entries. A consumer names the narrowest concept it uses; diagnostics
---- stream through any io.writer.  `world` composes all four for roots that
---- have everything.  A provider is a handle: a small copyable value, passed
---- by value, that refers to its state, so a program and its logger share one
---- without locking it.  An erased `any io.world` is built from the address of
---- a handle binding and dispatches every entry, but it is not an
---- `any io.writer`: build that from the same handle where a writer is
---- wanted.
+--- provider supplies only what it has: a UART is a writer and a read-only
+--- image is a reader, while system and memory providers also supply files and
+--- process entries. A consumer names the narrowest concept it uses;
+--- diagnostics stream through any io.writer.  `world` composes all four for
+--- roots that have everything.  A provider is a handle: a small copyable
+--- value, passed by value, that refers to its state, so a program and its
+--- logger share one without locking it.  An erased `any io.world` is built
+--- from the address of a handle binding and dispatches every entry. It is not
+--- an `any io.writer`: where a writer is wanted, build one from the same
+--- handle.
 public writer: type = concept (provider: type)
     --- Write the entire byte slice or fail. Failure may follow partial
     --- output; do not blindly retry the whole slice.
@@ -70,9 +70,9 @@ public writer: type = concept (provider: type)
                 -> (count: usize) ! io_failed
 end writer
 
---- Input capability. `read` fills at most the supplied slice and returns its
---- byte count; zero into a nonempty destination denotes end of input. The
---- caller retains the destination storage.
+--- Input capability. `read` puts at most `lenof into` bytes in the caller's
+--- slice and returns the count; zero for a nonempty slice means end of
+--- input. The slice's storage stays the caller's.
 public reader: type = concept (provider: type)
     --- Read at most the destination length and return progress; zero into a
     --- nonempty destination is end of input, and an empty one always reads
@@ -166,9 +166,9 @@ end environment
 public world: type = concept (provider: type) is reader, writer, files, process
 end world
 
---- The bytes a directory's buffer needs at the least: room for any entry
---- any provider here gives, its record and its terminator included.  The
---- hosted provider refuses a smaller buffer when the directory is opened.
+--- The fewest bytes a directory's buffer may have: room for any entry any
+--- provider here gives, with its record and its terminator.  The hosted
+--- provider refuses a smaller buffer when the directory is opened.
 public directory_buffer: usize = 1024
 
 --- An open directory: a value its caller keeps and edits, passing it
@@ -200,13 +200,13 @@ public entry: type = struct
     kind: entry_kind
 end entry
 
---- Directory listing and the names in a tree: open a directory and read
---- its entries, ask an entry's size, and make and remove directories and
---- remove files.  Paths are host strings, as `files` takes them, and an
---- entry's name is one, so a name read is given back unconverted.  A
---- listing hides `.` and `..`, which every directory holds and which name
---- no entry of its own, and gives its entries in the system's order, which
---- no provider promises.
+--- Directory listing and the names in a tree: open a directory and read its
+--- entries, ask an entry's size, make and remove directories, and remove
+--- files.  Paths are host strings, as `files` takes them, and an entry's
+--- name is one too, so a name read is given back unconverted.  A listing
+--- leaves out `.` and `..`, which every directory holds and which are no
+--- entries of its own.  It gives its entries in the system's order, and no
+--- provider promises an order.
 public directories: type = concept (provider: type)
     --- Open the directory at `path` and read it into the caller's
     --- `buffer`.  A missing path and a path through or to something that
@@ -220,9 +220,9 @@ public directories: type = concept (provider: type)
     read_entry: (self: provider, inout opened: directory)
                 -> (item: entry from opened) ! io_failed
     --- The size in bytes of the entry `name` in the open directory, not
-    --- following a symbolic link.  A name no entry can have, empty, with a
-    --- `/` or a NUL, or longer than `directory_buffer` allows, is
-    --- `not_found`, as is an entry removed since it was read.
+    --- following a symbolic link.  A name no entry can have is `not_found`: an
+    --- empty one, one with a `/` or a NUL, or one longer than
+    --- `directory_buffer` allows.  So is an entry removed since it was read.
     entry_size: (self: provider, opened: directory,
                  name: text.host_string)
                 -> (size: u64) ! not_found | no_access | io_failed
@@ -287,8 +287,8 @@ public open_write: (provider: type is files, host: provider,
     opened = try provider.open_write(host, path)
 end open_write
 
---- Ask whether two paths name the same file. Delegates
---- provider-specific identity rules and reports `io_failed` on failure.
+--- Ask whether two paths name the same file. The provider applies its own
+--- identity rules; a failure is `io_failed`.
 public same_file: (provider: type is files, host: provider,
                    left: text.host_string, right: text.host_string)
                   -> (same: bool) ! io_failed =
@@ -396,18 +396,18 @@ end file_take
 format_store: usize = 128
 
 --- Write `template` to the file with each `{}` replaced by the next of
---- `values`, as `text.format` writes them: `io.write_format(host,
---- io.out(host), "{} of {}\n", [any(addr done), any(addr total)])`.  It
---- needs no buffer or flush of the caller's: the text is formatted into
---- 128 bytes on the stack and written whenever they fill and at the end,
---- so a line that fits is one write and a value of any length
---- is written in pieces.  The template is checked against its values
---- first, so `text.invalid_format` writes nothing.  A failed write is
---- `io_failed` and may follow partial output, as `write`'s may; so is a
---- conformance of the program's own that asks for more room at once than
---- the store has, since the text cannot be written.  The values are
---- `text.formattable`'s types; floats are not formattable yet.  For many
---- writes to one file, a `buffered_writer` gathers them into fewer.
+--- `values`, as `text.format` writes them: `io.write_format(host, io.out(host),
+--- "{} of {}\n", [any(addr done), any(addr total)])`.  The caller supplies no
+--- buffer and has nothing to flush: the text is formatted into 128 bytes on the
+--- stack, which are written whenever they fill and at the end.  So a line that
+--- fits is one write, and a value of any length is written in pieces.  The
+--- template is checked against its values first, so `text.invalid_format`
+--- writes nothing.  A failed write is `io_failed` and may follow partial
+--- output, as `write`'s may.  A conformance of the program's own that asks for
+--- more room at once than the 128 bytes is `io_failed` too, since its text
+--- cannot be written.  The values are `text.formattable`'s types; floats are
+--- not formattable yet.  For many writes to one file, a `buffered_writer`
+--- gathers them into fewer.
 public write_format: (provider: type is writer, host: provider,
                       opened: file, template: utf8,
                       values: []any text.formattable)
@@ -455,12 +455,12 @@ public argument_count: (provider: type is process, host: provider)
     count = provider.argument_count(host)
 end argument_count
 
---- Lend the indexed process argument as a host string; index zero is the
---- first argument after the program's name, C's `argv[1]`. Reports
---- `no_argument` for an invalid index; the provider's argument backing must
---- outlive its use. `text.from_host` is its checked conversion to `utf8`
---- and `text.host_bytes` its bytes; passed on as a path, it is not
---- converted at all.
+--- Lend the process argument at `index` as a host string; index zero is the
+--- first argument after the program's name, C's `argv[1]`. An index that
+--- names no argument reports `no_argument`. The provider's argument backing
+--- must outlive the string's use. Convert it to `utf8` with the checked
+--- `text.from_host`, or take its bytes with `text.host_bytes`; passed on as
+--- a path, it is not converted at all.
 public argument_at: (provider: type is process, host: provider,
                      index: usize)
                     -> (value: text.host_string from host) ! no_argument =

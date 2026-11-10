@@ -1,37 +1,47 @@
 # Landin for C programmers
 
-This page has two halves: first what to write instead of C's habits, then
-a lookup of the Landin form of each C habit.
+This page has two halves. The first shows what to write in place of C's
+habits. The second is a lookup that gives the Landin form of each C habit.
+
+The page assumes that you write C and have read
+[the first program](../README.md#your-first-program).
+[The tour](../tour.md) teaches the language itself.
 
 A C programmer reaches for the same few things first: `main` and `exit`,
-`printf`, `malloc`, `errno`, strings, a header and a `#define`. This page
-gives the Landin form of each, and says plainly where Landin has no answer
-yet and what to write until it does. It assumes you write C and have read
-[the first program](../README.md#your-first-program); [the tour](../tour.md)
-teaches the language itself.
+`printf`, `malloc`, `errno`, strings, a header and a `#define`. The lookup
+gives the Landin form of each. Every entry shows the C form, then the
+Landin form, and gives the reason where Landin differs on purpose.
+
+The lookup is ordered by how soon you are likely to need each entry:
+[what nearly every program reaches for first](#the-first-things-you-reach-for),
+then [everyday C](#everyday-c), then the habits that stand
+[close to the machine](#close-to-the-machine).
+
+The page says plainly where Landin has no answer yet. The entry then says
+what to write today, and [What has no answer yet](#what-has-no-answer-yet)
+lists those gaps together.
 
 Every Landin block on this page is a file of one module that the test
-program compiles, so a block may use names another block declares.
-
-In the lookup, each entry gives the C form, the Landin form and, where
-Landin differs on purpose, the reason. It is ordered by how soon you are
-likely to need each one: what nearly every program reaches for first, then
-everyday C, then the habits that stand close to the machine. Where Landin
-has no form yet, the entry says what to write today, and
-[What has no answer yet](#what-has-no-answer-yet) lists those gaps
-together.
+program compiles, so a block may use a name that another block declares.
 
 ## Write Landin, not C in Landin
 
-C makes you encode things the compiler cannot see: an out pointer for a
-second result, `-1` for "not found", a pointer and a length passed apart, a
-`typedef` that mixes freely with its base, a flag variable to escape two
-loops, a label to jump to for cleanup, I/O any routine can reach, and a heap
-every routine reaches for. Landin has a direct form for each. The compiler
-checks the first six; the last two, passing the I/O handle and the
-allocator, are conventions it does not check. Each entry points to the
-tour entry that explains it, and [the tour](../tour.md) is where the rest
-of them are.
+C makes you encode things that the compiler cannot see:
+
+- an out pointer for a second result
+- `-1` for "not found"
+- a pointer and a length passed apart
+- a `typedef` that mixes freely with its base
+- a flag variable to escape two loops
+- a label to jump to for cleanup
+- I/O that any routine can reach
+- a heap that every routine reaches for
+
+Landin has a direct form for each, and the entries below take them in this
+order. The compiler checks the first six. The last two, passing the I/O
+handle and the allocator, are conventions that it does not check. Each
+entry points to the tour entry that explains it, and [the tour](../tour.md)
+is where the rest of them are.
 
 ### Several results, not out parameters
 
@@ -52,10 +62,10 @@ minutes_only: (total: u32) -> (whole_minutes: u32) =
 end minutes_only
 ```
 
-A routine returns as many named results as it needs, and the compiler checks
-that each is set on every path [0920] [0930]. The caller takes them apart by
-name and ignores the rest with `_` [0990]. Nothing is passed by address, so
-nothing can be left unwritten.
+A routine returns as many named results as it needs [0920]. The compiler
+checks that each one is set on every path [0930]. The caller takes the
+results apart by name and ignores the rest with `_` [0990]. Nothing is
+passed by address, so nothing can be left unwritten.
 
 ### Failures, not sentinel values
 
@@ -79,11 +89,13 @@ index_of: (items: []u32, wanted: u32) -> (index: usize) ! not_present =
 end index_of
 ```
 
-"Not found" is a failure the signature declares, `! not_present`, not a
-value of the result's own type that a caller can forget to test [0940]. A
-`for` loop's `complete` block runs only when the loop ran out without a
-`break` or `return` [1170]. The caller writes `try`, a fallback such as
-`else 0`, or a handler; ignoring it is an error.
+"Not found" is a failure that the signature declares, `! not_present`
+[0940]. It is not a value of the result's own type, which a caller can
+forget to test. The caller writes `try`, a fallback such as `else 0`, or a
+handler; ignoring the failure is an error.
+
+In `index_of` the failure comes from the `for` loop's `complete` block,
+which runs only when the loop ran out without a `break` or `return` [1170].
 
 ### Slices, not a pointer and a length
 
@@ -106,9 +118,11 @@ end header_sum
 ```
 
 A slice is a pointer and its length in one value, and every index is
-checked against it [0570]. `packet[0..<4]` is a view of the first four bytes,
-not a copy. Overflow traps unless you ask for wrapping with `+%` [0300], so
-a checksum says that it wraps and a counter that overflows is caught.
+checked against that length [0570]. `packet[0..<4]` is a view of the first
+four bytes, not a copy.
+
+Overflow traps unless you ask for wrapping with `+%` [0300]. So a checksum
+says that it wraps, and a counter that overflows is caught.
 
 ### Types that mean something, not `typedef`
 
@@ -132,13 +146,16 @@ tank_level: (litres: u32, capacity: u32) -> (level: fill_level) =
 end tank_level
 ```
 
-A `distinct` type has its base's representation but not its arithmetic,
-so a `celsius` never meets a `fahrenheit` or a bare `i32` without a
-conversion you can see [0650]. Equality, ordering and, for an unsigned
-base, the bit operations do carry over. A range subtype checks its values
-where they enter: a value outside 0 to 100 is refused when the compiler
-knows it and traps when it does not [0660]. Neither costs anything at run
-time beyond that check.
+A `distinct` type has its base's representation but not its arithmetic. A
+`celsius` therefore never meets a `fahrenheit` or a bare `i32` without a
+conversion you can see [0650]. Equality and ordering do carry over from the
+base, and so do the bit operations when the base is unsigned.
+
+A range subtype checks its values where they enter. A value outside 0 to
+100 is refused when the compiler knows it, and traps when the compiler does
+not [0660].
+
+Neither kind of type costs anything at run time beyond that check.
 
 ### Labelled loops, not flags and `goto`
 
@@ -165,9 +182,10 @@ end has_zero
 ```
 
 A loop can carry a label, and `break` and `continue` name the loop they
-leave [1180]. A `for` walks an array, a slice or a range directly, and
-gives the position as well when you ask, `for item, position in items`
-[1150].
+leave [1180].
+
+A `for` walks an array, a slice or a range directly. It gives the position
+as well when you ask for it, as in `for item, position in items` [1150].
 
 ### `defer`, not cleanup labels
 
@@ -194,11 +212,11 @@ scratch_sum: (provider: type is mem.allocator, memory: provider, bytes: []u8)
 end scratch_sum
 ```
 
-`defer` puts the cleanup beside what it cleans up, and runs it however the
-block is left: by falling through, by `return`, or by a `try` that fails
-[1100]. Several run in the reverse of their order, which is the ladder of
-labels C writes by hand. [`goto` cleanup](#goto-cleanup) below closes two
-files that way.
+`defer` puts the cleanup beside what it cleans up. The cleanup runs however
+the block is left: by falling through, by `return`, or by a `try` that
+fails [1100]. Several run in the reverse of their order, which is the
+ladder of labels that C writes by hand. [`goto` cleanup](#goto-cleanup)
+below closes two files that way.
 
 ### Passed capabilities, not global I/O
 
@@ -224,17 +242,17 @@ count_lines: (provider: type is io.reader, host: provider, source: io.file)
 end count_lines
 ```
 
-Pass the provider in rather than making one where you need it. Then the
-signature says what a routine touches, and a test can hand it a fake. This
-is a convention, not a rule: any hosted routine may call `blocking.new()`
-itself, and the compiler does not stop it [1680]. Create the provider in
-`main` and pass it down [1660].
+Create the provider in `main` and pass it down [1660], rather than making
+one where you need it. Then the signature says what a routine touches, and
+a test can hand the routine a fake. This is a convention, not a rule: any
+hosted routine may call `blocking.new()` itself, and the compiler does not
+stop it [1680].
 
 The same `count_lines` reads a file, standard input, a pipe, or a fake in
 a test, with no mocking framework. To test a routine over files, use
-`fake.volume` from `core/io/fake`; `io.memory_over` makes the memory
-world, firmware's own world rather than a fake, for running a whole
-program over memory.
+`fake.volume` from `core/io/fake`. To run a whole program over memory, use
+`io.memory_over`: it makes the memory world, which is firmware's own world
+rather than a fake.
 
 ### An allocator you pass, not a global heap
 
@@ -253,13 +271,15 @@ duplicate: (provider: type is mem.allocator, memory: provider, bytes: []u8)
 end duplicate
 ```
 
-A routine that allocates takes the allocator as a parameter, so its caller
-decides where the memory comes from: the heap, an arena over a buffer in
-its own frame, or a test's allocator that fails on purpose [1360].
-Containers do not keep one either; each call that grows a container is
-given it. Like passing capabilities, this is a convention the compiler
-does not check. [`malloc` and `free`](#malloc-and-free) shows the heap and
-an arena serving the same routine.
+A routine that allocates takes the allocator as a parameter. Its caller
+therefore decides where the memory comes from: the heap, an arena over a
+buffer in its own frame, or a test's allocator that fails on purpose
+[1360]. Containers do not keep an allocator either: each call that grows a
+container is given it.
+
+Like passing capabilities, this is a convention that the compiler does not
+check. [`malloc` and `free`](#malloc-and-free) shows the heap and an arena
+serving the same routine.
 
 ## The first things you reach for
 
@@ -294,9 +314,10 @@ end main
 
 `main` returns the exit status, and an early `return` is how a program
 leaves [1650]. Leaving through `main` runs every `defer` on the way out.
-There are no destructors and no `atexit`, so a buffered writer's bytes are
-written only by its flush. `posix.exit` ends the process at once, as C's
-`_exit` does:
+There are no destructors and no `atexit`, so only a buffered writer's flush
+writes its bytes.
+
+`posix.exit` ends the process at once, as C's `_exit` does:
 
 ```landin
 import platform/posix
@@ -307,8 +328,8 @@ give_up: () -> noreturn =
 end give_up
 ```
 
-Nothing after it runs, neither a `defer` nor a flush, so it suits only a
-program with nothing left to clean up.
+Nothing runs after it, neither a `defer` nor a flush. It therefore suits
+only a program with nothing left to clean up.
 
 ### `printf`
 
@@ -332,17 +353,18 @@ end report
 `io.write_format` fills each `{}` with the next value [1370] [1380] and
 writes the line to the file it is given, here standard output. It formats
 into a small buffer on its own stack, so a line that fits is one `write`
-and a longer one goes out in pieces, and nothing is allocated. Nothing runs
-at compile time, so the template is checked against the values when it
-runs, and a mismatch is `invalid_format`, which writes nothing, rather than
-undefined behaviour [1540].
+and a longer line goes out in pieces. Nothing is allocated.
+
+Nothing runs at compile time, so the template is checked against the
+values when the call runs [1540]. A mismatch is `invalid_format`, which
+writes nothing, rather than undefined behaviour.
 
 A program that prints many lines makes one buffered writer and passes it
-down, much as C buffers `stdout`: it gathers the output in a buffer
-of yours and writes it with one system call when the buffer fills or is
-flushed, where each `write_format` makes its own. `io.format` fills a
-template into it. Flush it on the way out, since there is no destructor to
-do it for you [1100]:
+down, much as C buffers `stdout`. The writer gathers the output in a buffer
+of yours. It writes that output with one system call when the buffer fills
+or is flushed, where each `write_format` makes a system call of its own.
+`io.format` fills a template into the writer. Flush the writer on the way
+out, because no destructor does it for you [1100]:
 
 ```landin
 import core/io
@@ -365,9 +387,9 @@ print_report: (host: blocking.host, names: []utf8)
 end print_report
 ```
 
-Width, padding and hexadecimal are a builder's typed calls rather than
-letters in the template, `align_right` and `append_hex_u32` among them, so a
-line with `%5u` in it is built first and then written:
+A template has no letters for width, padding or hexadecimal. Those are
+typed calls on a builder, `align_right` and `append_hex_u32` among them. A
+line with `%5u` in it is therefore built first and then written:
 
 ```landin
 import core/io
@@ -432,11 +454,13 @@ end from_heap_or_arena
 ```
 
 There is no ambient heap. Whatever allocates is passed an allocator, so
-the same code runs on the heap, in an arena over a buffer, or
-under a failure injector in a test [1360]. A failed allocation is
-`out_of_memory`, which the caller must handle. Nothing is freed for you:
-there is no garbage collector and no destructor, and `defer` is where a
-free goes [1100]. An arena gives everything back at once [0820].
+the same code runs on the heap, in an arena over a buffer, or under a
+failure injector in a test [1360]. A failed allocation is `out_of_memory`,
+which the caller must handle.
+
+Nothing is freed for you: Landin has no garbage collector and no
+destructor. A free goes in a `defer` [1100]. An arena gives everything back
+at once [0820].
 
 ### `errno`
 
@@ -467,16 +491,19 @@ settings_present: (host: blocking.host)
 end settings_present
 ```
 
-A routine that can fail declares its failures as a set of atoms after `!`,
-and a caller handles them with `else` or passes them on with `try` [0940],
+A routine that can fail declares its failures as a set of atoms after `!`.
+A caller handles them with `else` or passes them on with `try` [0940]
 [1030]. Nothing is set behind your back and nothing can be forgotten: a
 call that can fail and is neither handled nor passed on is a compile error.
 Only what cannot be foreseen is a failure; what can be checked is checked
-first [0950]. The errno is still there when a log wants it:
-`blocking.last_errno(host)` gives the number the failed call set, and
-`platform/posix` names every errno as an atom. For a person,
-`failure.words(problem)` from `core/failure` turns a library failure into
-a short phrase: it is Landin's `strerror`.
+first [0950].
+
+The errno is still there when a log wants it. `blocking.last_errno(host)`
+gives the number that the failed call set, and `platform/posix` names every
+errno as an atom.
+
+For a person, `failure.words(problem)` from `core/failure` turns a library
+failure into a short phrase: it is Landin's `strerror`.
 
 ### `char *` strings
 
@@ -496,9 +523,11 @@ spaces_in: (line: utf8) -> (count: u32) =
 end spaces_in
 ```
 
-Text is a view with its length, never a pointer to a NUL: `utf8` for
-validated text, `[]u8` for bytes, and `cstring` only for C [0260], [0600].
-A literal still ends in a NUL nobody counts, so it passes to C for nothing.
+Text is a view with its length, never a pointer to a NUL. Use `utf8` for
+validated text, `[]u8` for bytes, and `cstring` only for C [0260] [0600]. A
+literal still ends in a NUL that nobody counts, so it passes to C for
+nothing.
+
 Traversing `utf8` gives each character as a `u32`, which is what `' '` is
 [0250].
 
@@ -525,7 +554,7 @@ print_arguments: (host: blocking.host) -> none ! io.io_failed =
 end print_arguments
 ```
 
-The arguments belong to the hosted provider, which lends each as a host
+The arguments belong to the hosted provider, which lends each one as a host
 string: the bytes the system gave, unconverted and not necessarily UTF-8
 [1660]. The sequence starts after the program's name, at C's `argv[1]`.
 `text.from_host` is the checked conversion to `utf8`.
@@ -555,12 +584,14 @@ longest_line: (host: blocking.host)
 end longest_line
 ```
 
-`io.lines_over` makes a line reader over a buffer you supply, and
+`io.lines_over` makes a line reader over a buffer you supply.
 `io.read_line` lends each line from it until the next read, without its
 `\n` or `\r\n` [0790] [0800]. The end of the input is a line that has
-`finished`. A line longer than the buffer is the failure
-`io.line_too_long` rather than a line silently cut in two, and the reader
-skips the rest of it, so the next read gives the line after.
+`finished`.
+
+A line longer than the buffer is the failure `io.line_too_long`, rather
+than a line silently cut in two. The reader skips the rest of that line, so
+the next read gives the line after it.
 
 ### `#include` and headers
 
@@ -577,12 +608,14 @@ public config_path: () -> (path: host_string) =
 end config_path
 ```
 
-There are no header files. A module is a directory, every file in it sees
-the others, and `public` is what another module may name [1410]. A plain
-`import core/io` binds `io`, `as` renames it [1430], and a list in
-parentheses, `(get, post)`, selects names [1440]. A compilation never reads a C
-header: `refine bindings` asks Clang for one and writes Landin declarations
-from it [1580].
+There are no header files. A module is a directory, and every file in it
+sees the others. `public` is what another module may name [1410].
+
+A plain `import core/io` binds `io`. `as` renames it [1430], and a list in
+parentheses, `(get, post)`, selects names [1440].
+
+A compilation never reads a C header. `refine bindings` asks Clang for one
+and writes Landin declarations from it [1580].
 
 ### `#define` for a constant
 
@@ -595,9 +628,11 @@ from it [1580].
 buffer_size: usize = 4096
 ```
 
-A module value known when compiling is the constant. It has a type, and
-nothing runs before `main` to compute it [1460]. A macro that computes is a
-function: Landin has no macros and no compile-time execution [1540].
+The constant is a module value that is known when compiling. It has a type,
+and nothing runs before `main` to compute it [1460].
+
+A macro that computes is a function: Landin has no macros and no
+compile-time execution [1540].
 
 ### Operators
 
@@ -624,11 +659,13 @@ hash_bytes: (bytes: []u8) -> (h: u32) =
 end hash_bytes
 ```
 
-Inequality is `<>` and the logical operators are `and`, `or` and `not`
-[0340], [0350]. There is `inc` and no `++` [0400]. Overflow traps rather
-than wrapping or being undefined; `+%`, `-%` and `*%` wrap, and say so
-[0300]. The bitwise operators bind tighter than comparison, unlike C, so
-`flags & mask == 0` means what it looks like [0330].
+- Inequality is `<>`, and the logical operators are `and`, `or` and `not`
+  [0340] [0350].
+- There is `inc` and no `++` [0400].
+- Overflow traps rather than wrapping or being undefined. `+%`, `-%` and
+  `*%` wrap, and say so [0300].
+- The bitwise operators bind tighter than comparison, unlike C, so
+  `flags & mask == 0` means what it looks like [0330].
 
 ### `switch`
 
@@ -660,11 +697,13 @@ digit_name: (digit: u32) -> (name: utf8) =
 end digit_name
 ```
 
-A `match` names atoms or variant cases, has no fallthrough and no `break`,
-and a case left out is a compile error [1210]. A number has no case to name,
-so a `switch` over an integer is an `if` chain. Several labels may
+A `match` names atoms or variant cases. It has no fallthrough and no
+`break`, and a case left out is a compile error [1210]. Several labels may
 share one arm, `north, south:`, which is what C's stacked `case` labels
 are, and `_` covers the rest.
+
+A number has no case to name, so a `switch` over an integer is an `if`
+chain.
 
 ### `assert`
 
@@ -686,13 +725,16 @@ end words_in
 ```
 
 There is no `assert` macro; a routine does its work.
-`compiler.unreachable()` never returns and stops the program as a failed
+`compiler.unreachable()` never returns. It stops the program as a failed
 check does, and a hosted program first prints where it stopped [1560].
-That place is the line of `compiler.unreachable()`; to report the
-caller's line instead, give `expect` a `caller` parameter, which the
-compiler fills with the call's place [1040]. Nothing turns the check off as
-`NDEBUG` does. Many of C's assertions need no routine at all: indexing,
-conversions and overflow are checked already [0570] [0310] [0300].
+
+That place is the line of `compiler.unreachable()`. To report the caller's
+line instead, give `expect` a `caller` parameter, which the compiler fills
+with the call's place [1040].
+
+Nothing turns the check off as `NDEBUG` does. Many of C's assertions need
+no routine at all: indexing, conversions and overflow are checked already
+[0570] [0310] [0300].
 
 ## Everyday C
 
@@ -725,13 +767,15 @@ end is_main
 ```
 
 `mem.copy`, `mem.fill` and `mem.find` from `core/mem` are `memmove`,
-`memset` and `memchr` over slices, with their lengths checked [0570]:
-`copy` lets the two overlap either way, and fails with `out_of_bounds`
-before writing anything when the destination is too short.
+`memset` and `memchr` over slices, with their lengths checked [0570].
+`copy` lets the two slices overlap either way. When the destination is too
+short, it fails with `out_of_bounds` before writing anything.
+
 `cmp.compare` from `core/cmp` orders two byte strings as `less`, `equal` or
 `greater`. It is `memcmp` with both lengths counted, and `strcmp` for text
-that has no NUL to look for. `text.equal` says whether two `utf8` texts are
-the same.
+that has no NUL to look for.
+
+`text.equal` says whether two `utf8` texts are the same.
 
 ### `struct` layout
 
@@ -751,11 +795,13 @@ header_size: usize = sizeof header -- 8: one byte of padding after kind
 ```
 
 Every struct keeps its fields in the order they are written, with natural
-alignment, so a hexdump matches the source [0750]. `layout(c)` applies the
-selected target's C rules and is what may cross to C; `layout(optimal)`
-lets the compiler reorder for a smaller size [0750]. A field holds the
-target's byte order, and data in another order is converted with shifts
-where it crosses [0750].
+alignment, so a hexdump matches the source [0750].
+
+`layout(c)` applies the selected target's C rules and is what may cross to
+C. `layout(optimal)` lets the compiler reorder for a smaller size [0750].
+
+A field holds the target's byte order. Data in another order is converted
+with shifts where it crosses [0750].
 
 ### `NULL`
 
@@ -783,10 +829,12 @@ end bump_first
 ```
 
 There is no null pointer. A pointer that may be absent is a union of an
-atom and the pointer, which the compiler stores as a plain pointer with
-zero for the atom [0480]. Using it is a `match` that names both cases, so a
-missing check is a compile error rather than a crash. `ptr(0)` is refused,
-and a zero converted to a pointer at run time traps.
+atom and the pointer. The compiler stores that union as a plain pointer,
+with zero for the atom [0480].
+
+Using it is a `match` that names both cases, so a missing check is a
+compile error rather than a crash. `ptr(0)` is refused, and a zero
+converted to a pointer at run time traps.
 
 ### Casts
 
@@ -811,11 +859,13 @@ as_address: (cell: ptr mut u32) -> (address: usize) =
 end as_address
 ```
 
-A conversion is the type applied to the value, and it converts the value,
-never the bits: a value that does not fit traps, and one known when
-compiling is a compile error [0310]. To keep the low byte, a mask says
-so. A pointer becomes an integer and back the same way, and the integer
-carries no origin [0470]. Nothing converts implicitly.
+A conversion is the type applied to the value, and nothing converts
+implicitly. A conversion converts the value, never the bits: a value that
+does not fit traps, and one known when compiling is a compile error [0310].
+To keep the low byte, a mask says so.
+
+A pointer becomes an integer and back the same way, and the integer carries
+no origin [0470].
 
 ### `goto` cleanup
 
@@ -850,11 +900,13 @@ copy_first_block: (host: blocking.host, source_path: text.host_string,
 end copy_first_block
 ```
 
-`defer` runs when its block is left, by falling through, returning or
-failing, in reverse order, and only once control has reached it [1100].
-The ladder of labels falls out of that order: the first failure closes
-nothing and the second closes one [1200]. `undo` runs only when the block
-fails [1110]. A trap is a stop and runs neither.
+A `defer` runs when its block is left, by falling through, returning or
+failing. Several run in reverse order, and each runs only after control
+has reached it [1100]. The ladder of labels falls out of that order: the first
+failure closes nothing and the second closes one [1200].
+
+`undo` runs only when the block fails [1110]. A trap is a stop and runs
+neither.
 
 ### Callbacks and function pointers
 
@@ -882,13 +934,16 @@ sort_words: (words: []mut []u8) -> none =
 end sort_words
 ```
 
-A function is a value of its function type, a code address, with no
+A function is a value of its function type: a code address, with no
 separate pointer type and no `&` [1000]. `sort.sort_by` takes its
-comparison that way, and its `by` argument, passed unchanged to every
-call, is the state C passes through a `void *`. Nothing is captured, so
-state always travels as an argument; an anonymous function written in
-place captures nothing either [1010]. Where the items' type has an
-ordering, `sort.sort` needs no comparison at all [1280].
+comparison that way. Its `by` argument, passed unchanged to every call, is
+the state that C passes through a `void *`.
+
+Nothing is captured, so state always travels as an argument. An anonymous
+function written in place captures nothing either [1010].
+
+Where the items' type has an ordering, `sort.sort` needs no comparison at
+all [1280].
 
 ### `void *`
 
@@ -913,11 +968,14 @@ highest_reading: (readings: []u32) -> (high: u32) =
 end highest_reading
 ```
 
-A routine that works for any type takes the type as a parameter and its
-operations as a concept, and the compiler checks every call [1290]. Values
-of different types behind one interface are `any C`, dispatched through a
-table at run time [1370]. Raw memory is `ptr mut u8`, which is what an
-allocator returns and what stands for `void *` at the C boundary.
+What stands in for `void *` depends on its use:
+
+- A routine that works for any type takes the type as a parameter and its
+  operations as a concept, and the compiler checks every call [1290].
+- Values of different types behind one interface are `any C`, dispatched
+  through a table at run time [1370].
+- Raw memory is `ptr mut u8`, which is what an allocator returns and what
+  stands for `void *` at the C boundary.
 
 ### `getenv`
 
@@ -939,9 +997,10 @@ home_directory: (host: blocking.host) -> (home: text.host_string from host) =
 end home_directory
 ```
 
-A missing variable is the failure `no_variable`, not a null pointer. The
-environment is read-only: a program gives a child the environment it builds
-rather than changing its own.
+A missing variable is the failure `no_variable`, not a null pointer.
+
+The environment is read-only. A program gives a child the environment it
+builds, rather than changing its own.
 
 ### `#ifdef` and `-D`
 
@@ -971,11 +1030,12 @@ else
 end if
 ```
 
-`fixed if` chooses declarations, never statements, and reads only the
-compiler's facts and the program's declared options [1500]. An option is
-declared once with a type and a default, and `refine compile
---option=verbose=true` sets it; a misspelt one is an error rather than a
-silent false [1530].
+`fixed if` chooses declarations, never statements. It reads only the
+compiler's facts and the program's declared options [1500].
+
+An option is declared once, with a type and a default, and
+`refine compile --option=verbose=true` sets it. A misspelt option is an
+error rather than a silent false [1530].
 
 ### `_Static_assert`
 
@@ -993,11 +1053,13 @@ compiler.assert(sizeof usize == 8)
 compiler.assert(sizeof header == 8 and offsetof header.id == 4)
 ```
 
-The condition is a closed fold over literals, the compiler's facts and the
+The condition is a closed fold over literals, the compiler's facts, and the
 sizes, alignments and field offsets of types [1510]. An assertion that
 measures a declared type is checked once the type is laid out for the
-selected target; it runs no code. A `fixed if` condition measures
-scalar types only, because the arms it selects may declare the type.
+selected target; it runs no code.
+
+A `fixed if` condition measures scalar types only, because the arms it
+selects may declare the type.
 
 ### Calling C, and linking it
 
@@ -1017,15 +1079,20 @@ end default_port
 ```
 
 `extern(c)` declares a C function, and `platform/c` names C's integer types
-for the target [1580]. A Linux program is linked statically with no C
-library unless it asks, so a program that calls one is compiled with
-`refine compile --link=libc`, which links C's runtime and library; Darwin
+for the target [1580].
+
+A Linux program is linked statically, with no C library unless it asks. A
+program that calls one is therefore compiled with
+`refine compile --link=libc`, which links C's runtime and library. Darwin
 and FreeBSD always have it. `linker.library("m")` names another library
-beside the code that needs it [1590]. A C function `platform/libc` already
-declares, `strlen` among them, is called as `libc.strlen` or declared with
-exactly the same types. A pointer C may return as null is a pointer union,
-and a function exported to C returns a status, since no Landin failure
-crosses the boundary [1600].
+beside the code that needs it [1590].
+
+`platform/libc` already declares some C functions, `strlen` among them.
+Call such a function as `libc.strlen`, or declare it with exactly the same
+types.
+
+A pointer that C may return as null is a pointer union. A function exported
+to C returns a status, since no Landin failure crosses the boundary [1600].
 
 ```c
 #include "raylib.h"  /* cc game.c -Llib -lraylib -lm */
@@ -1056,19 +1123,27 @@ roll: () -> (face: i32) =
 end roll
 ```
 
-A library of your own, here raylib's `libraylib.a` in `lib` beside the
-source, is named where it is used: `linker.library("raylib")` is the C
-driver's `-lraylib`, which takes a shared library or an archive, and
-`linker.directory("lib")` its `-L`, read against the directory of the file
-that says it, so the build finds it wherever it runs [1590]. `-L DIR` on
-`refine compile` or `refine run` names another directory for one build, and
-is searched first. Landin names are lower case, so a C name that is not is
+A library of your own is named where it is used. Here it is raylib's
+`libraylib.a`, in `lib` beside the source:
+
+- `linker.library("raylib")` is the C driver's `-lraylib`, which takes a
+  shared library or an archive.
+- `linker.directory("lib")` is its `-L`. The directory is read against the
+  directory of the file that says it, so the build finds it wherever it
+  runs [1590].
+- `-L DIR` on `refine compile` or `refine run` names another directory for
+  one build, and is searched first.
+
+Landin names are lower case. A C name that is not lower case is therefore
 declared under a Landin name and linked by its own with
-`link(symbol: "GetRandomValue")` [1610]; a C struct passed by value is a
-`layout(c)` struct [1580], and `refine bindings` writes a header's pointer
-to one as `ptr color` or `ptr mut color`, which a `color`'s `addr` passes.
+`link(symbol: "GetRandomValue")` [1610].
+
+A C struct passed by value is a `layout(c)` struct [1580]. `refine
+bindings` writes a header's pointer to one as `ptr color` or
+`ptr mut color`, which a `color`'s `addr` passes.
+
 Build it with `refine compile --link=libc game.ldn -o game` on Linux. A
-library the link cannot find is named with every directory searched.
+library that the link cannot find is named with every directory searched.
 
 ### C owns `main`
 
@@ -1088,14 +1163,17 @@ int main(int argc, char **argv)
 ```
 
 A program whose `main` is C's can call any public `extern(c)` Landin
-routine [1570], but no Landin entry runs first to keep the process's
-arguments and environment, so C hands them over itself:
+routine [1570]. No Landin entry runs first in such a program to keep the
+process's arguments and environment, so C hands them over itself. It calls
 `_landin_host_initialize_arguments(argc, argv, envp)`, from
 `platform/posix`, before the first `system.new()` or `blocking.new()` and
-before it starts a thread that may make one. Without the call, `blocking.new()`
-or `system.new()` stops the program with a trap at a line of
-`platform/posix/processes.ldn`, `trap: unreachable`, which does not name
-the call it lacks. Files, standard streams and the heap work either way.
+before it starts a thread that may make one.
+
+Without the call, `blocking.new()` or `system.new()` stops the program with
+a trap at a line of `platform/posix/processes.ldn`. The trap is
+`trap: unreachable`, which does not name the call it lacks. Files, standard
+streams and the heap work either way.
+
 [A C `main` that calls Landin](library.md#a-c-main-that-calls-landin) in
 the library reference has the rest: which values the call takes, and that
 nothing is copied, so C keeps `argv` and `envp` alive. The compiler's own
@@ -1120,10 +1198,12 @@ end entry_at
 ```
 
 Everyday Landin indexes a slice, which carries its length and is checked
-[0570]. A pointer has no arithmetic: compute the address as an integer and
+[0570]. A pointer has no arithmetic. Compute the address as an integer and
 convert it back [0470]. The result borrows nothing, so no lifetime check
-follows it. The register in `ROADMAP.md` holds a pointer offset that keeps
-its base's origin as open work.
+follows it.
+
+A pointer offset that keeps its base's origin is open work, which the
+register in `ROADMAP.md` holds.
 
 ### `union`
 
@@ -1154,7 +1234,7 @@ end token_width
 
 A union whose tag says which member holds is a struct with a variant part
 [0680], and a `match` on it names every case [1210]. Landin has no untagged
-union. Reading one type's bits as another's goes through an address:
+union. To read one type's bits as another's, go through an address:
 
 ```landin
 --- The bits of a float, which C reads through a union or `memcpy`.
@@ -1206,11 +1286,14 @@ end directory_record
 name_offset: usize = offsetof directory_record.name
 ```
 
-`offsetof t.field` is a `usize`, measured for the selected target, and the
-selection may continue through nested structs, as in `offsetof frame.head.id`
-[0370]. Like `lenof`, the word is a name everywhere else. Do not compute an
-offset by hand or from `sizeof`, which counts the padding after the last
-field: `sizeof directory_record` is 24, and the name begins at 19.
+`offsetof t.field` is a `usize`, measured for the selected target. The
+selection may continue through nested structs, as in
+`offsetof frame.head.id` [0370]. Like `lenof`, the word is a name
+everywhere else.
+
+Do not compute an offset by hand or from `sizeof`. `sizeof` counts the
+padding after the last field: `sizeof directory_record` is 24, and the name
+begins at 19.
 
 ### `__attribute__((packed))`
 
@@ -1233,13 +1316,17 @@ end wire_id
 
 `layout(c, packed)` places every field at alignment one with no padding,
 as the attribute does [0750]. A field may therefore sit at any address, so
-it has no address of its own: `addr packet.val.id`, an `inout` argument and
-a slice of a field are refused, and a field is read and written by copy.
-Where a target needs aligned loads, the compiler moves such a field a byte at
-a time. C takes a packed record through a pointer and never by value
-[1580]. `layout(packed)` is a different thing, a hardware register's bits at
-stated positions [0730]. `refine bindings` writes this form for a
-header's packed struct, and a typed pointer wherever the header passes one.
+it has no address of its own. The compiler refuses `addr packet.val.id`,
+an `inout` argument and a slice of a field; a field is read and written by
+copy. Where a target needs aligned loads, the compiler moves such a field a
+byte at a time.
+
+C takes a packed record through a pointer and never by value [1580].
+`refine bindings` writes this form for a header's packed struct, and a
+typed pointer wherever the header passes one.
+
+`layout(packed)` is a different thing: a hardware register's bits at stated
+positions [0730].
 
 ### Flexible array members
 
@@ -1263,19 +1350,22 @@ record_name: (buffer: []u8, at: usize) -> (name: []u8 from buffer) =
 end record_name
 ```
 
-A C record's last field may be `[0]T`, C's flexible array member: it takes
-its element's alignment, so the record's size and the member's offset are
-C's [0750]. Its elements are not the record's own storage. Take them as a
-slice of the bytes the call filled, from `offsetof` to the record's length,
-which keeps their length and their origin. Because the elements would
-overlap whatever follows, such a record is no array element and no field of
-another C record, and C takes it through a pointer [1580].
-`refine bindings` writes a header's flexible member as this last
-`[0]T` field.
+A C record's last field may be `[0]T`, which is C's flexible array member.
+The field takes its element's alignment, so the record's size and the
+member's offset are C's [0750].
+
+The member's elements are not the record's own storage. Take them as a
+slice of the bytes that the call filled, from `offsetof` to the record's
+length. That keeps their length and their origin.
+
+The elements would overlap whatever follows the record. Such a record is
+therefore no array element and no field of another C record, and C takes it
+through a pointer [1580]. `refine bindings` writes a header's flexible
+member as this last `[0]T` field.
 
 ## Where to go next
 
-Read [the tour](../tour.md) from the top: it starts with a hello world and
+Read [the tour](../tour.md) from the top. It starts with a hello world and
 takes an hour or two. These parts have the least in common with C:
 
 | tour section | what it gives you |
@@ -1293,19 +1383,20 @@ takes an hour or two. These parts have the least in common with C:
 | pointer arithmetic that keeps the base's origin | the address as an integer; the result borrows nothing |
 | printing a float, `%f` | scale it to a whole number and print the parts, as [Printing formatted values](../examples.md#printing-formatted-values) does with tenths |
 
-Threads have an answer: `hosted/thread` starts threads as a group the
+Threads have an answer: `hosted/thread` starts threads as a group that the
 starting routine joins, as [the library reference](library.md#hostedthread)
 describes.
 
-Open work belongs to `ROADMAP.md`, whose register says for each gap what
+Open work belongs to `ROADMAP.md`. Its register says for each gap what
 would close it and when it will be taken up.
 
 ## About this page
 
 This page is derived and decides nothing. The tour explains the language
 and `spec.md` decides it; a paragraph number in brackets, such as [0480],
-says where. Every Landin block on the page is a file of
-`compiler/tests/fixtures/positive/from-c`, and the files are one module:
-the test program checks it, emits it and holds it to the layout
-`refine fmt` gives, and `check.py` holds each block to its file byte for
-byte.
+says where.
+
+Every Landin block on the page is a file of
+`compiler/tests/fixtures/positive/from-c`, and the files are one module.
+The test program checks that module, emits it and holds it to the layout
+`refine fmt` gives. `check.py` holds each block to its file byte for byte.

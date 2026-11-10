@@ -29,10 +29,10 @@ public extern(c) pthread_attr_destroy:
     (attributes: ptr mut thread_attributes) -> (status: i32)
 
 --- Make the `size` bytes from `lowest` the stack of a thread started with
---- `attributes`, the C library's own frames and, under glibc, its thread
---- block among them: 0, or the errno, EINVAL when `size` is below the
---- system's PTHREAD_STACK_MIN, and on Darwin when either is not a multiple
---- of the page.
+--- `attributes`. Those bytes also hold the C library's own frames and,
+--- under glibc, its thread block. 0, or the errno: EINVAL when `size` is
+--- below the system's PTHREAD_STACK_MIN, and on Darwin when either is not
+--- a multiple of the page.
 public extern(c) pthread_attr_setstack:
     (attributes: ptr mut thread_attributes, lowest: usize, size: usize)
     -> (status: i32)

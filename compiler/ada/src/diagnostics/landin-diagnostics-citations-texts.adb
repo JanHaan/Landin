@@ -13,8 +13,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "    -- [0010] Line comment, to end of line.",
             when 20 =>
-               "`--(` opens a block comment and `)--` closes it. It may "
-               & "sit between two tokens on one line."
+               "`--(` opens a block comment and `)--` closes it. A block"
+               & " comment may sit between two tokens on one line."
                & LF
                & LF
                & "    --( [0020] Block comment. Nests properly."
@@ -25,9 +25,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Because block comments nest, you can comment out a regio"
-               & "n that already contains one. A block comment that is nev"
-               & "er closed runs to the end of the file, and the compiler "
-               & "reports it there.",
+               & "n that already contains one."
+               & LF
+               & LF
+               & "A block comment that is never closed runs to the end of "
+               & "the file, and the compiler reports it there.",
             when 30 =>
                "`---` starts a doc comment, which documents the declarat"
                & "ion on the next line."
@@ -38,11 +40,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A doc comment changes nothing about what the program mea"
-               & "ns. Which lines count as a declaration's doc comment is "
-               & "in spec [2000].",
+               & "ns. Spec [2000] says which lines count as a declaration'"
+               & "s doc comment.",
             when 40 =>
                "A declaration gives a name, a type and a value, in that "
-               & "order. It is immutable unless you say otherwise."
+               & "order. The name is immutable unless you say otherwise (["
+               & "0060])."
                & LF
                & LF
                & "    greeting: utf8 = ""hello""",
@@ -87,7 +90,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "`addr` takes an address and `.val` is the thing pointed "
-               & "at; [0430] explains pointers properly, and [0460] points"
+               & "at. [0430] explains pointers properly, and [0460] points"
                & " one at a fixed hardware address.",
             when 80 =>
                "A declaration may leave out the value. The name must the"
@@ -107,7 +110,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ine or datum is still a local symbol inside the program'"
                & "s image, so no C library or linked object can collide wi"
                & "th it. To give C or the linker a name, see [1600] and [1"
-               & "610]. Exact rules: spec [1975].",
+               & "610]."
+               & LF
+               & LF
+               & "Exact rules: spec [1975].",
             when 100 =>
                "Several names may share one declaration, as fields in a "
                & "struct already do."
@@ -118,11 +124,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    north, south, east, west: atom"
                & LF
                & LF
-               & "It means the same declarations written one per name, in "
-               & "order. Each name gets its own storage and everything wri"
-               & "tten around the list: `mut`, `public`, a parameter conve"
-               & "ntion, `at` or `from`. So in a parameter list, `inout lo"
-               & "w, high: i32` makes both parameters `inout`."
+               & "The shared form means the same as one declaration per na"
+               & "me, written in the same order. Each name gets its own st"
+               & "orage, and each gets everything written around the list:"
+               & " `mut`, `public`, a parameter convention, `at` or `from`"
+               & ". So in a parameter list, `inout low, high: i32` makes b"
+               & "oth parameters `inout`."
                & LF
                & LF
                & "    mut low_mark, high_mark: u32 = 10 -- two variables, "
@@ -140,8 +147,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "gh := bounds()` reads as taking apart a multiple result "
                & "([0990])."
                & LF
-               & "- Type declarations, functions, type and fixed formals, "
-               & "variant parts and condition bindings take one name each.",
+               & "- These take one name each: type declarations, functions"
+               & ", type and fixed formals, variant parts and condition bi"
+               & "ndings.",
             when 110 =>
                "Left of `:` is always the name being introduced. Right o"
                & "f `:` is what fills it: a type, or, with `=`, a value."
@@ -150,17 +158,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "In a local declaration, the written type and the value b"
                & "oth see only the names visible before the declaration. I"
                & "f an outer `t` names a type, `mut t: t = value` uses tha"
-               & "t type and then introduces the local `t`; the statements"
-               & " after it see the local. A binding in a condition follow"
-               & "s the same rule ([1070]). Module declarations and routin"
-               & "e signatures see all their names at once ([0130], [1290]"
-               & ")."
+               & "t type and then introduces the local `t`, and the statem"
+               & "ents after it see the local. A binding in a condition fo"
+               & "llows the same rule ([1070])."
+               & LF
+               & LF
+               & "Module declarations and routine signatures see all their"
+               & " names at once ([0130], [1290])."
                & LF
                & LF
                & "Control words are reserved everywhere a name could go (s"
                & "pec [1760]). `begin`, `match`, `loop`, `break` and `unch"
                & "ecked` cannot be variables, parameters, fields or labels"
-               & ", so `begin = 10` is an error; call it `begin_value` ins"
+               & ", so `begin = 10` is an error. Call it `begin_value` ins"
                & "tead. There is no escape for using a keyword as a name: "
                & "writing `(begin)` does not make one.",
             when 120 =>
@@ -225,16 +235,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "the signed `i8`, `i16`, `i32` and `i64`."
                & LF
                & LF
-               & "128-bit integers are not in Landin yet; they are planned"
+               & "128-bit integers are not in Landin yet. They are planned"
                & ", for when a program needs them (Language evolution, in "
                & "the roadmap)."
                & LF
                & LF
                & "Odd widths such as `u4` or `u12` exist only as fields of"
-               & " packed register images ([0730]). Reading one gives you "
-               & "the next ordinary width up, so a `u1` field reads as a `"
-               & "u8` holding 0 or 1. A one-bit flag is spelt `bool`, and "
-               & "a `u1` does not convert to or from `bool` on its own.",
+               & " packed register images ([0730]):"
+               & LF
+               & LF
+               & "- Reading one gives you the next ordinary width up, so a"
+               & " `u1` field reads as a `u8` holding 0 or 1."
+               & LF
+               & "- A one-bit flag is spelt `bool`, and a `u1` does not co"
+               & "nvert to or from `bool` on its own.",
             when 160 =>
                "`usize` and `isize` are as wide as a pointer on the targ"
                & "et.",
@@ -269,7 +283,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    plain := 5",
             when 210 =>
                "A float literal always looks like one, so an integer nev"
-               & "er quietly becomes a float or the other way round."
+               & "er quietly becomes a float, nor a float an integer."
                & LF
                & LF
                & "    ratio: f32 = 5.0"
@@ -278,10 +292,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "    half := 1.0 / 2.0 -- 0.5"
                & LF
-               & "    zero := 1 / 2 -- 0, integer division",
+               & "    zero := 1 / 2 -- 0, integer division"
+               & LF
+               & LF
+               & "When nothing says what type a float literal should be, i"
+               & "t is an `f32`.",
             when 220 =>
                "Integers may be written in hex, binary or octal, and lon"
-               & "g numbers may use `_` to group digits."
+               & "g numbers may use `_` to group digits. A float may carry"
+               & " an exponent."
                & LF
                & LF
                & "    hex_value: u32 = 0xDEAD_BEEF -- too big for the defa"
@@ -437,15 +456,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "l start at the left margin."
                & LF
                & LF
-               & "Every line end between the quotes is part of the text, i"
-               & "ncluding the one just after the opening quotes and the o"
-               & "ne before a closer on its own line. So `help` begins and"
-               & " ends with a line end: `""\nusage: tool [options]\n  -v  "
-               & "  verbose\n""`. For text that should start with its first"
-               & " line, as expected output usually should, start it on th"
-               & "e opener's line. Nothing is stripped from that line, and"
-               & " the closer's indentation is still stripped from the lin"
-               & "es after it."
+               & "Every line end between the quotes is part of the text. T"
+               & "hat includes the one just after the opening quotes and t"
+               & "he one before a closer on its own line, so `help` begins"
+               & " and ends with a line end: `""\nusage: tool [options]\n  "
+               & "-v    verbose\n""`."
+               & LF
+               & LF
+               & "For text that should start with its first line, as expec"
+               & "ted output usually should, start it on the opener's line"
+               & ". Nothing is stripped from that line, and the closer's i"
+               & "ndentation is still stripped from the lines after it."
                & LF
                & LF
                & "    expected := """"""usage: tool [options]"
@@ -488,12 +509,18 @@ package body Landin.Diagnostics.Citations.Texts is
             when 310 =>
                "Nothing converts implicitly, except that a writable refe"
                & "rence passes where a read-only one is expected ([0440])."
-               & " To convert, apply the type to the value, like a call. I"
-               & "f the value is known at compile time, an impossible conv"
-               & "ersion is a compile error; otherwise it traps at run tim"
-               & "e. A float converts to an integer by truncating toward z"
-               & "ero. An integer converts to a float by rounding, and tha"
-               & "t never traps."
+               & " To convert, apply the type to the value, like a call."
+               & LF
+               & LF
+               & "- If the value is known at compile time, an impossible c"
+               & "onversion is a compile error; otherwise it traps at run "
+               & "time."
+               & LF
+               & "- A float converts to an integer by truncating toward ze"
+               & "ro."
+               & LF
+               & "- An integer converts to a float by rounding, and that n"
+               & "ever traps."
                & LF
                & LF
                & "    -- bad: u8 = u8(300)        compile error"
@@ -538,12 +565,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "that, taking its pointer type from the declaration ([046"
                & "0])."
                & LF
-               & "- A float literal with nothing to say its type is an `f3"
-               & "2`, and a conversion does not say it. `u64(1.0e18)` woul"
-               & "d truncate the `f32` nearest 10^18, which is 999,999,984"
-               & ",306,749,440, so it is refused; write `u64(f64(1.0e18))`"
-               & " for the number written. `i64(45.7)` gives 45 at either "
-               & "width and is converted as it stands.",
+               & "- A conversion does not say what type a float literal is"
+               & ", so the literal is an `f32` ([0210]). `u64(1.0e18)` wou"
+               & "ld truncate the `f32` nearest 10^18, which is 999,999,98"
+               & "4,306,749,440, so the compiler refuses it; write `u64(f6"
+               & "4(1.0e18))` for the number written. `i64(45.7)` gives 45"
+               & " at either width and is converted as it stands.",
             when 320 =>
                "`<<` and `>>` shift. Bits shifted out are gone and zeros"
                & " come in, and a signed `>>` keeps the sign. There is one"
@@ -659,12 +686,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "- `lenof` measures a name, a field or element reached th"
-               & "rough it, or what a call returns. A call whose result is"
-               & " measured runs; the elements of a measured literal, like"
-               & " the `roll_die()` calls above, are checked to have one s"
-               & "calar type but not evaluated. An array that a name or pa"
-               & "th reaches is not read, because its type holds its lengt"
-               & "h."
+               & "rough it, or what a call returns."
+               & LF
+               & "- A call whose result is measured runs. The elements of "
+               & "a measured literal, like the `roll_die()` calls above, a"
+               & "re checked to have one scalar type but not evaluated."
+               & LF
+               & "- An array that a name or path reaches is not read, beca"
+               & "use its type holds its length."
                & LF
                & "- `offsetof` gives a field's offset in bytes from the st"
                & "art of its struct type, through nested structs."
@@ -673,14 +702,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "se, they are ordinary names.",
             when 380 =>
                "`addr` takes an address, and `.val` is the thing a point"
-               & "er points at: read on the right of an assignment, writte"
-               & "n on the left. [0430] shows both.",
+               & "er points at. On the right of an assignment `.val` reads"
+               & " it, and on the left `.val` writes it. [0430] shows both"
+               & ".",
             when 390 =>
                "Assignment is a statement, never an expression, so it ca"
-               & "nnot hide inside a condition. The assignment operators a"
-               & "re `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, "
-               & "`<<=` and `>>=`, plus the wrapping `+%=`, `-%=` and `*%="
-               & "`.",
+               & "nnot hide inside a condition."
+               & LF
+               & LF
+               & "The assignment operators are `=`, `+=`, `-=`, `*=`, `/=`"
+               & ", `%=`, `&=`, `|=`, `^=`, `<<=` and `>>=`, plus the wrap"
+               & "ping `+%=`, `-%=` and `*%=` ([0300]).",
             when 400 =>
                "There is no `++` or `--`. The statements `inc` and `dec`"
                & " do the job, though `x += 1` says the same thing."
@@ -728,8 +760,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & " and the decimal point are separate things.",
             when 870 =>
                "A function is a name bound to a value of a function type"
-               & ". There is no `fn` keyword: `=` opens the body and `end`"
-               & " closes it, always."
+               & ". There is no `fn` keyword. In every function, `=` opens"
+               & " the body and `end` closes it."
                & LF
                & LF
                & "    double: (x: i32) -> (r: i32) ="
@@ -739,20 +771,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end double"
                & LF
                & LF
-               & "Results have names, like parameters. The body sets `r` b"
-               & "y assigning it, and whatever `r` holds when the body end"
-               & "s is what the caller gets.",
+               & "Results have names, as parameters do. The body sets `r` "
+               & "by assigning it, and the caller gets whatever `r` holds "
+               & "when the body ends.",
             when 880 =>
-               "When the body is a single expression, write it after `=`"
-               & ". It still takes an `end`, and the expression fills the "
-               & "named result."
+               "When the body is a single expression, write that express"
+               & "ion after `=`. Its value fills the named result. The fun"
+               & "ction still takes an `end`."
                & LF
                & LF
                & "    triple_it: (x: i32) -> (r: i32) = x * 3 end",
             when 980 =>
-               "Arguments are positional first, then named. There are no"
-               & " default values: every parameter gets exactly one argume"
-               & "nt."
+               "A call gives its positional arguments first and its name"
+               & "d arguments after them. Every parameter gets exactly one"
+               & " argument: there are no default values."
                & LF
                & LF
                & "    volume_of: (width: u32, height: u32, depth: u32) -> "
@@ -776,22 +808,28 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end volumes"
                & LF
                & LF
-               & "The positional arguments fill parameters in order; the n"
+               & "The positional arguments fill parameters in order. The n"
                & "amed ones may come in any order after them. An unknown o"
-               & "r repeated name is an error. Arguments run in the order "
-               & "you wrote them. Named arguments work in a call statement"
-               & " as well as in a call expression."
+               & "r repeated name is an error."
                & LF
                & LF
-               & "- Calling through a stored function uses the parameter n"
-               & "ames of that value's type. Those names are not part of f"
-               & "unction-type identity ([1000])."
+               & "Arguments are evaluated in the order you wrote them. Nam"
+               & "ed arguments work in a call statement as well as in a ca"
+               & "ll expression."
+               & LF
+               & LF
+               & "The fine print:"
+               & LF
+               & LF
+               & "- A call through a stored function uses the parameter na"
+               & "mes of that value's type. Those names are not part of fu"
+               & "nction-type identity ([1000])."
                & LF
                & "- A generic call may name its compile-time arguments in "
                & "the same list: `copy(t: u8, n: 4, source: bytes)`. Name "
                & "one and you name them all ([1290])."
                & LF
-               & "- A C variadic call adds an unnamed tail ([1580]); it do"
+               & "- A C variadic call adds an unnamed tail ([1580]). It do"
                & "es not add optional parameters.",
             when 890 =>
                "`none` means the function returns normally with no value"
@@ -804,29 +842,37 @@ package body Landin.Diagnostics.Citations.Texts is
                & "it"
                & LF
                & LF
-               & "A `noreturn` body has to diverge on every reachable path"
-               & ": an unconditional `loop` with no exit, or a call to ano"
-               & "ther `noreturn` function. A conditional loop does not co"
-               & "unt, even if you expect it to run forever. Because the c"
-               & "all ends the path, a branch that calls `halt_it()` needs"
-               & " no value of its own."
+               & "The body of a `noreturn` function has to diverge on ever"
+               & "y reachable path: an unconditional `loop` with no exit, "
+               & "or a call to another `noreturn` function. A conditional "
+               & "loop does not count, even if you expect it to run foreve"
+               & "r."
                & LF
                & LF
-               & "- `noreturn` is part of the function's type: a `() -> no"
+               & "A call to a `noreturn` function ends the path it is on, "
+               & "so a branch that calls `halt_it()` needs no value of its"
+               & " own."
+               & LF
+               & LF
+               & "The fine print:"
+               & LF
+               & LF
+               & "- `noreturn` is part of the function's type. A `() -> no"
                & "ne` function cannot stand in for a `() -> noreturn` one,"
-               & " or the other way round."
+               & " and a `() -> noreturn` function cannot stand in for a `"
+               & "() -> none` one."
                & LF
-               & "- A `noreturn` function declares no errors ([0940]): fai"
-               & "ling would return to the caller."
+               & "- A `noreturn` function declares no errors ([0940]), bec"
+               & "ause failing would return to the caller."
                & LF
-               & "- The call does not unwind `defer` ([1100]). A deferred "
-               & "`noreturn` call stops the cleanup that would follow it, "
-               & "and the original exit."
+               & "- Calling a `noreturn` function does not unwind `defer` "
+               & "([1100]). A deferred `noreturn` call stops the cleanup t"
+               & "hat would follow it, and the original exit."
                & LF
-               & "- C declarations may use it. Interrupt and naked handler"
-               & "s stay `() -> none`.",
+               & "- C declarations may use `noreturn`. Interrupt and naked"
+               & " handlers stay `() -> none`.",
             when 920 =>
-               "A function can hand back several named results."
+               "A function can return several named results."
                & LF
                & LF
                & "    divide: (a: i32, b: i32) -> (quot: i32, rem: i32) ="
@@ -840,16 +886,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Two or more results travel together as one anonymous str"
                & "uct, laid out in the order you wrote them. A single resu"
-               & "lt is just its own type, not wrapped.",
+               & "lt is its own type, with no struct around it.",
             when 930 =>
-               "Each named result must be assigned on every path that re"
-               & "turns. The compiler checks this, so there is no ""uniniti"
-               & "alised return value"". A path that fails ([0940]) need no"
-               & "t assign them, and the caller cannot read them then.",
+               "A function must assign each named result on every path t"
+               & "hat returns. The compiler checks this, so there is no ""u"
+               & "ninitialised return value""."
+               & LF
+               & LF
+               & "A path that fails ([0940]) need not assign the results, "
+               & "and the caller cannot read them on that path.",
             when 990 =>
-               "The results of a call form an anonymous struct. Bind it "
-               & "whole and read its fields, or take it apart by name, nev"
-               & "er by position."
+               "The results of a call form an anonymous struct ([0920])."
+               & " Bind it whole and read its fields, or take it apart by "
+               & "name. You never take it apart by position."
                & LF
                & LF
                & "    whole := divide(10, 3)"
@@ -863,32 +912,37 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    (quot, _) := divide(30, 3)"
                & LF
                & LF
-               & "The call runs once. You can pick names in any order, lea"
-               & "ve some out, or rename one after `:`; `_` says the rest "
-               & "is ignored on purpose. A whole result can also be the va"
-               & "lue of an `if`, `match` or block when every branch gives"
-               & " the same names and types."
+               & "The call runs once. When you take the result apart, you "
+               & "can pick names in any order, leave some out, or rename o"
+               & "ne after `:`. `_` says that you ignore the rest on purpo"
+               & "se."
+               & LF
+               & LF
+               & "A whole result can also be the value of an `if`, `match`"
+               & " or block when every branch gives the same names and typ"
+               & "es."
                & LF
                & LF
                & "The names belong to the call, not to the function's type"
-               & ": two function types with the same result types in the s"
-               & "ame order agree whatever the results are called ([1000])"
-               & ".",
+               & ". Two function types with the same result types in the s"
+               & "ame order agree, whatever the results are called ([1000]"
+               & ").",
             when 1020 =>
-               "Ignoring a result is never silent. Say so with `_ =`."
+               "You cannot ignore a result silently. To throw one away, "
+               & "say so with `_ =`."
                & LF
                & LF
                & "    _ = double(5)"
                & LF
                & LF
-               & "A call to a function that returns `none` has nothing to "
-               & "discard, so it is written on its own, and `_ =` in front"
-               & " of it is an error (spec [1930]).",
+               & "A function that returns `none` gives the caller nothing "
+               & "to discard. Write its call on its own: `_ =` in front of"
+               & " it is an error (spec [1930]).",
             when 900 =>
                "A convention says what the function may do with the valu"
                & "e you hand it. It is about the argument itself, never ab"
-               & "out what the argument points at: that is the pointer typ"
-               & "e's job ([0450])."
+               & "out what the argument points at: the pointer type says t"
+               & "hat ([0450])."
                & LF
                & LF
                & "| convention | what it promises |"
@@ -905,8 +959,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ead afterwards ([0910]). |"
                & LF
                & LF
-               & "`[]u8` is a slice of bytes, a view of someone else's byt"
-               & "es ([0570]):"
+               & "There is no `out` convention: outputs are named results."
+               & LF
+               & LF
+               & "In this example, `[]u8` is a slice of bytes, a view of s"
+               & "omeone else's bytes ([0570]):"
                & LF
                & LF
                & "    process: (source: []u8, inout target: []u8, sink own"
@@ -919,33 +976,43 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end process"
                & LF
                & LF
-               & "So a function that writes device registers through a poi"
-               & "nter, but never re-points it, takes the pointer as `in`,"
-               & " and the `mut` lives in the pointer type ([0430]). There"
-               & " is no `out` convention: outputs are named results."
+               & "Because a convention is about the argument itself, a fun"
+               & "ction that writes device registers through a pointer, bu"
+               & "t never re-points it, takes the pointer as `in`. The `mu"
+               & "t` lives in the pointer type ([0430])."
                & LF
                & LF
                & "`escaping` is a separate word that can go with any of th"
-               & "e three. It says the function may keep what a pointer, s"
-               & "lice or `any` refers to after the call returns, so the c"
-               & "aller has to show it lives long enough ([0780]). `sink` "
-               & "makes the caller's place unusable afterwards; `escaping`"
-               & " lets the callee keep a reference. The two can go togeth"
-               & "er. On a type parameter, `escaping` asks nothing when th"
-               & "e type holds no references ([0840])."
+               & "e three conventions. It says that the function may keep "
+               & "what a pointer, slice or `any` refers to after the call "
+               & "returns, so the caller has to show that it lives long en"
+               & "ough ([0780])."
                & LF
                & LF
-               & "An `inout` argument need not be a binding: a pointer tar"
-               & "get such as `c.inner.val` is fine. One call may not pass"
-               & " the same variable, or a field of it, to two `inout` par"
-               & "ameters. Two different pointer or computed-index paths m"
-               & "ay still alias; the compiler cannot see that, and does n"
-               & "ot promise to ([1720]).",
+               & "`sink` and `escaping` do different jobs: `sink` makes th"
+               & "e caller's place unusable afterwards, and `escaping` let"
+               & "s the callee keep a reference. The two can go together. "
+               & "On a type parameter, `escaping` asks nothing when the ty"
+               & "pe holds no references ([0840])."
+               & LF
+               & LF
+               & "The fine print:"
+               & LF
+               & LF
+               & "- An `inout` argument need not be a binding: a pointer t"
+               & "arget such as `c.inner.val` is fine."
+               & LF
+               & "- One call may not pass the same variable, or a field of"
+               & " it, to two `inout` parameters."
+               & LF
+               & "- Two different pointer or computed-index paths may stil"
+               & "l alias. The compiler cannot see that, and does not prom"
+               & "ise to ([1720]).",
             when 910 =>
-               "A `sink` argument is a place, and after the call that pl"
-               & "ace is dead until you assign it again. A field of a bind"
-               & "ing is a place, so consuming a struct's field needs no t"
-               & "emporary."
+               "A `sink` argument is a place. After the call, that place"
+               & " is dead until you assign it again. A field of a binding"
+               & " is a place, so consuming a struct's field needs no temp"
+               & "orary."
                & LF
                & LF
                & "    message: type = struct"
@@ -972,40 +1039,45 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Reading `m.body` between those two lines is an error. Th"
-               & "at closes the window between releasing storage and repoi"
-               & "nting the field, which a temporary binding would have le"
-               & "ft open."
+               & "e check closes the window between releasing storage and "
+               & "repointing the field, which a temporary binding would ha"
+               & "ve left open."
                & LF
                & LF
                & "This is a use-after-consume check on one place, not owne"
                & "rship. The value is still copyable: a copy made before t"
-               & "he sink stays live, and consuming through both is not ca"
-               & "ught."
+               & "he sink stays live, and the compiler does not catch cons"
+               & "uming through both."
+               & LF
+               & LF
+               & "The fine print:"
                & LF
                & LF
                & "- The place is a path from a binding through fields and "
-               & "literal fixed-array indexes. A path through a pointer (`"
-               & "p.val.items`), a computed index (`xs[i].items`) or a sli"
-               & "ce index is refused; a whole slice may be sunk."
+               & "literal fixed-array indexes. The compiler refuses a path"
+               & " through a pointer (`p.val.items`), a computed index (`x"
+               & "s[i].items`) or a slice index. A whole slice may be sunk"
+               & "."
                & LF
                & "- A field sunk out of an `inout` parameter must be assig"
                & "ned again before every return, failure included. A `defe"
                & "r` or `undo` may do it."
                & LF
                & "- Arguments are evaluated left to right first, and the p"
-               & "laces are consumed as the call begins: `use(value, value"
-               & ".count)` is fine when `use` sinks its first parameter."
+               & "laces are consumed as the call begins. So `use(value, va"
+               & "lue.count)` is fine when `use` sinks its first parameter"
+               & "."
                & LF
-               & "- Sinking one place twice in a call, or a place also pas"
-               & "sed `inout`, is refused."
+               & "- The compiler refuses a call that sinks one place twice"
+               & ", or that sinks a place it also passes `inout`."
                & LF
                & LF
                & "Exact rules: spec [1910].",
             when 1040 =>
-               "A `caller` parameter is filled in by the compiler with w"
-               & "here the call was written, so assertions and logging nee"
-               & "d no macros. Its type is a struct you declare, with exac"
-               & "tly these three `u32` fields, in this order:"
+               "The compiler fills in a `caller` parameter with where th"
+               & "e call was written, so assertions and logging need no ma"
+               & "cros. The parameter's type is a struct you declare, with"
+               & " exactly these three `u32` fields, in this order:"
                & LF
                & LF
                & "    site: type = struct"
@@ -1034,16 +1106,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end assert"
                & LF
                & LF
-               & "Used as: `assert(count > 0)`."
+               & "A call looks like this: `assert(count > 0)`. The caller "
+               & "leaves the parameter out."
                & LF
                & LF
-               & "The caller leaves the parameter out, and inside the func"
-               & "tion it is an ordinary immutable struct you can read, co"
-               & "py and store. It is 12 bytes on every target. Line and c"
-               & "olumn count from one. The file number is only a number: "
-               & "the table mapping it to a filename is written beside the"
-               & " program and need not ship with it, which keeps names ou"
-               & "t of firmware ([1670])."
+               & "Inside the function, the parameter is an ordinary immuta"
+               & "ble struct that you can read, copy and store. It is 12 b"
+               & "ytes on every target. Line and column count from one."
+               & LF
+               & LF
+               & "The file number is only a number. The table that maps it"
+               & " to a filename is written beside the program and need no"
+               & "t ship with it, which keeps names out of firmware ([1670"
+               & "])."
                & LF
                & LF
                & "A wrapper that wants to report its own caller's position"
@@ -1063,14 +1138,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & " cannot."
                & LF
                & LF
-               & "This `site` is not the `site` a panic handler receives a"
-               & "t [1670]: that one is a single `u32` number the compiler"
-               & " gives a failing check. Exact rules: spec [1920].",
+               & "This `site` is not the `site` that a panic handler recei"
+               & "ves at [1670]. That one is a single `u32` number, which "
+               & "the compiler gives a failing check."
+               & LF
+               & LF
+               & "Exact rules: spec [1920].",
             when 1000 =>
                "A function type is an ordinary type, written the way a s"
-               & "ignature is, and a function is a value of it: a code add"
-               & "ress. There is no separate function-pointer type, and yo"
-               & "u never write `addr` on a function."
+               & "ignature is. A function is a value of that type: a code "
+               & "address. There is no separate function-pointer type, and"
+               & " you never write `addr` on a function."
                & LF
                & LF
                & "    default_handler: () -> none = end default_handler"
@@ -1081,23 +1159,28 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Two function types agree by their parameter and result t"
-               & "ypes, in order. The names inside them only describe the "
-               & "positions. The comparison is recursive when a parameter "
-               & "or result is itself a function. Calling convention and v"
-               & "ariadicness count too: a C callback type is written `ext"
-               & "ern(c) (parameters) -> returns`, and a Landin function n"
-               & "ever matches it."
+               & "ypes, in order:"
+               & LF
+               & LF
+               & "- The names inside them only describe the positions."
+               & LF
+               & "- The comparison is recursive when a parameter or result"
+               & " is itself a function."
+               & LF
+               & "- Calling convention and variadicness count too. A C cal"
+               & "lback type is written `extern(c) (parameters) -> returns"
+               & "`, and a Landin function never matches it."
                & LF
                & LF
                & "A module binding set to a named or anonymous function is"
                & " a fixed code address. A mutable binding may later take "
                & "any function with the same complete signature. A `ptr` t"
-               & "o a function type points at a cell holding the address, "
-               & "not at the code."
+               & "o a function type points at a cell that holds the addres"
+               & "s, not at the code."
                & LF
                & LF
-               & "Nothing is captured ([1010]), so a callback is a functio"
-               & "n and an explicit state pointer:"
+               & "A function captures nothing ([1010]), so a callback is a"
+               & " function and an explicit state pointer:"
                & LF
                & LF
                & "    on_byte: type = struct"
@@ -1112,8 +1195,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Call it through the field: `callback.call(callback.state"
                & ", byte)`. The field keeps its full signature through eve"
                & "ry copy, assignment, variant payload and array. Whether "
-               & "it may be replaced depends on the binding that holds the"
-               & " struct. The callee is evaluated before the arguments.",
+               & "the field may be replaced depends on the binding that ho"
+               & "lds the struct. The callee is evaluated before the argum"
+               & "ents.",
             when 1010 =>
                "An anonymous function is a signature and body without a "
                & "name. It captures nothing: inside, it sees module declar"
@@ -1125,19 +1209,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "end"
                & LF
                & LF
-               & "Writing one makes a fixed code address; it does not run "
-               & "the body. State travels as an explicit parameter, as in "
-               & "[1000]'s callback."
+               & "Writing an anonymous function makes a fixed code address"
+               & "; it does not run the body. State travels as an explicit"
+               & " parameter, as in the callback at [1000]."
                & LF
                & LF
-               & "A bound anonymous function is a value: `less_i32(1, 2)` "
-               & "calls it, and it can be passed wherever its function typ"
-               & "e is expected, but it cannot supply a concept's entry (["
-               & "1240]).",
+               & "A bound anonymous function is a value. `less_i32(1, 2)` "
+               & "calls it, and you can pass it wherever its function type"
+               & " is expected. It cannot supply a concept's entry ([1240]"
+               & ").",
             when 630 =>
                "An atom is a name that is its own value and its own type"
                & ". Declaring one gives you both at once, because for an a"
-               & "tom they are the same thing."
+               & "tom the value and the type are the same thing."
                & LF
                & LF
                & "    not_found: atom"
@@ -1158,34 +1242,34 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end is_missing"
                & LF
                & LF
-               & "An atom has no number behind it as far as your program c"
-               & "an tell: it is not ordered and does not convert to or fr"
-               & "om an integer.",
+               & "As far as your program can tell, an atom has no number b"
+               & "ehind it: it is not ordered, and it does not convert to "
+               & "or from an integer.",
             when 640 =>
-               "An enumeration is a union of atoms. `north`, `south`, `e"
-               & "ast` and `west` were declared at [0100]."
+               "An enumeration is a union of atoms. The atoms `north`, `"
+               & "south`, `east` and `west` were declared at [0100]."
                & LF
                & LF
                & "    compass: type = north | south | east | west"
                & LF
                & LF
-               & "The union may be written in place as the type of a bindi"
-               & "ng, a parameter, a return or a field, and it is the same"
-               & " type as the declared name: `facing: (way: north | south"
-               & ") -> (ahead: bool)` takes a `compass` value that is nort"
-               & "h or south. As the element of an array, a slice or a poi"
-               & "nter the union needs its name."
+               & "You may also write the union in place, as the type of a "
+               & "binding, a parameter, a return or a field. It is then th"
+               & "e same type as the declared name: `facing: (way: north |"
+               & " south) -> (ahead: bool)` takes a `compass` value that i"
+               & "s north or south. As the element of an array, a slice or"
+               & " a pointer, the union needs its name."
                & LF
                & LF
                & "An atom set can be an array element, a struct field or a"
-               & " variant payload, and it stays that set there: a write n"
+               & " variant payload, and it stays that set there. A write n"
                & "eeds one of its members, and reading it back gives you a"
                & "n atom, not an integer.",
             when 650 =>
-               "`distinct` makes a new type with its base's representati"
-               & "on that never mixes with its base or any other type. Ari"
-               & "thmetic does not come along; comparison, and the bit ope"
-               & "rations of an unsigned base, do."
+               "`distinct` makes a new type that has its base's represen"
+               & "tation and never mixes with its base or any other type. "
+               & "Comparison comes along, and so do the bit operations of "
+               & "an unsigned base. Arithmetic does not."
                & LF
                & LF
                & "    meter: type = distinct f32"
@@ -1193,10 +1277,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    second: type = distinct f32"
                & LF
                & LF
-               & "You cannot add a `meter` to a `second`, and you cannot e"
-               & "ven add two `meter` values: `f32`'s arithmetic does not "
-               & "come along. To get a value in or out, apply the type, as"
-               & " for any conversion ([0700]):"
+               & "You cannot add a `meter` to a `second`. You cannot even "
+               & "add two `meter` values, because `f32`'s arithmetic stays"
+               & " with `f32`. To get a value in or out, apply the type, a"
+               & "s for any conversion ([0700]):"
                & LF
                & LF
                & "    length: meter = meter(2.5)"
@@ -1204,10 +1288,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    raw: f32 = f32(length)"
                & LF
                & LF
-               & "That is the whole point: a type the compiler keeps apart"
-               & " from its base and from every other distinct type, at no"
-               & " runtime cost. Generic deduction and conformances tell i"
-               & "t apart too, and an alias of it keeps its identity."
+               & "That separation is the whole point: the compiler keeps t"
+               & "he type apart from its base and from every other distinc"
+               & "t type, at no runtime cost. Generic deduction and confor"
+               & "mances tell it apart too, and an alias of it keeps its i"
+               & "dentity."
                & LF
                & LF
                & "A few things do carry over, because they ask nothing of "
@@ -1218,16 +1303,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & " scalar, an atom set, a pointer or a function value. A d"
                & "escriptor compares without taking its number out."
                & LF
-               & "- Ordering, when the base is a scalar: `<`, `<=`, `>` an"
+               & "- Ordering, when the base is a scalar. `<`, `<=`, `>` an"
                & "d `>=` order as the base does."
                & LF
-               & "- Flags, when the base is an unsigned integer: `&`, `^`,"
+               & "- Flags, when the base is an unsigned integer. `&`, `^`,"
                & " `|` and `~` give the same distinct type, and `&=`, `^=`"
                & " and `|=` update in place, so a set of flags stays one."
                & LF
-               & "- The zero image. A record holding a distinct value may "
-               & "be `zeroed` ([0540]), though `zeroed` written for the di"
-               & "stinct type itself does not construct it."
+               & "- The zero image. A record that holds a distinct value m"
+               & "ay be `zeroed` ([0540]), though `zeroed` written for the"
+               & " distinct type itself does not construct it."
                & LF
                & LF
                & "    farther: (a: meter, b: meter) -> (yes: bool) ="
@@ -1237,23 +1322,32 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end farther"
                & LF
                & LF
-               & "Arithmetic and shifts stay with the base. A distinct val"
-               & "ue meets its base or any other type only through a conve"
-               & "rsion, and that includes comparing with it. A wrapped re"
-               & "ference keeps its origin. Exact rules: spec [1890].",
+               & "The fine print:"
+               & LF
+               & LF
+               & "- Shifts stay with the base, as arithmetic does."
+               & LF
+               & "- A distinct value meets its base or any other type only"
+               & " through a conversion, and that includes comparing with "
+               & "it."
+               & LF
+               & "- A wrapped reference keeps its origin."
+               & LF
+               & LF
+               & "Exact rules: spec [1890].",
             when 660 =>
                "A range subtype is an integer type limited to a run of i"
-               & "ts values. It is checked when a value goes in."
+               & "ts values. The range is checked when a value goes in."
                & LF
                & LF
                & "    percent: type = u8 range 0..100"
                & LF
                & LF
                & "The check happens at a binding, a parameter, a named ret"
-               & "urn and a conversion. A value outside the range is refus"
-               & "ed when the compiler knows it, and traps otherwise. Arit"
-               & "hmetic on a `percent` gives a plain `u8`; the range is n"
-               & "ot part of the result."
+               & "urn and a conversion. When a value is outside the range,"
+               & " the compiler refuses it if it knows, and the program tr"
+               & "aps if it does not. Arithmetic on a `percent` gives a pl"
+               & "ain `u8`: the range is not part of the result."
                & LF
                & LF
                & "A range subtype is not allowed as a struct field, an arr"
@@ -1273,9 +1367,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & " check.",
             when 670 =>
                "A struct is written either as a block or inline in paren"
-               & "theses. The two mean the same thing, and the inline form"
-               & " is also how parameter lists, return lists and payloads "
-               & "are written."
+               & "theses. The two forms mean the same thing. The inline fo"
+               & "rm is also how parameter lists, return lists and payload"
+               & "s are written."
                & LF
                & LF
                & "    size2: type = (w: u32, h: u32)"
@@ -1286,26 +1380,29 @@ package body Landin.Diagnostics.Citations.Texts is
                & " alias keeps the original identity."
                & LF
                & LF
+               & "The fine print:"
+               & LF
+               & LF
                & "- Either form may take type and fixed parameters, and `l"
                & "ayout` ([0750]) applies to either. The parameters are co"
                & "mpile-time names: they add no field and no hidden runtim"
                & "e argument."
                & LF
                & "- Each fully applied instance of a parameterized struct "
-               & "is its own type, identified by the declaration and all i"
-               & "ts arguments, even an argument the fields do not use. Al"
-               & "iases of the arguments make no new type; a different arg"
-               & "ument does, even when the fields and layout come out equ"
-               & "al."
+               & "is its own type. The declaration and all its arguments i"
+               & "dentify it, even an argument the fields do not use. Alia"
+               & "ses of the arguments make no new type. A different argum"
+               & "ent does, even when the fields and layout come out equal"
+               & "."
                & LF
                & "- A struct may mention itself, or another struct that me"
-               & "ntions it back, in a function parameter or result: a fun"
+               & "ntions it back, in a function parameter or result. A fun"
                & "ction field is one code address, so the layout stays fin"
                & "ite.",
             when 680 =>
                "A struct may end in a variant part: one of several cases"
-               & ", each with its own fields. The fields every case shares"
-               & " need no ceremony."
+               & ", each with its own fields. The fields that every case s"
+               & "hares are ordinary fields of the struct."
                & LF
                & LF
                & "    figure: type = struct"
@@ -1349,13 +1446,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ct: copy the struct, or match it."
                & LF
                & LF
-               & "Selecting a bare case writes only its tag. Selecting a c"
-               & "ase with fields zeros that case's fields first, then wri"
-               & "tes the ones you gave. The bytes of the inactive cases a"
-               & "nd the padding are unspecified afterwards, though `zeroe"
-               & "d` still writes the whole struct as zeros. Selecting a c"
-               & "ase therefore costs the size of that case, not the size "
-               & "of the largest one.",
+               & "Selecting a case costs the size of that case, not the si"
+               & "ze of the largest one, because of what it writes:"
+               & LF
+               & LF
+               & "- Selecting a bare case writes only its tag."
+               & LF
+               & "- Selecting a case with fields zeros that case's fields "
+               & "first, then writes the ones you gave."
+               & LF
+               & "- The bytes of the inactive cases and the padding are un"
+               & "specified afterwards, though `zeroed` still writes the w"
+               & "hole struct as zeros.",
             when 700 =>
                "Construction and conversion look the same: a type applie"
                & "d to arguments."
@@ -1367,8 +1469,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A variant case is built the same way, with the case name"
-               & " applied to its fields. You read one back with `match` ("
-               & "[1210])."
+               & " applied to its fields. To read a case back, use `match`"
+               & " ([1210])."
                & LF
                & LF
                & "    mut f: figure = (label: ""disc"", area: 0.0, kind: cir"
@@ -1377,9 +1479,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    f.kind = rectangle(width: 3.0, height: 4.0)",
             when 710 =>
                "A struct literal has no type of its own, like a number l"
-               & "iteral. It takes the named struct type its context wants"
-               & ". A struct type written inline is not yet such a context"
-               & ": declare the type and use its name (spec [1830])."
+               & "iteral. It takes the named struct type that its context "
+               & "wants. A struct type written inline is not yet such a co"
+               & "ntext: declare the type and use its name (spec [1830])."
                & LF
                & LF
                & "    here: point = (x: 1.0, y: 2.0)"
@@ -1393,13 +1495,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & " all match."
                & LF
                & LF
-               & "At module scope, a struct literal is a static image the "
-               & "compiler builds, not code run before the entry point ([1"
-               & "460]). Exact rules: spec [1940].",
+               & "At module scope, a struct literal is a static image that"
+               & " the compiler builds, not code run before the entry poin"
+               & "t ([1460])."
+               & LF
+               & LF
+               & "Exact rules: spec [1940].",
             when 720 =>
                "`of` at the end of a struct literal fills every field th"
-               & "e literal did not name. It is the same word in the same "
-               & "place as in array literals ([0560])."
+               & "at the literal did not name. It is the same word in the "
+               & "same place as in array literals ([0560])."
                & LF
                & LF
                & "    window: type = struct"
@@ -1423,20 +1528,27 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "The fill has to typecheck for each field it fills: `of f"
                & "alse` works where the rest are `bool`, and `of zeroed` ("
-               & "[0540]) wherever the rest have a zero image. A fill othe"
-               & "r than `zeroed` needs at least one omitted field, and al"
-               & "l of the omitted fields must have exactly the same type,"
-               & " array length and reference permission included. It is e"
-               & "valuated once, after the named values, and copied into e"
-               & "ach remaining field in declaration order."
+               & "[0540]) wherever the rest have a zero image."
                & LF
                & LF
-               & "This is not a default value: declarations have none ([09"
+               & "This is not a default value. Declarations have none ([09"
                & "80]), because a new parameter would then fit every exist"
                & "ing call silently. Here whoever writes the literal makes"
                & " the choice. The trade is theirs too: a literal with `of"
                & "` picks up a field added later without a word, and one w"
-               & "ithout it breaks loudly.",
+               & "ithout it breaks loudly."
+               & LF
+               & LF
+               & "The fine print:"
+               & LF
+               & LF
+               & "- A fill other than `zeroed` needs at least one omitted "
+               & "field, and all of the omitted fields must then have exac"
+               & "tly the same type, array length and reference permission"
+               & " included."
+               & LF
+               & "- The fill is evaluated once, after the named values, an"
+               & "d copied into each remaining field in declaration order.",
             when 750 =>
                "Fields stay in the order you wrote them, with natural al"
                & "ignment and padding in between. A hexdump matches the so"
@@ -1463,7 +1575,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end from_big_u16"
                & LF
                & LF
-               & "Other layouts are asked for by name:"
+               & "You ask for another layout by name:"
                & LF
                & LF
                & "| layout | what it does |"
@@ -1488,8 +1600,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "he target's own order, which `compiler.byte_order` names"
                & " ([1560]). When your program reads or writes another ord"
                & "er, it converts where the bytes cross, with shifts ([032"
-               & "0]) or an ordinary function, so the cost is visible wher"
-               & "e it is paid, as in `from_big_u16` above."
+               & "0]) or an ordinary function, as `from_big_u16` does abov"
+               & "e. That way the cost is visible where it is paid."
+               & LF
+               & LF
+               & "The fine print:"
                & LF
                & LF
                & "- `layout(optimal)` keeps source order when sorting save"
@@ -1554,18 +1669,24 @@ package body Landin.Diagnostics.Citations.Texts is
                & "d `with` are reserved and cannot name anything."
                & LF
                & LF
-               & "There is no `volatile`: a device access is an operation "
-               & "([0740]). There is no `big` or `little`: byte order is c"
-               & "onverted where bytes cross ([0750]). There is no `inline"
-               & "` or `noinline`: inlining is the optimizer's decision (["
-               & "1310]). And there is no `weak`: a whole program links on"
-               & "e definition per name, and the compiler-owned vector ima"
-               & "ge does what weak default handlers do in C ([1640]).",
+               & "Landin has none of these attributes:"
+               & LF
+               & LF
+               & "- `volatile`: a device access is an operation ([0740])."
+               & LF
+               & "- `big` or `little`: byte order is converted where bytes"
+               & " cross ([0750])."
+               & LF
+               & "- `inline` or `noinline`: inlining is the optimizer's de"
+               & "cision ([1310])."
+               & LF
+               & "- `weak`: a whole program links one definition per name,"
+               & " and the compiler-owned vector image does what weak defa"
+               & "ult handlers do in C ([1640]).",
             when 1050 =>
-               "`if` takes a condition of type `bool`, and `then` begins"
-               & " the body. No integer or pointer stands in for a `bool`."
-               & " `elsif` and `else` are optional, and `end if` closes th"
-               & "e whole thing."
+               "`if` takes a condition, and `then` begins the body. `els"
+               & "if` and `else` are optional, and `end if` closes the who"
+               & "le thing."
                & LF
                & LF
                & "        if x > 0 then"
@@ -1580,17 +1701,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "            out = 0"
                & LF
-               & "        end if",
+               & "        end if"
+               & LF
+               & LF
+               & "The condition has type `bool`. No integer or pointer sta"
+               & "nds in for a `bool`.",
             when 1060 =>
-               "No construct needs a newline: `end` is what closes it, s"
-               & "o any of them can be written on one line."
+               "No construct needs a newline. `end` is what closes a con"
+               & "struct, so you can write any of them on one line."
                & LF
                & LF
                & "        if x > 0 then out = 1 end if"
                & LF
                & LF
-               & "`refine fmt` leaves a one-line form on one line; it neve"
-               & "r joins or breaks lines.",
+               & "`refine fmt` leaves a one-line form on one line. It neve"
+               & "r joins lines and never breaks them.",
             when 1070 =>
                "An `if`, `elsif` or `while` condition may declare a bind"
                & "ing, inferred or with a written type. The binding's valu"
@@ -1614,11 +1739,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "        end while"
                & LF
                & LF
-               & "The name exists only in the body that condition guards: "
-               & "not in a later `elsif`, the `else`, a loop's `complete`,"
-               & " or after the construct. Its initializer runs before the"
-               & " name exists, so it cannot refer to itself, and a `while"
-               & "` runs the initializer again before every iteration."
+               & "- The name exists only in the body that its condition gu"
+               & "ards. It does not exist in a later `elsif`, in the `else"
+               & "`, in a loop's `complete`, or after the construct."
+               & LF
+               & "- The initializer runs before the name exists, so it can"
+               & "not refer to the name it initializes."
+               & LF
+               & "- A `while` runs the initializer again before every iter"
+               & "ation."
                & LF
                & LF
                & "Exact rules: spec [1840].",
@@ -1641,9 +1770,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Rust needs a semicolon to tell a block's value from a st"
-               & "atement. Landin does not: throwing a value away is alway"
-               & "s written `_ =` ([1020]), so a bare expression at the en"
-               & "d of a block can only be its value."
+               & "atement. Landin does not: you always write `_ =` to thro"
+               & "w a value away ([1020]), so a bare expression at the end"
+               & " of a block can only be its value."
+               & LF
+               & LF
+               & "The details, arm by arm:"
                & LF
                & LF
                & "- Every arm that falls through must end with a value of "
@@ -1653,16 +1785,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- An arm that leaves by `return`, `fail`, `break` or `co"
                & "ntinue` supplies no value and needs no placeholder."
                & LF
-               & "- Only arms that fall through count when the compiler de"
-               & "cides whether a name is assigned after the construct. An"
-               & " arm that has left proves nothing for the others."
+               & "- When the compiler decides whether a name is assigned a"
+               & "fter the construct, only the arms that fall through coun"
+               & "t. An arm that has left proves nothing for the others."
                & LF
                & "- Statements and the final expression run in source orde"
-               & "r, after the `if` condition or `match` subject, and only"
-               & " in the selected arm."
+               & "r. They run after the `if` condition or the `match` subj"
+               & "ect, and only in the selected arm."
                & LF
-               & "- Used as a statement, an arm may not end with a value: "
-               & "nothing would take it."
+               & "- In a construct used as a statement, an arm may not end"
+               & " with a value: nothing would take it."
                & LF
                & LF
                & "Exact rules: spec [1910].",
@@ -1680,22 +1812,22 @@ package body Landin.Diagnostics.Citations.Texts is
                & "        end"
                & LF
                & LF
-               & "With a label, `name: begin ... end name`, a `break name`"
-               & " can leave the block early, and its cleanups run as a lo"
-               & "op's do ([1180]).",
+               & "Give the block a label, `name: begin ... end name`, and "
+               & "a `break name` can leave it early. Its cleanups then run"
+               & " as a loop's do ([1180]).",
             when 940 =>
                "A routine that can fail lists, after `!`, the atoms it c"
                & "an fail with, and `fail` leaves with one of them. An ato"
                & "m is a declared name that is its own value, such as `por"
                & "t_zero: atom` ([0630]). A caller cannot ignore a failure"
-               & ": every call to a failing routine is either passed on or"
-               & " handled."
+               & ": at every call to a failing routine, it either passes t"
+               & "he failure on or handles it."
                & LF
                & LF
                & "Here is all of it at once. `port_from` reads a port numb"
                & "er with the library's `text.to_u32`, which fails on bad "
-               & "digits, and adds a failure of its own. Its callers then "
-               & "deal with the result in two different ways:"
+               & "digits, and adds a failure of its own. Its two callers t"
+               & "hen deal with the result in different ways:"
                & LF
                & LF
                & "    import core/text"
@@ -1760,7 +1892,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & " ([1030])."
                & LF
                & LF
-               & "Those are the four ways to call something that can fail:"
+               & "A call to something that can fail takes one of four form"
+               & "s:"
                & LF
                & LF
                & "| you write | when the call fails |"
@@ -1777,8 +1910,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "| `f() else none` | nothing; the next statement runs |"
                & LF
                & LF
-               & "A shorter declaration, which the next entries use. `not_"
-               & "found` and `no_access` are the atoms declared at [0630]:"
+               & "The next entries use a shorter declaration. Its atoms, `"
+               & "not_found` and `no_access`, are the ones declared at [06"
+               & "30]:"
                & LF
                & LF
                & "    open_file: (path: utf8) -> (handle: u32) ! not_found"
@@ -1791,20 +1925,24 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end open_file"
                & LF
                & LF
-               & "An error set is a set: aliases flatten, order does not m"
-               & "atter, and a routine that fails with `a` passes where `a"
-               & " | b` is expected. The atoms carry no payload. They trav"
-               & "el in a register of their own, so failing costs about wh"
-               & "at returning does."
+               & "Three facts about error sets and their atoms:"
+               & LF
+               & LF
+               & "- An error set is a set. Aliases flatten, order does not"
+               & " matter, and a routine that fails with `a` passes where "
+               & "`a | b` is expected."
+               & LF
+               & "- The atoms carry no payload."
+               & LF
+               & "- The atoms travel in a register of their own, so failin"
+               & "g costs about what returning does."
                & LF
                & LF
                & "Exact rules: spec [1980].",
             when 960 =>
-               "`try f()` calls `f`, and if it fails, your routine fails"
-               & " with the same atom after running its cleanups ([1100])."
-               & " Every atom you might pass on must be in your own `!` se"
-               & "t. The `try` sits at the call, so you can see in the sou"
-               & "rce every place a routine may leave early."
+               "`try f()` calls `f`. If `f` fails, your routine runs its"
+               & " cleanups ([1100]) and then fails with the same atom. Ev"
+               & "ery atom you might pass on must be in your own `!` set."
                & LF
                & LF
                & "    read_config: (path: utf8) -> (data: []u8) ! ... ="
@@ -1816,16 +1954,27 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end read_config"
                & LF
                & LF
+               & "The `try` sits at the call, so you can see in the source"
+               & " every place a routine may leave early."
+               & LF
+               & LF
                & "`! ...` means ""whatever my callees can fail with"": the c"
                & "ompiler works the set out from every `fail` and `try` in"
-               & " the body. Use it inside a module, where the compiler se"
-               & "es every caller anyway. Anything public must write its s"
-               & "et out, because a public signature is a promise, and a c"
-               & "hange three modules down must not rewrite it silently. S"
-               & "o must function types, anonymous functions, concept entr"
-               & "ies ([1260]) and anything exported to C, because their c"
-               & "omplete signature is their type. An inferred set that co"
-               & "mes out empty means the routine cannot fail."
+               & " the body. An inferred set that comes out empty means th"
+               & "e routine cannot fail."
+               & LF
+               & LF
+               & "Use `! ...` inside a module, where the compiler sees eve"
+               & "ry caller anyway. These must write their set out:"
+               & LF
+               & LF
+               & "- Anything public, because a public signature is a promi"
+               & "se, and a change three modules down must not rewrite it "
+               & "silently."
+               & LF
+               & "- Function types, anonymous functions, concept entries ("
+               & "[1260]) and anything exported to C, because their comple"
+               & "te signature is their type."
                & LF
                & LF
                & "`try for item in source do ... end for` passes on a fail"
@@ -1838,8 +1987,9 @@ package body Landin.Diagnostics.Citations.Texts is
             when 1030 =>
                "An `else` after a call handles its failure on the spot. "
                & "The handler either supplies a value in place of the resu"
-               & "lt, or leaves: `return`, `fail`, `break` or `continue`, "
-               & "written in a block, as `else begin return end`."
+               & "lt, or leaves. Leaving is `return`, `fail`, `break` or `"
+               & "continue`, written in a block, as `else begin return end"
+               & "`."
                & LF
                & LF
                & "    h1 := open_file(path) else 0"
@@ -1859,11 +2009,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end"
                & LF
                & LF
-               & "`try f()` is short for the second line. A handler that l"
-               & "eaves needs no value, the same rule an arm of an `if` fo"
-               & "llows ([1080]), so nobody invents a placeholder to satis"
-               & "fy the type. The handler supplies the value; it does not"
-               & " assign the binding being initialized."
+               & "`try f()` is short for the second line's form. A handler"
+               & " that leaves needs no value, the same rule an arm of an "
+               & "`if` follows ([1080]), so nobody invents a placeholder t"
+               & "o satisfy the type. The handler supplies the value; it d"
+               & "oes not assign the binding being initialized."
                & LF
                & LF
                & "- `else (e)` binds the atom. `e` has the call's whole er"
@@ -1873,15 +2023,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "- The name may go unused. To run statements without nami"
                & "ng the atom at all, give `else` a bare block as its valu"
-               & "e: `else begin ... end`. `else (_)` is refused; leave th"
-               & "e parentheses out instead."
+               & "e: `else begin ... end`. The compiler refuses `else (_)`"
+               & "; leave the parentheses out instead."
                & LF
-               & "- On a call that returns nothing, there is no value to s"
-               & "upply: the block only handles the error, and the stateme"
-               & "nt after the call runs next."
+               & "- A call that returns nothing has no value to supply. It"
+               & "s block only handles the error, and the statement after "
+               & "the call runs next."
                & LF
                & "- The result may have any shape, from a scalar to a stru"
                & "ct or several named results."
+               & LF
+               & LF
+               & "A failing call needs `try` or `else` even when you throw"
+               & " its result away. `else` handles only declared failure: "
+               & "a result that is a union, such as [0480]'s maybe-pointer"
+               & ", is taken apart with `match`."
                & LF
                & LF
                & "Inside an `if` arm, `else value` after a call is the `if"
@@ -1892,21 +2048,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "itten."
                & LF
                & LF
-               & "Being an expression, a handled call also works inside a "
-               & "larger one, as an operand or an argument:"
+               & "A handled call is an expression, so it also works inside"
+               & " a larger one, as an operand or an argument:"
                & LF
                & LF
                & "    next_handle := (open_file(path) else 0) + 1"
                & LF
                & LF
-               & "A failing call needs `try` or `else` even when you throw"
-               & " its result away. `else` handles only declared failure: "
-               & "a result that is a union, such as [0480]'s maybe-pointer"
-               & ", is taken apart with `match`."
-               & LF
-               & LF
-               & "A call that returns nothing, and whose failure does not "
-               & "matter where it is made, says so in one word. Here `flus"
+               & "When a call returns nothing and its failure does not mat"
+               & "ter where the call is made, one word says so. Here `flus"
                & "h` writes out a buffer and returns nothing:"
                & LF
                & LF
@@ -1915,11 +2065,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "`else none` is the bound block with nothing in it, minus"
                & " the name nobody would read: what the call did before it"
-               & " failed stays done, and the next statement runs. On a ca"
-               & "ll that returns a value, `else none` is allowed only whe"
-               & "n the whole call is discarded with `_ =`; anywhere else "
-               & "a failure would leave a result unset that something read"
-               & "s. Here `parse_header` returns a value:"
+               & " failed stays done, and the next statement runs."
+               & LF
+               & LF
+               & "On a call that returns a value, `else none` is allowed o"
+               & "nly when the whole call is discarded with `_ =`. Anywher"
+               & "e else, a failure would leave a result unset that someth"
+               & "ing reads. Here `parse_header` returns a value:"
                & LF
                & LF
                & "    _ = parse_header(input) else none"
@@ -2004,13 +2156,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Collecting diagnostics needs somewhere to put them, and "
                & "that is an ordinary parameter. The library's destination"
-               & " for diagnostics is the concept `core/diag.log`, which a"
-               & " routine takes as `inout log: any diag.log`, meaning any"
-               & " kind of log at all ([1370]). Its `note` entry takes a p"
-               & "osition in the text, a severity and the message bytes. R"
-               & "ecording a note is a diagnostic; failing to record it is"
-               & " an operation failure, so `note` declares `io.io_failed`"
-               & ", and a routine that records notes lists it too."
+               & " for diagnostics is the concept `core/diag.log`. A routi"
+               & "ne takes it as `inout log: any diag.log`, meaning any ki"
+               & "nd of log at all ([1370]). Its `note` entry takes a posi"
+               & "tion in the text, a severity and the message bytes."
+               & LF
+               & LF
+               & "Recording a note is a diagnostic; failing to record it i"
+               & "s an operation failure. So `note` declares `io.io_failed"
+               & "`, and a routine that records notes lists it too."
                & LF
                & LF
                & "- A bounded logger never fails. When it is full it stops"
@@ -2062,11 +2216,6 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end walk_steps"
                & LF
                & LF
-               & "- A trap stops the program and runs no cleanup."
-               & LF
-               & "- An entry counts only once control has reached it. A `r"
-               & "eturn` above the `defer` does not run it."
-               & LF
                & "- At exit, the callee is evaluated first, including a fu"
                & "nction field, then the arguments, reading the places the"
                & "y name at that moment. So a `defer` that sinks something"
@@ -2074,11 +2223,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "een. If a place was re-pointed meanwhile, the `defer` se"
                & "es what is there now."
                & LF
+               & "- Registering an entry evaluates nothing, costs nothing "
+               & "and reserves nothing."
+               & LF
+               & "- An entry counts only once control has reached it. A `r"
+               & "eturn` above the `defer` does not run it."
+               & LF
                & "- The block's value, or its failure atom, is settled bef"
                & "ore the deferred calls run."
                & LF
-               & "- Registering an entry evaluates nothing, costs nothing "
-               & "and reserves nothing.",
+               & "- A trap stops the program and runs no cleanup.",
             when 1110 =>
                "`undo call` is a `defer` that runs only when a declared "
                & "failure leaves its block: a `fail`, a `try` that passes "
@@ -2086,6 +2240,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "        undo release(handle)"
+               & LF
+               & LF
+               & "It is its own word, not a flavour of `defer`: to defer i"
+               & "s to do it later, and this may never be done at all. It "
+               & "is a compensating action."
                & LF
                & LF
                & "- Falling off the end, a successful `return` and `break`"
@@ -2102,17 +2261,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & " writing, inner blocks first."
                & LF
                & "- Like `defer`, an `undo` evaluates its callee and argum"
-               & "ents only when it runs, and sees their values then."
-               & LF
-               & LF
-               & "It is its own word, not a flavour of `defer`: to defer i"
-               & "s to do it later, and this may never be done at all. It "
-               & "is a compensating action.",
+               & "ents only when it runs, and sees their values then.",
             when 1200 =>
-               "Because an entry exists only once control reaches it, a "
-               & "run of fallible acquisitions cleans up exactly what it g"
-               & "ot. If the first fails, nothing is released; if the seco"
-               & "nd fails, one is; if the third fails, two are."
+               "An entry exists only once control reaches it. A run of f"
+               & "allible acquisitions therefore cleans up exactly what it"
+               & " got: if the first fails, nothing is released; if the se"
+               & "cond fails, one is; if the third fails, two are."
                & LF
                & LF
                & "    close_file: (handle: u32) -> none ="
@@ -2185,9 +2339,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "The usual alternative is a flag and a conditional `defer"
                & "`. Forget to set the flag and you free storage that is s"
-               & "till in use, and under an arena, where freeing does noth"
-               & "ing, the mistake stays silent until the same code runs o"
-               & "n a real allocator.",
+               & "till in use. Under an arena, where freeing does nothing,"
+               & " that mistake stays silent until the same code runs on a"
+               & " real allocator.",
             when 1130 =>
                "`loop do ... end loop` repeats until something leaves it"
                & ": `break`, `return` or `fail`. A labelled loop closes wi"
@@ -2258,10 +2412,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "- A range's bounds are evaluated once, left to right. A "
-               & "typed bound gives its type to an untyped one, and two un"
-               & "typed bounds are `i32`, so `0..<lenof items` counts in `"
-               & "usize` with no conversion. A lower bound above the upper"
-               & " one runs no iteration."
+               & "lower bound above the upper one runs no iteration."
+               & LF
+               & "- A typed bound gives its type to an untyped one, and tw"
+               & "o untyped bounds are `i32`. So `0..<lenof items` counts "
+               & "in `usize` with no conversion."
                & LF
                & "- An element may itself be a fixed array, a slice or an "
                & "`any C`; the binding keeps its complete type."
@@ -2277,9 +2432,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "`try for` walks a source whose steps can fail ([1320]'s "
                & "`fallible_iterable`, or a plain `iterable`). A failure l"
-               & "eaves the loop through the routine's error set ([0960]),"
-               & " running `defer` and `undo` on the way and skipping `com"
-               & "plete`. `break` and `continue` work as usual.",
+               & "eaves the loop through the routine's error set ([0960])."
+               & " It runs `defer` and `undo` on the way and skips `comple"
+               & "te`. `break` and `continue` work as usual.",
             when 1160 =>
                "A loop binding carries no marker, because the source's t"
                & "ype already decides. Over a `[]mut t` the element is a w"
@@ -2305,18 +2460,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "- The cursor and item keep their exact declared types. A"
-               & "n `any C` item is still an `any C`, carrying its type's "
-               & "table of C's entries, its evidence ([1690]), and an `any"
-               & " C` source is handed as it is to its `iterable` entries;"
-               & " neither is treated as a slice."
+               & "n `any C` item is still an `any C`: it carries its evide"
+               & "nce ([1690]), which is its type's table of C's entries. "
+               & "An `any C` source is handed as it is to its `iterable` e"
+               & "ntries. Neither is treated as a slice."
                & LF
                & "- When the element is a fixed array, slice or `any C`, r"
                & "eplacing the whole element follows the same rule. Writin"
                & "g through an inner slice follows that slice's own `mut`.",
             when 1170 =>
                "A `complete` block runs when the loop ends because its s"
-               & "ource or condition ran out, and not when a `break` left "
-               & "it."
+               & "ource or condition ran out. It does not run when a `brea"
+               & "k` left the loop."
                & LF
                & LF
                & "        for item in items do"
@@ -2333,7 +2488,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "`loop do` has no natural end, so it takes no `complete`.",
             when 1180 =>
                "A loop or a bare block may carry a label, written like a"
-               & "ny other name. `break` and `continue` may name one."
+               & "ny other name. `break` and `continue` may name one. An u"
+               & "nlabelled `break` or `continue` means the innermost loop"
+               & "."
                & LF
                & LF
                & "        outer: for a in items do"
@@ -2348,11 +2505,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A `break` naming a bare block leaves it, and whatever lo"
-               & "ops it crosses, running their cleanups on the way out. A"
-               & " bare block has no next iteration and yields no value: `"
-               & "continue` can target only a loop, and only a loop can pr"
-               & "oduce a value through `break with`. An unlabelled `break"
-               & "` or `continue` means the innermost loop."
+               & "ops it crosses, running their cleanups on the way out."
                & LF
                & LF
                & "        search: begin"
@@ -2365,7 +2518,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "            out = 1 -- no item was zero"
                & LF
-               & "        end search",
+               & "        end search"
+               & LF
+               & LF
+               & "A bare block has no next iteration and yields no value. "
+               & "So `continue` can target only a loop, and only a loop ca"
+               & "n produce a value through `break with`.",
             when 1190 =>
                "`break with value` leaves the loop and makes the value t"
                & "he loop's result. A search becomes an expression instead"
@@ -2385,6 +2543,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "        out += found"
                & LF
                & LF
+               & "`with` is required because a bare name after `break` cou"
+               & "ld be either a label or a value."
+               & LF
+               & LF
                & "- Every `break` of a loop used as a value carries `with`"
                & ", and all of them yield the same type."
                & LF
@@ -2395,11 +2557,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- A loop whose value is unwanted is discarded explicitly"
                & " ([1020]): `_ = loop do break with 1 end loop`. A statem"
                & "ent loop uses plain `break` and cannot silently drop a `"
-               & "with` value."
-               & LF
-               & LF
-               & "`with` is required because a bare name after `break` cou"
-               & "ld be either a label or a value.",
+               & "with` value.",
             when 1210 =>
                "`match` picks the arm whose case or atom the subject hol"
                & "ds. There is no fallthrough, and a missing case is a com"
@@ -2470,14 +2628,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e, and the cases that share what an arm runs are listed "
                & "on that arm."
                & LF
-               & "- A number has no identity to name, so it is compared wi"
-               & "th `if` and `elsif`, not matched.",
+               & "- A number has no identity to name, so you compare it wi"
+               & "th `if` and `elsif` instead of matching it.",
             when 1220 =>
                "A pattern binding takes a parameter convention ([0900])."
                & " It is `in` by default; `inout` writes into the payload "
-               & "that was matched. On a pointer union's `ptr` arm, `ptr ("
-               & "sink p):` passes the pointer on to a `sink` parameter (["
-               & "0910]), which consumes the matched place."
+               & "that was matched."
                & LF
                & LF
                & "    store: type = struct"
@@ -2508,8 +2664,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "`spilled(heap)` needs no `inout`: it writes through the "
                & "slice, whose own `mut` allows it, and never replaces the"
-               & " slice. `describe` matches the `compass` of [0640], two "
-               & "directions in one arm:"
+               & " slice."
+               & LF
+               & LF
+               & "A plain binding reads the payload in place, without copy"
+               & "ing it; `inout` adds permission to write it. On a pointe"
+               & "r union's `ptr` arm, `ptr (sink p):` passes the pointer "
+               & "on to a `sink` parameter ([0910]), which consumes the ma"
+               & "tched place."
+               & LF
+               & LF
+               & "`describe` matches the `compass` of [0640], two directio"
+               & "ns in one arm:"
                & LF
                & LF
                & "    describe: (c: compass) -> (name: utf8) ="
@@ -2525,8 +2691,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end describe"
                & LF
                & LF
-               & "A plain binding reads the payload in place, without copy"
-               & "ing it; `inout` adds permission to write it."
+               & "The rules for the bindings:"
                & LF
                & LF
                & "- Both plain and `inout` bindings alias the matched stor"
@@ -2578,23 +2743,27 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- the destination range of an integer conversion."
                & LF
                & LF
-               & "What stays is everything the compiler decides at compile"
-               & " time (types, definite assignment, permissions, origins)"
-               & ", and the checks whose absence would not mean the same t"
-               & "hing on every machine: a zero divisor, a negative shift "
-               & "count, a conversion to `bool` or from a float, a text bo"
-               & "undary, and converting an integer that is zero at the ta"
-               & "rget's width into a pointer."
+               & "Two things stay:"
                & LF
                & LF
-               & "A region reaches only the code written inside it: a rout"
+               & "- Everything the compiler decides at compile time: types"
+               & ", definite assignment, permissions, origins."
+               & LF
+               & "- The checks whose absence would not mean the same thing"
+               & " on every machine: a zero divisor, a negative shift coun"
+               & "t, a conversion to `bool` or from a float, a text bounda"
+               & "ry, and converting an integer that is zero at the target"
+               & "'s width into a pointer."
+               & LF
+               & LF
+               & "A region reaches only the code written inside it. A rout"
                & "ine called from it is checked as that routine is written"
-               & ", and a deferred call is checked where you wrote it, not"
-               & " where the exit that runs it stands.",
+               & ". A deferred call is checked where you wrote it, not whe"
+               & "re the exit that runs it stands.",
             when 520 =>
                "`[n]t` is `n` elements of type `t`, stored inline. Assig"
-               & "nment copies the whole array, and the length is part of "
-               & "the type, so `[4]f32` and `[8]f32` are different types."
+               & "nment copies the whole array. The length is part of the "
+               & "type, so `[4]f32` and `[8]f32` are different types."
                & LF
                & LF
                & "    grid: [4]f32 = [1.0, 2.0, 3.0, 4.0]"
@@ -2604,34 +2773,48 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    next = [grid[0], grid[1], grid[2], grid[3]]"
                & LF
                & LF
-               & "Assigning a literal to an existing array, as `next = [.."
-               & ".]` does, fills it in place, in written order: each elem"
-               & "ent is evaluated and stored before the next one starts, "
-               & "and no hidden temporary copy is made. So a later element"
-               & " sees an earlier write, and a failure part-way leaves th"
-               & "e written prefix changed. The repeated forms of [0560] f"
-               & "ill in the same order."
+               & "Assigning a literal. Assigning a literal to an existing "
+               & "array, as `next = [...]` does, fills the array in place,"
+               & " in written order. Each element is evaluated and stored "
+               & "before the next one starts, and no hidden temporary copy"
+               & " is made. Two things follow: a later element sees an ear"
+               & "lier write, and a failure part-way leaves the written pr"
+               & "efix changed. The repeated forms of [0560] fill in the s"
+               & "ame order."
                & LF
                & LF
-               & "The length must be a constant the compiler works out wit"
-               & "hout running anything. You may write integer literals, f"
-               & "ixed parameters ([1520]) and immutable module integers, "
-               & "combined with parentheses, unary `-` and plain `+`, `-`,"
-               & " `*`, `/` and `%`. Calls, wrapping operators, bitwise op"
-               & "erators and shifts are not allowed. With `path_max: usiz"
-               & "e = 4096`, `[path_max]u8` is the same type as `[4096]u8`"
-               & ". A module integer counts only when its own value is suc"
-               & "h a constant, which may read a compiler fact [1500]; a `"
-               & "mut` one never counts, because the program may write it."
+               & "The length. The length must be a constant the compiler w"
+               & "orks out without running anything. You may write:"
+               & LF
+               & LF
+               & "- integer literals;"
+               & LF
+               & "- fixed parameters ([1520]);"
+               & LF
+               & "- immutable module integers;"
+               & LF
+               & "- parentheses, unary `-` and plain `+`, `-`, `*`, `/` an"
+               & "d `%` to combine them."
+               & LF
+               & LF
+               & "Calls, wrapping operators, bitwise operators and shifts "
+               & "are not allowed."
+               & LF
+               & LF
+               & "A module integer counts only when its own value is such "
+               & "a constant, which may read a compiler fact [1500]. A `mu"
+               & "t` one never counts, because the program may write it. W"
+               & "ith `path_max: usize = 4096`, `[path_max]u8` is the same"
+               & " type as `[4096]u8`."
                & LF
                & LF
                & "Fine print:"
                & LF
                & LF
-               & "- A negative length is refused. A length of zero is fine"
-               & " and gives a zero-length array, but there is no empty ar"
-               & "ray literal, and the repeated forms of [0560] cannot fil"
-               & "l one."
+               & "- The compiler refuses a negative length. A length of ze"
+               & "ro is fine and gives a zero-length array, but there is n"
+               & "o empty array literal, and the repeated forms of [0560] "
+               & "cannot fill a zero-length array."
                & LF
                & "- An index is a `usize`, and the array's size in bytes m"
                & "ust fit the target's `usize`."
@@ -2653,8 +2836,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The first element decides the element type, whether it i"
-               & "s a number, a slice, a pointer or a struct, and every la"
-               & "ter element must have that type.",
+               & "s a number, a slice, a pointer or a struct. Every later "
+               & "element must have that type.",
             when 560 =>
                "`[n of v]` is an array of `n` copies of `v`. It suits fi"
                & "xed patterns, which an immutable module binding can keep"
@@ -2673,6 +2856,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end read_header"
                & LF
                & LF
+               & "There are three forms. They differ in where the length c"
+               & "omes from:"
+               & LF
+               & LF
                & "| form | where the length comes from |"
                & LF
                & "|---|---|"
@@ -2686,10 +2873,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & ", with `1 <= k < N` |"
                & LF
                & LF
-               & "`v` is evaluated once, not once per element. The mixed f"
-               & "orm writes the prefix left to right, then evaluates `v` "
-               & "once and fills the rest. An assignment to an existing ar"
-               & "ray may use any of the three forms:"
+               & "`v` is evaluated once, not once per element. The last fo"
+               & "rm is the mixed form: it writes the prefix left to right"
+               & ", then evaluates `v` once and fills the rest."
+               & LF
+               & LF
+               & "An assignment to an existing array may use any of the th"
+               & "ree forms:"
                & LF
                & LF
                & "    header_image: [8]u8 = [0x7F, 0x45, of 0]"
@@ -2712,12 +2902,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Fine print:"
                & LF
                & LF
-               & "- The mixed form needs an explicitly typed local or modu"
-               & "le binding, an assignment to a mutable fixed array, or a"
-               & " fixed-array argument of the same length, which it fills"
-               & ". It cannot be inferred, nested or returned. At module l"
-               & "evel every element must be a compile-time known scalar ["
-               & "1460]."
+               & "- The mixed form needs one of three destinations: an exp"
+               & "licitly typed local or module binding, an assignment to "
+               & "a mutable fixed array, or a fixed-array argument of the "
+               & "same length, which it fills. It cannot be inferred, nest"
+               & "ed or returned. At module level every element must be a "
+               & "compile-time known scalar [1460]."
                & LF
                & "- An inferred `[n of v]` takes `v`'s scalar type, and an"
                & " untyped integer becomes `i32`. Its size must fit the ta"
@@ -2730,11 +2920,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "of, other, of]` and `[of + 1]` are ordinary literals.",
             when 540 =>
                "`zeroed` is the value of a type whose bits are all zero."
-               & " Two separate questions decide where you may write it."
                & LF
                & LF
-               & "`point` is [0120]'s struct and `compass` [0640]'s enumer"
-               & "ation:"
+               & "In this example `point` is [0120]'s struct and `compass`"
+               & " [0640]'s enumeration:"
                & LF
                & LF
                & "    mut buffer: [256]u8 = zeroed"
@@ -2751,21 +2940,32 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    -- p: ptr u32 = zeroed -- error, no zero image"
                & LF
                & LF
-               & "- Does the type have a zero image? It does when all-zero"
-               & " bits are a valid value of it, which is what lets a surr"
-               & "ounding struct or array be zeroed. Pointers and `any` ha"
-               & "ve none, because there is no null, and neither does a fu"
-               & "nction address. A struct or an active variant payload th"
-               & "at contains a function address must spell that field out"
-               & " instead of using whole or trailing `zeroed`."
+               & "Two separate questions decide where you may write `zeroe"
+               & "d`."
                & LF
-               & "- Does the type accept the word? Only when its zero has "
-               & "one obvious reading. Numbers, `bool`, ranges that contai"
-               & "n zero, and aggregates of those accept it. Named value s"
-               & "ets do not: write the name. A distinct type [0650] has i"
-               & "ts base's zero image, so a record holding one zeroes fin"
-               & "e, but an identity such as a user id has no obvious zero"
-               & ", so write `user_id(0)` rather than `zeroed` for it."
+               & LF
+               & "Does the type have a zero image? It does when all-zero b"
+               & "its are a valid value of it. That is what lets a surroun"
+               & "ding struct or array be zeroed. Pointers and `any` have "
+               & "none, because there is no null ([0480]), and neither doe"
+               & "s a function address. A struct or an active variant payl"
+               & "oad that contains a function address must spell that fie"
+               & "ld out instead of using whole or trailing `zeroed`."
+               & LF
+               & LF
+               & "Does the type accept the word? Only when its zero has on"
+               & "e obvious reading:"
+               & LF
+               & LF
+               & "- Numbers, `bool`, ranges that contain zero, and aggrega"
+               & "tes of those accept it."
+               & LF
+               & "- Named value sets do not: write the name."
+               & LF
+               & "- A distinct type [0650] has its base's zero image, so a"
+               & " record holding one zeroes fine. But an identity such as"
+               & " a user id has no obvious zero, so write `user_id(0)` ra"
+               & "ther than `zeroed` for it."
                & LF
                & LF
                & "Where the destination gives the context, `zeroed` writes"
@@ -2773,10 +2973,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & " to `buffer` does."
                & LF
                & LF
-               & "A packed struct ([0730]) is a raw image: `zeroed` is all"
-               & "owed even when an encoded field's zero pattern has no na"
-               & "me. Reading that field then traps; copying the image kee"
-               & "ps its bits."
+               & "A packed struct ([0730]) is a raw image, so `zeroed` is "
+               & "allowed even when an encoded field's zero pattern has no"
+               & " name. Reading that field then traps; copying the image "
+               & "keeps its bits."
                & LF
                & LF
                & "Library code has a narrow cousin, `uninit`, which leaves"
@@ -2784,10 +2984,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ling of `zeroed` and cannot initialize a stand-alone arr"
                & "ay.",
             when 550 =>
-               "`zeroable` is the first of those two properties as a con"
-               & "cept, so generic code can require it. Concepts come in ["
-               & "1240]; for now read one as a named property a type can h"
-               & "ave."
+               "`zeroable` is the concept that says a type has a zero im"
+               & "age, the first of [0540]'s two questions. Generic code c"
+               & "an therefore require it. Concepts come in [1240]; for no"
+               & "w read one as a named property a type can have."
                & LF
                & LF
                & "    -- compiler-owned; a program does not repeat this de"
@@ -2799,9 +2999,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Only the compiler knows a type's bit patterns, so only t"
-               & "he compiler supplies its conformances; it is the one con"
-               & "cept like that, and a program cannot declare a conforman"
-               & "ce to it. The family holds:"
+               & "he compiler supplies conformances to `zeroable`, and a p"
+               & "rogram cannot declare one. It is the one concept like th"
+               & "at. These types conform:"
                & LF
                & LF
                & "- the enabled scalars;"
@@ -2815,13 +3015,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- a distinct type exactly when its base is zeroable."
                & LF
                & LF
-               & "Atoms, functions, pointers and slices are not in it. It "
-               & "is a closed list, not reflection over arbitrary types."
+               & "Atoms, functions, pointers and slices do not. It is a cl"
+               & "osed list, not reflection over arbitrary types."
                & LF
                & LF
-               & "This is how a container that needs a filler value for st"
-               & "orage it has not used yet says so, instead of pretending"
-               & ": see `cleared` at [1350] and the reason at [0510].",
+               & "Requiring `zeroable` is how a container that needs a fil"
+               & "ler value for storage it has not used yet says so, inste"
+               & "ad of pretending: see `cleared` at [1350] and the reason"
+               & " at [0510].",
             when 570 =>
                "A slice `[]t` is a pointer and a length. It copies nothi"
                & "ng. `mut` inside the type says its elements may be writt"
@@ -2836,11 +3037,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "lls is mut"
                & LF
                & LF
-               & "You can pass an array straight to a slice parameter; it "
-               & "lends a slice of the whole array. A named array lends it"
-               & "s own storage. An array literal is built in the caller's"
-               & " frame for the duration of the call, so a list of values"
-               & " needs no binding of its own."
+               & "You can pass an array straight to a slice parameter. The"
+               & " array lends a slice of all its elements:"
+               & LF
+               & LF
+               & "- A named array lends its own storage."
+               & LF
+               & "- An array literal is built in the caller's frame for th"
+               & "e duration of the call, so a list of values needs no bin"
+               & "ding of its own. A literal lends read-only elements only"
+               & ", so it cannot go to a `[]mut t` parameter."
                & LF
                & LF
                & "    added: (values: []f32) -> (sum: f32) ="
@@ -2860,17 +3066,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "        both = added(grid) + added([1.0, 2.0])"
                & LF
-               & "    end both_sums"
-               & LF
-               & LF
-               & "A literal lends read-only elements only, so it cannot go"
-               & " to a `[]mut t` parameter.",
+               & "    end both_sums",
             when 580 =>
-               "`[]` is the empty slice: length zero, and a `for` over i"
-               & "t runs no iteration. It is never null. Its base is the l"
-               & "owest positive address aligned for the element type, 1 f"
-               & "or bytes and 4 for a `u32`, and since indexing checks th"
-               & "e length first, that base is never dereferenced.",
+               "`[]` is the empty slice. Its length is zero, and a `for`"
+               & " over it runs no iteration."
+               & LF
+               & LF
+               & "It is never null. Its base is the lowest positive addres"
+               & "s aligned for the element type: 1 for bytes and 4 for a "
+               & "`u32`. Indexing checks the length first, so that base is"
+               & " never dereferenced.",
             when 590 =>
                "Fixed arrays are also Landin's vector type: arithmetic o"
                & "n numeric arrays works element by element. There is no s"
@@ -2904,6 +3109,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end array_example"
                & LF
                & LF
+               & "The rules:"
+               & LF
+               & LF
                & "- `+`, `-`, `*`, `/` and unary `-` work on numeric array"
                & "s; `%`, `+%`, `-%` and `*%` on integer arrays."
                & LF
@@ -2922,9 +3130,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ting from positive zero."
                & LF
                & LF
-               & "Arrays do not compare, not even with `==` or `<>`: whole"
+               & "Arrays do not compare, not even with `==` or `<>`. Whole"
                & "-array equality and per-element masks are both plausible"
-               & ", so write the function you mean."
+               & " meanings, so write the function you mean."
                & LF
                & LF
                & "The cost is visible in the type: `[4096]f32 + [4096]f32`"
@@ -2947,19 +3155,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "| `cstring` | `ptr u8` | bytes up to a NUL; no length |"
                & LF
                & LF
-               & "A quoted or raw literal can be any of the three, and is "
-               & "`utf8` when nothing says otherwise. `lenof` on `utf8` an"
-               & "d `utf16` counts code units, not characters. The three t"
-               & "ypes stay distinct from each other and from their backin"
-               & "g types through calls, structs and generics."
+               & "The three types stay distinct from each other and from t"
+               & "heir backing types through calls, structs and generics. "
+               & "`lenof` on `utf8` and `utf16` counts code units, not cha"
+               & "racters."
                & LF
                & LF
-               & "Every literal has one trailing zero code unit, which sli"
-               & "ce lengths leave out, and equal literals of the same wid"
-               & "th may share one read-only copy. A `cstring` literal is "
-               & "valid UTF-8; a `cstring` that comes from C promises only"
-               & " readable bytes up to its first NUL, with its encoding u"
-               & "nchecked."
+               & "Literals. A quoted or raw literal can be any of the thre"
+               & "e, and is `utf8` when nothing says otherwise. Every lite"
+               & "ral has one trailing zero code unit, which slice lengths"
+               & " leave out. Equal literals of the same width may share o"
+               & "ne read-only copy. A `cstring` literal is valid UTF-8; a"
+               & " `cstring` that comes from C promises only readable byte"
+               & "s up to its first NUL, with its encoding unchecked."
                & LF
                & LF
                & "Converting. Conversion between text and bytes is the ord"
@@ -2988,12 +3196,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "result keeps its source's base and origin."
                & LF
                & LF
-               & "Bytes a program knows are UTF-8, because it has just che"
-               & "cked them or wrote only whole characters, become `utf8` "
-               & "without being read again through `compiler.utf8_unvalida"
-               & "ted(bytes)` [1560], which keeps the same base, length an"
-               & "d origin. It is allowed only inside `unchecked` [1120], "
-               & "and bytes that are not UTF-8 then go unnoticed."
+               & "`compiler.utf8_unvalidated(bytes)` [1560] is for bytes a"
+               & " program knows are UTF-8, because it has just checked th"
+               & "em or wrote only whole characters. They become `utf8` wi"
+               & "thout being read again, with the same base, length and o"
+               & "rigin. The call is allowed only inside `unchecked` [1120"
+               & "], and bytes that are not UTF-8 then go unnoticed."
                & LF
                & LF
                & "Slicing. `utf8` and `utf16` slice by range, as `word[3.."
@@ -3027,20 +3235,24 @@ package body Landin.Diagnostics.Citations.Texts is
                & "of trapping; call them before traversing. The module als"
                & "o has exact byte equality, substring search, decimal par"
                & "sing and bounded writing into a buffer you supply. It ne"
-               & "ver normalizes or silently truncates, and allocates only"
-               & " in a builder made by `text.growing`, which takes an all"
-               & "ocator."
+               & "ver normalizes or silently truncates. It allocates only "
+               & "in a builder made by `text.growing`, which takes an allo"
+               & "cator."
                & LF
                & LF
-               & "On plain `[]u8`, `core/text` counts positions as byte of"
-               & "fsets of the opaque type `text.position`, with `first`, "
-               & "`at_end`, `next`, `advance`, `offset`, `byte` and `slice"
-               & "`. Reading a byte at the end fails with `past_end`, and "
-               & "a slice keeps its source's origin. On `utf8`, the same p"
-               & "ositions step a whole scalar with `start`, `step`, `done"
-               & "` and `width`, and `find` returns where a match begins, "
-               & "so the text around it slices out by range with nothing c"
-               & "opied.",
+               & "`core/text` counts positions as byte offsets of the opaq"
+               & "ue type `text.position`:"
+               & LF
+               & LF
+               & "- On plain `[]u8`, the routines are `first`, `at_end`, `"
+               & "next`, `advance`, `offset`, `byte` and `slice`. Reading "
+               & "a byte at the end fails with `past_end`, and a slice kee"
+               & "ps its source's origin."
+               & LF
+               & "- On `utf8`, the same positions step a whole scalar with"
+               & " `start`, `step`, `done` and `width`. `find` returns whe"
+               & "re a match begins, so the text around it slices out by r"
+               & "ange with nothing copied.",
             when 610 =>
                "Indexing a `utf8` gives the Unicode scalar there as a `u"
                & "32`, the type a character literal [0250] and a traversal"
@@ -3078,15 +3290,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "The scalar is decoded, so it is a value, not a place: `a"
                & "ddr word[2]` and `word[2] = 'e'` are errors. To get its "
                & "bytes, take a one-scalar range as [0600] describes: its "
-               & "bounds count bytes, and the result is still `utf8`. A `u"
-               & "tf8` converted to `[]u8` loses scalar indexing and has t"
-               & "he ordinary slice operations instead.",
+               & "bounds count bytes, and the result is still `utf8`."
+               & LF
+               & LF
+               & "A `utf8` converted to `[]u8` loses scalar indexing and h"
+               & "as the ordinary slice operations instead.",
             when 1410 =>
                "Every `.ldn` file directly inside one directory belongs "
-               & "to one module, and those files see each other's declarat"
-               & "ions without importing anything. Everything is private t"
-               & "o its module unless it is marked `public`. There is no s"
-               & "eparate interface file."
+               & "to one module. Those files see each other's declarations"
+               & " without importing anything. Everything is private to it"
+               & "s module unless it is marked `public`. There is no separ"
+               & "ate interface file."
                & LF
                & LF
                & "    geometry/area.ldn"
@@ -3104,8 +3318,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "- The compiler reads a module's files in bytewise filena"
-               & "me order. Other files are ignored, and an empty director"
-               & "y is a legal empty module."
+               & "me order. It ignores other files, and an empty directory"
+               & " is a legal empty module."
                & LF
                & "- Declaration order never affects what is visible. File "
                & "order does fix identities, the order of diagnostics and "
@@ -3121,39 +3335,48 @@ package body Landin.Diagnostics.Citations.Texts is
             when 1420 =>
                "`import net/http` finds a directory `net` holding a dire"
                & "ctory `http`, under the import roots the compiler was gi"
-               & "ven, and binds the last segment, `http`, as a namespace "
-               & "in this file."
+               & "ven. It binds the last segment, `http`, as a namespace i"
+               & "n this file."
                & LF
                & LF
                & "    import net/http"
                & LF
                & LF
-               & "The roots are searched in order, and the first that has "
-               & "the directory wins; a later root is not merged in. From "
-               & "that directory the compiler takes every source file, not"
-               & " recursively, and follows their imports. A subdirectory "
-               & "is a module of its own, reached by its own path. Each mo"
-               & "dule is loaded once, so import cycles are legal."
+               & "Finding the module. The compiler searches the roots in o"
+               & "rder, and the first that has the directory wins; a later"
+               & " root is not merged in. From that directory the compiler"
+               & " takes every source file, not recursively, and follows t"
+               & "heir imports. A subdirectory is a module of its own, rea"
+               & "ched by its own path. Each module is loaded once, so imp"
+               & "ort cycles are legal."
                & LF
                & LF
-               & "After the import, `http.get`, `http.response` and `http."
-               & "drawable` name that module's public declarations. Qualif"
-               & "ication works wherever a value, type, type application, "
-               & "concept, conformance, error atom or match case is named."
-               & " The first dot after the namespace selects a public decl"
-               & "aration; later dots are ordinary value selections. The n"
-               & "amespace itself is not a value, type or place."
+               & "Using the namespace. After the import, `http.get`, `http"
+               & ".response` and `http.drawable` name that module's public"
+               & " declarations. Qualification works wherever a value, typ"
+               & "e, type application, concept, conformance, error atom or"
+               & " match case is named. The first dot after the namespace "
+               & "selects a public declaration; later dots are ordinary va"
+               & "lue selections. The namespace itself is not a value, typ"
+               & "e or place."
                & LF
                & LF
-               & "A path segment is a plain identifier: lowercase letters,"
-               & " digits and underscore, not starting with a digit. Lower"
-               & "case, because a case-sensitive and a case-insensitive fi"
-               & "lesystem must agree on what a name is, and the directory"
-               & " entry must have exactly that spelling even on a case-in"
-               & "sensitive host. An identifier, because the last segment "
-               & "becomes a name in your file, so a hyphen would need an a"
-               & "lias every time. The separator is always `/` in source, "
-               & "on every host.",
+               & "Spelling the path. A path segment is a plain identifier:"
+               & " lowercase letters, digits and underscore, not starting "
+               & "with a digit."
+               & LF
+               & LF
+               & "- It is lowercase because a case-sensitive and a case-in"
+               & "sensitive filesystem must agree on what a name is. The d"
+               & "irectory entry must have exactly that spelling even on a"
+               & " case-insensitive host."
+               & LF
+               & "- It is an identifier because the last segment becomes a"
+               & " name in your file, so a hyphen would need an alias ever"
+               & "y time."
+               & LF
+               & LF
+               & "The separator is always `/` in source, on every host.",
             when 1430 =>
                "`as` gives the namespace another name, for when two impo"
                & "rts collide."
@@ -3173,21 +3396,32 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "This binds `get` and `post` and not the `http` namespace"
-               & ". Every selected name must exist and be public, even if "
-               & "the file never uses it. Each keeps its original declarat"
-               & "ion's identity, type and mutability. The list is not emp"
-               & "ty and has no trailing comma or renaming, and a selectio"
-               & "n cannot be combined with an alias.",
+               & ". The rules for the list:"
+               & LF
+               & LF
+               & "- Every selected name must exist and be public, even if "
+               & "the file never uses it."
+               & LF
+               & "- Each name keeps its original declaration's identity, t"
+               & "ype and mutability."
+               & LF
+               & "- The list is not empty and has no trailing comma or ren"
+               & "aming."
+               & LF
+               & "- A selection cannot be combined with an alias.",
             when 1450 =>
                "Each file has its own imports, so every file reads on it"
                & "s own."
                & LF
                & LF
-               & "Imports come first, before every declaration. One file's"
-               & " imports are not visible in its siblings and are never r"
-               & "e-exported. Binding one name twice in a file's imports i"
-               & "s an error, whether it is the same import twice or a sel"
-               & "ection colliding with an alias."
+               & "- Imports come first, before every declaration."
+               & LF
+               & "- One file's imports are not visible in its siblings and"
+               & " are never re-exported."
+               & LF
+               & "- Binding one name twice in a file's imports is an error"
+               & ", whether it is the same import twice or a selection col"
+               & "liding with an alias."
                & LF
                & LF
                & "Shadowing goes like this:"
@@ -3203,9 +3437,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "."
                & LF
                & LF
-               & "Selecting a private member is reported differently from "
-               & "selecting one that does not exist, and the report points"
-               & " at the private declaration.",
+               & "The compiler reports selecting a private member differen"
+               & "tly from selecting one that does not exist, and the repo"
+               & "rt points at the private declaration.",
             when 1460 =>
                "A value at module level must be known when the compiler "
                & "reads it, because nothing runs before the entry point. S"
@@ -3219,24 +3453,26 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    mut call_count: u32 = 0"
                & LF
                & LF
-               & "Integer arithmetic here is worked out in a wide range fi"
-               & "rst, and only the final value is checked against its typ"
-               & "e. So a module `value: u8 = 200 + 100 - 100` holds 200, "
-               & "while the same `u8` addition inside a function overflows"
-               & " and traps before the subtraction."
+               & "Arithmetic. Integer arithmetic here is worked out in a w"
+               & "ide range first, and only the final value is checked aga"
+               & "inst its type. So a module `value: u8 = 200 + 100 - 100`"
+               & " holds 200, while the same `u8` addition inside a functi"
+               & "on overflows and traps before the subtraction."
                & LF
                & LF
-               & "A value another module exports is known in the same way,"
-               & " named through that module: `limit: u32 = sizes.page * 4"
-               & "`, `ready: flags.state = flags.idle`. Qualifying a name "
-               & "changes where it is found, not whether it is known."
+               & "Values from other modules. A value another module export"
+               & "s is known in the same way, named through that module: `"
+               & "limit: u32 = sizes.page * 4`, `ready: flags.state = flag"
+               & "s.idle`. Qualifying a name changes where it is found, no"
+               & "t whether it is known."
                & LF
                & LF
-               & "A module struct may hold a function. The field names a d"
-               & "eclared function, or an anonymous one that captures noth"
-               & "ing, and what is stored is the routine's address; nothin"
-               & "g is called. There is no all-zero function address [0540"
-               & "], so such a struct must be written out in full."
+               & "Functions in a struct. A module struct may hold a functi"
+               & "on. The field names a declared function, or an anonymous"
+               & " one that captures nothing. What is stored is the routin"
+               & "e's address; nothing is called. There is no all-zero fun"
+               & "ction address [0540], so such a struct must be written o"
+               & "ut in full."
                & LF
                & LF
                & "Exact rules: spec [1940].",
@@ -3248,13 +3484,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A program holds one version of each package name. Two co"
-               & "pies of a package would cost space a 32 KB part does not"
-               & " have, and they would be different types, since types ar"
-               & "e nominal. The whole program also keeps a single list of"
-               & " which types conform to which concepts ([1240]), and two"
-               & " copies would put conflicting entries in it. The compani"
-               & "on tool, once it exists, will solve versions and report "
-               & "a conflict as a hard error that asks for an upgrade."
+               & "pies of a package would do three things:"
+               & LF
+               & LF
+               & "- cost space a 32 KB part does not have;"
+               & LF
+               & "- be different types, since types are nominal;"
+               & LF
+               & "- put conflicting entries in the single list the whole p"
+               & "rogram keeps of which types conform to which concepts (["
+               & "1240])."
+               & LF
+               & LF
+               & "The companion tool ([1480]), once it exists, will solve "
+               & "versions and report a conflict as a hard error that asks"
+               & " for an upgrade."
                & LF
                & LF
                & "The current compiler reads no versions or origins. It ta"
@@ -3266,35 +3510,46 @@ package body Landin.Diagnostics.Citations.Texts is
                & "repeated `--root=DIR` options and then the entry module'"
                & "s directory, or its source files, which then form one mo"
                & "dule. With no `--root`, the named files form one synthet"
-               & "ic module. The roots are searched in the order you give "
-               & "([1420]), and that order alone decides: the compiler con"
-               & "sults no home directory and adds no system root of its o"
-               & "wn choosing."
+               & "ic module."
                & LF
                & LF
-               & "It does add one root: the library it ships with, found b"
-               & "eside its executable. `core`, `hosted` and `platform` al"
-               & "ways come from there, after every root you name. Because"
-               & " the search is otherwise project-first, a project can ov"
-               & "erride an ordinary module by putting its own copy in its"
-               & " first root, and vendoring a package is just that."
+               & "The roots are searched in the order you give ([1420]), a"
+               & "nd that order alone decides: the compiler consults no ho"
+               & "me directory and adds no system root of its own choosing"
+               & "."
                & LF
                & LF
-               & "Fetching packages, solving versions, lock files and nami"
-               & "ng authority belong to a companion tool that will ship a"
-               & "longside the compiler but stay separate from it: a compi"
-               & "ler you can read is worth more than one that can downloa"
-               & "d things. Arranging the roots so that only one version o"
-               & "f each package is reachable is that tool's job, so until"
-               & " it exists the compiler does not enforce [1470]'s one-ve"
-               & "rsion rule. The intended root order is the project, then"
-               & " the user's Landin home, then a system-wide one; whether"
-               & " a path's leading segments name an owner and a package i"
-               & "s a convention for people and that tool, while the compi"
-               & "ler only sees directories."
+               & "The library root. The compiler does add one root: the li"
+               & "brary it ships with, found beside its executable. `core`"
+               & ", `hosted` and `platform` always come from there, after "
+               & "every root you name. Because the search is otherwise pro"
+               & "ject-first, a project can override an ordinary module by"
+               & " putting its own copy in its first root. Vendoring a pac"
+               & "kage is just that."
                & LF
                & LF
-               & "Four source namespaces belong to the repository:"
+               & "The companion tool. Fetching packages, solving versions,"
+               & " lock files and naming authority belong to a companion t"
+               & "ool. It will ship alongside the compiler but stay separa"
+               & "te from it: a compiler you can read is worth more than o"
+               & "ne that can download things."
+               & LF
+               & LF
+               & "- Arranging the roots so that only one version of each p"
+               & "ackage is reachable is that tool's job. So until it exis"
+               & "ts, the compiler does not enforce [1470]'s one-version r"
+               & "ule."
+               & LF
+               & "- The intended root order is the project, then the user'"
+               & "s Landin home, then a system-wide one."
+               & LF
+               & "- Whether a path's leading segments name an owner and a "
+               & "package is a convention for people and that tool. The co"
+               & "mpiler only sees directories."
+               & LF
+               & LF
+               & "The repository's namespaces. Four source namespaces belo"
+               & "ng to the repository:"
                & LF
                & LF
                & "| namespace | holds | available |"
@@ -3309,20 +3564,36 @@ package body Landin.Diagnostics.Citations.Texts is
                & "sted/system` and `hosted/blocking` | on hosted systems |"
                & LF
                & "| `platform` | interfaces scoped to a target or a system"
-               & ": `platform/c`, the CPU modules `platform/cortex_m`, `pl"
-               & "atform/riscv` and `platform/xtensa`, and the POSIX layer"
-               & ", `platform/posix` over `platform/linux`, `platform/libc"
-               & "` and `platform/kqueue` | `platform/c` wherever a C ABI "
-               & "is enabled: the hosted LP64 targets and Cortex-M's AAPCS"
-               & "32. A CPU module everywhere, with its operations, submod"
-               & "ules and reference descriptions only on its own targets:"
-               & " Cortex-M at any level, `rv32`, `xtensa`. The POSIX laye"
-               & "r on Linux, macOS and FreeBSD. A `platform` module the c"
-               & "ompiler gives no scope, nowhere |"
+               & ": `platform/c`, the CPU modules and the POSIX layer | ea"
+               & "ch as the next table says |"
                & LF
                & "| `landin` | the toolchain modules of [1560]: `landin/co"
                & "mpiler`, `landin/assembler`, `landin/linker` | everywher"
                & "e, without an import |"
+               & LF
+               & LF
+               & "Within `platform`, availability goes by module:"
+               & LF
+               & LF
+               & "| `platform` module | available |"
+               & LF
+               & "|---|---|"
+               & LF
+               & "| `platform/c` | wherever a C ABI (application binary in"
+               & "terface) is enabled: the hosted LP64 targets and Cortex-"
+               & "M's AAPCS32 |"
+               & LF
+               & "| a CPU module: `platform/cortex_m`, `platform/riscv` or"
+               & " `platform/xtensa` | everywhere, with its operations, su"
+               & "bmodules and reference descriptions only on its own targ"
+               & "ets: Cortex-M at any level, `rv32`, `xtensa` |"
+               & LF
+               & "| the POSIX layer: `platform/posix` over `platform/linux"
+               & "`, `platform/libc` and `platform/kqueue` | on Linux, mac"
+               & "OS and FreeBSD |"
+               & LF
+               & "| a `platform` module the compiler gives no scope | nowh"
+               & "ere |"
                & LF
                & LF
                & "Fine print:"
@@ -3374,12 +3645,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & ", and `addr` of an immutable one a plain `ptr`."
                & LF
                & LF
-               & "`addr p.val` is the address of the thing `p` points at, "
-               & "and `addr items[i]` the address of a slice's element. `a"
-               & "ddr p` is something else: the address of the variable `p"
-               & "` itself, which may live on the stack.",
+               & "What `addr` is applied to decides which address you get:"
+               & LF
+               & LF
+               & "- `addr p.val` is the address of the thing `p` points at"
+               & "."
+               & LF
+               & "- `addr items[i]` is the address of a slice's element."
+               & LF
+               & "- `addr p` is something else: the address of the variabl"
+               & "e `p` itself, which may live on the stack.",
             when 440 =>
-               "    add_up: (xs: []i32) -> (total: i32) ="
+               "A writable reference is accepted where a read-only one i"
+               & "s expected, and the call needs no conversion spelled out"
+               & "."
+               & LF
+               & LF
+               & "    add_up: (xs: []i32) -> (total: i32) ="
                & LF
                & "        total = 0"
                & LF
@@ -3427,9 +3709,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "This binding is immutable, but the register behind it is"
                & " written: the two questions of [0070] really are separat"
-               & "e. Nothing in the pointer's type makes access to it a de"
-               & "vice transaction. The operation that reads or writes doe"
-               & "s that ([0850]).",
+               & "e."
+               & LF
+               & LF
+               & "Nothing in the pointer's type makes access to it a devic"
+               & "e transaction. The operation that reads or writes does t"
+               & "hat ([0850]).",
             when 470 =>
                "A pointer and an integer convert both ways like any othe"
                & "r conversion ([0700]): apply the type. Here `gpio` is th"
@@ -3448,10 +3733,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "The cost is on the way back. An integer has no origin, s"
                & "o a pointer made from one borrows nothing as far as the "
-               & "compiler knows, and it will say nothing more about that "
-               & "pointer's lifetime. This is the one place inside the lan"
-               & "guage where lifetime checking is left behind, much as at"
-               & " the C boundary.",
+               & "compiler knows, and the compiler will say nothing more a"
+               & "bout that pointer's lifetime. This is the one place insi"
+               & "de the language where lifetime checking is left behind, "
+               & "much as at the C boundary.",
             when 480 =>
                """Maybe a pointer"" is a union of an atom and a pointer ty"
                & "pe. With a single atom, the compiler stores it as a plai"
@@ -3493,16 +3778,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end read"
                & LF
                & LF
-               & "A pointer goes into the union with no ceremony. Getting "
-               & "it out takes a `match`, and the `match` has to name both"
-               & " cases: `ptr (p)` is the present case, with the pointer "
-               & "bound to `p`."
+               & "A pointer goes into the union with nothing extra to writ"
+               & "e. Getting it out takes a `match`, and the `match` has t"
+               & "o name both cases: `ptr (p)` is the present case, with t"
+               & "he pointer bound to `p`."
                & LF
                & LF
-               & "To ask only which case it holds, compare with the atom: "
-               & "`m == none_found` or `m <> none_found`. That reads no ad"
-               & "dress, so it needs no `match`. Two such unions do not co"
-               & "mpare with each other."
+               & "To ask only which case the union holds, compare with the"
+               & " atom: `m == none_found` or `m <> none_found`. That read"
+               & "s no address, so it needs no `match`. Two such unions do"
+               & " not compare with each other."
                & LF
                & LF
                & "A union may also hold several atoms beside the pointer; "
@@ -3533,13 +3818,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "handle's type says what it is for.",
             when 500 =>
                "There is no `p + n` on pointers, and no built-in operati"
-               & "on that turns a pointer into a slice. Code that really n"
-               & "eeds to compute an address converts to an integer and ba"
-               & "ck ([0470]), and gives up lifetime checking when it does"
-               & ". Inside the standard library, `core/mem` does this for "
-               & "you, behind its private storage operations. If you need "
-               & "an element's address, take it from a slice that you know"
-               & " is not empty: `addr items[0]`.",
+               & "on that turns a pointer into a slice."
+               & LF
+               & LF
+               & "Code that really needs to compute an address converts to"
+               & " an integer and back ([0470]), and gives up lifetime che"
+               & "cking when it does. Inside the standard library, `core/m"
+               & "em` does this for you, behind its private storage operat"
+               & "ions."
+               & LF
+               & LF
+               & "If you need an element's address, take it from a slice t"
+               & "hat you know is not empty: `addr items[0]`.",
             when 510 =>
                "A growing array has room for more items than it holds. T"
                & "he empty slots contain no `t` yet, so no slice may cover"
@@ -3584,13 +3874,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "t_empty`."
                & LF
                & LF
-               & "To grow, reserve a bigger block and `transfer` every ite"
-               & "m into it. A `transfer` copies and leaves its source as "
-               & "it was, so the old block is unchanged until you are done"
-               & ": if a step fails, release the new block and carry on wi"
-               & "th the old one. Only after every item is copied do you e"
-               & "mpty and dispose of the old block and publish the new on"
-               & "e."
+               & "Growing. To grow, reserve a bigger block and `transfer` "
+               & "every item into it. A `transfer` copies and leaves its s"
+               & "ource as it was, so the old block is unchanged until you"
+               & " are done: if a step fails, release the new block and ca"
+               & "rry on with the old one. Only after every item is copied"
+               & " do you empty and dispose of the old block and publish t"
+               & "he new one."
                & LF
                & LF
                & "This keeps the empty slots out of reach. It does not mak"
@@ -3598,8 +3888,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ve, aligned and as large as you say ([1720]).",
             when 770 =>
                "A pointer to a local dies with the routine. Returning on"
-               & "e, or storing it anywhere that outlives the routine, is "
-               & "an error."
+               & "e is an error, and so is storing it anywhere that outliv"
+               & "es the routine."
                & LF
                & LF
                & "    bad: () -> (p: ptr u32) ="
@@ -3625,13 +3915,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end tally_cell"
                & LF
                & LF
-               & "The origin travels with the value: a slice of a local ar"
-               & "ray, or an `any` built over a local ([1370]), is frame t"
-               & "oo.",
+               & "The origin travels with the value. A slice of a local ar"
+               & "ray is frame too, and so is an `any` built over a local "
+               & "([1370]).",
             when 780 =>
                "A parameter is non-escaping by default. The callee may r"
                & "ead and write through a pointer it was handed, but it ma"
-               & "y not keep it once it returns."
+               & "y not keep the pointer once it returns."
                & LF
                & LF
                & "    increment_cell: (cell: ptr mut u32) -> none ="
@@ -3655,16 +3945,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "So a pointer to a local can go into any call whose param"
-               & "eter does not say `escaping`. When a routine does keep a"
-               & " reference, it marks the parameter `escaping`, and then "
-               & "the caller may only pass something that lives long enoug"
-               & "h: allocated or static, never frame."
+               & "eter does not say `escaping`."
                & LF
                & LF
-               & "Assume a struct `node` with a field `next: ptr mut node`"
-               & ". `mem.new` allocates one value through the allocator it"
-               & " is given and returns a pointer to it ([1360]; `core/mem"
-               & "` in the library guide)."
+               & "A routine that does keep a reference marks the parameter"
+               & " `escaping`. The caller may then pass only something tha"
+               & "t lives long enough: allocated or static, never frame."
+               & LF
+               & LF
+               & "The next example assumes a struct `node` with a field `n"
+               & "ext: ptr mut node`. `mem.new` allocates one value throug"
+               & "h the allocator it is given and returns a pointer to it "
+               & "([1360]; `core/mem` in the library guide)."
                & LF
                & LF
                & "    push_front: (escaping inout head: ptr mut node, esca"
@@ -3706,21 +3998,30 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ach it, so both are `escaping`."
                & LF
                & LF
-               & """Keeping"" means any store that outlives the call: into a"
-               & " module binding, or through a pointer, slice or `inout` "
-               & "field the caller owns. Storing a reference back into sto"
-               & "rage of the same origin is an update, not keeping, and n"
-               & "eeds no marker. Storing one parameter's reference into a"
-               & "nother parameter's storage needs `escaping`."
+               & "What counts as keeping:"
                & LF
                & LF
-               & "Or it needs `escaping into`, which names the one paramet"
-               & "er whose storage keeps it. That lets a node on the calle"
-               & "r's frame go onto a list on the caller's frame, provided"
-               & " the node lives as long as the list: it is the caller's "
-               & "parameter, static, allocated, or a local declared before"
-               & " the list. Here each parameter is kept in the other's st"
-               & "orage, so each names the other."
+               & "- ""Keeping"" means any store that outlives the call: into"
+               & " a module binding, or through a pointer, slice or `inout"
+               & "` field the caller owns."
+               & LF
+               & "- Storing a reference back into storage of the same orig"
+               & "in is an update, not keeping, and needs no marker."
+               & LF
+               & "- Storing one parameter's reference into another paramet"
+               & "er's storage needs `escaping`, or else `escaping into`."
+               & LF
+               & LF
+               & "`escaping into` names the one parameter whose storage ke"
+               & "eps the reference. With it, a node on the caller's frame"
+               & " can go onto a list on the caller's frame, provided the "
+               & "node lives as long as the list. The node does so when it"
+               & " is the caller's parameter, static, allocated, or a loca"
+               & "l declared before the list."
+               & LF
+               & LF
+               & "In the next example each parameter is kept in the other'"
+               & "s storage, so each names the other."
                & LF
                & LF
                & "    push_kept: (escaping into item inout head: ptr mut n"
@@ -3764,9 +4065,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Exact rules: spec [1910].",
             when 830 =>
                "A view taken from a local borrows it. While the view is "
-               & "still in use, the local cannot be passed as `inout` or `"
-               & "sink`, because that call could grow, move or replace the"
-               & " storage under the view."
+               & "still in use, the compiler refuses to pass the local as "
+               & "`inout` or `sink`, because that call could grow, move or"
+               & " replace the storage under the view."
                & LF
                & LF
                & "    reset_cells: (inout buffer: [4]i32) -> none ="
@@ -3795,12 +4096,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "outine body, so there is nothing to annotate."
                & LF
                & LF
-               & "Only `inout` and `sink` trigger it, since they are the t"
-               & "wo ways a call can change the storage itself. Reading th"
-               & "e local, or passing it `in` or by pointer, is fine while"
-               & " the view lives. An unchecked region ([1120]) does not t"
-               & "urn the check off: origins and escape are among the chec"
-               & "ks that stay.",
+               & "Only `inout` and `sink` trigger the check, since they ar"
+               & "e the two ways a call can change the storage itself. Whi"
+               & "le the view lives, you may still read the local, pass it"
+               & " `in` or pass it by pointer."
+               & LF
+               & LF
+               & "An unchecked region ([1120]) does not turn the check off"
+               & ": origins and escape are among the checks that stay.",
             when 790 =>
                "When a routine returns a reference derived from a parame"
                & "ter, its signature says so with `from`. The caller then "
@@ -3843,34 +4146,40 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ere is no const and non-const pair."
                & LF
                & LF
-               & "The clause is checked against the body in both direction"
-               & "s. Returning something derived from a parameter without "
-               & "naming it is an error, and so is naming a parameter the "
-               & "result did not come from."
+               & "The compiler checks the clause against the body in both "
+               & "directions. Returning something derived from a parameter"
+               & " without naming it is an error, and so is naming a param"
+               & "eter the result did not come from."
                & LF
                & LF
                & "`from` is the mirror of `escaping`. `escaping` says the "
                & "callee keeps what the caller handed in; `from` says the "
-               & "caller keeps something of what the callee handed back. B"
-               & "oth are written, not inferred, so a distant body can nev"
-               & "er change a signature, and function pointers, concept en"
-               & "tries and the C boundary need no special rule."
+               & "caller keeps something of what the callee handed back. Y"
+               & "ou write both, and the compiler infers neither. So a dis"
+               & "tant body can never change a signature, and function poi"
+               & "nters, concept entries and the C boundary need no specia"
+               & "l rule."
                & LF
                & LF
-               & "Two refinements: a read-only result that points into sta"
-               & "tic storage may name a parameter it does not come from, "
-               & "since static storage outlives every parameter; and a wri"
-               & "table result must name every place it could point to, so"
-               & " a helper that might return module storage takes it as a"
-               & " parameter and names that too."
+               & "Two refinements:"
+               & LF
+               & LF
+               & "- A read-only result that points into static storage may"
+               & " name a parameter it does not come from, since static st"
+               & "orage outlives every parameter."
+               & LF
+               & "- A writable result must name every place it could point"
+               & " to. So a helper that might return module storage takes "
+               & "that storage as a parameter and names it too."
                & LF
                & LF
                & "Exact rules: spec [1910].",
             when 800 =>
                "A result with `from` borrows its source just as a view d"
-               & "oes in [0830]. The signature supplies the derivation ins"
-               & "tead of one expression showing it, and the fix is the sa"
-               & "me: take the view again afterwards."
+               & "oes in [0830]. The difference is how the compiler learns"
+               & " of the derivation: the signature supplies it, where in "
+               & "[0830] one expression showed it. The fix is the same: ta"
+               & "ke the view again afterwards."
                & LF
                & LF
                & "`core/vec`'s `vec.used` is declared with `from`, like [0"
@@ -3912,8 +4221,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "A value that holds no references has no origin and goes "
                & "anywhere, which is one more reason the idiom is handles "
                & "and indices. A number computed from a view keeps no borr"
-               & "ow: saving `lenof xs` saves a number, usable after `xs` "
-               & "or its container changes."
+               & "ow: saving `lenof xs` saves a number, and you may use it"
+               & " after `xs` or its container changes."
                & LF
                & LF
                & "Taking an address or a range is different: that referenc"
@@ -3928,9 +4237,9 @@ package body Landin.Diagnostics.Citations.Texts is
                "Converting an integer to a pointer ([0470]) ends trackin"
                & "g. The integer has no origin, so the pointer borrows not"
                & "hing, and the compiler says nothing more about its lifet"
-               & "ime. It also does not check that the storage is live or "
-               & "large enough: that stays the library's unsafe obligation"
-               & " ([1720])."
+               & "ime. Nor does the compiler check that the storage is liv"
+               & "e or large enough: that stays the library's unsafe oblig"
+               & "ation ([1720])."
                & LF
                & LF
                & "    block_at: (base: ptr mut u8, offset: usize) -> (bloc"
@@ -3953,10 +4262,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "A signature brings tracking back. A routine that indexes"
                & " a table C gave it writes `from table` on its result, an"
-               & "d its callers are checked against that as against any si"
-               & "gnature. Its body is not checked against it, since a poi"
-               & "nter made from an integer satisfies any `from`: the cont"
-               & "ract is its author's claim, so keep such routines small.",
+               & "d the compiler checks its callers against that as agains"
+               & "t any signature. The compiler does not check the routine"
+               & "'s body against it, since a pointer made from an integer"
+               & " satisfies any `from`. The contract is its author's clai"
+               & "m, so keep such routines small.",
             when 820 =>
                "An arena is a library value from `core/arena`: you hand "
                & "it a block of bytes, it hands out pieces of it, and indi"
@@ -4018,13 +4328,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "`over` takes its backing as `escaping base`, so it accep"
                & "ts module storage or storage from another allocator and "
-               & "refuses a frame array. Allocations borrow nothing ([0790"
-               & "]), so a helper could store one in module storage, and a"
-               & "n arena over frame storage would let that pointer outliv"
-               & "e the frame. For a local buffer whose every use stays in"
-               & "side the frame, `arena.over_unchecked` takes frame backi"
-               & "ng; you must stop using its results before the buffer en"
-               & "ds."
+               & "refuses a frame array. The reason is that allocations bo"
+               & "rrow nothing ([0790]): a helper could store one in modul"
+               & "e storage, and an arena over frame storage would let tha"
+               & "t pointer outlive the frame."
+               & LF
+               & LF
+               & "For a local buffer whose every use stays inside the fram"
+               & "e, `arena.over_unchecked` takes frame backing. You must "
+               & "stop using its results before the buffer ends."
                & LF
                & LF
                & "Other providers build on the same idea:"
@@ -4046,18 +4358,26 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A region's handle holds a copy of its provider's handle."
-               & " Its allocations borrow nothing, its bookkeeping also us"
-               & "es the provider's capacity, and a finite provider stays "
+               & " Its allocations borrow nothing, and its bookkeeping als"
+               & "o uses the provider's capacity. A finite provider stays "
                & "finite: there is no hidden heap fallback."
                & LF
                & LF
-               & "What the compiler does not do for you: arrange the backi"
-               & "ng's lifetime and release (`defer`, [1100], runs on ever"
-               & "y exit), keep overlapping backing apart, or stop you usi"
-               & "ng a result after its backing ends or is reused. Results"
-               & " obey the ordinary origin rules and nothing more. `arena"
-               & "` itself is not a keyword: it is an ordinary name you ma"
-               & "y declare.",
+               & "The compiler does not do these for you:"
+               & LF
+               & LF
+               & "- arrange the backing's lifetime and release (`defer`, ["
+               & "1100], runs on every exit);"
+               & LF
+               & "- keep overlapping backing apart;"
+               & LF
+               & "- stop you using a result after its backing ends or is r"
+               & "eused."
+               & LF
+               & LF
+               & "Results obey the ordinary origin rules and nothing more."
+               & " `arena` itself is not a keyword: it is an ordinary name"
+               & " you may declare.",
             when 850 =>
                "A volatile access is exempt from the borrow rule and fro"
                & "m every aliasing assumption. It is an operation, not a p"
@@ -4076,26 +4396,31 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Each performs exactly one access of its width through an"
-               & " ordinary pointer, usually one built from an address ([0"
-               & "460]) and so already outside the lifetime checks ([0470]"
-               & "). Hardware often needs several typed windows on one add"
-               & "ress, a byte view and a word view of the same register, "
-               & "and that is legal on purpose. There is no `volatile ptr`"
-               & ": a second permission on every reference would buy nothi"
-               & "ng the operations do not."
+               & " ordinary pointer. That pointer is usually one built fro"
+               & "m an address ([0460]), and so already outside the lifeti"
+               & "me checks ([0470])."
                & LF
                & LF
-               & "DMA uses ordinary slices. Landin makes no lifetime promi"
-               & "se about storage a device is still writing: neither an i"
-               & "nterrupt nor masking one makes it reusable, and waiting "
-               & "for the device is the driver's own protocol."
+               & "Hardware often needs several typed windows on one addres"
+               & "s, such as a byte view and a word view of the same regis"
+               & "ter, and that is legal on purpose. There is no `volatile"
+               & " ptr`: a second permission on every reference would buy "
+               & "nothing the operations do not."
+               & LF
+               & LF
+               & "Direct memory access (DMA) uses ordinary slices. Landin "
+               & "makes no lifetime promise about storage a device is stil"
+               & "l writing: neither an interrupt nor masking one makes it"
+               & " reusable, and waiting for the device is the driver's ow"
+               & "n protocol."
                & LF
                & LF
                & "Exact rules: spec [1990].",
             when 860 =>
                "The checks know which kind of storage a reference points"
-               & " into, not which allocation or whether it still exists. "
-               & "So these go through:"
+               & " into. They do not know which allocation it points into,"
+               & " or whether that allocation still exists. So these go th"
+               & "rough:"
                & LF
                & LF
                & "- Use after free or reset. The compiler does not know wh"
@@ -4128,7 +4453,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "A concept is an ordinary type declaration, so it lives i"
                & "n a module like any other name. It has no default bodies"
-               & ": every entry is supplied by each conformance.",
+               & ": each conformance supplies every entry.",
             when 1240 =>
                "A conformance registers one type against one concept, na"
                & "ming the function that supplies each entry."
@@ -4141,13 +4466,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    i32 is ordered (less: less_than_i32)"
                & LF
                & LF
-               & "Each label is an entry of the concept, and each supplyin"
-               & "g function must have exactly the entry's signature with "
-               & "`t` replaced by `i32`. It must be a declared function: ["
+               & "Each label is an entry of the concept. Each supplying fu"
+               & "nction must have exactly the entry's signature with `t` "
+               & "replaced by `i32`, and it must be a declared function: ["
                & "1010]'s `less_i32`, a binding that holds an anonymous fu"
-               & "nction, cannot supply an entry. There is no implicit con"
-               & "formance: a type with a matching `less` is still not `or"
-               & "dered` until a line like this one says so.",
+               & "nction, cannot supply an entry."
+               & LF
+               & LF
+               & "There is no implicit conformance. A type with a matching"
+               & " `less` is still not `ordered` until a line like this on"
+               & "e says so.",
             when 1290 =>
                "A generic function takes the type as an ordinary paramet"
                & "er, constrained with `is`, and calls the concept's entri"
@@ -4194,7 +4522,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A type parameter may also be unconstrained, for code tha"
-               & "t only moves values around. Fine print:"
+               & "t only moves values around."
+               & LF
+               & LF
+               & "The fine print:"
                & LF
                & LF
                & "- Every type parameter is written in the list. A name th"
@@ -4209,16 +4540,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- A private `! ...` error set is inferred separately for"
                & " each concrete instance."
                & LF
-               & "- The body is checked for each instance a call makes. A "
-               & "generic function nothing calls is checked only for its n"
-               & "ames and for operands no type could make valid. An error"
-               & " that depends on what `t` turns out to be, such as a vie"
-               & "w held across a call that may move its source, is report"
-               & "ed once a call picks `t`.",
+               & "- The compiler checks the body for each instance a call "
+               & "makes. A generic function nothing calls is checked only "
+               & "for its names and for operands no type could make valid."
+               & " An error that depends on what `t` turns out to be, such"
+               & " as a view held across a call that may move its source, "
+               & "is reported once a call picks `t`.",
             when 1300 =>
-               "The type is normally deduced from the arguments. You may"
-               & " also name it, in the same named-argument list as the ru"
-               & "ntime arguments."
+               "The compiler normally deduces the type from the argument"
+               & "s. You may also name it, in the same named-argument list"
+               & " as the runtime arguments."
                & LF
                & LF
                & "    sort_demo: (values: []mut i32) -> none ="
@@ -4254,19 +4585,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Exact rules: spec [1920].",
             when 1310 =>
                "A call to a generic function passes, invisibly, a table "
-               & "for each conformance the body uses: the type's size and "
-               & "alignment, then the concept's functions in the order the"
-               & " concept declares them. `t.less(...)` loads `less` from "
-               & "that table and calls it. The same tables carry `any C` v"
-               & "alues ([1370]), so static generics and runtime dispatch "
-               & "are one mechanism ([1690])."
+               & "for each conformance the body uses. The table holds the "
+               & "type's size and alignment, then the concept's functions "
+               & "in the order the concept declares them. `t.less(...)` lo"
+               & "ads `less` from that table and calls it. The same tables"
+               & " carry `any C` values ([1370]), so static generics and r"
+               & "untime dispatch are one mechanism ([1690])."
                & LF
                & LF
                & "The tables are the meaning of generic code. Specializati"
-               & "on, replacing an indirect call with a direct one where t"
-               & "he compiler can prove which table arrives, is an optimiz"
-               & "ation that never changes what a program does. Two indepe"
-               & "ndent switches control code generation:"
+               & "on replaces an indirect call with a direct one where the"
+               & " compiler can prove which table arrives. It is an optimi"
+               & "zation that never changes what a program does."
+               & LF
+               & LF
+               & "Two independent switches control code generation:"
                & LF
                & LF
                & "| option | values | default |"
@@ -4278,22 +4611,25 @@ package body Landin.Diagnostics.Citations.Texts is
                & "| `--specialize` | `off`, `auto`, `all` | `auto` |"
                & LF
                & LF
-               & "Neither depends on `--build-mode`. A call is never speci"
-               & "alized merely because its source type is known: the comp"
-               & "iler needs proof of the table that actually arrives. Cal"
-               & "ls through `any`, through a table it cannot trace, or in"
-               & " an instance whose address is taken stay indirect. `--bu"
-               & "ild-report=PATH` writes a report of what was specialized"
-               & " and what stayed indirect, and why.",
+               & "Neither depends on `--build-mode`."
+               & LF
+               & LF
+               & "A call is never specialized merely because its source ty"
+               & "pe is known: the compiler needs proof of the table that "
+               & "actually arrives. A call stays indirect when it goes thr"
+               & "ough `any`, through a table the compiler cannot trace, o"
+               & "r in an instance whose address is taken. `--build-report"
+               & "=PATH` writes a report of what was specialized and what "
+               & "stayed indirect, and why.",
             when 1340 =>
                "A concept may build on others by naming them after `is`."
                & " A type that satisfies the combined concept still confor"
                & "ms to each part separately."
                & LF
                & LF
-               & "Assume a struct `button` with a `text` field, a type `ca"
-               & "nvas`, and functions `button_draw`, `button_click` and `"
-               & "button_focus` with the entries' signatures."
+               & "The example assumes a struct `button` with a `text` fiel"
+               & "d, a type `canvas`, and functions `button_draw`, `button"
+               & "_click` and `button_focus` with the entries' signatures."
                & LF
                & LF
                & "    drawable: type = concept (t: type)"
@@ -4329,7 +4665,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "All three conformances are needed, because `widget`'s su"
                & "pplies only what `widget` adds. Having the parts does no"
                & "t make a type a `widget`, and being a `widget` does not "
-               & "make it `drawable`; conformance is always declared, even"
+               & "make it `drawable`. Conformance is always declared, even"
                & " when its list is empty."
                & LF
                & LF
@@ -4339,12 +4675,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "In generic code, `t.entry` must name exactly one declara"
-               & "tion across the concept and all its parents. A parent re"
-               & "ached twice, through two paths, is still one concept, bu"
-               & "t two different concepts that both declare `entry` make "
-               & "`t.entry` ambiguous. Parent order never decides, and a c"
-               & "hild's own entry does not override an inherited one. A c"
-               & "lash nobody uses is not an error."
+               & "tion across the concept and all its parents:"
+               & LF
+               & LF
+               & "- A parent reached twice, through two paths, is still on"
+               & "e concept."
+               & LF
+               & "- Two different concepts that both declare `entry` make "
+               & "`t.entry` ambiguous."
+               & LF
+               & "- Parent order never decides, and a child's own entry do"
+               & "es not override an inherited one."
+               & LF
+               & "- A clash nobody uses is not an error."
                & LF
                & LF
                & "Exact rules: spec [1920].",
@@ -4368,10 +4711,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "y use of `pair(i32)` is the same type. A growable contai"
                & "ner is generic the same way: `core/vec`'s `list(t)` is o"
                & "ne, and [0510] explains how it keeps its empty slots out"
-               & " of sight. A type parameter may carry one concept constr"
-               & "aint, and a `fixed` parameter is an integer known at com"
-               & "pile time. Here `cmp.hashable` is a concept `core/cmp` p"
-               & "rovides, and `zeroable` is [0550]'s:"
+               & " of sight."
+               & LF
+               & LF
+               & "A type parameter may carry one concept constraint, and a"
+               & " `fixed` parameter is an integer known at compile time. "
+               & "Here `cmp.hashable` is a concept `core/cmp` provides, an"
+               & "d `zeroable` is [0550]'s:"
                & LF
                & LF
                & "    import core/cmp"
@@ -4407,15 +4753,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "An alias may be generic too, including a union of atom s"
-               & "ets, and an alias never makes a new type: `missing | ptr"
-               & " t` keeps the one-word optional pointer of [0480]. Fine "
-               & "print:"
+               & "ets. An alias never makes a new type: `missing | ptr t` "
+               & "keeps the one-word optional pointer of [0480]."
                & LF
                & LF
-               & "- A generic type's template is checked even if nothing a"
-               & "pplies it, and an error that depends on the argument is "
-               & "reported at each application. A generic function's body "
-               & "is checked per instance instead ([1290])."
+               & "The fine print:"
+               & LF
+               & LF
+               & "- The compiler checks a generic type's template even if "
+               & "nothing applies it, and reports an error that depends on"
+               & " the argument at each application. A generic function's "
+               & "body is checked per instance instead ([1290])."
                & LF
                & "- An unused or phantom parameter still distinguishes ins"
                & "tances."
@@ -4454,29 +4802,35 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The binder is an ordinary parameter list, the same form "
-               & "functions and generic types take, so a variable may carr"
-               & "y a constraint and a `fixed` parameter may appear among "
-               & "them. The supplying functions are generic themselves; in"
-               & "stantiating the conformance gives them their type argume"
-               & "nt and leaves functions of exactly the concept's shape."
+               & "functions and generic types take. So a variable may carr"
+               & "y a constraint, and a `fixed` parameter may appear among"
+               & " them."
+               & LF
+               & LF
+               & "The supplying functions are generic themselves. Instanti"
+               & "ating the conformance gives them their type argument and"
+               & " leaves functions of exactly the concept's shape."
                & LF
                & LF
                & "The target must be the whole generic type applied to the"
                & " binder in order, each variable used once: one conforman"
                & "ce covers the whole family `pair(t)`. Another family for"
-               & " the same template and concept, or a concrete exception "
-               & "such as `pair(u8) is iterable`, is a collision ([1280])."
-               & " Without this form no generic container could be travers"
-               & "ed, sorted or handed to other generic code.",
+               & " the same template and concept is a collision ([1280]), "
+               & "and so is a concrete exception such as `pair(u8) is iter"
+               & "able`."
+               & LF
+               & LF
+               & "Without this form no generic container could be traverse"
+               & "d, sorted or handed to other generic code.",
             when 1270 =>
                "A conformance is keyed by the type, the concept and the "
                & "concept's other input types, so one type may satisfy the"
                & " same concept more than once."
                & LF
                & LF
-               & "Assume `position` is a byte-offset type, and `utf8_nth` "
-               & "and `utf8_at_pos` look up a character by count and by po"
-               & "sition."
+               & "The example assumes `position` is a byte-offset type, an"
+               & "d `utf8_nth` and `utf8_at_pos` look up a character by co"
+               & "unt and by position."
                & LF
                & LF
                & "    indexable: type = concept (t: type, idx: type, item_"
@@ -4516,26 +4870,31 @@ package body Landin.Diagnostics.Citations.Texts is
                & "of through a concept."
                & LF
                & LF
-               & "Every conformance in every module the program reaches is"
-               & " collected before any generic call is checked, whether o"
-               & "r not anything uses it. A conformance is a registration,"
-               & " not a name, so it needs no `public` and refuses one. Mo"
-               & "dules the program does not reach contribute nothing.",
+               & "The compiler collects every conformance in every module "
+               & "the program reaches before it checks any generic call, w"
+               & "hether or not anything uses the conformance. Modules the"
+               & " program does not reach contribute nothing."
+               & LF
+               & LF
+               & "A conformance is a registration, not a name, so it needs"
+               & " no `public` and refuses one.",
             when 1260 =>
                "A concept entry's error set is written out or absent, ne"
                & "ver inferred with `! ...`. An entry is reached through a"
-               & " table, [0960] forbids an inferred set there, and so the"
-               & " concept fixes the error set once for every type that wi"
-               & "ll ever satisfy it."
+               & " table, and [0960] forbids an inferred set there. So the"
+               & " concept fixes the error set once, for every type that w"
+               & "ill ever satisfy it."
                & LF
                & LF
                & "That is right for allocation, where out of memory is out"
-               & " of memory, but it shapes how you design a concept. The "
-               & "same goes for what an implementation is handed: by conve"
-               & "ntion, a concept with no allocator among its parameters "
-               & "says its implementations do not allocate. The compiler d"
-               & "oes not check that, since any hosted routine can make a "
-               & "heap of its own ([1680])."
+               & " of memory, but it shapes how you design a concept."
+               & LF
+               & LF
+               & "The same goes for what an implementation is handed: by c"
+               & "onvention, a concept with no allocator among its paramet"
+               & "ers says its implementations do not allocate. The compil"
+               & "er does not check that, since any hosted routine can mak"
+               & "e a heap of its own ([1680])."
                & LF
                & LF
                & "Resist widening a concept until it fits its hungriest im"
@@ -4562,14 +4921,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The conformance supplies the cursor type `cur` and the `"
-               & "item_type`, as [1250]'s `pair` does. The loop evaluates "
-               & "`s` once and keeps a private copy; each provider gets a "
-               & "read-only pointer to that copy, so a large struct is cop"
-               & "ied once, not on every call. The labels may come in any "
-               & "order. The four signatures are exact: no permission, err"
-               & "or set or `from` clause is inferred or converted, so a p"
-               & "rovider whose result is declared `from s` does not match"
-               & "."
+               & "item_type`, as [1250]'s `pair` does. The labels may come"
+               & " in any order."
+               & LF
+               & LF
+               & "The loop evaluates `s` once and keeps a private copy. Ea"
+               & "ch provider gets a read-only pointer to that copy, so a "
+               & "large struct is copied once, not on every call."
+               & LF
+               & LF
+               & "The four signatures are exact: no permission, error set "
+               & "or `from` clause is inferred or converted. So a provider"
+               & " whose result is declared `from s` does not match."
                & LF
                & LF
                & "`item` returns a fresh value for the loop binding, never"
@@ -4679,11 +5042,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "The list is changed, so it is passed `inout`. The alloca"
                & "tor is passed as a handle: a small copyable value, passe"
-               & "d `in`, that refers to its provider's state. Its lifetim"
-               & "e is checked once, where it is made from that state, and"
-               & " using it does not borrow that state, so several contain"
-               & "ers can allocate through one handle, and a region from i"
-               & "ts parent while both are live."
+               & "d `in`, that refers to its provider's state. The handle'"
+               & "s lifetime is checked once, where the handle is made fro"
+               & "m that state, and using it does not borrow that state. S"
+               & "o several containers can allocate through one handle, an"
+               & "d a region can allocate from its parent while both are l"
+               & "ive."
                & LF
                & LF
                & "The allocator is passed to each call rather than stored "
@@ -4789,29 +5153,32 @@ package body Landin.Diagnostics.Citations.Texts is
                & "type."
                & LF
                & LF
-               & "The pair is an ordinary copyable value. It can sit in a "
-               & "variable, a field or a slice. What it points at is never"
-               & " copied, because its size is unknown, so the pointee mus"
-               & "t stay alive as long as any copy of the pair can use it."
-               & " An arena ([0820]) is the usual place for it."
+               & "What the pair is, as a value:"
                & LF
                & LF
-               & "The pair needs no permission of its own: the concept's e"
-               & "ntries carry it. An entry declared with `self: ptr mut t"
-               & "` can only be satisfied by a pointer that may write, so "
-               & "a stateful implementation behind `any` just works."
+               & "- It is an ordinary copyable value, and can sit in a var"
+               & "iable, a field or a slice."
                & LF
+               & "- What it points at is never copied, because its size is"
+               & " unknown. So the pointee must stay alive as long as any "
+               & "copy of the pair can use it. An arena ([0820]) is the us"
+               & "ual place for it."
                & LF
-               & "The pair does carry its pointee's origin ([0770]), so an"
-               & " `any` over a local cannot go into a list that outlives "
-               & "the frame."
+               & "- It needs no permission of its own: the concept's entri"
+               & "es carry it. An entry declared with `self: ptr mut t` ca"
+               & "n only be satisfied by a pointer that may write, so a st"
+               & "ateful implementation behind `any` just works."
+               & LF
+               & "- It does carry its pointee's origin ([0770]), so an `an"
+               & "y` over a local cannot go into a list that outlives the "
+               & "frame."
                & LF
                & LF
                & "An `any C` is itself a provider of C and of every concep"
-               & "t C builds on ([1340]), so a generic function ([1290]) t"
-               & "akes one, and each entry it calls goes through the value"
-               & "'s own table. Here an `any widget` is handed to a functi"
-               & "on that wants a `drawable`:"
+               & "t C builds on ([1340]). So a generic function ([1290]) t"
+               & "akes one, and each entry the function calls goes through"
+               & " the value's own table. Here an `any widget` is handed t"
+               & "o a function that wants a `drawable`:"
                & LF
                & LF
                & "    draw_on: (provider: type is drawable, item: ptr prov"
@@ -4832,10 +5199,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end paint_one"
                & LF
                & LF
-               & "It provides no other concept, and the compiler, not the "
-               & "program, declares these conformances. An `any` is not er"
-               & "ased again: where an `any C` is wanted, pass the one you"
-               & " have rather than its address."
+               & "An `any C` provides no other concept, and the compiler, "
+               & "not the program, declares these conformances. An `any` i"
+               & "s not erased again: where an `any C` is wanted, pass the"
+               & " one you have rather than its address."
                & LF
                & LF
                & "Printing is where most programs first meet `any`. `io.wr"
@@ -4861,11 +5228,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Integers, `bool`, `utf8` and byte strings are formattabl"
                & "e, floats not yet, and a type of your own becomes format"
-               & "table by conforming ([1240]). The text is made in a smal"
-               & "l buffer on the stack and written as it fills, so printi"
-               & "ng allocates nothing; a template whose `{}` and values d"
-               & "iffer in number fails with `text.invalid_format` and wri"
-               & "tes nothing.",
+               & "table by conforming ([1240])."
+               & LF
+               & LF
+               & "The text is made in a small buffer on the stack and writ"
+               & "ten as it fills, so printing allocates nothing. A templa"
+               & "te whose `{}` and values differ in number fails with `te"
+               & "xt.invalid_format` and writes nothing.",
             when 1380 =>
                "You build an `any` explicitly from a pointer. The concep"
                & "t comes from context where it can; otherwise name it."
@@ -4892,9 +5261,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A read-only pointer cannot build an `any` whose concept "
-               & "has an entry taking `self: ptr mut t`. Once built, bindi"
-               & "ng mutability controls only replacing the pair, not the "
-               & "write authority its pointer already carries.",
+               & "has an entry taking `self: ptr mut t`. Once the `any` is"
+               & " built, binding mutability controls only replacing the p"
+               & "air, not the write authority its pointer already carries"
+               & ".",
             when 1390 =>
                "A call on an `any` looks up the entry in the table and p"
                & "asses the data pointer as the first argument. This is th"
@@ -4913,14 +5283,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end paint"
                & LF
                & LF
-               & "For an entry to be callable this way, its first paramete"
-               & "r is `self` as `ptr t` or `ptr mut t`, or `self: t` take"
-               & "n by value when `t` is a record, and the hidden type `t`"
-               & " appears nowhere else in it. A by-value `self` is copied"
-               & " out of the data pointer when the call is made. So to pu"
-               & "t a small handle, such as an allocator handle `memory`, "
-               & "behind `any`, take the address of the variable that hold"
-               & "s it: `any(addr memory)`."
+               & "An entry is callable this way when it meets two conditio"
+               & "ns:"
+               & LF
+               & LF
+               & "- Its first parameter is `self` as `ptr t` or `ptr mut t"
+               & "`, or `self: t` taken by value when `t` is a record."
+               & LF
+               & "- The hidden type `t` appears nowhere else in it."
+               & LF
+               & LF
+               & "A by-value `self` is copied out of the data pointer when"
+               & " the call is made. So to put a small handle, such as an "
+               & "allocator handle `memory`, behind `any`, take the addres"
+               & "s of the variable that holds it: `any(addr memory)`."
                & LF
                & LF
                & "`any C` is exactly C: a concept's parent gives no conver"
@@ -4929,22 +5305,27 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ing` and origin checks as a written pointer argument."
                & LF
                & LF
-               & "A call through `any C` is checked even if the program ha"
-               & "s no conformance of C. Then no `any C` can be made and n"
-               & "o value reaches the call, so it compiles to a trap that "
-               & "never runs. A library that takes an erased capability th"
-               & "erefore builds in a program that supplies none.",
+               & "The compiler checks a call through `any C` even if the p"
+               & "rogram has no conformance of C. Then no `any C` can be m"
+               & "ade and no value reaches the call, so it compiles to a t"
+               & "rap that never runs. A library that takes an erased capa"
+               & "bility therefore builds in a program that supplies none.",
             when 1400 =>
                "One slice can hold values of different types. A `[]t` is"
                & " always one `t`; a `[]any widget` holds buttons, labels "
                & "and anything else that is a widget.",
             when 1490 =>
                "`fixed` marks something the compiler knows before the pr"
-               & "ogram runs. You meet it in three places: `fixed if`, whi"
-               & "ch chooses declarations ([1500]); fixed parameters, whic"
-               & "h are compile-time values ([1520]); and the fixed expres"
-               & "sions that conditions, assertions and option defaults ar"
-               & "e written in.",
+               & "ogram runs. You meet it in three places:"
+               & LF
+               & LF
+               & "- `fixed if` chooses declarations ([1500])."
+               & LF
+               & "- A fixed parameter is a compile-time value ([1520])."
+               & LF
+               & "- A fixed expression is what a condition, an assertion o"
+               & "r an option default is written in ([1500], [1510], [1530"
+               & "]).",
             when 1520 =>
                "A `fixed` parameter is a value the caller supplies at co"
                & "mpile time, so it can size an array in the signature."
@@ -4956,9 +5337,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "                 -> (b: [capacity]t) = zeroed end"
                & LF
                & LF
-               & "Fixed parameters sit beside type parameters and work the"
-               & " same way: the call supplies or deduces them, and they h"
-               & "ave no storage at run time ([1290]).",
+               & "A fixed parameter sits beside the type parameters and wo"
+               & "rks the way they do ([1290]): the call supplies it or de"
+               & "duces it, and it has no storage at run time.",
             when 1500 =>
                "`fixed if` picks which module-level declarations exist i"
                & "n this build. It works on declarations only, not on stat"
@@ -4976,14 +5357,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end if"
                & LF
                & LF
-               & "Every arm is parsed, so a syntax error in an arm you are"
-               & " not building is still an error. Only the selected arm's"
-               & " declarations join the module; the others have no names,"
-               & " no types and no effect. Arms may nest and may be empty,"
-               & " and an arm opens no scope."
+               & "The compiler parses every arm, so a syntax error in an a"
+               & "rm you are not building is still an error. Only the sele"
+               & "cted arm's declarations join the module; the declaration"
+               & "s of the other arms have no names, no types and no effec"
+               & "t. Arms may nest, an arm may be empty, and an arm opens "
+               & "no scope."
                & LF
                & LF
-               & "The compiler supplies these facts:"
+               & "The facts. The compiler supplies these facts:"
                & LF
                & LF
                & "| fact | what it says |"
@@ -5019,27 +5401,32 @@ package body Landin.Diagnostics.Citations.Texts is
                & "tion's cache, in bytes, or 0 without one |"
                & LF
                & LF
-               & "Ask the C ABI question directly rather than guessing it "
-               & "from the architecture: Linux and Apple arm64 share `comp"
-               & "iler.arch == arm64` and answer differently here. `compil"
-               & "er.os` is separate from the C ABI because Linux and Free"
-               & "BSD share a calling convention on each architecture but "
-               & "not every libc record layout."
+               & "Build mode is a value you ask for. It does not change ru"
+               & "ntime checks or optimization."
+               & LF
+               & LF
+               & "The C ABI and the C runtime. Ask the C ABI question dire"
+               & "ctly rather than guessing the answer from the architectu"
+               & "re: Linux and Apple arm64 share `compiler.arch == arm64`"
+               & " and answer the C ABI question differently. `compiler.os"
+               & "` is separate from the C ABI because Linux and FreeBSD s"
+               & "hare a calling convention on each architecture but not e"
+               & "very libc record layout."
                & LF
                & LF
                & "`compiler.c_runtime` is always true on Darwin and FreeBS"
                & "D, true on Linux only when the build asks with `--link=l"
                & "ibc`, and never true on firmware. A library calls the C "
-               & "library only where this says it is there."
+               & "library only where this fact says it is there."
                & LF
                & LF
-               & "A build assumes a CPU feature level, chosen with `--leve"
-               & "l=` and defaulting to the oldest processor of the archit"
-               & "ecture. `compiler.feature.NAME` asks about one feature, "
-               & "such as `bmi2` on x86-64, `lse` on arm64, `idiv` on the "
-               & "M profile or `xtheadba` on RV64. A feature of another ar"
-               & "chitecture is simply false, so you need no `compiler.arc"
-               & "h` test first:"
+               & "CPU features. A build assumes a CPU feature level. You c"
+               & "hoose it with `--level=`, and it defaults to the oldest "
+               & "processor of the architecture. `compiler.feature.NAME` a"
+               & "sks about one feature, such as `bmi2` on x86-64, `lse` o"
+               & "n arm64, `idiv` on the M profile or `xtheadba` on RV64. "
+               & "A feature of another architecture is simply false, so yo"
+               & "u need no `compiler.arch` test first:"
                & LF
                & LF
                & "    fixed if compiler.feature.idiv then"
@@ -5059,9 +5446,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & " their features."
                & LF
                & LF
-               & "When only a value differs, you need no `fixed if` at all"
-               & ". A module value may read a fact, and a routine branches"
-               & " on that value with an ordinary `if`:"
+               & "Values that differ by target. When only a value differs,"
+               & " you need no `fixed if` at all. A module value may read "
+               & "a fact, and a routine branches on that value with an ord"
+               & "inary `if`:"
                & LF
                & LF
                & "    fast_count: bool = compiler.feature.popcnt"
@@ -5071,41 +5459,43 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    word_bytes: usize = compiler.word_size / 8"
                & LF
                & LF
-               & "An integer fact takes its type from context. The atom fa"
-               & "cts, `compiler.arch`, `compiler.os`, `compiler.byte_orde"
-               & "r` and `compiler.build_mode`, are read by comparing them"
-               & " with one of their atoms."
+               & "An integer fact takes its type from context. You read an"
+               & " atom fact, which is one of `compiler.arch`, `compiler.o"
+               & "s`, `compiler.byte_order` and `compiler.build_mode`, by "
+               & "comparing it with one of its atoms."
                & LF
                & LF
-               & "A routine body reads no fact directly, and `fixed if` ca"
-               & "nnot begin a statement. What differs by value branches o"
-               & "n a module value like those above; what needs a call tha"
-               & "t one system lacks is a routine declared in each arm of "
-               & "a module-level `fixed if`."
+               & "Inside a routine. A routine body reads no fact directly,"
+               & " and `fixed if` cannot begin a statement. Instead:"
                & LF
                & LF
-               & "Fine print:"
+               & "- What differs by value branches on a module value like "
+               & "those above."
+               & LF
+               & "- What needs a call that one system lacks is a routine d"
+               & "eclared in each arm of a module-level `fixed if`."
                & LF
                & LF
-               & "- Build mode is a value you ask for. It does not change "
-               & "runtime checks or optimization."
+               & "Conditions. A condition is a closed fold: literals, pare"
+               & "ntheses, unary `-`, integer `+ - * / %` without overflow"
+               & ", integer comparisons, equality, `not`, `and`, `or`, and"
+               & " `sizeof` and `alignof` of the built-in scalar types."
                & LF
-               & "- Conditions may also read your own options [1530]."
                & LF
-               & "- A condition is a closed fold: literals, parentheses, u"
-               & "nary `-`, integer `+ - * / %` without overflow, integer "
-               & "comparisons, equality, `not`, `and`, `or`, and `sizeof` "
-               & "and `alignof` of the built-in scalar types. Sizes count "
-               & "target bytes, so `compiler.word_size == 8 * sizeof usize"
-               & "` holds on 32-bit and 64-bit targets alike."
+               & "- Sizes count target bytes, so `compiler.word_size == 8 "
+               & "* sizeof usize` holds on 32-bit and 64-bit targets alike"
+               & "."
                & LF
-               & "- Calls, runtime names, measurements of your own types a"
-               & "nd aggregate operations are refused, even in an operand "
-               & "that short-circuiting would skip."
+               & "- A condition may also read your own options ([1530])."
                & LF
-               & "- There is no `public fixed if`, no trailing name after "
-               & "`end if`, and no `fixed if` inside a block, struct, sign"
-               & "ature or template."
+               & "- The compiler refuses calls, runtime names, measurement"
+               & "s of your own types and aggregate operations, even in an"
+               & " operand that short-circuiting would skip."
+               & LF
+               & LF
+               & "Forms that do not exist. There is no `public fixed if`, "
+               & "no trailing name after `end if`, and no `fixed if` insid"
+               & "e a block, struct, signature or template."
                & LF
                & LF
                & "Exact rules: spec [1940].",
@@ -5117,19 +5507,25 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    compiler.assert(sizeof usize == 8)"
                & LF
                & LF
-               & "It is a module-level directive, allowed in a selected `f"
-               & "ixed if` arm too, and an assertion in an inactive arm do"
-               & "es nothing. The condition is the same closed fold as [15"
-               & "00] and must be a bool; a false one is reported at its o"
-               & "wn source. An assertion may also measure your own types,"
-               & " as in `compiler.assert(sizeof header == 8)`, and is the"
-               & "n checked once the type is laid out."
+               & "`compiler.assert` is a module-level directive, and a sel"
+               & "ected `fixed if` arm may hold one too. An assertion in a"
+               & "n inactive arm does nothing."
                & LF
                & LF
-               & "It is a builtin call rather than a keyword, like the res"
-               & "t of [1560]. That leaves the word `assert` free for an o"
-               & "rdinary routine of your own, such as the `assert` of [10"
-               & "40].",
+               & "The condition is the same closed fold as in [1500] and m"
+               & "ust be a bool. A false condition is reported at its own "
+               & "source."
+               & LF
+               & LF
+               & "An assertion may also measure your own types, as in `com"
+               & "piler.assert(sizeof header == 8)`. The compiler then che"
+               & "cks it once the type is laid out."
+               & LF
+               & LF
+               & "`compiler.assert` is a builtin call rather than a keywor"
+               & "d, like the rest of [1560]. That leaves the word `assert"
+               & "` free for an ordinary routine of your own, such as the "
+               & "`assert` of [1040].",
             when 1530 =>
                "An `option` declares a typed build switch with a default"
                & ", which the build can override. A misspelt switch is a c"
@@ -5154,38 +5550,45 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end if"
                & LF
                & LF
-               & "What to know:"
+               & "Type. An option's type is `bool` or a built-in integer t"
+               & "ype; `usize` and `isize` take the selected target's boun"
+               & "ds. An option has no storage at run time, and its name i"
+               & "s visible only in fixed conditions, option defaults and "
+               & "compiler assertions."
                & LF
                & LF
-               & "- An option's type is `bool` or a built-in integer type;"
-               & " `usize` and `isize` take the selected target's bounds. "
-               & "It has no storage at run time, and its name is visible o"
-               & "nly in fixed conditions, option defaults and compiler as"
-               & "sertions."
+               & "Declaration. Option names are global across the whole pr"
+               & "ogram, so each is declared exactly once, unconditionally"
+               & " at module level and never inside a `fixed if` arm: the "
+               & "compiler collects every option before it chooses arms."
                & LF
-               & "- Option names are global across the whole program, so e"
-               & "ach is declared exactly once, unconditionally at module "
-               & "level and never inside a `fixed if` arm: the compiler co"
-               & "llects every option before it chooses arms. An option ma"
-               & "y not share a name with an active declaration or import "
-               & "in its declaring module, including another file of that "
-               & "module, or with a compiler-owned atom such as `arm64` or"
-               & " `release`. Ordinary bindings in unrelated modules may u"
-               & "se the same spelling; fixed configuration still reads th"
-               & "e global option, while runtime uses ordinary module/impo"
-               & "rt lookup."
                & LF
-               & "- A default may refer to another option, even one declar"
-               & "ed later, and sees that option's overridden value. Cycle"
-               & "s are refused, and every default must be valid even when"
-               & " overridden."
+               & "Names. An option may not share a name with either of the"
+               & "se:"
                & LF
-               & "- `--option=NAME=VALUE` takes `true` or `false`, or sign"
-               & "ed decimal integer text. Unknown or repeated names, malf"
-               & "ormed values and values out of range are errors."
                & LF
-               & "- `--build-mode=debug` or `--build-mode=release` sets th"
-               & "e separate built-in build mode.",
+               & "- an active declaration or import in its declaring modul"
+               & "e, including another file of that module;"
+               & LF
+               & "- a compiler-owned atom such as `arm64` or `release`."
+               & LF
+               & LF
+               & "Ordinary bindings in unrelated modules may use the same "
+               & "spelling. Fixed configuration still reads the global opt"
+               & "ion, while runtime uses ordinary module/import lookup."
+               & LF
+               & LF
+               & "Defaults. A default may refer to another option, even on"
+               & "e declared later, and sees that option's overridden valu"
+               & "e. The compiler refuses cycles, and every default must b"
+               & "e valid even when overridden."
+               & LF
+               & LF
+               & "On the command line. `--option=NAME=VALUE` takes `true` "
+               & "or `false`, or signed decimal integer text. Unknown or r"
+               & "epeated names, malformed values and values out of range "
+               & "are errors. `--build-mode=debug` or `--build-mode=releas"
+               & "e` sets the separate built-in build mode.",
             when 1540 =>
                "There are no compile-time loops and no compile-time func"
                & "tion calls. Nothing of yours runs while the program is b"
@@ -5193,12 +5596,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The builtin modules of [1560] look like an exception and"
-               & " are not one: their members are operations the compiler "
+               & " are not one. Their members are operations the compiler "
                & "recognizes, not your functions run during the build, and"
-               & " nobody can add another. Some of their inputs must be fi"
-               & "xed, such as assertion conditions, library names and ass"
-               & "embly text; others, such as atomic data and assembly inp"
-               & "ut operands, can be runtime values."
+               & " nobody can add another. Their inputs differ:"
+               & LF
+               & LF
+               & "- Some must be fixed, such as assertion conditions, libr"
+               & "ary names and assembly text."
+               & LF
+               & "- Others can be runtime values, such as atomic data and "
+               & "assembly input operands."
                & LF
                & LF
                & "When you need a generated table or a structure-of-arrays"
@@ -5208,7 +5615,10 @@ package body Landin.Diagnostics.Citations.Texts is
                "`refine` compiles the whole program at once into assembl"
                & "y text, and the platform's own assembler and linker turn"
                & " that into an executable. There is no LLVM and no C in b"
-               & "etween."
+               & "etween. Going through C would lose the calling conventio"
+               & "n, the traps and the debug information Landin is precise"
+               & " about, so every target's backend is Landin's own. The R"
+               & "EADME lists the targets."
                & LF
                & LF
                & "- The emitted assembly is deterministic: the same progra"
@@ -5228,31 +5638,34 @@ package body Landin.Diagnostics.Citations.Texts is
                & "separate-compilation interface."
                & LF
                & LF
-               & "Going through C would lose the calling convention, the t"
-               & "raps and the debug information Landin is precise about, "
-               & "so every target's backend is Landin's own. The README li"
-               & "sts the targets."
-               & LF
-               & LF
                & "On Cortex-M the `cortex_m0` backend emits ARMv6-M Thumb,"
-               & " the default `armv6-m` level. `--level=armv7-m`, `--leve"
-               & "l=armv7e-m` or `--level=armv8-m.main` lets it use that l"
-               & "evel's instructions too, which the processor must then s"
-               & "upport. All four levels are little-endian, and floats ar"
-               & "e computed in software unless the device description nam"
-               & "es a float unit: a Cortex-M7's `compiler.float_unit(""fpv"
-               & "5-d16"")` makes the build hard-float at `armv7e-m`, its f"
-               & "32 and f64 arithmetic VFP instructions and its floats pa"
-               & "ssed in s and d registers, and `compiler.feature.fp` and"
-               & " `compiler.feature.fp_dp` say so. A firmware request emi"
-               & "ts its own reset code, vector table and linker script: r"
-               & "eset copies initialized data and RAM code out of flash a"
-               & "nd clears BSS before your code runs. A Cortex-M7's descr"
-               & "iption may also declare its caches, `compiler.cache(""arm"
-               & "v7-m-l1"", 32)`; reset then turns them on after those cop"
-               & "ies and off again if the entry returns, `compiler.featur"
-               & "e.cache` and `compiler.cache_line` say so, and a DMA buf"
-               & "fer is kept in step with them through `core/cache`."
+               & " the default `armv6-m` level."
+               & LF
+               & LF
+               & "- Levels. `--level=armv7-m`, `--level=armv7e-m` or `--le"
+               & "vel=armv8-m.main` lets the backend use that level's inst"
+               & "ructions too, which the processor must then support. All"
+               & " four levels are little-endian."
+               & LF
+               & "- Floats. Floats are computed in software unless the dev"
+               & "ice description names a float unit. A Cortex-M7's `compi"
+               & "ler.float_unit(""fpv5-d16"")` makes the build hard-float a"
+               & "t `armv7e-m`: its f32 and f64 arithmetic becomes VFP ins"
+               & "tructions, its floats are passed in s and d registers, a"
+               & "nd `compiler.feature.fp` and `compiler.feature.fp_dp` sa"
+               & "y so."
+               & LF
+               & "- Firmware. A firmware request emits its own reset code,"
+               & " vector table and linker script. Reset copies initialize"
+               & "d data and RAM code out of flash and clears BSS before y"
+               & "our code runs."
+               & LF
+               & "- Caches. A Cortex-M7's description may also declare its"
+               & " caches, `compiler.cache(""armv7-m-l1"", 32)`. Reset then "
+               & "turns them on after those copies and off again if the en"
+               & "try returns, and `compiler.feature.cache` and `compiler."
+               & "cache_line` say so. A direct memory access (DMA) buffer "
+               & "is kept in step with the caches through `core/cache`."
                & LF
                & LF
                & "Exact rules: spec [1990].",
@@ -5268,27 +5681,47 @@ package body Landin.Diagnostics.Citations.Texts is
                & "| --- | --- |"
                & LF
                & "| `compiler` | target, word size, byte order, build mode"
-               & ", CPU features, the atomic, volatile and register intrin"
-               & "sics, the two stack builtins under fibres ([1675]), `com"
-               & "piler.unreachable()`, a call that never returns and stop"
-               & "s the program as a failed check does, and `compiler.utf8"
-               & "_unvalidated(bytes)`, text of bytes known to be UTF-8, m"
-               & "ade without reading them and only inside `unchecked` ([0"
-               & "600]) |"
+               & ", CPU features; the atomic, volatile and register intrin"
+               & "sics; the two stack builtins under fibres ([1675]); `com"
+               & "piler.unreachable()`; `compiler.utf8_unvalidated(bytes)`"
+               & " |"
                & LF
                & "| `assembler` | inline assembly |"
                & LF
                & "| `linker` | libraries, sections, entry |"
                & LF
                & LF
-               & "Their members are built into the compiler; you cannot wr"
-               & "ite one yourself. Some arguments must be fixed when the "
-               & "program is compiled: `compiler.assert` takes a fixed con"
-               & "dition, `linker.library` a fixed name and `assembler.blo"
-               & "ck` fixed instruction text. Atomic and volatile pointer "
-               & "and value operands, and assembly inputs, can be runtime "
-               & "values; an atomic's ordering is always a fixed `compiler"
-               & "` atom."
+               & "Two of those calls:"
+               & LF
+               & LF
+               & "- `compiler.unreachable()` is a call that never returns."
+               & " It stops the program as a failed check does ([1670])."
+               & LF
+               & "- `compiler.utf8_unvalidated(bytes)` is text of bytes kn"
+               & "own to be UTF-8, made without reading them and only insi"
+               & "de `unchecked` ([0600])."
+               & LF
+               & LF
+               & "The members of all three modules are built into the comp"
+               & "iler; you cannot write one yourself."
+               & LF
+               & LF
+               & "Some arguments must be fixed when the program is compile"
+               & "d:"
+               & LF
+               & LF
+               & "- `compiler.assert` takes a fixed condition."
+               & LF
+               & "- `linker.library` takes a fixed name."
+               & LF
+               & "- `assembler.block` takes fixed instruction text."
+               & LF
+               & "- An atomic's ordering is always a fixed `compiler` atom"
+               & "."
+               & LF
+               & LF
+               & "Atomic and volatile pointer and value operands, and asse"
+               & "mbly inputs, can be runtime values."
                & LF
                & LF
                & "What works today:"
@@ -5310,16 +5743,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- Any other tool operation is refused by name."
                & LF
                & LF
-               & "Something is builtin when the compiler has to understand"
-               & " it. Atomics are, because opaque assembly in a hot loop "
-               & "wrecks the register allocation around it. Masking interr"
-               & "upts is not: a critical section wants nothing moved acro"
-               & "ss it, which is exactly what opaque assembly gives. So `"
-               & "cortex_m.disable_interrupts` and its kin are an ordinary"
-               & " module per target, written with `assembler.block` ([163"
-               & "0]). An operation that comes to mean the same thing on e"
-               & "very target, as the atomics do, can move into `compiler`"
-               & ". There are no vector intrinsics: fixed arrays are the v"
+               & "Why some things are builtin and others are not: somethin"
+               & "g is builtin when the compiler has to understand it."
+               & LF
+               & LF
+               & "- Atomics are builtin, because opaque assembly in a hot "
+               & "loop wrecks the register allocation around it."
+               & LF
+               & "- Masking interrupts is not. A critical section wants no"
+               & "thing moved across it, which is exactly what opaque asse"
+               & "mbly gives. So `cortex_m.disable_interrupts` and its kin"
+               & " are an ordinary module per target, written with `assemb"
+               & "ler.block` ([1630])."
+               & LF
+               & "- An operation that comes to mean the same thing on ever"
+               & "y target, as the atomics do, can move into `compiler`."
+               & LF
+               & "- There are no vector intrinsics: fixed arrays are the v"
                & "ector type and take element-wise operators ([0590]).",
             when 1580 =>
                "A bodyless `extern(c)` declaration imports a C function."
@@ -5338,28 +5778,35 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    extern(c) free: (p: ptr mut u8) -> none"
                & LF
                & LF
-               & "A C pointer may be null and a Landin pointer may not. So"
-               & " a C result or parameter that may be null is [0480]'s on"
-               & "e-atom pointer union, which costs no extra bits, and you"
-               & " `match` the result before using the pointer. `ptr(0)` i"
-               & "s refused, and so is any fixed expression that folds to "
-               & "zero at the target's `usize` width. A pointer built from"
-               & " an integer at run time is checked, and zero traps, even"
-               & " in `unchecked`: losing the origin is not permission to "
-               & "make null. Absent allocator backing is a named union too"
-               & ", never a fake `ptr(1)`."
+               & "Null. A C pointer may be null and a Landin pointer may n"
+               & "ot. So a C result or parameter that may be null is [0480"
+               & "]'s one-atom pointer union, which costs no extra bits, a"
+               & "nd you `match` the result before using the pointer."
                & LF
                & LF
-               & "A header does not say everything Landin wants to know: w"
-               & "hether a pointer may be null, who owns it, what it is `f"
-               & "rom`, whether C retains it, how to read incoming varargs"
-               & ". The generator takes that from a written policy, not fr"
-               & "om a handwritten replacement signature."
+               & "- `ptr(0)` is refused, and so is any fixed expression th"
+               & "at folds to zero at the target's `usize` width."
+               & LF
+               & "- A pointer built from an integer at run time is checked"
+               & ", and zero traps, even in `unchecked`: losing the origin"
+               & " is not permission to make null."
+               & LF
+               & "- Absent allocator backing is a named union too, never a"
+               & " fake `ptr(1)`."
                & LF
                & LF
-               & "A function found while the program runs, such as a symbo"
-               & "l of a loaded library, is just an address. Apply a C fun"
-               & "ction type to it and you have a function value:"
+               & "What a header leaves out. A header does not say everythi"
+               & "ng Landin wants to know: whether a pointer may be null, "
+               & "who owns it, what it is `from`, whether C retains it, ho"
+               & "w to read incoming varargs. The generator takes that fro"
+               & "m a written policy, not from a handwritten replacement s"
+               & "ignature."
+               & LF
+               & LF
+               & "A function found while the program runs. Such a function"
+               & ", a symbol of a loaded library for example, is just an a"
+               & "ddress. Apply a C function type to it and you have a fun"
+               & "ction value:"
                & LF
                & LF
                & "    c_adder: type = extern(c) (a: i32, b: i32) -> (r: i3"
@@ -5380,27 +5827,46 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ly while the library stays loaded."
                & LF
                & LF
-               & "Five C ABIs are supported: SysV AMD64 LP64 on Linux and "
-               & "FreeBSD x86-64, Apple's arm64 variant of AAPCS64 on macO"
-               & "S, the standard AAPCS64 on Linux and FreeBSD arm64, RV64"
-               & " LP64D on Linux RV64, and AAPCS32 on Cortex-M, whose flo"
-               & "ats travel in the float unit's registers when the device"
-               & " description has one and in core registers when it has n"
-               & "one."
+               & "The supported ABIs. Landin supports five C application b"
+               & "inary interfaces (ABIs):"
                & LF
                & LF
-               & "`platform/c` names C's types: the signed and unsigned in"
-               & "teger widths, `c_size`, `c_ptrdiff`, `c_float`, `c_doubl"
-               & "e` and `c_bool`. It asserts `compiler.c_sysv_lp64 or com"
-               & "piler.c_darwin_lp64 or compiler.c_aapcs64_lp64 or compil"
-               & "er.c_riscv_lp64d or compiler.c_aapcs32`, so it admits ex"
-               & "actly those five ABIs; another target with the same poin"
-               & "ter width, RV32's or Xtensa's, is not admitted. The firs"
-               & "t four are LP64, with a 64-bit `long`; AAPCS32 is ILP32,"
-               & " so there `c_long` is an `i32` and `c_size` a 32-bit `us"
-               & "ize`. Plain `c_char` is the ABI's plain `char`, a number"
-               & " and not a Unicode scalar: `i8` under SysV and Apple's A"
-               & "BI, `u8` under the standard AAPCS64, RV64 and AAPCS32."
+               & "| C ABI | where |"
+               & LF
+               & "| --- | --- |"
+               & LF
+               & "| SysV AMD64 LP64 | Linux and FreeBSD x86-64 |"
+               & LF
+               & "| Apple's arm64 variant of AAPCS64 | macOS |"
+               & LF
+               & "| the standard AAPCS64 | Linux and FreeBSD arm64 |"
+               & LF
+               & "| RV64 LP64D | Linux RV64 |"
+               & LF
+               & "| AAPCS32 | Cortex-M |"
+               & LF
+               & LF
+               & "Under Cortex-M's AAPCS32, floats travel in the float uni"
+               & "t's registers when the device description has one and in"
+               & " core registers when it has none."
+               & LF
+               & LF
+               & "C's types. `platform/c` names them: the signed and unsig"
+               & "ned integer widths, `c_size`, `c_ptrdiff`, `c_float`, `c"
+               & "_double` and `c_bool`. It asserts `compiler.c_sysv_lp64 "
+               & "or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64 or "
+               & "compiler.c_riscv_lp64d or compiler.c_aapcs32`, so it adm"
+               & "its exactly those five ABIs; another target with the sam"
+               & "e pointer width, RV32's or Xtensa's, is not admitted."
+               & LF
+               & LF
+               & "- The first four are LP64, with a 64-bit `long`. AAPCS32"
+               & " is ILP32, so there `c_long` is an `i32` and `c_size` a "
+               & "32-bit `usize`."
+               & LF
+               & "- Plain `c_char` is the ABI's plain `char`, a number and"
+               & " not a Unicode scalar: `i8` under SysV and Apple's ABI, "
+               & "`u8` under the standard AAPCS64, RV64 and AAPCS32."
                & LF
                & LF
                & "What crosses the boundary:"
@@ -5435,9 +5901,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "a `va_list`, is refused by name rather than guessed."
                & LF
                & LF
-               & "A variadic C function writes `, ...` after at least one "
-               & "fixed parameter. This `...` is C's variadic tail, unrela"
-               & "ted to [0960]'s `! ...`."
+               & "Variadic functions. A variadic C function writes `, ...`"
+               & " after at least one fixed parameter. This `...` is C's v"
+               & "ariadic tail, unrelated to [0960]'s `! ...`."
                & LF
                & LF
                & "    extern(c) printf: (format: ptr u8, ...) -> (written:"
@@ -5490,10 +5956,22 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "`extern(c)` chooses the calling convention and nothing e"
-               & "lse. Without a body it imports; with a body it defines; "
-               & "`public` is what exports, making the declared name a glo"
-               & "bal symbol. A private C definition is still useful: its "
-               & "address can be handed to C as a callback."
+               & "lse:"
+               & LF
+               & LF
+               & "- Without a body it imports."
+               & LF
+               & "- With a body it defines."
+               & LF
+               & "- `public` is what exports, making the declared name a g"
+               & "lobal symbol."
+               & LF
+               & LF
+               & "A private C definition is still useful: its address can "
+               & "be handed to C as a callback."
+               & LF
+               & LF
+               & "Limits:"
                & LF
                & LF
                & "- A C signature is not generic, takes only `in` paramete"
@@ -5535,14 +6013,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & " and never means bodyless."
                & LF
                & LF
-               & "It does export. A link name is a global symbol whether o"
-               & "r not the declaration is `public`, and that is how you e"
-               & "xport a module datum deliberately. Without `link`, C imp"
-               & "orts and public C definitions use their declared name. E"
-               & "very other routine and datum, public or private, is a lo"
-               & "cal symbol under its own name, so no C library can colli"
-               & "de with it. It is renamed, with its module path, only wh"
-               & "en the program holds that name twice."
+               & "It does export. Which symbols the linker sees:"
+               & LF
+               & LF
+               & "- A link name is a global symbol whether or not the decl"
+               & "aration is `public`. That is how you export a module dat"
+               & "um deliberately."
+               & LF
+               & "- Without `link`, C imports and public C definitions use"
+               & " their declared name."
+               & LF
+               & "- Every other routine and datum, public or private, is a"
+               & " local symbol under its own name, so no C library can co"
+               & "llide with it. It is renamed, with its module path, only"
+               & " when the program holds that name twice."
+               & LF
+               & LF
+               & "The rules for a link name:"
                & LF
                & LF
                & "- A link name matches `[A-Za-z_.$][A-Za-z0-9_.$]*`: no w"
@@ -5624,35 +6111,39 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ibrary or an archive of that name, as it would for a C p"
                & "rogram."
                & LF
-               & "- Active directives reach the linker after the program, "
-               & "in source order, repeats included. So moving one among t"
-               & "he module's declarations can change how archives resolve"
-               & ". This is the one place where declaration order matters."
-               & " A directive in an inactive arm of a `fixed if` ([1500])"
-               & " adds nothing."
+               & "- Order. Active directives reach the linker after the pr"
+               & "ogram, in source order, repeats included. So moving one "
+               & "among the module's declarations can change how archives "
+               & "resolve. This is the one place where declaration order m"
+               & "atters. A directive in an inactive arm of a `fixed if` ("
+               & "[1500]) adds nothing."
                & LF
                & "- A directory is a fixed, nonempty text literal: relativ"
                & "e to the directory of the file that names it, or absolut"
                & "e. One that does not exist is refused before anything is"
-               & " linked. `-L DIR` on `refine compile`, `run` or `check` "
-               & "names another, relative to where the build runs, and is "
-               & "searched first, so a build can put its own copy of a lib"
-               & "rary ahead. Each directory is also where the program loo"
-               & "ks for a shared library when it starts."
+               & " linked."
                & LF
-               & "- A library the link cannot find is named with every dir"
-               & "ectory searched."
+               & "- **`-L DIR`** on `refine compile`, `run` or `check` nam"
+               & "es another directory, relative to where the build runs. "
+               & "It is searched first, so a build can put its own copy of"
+               & " a library ahead."
+               & LF
+               & "- At startup. Each directory is also where the program l"
+               & "ooks for a shared library when it starts."
+               & LF
+               & "- A missing library. A library the link cannot find is n"
+               & "amed with every directory searched."
                & LF
                & "- On Linux a library links beside the C library, so a bu"
-               & "ild that asks for one needs `--link=libc`; the default s"
-               & "tatic link ([1650]) refuses it, and refuses a directory "
-               & "too."
+               & "ild that asks for one needs `--link=libc`. The default s"
+               & "tatic link ([1650]) refuses a library, and refuses a dir"
+               & "ectory too."
                & LF
                & "- Cortex-M firmware links each library as a static archi"
                & "ve built for its core, after the program and before the "
-               & "compiler's runtime, and refuses one that brings C constr"
-               & "uctors, thread-local storage or a dynamic linkage, none "
-               & "of which its startup can honour.",
+               & "compiler's runtime. It refuses one that brings C constru"
+               & "ctors, thread-local storage or a dynamic linkage, none o"
+               & "f which its startup can honour.",
             when 1570 =>
                "A function's calling convention is written `extern(...)`"
                & " before its name. Without one, a function uses Landin's "
@@ -5678,8 +6169,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & " `extern(win64)`. No other convention is in Landin yet."
                & LF
                & LF
-               & "The two machine conventions are their own function types"
-               & ":"
+               & "The two machine conventions, `interrupt` and `naked`, ar"
+               & "e their own function types:"
                & LF
                & LF
                & "- A definition is nongeneric, exactly `() -> none`, and "
@@ -5716,9 +6207,35 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "`core/atomic` wraps one `u8`, `u16`, `u32` or `u64` in a"
                & " cell whose operations carry their orderings in their na"
-               & "mes: `load` acquires, `store` releases, `exchange`, `add"
-               & "` and `compare_exchange` do both, and `load_relaxed`, `s"
-               & "tore_relaxed` and `add_relaxed` order nothing else."
+               & "mes:"
+               & LF
+               & LF
+               & "| operations | ordering |"
+               & LF
+               & "| --- | --- |"
+               & LF
+               & "| `load` | acquires |"
+               & LF
+               & "| `store` | releases |"
+               & LF
+               & "| `exchange`, `add`, `compare_exchange` | acquire and re"
+               & "lease |"
+               & LF
+               & "| `load_relaxed`, `store_relaxed`, `add_relaxed` | order"
+               & " nothing else |"
+               & LF
+               & LF
+               & "Cortex-M0 has no read-modify-write atomics, so there a c"
+               & "ell has no `exchange`, `add` or `compare_exchange`, ther"
+               & "e is no `u64` cell, and the compiler reports a call to o"
+               & "ne. What it has is `sole_add`, the single writer's add: "
+               & "a load and a store, correct while only one context, say "
+               & "an interrupt handler, writes the cell. State that severa"
+               & "l contexts write needs `platform/cortex_m`'s critical se"
+               & "ction instead."
+               & LF
+               & LF
+               & "A cell, and the single writer's add on it:"
                & LF
                & LF
                & "    import core/atomic"
@@ -5732,16 +6249,6 @@ package body Landin.Diagnostics.Citations.Texts is
                & "        _ = atomic.sole_add(addr ticks, 1)"
                & LF
                & "    end count_tick"
-               & LF
-               & LF
-               & "Cortex-M0 has no read-modify-write atomics, so there a c"
-               & "ell has no `exchange`, `add` or `compare_exchange`, ther"
-               & "e is no `u64` cell, and the compiler reports a call to o"
-               & "ne. What it has is `sole_add`, the single writer's add: "
-               & "a load and a store, correct while only one context, say "
-               & "an interrupt handler, writes the cell. State that severa"
-               & "l contexts write needs `platform/cortex_m`'s critical se"
-               & "ction instead."
                & LF
                & LF
                & "Each tool for shared memory does one thing:"
@@ -5764,17 +6271,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & " ordering and completion of the accesses before them |"
                & LF
                & LF
-               & "A DMA buffer stays an ordinary slice. When the device ha"
-               & "s finished, by its own protocol and not merely because a"
-               & "n interrupt arrived, make its writes visible with the ta"
-               & "rget's barriers or cache maintenance and a compiler barr"
-               & "ier, then read the buffer. Masking interrupts does not s"
-               & "top DMA."
+               & "A direct memory access (DMA) buffer stays an ordinary sl"
+               & "ice. When the device has finished, by its own protocol a"
+               & "nd not merely because an interrupt arrived, make its wri"
+               & "tes visible with the target's barriers or cache maintena"
+               & "nce and a compiler barrier. Then read the buffer. Maskin"
+               & "g interrupts does not stop DMA."
                & LF
                & LF
                & "`spec.md` defines the supported operations, the exact or"
                & "derings, alignment traps, happens-before and what a race"
-               & " may do. Exact rules: spec [1990].",
+               & " may do."
+               & LF
+               & LF
+               & "Exact rules: spec [1990].",
             when 1630 =>
                "`assembler.block` takes fixed quoted or raw text in a ro"
                & "utine body, and after it the operands that carry values "
@@ -5803,16 +6313,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end restore_interrupts"
                & LF
                & LF
-               & "A register is a name the target answers for, never text."
-               & " `general` asks the compiler to choose one, and `{mask}`"
-               & " in the text is where the chosen register goes, spelled "
-               & "at the width the operand's type selects. A fixed registe"
-               & "r is the architecture's own full-width name, and the tex"
-               & "t may use it directly. `in` carries a value in, `out` ca"
-               & "rries one out, and `inout` does both through one registe"
-               & "r. The outputs are the block's value, as a function's na"
-               & "med returns are its: one is a scalar, several are an ano"
-               & "nymous result you destructure."
+               & "- The register is a name the target answers for, never t"
+               & "ext. `general` asks the compiler to choose one, and `{ma"
+               & "sk}` in the text is where the chosen register goes, spel"
+               & "led at the width the operand's type selects. A fixed reg"
+               & "ister is the architecture's own full-width name, and the"
+               & " text may use it directly."
+               & LF
+               & "- The direction: `in` carries a value in, `out` carries "
+               & "one out, and `inout` does both through one register."
+               & LF
+               & "- The value. The outputs are the block's value, as a fun"
+               & "ction's named returns are its: one is a scalar, several "
+               & "are an anonymous result you destructure."
                & LF
                & LF
                & "    (low, high) := assembler.block(""rdtsc"", out low: u32"
@@ -5821,28 +6334,31 @@ package body Landin.Diagnostics.Citations.Texts is
                & "                                   out high: u32 at rdx)"
                & LF
                & LF
-               & "What an operand can be:"
+               & "What an operand can be."
                & LF
                & LF
                & "- An integer scalar that fits one register, placed `at g"
-               & "eneral` or at an integer register, or an `f32` or `f64`,"
-               & " placed `at float` or at a float register: `xmm3`, `v3`,"
-               & " `f3`, or `d3` on a Cortex-M7 whose description has its "
-               & "float unit. A target without float registers, such as a "
-               & "Cortex-M with no float unit, refuses a float operand."
+               & "eneral` or at an integer register."
+               & LF
+               & "- An `f32` or `f64`, placed `at float` or at a float reg"
+               & "ister: `xmm3`, `v3`, `f3`, or `d3` on a Cortex-M7 whose "
+               & "description has its float unit. A target without float r"
+               & "egisters, such as a Cortex-M with no float unit, refuses"
+               & " a float operand."
                & LF
                & "- A pointer crosses as `usize(p)` and comes back through"
-               & " `ptr(u)`, whose zero check then happens there. A flag c"
-               & "omes back as `x <> 0`."
+               & " `ptr(u)`, whose zero check then happens there. The inte"
+               & "ger keeps no permission. So a routine around a block tha"
+               & "t writes storage takes it as `ptr mut u8` or `[]mut u8`:"
+               & " its callers are checked against that parameter, and an "
+               & "immutable buffer is refused there rather than handed to "
+               & "the system."
                & LF
-               & "- Inputs are evaluated once, left to right, before the b"
-               & "lock runs."
+               & "- A flag comes back as `x <> 0`."
                & LF
-               & "- The integer keeps no permission. So a routine around a"
-               & " block that writes storage takes it as `ptr mut u8` or `"
-               & "[]mut u8`: its callers are checked against that paramete"
-               & "r, and an immutable buffer is refused there rather than "
-               & "handed to the system."
+               & LF
+               & "Inputs are evaluated once, left to right, before the blo"
+               & "ck runs."
                & LF
                & LF
                & "Landin has no square-root builtin, so a block is how you"
@@ -5862,30 +6378,45 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end root"
                & LF
                & LF
-               & "What a block may touch: every block may overwrite the re"
-               & "gisters a call may, and the flags. A register a call mus"
-               & "t preserve is declared, as an operand or as a discarded "
-               & "output `out _ at rbx`, or `out _ at v8` for a float one,"
-               & " and that is what makes the routine save it. The frame, "
-               & "stack and link registers are never named, so a block can"
-               & "not break a backtrace. The language reserves no register"
-               & " of its own. A block that changes x86-64's direction fla"
-               & "g, or a float unit's rounding mode or exception flags, p"
-               & "uts them back before it ends."
+               & "What a block may touch."
                & LF
                & LF
-               & "Every block is opaque to the compiler: memory knowledge "
+               & "- Every block may overwrite the registers a call may, an"
+               & "d the flags."
+               & LF
+               & "- A register a call must preserve is declared, as an ope"
+               & "rand or as a discarded output `out _ at rbx`, or `out _ "
+               & "at v8` for a float one. That declaration is what makes t"
+               & "he routine save it."
+               & LF
+               & "- The frame, stack and link registers are never named, s"
+               & "o a block cannot break a backtrace."
+               & LF
+               & "- The language reserves no register of its own."
+               & LF
+               & "- A block that changes x86-64's direction flag, or a flo"
+               & "at unit's rounding mode or exception flags, puts them ba"
+               & "ck before it ends."
+               & LF
+               & LF
+               & "Every block is opaque to the compiler. Memory knowledge "
                & "is invalidated and memory accesses cannot be moved acros"
                & "s it, which is exactly what a critical section wants. It"
-               & " is not itself a hardware barrier. An ordinary block is "
-               & "straight-line code, with no labels or calls; a system ca"
-               & "ll returns to the next instruction, so it is straight-li"
-               & "ne too. The older Cortex-M0 form stays as a shorthand: `"
-               & "assembler.block(text, value)` passes one `u32` in and ou"
-               & "t of r0, and the text names r0 itself."
+               & " is not itself a hardware barrier."
                & LF
                & LF
-               & "`platform/cortex_m` wraps the common blocks:"
+               & "An ordinary block is straight-line code, with no labels "
+               & "or calls; a system call returns to the next instruction,"
+               & " so it is straight-line too."
+               & LF
+               & LF
+               & "The older Cortex-M0 form stays as a shorthand: `assemble"
+               & "r.block(text, value)` passes one `u32` in and out of r0,"
+               & " and the text names r0 itself."
+               & LF
+               & LF
+               & "The common blocks, already written. `platform/cortex_m` "
+               & "wraps them:"
                & LF
                & LF
                & "- `disable_interrupts()` returns the prior PRIMASK, and "
@@ -5903,9 +6434,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "re is no cache or scheduler API."
                & LF
                & LF
-               & "A naked body ([1570]) owns its control flow, so its bloc"
-               & "k may use labels and branches. This entry runs after the"
-               & " compiler's reset has initialized data and stacks:"
+               & "A naked body. A naked body ([1570]) owns its control flo"
+               & "w, so its block may use labels and branches. This entry "
+               & "runs after the compiler's reset has initialized data and"
+               & " stacks:"
                & LF
                & LF
                & "    extern(naked) start: () -> none ="
@@ -5923,28 +6455,30 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end start"
                & LF
                & LF
-               & "A line of the text may end in a comment, written as the "
-               & "target's own assembler writes one: `@` on Cortex-M, `//`"
-               & " on arm64, `#` on x86-64 and RV64. The compiler removes "
-               & "it before it reads the text, so a register or a `{name}`"
-               & " in a comment means nothing, and it never reaches the as"
-               & "sembly the compiler writes. Any other form, `/* */` or a"
-               & "nother target's, is refused, and so is a number with a `"
-               & "_` in it: the text is the assembler's, and its numbers t"
-               & "ake no separator."
+               & "The compiler request names the source entry:"
                & LF
                & LF
                & "    refine compile main.ldn --target=cortex-m0 --firmwar"
                & "e-entry=start --emit=exe"
                & LF
                & LF
-               & "The request names the source entry. A naked entry may se"
-               & "t up PSP or call explicitly linked ordinary code, but it"
-               & " must then meet that code's eight-byte stack alignment, "
-               & "r9 and frame obligations. `none` is not a promise never "
-               & "to return: the compiler traps if the entry returns or th"
-               & "e naked block falls through. There is no hosted caller t"
-               & "o return to."
+               & "A naked entry may set up PSP or call explicitly linked o"
+               & "rdinary code, but it must then meet that code's eight-by"
+               & "te stack alignment, r9 and frame obligations. `none` is "
+               & "not a promise never to return: the compiler traps if the"
+               & " entry returns or the naked block falls through. There i"
+               & "s no hosted caller to return to."
+               & LF
+               & LF
+               & "Comments in the text. A line of the text may end in a co"
+               & "mment, written as the target's own assembler writes one:"
+               & " `@` on Cortex-M, `//` on arm64, `#` on x86-64 and RV64."
+               & " The compiler removes it before it reads the text, so a "
+               & "register or a `{name}` in a comment means nothing, and i"
+               & "t never reaches the assembly the compiler writes. Any ot"
+               & "her form, `/* */` or another target's, is refused, and s"
+               & "o is a number with a `_` in it: the text is the assemble"
+               & "r's, and its numbers take no separator."
                & LF
                & LF
                & "Exact rules, with each target's registers, the text rule"
@@ -5976,16 +6510,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & " a peripheral's name."
                & LF
                & LF
-               & "The compiler owns the vector table. Its first word is th"
-               & "e initial stack pointer, its second the compiler's reset"
-               & ", reserved slots are zero, and `vector` annotations fill"
-               & " in handlers with their types checked. So a stack addres"
-               & "s, a reserved word and a handler can never be mixed up. "
-               & "A vector annotation needs a firmware-entry request ([165"
-               & "0])."
+               & "Calling convention, symbol name, placement and retention"
+               & " are four independent choices; none implies another."
                & LF
                & LF
-               & "What survives the link:"
+               & "The vector table. The compiler owns it. Its first word i"
+               & "s the initial stack pointer, its second the compiler's r"
+               & "eset, reserved slots are zero, and `vector` annotations "
+               & "fill in handlers with their types checked. So a stack ad"
+               & "dress, a reserved word and a handler can never be mixed "
+               & "up. A vector annotation needs a firmware-entry request ("
+               & "[1650])."
+               & LF
+               & LF
+               & "What survives the link."
                & LF
                & LF
                & "- The table is kept and refers to each handler in it, so"
@@ -6001,7 +6539,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- A link name alone retains nothing."
                & LF
                & LF
-               & "Where things go:"
+               & "Where things go."
                & LF
                & LF
                & "| what | sections |"
@@ -6024,9 +6562,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "- `region: ""NAME""` places a routine or module datum in a"
                & " region of the device description, by name rather than b"
-               & "y section: code needs a region that may execute, mutable"
-               & " data one that may be written, and reset copies or clear"
-               & "s it there."
+               & "y section. Code needs a region that may execute and muta"
+               & "ble data one that may be written, and reset copies or cl"
+               & "ears it there."
                & LF
                & "- Without a device description, the image has the refere"
                & "nce firmware profile's 32 KiB of flash and 16 KiB of RAM"
@@ -6041,18 +6579,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & ")."
                & LF
                & LF
-               & "Calling convention, symbol name, placement and retention"
-               & " are four independent choices; none implies another."
-               & LF
-               & LF
-               & "Some boot ROMs run a second stage before the image: RP20"
-               & "40's reads its flash through one. On such a chip that st"
-               & "age lives in the device description, as a naked routine "
-               & "marked `link(boot_stage)`. The description's boot kind p"
-               & "laces it at the start of the image, and the compiler sea"
-               & "ls it with the checksum the ROM checks. Nothing else is "
-               & "marked that way, and nothing else in a description is co"
-               & "de.",
+               & "A second boot stage. Some boot ROMs run a second stage b"
+               & "efore the image: RP2040's reads its flash through one. O"
+               & "n such a chip that stage lives in the device description"
+               & ", as a naked routine marked `link(boot_stage)`. The desc"
+               & "ription's boot kind places it at the start of the image,"
+               & " and the compiler seals it with the checksum the ROM che"
+               & "cks. Nothing else is marked that way, and nothing else i"
+               & "n a description is code.",
             when 730 =>
                "A hardware register mixes kinds of field, and confusing "
                & "them is the classic driver bug. Landin describes a regis"
@@ -6117,13 +6651,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A set is a packed struct of `bool`, one field per member"
-               & ", each at the bit its member's encoding names. Membershi"
-               & "p is a field read, adding or removing a member is a fiel"
-               & "d write, and building one is an ordinary struct literal "
-               & "with `of` ([0720]). There is no set literal or set opera"
-               & "tor, because a struct needs none. Inside a larger image "
-               & "the same fields sit at the image's bits, offset by where"
-               & " the set begins."
+               & ", each at the bit its member's encoding names."
+               & LF
+               & LF
+               & "- Membership is a field read."
+               & LF
+               & "- Adding or removing a member is a field write."
+               & LF
+               & "- Building one is an ordinary struct literal with `of` ("
+               & "[0720])."
+               & LF
+               & LF
+               & "There is no set literal or set operator, because a struc"
+               & "t needs none. Inside a larger image the same fields sit "
+               & "at the image's bits, offset by where the set begins."
                & LF
                & LF
                & "    irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)"
@@ -6162,20 +6703,22 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e `[16]bool` at `0..15`, not sixteen invented atoms."
                & LF
                & LF
-               & "Bit positions are written, never implied by field order,"
-               & " so reordering the fields of a published register is not"
-               & " a hidden breaking change. In a packed struct every fiel"
-               & "d carries a position, or none does. Any bit no field cla"
-               & "ims is reserved: you cannot name it, no completion list "
-               & "offers it, and a read-modify-write leaves it untouched."
+               & "Positions are written. Bit positions are never implied b"
+               & "y field order, so reordering the fields of a published r"
+               & "egister is not a hidden breaking change. In a packed str"
+               & "uct every field carries a position, or none does. Any bi"
+               & "t no field claims is reserved: you cannot name it, no co"
+               & "mpletion list offers it, and a read-modify-write leaves "
+               & "it untouched."
                & LF
                & LF
                & "You rarely write these by hand. A generator reading a ve"
-               & "ndor's SVD file writes the fields, and the helpers [0740"
-               & "] uses, for every register: `refine svd` generates them "
-               & "(devices), and running a generator as a step of a build "
-               & "belongs to the companion tool. The language has no `set("
-               & "X)` type former to do it instead."
+               & "ndor's System View Description (SVD) file writes the fie"
+               & "lds, and the helpers [0740] uses, for every register: `r"
+               & "efine svd` generates them (devices), and running a gener"
+               & "ator as a step of a build belongs to the companion tool."
+               & " The language has no `set(X)` type former to do it inste"
+               & "ad."
                & LF
                & LF
                & "A field may be an array, which is how a real peripheral "
@@ -6302,12 +6845,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & " so is `compiler.no_write`."
                & LF
                & LF
-               & "You cannot write a single field of a device register. Fo"
-               & "r an ordinary read/write register, read the whole image,"
-               & " change it locally and write it back whole. The generato"
-               & "r of [0730] writes, beside `control`, `control_decode` f"
-               & "rom the raw `u32` to the image, `control_encode` back, a"
-               & "nd the constant `control_named_mask`:"
+               & "The operation, not the pointer's type, makes an access a"
+               & " device transaction: there is no `volatile ptr` and no `"
+               & "register(t, ...)` wrapper type."
+               & LF
+               & LF
+               & "Changing one field. You cannot write a single field of a"
+               & " device register. For an ordinary read/write register, r"
+               & "ead the whole image, change it locally and write it back"
+               & " whole. The generator of [0730] writes, beside `control`"
+               & ", `control_decode` from the raw `u32` to the image, `con"
+               & "trol_encode` back, and the constant `control_named_mask`"
+               & ":"
                & LF
                & LF
                & "    reset_flags: (base: usize) -> none ="
@@ -6351,26 +6900,24 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end read_modify_write"
                & LF
                & LF
-               & "A fresh local literal knows nothing of what the hardware"
-               & " holds. To keep reserved bits as the device has them, re"
-               & "ad the image first, as `read_modify_write` does; `compil"
-               & "er.preserve` never reads behind your back. That read, ch"
-               & "ange and write is not atomic, and it does not carry over"
-               & " to clear-on-read or one-clears registers: a destructive"
-               & " read consumes state, and a one-clears readback is not a"
-               & " command."
+               & "- A fresh local literal knows nothing of what the hardwa"
+               & "re holds. To keep reserved bits as the device has them, "
+               & "read the image first, as `read_modify_write` does; `comp"
+               & "iler.preserve` never reads behind your back."
+               & LF
+               & "- That read, change and write is not atomic."
+               & LF
+               & "- The read, change and write does not carry over to clea"
+               & "r-on-read or one-clears registers: a destructive read co"
+               & "nsumes state, and a one-clears readback is not a command"
+               & "."
                & LF
                & LF
-               & "A register's reset value initializes nothing. It is what"
-               & " the datasheet says the register holds after a reset, ge"
-               & "nerated as a constant so that tools and readers know whe"
-               & "re they start. The hardware puts it there, not the progr"
-               & "am."
-               & LF
-               & LF
-               & "The operation, not the pointer's type, makes an access a"
-               & " device transaction: there is no `volatile ptr` and no `"
-               & "register(t, ...)` wrapper type."
+               & "Reset values. A register's reset value initializes nothi"
+               & "ng. It is what the datasheet says the register holds aft"
+               & "er a reset, generated as a constant so that tools and re"
+               & "aders know where they start. The hardware puts it there,"
+               & " not the program."
                & LF
                & LF
                & "Exact rules: spec [1870].",
@@ -6380,28 +6927,29 @@ package body Landin.Diagnostics.Citations.Texts is
                & "passed through the system's C ABI."
                & LF
                & LF
-               & "The arguments are not parameters. You ask the host for t"
-               & "hem, as `io.argument_at(host, 0)` does in ""Reading a fil"
-               & "e"" at the top: the host keeps the argument table and len"
-               & "ds each argument as a host string ([1660]). The first ar"
-               & "gument is the one after the program's own name. C's `arg"
-               & "c` and `argv` shape could not be indexed in Landin witho"
-               & "ut turning a pointer into a slice, which Landin does not"
-               & " do ([0500])."
+               & "Arguments. The arguments are not parameters. You ask the"
+               & " host for them, as `io.argument_at(host, 0)` does in ""Re"
+               & "ading a file"" at the top: the host keeps the argument ta"
+               & "ble and lends each argument as a host string ([1660]). T"
+               & "he first argument is the one after the program's own nam"
+               & "e. C's `argc` and `argv` shape could not be indexed in L"
+               & "andin without turning a pointer into a slice, which Land"
+               & "in does not do ([0500])."
                & LF
                & LF
-               & "A Linux executable needs no C library. It starts at `pla"
-               & "tform/linux`'s `_landin_start`, which calls `main` with "
-               & "the process's arguments; `--link=libc` links the C runti"
-               & "me instead. Darwin and FreeBSD always link their C libra"
-               & "ry."
+               & "The C library. A Linux executable needs no C library. It"
+               & " starts at `platform/linux`'s `_landin_start`, which cal"
+               & "ls `main` with the process's arguments; `--link=libc` li"
+               & "nks the C runtime instead. Darwin and FreeBSD always lin"
+               & "k their C library."
                & LF
                & LF
-               & "When the program imports `hosted/system`, directly or th"
-               & "rough `hosted/blocking`, and so `platform/posix`, the en"
-               & "try first calls this C-callable routine with the real va"
-               & "lues, before the body of `main` begins, so the environme"
-               & "nt is kept beside the arguments and lent the same way:"
+               & "The argument root. A program that imports `hosted/system"
+               & "`, directly or through `hosted/blocking`, imports `platf"
+               & "orm/posix` with it. Its entry then first calls this C-ca"
+               & "llable routine with the real values, before the body of "
+               & "`main` begins, so the environment is kept beside the arg"
+               & "uments and lent the same way:"
                & LF
                & LF
                & "    void _landin_host_initialize_arguments(int argc, cha"
@@ -6433,7 +6981,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ith only its own name gives Landin no arguments."
                & LF
                & LF
-               & "Freestanding, there is no `main`. The compiler request n"
+               & "Freestanding. There is no `main`. The compiler request n"
                & "ames the entry: an infallible ordinary `() -> none` or `"
                & "() -> noreturn` routine, or a naked `() -> none` one, in"
                & " the entry module ([1630] shows the request). The compil"
@@ -6443,13 +6991,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "on are outside the firmware path."
                & LF
                & LF
-               & "For a debugger-loaded SRAM image, select `--firmware-lay"
-               & "out=ram`. The compiler derives RAM placement from the sa"
-               & "me device description, retains BSS clearing and skips co"
-               & "pies of data already in place. The board tool establishe"
-               & "s the device state before entry. The default `boot` layo"
-               & "ut keeps the image its boot ROM needs; a RAM run does no"
-               & "t test that boot path."
+               & "An image loaded into RAM. For a debugger-loaded SRAM ima"
+               & "ge, select `--firmware-layout=ram`. The compiler derives"
+               & " RAM placement from the same device description, retains"
+               & " BSS clearing and skips copies of data already in place."
+               & " The board tool establishes the device state before entr"
+               & "y. The default `boot` layout keeps the image its boot RO"
+               & "M needs; a RAM run does not test that boot path."
                & LF
                & LF
                & "Exact rules: spec [1975] for hosted programs, spec [1990"
@@ -6466,19 +7014,32 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (148)
                & " and pass them down as ordinary arguments. The language "
                & "does not reserve that to the entry point: any routine ca"
-               & "n call the constructors ([1680]). A hosted root imports "
-               & "`hosted/blocking`, whose reads, writes, network calls an"
-               & "d sleeps block the thread until they are done; a caller-"
-               & "backed one needs only `core/io`. `hosted/blocking` is bu"
-               & "ilt over `hosted/system`, which keeps everything that do"
-               & "es not wait: the arguments and environment, opening and "
-               & "closing files, directories, running programs, entropy an"
-               & "d the wall clock. A program that serves several things a"
-               & "t once imports `hosted/events` instead, whose waits let "
-               & "other fibres run ([1675]); it is built over `hosted/syst"
-               & "em` too. A program that never reads, writes or sleeps ma"
-               & "y use `system.new()` alone; it is not a world, since it "
-               & "cannot read or write."
+               & "n call the constructors ([1680])."
+               & LF
+               & LF
+               & "What a root imports:"
+               & LF
+               & LF
+               & "- A hosted root imports `hosted/blocking`, whose reads, "
+               & "writes, network calls and sleeps block the thread until "
+               & "they are done."
+               & LF
+               & "- A program that serves several things at once imports `"
+               & "hosted/events` instead, whose waits let other fibres run"
+               & " ([1675])."
+               & LF
+               & "- A program that never reads, writes or sleeps may use `"
+               & "system.new()` alone; it is not a world, since it cannot "
+               & "read or write."
+               & LF
+               & "- A caller-backed root needs only `core/io`."
+               & LF
+               & LF
+               & "`hosted/blocking` and `hosted/events` are both built ove"
+               & "r `hosted/system`, which keeps everything that does not "
+               & "wait: the arguments and environment, opening and closing"
+               & " files, directories, running programs, entropy and the w"
+               & "all clock."
                & LF
                & LF
                & "This is the essential flow of `examples/derived_hosted`,"
@@ -6528,8 +7089,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end entry"
                & LF
                & LF
-               & "Each root is a handle: a small value, copied and passed "
-               & "by value, that refers to its state."
+               & "Roots are handles. Each root is a small value, copied an"
+               & "d passed by value, that refers to its state."
                & LF
                & LF
                & "- `blocking.new()` and `heap.new()` borrow nothing, beca"
@@ -6549,12 +7110,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "side by side, and nothing is locked."
                & LF
                & LF
-               & "Because the code below the root only sees what it is han"
-               & "ded, you can hand it something else. A test gives the sa"
-               & "me `run_logged` an in-memory world from `core/io`'s `io."
-               & "memory_over`, which takes caller-owned files, arguments "
-               & "and output storage and makes no host call, and the run c"
-               & "annot tell."
+               & "Handing it something else. Because the code below the ro"
+               & "ot only sees what it is handed, you can hand it somethin"
+               & "g else. A test gives the same `run_logged` an in-memory "
+               & "world from `core/io`'s `io.memory_over`, which takes cal"
+               & "ler-owned files, arguments and output storage and makes "
+               & "no host call, and the run cannot tell."
                & LF
                & LF
                & "That works because I/O is a concept, not a type, so anot"
@@ -6566,8 +7127,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "[1690])."
                & LF
                & LF
-               & "It is four concepts, because a provider should supply on"
-               & "ly what it has ([1260]):"
+               & "Four concepts. I/O is four concepts, because a provider "
+               & "should supply only what it has ([1260]):"
                & LF
                & LF
                & "| concept | entries |"
@@ -6593,24 +7154,35 @@ package body Landin.Diagnostics.Citations.Texts is
                & "`io.world` composes the four for a root that has everyth"
                & "ing, and `world.write` on an erased world reaches the wr"
                & "iter's entry. A UART implements `writer` and nothing els"
-               & "e. A diagnostics log asks for `any io.writer`, which is "
-               & "why `entry` builds one from the same `host`: an `any io."
-               & "world` is not an `any io.writer`, and neither converts t"
-               & "o the other. A routine holding only an erased world can "
-               & "pass it as it is to a routine generic over a writer, or "
-               & "make an `any io.writer` from the adapter `io.writer_of(w"
-               & "orld)` lends it."
+               & "e."
                & LF
                & LF
-               & "Both providers lend each argument and path as a `text.ho"
-               & "st_string`: the bytes the system gave, unconverted and u"
-               & "ncopied, so an argument passed on as a path reaches the "
-               & "system unchanged, whether or not it is UTF-8. Neither pr"
-               & "ovider's arguments include `argv[0]`. The library refere"
-               & "nce describes the system providers (`hosted/system`, `ho"
-               & "sted/blocking` and `hosted/events`), the memory provider"
-               & " and host strings (`core/io`, `core/text`); the exact pr"
-               & "ovider contracts "
+               & "A diagnostics log asks for `any io.writer`, which is why"
+               & " `entry` builds one from the same `host`: an `any io.wor"
+               & "ld` is not an `any io.writer`, and neither converts to t"
+               & "he other. A routine holding only an erased world can go "
+               & "on in either of these ways:"
+               & LF
+               & LF
+               & "- pass it as it is to a routine generic over a writer, o"
+               & "r"
+               & LF
+               & "- make an `any io.writer` from the adapter `io.writer_of"
+               & "(world)` lends it."
+               & LF
+               & LF
+               & "Arguments and paths. Both providers lend each argument a"
+               & "nd path as a `text.host_string`: the bytes the system ga"
+               & "ve, unconverted and uncopied, so an argument passed on a"
+               & "s a path reaches the system unchanged, whether or not it"
+               & " is UTF-8. Neither provider's arguments include `argv[0]"
+               & "`."
+               & LF
+               & LF
+               & "The library reference describes the system providers (`h"
+               & "osted/system`, `hosted/blocking` and `hosted/events`), t"
+               & "he memory provider and host strings (`core/io`, `core/te"
+               & "xt`). The exact provider contracts "
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (148)
@@ -6653,17 +7225,27 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end panic_handler"
                & LF
                & LF
-               & "It gets two scalars and no strings. `kind` is one of `co"
-               & "re/panic`'s `out_of_range`, `overflow`, `bad_conversion`"
-               & ", `unreachable` and `stack_exhausted`. `site` is a plain"
-               & " `u32`, not [1040]'s `site` struct: a number the compile"
-               & "r gives the failing operation and its check family. File"
-               & " and line live in an optional table outside the target, "
-               & "so a small firmware image carries no file names. `refine"
-               & " --panic-map` writes that table, and `scripts/source-loc"
+               & "It gets two scalars and no strings:"
+               & LF
+               & LF
+               & "- `kind` is one of `core/panic`'s `out_of_range`, `overf"
+               & "low`, `bad_conversion`, `unreachable` and `stack_exhaust"
+               & "ed`."
+               & LF
+               & "- `site` is a plain `u32`, not [1040]'s `site` struct: a"
+               & " number the compiler gives the failing operation and its"
+               & " check family."
+               & LF
+               & LF
+               & "File and line live in an optional table outside the targ"
+               & "et, so a small firmware image carries no file names. `re"
+               & "fine --panic-map` writes that table. `scripts/source-loc"
                & "ation.py --panic-site`, a script in Landin's source repo"
                & "sitory rather than part of `refine`, resolves a site aga"
                & "inst the build that made it, and only that build."
+               & LF
+               & LF
+               & "Fine print:"
                & LF
                & LF
                & "- The handler must have exactly this infallible form and"
@@ -6737,9 +7319,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end ask"
                & LF
                & LF
-               & "A routine starts tasks as a group, over storage it lends"
-               & ", and waits for them before it goes on, so whatever they"
-               & " borrow from it outlives them:"
+               & "A group. A routine starts tasks as a group, over storage"
+               & " it lends, and waits for them before it goes on, so what"
+               & "ever they borrow from it outlives them:"
                & LF
                & LF
                & "    ask_both: (runs: any fibre.scheduler, clock: any tim"
@@ -6796,11 +7378,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "sed."
                & LF
                & LF
-               & "Two concepts say what a provider is. A `fibre.scheduler`"
-               & " may run each task to its end inside `admit`, before ret"
-               & "urning. A `fibre.turns` is a scheduler with `yield`, and"
-               & " promises more: a fibre that yields lets every other unf"
-               & "inished fibre of its provider run before it goes on."
+               & "Providers. Two concepts say what a provider is:"
+               & LF
+               & LF
+               & "- A `fibre.scheduler` may run each task to its end insid"
+               & "e `admit`, before returning."
+               & LF
+               & "- A `fibre.turns` is a scheduler with `yield`, and promi"
+               & "ses more: a fibre that yields lets every other unfinishe"
+               & "d fibre of its provider run before it goes on."
                & LF
                & LF
                & "The blocking host and `fibre.whole` are schedulers. Over"
@@ -6837,9 +7423,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "t when a task waits for ever."
                & LF
                & LF
-               & "On a hosted system the choice is made where the roots ar"
-               & "e minted ([1660]), and the routines below never learn it"
-               & ":"
+               & "Choosing a provider on a hosted system. The choice is ma"
+               & "de where the roots are minted ([1660]), and the routines"
+               & " below never learn it:"
                & LF
                & LF
                & "| provider | a call that waits | groups | signals |"
@@ -6885,20 +7471,26 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    main.ldn:15:1: trap: stack_exhausted"
                & LF
                & LF
-               & "The limit stands a margin above the stack's lowest byte,"
-               & " room for the handler to run in: 640 bytes on x86-64 and"
-               & " arm64, 768 on RV64, 384 on Cortex-M0. A program that pr"
-               & "epares no stack has no check, and its code is what it wo"
-               & "uld be without fibres. How deep a task goes depends on t"
-               & "he target: `ask` takes up to 4.4 KiB of its stack on RV6"
-               & "4 and less on the others, which is why its stacks are 8 "
-               & "KiB. `refine compile --stack-report=PATH` writes each ro"
-               & "utine's frame and the deepest stack its calls can reach,"
-               & " and names the `any` calls, recursion and foreign calls "
-               & "that leave that open. Size a stack from its task's row a"
-               & "nd the margin. A backing too small for its stacks fails "
-               & "`mem.out_of_memory`, where the group is made or when a t"
-               & "ask is admitted."
+               & "- The limit stands a margin above the stack's lowest byt"
+               & "e, room for the handler to run in: 640 bytes on x86-64 a"
+               & "nd arm64, 768 on RV64, 384 on Cortex-M0."
+               & LF
+               & "- A program that prepares no stack has no check, and its"
+               & " code is what it would be without fibres."
+               & LF
+               & "- How deep a task goes depends on the target: `ask` take"
+               & "s up to 4.4 KiB of its stack on RV64 and less on the oth"
+               & "ers, which is why its stacks are 8 KiB."
+               & LF
+               & "- `refine compile --stack-report=PATH` writes each routi"
+               & "ne's frame and the deepest stack its calls can reach, an"
+               & "d names the `any` calls, recursion and foreign calls tha"
+               & "t leave that open. Size a stack from its task's row and "
+               & "the margin."
+               & LF
+               & "- A backing too small for its stacks fails `mem.out_of_m"
+               & "emory`, where the group is made or when a task is admitt"
+               & "ed."
                & LF
                & LF
                & "On one core nothing runs at once, so there fibres are fo"
@@ -6906,25 +7498,36 @@ package body Landin.Diagnostics.Citations.Texts is
                & "swers this one. A single-core device answers requests on"
                & "e at a time, in the order they arrived, and says `busy` "
                & "when its queue is full; two answers are never in flight "
-               & "together. On Cortex-M0 a fibre runs on the process stack"
-               & " and interrupt handlers on the main one, so a fibre's ba"
-               & "cking pays for one exception frame, 36 bytes, and the ha"
-               & "ndlers' own frames are the main stack's. A handler never"
-               & " switches: it records what happened, and the provider lo"
-               & "oks before it waits."
+               & "together."
                & LF
                & LF
-               & "An application makes a group, and at most a provider, as"
-               & " the round above. `core/fibre/stacks` also holds the swi"
-               & "tch, `prepare` and `switch` over records a provider keep"
-               & "s, for whoever writes a provider of their own, built on "
-               & "two `compiler` builtins. A program over `whole` or the b"
-               & "locking host imports no switch and runs on every target;"
-               & " the switch runs on every target with a native backend. "
-               & "A debugger's backtrace through a switch shows `landin.st"
-               & "ack_switch`, and a fibre's frames end at `landin.stack_s"
-               & "tart`. The library reference describes `core/fibre` and "
-               & "`core/fibre/stacks`."
+               & "On Cortex-M0 a fibre runs on the process stack and inter"
+               & "rupt handlers on the main one, so a fibre's backing pays"
+               & " for one exception frame, 36 bytes, and the handlers' ow"
+               & "n frames are the main stack's. A handler never switches:"
+               & " it records what happened, and the provider looks before"
+               & " it waits."
+               & LF
+               & LF
+               & "Writing a provider. An application makes a group, and at"
+               & " most a provider, as the round above. `core/fibre/stacks"
+               & "` also holds the switch, `prepare` and `switch` over rec"
+               & "ords a provider keeps, for whoever writes a provider of "
+               & "their own, built on two `compiler` builtins."
+               & LF
+               & LF
+               & "- A program over `whole` or the blocking host imports no"
+               & " switch and runs on every target."
+               & LF
+               & "- The switch runs on every target with a native backend."
+               & LF
+               & "- A debugger's backtrace through a switch shows `landin."
+               & "stack_switch`, and a fibre's frames end at `landin.stack"
+               & "_start`."
+               & LF
+               & LF
+               & "The library reference describes `core/fibre` and `core/f"
+               & "ibre/stacks`."
                & LF
                & LF
                & "Exact rules: spec [1995].",
@@ -6937,21 +7540,36 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The parameter list says what a caller supplies, not ever"
-               & "ything the call can reach. Any hosted routine may call t"
-               & "he public host and heap constructors itself, and a drive"
-               & "r may make a pointer from an address [0460]. Creating th"
-               & "e roots in `main` [1660] is a convention the compiler do"
-               & "es not check. If you need to know that a call tree does "
-               & "no host I/O, read its calls and imports. Exact rules: sp"
-               & "ec [1975].",
+               & "ything the call can reach:"
+               & LF
+               & LF
+               & "- Any hosted routine may call the public host and heap c"
+               & "onstructors itself."
+               & LF
+               & "- A driver may make a pointer from an address [0460]."
+               & LF
+               & LF
+               & "Creating the roots in `main` [1660] is a convention the "
+               & "compiler does not check."
+               & LF
+               & LF
+               & "If you need to know that a call tree does no host I/O, r"
+               & "ead its calls and imports."
+               & LF
+               & LF
+               & "Exact rules: spec [1975].",
             when 1690 =>
                "Generic code and `any` share one foundation: evidence th"
-               & "at a type satisfies a concept. When the compiler knows t"
-               & "he concrete evidence it may specialize the call; otherwi"
-               & "se the call goes through a table, and an `any C` value c"
-               & "arries that table with it. Static generics and runtime d"
-               & "ispatch are two readings of one feature, not two feature"
-               & "s ([1310], [1370]).",
+               & "at a type satisfies a concept. Static generics and runti"
+               & "me dispatch are two readings of one feature, not two fea"
+               & "tures ([1310], [1370]):"
+               & LF
+               & LF
+               & "- When the compiler knows the concrete evidence, it may "
+               & "specialize the call."
+               & LF
+               & "- Otherwise the call goes through a table, and an `any C"
+               & "` value carries that table with it.",
             when 1700 =>
                "An atom is identity without payload. Enumerations, error"
                & " sets, variant tags, register encodings and panic kinds "
@@ -7008,13 +7626,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Checks are on by default. `unchecked` [1120] removes onl"
-               & "y the checks that entry lists, only in the region where "
-               & "it is written, and tells the optimizer nothing: it emits"
-               & " fewer checks and gives no later pass a fact to assume. "
-               & "Optimization adds no undefined behavior, no-alias, overf"
-               & "low or floating-point assumption because of it, and keep"
-               & "s scalar results and the order of side effects and traps"
-               & ".",
+               & "y the checks that entry lists, and only in the region wh"
+               & "ere it is written. It tells the optimizer nothing: it em"
+               & "its fewer checks and gives no later pass a fact to assum"
+               & "e. Optimization adds no undefined behavior, no-alias, ov"
+               & "erflow or floating-point assumption because of it, and k"
+               & "eeps scalar results and the order of side effects and tr"
+               & "aps.",
             when 1730 =>
                "A successful check can produce a value that stands for w"
                & "hat was checked. A buffer that passed the alignment test"
@@ -7028,14 +7646,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "type value, not with a guard on an ordinary integer.",
             when 620 =>
                "DEFERRED: not in Landin yet; it is planned (Language evo"
-               & "lution, in the roadmap). A collection could be stored tr"
-               & "ansposed, one array per field instead of one array of st"
-               & "ructs, written `soa [4096]entity`, so that one field of "
-               & "every element is a contiguous slice. It touches aliasing"
-               & ", generics, slicing, `addr`, layout, debug information a"
-               & "nd the optimiser all at once, and no program has needed "
-               & "it yet. Until one does, generate the arrays with a progr"
-               & "am that writes the source ([1540]).",
+               & "lution, in the roadmap)."
+               & LF
+               & LF
+               & "A collection could be stored transposed: one array per f"
+               & "ield instead of one array of structs, so that one field "
+               & "of every element is a contiguous slice. It would be writ"
+               & "ten `soa [4096]entity`."
+               & LF
+               & LF
+               & "The feature touches aliasing, generics, slicing, `addr`,"
+               & " layout, debug information and the optimiser all at once"
+               & ", and no program has needed it yet. Until one does, gene"
+               & "rate the arrays with a program that writes the source (["
+               & "1540]).",
             when 1740 =>
                "A source file is a possibly empty import prelude followe"
                & "d by declarations in any order. All reached source files"

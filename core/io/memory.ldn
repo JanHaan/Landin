@@ -12,8 +12,8 @@ public writing_slot: atom
 public slot_state: type = closed_slot | reading_slot | writing_slot
 
 --- Caller-supplied in-memory file slot holding its path, readable bytes and
---- writable capacity.  The caller gives it `closed_slot`. Keep all referenced ranges alive and initialize the
---- fields before constructing the provider.
+--- writable capacity.  The caller gives it `closed_slot`. Keep all referenced
+--- ranges alive and initialize the fields before constructing the provider.
 ---
 --- Finite caller-backed provider of every io concept. Handles are indexes,
 --- not ownership tokens.
@@ -510,14 +510,14 @@ memory is directories
      make_directory: memory_make_directory, remove_file: memory_remove_file,
      remove_directory: memory_remove_directory)
 
---- Lend the initialized standard-output prefix accumulated by the memory
---- provider.
+--- Lend the bytes written to standard output so far: the initialized prefix
+--- of the memory provider's output buffer.
 public written: (host: memory) -> (bytes: []u8 from host) =
     output: []mut u8 = host.output
     bytes = output[0..<host.state.val.output_used]
 end written
---- Lend the initialized standard-error prefix accumulated by the memory
---- provider.
+--- Lend the bytes written to standard error so far: the initialized prefix
+--- of the memory provider's error buffer.
 public written_errors: (host: memory) -> (bytes: []u8 from host) =
     errors: []mut u8 = host.errors
     bytes = errors[0..<host.state.val.errors_used]
@@ -589,23 +589,23 @@ scripted_value: type = struct
     programs: []mut scripted_program
 end scripted_value
 
---- A program a scripted provider runs in place of a real one, a scripted
---- child: what it writes and how it ends are given, and what it was given
---- is recorded.  `spawn` of a path equal to `path` starts it; it writes
---- `output` and `errors` all at once when it starts, to the world's own
+--- A scripted child: a program a scripted provider runs in place of a real
+--- one.  What it writes and how it ends are given, and what it was given is
+--- recorded.  `spawn` of a path equal to `path` starts it.  It writes
+--- `output` and `errors` all at once when it starts: to the world's own
 --- standard output and error when a stream is inherited, to nothing when
 --- one is discarded, and into its pipe when one is piped, from which
---- `read_child` reads them, output first; and `wait` reports `ending`,
---- that it exited with a code or was signalled.  What the
---- parent writes to its piped input with `write_child` is kept in `input`,
---- its first `input_length` bytes, and a write that does not fit is
---- `io_failed`, where a real pipe would wait.  The child's pipes are no
---- files of the world: `reader` and `writer` refuse them.  The caller sets
---- those five fields and zeroes the rest, which the provider keeps: how many
---- times it was started, how many arguments and variables its last start
---- gave it, how much of its output and errors the parent has read, and
---- whether it is running.  One record is one child at a time: starting a
---- running one is `io_failed`.
+--- `read_child` reads them, output first.  `wait` reports `ending`, that it
+--- exited with a code or was signalled.  What the parent writes to its
+--- piped input with `write_child` is kept in `input`, its first
+--- `input_length` bytes, and a write that does not fit is `io_failed`,
+--- where a real pipe would wait.  The child's pipes are no files of the
+--- world: `reader` and `writer` refuse them.  The caller sets `path`,
+--- `output`, `errors`, `ending` and `input` and zeroes the rest, which the
+--- provider keeps: how many times it was started, how many arguments and
+--- variables its last start gave it, how much of its output and errors the
+--- parent has read, and whether it is running.  One record is one child at
+--- a time: starting a running one is `io_failed`.
 public scripted_program: type = struct
     path: []u8
     output: []u8
@@ -621,10 +621,10 @@ public scripted_program: type = struct
     running: bool
 end scripted_program
 
---- A provider of `programs` whose children are the caller's scripted
---- records, writing an inherited stream into a memory world's own standard
---- output or error and counting its reads in that world's state, whose
---- read limit and failure point apply to them.  Copies share the records.
+--- A provider of `programs` whose children are the caller's scripted records.
+--- It writes an inherited stream into a memory world's own standard output or
+--- error, and counts its reads in that world's state, whose read limit and
+--- failure point apply to them.  Copies share the records.
 public scripted_programs: type = scripted_value
 
 --- Scripted programs over `programs`, beside the memory world `world`,

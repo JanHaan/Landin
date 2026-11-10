@@ -23,9 +23,9 @@ fixed if compiler.feature.cache then
     end new
 
     --- CCSIDR for the level 1 data cache, which reset selected in CSSELR
-    --- and nothing else changes: its LineSize, bits 2:0, is the log of the
-    --- line's words less 2, its associativity less one bits 12:3 and its
-    --- sets less one bits 27:13, as CMSIS's core_cm7.h defines its fields.
+    --- and nothing else changes. Bits 2:0 are LineSize, the log of the
+    --- line's words less 2, bits 12:3 the associativity less one and bits
+    --- 27:13 the sets less one, as CMSIS's core_cm7.h defines its fields.
     public geometry: () -> (ccsidr: u32) =
         at: ptr u32 = ptr(ccsidr_address)
         ccsidr = compiler.volatile_load(at)

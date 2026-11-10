@@ -135,11 +135,11 @@ fixed if compiler.os == darwin then
     public extern(c) posix_spawnattr_setflags:
         (attributes: ptr mut spawn_object, flags: i16) -> (error: i32)
 
-    --- Start the program at `path`, with the null-terminated `arguments` and
-    --- `environment` tables, in a child, applying `actions` and `attributes`
-    --- first, and put its ID in `child`: 0, or the errno, which a program
-    --- that could not be executed reports too, its child already reaped.
-    --- Nothing searches a path for the program.
+    --- Start the program at `path` in a child, with the null-terminated
+    --- `arguments` and `environment` tables, and put the child's ID in
+    --- `child`.  `actions` and `attributes` are applied first.  0, or the
+    --- errno, which a program that could not be executed reports too, its
+    --- child already reaped.  Nothing searches a path for the program.
     public extern(c) posix_spawn:
         (child: ptr mut i32, path: ptr u8, actions: ptr spawn_object,
          attributes: ptr spawn_object, arguments: ptr ptr u8,
@@ -218,9 +218,9 @@ fixed if compiler.os == darwin then
     --- `posix_spawnattr_setsigdefault` start at their default disposition.
     public posix_spawn_setsigdef: i16 = 4
 
-    --- Name the signals whose disposition a child `posix_spawn` starts with
-    --- `posix_spawn_setsigdef` set is reset to the default: 0, or the
-    --- errno.
+    --- Name the signals whose disposition is reset to the default in a
+    --- child that `posix_spawn` starts with the flag
+    --- `posix_spawn_setsigdef` set: 0, or the errno.
     public extern(c) posix_spawnattr_setsigdefault:
         (attributes: ptr mut spawn_object, signals: ptr signal_set)
         -> (error: i32)
@@ -229,8 +229,8 @@ fixed if compiler.os == darwin then
     --- is the one `posix_spawnattr_setsigmask` gives.
     public posix_spawn_setsigmask: i16 = 8
 
-    --- Give the mask of blocked signals a child `posix_spawn` starts with
-    --- `posix_spawn_setsigmask` set: 0, or the errno.
+    --- Give the mask of blocked signals for a child that `posix_spawn`
+    --- starts with the flag `posix_spawn_setsigmask` set: 0, or the errno.
     public extern(c) posix_spawnattr_setsigmask:
         (attributes: ptr mut spawn_object, signals: ptr signal_set)
         -> (error: i32)
@@ -389,10 +389,10 @@ fixed if compiler.os == darwin then
     public os_clock_mach_absolute_time: u32 = 32
 
     --- Sleep while the `size` bytes at `address`, four or eight, hold
-    --- `value`, until a wake or a signal: the number of threads still
-    --- waiting there, and at once when the bytes do not hold `value`, or
-    --- -1 with the reason in errno, EINTR for a signal.  A return may be
-    --- spurious.  Darwin's since macOS 14.4.
+    --- `value`, until a wake or a signal.  It returns at once when the
+    --- bytes do not hold `value`.  The number of threads still waiting
+    --- there, or -1 with the reason in errno, EINTR for a signal.  A return
+    --- may be spurious.  Darwin's since macOS 14.4.
     public extern(c) os_sync_wait_on_address:
         (address: usize, value: u64, size: usize, flags: u32)
         -> (result: i32)

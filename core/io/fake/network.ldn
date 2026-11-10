@@ -9,20 +9,20 @@ import core/mem
 import core/net
 import core/time
 
---- Caller-owned state of a memory network: the next port it gives a
---- socket bound to port 0, its counters, and what a test may set.
---- Declare it `zeroed` and give it to `network_over`, which fills it; it
---- must outlive the network's handle.  `without_ipv6` makes IPv6 missing,
---- as on a system that does not have it, so every IPv6 address is
---- `address_unavailable`; `fail_at` makes the network's call of that
---- number, counted from one in `calls`, fail `io_failed`, and zero never.
---- `connections` counts connections made, `datagrams` datagrams
---- delivered and `losses` datagrams no socket took.  `moves` counts what
---- changed something a call may wait for: a connection made or taken,
---- bytes or a datagram delivered or taken, a shutdown, a close and the
---- advance of a clock `clock_over_beside` made beside it; `turns` the turns
---- its calls took while they waited; and `sleepers` the fibres sleeping on such a
---- clock.
+--- Caller-owned state of a memory network: the next port it gives a socket
+--- bound to port 0, its counters, and what a test may set.  Declare it
+--- `zeroed` and give it to `network_over`, which fills it; it must outlive
+--- the network's handle.  `without_ipv6` makes IPv6 missing, as on a
+--- system that does not have it, so every IPv6 address is
+--- `address_unavailable`.  `fail_at` names the call of the network that
+--- fails `io_failed`, counted from one in `calls`; zero fails none.
+--- `connections` counts connections made, `datagrams` datagrams delivered
+--- and `losses` datagrams no socket took.  `moves` counts what changed
+--- something a call may wait for: a connection made or taken, bytes or a
+--- datagram delivered or taken, a shutdown, a close and the advance of a
+--- clock `clock_over_beside` made beside it.  `turns` counts the turns its
+--- calls took while they waited, and `sleepers` the fibres sleeping on
+--- such a clock.
 public network_space: type = struct
     next_port: usize
     arrivals: usize
@@ -105,26 +105,26 @@ end network_value
 --- a datagram sent to a port no socket holds, or larger than the room its
 --- socket has left, is lost, as UDP's may be.
 ---
---- Made by `network_over`, nothing in it waits, since in one thread nothing
---- else could end the wait: where a real socket would wait, for a
---- connection to accept, for bytes to receive or for room to send into,
---- it fails `timed_out` at once, whether or not a limit was set, after a
---- send has delivered what fits.  Made by `network_over_turns`, a call
---- that would wait takes a turn of the scheduler it was given instead, so
---- that the other fibres run, and looks again; it fails `timed_out` only
---- after a whole round in which nothing moved anywhere in the network, so
---- nothing it waits for arrived, while no fibre sleeps on a clock
---- `clock_over_beside` made beside it, which would move it when it wakes,
---- and a call whose socket was shut for what it waits for, or closed,
---- while it waited fails `io_failed` (D449, D483, D493).  `accept`, `send`, `receive`, `receive_from`, `read`, `write`
---- and `write_some` are the calls that may wait and so switch; the others
---- never do.  A send to a connection whose peer has closed is
---- `disconnected` at once, where a real one may take one send before it
---- says so.  It does not model loss on a connection, a peer's reset,
---- partial reads, nor a port held after its socket closed.  It reads no
---- zone: `::1%lo` is its loopback address, and `fe80::1%lo`, as every
---- other address, none of its interfaces.  A connection is made at once
---- or refused, so `connect_within`'s limit is never reached.
+--- In a network made by `network_over`, nothing waits, since in one thread
+--- nothing else could end the wait.  Where a real socket would wait, for a
+--- connection to accept, for bytes to receive or for room to send into, the
+--- call fails `timed_out` at once, whether or not a limit was set, after a send
+--- has delivered what fits.  In a network made by `network_over_turns`, a call
+--- that would wait takes a turn of the scheduler it was given instead, so that
+--- the other fibres run, and looks again.  It fails `timed_out` only after a
+--- whole round in which nothing moved anywhere in the network, so nothing it
+--- waits for arrived, while no fibre sleeps on a clock `clock_over_beside` made
+--- beside it, which would move it when it wakes.  A call whose socket was
+--- closed, or shut for what the call waits for, while it waited fails
+--- `io_failed` (D449, D483, D493).  `accept`, `send`, `receive`,
+--- `receive_from`, `read`, `write` and `write_some` are the calls that may wait
+--- and so switch; the others never do.  A send to a connection whose peer has
+--- closed is `disconnected` at once, where a real one may take one send before
+--- it says so.  The network does not model loss on a connection, a peer's
+--- reset, partial reads, nor a port held after its socket closed.  It reads no
+--- zone: `::1%lo` is its loopback address, and `fe80::1%lo`, as every other
+--- address, none of its interfaces.  A connection is made at once or refused,
+--- so `connect_within`'s limit is never reached.
 public network: type = network_value
 
 --  The scheduler of a network that does not take turns: it runs nothing

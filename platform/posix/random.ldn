@@ -4,12 +4,12 @@ import platform/libc
 import platform/linux
 
 --- Fill as much of `into` as the system gives at once with random bytes
---- from its own source, which is fit for keys: how many, or the errno.  On
---- Linux it is `getrandom`, which waits while the kernel's pool is not yet
---- ready, only early in boot, may fill a request over 256 bytes short and
---- fails `eintr` when a signal came before any byte.  On Darwin and
---- FreeBSD it is the C library's `arc4random_buf`, which fills all of
---- `into` and never fails.
+--- from its own source, which is fit for keys. It returns how many, or
+--- fails with the errno. On Linux it is `getrandom`, which waits while the
+--- kernel's pool is not yet ready, only early in boot, may fill a request
+--- over 256 bytes short and fails `eintr` when a signal came before any
+--- byte. On Darwin and FreeBSD it is the C library's `arc4random_buf`,
+--- which fills all of `into` and never fails.
 public random_bytes:
     (into: []mut u8) -> (count: usize) ! errno =
     count = 0

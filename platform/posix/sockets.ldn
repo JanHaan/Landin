@@ -90,13 +90,13 @@ end if
 --  Where a Unix-domain record's path begins on every system.
 unix_path_offset: usize = 2
 
---- The system's record of the internet address `at`: C's `struct
+--- Make the system's record of the internet address `at`: C's `struct
 --- sockaddr_in`, 16 bytes, for an IPv4 address and `struct sockaddr_in6`,
---- 28 bytes, for an IPv6 one, the port in network order, the IPv6 flow
---- label zero and its scope the interface the address's zone names: a
+--- 28 bytes, for an IPv6 one. The port is in network order. The IPv6 flow
+--- label is zero and its scope is the interface the address's zone names: a
 --- zone of decimal digits is the interface's number as it stands, and a
---- name is looked up with `interface_index` (D581).  `enodev` when the
---- zone names no interface here, or is a number past 32 bits.
+--- name is looked up with `interface_index` (D581). It fails `enodev` when
+--- the zone names no interface here, or is a number past 32 bits.
 public internet_address:
     (at: net.address) -> (made: socket_address) ! errno =
     made = (bytes: zeroed, length: 16)
@@ -218,10 +218,10 @@ public family_of:
     fail eafnosupport when number <> system_family_number(family)
 end family_of
 
---- The internet address and port the socket address `at` holds, an IPv6
---- scope as its zone, the interface's name, or its number in decimal when
---- no interface has that number now: `eafnosupport` for a Unix-domain
---- one, or a record too short for its family.
+--- The internet address and port the socket address `at` holds. An IPv6
+--- scope becomes its zone: the interface's name, or its number in decimal
+--- when no interface has that number now. It fails `eafnosupport` for a
+--- Unix-domain address, or a record too short for its family.
 public address_of:
     (at: socket_address) -> (result: net.address) ! errno =
     family: socket_family = try family_of(at)
@@ -305,13 +305,13 @@ public listen:
     try system_listen(socket, backlog)
 end listen
 
---- Take the next connection waiting on `listener` as a new socket, closed
---- on exec and raising no SIGPIPE, waiting for one, or the errno: `eagain`
+--- Wait for the next connection on `listener` and take it as a new socket,
+--- closed on exec and raising no SIGPIPE. It fails with the errno: `eagain`
 --- when the listener's receive time limit passed first, `econnaborted` for
---- a connection reset before it was taken.  Linux limits the wait itself;
---- Darwin and FreeBSD do not, so it is waited out here with `poll` for
---- the limit `receive_timeout` reads.  On Darwin the new socket is marked
---- closed on exec just after it is made.
+--- a connection reset before it was taken. Linux limits the wait itself;
+--- Darwin and FreeBSD do not, so it is waited out here with `poll` for the
+--- limit `receive_timeout` reads. On Darwin the new socket is marked closed
+--- on exec just after it is made.
 public accept:
     (listener: descriptor) -> (accepted: descriptor) ! errno =
     accepted = try system_accept(listener)
@@ -319,23 +319,23 @@ end accept
 
 --- Take the next connection waiting on `listener` as a new socket that is
 --- non-blocking from the start, as `set_non_blocking` makes one, closed on
---- exec and raising no SIGPIPE, or the errno: on a non-blocking listener
---- `eagain` at once when no connection is waiting, which `poll` for
---- `poll_input` on the listener says has changed.  It is `accept` for a
---- program that waits for readiness, and no receive limit bounds it.  On
---- Linux and FreeBSD the socket is made non-blocking with it, and on
---- Darwin just after it is made.
+--- exec and raising no SIGPIPE. It fails with the errno: on a non-blocking
+--- listener, `eagain` at once when no connection is waiting, which `poll`
+--- for `poll_input` on the listener says has changed. It is `accept` for a
+--- program that waits for readiness, and no receive limit bounds it. Linux
+--- and FreeBSD make the socket non-blocking as they accept it, and Darwin
+--- just after it is made.
 public accept_non_blocking:
     (listener: descriptor) -> (accepted: descriptor) ! errno =
     accepted = try system_accept_non_blocking(listener)
 end accept_non_blocking
 
---- Connect `socket` to `to`: `econnrefused` when nothing listens there,
---- `eintr` when a signal came first, after which the connection goes on and
---- its outcome is what `poll` for `poll_output` and then `pending_error`
---- say.  A non-blocking socket fails `einprogress` rather than wait for a
---- connection the system cannot make at once, and its outcome is found the
---- same way.
+--- Connect `socket` to `to`. It fails `econnrefused` when nothing listens
+--- there, and `eintr` when a signal came first; the connection then goes
+--- on, and its outcome is what `poll` for `poll_output` and then
+--- `pending_error` say. A non-blocking socket fails `einprogress` rather
+--- than wait for a connection the system cannot make at once, and its
+--- outcome is found the same way.
 public connect:
     (socket: descriptor, to: socket_address) -> none ! errno =
     try system_connect(socket, addr to.bytes[0], to.length)
@@ -484,8 +484,8 @@ public send_timeout:
 end send_timeout
 
 --- Fail with the error pending on `socket`, `SO_ERROR`, clearing it, or
---- return when there is none: how a connection `connect` began and a
---- signal interrupted ended.
+--- return when there is none. It tells how a connection ended that
+--- `connect` began and a signal interrupted.
 public pending_error:
     (socket: descriptor) -> none ! errno =
     number: i32 = try system_get_number(socket, pending)

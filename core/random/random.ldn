@@ -17,10 +17,10 @@ state_value: type = struct
     s3: u64
 end state_value
 
---- A generator: 256 bits of state that each draw advances, a value the
---- caller keeps and passes `inout`.  A seed always gives the same
+--- A generator: 256 bits of state that each draw advances.  It is a value
+--- the caller keeps and passes `inout`.  A seed always gives the same
 --- sequence, on every target, which is what makes it useful for tests,
---- simulations and sampling; a generator is not cryptographic, and its
+--- simulations and sampling.  A generator is not cryptographic, and its
 --- outputs reveal its state, so never make a key, a token or a password
 --- with one: take those from `io.fill_random` directly.  Copying a
 --- generator copies its state, and the copy repeats what the original
@@ -103,12 +103,12 @@ public next_u32: (inout source: generator) -> (value: u32) =
     value = u32(next(source) >> 32)
 end next_u32
 
---- A value from 0 to `bound - 1`, each equally likely: the next draw's
---- bits below `bound`'s highest bit, drawn again while they are `bound`
---- or more, which is never more often than not, so no value is favoured
---- as a remainder would favour some.  It uses no division.  A `bound` of
---- zero has no value below it, and traps as a remainder by zero does,
---- with `overflow`.
+--- A value from 0 to `bound - 1`, each equally likely.  It takes the next
+--- draw's bits below `bound`'s highest bit and draws again while they are
+--- `bound` or more, which is never more often than not.  So no value is
+--- favoured, as a remainder would favour some, and it uses no division.
+--- A `bound` of zero has no value below it, and traps as a remainder by
+--- zero does, with `overflow`.
 public below: (inout source: generator, bound: u64) -> (value: u64) =
     --  A bound of zero is the remainder's zero divisor, which this checked
     --  subtraction meets as `%` would.

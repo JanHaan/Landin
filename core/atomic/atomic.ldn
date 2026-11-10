@@ -21,10 +21,10 @@
 --  masking in platform/cortex_m, platform/riscv or platform/xtensa.
 --  Sequential consistency stays with the builtins.
 
---- The scalars a cell can hold, with the accesses every target admits for
---- them: u8, u16 and u32 everywhere, and u64 where the target has eight-byte
---- atomics, which Cortex-M0, RV32 and Xtensa have not.  The entries are the cell's
---- operations' own, over the scalar's address; use the operations below.
+--- The scalars a cell can hold: u8, u16 and u32 on every target, and u64 on
+--- targets with eight-byte atomics, which Cortex-M0, RV32 and Xtensa lack.
+--- The entries are the accesses every target admits for them, over the
+--- scalar's address. They back the cell operations below; call those.
 public scalar: type = concept (item: type)
     load: (cell: ptr item) -> (value: item)
     load_relaxed: (cell: ptr item) -> (value: item)
@@ -247,12 +247,12 @@ public store_relaxed: (item: type is scalar, at: ptr mut cell(item),
 end store_relaxed
 
 --- Add `value` to `at`, wrapping, as the cell's one writer, and return what
---- it held: a relaxed load and a release store, so a reader that acquires
---- the sum sees what the writer did before.  It is correct only while one
---- context alone writes the cell, an interrupt handler or a thread, since a
---- second writer's store between the two is lost; then it needs no
---- read-modify-write, and every target has it, Cortex-M0 included.  Where
---- several contexts write, use `add`.
+--- it held.  It is a relaxed load and a release store, so a reader that
+--- acquires the sum sees what the writer did before.  It is correct only
+--- while one context alone, an interrupt handler or a thread, writes the
+--- cell: a second writer's store between the load and the store is lost.
+--- In return it needs no read-modify-write, so every target has it,
+--- Cortex-M0 included.  Where several contexts write, use `add`.
 public sole_add: (item: type is scalar, at: ptr mut cell(item), value: item)
                  -> (previous: item) =
     previous = item.sole_add(addr at.val.value, value)

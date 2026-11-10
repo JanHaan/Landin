@@ -1,14 +1,27 @@
 # Running examples
 
-Complete Landin programs you can copy, compile and run. Two short lessons
-on printing and on failures come first, with a small tool that counts the
-lines of the file you name. Then come the classic exercises and a program
-that puts the language's main ideas together, then two small tools that
-read their input, then larger tools that load a library or use processes,
-the network and the file system, shortest first. Last come the Benchmark
-Game ports used to compare Landin with other languages. Each section names
-the tour entries it leans on, such as [0570], so you can read up on
-anything new.
+Complete Landin programs you can copy, compile and run. They come in this
+order:
+
+- Two short lessons come first,
+  [Printing formatted values](#printing-formatted-values) and
+  [Reporting a failure in words](#reporting-a-failure-in-words), with
+  [a small tool](#counting-lines-in-a-named-file) that counts the lines of
+  the file you name.
+- Then come the classic exercises, from [FizzBuzz](#fizzbuzz) to
+  [Merge sort](#merge-sort), and [Sensors](#sensors), a program that puts
+  the language's main ideas together.
+- Then come two small tools that read their input,
+  [Word count](#word-count) and [Line numbers](#line-numbers).
+- Then come larger tools that load a library or use processes, the network
+  and the file system, shortest first, from
+  [Loading a library](#loading-a-library) to
+  [Copying a tree](#copying-a-tree).
+- Last come [the Benchmark Game ports](#benchmark-game-programs), used to
+  compare Landin with other languages.
+
+Each section names the tour entries it leans on, such as [0570], so you can
+read up on anything new.
 
 ## Compile and run
 
@@ -21,10 +34,12 @@ refine compile main.ldn -o fizzbuzz
 ./fizzbuzz
 ```
 
-Each program prints what it computes, shown under its listing, and
-returns 0 when it succeeds. A program that reads its standard input or takes
-an argument says so in its section. `refine` compiles for the computer it
-runs on unless `--target` names another.
+`refine` compiles for the computer it runs on unless `--target` names
+another.
+
+Each program prints what it computes and returns 0 when it succeeds. Its
+output is shown under its listing. A program that reads its standard input
+or takes an argument says so in its section.
 
 Every program here is compiled and run, and what it prints is checked, on
 Linux, macOS and FreeBSD. The `Fixture source:` line above each listing
@@ -33,11 +48,16 @@ says where the program lives in the repository.
 ## Printing formatted values
 
 A template's `{}` placeholders take values of any type that conforms to
-`text.formattable`. One line is one call, `io.write_format(host,
-io.out(host), "{} lines\n", [any(addr lines)])`, as Counting lines below
-prints its count. A program that prints
-many lines, as this one does, gathers them in a buffered writer, which
-writes them in a few large writes:
+`text.formattable`.
+
+To print one line, make one call: `io.write_format(host, io.out(host),
+"{} lines\n", [any(addr lines)])`.
+[Counting lines in a named file](#counting-lines-in-a-named-file) prints
+its count that way.
+
+A program that prints many lines, as this one does, gathers them in a
+buffered writer, which writes them in a few large writes. Three pieces do
+the work here:
 
 - `io.buffered_over` makes the writer over a buffer in `main`'s frame.
 - `io.format` takes the template and an inline list of the values, each
@@ -49,16 +69,19 @@ Integers, `bool`, `utf8`, `[]u8` and host strings format themselves. Write
 `{{` or `}}` for a brace. The template is checked against its values when
 it runs, and a mismatch is the failure `text.invalid_format`.
 
-A float has no `{}` of its own yet. The last lines show what to write
-today: scale the value to a whole number of tenths and print the whole
-part and the tenth as two integers. A conversion to an integer truncates
-toward zero [0310], so adding 0.5 first rounds.
+A float has no `{}` of its own yet. The program's last lines show what to
+write today: scale the value to a whole number of tenths, then print the
+whole part and the tenth as two integers. A conversion to an integer
+truncates toward zero [0310], so adding 0.5 first rounds.
 
-`io.format` formats each line straight into the buffer, so a line larger
-than the whole buffer fails with `text.no_space`. The deferred flush
-drops a failure without a word. A program that must know its output
-arrived flushes once more at the end and handles that call's failure,
-`io.flush(out) else (problem) ... end`, as Word count below does.
+A buffered writer has two failures to know about:
+
+- `io.format` formats each line straight into the buffer, so a line larger
+  than the whole buffer fails with `text.no_space`.
+- The deferred flush drops a failure without a word. A program that must
+  know its output arrived flushes once more at the end and handles that
+  call's failure, `io.flush(out) else (problem) ... end`, as
+  [Word count](#word-count) does.
 
 Fixture source: `compiler/tests/fixtures/runtime/example-formatted-output/main.ldn`.
 
@@ -122,7 +145,7 @@ They lived 67.3 years on average.
 
 A failure is an atom [0630] [0940]. To tell a person what went wrong,
 `failure.words` from `core/failure` gives a short phrase for every atom
-the library fails with.
+the library fails with. In this program:
 
 - `percent` passes a parse failure on with `try` [0960], and reports a
   value over 100 as the library's `text.number_overflow` with `fail`
@@ -130,10 +153,11 @@ the library fails with.
 - `main` handles each failure with `else (problem)` [1030] and hands
   `problem` to `report`, whose parameter `failure.reason` takes any of the
   library's atoms.
-- A program's own atoms have no phrase in `core/failure`. To word one,
-  `match` the failure: an arm for each of your own atoms gives its phrase,
-  and a last arm `_ (rest)` hands the library's atoms that remain to
-  `failure.words(rest)` [1210].
+
+A program's own atoms have no phrase in `core/failure`. To word one,
+`match` the failure: an arm for each of your own atoms gives its phrase,
+and a last arm `_ (rest)` hands the library's atoms that remain to
+`failure.words(rest)` [1210].
 
 A real tool writes these lines to standard error, `io.err(host)`, and
 returns 1, as the next program does.
@@ -201,10 +225,10 @@ missing-settings.conf: not found
 
 ## Counting lines in a named file
 
-Like `wc -l` for one file, except that a last line without its newline
-counts too: the program opens the file its first argument names, counts
-its lines and prints the count. When something fails, it says what
-in words on standard error and returns 1.
+The program opens the file its first argument names, counts its lines and
+prints the count. It is like `wc -l` for one file, except that a last line
+without its newline counts too. When something fails, the program says
+what in words on standard error and returns 1.
 
 - `io.argument_at(host, 0)` lends the first argument as a host string, the
   bytes the system gave [1660]. With no argument it fails, and the program
@@ -218,7 +242,7 @@ in words on standard error and returns 1.
   more line.
 - A `defer` closes the file on every way out of `count_lines` [1100].
 - `complain` writes the program's name, what it was working on and the
-  failure's words, `failure.words`, to `io.err(host)`; `main` writes the
+  failure's words, `failure.words`, to `io.err(host)`. `main` writes the
   count to `io.out(host)`. Each is one `io.write_format` call, whose `{}`
   take the values in order [1370] [1380].
 
@@ -296,8 +320,8 @@ it prints `4 lines`. Named a file that is not there, it prints
 
 The familiar exercise from
 [Rosetta Code](https://rosettacode.org/wiki/FizzBuzz): a `for` over a range
-[1150] [0360] and an `if` on remainders [1050] [0290]. Fixed words go out
-with `io.put` and numbers with `io.format`.
+[1150] [0360] and an `if` on remainders [1050] [0290]. The program writes
+fixed words with `io.put` and numbers with `io.format`.
 
 Fixture source: `compiler/tests/fixtures/runtime/example-fizzbuzz/main.ldn`.
 
@@ -401,10 +425,11 @@ gcd(37, 600) = 1
 ## Insertion sort
 
 Insertion sort grows a sorted prefix, moving each new value left past the
-larger ones. It sorts a writable slice in place [0570]. The `show` helper
-declares what can fail and passes each failure on with `try` [0940]
-[0960]; `main` does not mind a failed print, so it calls `show` with
-`else none` [1030].
+larger ones. It sorts a writable slice in place [0570].
+
+The `show` helper declares what can fail and passes each failure on with
+`try` [0940] [0960]. `main` does not mind a failed print, so it calls
+`show` with `else none` [1030].
 
 Fixture source: `compiler/tests/fixtures/runtime/example-insertion-sort/main.ldn`.
 
@@ -462,9 +487,10 @@ after: -9 -4 0 1 7 7 9 42
 ## Binary search
 
 Binary search from [Rosetta Code](https://rosettacode.org/wiki/Binary_search)
-returns a variant [0680]: `found` with an index, or `missing`. The loop
-itself is the result: `break with` leaves it with a value [1190], and
-`complete` gives the value when it runs out [1170]. `main` takes the
+returns a variant [0680]: `found` with an index, or `missing`.
+
+The loop itself is the result: `break with` leaves it with a value [1190],
+and `complete` gives the value when it runs out [1170]. `main` takes the
 answer apart with `match` [1210].
 
 Fixture source: `compiler/tests/fixtures/runtime/example-binary-search/main.ldn`.
@@ -851,15 +877,17 @@ read 19
 ## Word count
 
 `wc` with no file named: the program reads its standard input to the end
-and prints how many lines, words and bytes it held. The counting routine,
-`count`, asks only for an `io.reader` [1290] [1230], the narrowest
-capability it uses, so the same code counts a pipe, a file or bytes in
-memory.
+and prints how many lines, words and bytes it held.
 
-- It reads a buffer at a time until a read returns zero, which is the end
-  of the input. `main` lends its whole array as the buffer [0570].
+The counting routine, `count`, asks only for an `io.reader` [1290] [1230],
+the narrowest capability it uses. So the same code counts a pipe, a file or
+bytes in memory, and it counts bytes held in memory on targets with no
+standard input at all, Cortex-M included.
+
+- `count` reads a buffer at a time until a read returns zero, which is the
+  end of the input. `main` lends its whole array as the buffer [0570].
 - The totals go out through a buffered writer and `io.format`, as in
-  Printing formatted values.
+  [Printing formatted values](#printing-formatted-values).
 - `main` checks the format and the final flush, so a total that could not
   be written makes the program say why on standard error and return 1
   rather than 0 [1030].
@@ -952,19 +980,17 @@ refine compile main.ldn -o wc
 printf 'one two\nthree\n' | ./wc
 ```
 
-which prints `2 3 14`. Because `count` names only a reader, the same
-routine also counts bytes held in memory, on targets with no standard
-input at all, Cortex-M included.
+which prints `2 3 14`.
 
 ## Line numbers
 
 `cat -n`: the program writes each line of its standard input after its
-number, right-aligned in six columns, and a tab.
+number and a tab, the number right-aligned in six columns.
 
 - `io.lines_over` makes a line reader over a 32-byte buffer, and
   `io.read_line` lends each line from that buffer until the next read
   [0790] [0800], without its `\n` or `\r\n`.
-- A line too long for the buffer is the failure `io.line_too_long`; the
+- A line too long for the buffer is the failure `io.line_too_long`. The
   program numbers it with a note in its place and goes on.
 - A placeholder has no width, so the number is right-aligned with
   `text.align_right` in a small `text.builder`, and each piece is written
@@ -1064,18 +1090,19 @@ C functions in it by name and calls them, handing one a function of its
 own to call back. Read `main`, which loads and looks up, and then
 `report`, which calls.
 
-- `posix.open_library` loads with the system's own loader, which a
-  program has only when C's runtime started it, so on Linux this one is
-  compiled with `--link=libc`; without it `refine` refuses it, naming the
-  flag.
+- `posix.open_library` loads with the system's own loader. A program has
+  that loader only when C's runtime started it, so on Linux this program
+  is compiled with `--link=libc`. Without the flag, `refine` refuses the
+  program and names the flag.
 - `posix.find_symbol` gives an address with no type. The program names
   the C function type it is, `adder(added)`, and nothing can check that
   the library's function is one [1580], as a C cast cannot.
 - `doubled` is an `extern(c)` routine [1570], so the plugin can call it
   through a C function pointer.
 - A symbol the library does not define is `posix.no_symbol`, a failure to
-  recover from [1030]; one that cannot be loaded is `posix.no_library`,
-  and `posix.library_failure` gives the loader's own words for either.
+  recover from [1030]. A library that cannot be loaded is
+  `posix.no_library`, and `posix.library_failure` gives the loader's own
+  words for either.
 - A `defer` keeps the library loaded until `main` returns [1100]: every
   address found in it names nothing once it is closed.
 
@@ -1201,6 +1228,8 @@ cc -fPIC -shared plugin.c -o plugin.so
 refine compile --link=libc main.ldn -o plugin
 ./plugin ./plugin.so
 ```
+
+which prints
 
 ```text
 add(40, 2) is 42
@@ -1415,8 +1444,8 @@ over UDP, on `127.0.0.1` and then on `::1`. Read `tcp_echo` first, then
 - `net.set_timeouts` makes a receive give up with `net.timed_out` rather
   than wait for ever. Every failure is an atom of its concept [0940].
 - A system without IPv6's loopback address cannot run the second half: the
-  program says so and returns 2. Any other failure it says in words on
-  standard error, and returns 1.
+  program says so and returns 2. The program reports any other failure in
+  words on standard error and returns 1.
 
 Fixture source: `compiler/tests/fixtures/runtime/network-echo/main.ldn`.
 
@@ -1630,14 +1659,22 @@ UDP over ::1: the server echoed 2 datagrams
 `ls -l` cut down to what every hosted system agrees on: each entry of a
 directory with its kind, a file's size in bytes and its name, in byte order.
 Read `list`, which reads the entries, and `show`, which prints them: they
-are at the top of the file. Given a path, `./listing DIR` lists that
-directory, up to 256 entries. With no argument, so that it has something
-known to list, the program builds a small directory where it runs, lists it,
-checks the listing and removes the directory again; that code comes after
-the comment `Everything below`. It refuses to run the demonstration if
-`listing-scratch` already exists, leaving that directory untouched. Once
-it creates the directory, an `undo` attempts cleanup if setup or listing
-fails and reports any cleanup failure with the directory to remove.
+are at the top of the file.
+
+The program runs in two ways:
+
+- Given a path, `./listing DIR` lists that directory, up to 256 entries.
+- With no argument, so that it has something known to list, the program
+  builds a small directory where it runs, lists it, checks the listing and
+  removes the directory again. That code comes after the comment
+  `Everything below`.
+
+The program refuses to run this demonstration if `listing-scratch` already
+exists, and leaves that directory untouched. Once it creates the directory,
+an `undo` attempts cleanup if setup or listing fails, and reports any
+cleanup failure with the directory to remove.
+
+In the code:
 
 - `io.read_entry` lends each name from the directory's buffer until the
   next read [0790] [0800], so the program copies each name it keeps with
@@ -1648,8 +1685,8 @@ fails and reports any cleanup failure with the directory to remove.
   program declares for them [1280].
 - A `defer` closes the directory on every way out of `list` [1100].
 - `complain` words the program's own atoms with a `match` and hands the
-  library's to `failure.words` with `_ (rest)` [1210], as Reporting a
-  failure in words describes.
+  library's to `failure.words` with `_ (rest)` [1210], as
+  [Reporting a failure in words](#reporting-a-failure-in-words) describes.
 
 Fixture source: `compiler/tests/fixtures/runtime/directory-listing/main.ldn`.
 
@@ -1980,16 +2017,25 @@ and leaves the directory as it found it.
 bytes, its permission bits and its times, and each symbolic link as a link
 to the same target, never followed. Read `copy_directory` first, at the top
 of the file, and then `copy_file`, `filled` and `copy_link`, which it calls.
-Given two paths, `./tree-copy FROM TO` copies the directory FROM to TO and
-says how many files, links and directories it copied. A directory may hold
-up to 256 entries, a name up to 255 bytes and a path up to 256 bytes. With
-no arguments, so that it has something known to copy, the program builds a
-small tree where it runs, copies it twice, checks the copy, prints a listing
-of it and removes both; that code comes after the comment `Everything
-below`. The demonstration refuses an existing `tree-copy-scratch`,
-leaving it untouched. Once it creates the directory, an `undo` attempts
-cleanup if setup or copying fails and reports any cleanup failure with
-the directory to remove.
+
+The program runs in two ways:
+
+- Given two paths, `./tree-copy FROM TO` copies the directory FROM to TO
+  and says how many files, links and directories it copied.
+- With no arguments, so that it has something known to copy, the program
+  builds a small tree where it runs, copies it twice, checks the copy,
+  prints a listing of it and removes both. That code comes after the
+  comment `Everything below`.
+
+A directory may hold up to 256 entries, a name up to 255 bytes and a path
+up to 256 bytes.
+
+This demonstration refuses an existing `tree-copy-scratch`, leaving it
+untouched. Once it creates the directory, an `undo` attempts cleanup if
+setup or copying fails, and reports any cleanup failure with the directory
+to remove.
+
+How the copy works:
 
 - The destination must lie outside the source. Before creating anything,
   `outside_source` walks up from the destination, or from its parent when
@@ -2005,11 +2051,14 @@ the directory to remove.
   in it stays a hole.
 - `platform/posix` gives what the portable concepts do not: permission
   bits, owners, times and symbolic links.
-- The copy does not keep the owner unless the process is root, the time a
-  file last changed, extended attributes, or that two names are one file,
-  and it skips anything that is not a file, a directory or a link.
 - `complain` words a failure with `posix.words`, which has a phrase for
   every errno and passes the library's own failures to `failure.words`.
+
+What the copy leaves out:
+
+- It does not keep the owner unless the process is root, the time a file
+  last changed, extended attributes, or that two names are one file.
+- It skips anything that is not a file, a directory or a link.
 
 Fixture source: `compiler/tests/fixtures/runtime/tree-copy/main.ldn`.
 
@@ -2867,14 +2916,16 @@ of 2000, which the program gave the source.
 
 The last five programs are direct ports of
 [the Benchmark Game](https://benchmarksgame-team.pages.debian.net/benchmarksgame/)'s
-workloads, there to compare Landin with other languages:
-[docs/benchmarks.md](docs/benchmarks.md) has the measurements. They are
-longer and tuned for speed rather than for teaching.
+workloads, there to compare Landin with other languages.
+[docs/benchmarks.md](docs/benchmarks.md) has the measurements. The ports
+are longer and tuned for speed rather than for teaching.
 
 Like the game's own programs, each takes its size as an argument or reads
 its standard input. What each prints for the game's small correctness
-input is the game's official output, byte for byte. To measure one,
-compile it with `--optimize speed` and give it the performance input:
+input is the game's official output, byte for byte.
+
+To measure one, compile it with `--optimize speed` and give it the
+performance input:
 
 ```sh
 refine compile --optimize speed main.ldn -o fannkuch-redux
@@ -3021,10 +3072,11 @@ Pfannkuchen(7) = 16
 ## Benchmark Game Mandelbrot
 
 [Mandelbrot](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/mandelbrot.html)
-plots the Mandelbrot set as a binary PBM image whose width and height its
-argument names. It packs eight pixels to a byte into a row allocated from
-the hosted heap [1360] and writes each row through a buffered writer. The
-correctness input is 200 and the performance input 16000.
+plots the Mandelbrot set as a binary PBM (portable bitmap) image whose
+width and height its argument names. It packs eight pixels to a byte into a
+row allocated from the hosted heap [1360] and writes each row through a
+buffered writer. The correctness input is 200 and the performance input
+16000.
 
 Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.ldn`.
 

@@ -1,10 +1,10 @@
 import core/mem
 
---- Lend a mutable slice covering only initialized items. End uses before any
---- operation that relocates or releases backing.
+--- Lend a mutable slice covering only the initialized items. The slice
+--- derives from the list.
 ---
---- Only initialized elements are exposed. The descriptor derives from the
---- list; changing capacity or releasing storage requires ending that view.
+--- End every use of the view before an operation that changes capacity,
+--- relocates the backing or releases the storage.
 public used: (item: type, value: list(item))
              -> (items: []mut item from value) =
     items = mem.used(value.values)

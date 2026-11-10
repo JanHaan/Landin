@@ -86,8 +86,8 @@ fixed if compiler.os == linux then
     --- What `epoll_pwait` and `signalfd4` take for no signal mask: C's
     --- null pointer.
     public no_mask: atom
-    --- A signal mask a call reads, a set of signals, the kernel's eight
-    --- bytes with signal N at bit N - 1, or `no_mask`.
+    --- A signal mask a call reads, or `no_mask`.  The mask is a set of
+    --- signals: the kernel's eight bytes, with signal N at bit N - 1.
     public mask_given: type = no_mask | ptr u64
     --- Where `rt_sigprocmask` puts the mask it replaces, or `no_mask`.
     public mask_kept: type = no_mask | ptr mut u64
@@ -101,12 +101,12 @@ fixed if compiler.os == linux then
     end given_mask
 
     --- Wait until one of the descriptors `epoll` watches is ready or
-    --- `milliseconds` pass, waiting indefinitely when it is negative and not
-    --- at all when it is zero, with the signal mask `mask` in place while it
-    --- waits when one is given, and fill at most `count` records at
-    --- `events`, each with its events and the word it was watched with: how
-    --- many it filled, zero when the time passed first, or minus the errno,
-    --- EINTR when a signal came first.  arm64 and RV64 have no
+    --- `milliseconds` pass.  A negative `milliseconds` waits indefinitely
+    --- and zero does not wait.  A `mask` that is given is the signal mask
+    --- in place during the wait.  The call fills at most `count` records at
+    --- `events`, each with its events and the word it was watched with.
+    --- How many it filled, zero when the time passed first, or minus the
+    --- errno, EINTR when a signal came first.  arm64 and RV64 have no
     --- `epoll_wait`; this is every architecture's.
     public epoll_pwait:
         (epoll: i32, events: ptr mut epoll_record, count: i32,
@@ -199,11 +199,11 @@ fixed if compiler.os == linux then
     end signalfd_record
 
     --- Make a descriptor that reads the signals in `mask` as
-    --- `signalfd_record`s, or with `descriptor` one made already change
-    --- which it reads, with `flags`, `sfd_cloexec` and `sfd_nonblock` among
-    --- them; -1 asks for a new one: the descriptor, or minus the errno.
-    --- It reads only signals that are pending, so the signals must be
-    --- blocked with `rt_sigprocmask` first, or a signal is delivered as its
+    --- `signalfd_record`s, when `descriptor` is -1, or change which signals
+    --- the signalfd `descriptor` reads.  Its `flags` have `sfd_cloexec` and
+    --- `sfd_nonblock` among them.  The descriptor, or minus the errno.  It
+    --- reads only signals that are pending, so the signals must be blocked
+    --- with `rt_sigprocmask` first, or a signal is delivered as its
     --- disposition says before it can be read.
     public signalfd4:
         (descriptor: i32, mask: ptr u64, flags: i32) -> (result: i32) =

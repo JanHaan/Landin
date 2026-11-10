@@ -169,7 +169,7 @@ public clear: (item: type, fixed inline_slots: usize,
     value.count = 0
 end clear
 
---- Copy the last item: `mem.empty` when there is none.
+--- Copy the last item. Reports `mem.empty` when there is none.
 public last: (item: type, fixed inline_slots: usize,
               value: ptr list(item, inline_slots))
              -> (result: item from value) ! mem.empty =

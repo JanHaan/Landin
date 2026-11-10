@@ -198,12 +198,12 @@ public member:
 end member
 
 --- The account with the user ID `user`, read into `buffer` and lent from
---- it: `no_account` when there is none, `erange` when `buffer` is too small
---- for it, and the errno of reading the database otherwise.  Through the C
---- library on Darwin, FreeBSD and Linux under --link=libc, which asks
---- every database the system is set to; a static Linux program reads
---- /etc/passwd, the first entry with that ID, skipping every line that is
---- not one.  A kilobyte holds an ordinary account.
+--- it. It fails `no_account` when there is none, `erange` when `buffer` is
+--- too small for it, and otherwise with the errno of reading the database.
+--- Darwin, FreeBSD and Linux under --link=libc go through the C library,
+--- which asks every database the system is set to. A static Linux program
+--- reads /etc/passwd for the first entry with that ID, skipping every line
+--- that is not one. A kilobyte holds an ordinary account.
 public account_with_id:
     (user: user_id, buffer: []mut u8)
     -> (found: account from buffer) ! errno | no_account =

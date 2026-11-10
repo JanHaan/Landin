@@ -24,19 +24,19 @@ end lines_value
 public line_reader: type (provider: type) = lines_value(provider)
 
 --- One line, lent from its reader: its bytes without the line ending, and
---- whether the input had already ended, in which case there is no line and
---- `bytes` is empty.  An empty line is an empty `bytes` that has not
---- `finished`.
+--- `finished`, whether the input had already ended.  When it had, there is
+--- no line and `bytes` is empty.  An empty line has empty `bytes` too, and
+--- `finished` false.
 public line: type = struct
     bytes: []u8
     finished: bool
 end line
 
 --- A line reader over the caller's `buffer`, reading `opened` through
---- `host`.  It holds a copy of the reader's handle; keep the handle's
---- state and the buffer alive while it is used.  The longest line it reads
---- is one byte shorter than the buffer when it has a `\n` ending, which
---- must fit as well.  An unterminated final line may fill the buffer.
+--- `host`.  It holds a copy of the reader's handle; keep the handle's state
+--- and the buffer alive while it is used.  A line's `\n` must fit in the
+--- buffer too, so the longest line it reads with one is one byte shorter
+--- than the buffer.  An unterminated final line may fill it.
 public lines_over: (provider: type is reader, host: provider, opened: file,
                     buffer: []mut u8)
                    -> (lines: line_reader(provider) from buffer, host) =
@@ -82,10 +82,10 @@ end refill
 --- A line that does not fit the buffer with its ending reports
 --- `line_too_long`, and the rest of that line is skipped, so the read after
 --- it gives the line that follows.  A reader's failure is its `io_failed`,
---- and keeps every byte already read for the next call.  A reader over an
---- empty buffer has room for no line, and reports every one
---- `line_too_long` without reading: it never takes the empty read its
---- buffer would give for the end of the input.
+--- and keeps every byte already read for the next call.  A line reader over
+--- an empty buffer has room for no line, and reports `line_too_long` on
+--- every call without reading: a read into it returns zero, which it would
+--- take for the end of the input.
 public read_line: (provider: type is reader,
                    inout lines: line_reader(provider))
                   -> (item: line from lines)

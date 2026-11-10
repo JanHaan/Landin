@@ -12,14 +12,14 @@ buffered_value: type (provider: type) = struct
     used: usize
 end buffered_value
 
---- Writes to one file, gathered in a buffer the caller supplies and
---- written through a writer when the buffer fills or `flush` is called: a
+--- Gathers writes to one file in a buffer the caller supplies, and writes
+--- them through a writer when the buffer fills or `flush` is called: a
 --- value the caller keeps and edits, passing it `inout`.  There are no
 --- destructors, so bytes still in the buffer when the program ends, or when
---- the writer is dropped, are never written: flush before every way out,
---- with `defer io.flush(out) else ...` as the idiom, and flush again where
---- the bytes must be out before something else happens, as before reading
---- a reply.  `pending` says how many are waiting.
+--- the writer is dropped, are never written.  Flush before every way out,
+--- with `defer io.flush(out) else ...` as the idiom, and flush again
+--- wherever the bytes must be out before something else happens, as before
+--- reading a reply.  `pending` says how many bytes are waiting.
 public buffered_writer: type (provider: type) = buffered_value(provider)
 
 --- A buffered writer over the caller's `buffer`, writing to `opened`
@@ -71,12 +71,12 @@ kept: (provider: type, inout out: buffered_writer(provider), done: usize)
     out.used = remaining
 end kept
 
---- Write `bytes` to the file through the buffer.  Bytes that fit wait in
---- it; otherwise the waiting ones are flushed first, and then bytes fewer
---- than the buffer holds wait in it and any more go straight to the writer
---- in one `write`.  A failure is the writer's `io_failed`: a failed flush
---- keeps its bytes, as `flush` does, and a failed direct write may follow
---- partial output, as `io.write` may.
+--- Write `bytes` to the file through the buffer.  Bytes that fit in its
+--- free room wait there.  Otherwise the waiting bytes are flushed first;
+--- then `bytes` wait in the buffer if they are fewer than it holds, and go
+--- straight to the writer in one `write` if they are not.  A failure is the
+--- writer's `io_failed`: a failed flush keeps its bytes, as `flush` does,
+--- and a failed direct write may follow partial output, as `io.write` may.
 public put: (provider: type is writer, inout out: buffered_writer(provider),
              bytes: []u8) -> none ! io_failed =
     count: usize = lenof bytes
@@ -105,16 +105,16 @@ end pending
 
 --  The two byte sinks a template is formatted into: spec.md's D355.
 --- Format `template` with `values`, as `text.format` does, straight into
---- the buffer, with no builder of the caller's and no copy: into the room
---- after the waiting bytes, or when the text does not fit there, after a
---- flush, into the whole buffer.  A text larger than the whole buffer is
---- `text.no_space` and leaves nothing of itself waiting; a template that
---- does not fit its values is `text.invalid_format`; a failed flush is the
---- writer's `io_failed`.  The values are `text.formattable`'s types.
---- Floats are not formattable yet: scale one to an integer and print the
---- parts, as `core/text`'s reference program does for two decimals.  The
---- buffered writer and the builder are the byte sinks a template is
---- formatted into.
+--- the buffer: the caller needs no builder and nothing is copied.  The text
+--- goes into the room after the waiting bytes; when it does not fit there,
+--- the buffer is flushed and the text goes into the whole buffer.  A text
+--- larger than the whole buffer is `text.no_space` and leaves nothing of
+--- itself waiting; a template that does not fit its values is
+--- `text.invalid_format`; a failed flush is the writer's `io_failed`.  The
+--- values are `text.formattable`'s types.  Floats are not formattable yet:
+--- scale one to an integer and print the parts, as `core/text`'s reference
+--- program does for two decimals.  The buffered writer and the builder are
+--- the byte sinks a template is formatted into.
 public format: (provider: type is writer,
                 inout out: buffered_writer(provider), template: utf8,
                 values: []any text.formattable)

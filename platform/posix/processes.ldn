@@ -182,12 +182,12 @@ empty_environment: [1]usize = [0]
 
 --- The process's environment, read where the entry left it: the initial
 --- stack's on a static Linux program, and what the C runtime gave `main`
---- otherwise, each `NAME=value` in the order it was given.  It is counted
+--- otherwise, each `NAME=value` in the order it was given. It is counted
 --- afresh each time, since C code in the same process may change its own
---- `environ` in place, which this module never does: changing the
---- environment is not safe beside threads, and a child is given the one
---- its parent builds instead.  It traps before the argument root exists,
---- as `arguments` does.
+--- `environ` in place. This module never changes it: changing the
+--- environment is not safe beside threads, and a child is given the one its
+--- parent builds instead. It traps before the argument root exists, as
+--- `arguments` does.
 public environment:
     () -> (table: environment_table) =
     _ = arguments()
@@ -237,12 +237,12 @@ public pipe_ends: type = struct
     writing: descriptor
 end pipe_ends
 
---- Make a pipe, POSIX's `pipe`: its two ends, each closed when the process
---- executes a program, which Linux and FreeBSD set as the pipe is made,
---- with `pipe2`, and Darwin, which has none, just after; or the errno,
---- `emfile` when the process has no descriptor to spare.  A pipe holds 64
---- KiB on Linux and between 16 and 64 KiB on Darwin and FreeBSD, and a
---- write to a full one waits until its reader reads.
+--- Make a pipe, POSIX's `pipe`, and return its two ends. Each is closed
+--- when the process executes a program: Linux and FreeBSD set that as the
+--- pipe is made, with `pipe2`, and Darwin, which has none, just after. It
+--- fails with the errno, `emfile` when the process has no descriptor to
+--- spare. A pipe holds 64 KiB on Linux and between 16 and 64 KiB on Darwin
+--- and FreeBSD, and a write to a full one waits until its reader reads.
 public pipe:
     () -> (ends: pipe_ends) ! errno =
     ends = try system_pipe()
@@ -263,12 +263,12 @@ process_value: type = distinct i32
 public process_id: type = process_value
 
 --- The descriptors a child's standard input, output and error are made
---- from: each is duplicated onto the child's descriptor 0, 1 or 2, so the
+--- from. Each is duplicated onto the child's descriptor 0, 1 or 2, so the
 --- child receives it open whether or not it is closed on exec, one that
---- already is that number among them, and the same descriptor may be given
---- for more than one.  The parent's descriptors and their flags are left as
---- they are.  A stream that is its own number and is not open in the parent
---- is not open in the child either; any other that is not open is `ebadf`.
+--- already is that number among them. The same descriptor may be given for
+--- more than one. The parent's descriptors and their flags are left as they
+--- are. A stream that is its own number and is not open in the parent is
+--- not open in the child either; any other that is not open is `ebadf`.
 public standard_streams: type = struct
     input: descriptor
     output: descriptor
@@ -310,35 +310,35 @@ public default_in_children: (signal: i32) -> none ! errno =
     end loop
 end default_in_children
 
---- Start the program at `path` in a child process, POSIX's `posix_spawn`:
---- the program is given `path` as its name, `argv[0]`, then `arguments`,
+--- Start the program at `path` in a child process, POSIX's `posix_spawn`.
+--- The program is given `path` as its name, `argv[0]`, then `arguments`,
 --- and exactly the variables of `environment`, each as `NAME=value`, and
---- its standard streams are `streams`.  Nothing searches a path for the
---- program and no shell reads anything.  Every other descriptor is closed
---- in the child, so it receives no file but its three streams.  The
---- child's ID, or the errno, with no child started: `enoent` for a missing
---- program, `eacces` for one that may not be executed, `enoexec` for one
---- that is no program, `einval` for an argument or a value holding a NUL
---- or a name that is empty or holds `=` or a NUL, and `e2big` for more than
---- the system takes.  A child must be waited for, with `wait`, or it keeps
---- its place in the system's table until this process ends.
+--- its standard streams are `streams`. Nothing searches a path for the
+--- program and no shell reads anything. Every other descriptor is closed
+--- in the child, so it receives no file but its three streams. It returns
+--- the child's ID, or fails with the errno and no child started: `enoent`
+--- for a missing program, `eacces` for one that may not be executed,
+--- `enoexec` for one that is no program, `einval` for an argument or a
+--- value holding a NUL or a name that is empty or holds `=` or a NUL, and
+--- `e2big` for more than the system takes. A child must be waited for,
+--- with `wait`, or it keeps its place in the system's table until this
+--- process ends.
 ---
---- The child starts with no signal blocked, whatever this thread's mask
---- is, which an exec would otherwise pass on: a provider that blocks a
---- signal to read it through a signalfd starts no child with it blocked.
---- It starts with SIGPIPE's default disposition, whatever this process's
---- is, since this process ignores it, and with the default of every signal
+--- The child starts with no signal blocked, whatever this thread's mask is,
+--- which an exec would otherwise pass on: a provider that blocks a signal
+--- to read it through a signalfd starts no child with it blocked. It starts
+--- with SIGPIPE's default disposition, whatever this process's is, since
+--- this process ignores it, and with the default of every signal
 --- `default_in_children` was given.
 ---
---- On Linux it is a `clone` that copies this process, as `fork` does,
---- which in the child moves the streams into place, gives those signals
---- their default, empties its mask and executes the program, and reports
---- a failure to the parent through a pipe closed on exec; on Darwin and
---- FreeBSD it is the C library's `posix_spawn`, told to reset those
---- signals with `posix_spawnattr_setsigdefault` and the mask with
---- `posix_spawnattr_setsigmask`.  The
---- block of strings and tables the child is given is mapped for the call
---- and unmapped after it.
+--- On Linux it is a `clone` that copies this process, as `fork` does. The
+--- child moves the streams into place, gives those signals their default,
+--- empties its mask and executes the program, and reports a failure to the
+--- parent through a pipe closed on exec. On Darwin and FreeBSD it is the C
+--- library's `posix_spawn`, told to reset those signals with
+--- `posix_spawnattr_setsigdefault` and the mask with
+--- `posix_spawnattr_setsigmask`. The block of strings and tables the child
+--- is given is mapped for the call and unmapped after it.
 public spawn:
     (path: text.host_string, arguments: []text.host_string,
      environment: []io.variable, streams: standard_streams)
@@ -444,11 +444,11 @@ forget: (made_from: descriptor, made: bool) -> none =
     if made then forgotten(made_from) end if
 end forget
 
---- How a child ended, as `wait` reports it: it `exited` with the code its
---- program gave `_exit` or returned from `main`, of which the parent sees
---- the low eight bits, or it was `signalled`, ended by the signal of
---- that number, a number each system gives its signals: SIGKILL is 9
---- and SIGTERM 15 on all three, SIGUSR1 10 on Linux and 30 on Darwin and
+--- How a child ended, as `wait` reports it. It `exited` with the code
+--- its program gave `_exit` or returned from `main`, of which the parent
+--- sees the low eight bits, or it was `signalled`, ended by the signal
+--- of that number. Each system numbers its own signals: SIGKILL is 9 and
+--- SIGTERM 15 on all three, SIGUSR1 10 on Linux and 30 on Darwin and
 --- FreeBSD.
 public child_status: type = struct
     how: variant
@@ -458,9 +458,9 @@ public child_status: type = struct
 end child_status
 
 --- Wait for the child `child` to end and report how it did, POSIX's
---- `waitpid`, after which it is gone: or the errno, `echild` for no child
---- of this process, `eintr` when a signal came first and the child is
---- still to be waited for.
+--- `waitpid`, after which it is gone. It fails with the errno: `echild` for
+--- no child of this process, `eintr` when a signal came first and the child
+--- is still to be waited for.
 public wait:
     (child: process_id) -> (status: child_status) ! errno =
     word: i32 = try system_wait(child)

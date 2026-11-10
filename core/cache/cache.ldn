@@ -39,8 +39,8 @@ public maintenance: type = concept (provider: type)
     clean_invalidate: (self: provider, range: []u8) -> none ! misaligned
 end maintenance
 
---- How many lines of LINE bytes RANGE is, refusing a range that does not
---- begin on a line or end on one. An empty range is no lines.
+--- Count the lines of `line` bytes in `range`, refusing a range that
+--- does not begin on a line or end on one. An empty range is no lines.
 public lines: (line: usize, range: []u8) -> (count: usize) ! misaligned =
     size := lenof range
     count = 0
@@ -81,9 +81,9 @@ public barriers: type = struct
     line: usize
 end barriers
 
---- The cacheless provider, refusing ranges that are not whole lines of
---- LINE bytes. Its operations check the range and issue the completion
---- barrier, which is all memory with no cache in front of it needs.
+--- Make the cacheless provider, which refuses ranges that are not whole
+--- lines of `line` bytes. Its operations check the range and issue the
+--- completion barrier: all that memory with no cache in front needs.
 public cacheless: (line: usize) -> (caches: barriers) ! bad_line =
     fail bad_line when line == 0 or (line & (line - 1)) <> 0
     caches = (line: line)

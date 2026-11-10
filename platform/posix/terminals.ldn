@@ -116,13 +116,13 @@ public pseudo_terminal: type = struct
     terminal: descriptor
 end pseudo_terminal
 
---- Open a new pseudo-terminal, POSIX's `posix_openpt`, `grantpt`,
---- `unlockpt` and the terminal's path, both ends closed on exec and
---- neither made the process's controlling terminal: `enoent` or `enodev`
---- where the system has none, as a container without /dev/pts may not.
---- On Linux it is /dev/ptmx and `TIOCGPTPEER`, Linux 4.13's; on Darwin the
---- controller is marked closed on exec just after it is opened.  Close
---- both when done.
+--- Open a new pseudo-terminal: POSIX's `posix_openpt`, `grantpt`,
+--- `unlockpt` and the terminal's path. Both ends are closed on exec and
+--- neither is made the process's controlling terminal. It fails `enoent`
+--- or `enodev` where the system has none, as a container without /dev/pts
+--- may not. On Linux it is /dev/ptmx and `TIOCGPTPEER`, Linux 4.13's; on
+--- Darwin the controller is marked closed on exec just after it is opened.
+--- Close both when done.
 public open_pseudo_terminal:
     () -> (pair: pseudo_terminal) ! errno =
     pair = try system_open_pseudo_terminal()

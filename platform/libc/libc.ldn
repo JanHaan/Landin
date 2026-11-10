@@ -455,9 +455,9 @@ public extern(c) getcwd: (into: ptr mut u8, length: usize) -> (result: usize)
 public extern(c) renameat: (old_directory: i32, old: ptr u8,
                             new_directory: i32, new: ptr u8) -> (status: i32)
 
---- Give the file `old` a second name `new`, each relative to its
---- directory, not following a final symbolic link of `old` unless `flags`
---- holds `at_symlink_follow`: 0, or -1 with the reason in errno.
+--- Give the file `old` a second name `new`, each relative to its directory.
+--- A final symbolic link of `old` is followed only when `flags` holds
+--- `at_symlink_follow`.  0, or -1 with the reason in errno.
 public extern(c) linkat: (old_directory: i32, old: ptr u8,
                           new_directory: i32, new: ptr u8, flags: i32)
                          -> (status: i32)
@@ -474,9 +474,9 @@ public extern(c) readlinkat: (directory: i32, path: ptr u8, into: ptr mut u8,
                               length: usize) -> (count: isize)
 
 --- Set the owner and group of the file `path` names, relative to
---- `directory`, either kept when it is `0xFFFFFFFF`, not following a final
---- symbolic link with `at_symlink_nofollow`: 0, or -1 with the reason in
---- errno.
+--- `directory`.  Either stays as it is when its argument is `0xFFFFFFFF`.
+--- With `at_symlink_nofollow` a final symbolic link is not followed.  0, or
+--- -1 with the reason in errno.
 public extern(c) fchownat: (directory: i32, path: ptr u8, user: u32,
                             group: u32, flags: i32) -> (status: i32)
 
@@ -487,8 +487,8 @@ public extern(c) fchown: (descriptor: i32, user: u32, group: u32)
 
 --- Set the last access and modification times of the file `path` names,
 --- relative to `directory`, to the two `timespec`s at `times`, access
---- first, a final symbolic link's own with `at_symlink_nofollow`: 0, or -1
---- with the reason in errno.
+--- first.  With `at_symlink_nofollow` a final symbolic link's own times are
+--- set.  0, or -1 with the reason in errno.
 public extern(c) utimensat: (directory: i32, path: ptr u8, times: ptr timespec,
                              flags: i32) -> (status: i32)
 
@@ -576,11 +576,11 @@ public group_record: type = struct
     members: usize
 end group_record
 
---- Find the account with user ID `user`, filling `into` with pointers into
---- the `length` bytes at `buffer` and putting `into`'s address in `found`,
---- or zero when there is none: 0, or the errno, ERANGE when the buffer is
---- too small.  The C library asks every database the system names, NSS
---- on Linux.
+--- Find the account with user ID `user`.  The call fills `into` with
+--- pointers into the `length` bytes at `buffer` and puts `into`'s address
+--- in `found`, or zero when there is none.  0, or the errno, ERANGE when
+--- the buffer is too small.  The C library asks every database the system
+--- names, NSS on Linux.
 public extern(c) getpwuid_r: (user: u32, into: ptr mut account_record,
                               buffer: ptr mut u8, length: usize,
                               found: ptr mut usize) -> (error: i32)

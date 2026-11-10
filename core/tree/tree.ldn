@@ -190,8 +190,8 @@ public leaves: (value: node) -> (count: usize) =
     count = value.leaves
 end leaves
 
---- A branch's children, the `count` nodes from `first` on; a leaf has
---- none, the empty range at its own start, `first` zero.
+--- Return a branch's children: the `count` nodes from `first` on. A leaf
+--- has none, and returns the empty range, `first` and `count` both zero.
 public children: (value: node) -> (first: node_id, count: usize) =
     match value.kind
         leaf: begin

@@ -1,7 +1,7 @@
 --- A checked index or range is outside its valid extent.
 ---
---- Compiler-check reasons. The representation is the ordinary nonzero
---- atom carrier; callers compare identities, never assumed integer codes.
+--- One of the compiler-check reasons. Their representation is the ordinary
+--- nonzero atom carrier; compare identities, never assumed integer codes.
 public out_of_range: atom
 --- A checked arithmetic operation cannot represent its result.
 public overflow: atom

@@ -39,9 +39,9 @@ region_value: type (provider: type) = struct
     records: []mut allocation
 end region_value
 
---- Allocator that records payload allocations through a parent, as a
---- handle: copies share one ledger. Releasing its state frees all recorded
---- payloads; the parent must outlive the region.
+--- An allocator that takes its payloads from a parent and records each one.
+--- It is a handle: copies share one ledger. Releasing its state frees all
+--- recorded payloads; the parent must outlive the region.
 public region: type (provider: type) = region_value(provider)
 
 --- Fill `state` for a region over `parent` and return its handle. The handle

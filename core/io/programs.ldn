@@ -41,17 +41,17 @@ public capturing: child_streams = (input: discarded, output: piped,
 
 --- A started child: a value its caller keeps and edits, passing it `inout`
 --- to `write_child`, `close_input` and `read_child`, and `sink` to `wait`,
---- which consumes it.  Its fields are the provider's: `handle` names the
---- child, and `input`, `output` and `errors` the parent's ends of its piped
---- streams, each open while its `*_open` flag says so, which it is only
---- for a piped stream.  The child owns its pipes: `close_input` closes its
---- input, `read_child` closes an output it has read to the end, and `wait`
---- closes the rest.  A provider whose own files they are, as the hosted
---- one's are its descriptors, may read and write them through `reader` and
---- `writer` as well, a line reader over a child's output among them; never
---- close them through `files`.  A child that is never waited for keeps
---- what its provider holds for it until the process ends: there are no
---- destructors.
+--- which consumes it.  Its fields are the provider's.  `handle` names the
+--- child.  `input`, `output` and `errors` are the parent's ends of its
+--- piped streams; each is open while its `*_open` flag says so, which it is
+--- only for a piped stream.  The child owns its pipes: `close_input` closes
+--- its input, `read_child` closes an output it has read to the end, and
+--- `wait` closes the rest.  Where the pipes are the provider's own files,
+--- as the hosted provider's are its descriptors, a program may read and
+--- write them through `reader` and `writer` as well, for example through a
+--- line reader over a child's output; never close them through `files`.  A
+--- child that is never waited for keeps what its provider holds for it
+--- until the process ends: there are no destructors.
 public child: type = struct
     handle: usize
     input: file
@@ -98,16 +98,16 @@ end ending
 --- standard streams is inherited, discarded or piped (`child_streams`).
 ---
 --- A child that writes more than a pipe holds waits for its parent to read
---- it, so read a piped output while the child runs, and read output and
---- errors piped together through `read_child`, which reads whichever has
---- something: reading one to its end first can wait forever while the
+--- it, so read a piped output while the child runs.  When output and errors
+--- are both piped, read them through `read_child`, which reads whichever
+--- has something: reading one to its end first can wait forever while the
 --- child waits to write the other.  Close a piped input before waiting for
 --- a child that reads it to its end.
 ---
---- `write_child`, `read_child` and `wait` wait, and `spawn` and
---- `close_input` do not, so a provider supplies the concept whose waiting
---- is its own: the hosted one that blocks the thread, or one that switches
---- fibres while a child's pipe or its end is awaited (D479).
+--- `write_child`, `read_child` and `wait` wait; `spawn` and `close_input`
+--- do not.  So a provider supplies the concept whose waiting is its own:
+--- the hosted one that blocks the thread, or one that switches fibres while
+--- a child's pipe or its end is awaited (D479).
 public programs: type = concept (provider: type)
     --- Start the program at `path` with `arguments`, which it sees after
     --- its own name, and exactly the variables of `environment`.  A
@@ -123,8 +123,8 @@ public programs: type = concept (provider: type)
                  -> none ! io_failed
     --- Close the child's piped input, so that it reads to its end.
     close_input: (self: provider, inout started: child) -> none ! io_failed
-    --- Read what the child wrote next to whichever of its piped output and
-    --- errors has something, into `into`.
+    --- Read into `into` the next bytes the child wrote, from whichever of
+    --- its piped output and errors has something.
     read_child: (self: provider, inout started: child, into: []mut u8)
                 -> (taken: child_read) ! io_failed
     --- Wait for the child to end, close every pipe it still has, and
@@ -145,9 +145,9 @@ public spawn: (provider: type is programs, host: provider,
 end spawn
 
 --- Write all of `bytes` to a child's piped input.  A child that is not
---- reading waits its parent here once its pipe is full, so write a large
---- input only to a child that reads it as it comes.  Writing to an input
---- that is not open is `io_failed`.
+--- reading makes its parent wait here once the pipe is full, so write a
+--- large input only to a child that reads it as it comes.  Writing to an
+--- input that is not open is `io_failed`.
 public write_child: (provider: type is programs, host: provider,
                      inout started: child, bytes: []u8) -> none ! io_failed =
     try provider.write_child(host, started, bytes)
@@ -160,9 +160,9 @@ public close_input: (provider: type is programs, host: provider,
     try provider.close_input(host, started)
 end close_input
 
---- Read the next bytes a child wrote to whichever of its piped output and
---- errors has something, waiting until one has; zero bytes and `finished`
---- once both have ended.
+--- Read the next bytes a child wrote, from whichever of its piped output
+--- and errors has something, waiting until one has.  Once both have ended,
+--- it reads zero bytes and reports `finished`.
 public read_child: (provider: type is programs, host: provider,
                     inout started: child, into: []mut u8)
                    -> (taken: child_read) ! io_failed =

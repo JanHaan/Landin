@@ -67,11 +67,11 @@ public happened:
     events = entry.returned
 end happened
 
---- Wait until an event happens to one of `entries`' descriptors, or
---- `milliseconds` pass, waiting indefinitely when it is negative and not
---- at all when it is zero, POSIX's `poll`: how many entries had an event,
---- each of which `happened` reads, zero when the time passed first, or
---- the errno, `eintr` when a signal came first.
+--- Wait until an event happens to one of `entries`' descriptors or
+--- `milliseconds` pass, POSIX's `poll`; a negative time waits
+--- indefinitely and zero not at all. It returns how many entries had an
+--- event, each of which `happened` reads, zero when the time passed
+--- first, or fails with the errno, `eintr` when a signal came first.
 public poll:
     (entries: []mut poll_entry, milliseconds: i32)
     -> (ready: usize) ! errno =
@@ -79,11 +79,11 @@ public poll:
 end poll
 
 --- With `on`, make calls on `opened` that would wait fail `eagain`
---- instead, `O_NONBLOCK`, and without it make them wait again: a send, a
---- receive, a read, a write or an `accept`, and a `connect`, which fails
---- `einprogress` and goes on.  The mode belongs to the open file, so
---- every descriptor duplicated from `opened`, in this process or another,
---- shares it.
+--- instead, `O_NONBLOCK`; without it, make them wait again. Those calls
+--- are a send, a receive, a read, a write or an `accept`, and a
+--- `connect`, which fails `einprogress` and goes on. The mode belongs to
+--- the open file, so every descriptor duplicated from `opened`, in this
+--- process or another, shares it.
 public set_non_blocking:
     (opened: descriptor, on: bool) -> none ! errno =
     flags: i32 = try system_status_flags(opened)

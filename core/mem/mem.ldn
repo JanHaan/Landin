@@ -4,11 +4,11 @@
 
 --- The index is outside the initialized prefix.
 ---
---- The two atoms every core container fails with. An index past the
---- initialized prefix is out_of_bounds whether the container is raw
---- storage, a vector, a spill list or a bounded log; taking from a
---- container with nothing to take is empty. Key lookups keep their own
---- atoms, because a missing key is not a bad index.
+--- This atom and `empty` are the two every core container fails with. An
+--- index past the initialized prefix is `out_of_bounds` whether the
+--- container is raw storage, a vector, a spill list or a bounded log;
+--- taking from a container with nothing to take is `empty`. Key lookups
+--- keep their own atoms, because a missing key is not a bad index.
 public out_of_bounds: atom
 --- No initialized item or backing allocation is available for this operation.
 public empty: atom
@@ -79,9 +79,9 @@ public allocate: (provider: type is allocator, memory: provider,
 end allocate
 
 --- Grow a block of `old_size` bytes to `new_size` where it is, through the
---- provider: true when it did, and the block is then freed with
---- `new_size`; false, changing nothing, when the provider refuses, as any
---- may.
+--- provider. Returns true when the block grew; free it with `new_size` from
+--- then on. Returns false, with nothing changed, when the provider refuses,
+--- as any provider may.
 public grow: (provider: type is allocator, memory: provider,
               block: ptr mut u8, old_size: usize, new_size: usize,
               alignment: usize) -> (grown: bool) =
@@ -179,8 +179,8 @@ grow_storage: (item: type, provider: type is allocator,
     end match
 end grow_storage
 
---- The bytes `slots` items take: `out_of_memory` when the product is not
---- a `usize`, and zero for a zero-sized item, which still has its slots.
+--- Return the bytes `slots` items take: zero for a zero-sized item, which
+--- still has its slots. Reports `out_of_memory` when they do not fit `usize`.
 public storage_extent: (item: type, slots: usize)
                        -> (extent: usize) ! out_of_memory =
     size: usize = sizeof item
@@ -211,12 +211,12 @@ public release_storage: (item: type, provider: type is allocator,
 end release_storage
 
 --  The containers' one way of taking slots: spec.md's D356.
---- Make room for at least `want` items, keeping the initialized prefix:
---- the block grows in place where the provider can grow it, and otherwise
---- the items move to a fresh block, which is published last, and the old
---- one is freed.  `out_of_memory` leaves the storage, its prefix and its
---- capacity as they were.  The containers' one way of taking slots; a move
---- invalidates views of the old block.
+--- Make room for at least `want` items, keeping the initialized prefix.
+--- The block grows in place where the provider can grow it.  Otherwise the
+--- items move to a fresh block, which is published last, and the old one
+--- is freed; a move invalidates views of the old block.  `out_of_memory`
+--- leaves the storage, its prefix and its capacity as they were.  This is
+--- the containers' one way of taking slots.
 public reserve_storage: (item: type, provider: type is allocator,
                          inout store: storage(item), memory: provider,
                          want: usize) -> none ! out_of_memory =
@@ -359,7 +359,7 @@ end replace
 --- Copy one initialized source item to the end of the target. Checks source
 --- index and target capacity before mutation; the source remains initialized.
 ---
---- Read a complete source value before entering the destination's narrow
+--- The complete source value is read before the destination's narrow
 --- unchecked append. The new prefix is published only after its typed store.
 public transfer: (item: type, source: storage(item), index: usize,
                   inout target: storage(item))

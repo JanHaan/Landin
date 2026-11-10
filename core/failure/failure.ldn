@@ -13,10 +13,10 @@ import core/text
 import core/tree
 
 --- Every atom a `core` module fails with: the set `words` takes. A call's
---- failure, `problem` in its `else (problem)`, widens to it whatever subset
---- of these atoms the call declares. A set that also holds an atom of the
---- program's own does not: a `match` arm names each library atom and passes
---- that atom on, since a `_` arm leaves the set as it was.
+--- failure, the `problem` of its `else (problem)`, widens to `reason`
+--- whatever subset of these atoms the call declares. A set that also holds
+--- an atom of the program's own does not: there, a `match` arm names each
+--- library atom and passes it on, since a `_` arm leaves the set as it was.
 public reason: type = mem.out_of_bounds | mem.empty | mem.full | mem.not_empty
     | mem.out_of_memory | map.missing | map.end_of_entries
     | tree.no_such_node | tree.invalid_children

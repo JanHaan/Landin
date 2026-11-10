@@ -9,11 +9,11 @@ public equatable: type = concept (item: type)
     equal: (left: item, right: item) -> (yes: bool)
 end equatable
 
---- Hash evidence composing `equatable`. Items that are `equal` must have
---- equal hashes, and both must stay stable while an item is stored. Hashes
---- are not cryptographic.
+--- Hash evidence, which composes `equatable`. Items that are `equal` must
+--- have equal hashes, and both answers must stay stable while an item is
+--- stored. Hashes are not cryptographic.
 ---
---- A hashable conformance composes equatable, but [1340] still requires a
+--- Although `hashable` composes `equatable`, [1340] still requires a
 --- concrete type to declare both conformances explicitly.
 public hashable: type = concept (item: type) is equatable
     --- Return a stable hash; items `equal` to each other hash equally.

@@ -182,13 +182,13 @@ end valid
 --  view establishes utf8's invariant, which `valid` has then checked once.
 --  Their result is a source-derived view; no allocation, copy or canonical
 --  empty carrier is introduced.
---- Validate a byte slice and lend it as UTF-8 without allocation. Reports
---- `invalid_text`; the caller keeps the bytes alive and valid while the view
---- is used.
+--- Validate a byte slice and lend it as UTF-8. Reports `invalid_text` when
+--- the bytes are not well-formed UTF-8; the `utf8(bytes)` conversion traps
+--- on them instead.
 ---
---- Where the `utf8(bytes)` conversion traps on malformed bytes, this
---- reports them.  The result is a view of `source`: nothing is allocated
---- or copied.
+--- The result is a view of `source`: nothing is allocated or copied.
+--- The caller keeps the bytes alive and valid for as long as the view
+--- is used.
 public from_bytes: (source: []u8)
                    -> (result: utf8 from source) ! invalid_text =
     fail invalid_text when not valid(source)
@@ -224,8 +224,8 @@ end host_value
 
 --- A host string: a path, a process argument or a directory entry's name,
 --- in the representation its system gives and takes, and not converted on
---- the way through.  It is bytes on Linux, Darwin and FreeBSD, which need
---- not be UTF-8; `from_host` is the checked conversion to `utf8`,
+--- the way through.  On Linux, Darwin and FreeBSD it is bytes, which need
+--- not be UTF-8.  `from_host` is the checked conversion to `utf8`,
 --- `host_bytes` the conversion to bytes, and `host_equal` compares one
 --- with a literal.  It lends what it was made from: an argument lends the
 --- process's storage, an entry its directory's buffer, and `host_over` the
@@ -575,10 +575,10 @@ public hash: (value: utf8) -> (result: u64) =
     result = folded
 end hash
 
---- Compare encoded bytes lexicographically, with a shorter equal prefix
---- sorting first. This is not locale-aware collation.
+--- Order UTF-8 values by their encoded bytes, lexicographically, with a
+--- shorter equal prefix sorting first.
 ---
---- Byte-wise lexicographic order, which for valid UTF-8 is scalar order.
+--- For valid UTF-8 this is scalar order. It is not locale-aware collation.
 public less: (left: utf8, right: utf8) -> (yes: bool) =
     left_bytes: []u8 = bytes(left)
     right_bytes: []u8 = bytes(right)

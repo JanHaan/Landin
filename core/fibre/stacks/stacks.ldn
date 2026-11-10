@@ -48,15 +48,15 @@ first_frame: (argument: usize) -> noreturn =
     compiler.unreachable()
 end first_frame
 
---- Lay out a first frame on `stack` that, when a switch resumes `record`,
---- runs `work` to its end, makes the record's status zero and switches to
---- `after`, which the provider keeps unfinished for as long as a fibre
---- can end into it. A routine of the task, or of anything it calls, whose
---- frame would go below the stack's limit traps `stack_exhausted` in its
---- prologue (D451, D471), before it has written there. It fails
---- `mem.out_of_memory` when `stack` is smaller than 128 words, or 176 with
---- a Cortex-M float unit, and the few words the first frame keeps at its
---- top.
+--- Lay out a first frame on `stack`. When a switch resumes `record`, the
+--- frame runs `work` to its end, makes the record's status zero and
+--- switches to `after`, which the provider keeps unfinished for as long
+--- as a fibre can end into it. A routine of the task, or of anything it
+--- calls, whose frame would go below the stack's limit traps
+--- `stack_exhausted` in its prologue (D451, D471), before it has written
+--- there. `prepare` fails `mem.out_of_memory` when `stack` is smaller than
+--- 128 words, or 176 with a Cortex-M float unit, plus the few words the
+--- first frame keeps at its top.
 public prepare: (escaping record: ptr mut fibre.space,
                  escaping stack: []mut u8, escaping work: any fibre.task,
                  escaping after: ptr mut fibre.space)
@@ -130,24 +130,24 @@ round_value: type = struct
     when_idle: any idler
 end round_value
 
---- A round of fixed turns, as a handle: copies share one round. Entry 0 is
---- the stack the round was made on; the others are the fibres `start`
---- prepared, each the record it was given, in the order they were
---- started. `start` prepares and returns, and the fibre runs at its first
---- turn. `yield` moves to the next unfinished entry after the current
---- one, round the table, and after a whole round in which every
---- unfinished entry yielded and nothing started or ended it calls the
---- idler first. A provider of `fibre.turns`. `yield` and `wait` switch;
---- `start` prepares a fibre and returns, and `finished` only reads.
+--- A round of fixed turns, and a provider of `fibre.turns`. It is a
+--- handle: copies share one round. Entry 0 is the stack the round was made
+--- on; the others are the fibres `start` prepared, each the record it was
+--- given, in the order they were started. `start` prepares a fibre and
+--- returns; the fibre runs at its first turn. `yield` switches to the next
+--- unfinished entry after the current one, round the table. After a whole
+--- round in which every unfinished entry yielded and nothing started or
+--- ended, it calls the idler first. `wait` switches too, and `finished`
+--- only reads.
 public round: type = round_value
 
 --- Fill `state` for a round over `entries`, the caller's table of the
 --- records it runs, and return its handle. The table holds entry 0 and
 --- one entry for each fibre that may be unfinished at once, so a group of
 --- `count` stacks needs `count + 1`; `start` fails `mem.out_of_memory`
---- when it is full. It fails `mem.out_of_memory` when `entries` holds
---- fewer than two. Keep `state`, `entries` and `when_idle` alive while the
---- round is used.
+--- when it is full. `round_over` fails `mem.out_of_memory` when `entries`
+--- holds fewer than two. Keep `state`, `entries` and `when_idle` alive
+--- while the round is used.
 public round_over: (inout state: round_space, entries: []mut usize,
                     when_idle: any idler)
                    -> (handle: round from state, entries, when_idle)

@@ -84,11 +84,11 @@ end give
 --  orders what the program did before it, and nothing is ever unwritten.
 mut started: atomic.cell(u32) = zeroed
 
---- Record that the program is about to start a thread.  The thread
---- facility calls it before it starts its first thread, on the thread that
---- starts it, and the creation's happens-before edge gives the new thread
---- the record.  State that is shared only once there are threads, the
---- heap's among it, then takes its lock; until then it skips it.
+--- Record that the program is about to start a thread. The thread facility
+--- calls it before it starts its first thread, on the thread that starts
+--- it, and the creation's happens-before edge gives the new thread the
+--- record. State that is shared only once there are threads, the heap's
+--- among it, takes its lock from then on and skips it until then.
 public note_start: () -> none =
     atomic.store_relaxed(addr started, 1)
 end note_start
