@@ -591,6 +591,70 @@ package body Landin.Tests.Fixes_Suite is
         (Item, not Clashed, "no advisory edits can conflict");
    end Advisory_Warnings_Preserve_Source;
 
+   --  A source need not be UTF-8 outside its literals and comments: a
+   --  byte in 128 .. 191 with no lead byte before it is a character of
+   --  its own, as Latin-1 writes its upper half, and the scanner reports
+   --  it.  A fix whose edit ends just before one edits whole characters;
+   --  the check on fixes once called it a split sequence and ended the
+   --  compilation as a defect.
+   procedure A_Fix_Beside_A_Stray_Byte_Is_Kept
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Fix_Beside_A_Stray_Byte_Is_Kept
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+
+      procedure Probe (Label, Text, Fixed_Code : String);
+
+      procedure Probe (Label, Text, Fixed_Code : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Arguments : Landin.Platform.Path_List;
+         Ran : Landin.Driver.Outcome;
+         Fixed, Stray : Boolean := False;
+      begin
+         Host.Add_File ("legacy.ldn", Text);
+         Arguments.Append ("legacy.ldn");
+         Ran := Landin.Driver.Execute (Arguments, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Ran.Status, Landin.Driver.Status_Reported,
+            Label & ": the source is refused with its reports");
+         for Index in 1 .. Diag.Count (Ran.Found) loop
+            declare
+               One : constant Diag.Diagnostic := Diag.Get (Ran.Found, Index);
+            begin
+               if Diag.Code (One) = Fixed_Code
+                 and then Diag.Fix_Count (One) > 0
+               then
+                  Fixed := True;
+               elsif Diag.Code (One) = "L0012" then
+                  Stray := True;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Fixed, Label & ": " & Fixed_Code & " keeps its fix");
+         Landin.Testing.Check
+           (Item, Stray, Label & ": the stray byte is reported as L0012");
+      end Probe;
+   begin
+      Probe ("a Latin-1 no-break space after a wrong closing name",
+             "f: () -> (r: i32) =" & LF & "    r = 1" & LF
+             & "end g" & Character'Val (16#A0#) & LF,
+             "L0109");
+      Probe ("a CP1252 quote after a misspelt closing word",
+             "f: (x: i32) -> (r: i32) =" & LF & "    r = 0" & LF
+             & "    if x > 0 then" & LF & "        r = 1" & LF
+             & "    end fi" & Character'Val (16#94#) & LF & "end f" & LF,
+             "L0103");
+      Probe ("a well-formed character in the same place",
+             "f: () -> (r: i32) =" & LF & "    r = 1" & LF
+             & "end g" & Character'Val (16#C3#) & Character'Val (16#A9#)
+             & LF,
+             "L0109");
+   end A_Fix_Beside_A_Stray_Byte_Is_Kept;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -605,6 +669,9 @@ package body Landin.Tests.Fixes_Suite is
       Landin.Testing.Register
         (Into, "fixes", "advisory warnings preserve source",
          Advisory_Warnings_Preserve_Source'Access);
+      Landin.Testing.Register
+        (Into, "fixes", "a fix beside a stray byte is kept",
+         A_Fix_Beside_A_Stray_Byte_Is_Kept'Access);
    end Register;
 
 end Landin.Tests.Fixes_Suite;
