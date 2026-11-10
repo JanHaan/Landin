@@ -8,13 +8,14 @@ package Landin.Backend.Xtensa_Machine is
    --  Compact homes exclude zero, SP, the derived immutable CFA and
    --  register-held scratch words; unused x26 also has no home.
    --  Any other omitted logical word is refused rather than aliased.
-   function Word_Offset (Word : Natural; Compact : Boolean) return Natural;
+   function Word_Offset (Word : Natural; Compact : Boolean)
+      return Landin.Targets.Byte_Count;
 
    procedure Select_Word
      (Instruction : String;
       Into : in out Ada.Strings.Unbounded.Unbounded_String;
       Serial : in out Natural;
-      Frame_Bytes : Natural := 0;
+      Frame_Bytes : Landin.Targets.Byte_Count := 0;
       Scratch_Registers : Boolean := False);
 
    --  Shorten only local jumps proved in range by a conservative bound

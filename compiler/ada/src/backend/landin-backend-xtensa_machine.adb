@@ -18,17 +18,26 @@ package body Landin.Backend.Xtensa_Machine is
      is (Ada.Strings.Fixed.Trim (Text, Layout, Layout));
    function Image (Number : Integer) return String
      is (Trim (Number'Image));
+   --  Target bytes are counted in the target's own type, never the
+   --  host's Natural, and spelled from it.
+   function Byte_Image (Number : Landin.Targets.Byte_Count) return String
+     is (Trim (Number'Image));
 
-   function Word_Offset (Word : Natural; Compact : Boolean) return Natural is
+   function Word_Offset (Word : Natural; Compact : Boolean)
+      return Landin.Targets.Byte_Count
+   is
+      use type Landin.Targets.Byte_Count;
+      At_Word : constant Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count (Word);
    begin
       if not Compact and then Word <= 31 then
-         return Word * 4;
+         return At_Word * 4;
       elsif Compact and then Word in 10 .. 17 then
-         return (Word - 10) * 4;
+         return (At_Word - 10) * 4;
       elsif Compact and then Word in 19 .. 25 then
-         return 32 + (Word - 19) * 4;
+         return 32 + (At_Word - 19) * 4;
       elsif Compact and then Word in 27 .. 31 then
-         return 60 + (Word - 27) * 4;
+         return 60 + (At_Word - 27) * 4;
       end if;
       raise Compiler_Defect with "Xtensa logical word has no frame home";
    end Word_Offset;
@@ -37,9 +46,10 @@ package body Landin.Backend.Xtensa_Machine is
      (Instruction : String;
       Into : in out U.Unbounded_String;
       Serial : in out Natural;
-      Frame_Bytes : Natural := 0;
+      Frame_Bytes : Landin.Targets.Byte_Count := 0;
       Scratch_Registers : Boolean := False)
    is
+      use type Landin.Targets.Byte_Count;
       Text : constant String := Trim (Instruction);
       Space : constant Natural := Ada.Strings.Fixed.Index (Text, " ");
       Op : constant String :=
@@ -91,11 +101,11 @@ package body Landin.Backend.Xtensa_Machine is
             if Frame_Bytes = 0 then
                raise Compiler_Defect with "Xtensa CFA has no native frame";
             end if;
-            Raw ("movi " & Physical & ", " & Image (Frame_Bytes));
+            Raw ("movi " & Physical & ", " & Byte_Image (Frame_Bytes));
             Raw ("add " & Physical & ", a7, " & Physical);
          elsif Id <= 31 then
             Raw ("l32i " & Physical & ", a7, "
-                 & Image (Word_Offset (Id, Scratch_Registers)));
+                 & Byte_Image (Word_Offset (Id, Scratch_Registers)));
          else raise Compiler_Defect with "Xtensa logical word exceeds bank";
          end if;
       end Read;
@@ -128,7 +138,7 @@ package body Landin.Backend.Xtensa_Machine is
             raise Compiler_Defect with "Xtensa CFA is immutable";
          elsif Id <= 31 then
             Raw ("s32i " & Physical & ", a7, "
-                 & Image (Word_Offset (Id, Scratch_Registers)));
+                 & Byte_Image (Word_Offset (Id, Scratch_Registers)));
          else raise Compiler_Defect with "Xtensa logical word exceeds bank";
          end if;
       end Write;
@@ -153,16 +163,16 @@ package body Landin.Backend.Xtensa_Machine is
          for Index in 0 .. 5 loop
             Raw ("l32i a" & Image (Index + 10)
                  & ", a7, "
-                 & Image (Word_Offset (Index + 10, Scratch_Registers)));
+                 & Byte_Image (Word_Offset (Index + 10, Scratch_Registers)));
          end loop;
          Raw (if Indirect then "callx8 a9" else "call8 " & Target);
          for Index in 0 .. 3 loop
             Raw ("s32i a" & Image (Index + 10)
                  & ", a7, "
-                 & Image (Word_Offset (Index + 10, Scratch_Registers)));
+                 & Byte_Image (Word_Offset (Index + 10, Scratch_Registers)));
          end loop;
          Raw ("s32i a14, a7, "
-              & Image (Word_Offset (31, Scratch_Registers)));
+              & Byte_Image (Word_Offset (31, Scratch_Registers)));
       end Call;
       procedure Boolean_Result (Condition, Left, Right : String);
       procedure Boolean_Result (Condition, Left, Right : String) is
