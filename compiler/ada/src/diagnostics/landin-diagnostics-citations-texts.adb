@@ -15494,6 +15494,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "isting boundaries. Whole copies of the containing struct"
                & " remain refused here and are admitted later by D54. In p"
                & "articular, D52 itself does not widen `Fill_Array`.",
+            when 1180 =>
+               "Chosen: a parameter or a named return of fixed-array typ"
+               & "e is a source of D50's copy into a fixed-array field, at"
+               & " any depth of selection, under D50's rules for length, e"
+               & "lement type, mutability of the destination's root and or"
+               & "der of evaluation. Nothing else about either changes: a "
+               & "parameter is not a destination, and a named return is as"
+               & "signed as it was.",
             when 53 =>
                "Chosen: where `s` directly names D46 module state or a D"
                & "47 local and `f` is a fixed array of enabled scalars, D3"
