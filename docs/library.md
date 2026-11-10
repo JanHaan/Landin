@@ -417,6 +417,15 @@ policy.
 Keep keys and their backing stable while the map stores them, and
 restart cursors after any mutation.
 
+The map has no seed, and the hashes `core/cmp` ships are fixed and public:
+an integer hashes to itself and bytes with FNV-1a. Whoever chooses the keys
+can therefore choose keys that all land in one probe chain, and a map
+filled with them takes time in proportion to its size for each insertion
+and each lookup, where it otherwise takes a few probes. Bound how many
+keys an outside party may add, or key by a `distinct` wrapper whose hash
+is keyed by a secret of the program's, before keying a map by data from
+outside.
+
 A walk starts at `map.entries()` and calls `map.next_entry` until the
 call fails with `map.end_of_entries`. The executable example below walks
 this way. The

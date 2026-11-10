@@ -1,7 +1,7 @@
 error[L0317]: this conformance has the same whole-program key as another
-  --> ../../core/cmp/cmp.ldn:149:1
+  --> ../../core/cmp/cmp.ldn:153:1
     |
-149 | u32 is hashable (hash: hash_u32)
+153 | u32 is hashable (hash: hash_u32)
     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/library-evidence-collision/main.ldn:10:1
    |

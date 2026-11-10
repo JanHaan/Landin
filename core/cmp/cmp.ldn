@@ -11,7 +11,11 @@ end equatable
 
 --- Hash evidence, which composes `equatable`. Items that are `equal` must
 --- have equal hashes, and both answers must stay stable while an item is
---- stored. Hashes are not cryptographic.
+--- stored. Hashes are not cryptographic, and the ones this module ships
+--- are not keyed: an integer hashes to itself and bytes with FNV-1a from
+--- its standard basis, so anyone can compute them and choose items that
+--- collide. `core/map` says what that means for a map of an outside
+--- party's keys.
 ---
 --- Although `hashable` composes `equatable`, [1340] still requires a
 --- concrete type to declare both conformances explicitly.
