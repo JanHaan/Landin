@@ -1844,6 +1844,9 @@
     "runtime/computed-array-index-traps": {
       "mode": "execute"
     },
+    "runtime/concept-entry-range-subtype-is-checked": {
+      "mode": "execute"
+    },
     "runtime/condition-declarations": {
       "mode": "execute"
     },
@@ -3303,6 +3306,9 @@
     "runtime/module-float-arithmetic": {
       "mode": "execute"
     },
+    "runtime/module-float-declared-below-is-known": {
+      "mode": "execute"
+    },
     "runtime/module-image-qualified-atoms": {
       "mode": "execute"
     },
@@ -4490,6 +4496,9 @@
     "runtime/range-subtype-conversion-traps": {
       "mode": "execute"
     },
+    "runtime/range-subtype-else-value-is-checked": {
+      "mode": "execute"
+    },
     "runtime/range-subtype-store-traps": {
       "mode": "execute"
     },
@@ -4652,6 +4661,9 @@
       "mode": "execute"
     },
     "runtime/scalar-zeroed-assignment-clears-values": {
+      "mode": "execute"
+    },
+    "runtime/selected-callee-keeps-its-error-set": {
       "mode": "execute"
     },
     "runtime/selection-sort": {
@@ -5046,6 +5058,12 @@
           "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
         }
       }
+    },
+    "runtime/unnamed-view-finished-or-apart": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
     },
     "runtime/utf16-slice-not-boundary-traps": {
       "mode": "execute"

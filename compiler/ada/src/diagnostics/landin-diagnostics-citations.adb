@@ -1376,6 +1376,9 @@ package body Landin.Diagnostics.Citations is
                & "ality",
             when 224 =>
                "Ordinary module arithmetic has a wider folding range",
+            when 1090 =>
+               "Inside a module fold, a conversion and a width-dependent"
+               & " operator take only what their type holds",
             when 189 =>
                "A one-atom pointer union is a pointer whose empty case i"
                & "s zero",
@@ -1505,6 +1508,11 @@ package body Landin.Diagnostics.Citations is
             when 228 =>
                "A packed image holds bits; extraction produces a validat"
                & "ed value",
+            when 1086 =>
+               "A call-site `else` value carries its own proof or none",
+            when 1087 =>
+               "A `fixed` formal of a range subtype takes only a value i"
+               & "nside it",
             when 236 =>
                "A range subtype constrains scalar positions only",
             when 239 =>
@@ -1622,6 +1630,9 @@ package body Landin.Diagnostics.Citations is
             when 85 =>
                "A match-arm name aliases a fixed-array payload by elemen"
                & "t",
+            when 1085 =>
+               "An `inout` payload binding needs a matched value that ma"
+               & "y be written",
             when 86 =>
                "A named ordinary struct field has a measured layout",
             when 87 =>
@@ -1707,6 +1718,9 @@ package body Landin.Diagnostics.Citations is
             when 292 =>
                "A cleanup on a return or failure edge has no later state"
                & "ment to conflict with",
+            when 1084 =>
+               "A view no name holds is in use until what took it is don"
+               & "e",
             when 433 =>
                "A pointer arm's binding may be `sink`, and consumes the "
                & "matched place",
@@ -1821,6 +1835,9 @@ package body Landin.Diagnostics.Citations is
                & "`",
             when 432 =>
                "A destructured name is a local place",
+            when 1091 =>
+               "A selected callee keeps its error set under every call r"
+               & "ule",
             when 7 =>
                "Written Boolean literals fix branch reachability",
             when 124 =>
@@ -1931,6 +1948,8 @@ package body Landin.Diagnostics.Citations is
             when 881 =>
                "A missing composed conformance names the concepts it ref"
                & "ines that the type has",
+            when 1088 =>
+               "A concept entry's range subtype is part of its signature",
             when 139 =>
                "Fixed conditionals select module declarations without ex"
                & "ecution",
@@ -1982,6 +2001,9 @@ package body Landin.Diagnostics.Citations is
             when 880 =>
                "A refusal spells a type and a concept as the program rea"
                & "ding it writes them",
+            when 1089 =>
+               "A module value is typed before it is folded, in any orde"
+               & "r",
             when 267 =>
                "Library source namespaces declare target availability",
             when 575 =>
@@ -3223,6 +3245,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Operators, conversions and traps",
             when 224 =>
                "Decisions: Operators, conversions and traps",
+            when 1090 =>
+               "Decisions: Operators, conversions and traps",
             when 189 =>
                "Decisions: Pointers and raw storage",
             when 206 =>
@@ -3329,6 +3353,10 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Declared types, ranges and layout",
             when 228 =>
                "Decisions: Declared types, ranges and layout",
+            when 1086 =>
+               "Decisions: Declared types, ranges and layout",
+            when 1087 =>
+               "Decisions: Declared types, ranges and layout",
             when 236 =>
                "Decisions: Declared types, ranges and layout",
             when 239 =>
@@ -3429,6 +3457,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Structs, variants and nesting",
             when 85 =>
                "Decisions: Structs, variants and nesting",
+            when 1085 =>
+               "Decisions: Structs, variants and nesting",
             when 86 =>
                "Decisions: Structs, variants and nesting",
             when 87 =>
@@ -3496,6 +3526,8 @@ package body Landin.Diagnostics.Citations is
             when 291 =>
                "Decisions: Lifetime, escape and allocation",
             when 292 =>
+               "Decisions: Lifetime, escape and allocation",
+            when 1084 =>
                "Decisions: Lifetime, escape and allocation",
             when 433 =>
                "Decisions: Lifetime, escape and allocation",
@@ -3589,6 +3621,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Functions, calls and returns",
             when 432 =>
                "Decisions: Functions, calls and returns",
+            when 1091 =>
+               "Decisions: Functions, calls and returns",
             when 7 =>
                "Decisions: Control flow",
             when 124 =>
@@ -3673,6 +3707,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Concepts, generics and runtime dispatch",
             when 881 =>
                "Decisions: Concepts, generics and runtime dispatch",
+            when 1088 =>
+               "Decisions: Concepts, generics and runtime dispatch",
             when 139 =>
                "Decisions: Modules and compile time",
             when 150 =>
@@ -3710,6 +3746,8 @@ package body Landin.Diagnostics.Citations is
             when 855 =>
                "Decisions: Modules and compile time",
             when 880 =>
+               "Decisions: Modules and compile time",
+            when 1089 =>
                "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
@@ -4725,6 +4763,10 @@ package body Landin.Diagnostics.Citations is
             when 224 =>
                "https://www.701.dev/spec.html#d224-ordinary-module-arith"
                & "metic-has-a-wider-folding-range",
+            when 1090 =>
+               "https://www.701.dev/spec.html#d1090-inside-a-module-fold"
+               & "-a-conversion-and-a-width-dependent-operator-take-only-w"
+               & "hat-their-type-holds",
             when 189 =>
                "https://www.701.dev/spec.html#d189-a-one-atom-pointer-un"
                & "ion-is-a-pointer-whose-empty-case-is-zero",
@@ -4884,6 +4926,12 @@ package body Landin.Diagnostics.Citations is
             when 228 =>
                "https://www.701.dev/spec.html#d228-a-packed-image-holds-"
                & "bits-extraction-produces-a-validated-value",
+            when 1086 =>
+               "https://www.701.dev/spec.html#d1086-a-call-site-else-val"
+               & "ue-carries-its-own-proof-or-none",
+            when 1087 =>
+               "https://www.701.dev/spec.html#d1087-a-fixed-formal-of-a-"
+               & "range-subtype-takes-only-a-value-inside-it",
             when 236 =>
                "https://www.701.dev/spec.html#d236-a-range-subtype-const"
                & "rains-scalar-positions-only",
@@ -5035,6 +5083,9 @@ package body Landin.Diagnostics.Citations is
             when 85 =>
                "https://www.701.dev/spec.html#d85-a-match-arm-name-alias"
                & "es-a-fixed-array-payload-by-element",
+            when 1085 =>
+               "https://www.701.dev/spec.html#d1085-an-inout-payload-bin"
+               & "ding-needs-a-matched-value-that-may-be-written",
             when 86 =>
                "https://www.701.dev/spec.html#d86-a-named-ordinary-struc"
                & "t-field-has-a-measured-layout",
@@ -5139,6 +5190,9 @@ package body Landin.Diagnostics.Citations is
             when 292 =>
                "https://www.701.dev/spec.html#d292-a-cleanup-on-a-return"
                & "-or-failure-edge-has-no-later-statement-to-conflict-with",
+            when 1084 =>
+               "https://www.701.dev/spec.html#d1084-a-view-no-name-holds"
+               & "-is-in-use-until-what-took-it-is-done",
             when 433 =>
                "https://www.701.dev/spec.html#d433-a-pointer-arm-s-bindi"
                & "ng-may-be-sink-and-consumes-the-matched-place",
@@ -5278,6 +5332,9 @@ package body Landin.Diagnostics.Citations is
             when 432 =>
                "https://www.701.dev/spec.html#d432-a-destructured-name-i"
                & "s-a-local-place",
+            when 1091 =>
+               "https://www.701.dev/spec.html#d1091-a-selected-callee-ke"
+               & "eps-its-error-set-under-every-call-rule",
             when 7 =>
                "https://www.701.dev/spec.html#d7-written-boolean-literal"
                & "s-fix-branch-reachability",
@@ -5405,6 +5462,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d881-a-missing-composed-co"
                & "nformance-names-the-concepts-it-refines-that-the-type-ha"
                & "s",
+            when 1088 =>
+               "https://www.701.dev/spec.html#d1088-a-concept-entry-s-ra"
+               & "nge-subtype-is-part-of-its-signature",
             when 139 =>
                "https://www.701.dev/spec.html#d139-fixed-conditionals-se"
                & "lect-module-declarations-without-execution",
@@ -5464,6 +5524,9 @@ package body Landin.Diagnostics.Citations is
             when 880 =>
                "https://www.701.dev/spec.html#d880-a-refusal-spells-a-ty"
                & "pe-and-a-concept-as-the-program-reading-it-writes-them",
+            when 1089 =>
+               "https://www.701.dev/spec.html#d1089-a-module-value-is-ty"
+               & "ped-before-it-is-folded-in-any-order",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
