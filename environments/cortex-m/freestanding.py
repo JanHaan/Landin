@@ -37,10 +37,13 @@ def imports(program):
 
 def linker_closure(mapping, helper):
     loads = re.findall(r'^LOAD (.+)$', mapping, re.MULTILINE)
-    # The pinned linker workspace spells its declared object with './'.
-    # Accept that exact spelling too; other directories and extra inputs
-    # still fail the closure check. Keep the actual map spelling in evidence.
-    require(len(loads) >= 2 and loads[0] in ('core.elf.o', './core.elf.o')
+    # The pinned linker workspace spells its declared object with './',
+    # and a tool refine starts in its workspace's `work` directory names
+    # the object in the stage beside it, `../stage/` (D1050).  Accept those
+    # exact spellings too; other directories and extra inputs still fail
+    # the closure check. Keep the actual map spelling in evidence.
+    require(len(loads) >= 2 and loads[0] in ('core.elf.o', './core.elf.o',
+                                             '../stage/core.elf.o')
             and loads[1] == helper
             and loads[2:] in ([], ['linker stubs']),
             'undeclared linker input: '+repr(loads))
