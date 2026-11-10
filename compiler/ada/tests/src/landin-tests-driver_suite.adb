@@ -691,6 +691,35 @@ package body Landin.Tests.Driver_Suite is
             Preserved ("notes.txt", "user data");
          end;
       end loop;
+
+      --  A source file beside a rooted directory is refused, and the
+      --  refusal says that the directory's own files are how a file is
+      --  added to its module; two directories are told no such thing.
+      Host.Add_File ("extra.ldn", "");
+      declare
+         Beside : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (["--root=root", "entry", "extra.ldn"], Host, Tools);
+         Two : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (["--root=root", "entry", "root"], Host, Tools);
+         Advice : constant String :=
+           "; to add a source file to a directory's module, name that"
+           & " directory's `.ldn` files in place of the directory";
+      begin
+         Landin.Testing.Check
+           (Item, Beside.Status = Landin.Driver.Status_Misuse
+            and then Contains
+              (Unbounded.To_String (Beside.Report),
+               "a rooted request names one entry-module directory, or the"
+               & " entry module's source files" & Advice),
+            "a file beside a rooted directory is told the files form: "
+            & Unbounded.To_String (Beside.Report));
+         Landin.Testing.Check
+           (Item, Two.Status = Landin.Driver.Status_Misuse
+            and then not Contains (Unbounded.To_String (Two.Report), Advice),
+            "two rooted directories are not told to name files");
+      end;
    end Empty_Rooted_Emission_Is_Refused;
 
    ------------------------------------------------------------------
@@ -8901,9 +8930,31 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check
            (Item, Result.Status = Landin.Driver.Status_Reported
             and then not Contains (Unbounded.To_String (Result.Report),
-                                   "--level="),
+                                   "for cortex-m55 use"),
             "an unrecognized core is not given an invented level");
       end;
+      --  A core the table lacks is refused as unsupported with the
+      --  covered cores named, never as a misspelling of `cortex-m0`.
+      for Core of Landin.Platform.Path_List'["cortex-m23", "cortex-m55"] loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
+              (["--target=" & Core, "main.ldn"], Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Contains (Report, "unknown target: " & Core
+                 & "; no Cortex-M core of that name is supported:"
+                 & " --target=cortex-m0 covers cortex-m0 (--level=armv6-m),")
+               and then Contains (Report, "and cortex-m33"
+                 & " (--level=armv8-m.main)")
+               and then not Contains (Report, "did you mean"),
+               Core & " is refused as unsupported with the covered cores"
+               & " named: " & Report);
+         end;
+      end loop;
    end Cortex_Model_Refusals_Name_Target_And_Level;
 
    --  A static Linux link adds the library's platform/linux.  The entry

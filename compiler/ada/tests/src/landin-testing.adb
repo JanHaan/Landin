@@ -160,6 +160,18 @@ package body Landin.Testing is
         & Part (Part'First + 1 .. Part'Last) & "s";
    end Progress_Line;
 
+   function Fixture_Line
+     (Of_Case, Label : String; Passed : Boolean; Ordinal, Total : Positive)
+      return String
+   is
+      Nth : constant String := Positive'Image (Ordinal);
+   begin
+      return "fixture: " & Of_Case & ": " & Label & ": "
+        & (if Passed then "pass" else "FAIL")
+        & " (" & Nth (Nth'First + 1 .. Nth'Last) & " of"
+        & Positive'Image (Total) & ")";
+   end Fixture_Line;
+
    procedure Write_Progress
      (Suite : String; Cases, Failed : Natural; Seconds : Duration) is
    begin

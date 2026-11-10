@@ -492,6 +492,19 @@ package body Landin.Commands is
          end loop;
       end Normalize_Transcript;
 
+      --  Every source the request read, in the order the loader read
+      --  them, a `source:` line each: the program's own files, the
+      --  library modules it imports and the description it was built
+      --  against, so which library and description a compiler used is
+      --  read here and not inferred.
+      procedure Append_Sources_Read;
+      procedure Append_Sources_Read is
+      begin
+         for Path of Result.Named loop
+            US.Append (Transcript, "  source: " & J.Quoted (Path) & LF);
+         end loop;
+      end Append_Sources_Read;
+
       function Effective (Flag : C.Option; Default : String) return String;
 
       --  A Linux executable links static by default and every
@@ -977,6 +990,7 @@ package body Landin.Commands is
                      for Text of Asked.Forwarded loop
                         US.Append (Transcript, "  " & J.Quoted (Text) & LF);
                      end loop;
+                     Append_Sources_Read;
                   end if;
                   Normalize_Transcript;
                   Result.Trace := Transcript & Result.Trace;
@@ -1052,6 +1066,9 @@ package body Landin.Commands is
                   for Text of Asked.Forwarded loop
                      US.Append (Transcript, "  " & J.Quoted (Text) & LF);
                   end loop;
+                  if Asked.Command in C.Check | C.Compile then
+                     Append_Sources_Read;
+                  end if;
                end if;
                Normalize_Transcript;
                Result.Trace := Transcript & Result.Trace;

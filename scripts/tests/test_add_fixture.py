@@ -165,14 +165,22 @@ class AddFixtureTest(unittest.TestCase):
         self.assertFalse(add_fixture.held_to_layout(meta("negative/new")))
         self.assertFalse(add_fixture.held_to_layout(
             meta("runtime/new", constructs="0010, 1750")))
+        #  The exemption is the fixture's own `layout: evidence`, which
+        #  the corpus case reads from the same metadata and no list here
+        #  or there mirrors.
+        self.assertFalse(add_fixture.held_to_layout(
+            meta("positive/new", constructs="0010", layout="evidence")))
         source = (ROOT / "compiler/ada/tests/src/"
                   "landin-tests-formatting_suite.adb").read_text()
         case = source[source.index("procedure The_Corpus_Is_Formatted"):]
-        case = case[:case.index("procedure Visit")]
-        for name in add_fixture.LAYOUT_EVIDENCE:
-            self.assertIn('"%s"' % name, case)
-            self.assertFalse(add_fixture.held_to_layout(
-                meta("positive/" + name)))
+        case = case[:case.index("end The_Corpus_Is_Formatted")]
+        self.assertIn("Fixtures.Layout_Evidence (Fixture)", case)
+        self.assertNotIn(" in \"", case)
+        declared = [one.label for one in fixture_meta.discover(
+            ("positive", "runtime", "abi")) if one.get("layout")]
+        self.assertEqual(declared, [
+            "positive/value-continued-at-any-indentation",
+            "runtime/r490-lexical-module-observation"])
 
     def test_sources_are_laid_out_and_named(self):
         import os

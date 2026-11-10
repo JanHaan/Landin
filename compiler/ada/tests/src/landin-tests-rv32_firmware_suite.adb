@@ -523,8 +523,13 @@ package body Landin.Tests.RV32_Firmware_Suite is
 
       --  The driver writes OUT.bin after the link and reads it back, and
       --  an executable no image can hold is L0577, leaving neither file.
-      for Outside in Boolean loop
+      --  A cleanup refused after publication says that the image was
+      --  written and read back, which only a tool result that writes its
+      --  `-o` file reaches: the fake runner publishes Linked there.
+      for Scenario in 1 .. 3 loop
          declare
+            Outside : constant Boolean := Scenario = 2;
+            Cleanup_Refused : constant Boolean := Scenario = 3;
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args : Landin.Platform.Path_List;
@@ -532,6 +537,11 @@ package body Landin.Tests.RV32_Firmware_Suite is
               (if Outside then Executable (Second => Origin + 16#5_0000#)
                else Executable);
          begin
+            if Cleanup_Refused then
+               Host.Add_File ("/w/p.elf", "old");
+               Host.Refuse_Removals
+                 (From_Action => Landin.Platform.Finish_Publication);
+            end if;
             Host.Add_Firmware_Library;
             Host.Add_Directory ("/w");
             Host.Add_Directory ("/w/app");
@@ -569,6 +579,19 @@ package body Landin.Tests.RV32_Firmware_Suite is
                        and then not Host.Exists ("/w/p.elf.bin"),
                      "a segment outside the description is L0577, and no"
                      & " executable or image is left: " & Said);
+               elsif Cleanup_Refused then
+                  Landin.Testing.Check
+                    (Item, Ran.Status = Landin.Driver.Status_Reported
+                       and then Contains (Said,
+                         "is published, and its image /w/p.elf.bin was"
+                         & " written and read back, but cleaning up after"
+                         & " it failed: ")
+                       and then Host.Exists ("/w/p.elf.bin")
+                       and then Host.Written ("/w/p.elf.bin")
+                         = U.To_String (Landin.Driver.ESP_Image.Make
+                             (Linked, Profile).Image),
+                     "a cleanup refused after publication names the image"
+                     & " as written and read back: " & Said);
                else
                   Landin.Testing.Check_Equal
                     (Item, Ran.Status, Landin.Driver.Status_Success, Said);

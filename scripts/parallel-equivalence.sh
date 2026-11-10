@@ -95,14 +95,26 @@ PY
     printf '%s\n' "$Run_Status" > "$Prefix.status"
     #  Retain every unknown diagnostic and all progress counts/verdicts.
     #  Only the known one-decimal elapsed field may differ between jobs.
-    sed -E 's/^(progress: .+: [0-9]+ cases, [0-9]+ failed, )[0-9]+\.[0-9]s$/\1<TIME>/' \
-        "$Prefix.stderr" > "$Prefix.stderr.comparison"
+    #  A corpus case's `fixture:` lines come in the order its workers
+    #  finished, each counting how many had: the raw stream keeps them as
+    #  the run's progress, and the comparison takes each fixture's verdict
+    #  without its count, sorted, after everything else.
+    Fixture_Line='^fixture: .+: (pass|FAIL) \([0-9]+ of [0-9]+\)$'
+    {
+        grep -Ev "$Fixture_Line" "$Prefix.stderr" | sed -E \
+            's/^(progress: .+: [0-9]+ cases, [0-9]+ failed, )[0-9]+\.[0-9]s$/\1<TIME>/' \
+            || :
+        grep -E "$Fixture_Line" "$Prefix.stderr" \
+            | sed -E 's/ \([0-9]+ of [0-9]+\)$//' | LC_ALL=C sort || :
+    } > "$Prefix.stderr.comparison"
 }
 
-echo "landin: one job..."
+#  A corpus case of half an hour says one line a fixture on standard
+#  error, so the file named here grows while the run is working.
+echo "landin: one job; progress: $Evidence/one-job.stderr"
 run_test 1 one-job
 Sequential_Status="$Run_Status"
-echo "landin: $Jobs jobs..."
+echo "landin: $Jobs jobs; progress: $Evidence/many-jobs.stderr"
 run_test "$Jobs" many-jobs
 Parallel_Status="$Run_Status"
 

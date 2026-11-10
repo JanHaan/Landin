@@ -69,6 +69,13 @@ recording is not a verdict:
 | `./scripts/test.sh --record=layout` | `layout.targets` alone |
 | `./scripts/test.sh --record=server/NAME` | the one session `server/NAME/session.lsp` |
 | `./scripts/test.sh --record=CLASS/NAME` | one recorded fixture's `expect` file, with what `refine` reports for it now |
+| `./scripts/test.sh --record-code=LNNNN` | the `expect` file of every recorded fixture whose report carries that diagnostic code, `[LNNNN]` as a report writes it: the reports a change to the diagnostic's text changes |
+
+`--fixture-code=LNNNN` selects the same fixtures as `--fixture` does, so
+after a diagnostic's text changes one run shows which recorded reports no
+longer hold and one records them. Either repeats, and may accompany its
+plain form; a code no report carries is refused rather than selecting
+nothing.
 
 A fixture's report is rewritten only while `refine` still exits with its
 `status` and, for a positive, negative, runtime or ABI fixture, still reports
@@ -181,6 +188,20 @@ an hour says where it is while it runs and a stuck one is told from a slow
 one by the suite that stopped reporting; `LANDIN_TEST_TIMINGS=1` adds the
 table of suites and slowest cases at the end. Neither is in the transcript on
 standard output, which is the same on every host.
+
+`fixture execution`'s two corpus-wide cases, which are most of a complete
+run, also write one line as each fixture ends:
+`fixture: runtime fixtures execute: runtime/hello: pass (12 of 403)`, with
+`FAIL` for a fixture that failed a check. A fixture a cross-lanes row lists
+as failing on the host, and that failed only so, is `pass` here and has its
+own `expected host failure` line. These lines are the run's per-fixture
+verdicts, which the transcript's one row for the case is not, so a log
+shows that a given fixture ran on its lane; and they are its progress,
+so a stalled run is told from a slow one by the lines that stopped coming.
+They come in the order the workers finished and count them, so they stay
+out of the transcript, and `scripts/parallel-equivalence.sh` compares them
+sorted and without their counts while keeping the raw stream, whose path
+it prints before each run, as `one-job.stderr` and `many-jobs.stderr`.
 
 `./scripts/dev-test.sh --host` runs every compiler case except the two
 native target-workload emission/execution cases. Its `HOST-ONLY` banner
@@ -743,6 +764,7 @@ emits assembly text.
 | `c-archives` | no, and runtime only | comma-separated, ordered C sources relative to the fixture directory, each compiled alone with the lane's C driver (`-std=c11 -Wall -Wextra -Werror -fPIC -O2 -c`) and archived alone as `lib<stem>.a` in its own directory of the fixture's work copy, a fresh directory holding the program and its `with` files, which refine compiles, so the program's `linker.directory` finds them; entries follow `c-sources`' path rules and no two may build one archive. A fixture that names it says `link: libc` and has no `root` |
 | `library-directories` | no, runtime only and only with `c-archives` | comma-separated directories of the work copy, each relative and below it, no two alike, given to refine in order as `-L <work copy>/<dir>`, absolute, before the program |
 | `link` | no, and runtime only | `static` or `libc`: how a hosted lane links the executable, passed as `--link=`; absent means the target's default, static on Linux. A program that calls the C library names `libc`. An ABI fixture is always emitted with `--link=libc`, because the C driver links its assembly with the C runtime |
+| `layout` | no, and positive, runtime or ABI only | `evidence`: the fixture's layout is what it shows, so `formatting/the corpus is formatted` does not hold its sources to `refine fmt`'s layout and `scripts/add_fixture.py` does not reformat them. A fixture whose `constructs` name [1750], the layout rule, is exempt without it |
 | `expect` | no | the file holding the expected bytes, which `fixture execution/recorded expectations hold` compares and `./scripts/test.sh --record=CLASS/NAME` rewrites |
 | `args` | no | the arguments `refine` is run with; for a rooted fixture, only the options before the module its `root` gives, such as `--target=darwin-arm64` |
 | `run_args` | no | words handed to a compiled runtime or ABI program as written, before its `run_files`; it names no file of the fixture's |
@@ -1082,7 +1104,8 @@ It reads the metadata as the test program does and stops on any fault. It
 gives a runtime or ABI fixture its row in `cortex-m/corpus.json`. It puts a
 positive, runtime or ABI fixture's sources in the layout `refine fmt` gives,
 which `formatting/the corpus is formatted` holds the corpus to, unless the
-fixture names [1750] and its layout is its evidence. It regenerates every
+fixture says `layout: evidence` or names [1750] and its layout is its
+evidence. It regenerates every
 file a fixture is read into (`check.py --generate`: `targets.matrix`,
 `constructs.matrix`, the diagnostic matrix and `lexical.tokens` among
 them). Last, it says what only a person can decide: that a Linux x86-64

@@ -954,7 +954,13 @@ class DeveloperScripts(unittest.TestCase):
                     # the worker count that shortens one of them.
                     for said in ("fixture execution  emits every positive",
                                  "LANDIN_TEST_JOBS=N splits",
-                                 "  parser  ", "  memory  "):
+                                 "  parser  ", "  memory  ",
+                                 "  server  ",
+                                 "'analysis agrees",
+                                 "'refused sources are served'",
+                                 "LANDIN_TEST_TIMINGS=1 adds",
+                                 "--fixture-code=LNNNN is --fixture, and"
+                                 " --record-code=LNNNN --record"):
                         self.assertIn(said, result.stdout)
                     #  What a run's scope is, as the local recipe reports it.
                     self.assertIn("A no-argument invocation runs the complete"

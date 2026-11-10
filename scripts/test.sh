@@ -7,7 +7,10 @@
 #  no case; --record=lowering, --record=layout, --record=server/NAME and
 #  --record=CLASS/NAME each write one of them, the last a fixture's report,
 #  and repeat to write several in one run.  --record-and-run does
-#  both invocations after one build.  --suite, --case and --fixture, each as
+#  both invocations after one build.  --fixture-code=LNNNN and
+#  --record-code=LNNNN are --fixture and --record for every recorded
+#  fixture whose expect file carries that diagnostic code, the reports a
+#  change to its text changes.  --suite, --case and --fixture, each as
 #  often as wanted, select a visibly FILTERED developer run; none replaces
 #  the no-argument run, the complete local native suite, and neither that
 #  nor any local run replaces the multi-host gate.
@@ -46,7 +49,7 @@ case "${1:-}" in
         echo
         #  What a suite costs is not in its name, and a brief that names
         #  one beside a new fixture did not expect half an hour.
-        echo "Most suites take seconds; three take minutes on their own:"
+        echo "Most suites take seconds; four take minutes on their own:"
         echo "  fixture execution  emits every positive fixture and compiles, links"
         echo "                     and runs every runtime fixture at every profile:"
         echo "                     half an hour and more on one worker, about fifteen"
@@ -56,6 +59,13 @@ case "${1:-}" in
         echo "                     five to fifteen minutes, longest on a loaded host"
         echo "  memory             compiles one real program over and over to see what"
         echo "                     it keeps: about five minutes"
+        echo "  server             six to ten minutes, all but seconds of it in two"
+        echo "                     cases that serve the whole corpus: 'analysis agrees"
+        echo "                     with refine' and 'refused sources are served'."
+        echo "                     --case='server/every session runs as written' runs"
+        echo "                     the recorded sessions alone in under a second."
+        echo "LANDIN_TEST_TIMINGS=1 adds, on standard error after any run, what each"
+        echo "suite cost and its slowest cases."
         echo "LANDIN_TEST_JOBS=N splits fixture execution's two corpus-wide cases"
         echo "across N workers, one by default; scripts/parallel-equivalence.sh holds"
         echo "a wider run to the same transcript.  It changes no other suite."

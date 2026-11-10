@@ -68,6 +68,67 @@ package body Landin.Tests.X86_Optimization_Suite is
    function Contains (Text, Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
+   --  Whether TEXT holds SHAPE, an instruction in which each `@` stands
+   --  for one register or local label number the judgement is not about:
+   --  a run of letters and digits, so "movq %@, %rdi" is a move from any
+   --  register into the first argument's and "jbe .L@_@" a branch to any
+   --  local label.  A judgement names a register or a label outright only
+   --  where the ABI or the case fixes it; what the allocator or the
+   --  block numbering chose is written `@`, so another allocation or a
+   --  renumbering does not fail a case about something else.
+   function Shaped (Text, Shape : String) return Boolean;
+
+   function Shaped (Text, Shape : String) return Boolean is
+      function Is_Word (C : Character) return Boolean
+        is (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9');
+
+      function Matches_At (Start : Positive) return Boolean;
+
+      function Matches_At (Start : Positive) return Boolean is
+         At_Text : Natural := Start;
+      begin
+         for C of Shape loop
+            if C = '@' then
+               if At_Text > Text'Last or else not Is_Word (Text (At_Text))
+               then
+                  return False;
+               end if;
+               while At_Text <= Text'Last and then Is_Word (Text (At_Text))
+               loop
+                  At_Text := At_Text + 1;
+               end loop;
+            elsif At_Text > Text'Last or else Text (At_Text) /= C then
+               return False;
+            else
+               At_Text := At_Text + 1;
+            end if;
+         end loop;
+         return True;
+      end Matches_At;
+   begin
+      return (for some Start in Text'Range => Matches_At (Start));
+   end Shaped;
+
+   --  The operand of the first instruction of TEXT that begins MNEMONIC
+   --  and a space, to its line's end: the label a branch names.  "" when
+   --  TEXT has no such instruction.
+   function Operand_Of (Text, Mnemonic : String) return String;
+
+   function Operand_Of (Text, Mnemonic : String) return String is
+      Found : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, Mnemonic & " ");
+      Last  : Natural;
+   begin
+      if Found = 0 then
+         return "";
+      end if;
+      Last := Found + Mnemonic'Length;
+      while Last < Text'Last and then Text (Last + 1) /= LF loop
+         Last := Last + 1;
+      end loop;
+      return Text (Found + Mnemonic'Length + 1 .. Last);
+   end Operand_Of;
+
    --  A judgement of emitted assembly.  When Condition fails, the failure
    --  shows Judged, the assembly the condition read, beneath its sentence,
    --  so a changed selection is read from the failure itself rather than
@@ -546,9 +607,11 @@ package body Landin.Tests.X86_Optimization_Suite is
            (Item,
             Labelled ("size", Emitted (Work))
             & Labelled ("speed", Emitted (Work, Speed)),
-            Contains (Emitted (Work), "jbe .L1_3" & LF)
-            and then Contains (Emitted (Work, Speed), "jbe .L1_4" & LF)
-            and then not Contains (Emitted (Work, Speed), "jbe .L1_3" & LF),
+            Shaped (Emitted (Work), "jbe .L@_@" & LF)
+            and then Shaped (Emitted (Work, Speed), "jbe .L@_@" & LF)
+            and then not Contains
+              (Emitted (Work, Speed),
+               "jbe " & Operand_Of (Emitted (Work), "jbe") & LF),
             "speed branches past a block that only jumps on");
       end;
    end Loop_Nesting;
@@ -896,9 +959,10 @@ package body Landin.Tests.X86_Optimization_Suite is
            (Item, Emitted (C_Work),
             Calls = 2 and then Register_Arguments > 0
             and then Contains (Emitted (C_Work), "foreign_step")
-            and then Contains (Emitted (C_Work), "movq %r10, %rdi")
-            and then not Contains
-              (Emitted (C_Work), "movq 0(%r11), %r10"),
+            and then Shaped (Emitted (C_Work), "movq %@, %rdi")
+            and then not Shaped
+              (Emitted (C_Work), "movq 0(%@), %@" & LF & Character'Val (9)
+               & "movq %@, %rdi"),
             "foreign calls load scalar values without address roundtrips");
       end;
    end Pressure_And_C_Scalars;
@@ -927,7 +991,7 @@ package body Landin.Tests.X86_Optimization_Suite is
                     (Item, Text,
                      Contains (Text, "subq $4096, %rsp")
                      and then Contains (Text, "orq $0, (%rsp)")
-                     and then Contains (Text, "cmpq %r11, %rsp")
+                     and then Shaped (Text, "cmpq %@, %rsp")
                      and then Text'Length < 20000,
                      "page probing is bounded code even for a megabyte frame");
                end;
@@ -966,7 +1030,7 @@ package body Landin.Tests.X86_Optimization_Suite is
            (Item, Text,
             Contains (Text, "movq %rdi, 0(%rsp)")
             and then Contains (Text, "movq %xmm0, 8(%rsp)")
-            and then Contains (Text, "movq 8(%rsp), %r10")
+            and then Shaped (Text, "movq 8(%rsp), %@")
             and then not Contains (Text, "movq %rsi, 8(%rsp)")
             and then not Contains (Text, "movq %xmm1, 16(%rsp)"),
             "a mixed C entry saves only the used register prefixes");
@@ -1154,7 +1218,7 @@ package body Landin.Tests.X86_Optimization_Suite is
                Check_Assembly
                  (Item, Text,
                   Copies = 1 and then Clears = 0
-                  and then Contains (Text, "movq 8(%rsi), %rax")
+                  and then Shaped (Text, "movq 8(%rsi), %@")
                   and then Contains (Text, "movq $0, 8(%rdi)"),
                   "speed moves sixteen bytes as words, seventy-two as a"
                   & " string");
@@ -2206,6 +2270,38 @@ package body Landin.Tests.X86_Optimization_Suite is
          "a judgement of a routine Routine did not find says so");
    end Failures_Show_Assembly;
 
+   --  The matcher the judgements above lean on: `@` is one register or
+   --  label number, and nothing else is loosened.
+   procedure Shapes_Match (Item : in out Landin.Testing.Context);
+
+   procedure Shapes_Match (Item : in out Landin.Testing.Context) is
+      HT : constant Character := Character'Val (9);
+      Text : constant String :=
+        HT & "movq %r10, %rdi" & LF & HT & "jbe .L1_3" & LF
+        & HT & "cmpq %r11, %rsp" & LF;
+   begin
+      Landin.Testing.Check
+        (Item, Shaped (Text, "movq %@, %rdi")
+           and then Shaped (Text, "movq %r10, %@" & LF)
+           and then Shaped (Text, "jbe .L@_@" & LF)
+           and then Shaped (Text, "cmpq %@, %rsp"),
+         "a register or a label number may be any");
+      Landin.Testing.Check
+        (Item, not Shaped (Text, "movq %@, %rsi")
+           and then not Shaped (Text, "movl %@, %rdi")
+           and then not Shaped (Text, "jb .L@_@")
+           and then not Shaped (Text, "jbe .L@" & LF)
+           and then not Shaped (Text, "movq @, %rdi")
+           and then not Shaped (Text, "cmpq %@, %rsp" & LF & "x"),
+         "the instruction, the named operands and the punctuation are"
+         & " held exactly");
+      Landin.Testing.Check_Equal
+        (Item, Operand_Of (Text, "jbe"), ".L1_3",
+         "a branch's operand is read to its line's end");
+      Landin.Testing.Check_Equal
+        (Item, Operand_Of (Text, "jne"), "", "and is nothing when absent");
+   end Shapes_Match;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2279,6 +2375,9 @@ package body Landin.Tests.X86_Optimization_Suite is
          Choices_Move_Conditionally'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "speed places code", Speed_Places_Code'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "a shape names what a judgement is about",
+         Shapes_Match'Access);
    end Register;
 
 end Landin.Tests.X86_Optimization_Suite;

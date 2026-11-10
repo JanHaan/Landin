@@ -110,8 +110,9 @@ def absent(paths):
 #  holds that register's scopes to its own list, in
 #  compiler/ada/tests/src/landin-testing-fixtures.adb, so a scope it does
 #  not know is refused rather than skipped: a new prototype's scope is
-#  added there by hand.  By hand, and held by nothing else: AGENTS.md's
-#  prototype coverage describes each in prose.
+#  added there by hand, and check_prototype_scopes holds that list to this
+#  table.  By hand, and held by nothing else: AGENTS.md's prototype
+#  coverage describes each in prose.
 PROTOTYPE_FINDINGS = {
     "X": "prototype-1-driver.md",
     "Y": "prototype-2-parser.md",
@@ -2718,6 +2719,49 @@ def check_finding_letters(full_run):
         return [(path, line, "links findings %s; check.py's prototypes have %s"
                  % (found.group(1), FINDING_LETTERS))]
     return []
+
+
+#  Where the test program lists the scope rows of the target applicability
+#  register that are prototypes and not fixtures.
+PROTOTYPE_SCOPE_SOURCE = "compiler/ada/tests/src/landin-testing-fixtures.adb"
+
+
+def check_prototype_scopes(full_run):
+    """The test program knows the scope of every prototype check.py reads.
+
+    Its inventory check skips the target applicability register's
+    `prototype-N` rows by a list of its own.  Prototype 5's row passed this
+    file and then failed every gate job that runs the test program, with
+    "there is no such fixture", because nothing held that list to
+    PROTOTYPE_FINDINGS.
+    """
+    if not full_run:
+        return []
+    path = PROTOTYPE_SCOPE_SOURCE
+    out = absent([path])
+    if out:
+        return out
+    text = read_file(path, encoding="utf-8")
+    listed = {}
+    for found in re.finditer(r'"prototype-(\d+)"', text):
+        listed.setdefault(found.group(1),
+                          text.count("\n", 0, found.start()) + 1)
+    if not listed:
+        return [(path, 1, "names no `\"prototype-N\"` scope; the inventory"
+                 " check skips the prototypes' scope rows by that list")]
+    first = min(listed.values())
+    for number in sorted(set(PROTOTYPE_SOURCES) - set(listed), key=int):
+        out.append((path, first,
+                    "does not list the scope \"prototype-%s\" of %s, so the"
+                    " test program would refuse its row of %s's target"
+                    " applicability register as a fixture that does not"
+                    " exist; add it to this list"
+                    % (number, PROTOTYPE_SOURCES[number][0], REGISTERS)))
+    for number in sorted(set(listed) - set(PROTOTYPE_SOURCES), key=int):
+        out.append((path, listed[number],
+                    "lists the scope \"prototype-%s\", and check.py's"
+                    " PROTOTYPE_FINDINGS has no such prototype" % number))
+    return out
 
 
 def check_site_documents(full_run):
@@ -11177,6 +11221,7 @@ def main(argv):
     extra += check_roadmap_citations(full_run)
     extra += check_specification_version(full_run)
     extra += check_finding_letters(full_run)
+    extra += check_prototype_scopes(full_run)
     extra += check_site_documents(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)

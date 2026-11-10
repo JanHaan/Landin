@@ -1389,6 +1389,8 @@ package body Landin.Tests.Fixture_Suite is
             return (if Stream (Fixture) = Output then "output" else "merged");
          elsif Key = "profile-count" then
             return Image (Profile_Count (Fixture));
+         elsif Key = "layout-evidence" then
+            return (if Layout_Evidence (Fixture) then "yes" else "no");
          elsif Key = "codes-normalized" then
             return Normalized_Codes (Codes (Fixture));
          elsif Key = "module-arguments" then
