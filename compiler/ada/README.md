@@ -183,7 +183,7 @@ different responsibilities.
 | `Landin.Backend.Firmware` | compiler-owned reset text and the linker script derived from the selected profile's regions, placements and boot kind (D545), keeping a C archive's constructors where the driver sees them (D924) | perform host effects or initialize user modules by executing source code |
 | `Landin.Backend.Images` | D537's one pre-emission measure of a unit's written, mutable and zero images against a budget the caller selects, and its refusal's message | choose a target's or a profile's budget, read a profile's capacities as constants, or ask the host's width |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
-| `Landin.Diagnostics` | codes, severities, labels, notes, fixes and their edits, ordering | render, apply a fix, or own the catalogue of codes |
+| `Landin.Diagnostics` | codes, severities, labels, notes, fixes and their edits, a failed tool's transcript kept a line each beside the message (D1057), ordering | render, apply a fix, or own the catalogue of codes |
 | `Landin.Diagnostics.Fixes` | the one constructor and sentence of each kind of fix, and whether it is exact or likely | decide which names a position could mean, or where a fix may appear |
 | `Landin.Diagnostics.Suggestions` | [1860]'s nearness: the distance, its bound and the deterministic order of the names a stage offers | choose candidates, or offer one out of scope or inaccessible |
 | `Landin.Diagnostics.Modules` | catalogue diagnostics for rooted module discovery failures | perform filesystem discovery or invent diagnostic codes |

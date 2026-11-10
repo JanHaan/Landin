@@ -1,0 +1,6 @@
+error[L0616]: `app` is ../tests/fixtures/negative/import-of-named-entry/back/app, which holds ../tests/fixtures/negative/import-of-named-entry/back/app/main.ldn, a source this request named as the entry module
+  --> ../tests/fixtures/negative/import-of-named-entry/back/util/u.ldn:1:1
+  |
+1 | import app
+  | ^^^^^^^^^^
+  = note: D1055: named files are one module apart from their directory, and an import of it would compile them twice; name the directory ../tests/fixtures/negative/import-of-named-entry/back/app as the entry, under --root, in place of its files

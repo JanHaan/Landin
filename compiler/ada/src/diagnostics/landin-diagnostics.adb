@@ -75,6 +75,43 @@ package body Landin.Diagnostics is
    function Note_Count (Item : Diagnostic) return Natural
      is (Natural (Item.Notes.Length));
 
+   procedure Set_Transcript (Item : in out Diagnostic; Text : String) is
+      Start : Positive := Text'First;
+
+      procedure Add (Line : String);
+
+      procedure Add (Line : String) is
+         Last : constant Natural :=
+           (if Line'Length > 0 and then Line (Line'Last) = ASCII.CR
+            then Line'Last - 1 else Line'Last);
+      begin
+         Item.Transcript.Append (Line (Line'First .. Last));
+      end Add;
+   begin
+      Item.Transcript.Clear;
+      for Index in Text'Range loop
+         if Text (Index) = ASCII.LF then
+            Add (Text (Start .. Index - 1));
+            Start := Index + 1;
+         end if;
+      end loop;
+      if Start <= Text'Last then
+         Add (Text (Start .. Text'Last));
+      end if;
+      while not Item.Transcript.Is_Empty
+        and then Item.Transcript.Last_Element = ""
+      loop
+         Item.Transcript.Delete_Last;
+      end loop;
+   end Set_Transcript;
+
+   function Transcript_Count (Item : Diagnostic) return Natural
+     is (Natural (Item.Transcript.Length));
+
+   function Nth_Transcript_Line
+     (Item : Diagnostic; Index : Positive) return String
+     is (Item.Transcript.Element (Index));
+
    function Nth_Note (Item : Diagnostic; Index : Positive) return String
      is (Item.Notes.Element (Index));
 

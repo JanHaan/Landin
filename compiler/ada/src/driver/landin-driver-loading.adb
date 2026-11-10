@@ -5,6 +5,7 @@ with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 with Ada.Strings.Fixed;
+with Interfaces;
 
 with Landin.Configuration;
 with Landin.Diagnostics;
@@ -46,10 +47,15 @@ package body Landin.Driver.Loading is
    function Hash_Identity (Key : Landin.Platform.File_Identity)
      return Ada.Containers.Hash_Type
    is
-      use type Ada.Containers.Hash_Type;
+      use type Interfaces.Unsigned_64;
+      --  A device or inode number is 64 bits on the host and the hash is
+      --  32, and a conversion to a modular type checks its range where
+      --  'Mod reduces: XFS, NFS and FUSE number inodes past 2 ** 32.
+      Folded : constant Interfaces.Unsigned_64 :=
+        Key.Device xor Interfaces.Shift_Right (Key.Device, 32)
+        xor Key.Inode xor Interfaces.Shift_Right (Key.Inode, 32);
    begin
-      return Ada.Containers.Hash_Type (Key.Device)
-        xor Ada.Containers.Hash_Type (Key.Inode);
+      return Ada.Containers.Hash_Type'Mod (Folded);
    end Hash_Identity;
 
    package Directory_Maps is new Ada.Containers.Hashed_Maps
@@ -313,8 +319,14 @@ package body Landin.Driver.Loading is
       package Child_Maps is new Ada.Containers.Indefinite_Ordered_Maps
         (Key_Type => String, Element_Type => Boolean);
 
+      package Path_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => String);
+
       Listings : Listing_Maps.Map;
       Children : Child_Maps.Map;
+      --  D1055: each directory a named entry source lies in, with the
+      --  first such source; empty when the entry is a directory.
+      Entry_Directories : Path_Maps.Map;
 
       procedure Remember_Dependency (Directory : String);
 
@@ -873,8 +885,38 @@ package body Landin.Driver.Loading is
          return Landin.Modules.No_Module;
       end Loaded_Directory;
 
-      --  Whether the library holds LOGICAL and no module has brought it.
-      function Library_Present (Logical : String) return Boolean
+      --  D1055: the named entry source DIRECTORY holds, or the empty
+      --  string.  Named files are the entry module and their directory
+      --  is no module of the graph, so only this knows that a directory
+      --  about to be read holds sources already read.
+      function Named_Entry_In (Directory : String) return String;
+      function Named_Entry_In (Directory : String) return String is
+      begin
+         for Position in Entry_Directories.Iterate loop
+            if Path_Maps.Key (Position) = Directory
+              or else Host.Same_File (Path_Maps.Key (Position), Directory)
+            then
+               return Path_Maps.Element (Position);
+            end if;
+         end loop;
+         return "";
+      end Named_Entry_In;
+
+      --  Whether DIRECTORY is already part of the program: a module of
+      --  the graph by spelling or identity, the entry module among them,
+      --  or the directory of a named entry source.
+      function Is_Loaded (Directory : String) return Boolean;
+      function Is_Loaded (Directory : String) return Boolean is
+         Identity : Landin.Platform.File_Identity;
+      begin
+         return Loaded_Directory (Directory, Identity)
+             /= Landin.Modules.No_Module
+           or else Named_Entry_In (Directory) /= "";
+      end Is_Loaded;
+
+      --  Whether the library holds LOGICAL and no module has brought it
+      --  under that name.
+      function Library_Offers (Logical : String) return Boolean
         is (Library /= ""
             and then Library_Position /= 0
             and then not Landin.Stages.Failed (Context)
@@ -898,6 +940,22 @@ package body Landin.Driver.Loading is
          Remember_Directory (Added, Host.Existing_Identity (Directory));
          Queue.Append (Added);
       end Add_Implicit;
+
+      --  The module the library offers joins the program, unless its
+      --  directory is part of it already: the entry module has no
+      --  logical path, so checking platform/linux itself met its own
+      --  directory here, and an import under another name reaches the
+      --  same one.  It is read once and noted as supplied.
+      procedure Take_Implicit (Logical : String);
+      procedure Take_Implicit (Logical : String) is
+      begin
+         if Is_Loaded (Joined_Path (Searched.Element (Library_At), Logical))
+         then
+            Landin.Modules.Note_Supplied (Graph.all, Logical);
+         else
+            Add_Implicit (Logical);
+         end if;
+      end Take_Implicit;
 
       --  D542: whether a read source names a device, which makes its
       --  module a description.
@@ -969,6 +1027,26 @@ package body Landin.Driver.Loading is
          Remember_Directory
            (Landin.Modules.Entry_Module,
             Host.Existing_Identity (Entry_Directory));
+      else
+         for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+            declare
+               Path : constant String :=
+                 Landin.Source.Name
+                   (Landin.Stages.Source
+                      (Context, Landin.Stages.Nth_Source (Context, Index)));
+               Slash : constant Natural :=
+                 Ada.Strings.Fixed.Index
+                   (Path, "/", Ada.Strings.Backward);
+               Directory : constant String :=
+                 (if Slash = 0 then "."
+                  elsif Slash = Path'First then "/"
+                  else Path (Path'First .. Slash - 1));
+            begin
+               if not Entry_Directories.Contains (Directory) then
+                  Entry_Directories.Insert (Directory, Path);
+               end if;
+            end;
+         end loop;
       end if;
       Queue.Append (Landin.Modules.Entry_Module);
 
@@ -1345,7 +1423,51 @@ package body Landin.Driver.Loading is
                                  begin
                                     Target := Loaded_Directory
                                       (Directory_Path, Identity);
-                                    if Target = Landin.Modules.No_Module then
+                                    if Target = Landin.Modules.No_Module
+                                      and then Named_Entry_In
+                                        (Directory_Path) /= ""
+                                    then
+                                       --  D1055: reading the directory
+                                       --  would compile the entry
+                                       --  module's sources a second
+                                       --  time, as another module.
+                                       declare
+                                          Found : Landin.Diagnostics
+                                            .Diagnostic_List;
+                                       begin
+                                          Module_Diagnostics.Report
+                                            (Item    => Module_Diagnostics
+                                               .Import_Of_Named_Entry,
+                                             Source  => Source_Id,
+                                             Where   => Landin.Syntax.Where
+                                               (Tree.all, Import_Node),
+                                             Message => "`" & Logical
+                                               & "` is " & Directory_Path
+                                               & ", which holds "
+                                               & Named_Entry_In
+                                                   (Directory_Path)
+                                               & ", a source this request"
+                                               & " named as the entry"
+                                               & " module",
+                                             Note    => "D1055: named"
+                                               & " files are one module"
+                                               & " apart from their"
+                                               & " directory, and an"
+                                               & " import of it would"
+                                               & " compile them twice;"
+                                               & " name the directory "
+                                               & Directory_Path
+                                               & " as the entry, under"
+                                               & " --root, in place of"
+                                               & " its files",
+                                             Into    => Found);
+                                          Landin.Stages.Report
+                                            (Context,
+                                             Landin.Diagnostics.Get
+                                               (Found, 1));
+                                       end;
+                                    elsif Target = Landin.Modules.No_Module
+                                    then
                                        Target := Landin.Modules.Add_Module
                                          (Graph.all, Logical,
                                           Directory_Path,
@@ -1379,17 +1501,20 @@ package body Landin.Driver.Loading is
          --  (D543, D661).
          if Next > Natural (Queue.Length)
            and then Implicit /= ""
-           and then Library_Present (Implicit)
+           and then Library_Offers (Implicit)
+           and then not Landin.Modules.Supplies (Graph.all, Implicit)
          then
-            Add_Implicit (Implicit);
+            Take_Implicit (Implicit);
          end if;
          if Next > Natural (Queue.Length)
            and then Landin.Targets.Is_Firmware
              (Landin.Stages.Target (Context))
-           and then Library_Present (Reference_Description)
+           and then Library_Offers (Reference_Description)
+           and then not Landin.Modules.Supplies
+             (Graph.all, Reference_Description)
            and then not Reaches_Description
          then
-            Add_Implicit (Reference_Description);
+            Take_Implicit (Reference_Description);
          end if;
       end loop;
    end Discover;

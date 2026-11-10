@@ -88,6 +88,15 @@ package body Landin.Modules is
    function Is_Implicit (Of_Table : Table; Id : Module_Id) return Boolean
      is (Of_Table.Modules.Element (Positive (Id)).Implicit);
 
+   procedure Note_Supplied (Into : in out Table; Logical : String) is
+   begin
+      Into.Supplied.Include (Logical, Entry_Module);
+   end Note_Supplied;
+
+   function Supplies (Of_Table : Table; Logical : String) return Boolean
+     is (Find_Logical (Of_Table, Logical) /= No_Module
+         or else Of_Table.Supplied.Contains (Logical));
+
    procedure Attach_Source
      (Into   : in out Table;
       Source : Landin.Source.Source_Id;

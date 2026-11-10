@@ -1,0 +1,12 @@
+import util
+
+mut counter: i32 = 0
+
+public bump: () -> none =
+    counter = counter + 1
+end bump
+
+public main: () -> (code: i32) =
+    util.twice()
+    code = counter
+end main

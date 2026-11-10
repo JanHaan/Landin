@@ -1,0 +1,7 @@
+class: negative
+summary: an import that selects the directory of a source the request named as the entry module is refused, since loading it would compile that source a second time as another module
+expect: expected.txt
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: --root=../tests/fixtures/negative/import-of-named-entry/back ../tests/fixtures/negative/import-of-named-entry/back/app/main.ldn
+codes: L0616
+status: 1

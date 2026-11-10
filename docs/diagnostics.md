@@ -126,6 +126,12 @@ assembly emission do not run a linker. They are also incompatible with
 `--help` and `--identify`, which do not compile. Each selection must have a
 nonempty value and may be given only once.
 
+With `--depfile`, a path the depfile would hold is refused when Make has no
+spelling that reads back as that one name (D1058): a line break, `;`, `|`,
+`=`, `&`, `%`, `*`, `?`, `[`, a backslash or a leading `~`, and in the
+output's own path also `#` and `:`. The message names the byte and the
+path. Rename the file or directory, or build without `--depfile`.
+
 `--link=static|libc` chooses how a hosted executable is linked, and under
 `refine check` which C runtime the program is checked with; `static` needs a
 Linux target, and a target with no hosted system takes neither. `check`
@@ -140,7 +146,18 @@ path and its permissions. Assembly `.include` and `.incbin`, and linker
 plain absolute paths so their inputs can be protected while the tool runs
 in private staging. Replace relative or indirect forms with plain absolute
 paths, or supply a standalone assembly input or linker script. Nested text
-inputs are limited to sixteen levels.
+inputs are limited to sixteen levels, each input is scanned once, and one
+build names at most 4,096 of them and 64 MiB of their text (D1059).
+
+In an assembly input the word `.include` or `.incbin` is the directive
+wherever it stands outside a double-quoted string and a `/* */` comment,
+behind a label, a separator or a line comment's marker alike, since no
+character begins a comment on every target (D1060). It must be followed on
+its line by a double-quoted absolute path; the message gives the line
+otherwise. An assembly input that uses `.macro`, `.irp`, `.irpc` or
+`.altmacro` is refused, since a macro can form a file directive from its
+arguments where it cannot be found: expand the macros first, with the
+assembler's listing or by hand.
 
 ### L0004
 
@@ -288,6 +305,19 @@ that was meant: an `import rp2040` under `--root=devices/generated`, whose
 description. The message names the empty directory and the later one. Name
 the root that holds the module first, or give the empty directory its source.
 An empty module no later root rivals is still legal.
+
+### L0616
+
+An import selected the directory of a source the request named as the entry
+module (D1055). Files named on the command line are one module of their own,
+apart from the directory they lie in, so loading that directory for the import
+would read and compile the same files a second time as another module: two
+copies of every binding and routine in them, the entry's `main` using one and
+the importing module the other. The message names the import, the directory
+and the named source it holds. Name the directory as the entry in place of its
+files, under `--root`, and the import is the entry module again: with
+`--root=src`, `refine check src/app` where `refine check src/app/main.ldn` was
+refused.
 
 ## Lexical, and what is not enabled
 
@@ -1755,8 +1785,10 @@ unavailable.
 
 Executable emission failed [1550]. The assembler or linker may have refused
 the emitted code, or the requested output could not be produced, verified, or
-restored. The note describes the failure, names paths needed for recovery,
-and includes tool output when available.
+restored. The message says which tool failed and how it ended, or names the
+paths needed for recovery; what the tool wrote follows it a line each, behind
+`  | ` in the text and the short presentation and as the `tool_output` array
+in JSON (D1057).
 refine starts no tool while `SIGCHLD` is ignored or `SA_NOCLDWAIT` is set,
 since either discards the tool's exit status; it leaves the inherited
 setting as it is, and the message gives the fix before any path. Start
