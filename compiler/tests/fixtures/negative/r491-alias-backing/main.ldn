@@ -19,7 +19,7 @@ end value_array
 nested_frame: (source: box, index: usize) -> (result: ptr u32 from source) =
     result = addr source.fallback
     match source.kind
-        full(inout contents): match contents.cells[index].kind
+        full(contents): match contents.cells[index].kind
             item(value): result = addr value
             empty: begin end
         end match

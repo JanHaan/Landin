@@ -1425,8 +1425,12 @@ package body Landin.Tests.Checking_Suite is
       Check_Source
         ("index: usize", "    mut local: [1]packet = zeroed" & LF
          & "    source := local[0..<1]" & LF, "source[index]", False);
+      --  D1085: an `in` parameter's payload takes no `inout` binding, so
+      --  the by-value array is copied to a place that may be written; the
+      --  copy is the frame's as the parameter is.
       Check_Source
-        ("source: [1]packet, index: usize", "", "source[index]", False);
+        ("given: [1]packet, index: usize",
+         "    mut source: [1]packet = given" & LF, "source[index]", False);
    end Match_Aliases_Keep_Backing_Origins;
 
    procedure Iterable_Elements_Are_Copies

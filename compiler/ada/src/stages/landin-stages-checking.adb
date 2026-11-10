@@ -30336,6 +30336,36 @@ package body Landin.Stages.Checking is
             end if;
          end Refuse_Sink_Binding;
 
+         --  [1900]/D1085: an `inout` payload binding is a writable name
+         --  for storage of the matched value, so that value is asked what
+         --  an assignment's target is asked: whether it may be written.
+         procedure Refuse_Read_Only_Subject (Binding : Syn.Node_Id);
+
+         procedure Refuse_Read_Only_Subject (Binding : Syn.Node_Id) is
+         begin
+            if Syn.Convention_Of (Of_Tree, Binding) = Syn.Inout_Convention
+              and then not Place_Is_Mutable
+                (Of_Tree, Syn.Target_Of (Of_Tree, Subject))
+            then
+               Bad.Report
+                 (Item    => Bad.Immutable_Target,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Binding),
+                  Message => "this `inout` binding would write the matched"
+                             & " value, which may not be written",
+                  Note    => "[1900]/D1085: an `inout` payload binding"
+                             & " needs what an assignment to the payload"
+                             & " needs: a mutable binding, a named return,"
+                             & " an `inout` parameter or a `mut`"
+                             & " reference; bind it without `inout` to"
+                             & " read it",
+                  Related => Syn.Origin
+                    (Of_Tree, Syn.Target_Of (Of_Tree, Subject)),
+                  Because => "the matched value, which is read-only here",
+                  Into    => Found);
+            end if;
+         end Refuse_Read_Only_Subject;
+
          procedure Refuse_Bindings (Arm : Syn.Node_Id) is
          begin
             for Position in 1 .. Syn.Match_Binding_Count (Of_Tree, Arm)
@@ -31387,6 +31417,7 @@ package body Landin.Stages.Checking is
                                         Payload);
                               begin
                                  Refuse_Sink_Binding (Binding);
+                                 Refuse_Read_Only_Subject (Binding);
                                  case Shape.Kind is
                                     when Landin.Checking.Scalar_Field =>
                                        if Shape.Atoms /=

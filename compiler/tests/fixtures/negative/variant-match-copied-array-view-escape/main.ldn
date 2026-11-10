@@ -34,9 +34,9 @@ local_backed: () -> (result: []mut u32) =
     end match
 end local_backed
 
-value_backed: (source: packet) -> (result: []mut u32 from source) =
+value_backed: (source: packet) -> (result: []u32 from source) =
     match source.kind
         empty: result = []
-        row(inout values): result = values[0..<2]
+        row(values): result = values[0..<2]
     end match
 end value_backed

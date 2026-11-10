@@ -1,0 +1,90 @@
+--  D1085: an `inout` payload binding writes storage of the matched value,
+--  so the matched value has to be a place that may be written, as the
+--  target of an assignment has to be.
+shape: type = struct
+    k: variant
+        a: (v: i32) |
+        cells: (items: [2]i32) |
+        b
+    end k
+end shape
+
+fixed_shape: shape = (k: a(v: 1))
+
+bump: (inout n: i32) -> none =
+    n += 1
+end bump
+
+through_in: (c: shape) -> none =
+    match c.k
+        a(inout v): v = 2 -- error: `c` is an `in` parameter
+        cells(items): _ = items[0]
+        b: begin end
+    end match
+end through_in
+
+through_pointer: (p: ptr shape) -> none =
+    match p.val.k
+        a(inout v): bump(v) -- error: `p` is read-only
+        cells(inout items): items[0] = 2 -- error
+        b: begin end
+    end match
+end through_pointer
+
+through_slice: (xs: []shape) -> none =
+    match xs[0].k
+        a(inout v): v = 4 -- error: `xs` is read-only
+        cells(items): _ = items[0]
+        b: begin end
+    end match
+    for item in xs do
+        match item.k
+            a(inout v): v = 5 -- error: an element of read-only storage
+            cells(items): _ = items[0]
+            b: begin end
+        end match
+    end for
+end through_slice
+
+--  The same bindings over places that may be written are accepted.
+through_writable: (inout c: shape, p: ptr mut shape, xs: []mut shape) -> none =
+    match c.k
+        a(inout v): v = 2
+        cells(inout items): items[0] = 2
+        b: begin end
+    end match
+    match p.val.k
+        a(inout v): v = 3
+        cells(items): _ = items[0]
+        b: begin end
+    end match
+    for item in xs do
+        match item.k
+            a(inout v): v = 5
+            cells(items): _ = items[0]
+            b: begin end
+        end match
+    end for
+end through_writable
+
+public main: () -> (code: i32) =
+    local: shape = (k: a(v: 1))
+    match local.k
+        a(inout v): v = 6 -- error: `local` is not `mut`
+        cells(items): _ = items[0]
+        b: begin end
+    end match
+    match fixed_shape.k
+        a(inout v): v = 7 -- error: an immutable module binding
+        cells(items): _ = items[0]
+        b: begin end
+    end match
+    mut kept: shape = (k: a(v: 1))
+    mut pointed: shape = (k: b)
+    mut others: [1]shape = [kept]
+    through_writable(kept, addr pointed, others)
+    through_in(local)
+    through_pointer(addr local)
+    through_slice(others)
+    code = 0
+end main

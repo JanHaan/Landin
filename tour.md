@@ -2204,7 +2204,8 @@ end spill
 `mut` allows it, and never replaces the slice.
 
 A plain binding reads the payload in place, without copying it; `inout`
-adds permission to write it. On a pointer union's `ptr` arm,
+adds permission to write it, where the matched value may itself be
+written: `s` above is an `inout` parameter. On a pointer union's `ptr` arm,
 `ptr (sink p):` passes the pointer on to a `sink` parameter ([0910]), which
 consumes the matched place.
 

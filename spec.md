@@ -1364,6 +1364,10 @@ that reference type, independently of the binding that holds it [0430] [0450].
 `addr` retains that place's writability: its result is `ptr mut T` for a
 writable place and `ptr T` for a read-only place. Taking an address does not
 grant permission to modify immutable storage.
+Nor does matching: an `inout` payload binding of a match arm [1220] is a
+writable name for storage of the matched value, so the value matched has to
+be a place that may be written by these same rules, and the binding is
+L0303 where it is not (D1085).
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
 two is wrong is the reader's to decide.
@@ -10614,6 +10618,31 @@ only scalar value an expression needs.
 `negative/variant-match-array-binding-index-out-of-range`; the generated token
 and IR records; and
 `runtime/variant-match-array-payload-bindings-update-storage` on Linux x86-64.
+
+### D1085 — An `inout` payload binding needs a matched value that may be written
+
+**The tour said** at [1220] that a match arm's binding takes a parameter
+convention and that `inout` makes it a writable alias of the payload, and
+at [0430] and [0450] that a read-only reference and an immutable binding
+are never written through. D78 and D85 gave the alias its storage. None of
+them said what the matched value must be, and the checker asked only the
+binding's own convention, so `case(inout v): v = 2` wrote the payload of
+an immutable binding, of an `in` parameter, and of whatever a `ptr s` or a
+`[]s` reached; on firmware that store's target is in flash.
+
+**Chosen:** an `inout` payload binding requires the matched value to be a
+place that may be written, by [1900]'s rules for an assignment's target: a
+mutable binding, a named return, an `inout` parameter, an element of
+writable storage a `for` walks, or a place reached through a `mut`
+reference. Anything else is L0303 at the binding, naming the matched
+value. A binding without `inout` reads the payload of any value, as before.
+
+**The alternatives:** refusing each write through the binding where it is
+made, which leaves `addr v` and an `inout` argument to find separately and
+reports far from the cause; and making the binding a copy when the value
+is read-only, which gives one spelling two meanings. Both are declined.
+
+**Pinned by** `negative/inout-payload-binding-of-read-only-subject`.
 
 ### D86 — A named ordinary struct field has a measured layout
 
