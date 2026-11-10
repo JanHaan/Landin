@@ -48,6 +48,8 @@ int landin_private_directory(const char *prefix, char *path,
                              size_t capacity);
 int landin_remove_tree(const char *path);
 int landin_private_parent(const char *, char **, char **);
+extern void landin_cancellation_hold(void);
+extern void landin_cancellation_release(void);
 
 /* A failed Ada.Directories.Exists can mean either absence or a parent that
    refused traversal. Probe only that failure path, preserving the host's
@@ -256,7 +258,14 @@ static int landin_private_directory_locked(const char *prefix, char *path,
     if (n < 0 || (size_t)n >= sizeof marked) {
         free(root); errno = ENAMETOOLONG; return -1;
     }
-    if (landin_owned_create(marked, &root->owned) != 0) { free(root); return -1; }
+    /* A cancelling signal is recorded, not fatal, from before the directory
+       exists until landin_remove_tree has removed it. */
+    landin_cancellation_hold();
+    if (landin_owned_create(marked, &root->owned) != 0) {
+        int error = errno;
+        landin_cancellation_release();
+        free(root); errno = error; return -1;
+    }
     if (strlen(root->owned.path) >= capacity) {
         if (landin_owned_remove(&root->owned) >= 0) {
             close(root->owned.parent); free(root);
@@ -265,6 +274,7 @@ static int landin_private_directory_locked(const char *prefix, char *path,
                      "%s", root->owned.reason);
             root->next = landin_private_roots; landin_private_roots = root;
         }
+        landin_cancellation_release();
         errno = ENAMETOOLONG; return -1;
     }
     strcpy(path, root->owned.path);
@@ -287,6 +297,7 @@ static int landin_remove_tree_locked(const char *path)
             } else {
                 *link = root->next;
                 close(root->owned.parent); free(root);
+                landin_cancellation_release();
             }
             return result;
         }

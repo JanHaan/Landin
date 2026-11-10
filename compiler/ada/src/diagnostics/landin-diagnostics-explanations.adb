@@ -105,7 +105,10 @@ package body Landin.Diagnostics.Explanations is
                & "he publication workspace it made when nothing was captur"
                & "ed; free the resource and retry. A build cancelled by a "
                & "signal reports no output failure: refine's last line nam"
-               & "es the signal, and nothing it would have replaced was."
+               & "es the signal, and nothing it would have replaced was. A"
+               & " command that held nothing when the signal came, such as"
+               & " `refine check`, is ended by the signal itself and write"
+               & "s no last line (D1046)."
                & LF
                & LF
                & "A late failure can follow successful staging or installa"

@@ -18583,7 +18583,8 @@ Identity is not a content-version lock. Private storage is not isolation
 from hostile processes with the same credentials or privileged processes.
 
 Interrupt, termination and hangup cancellation is recorded by signal-safe
-notification. The supervisor forwards it to the active tool's process group,
+notification while the command holds something to recover (D1046). The
+supervisor forwards it to the active tool's process group,
 permits bounded shutdown, stops remaining ordinary group members and reaps
 its direct child before cleanup. That unreaped child reserves the identifier
 while signaling is possible. Tools that escape their group or change
@@ -18616,6 +18617,81 @@ Unsupported operations refuse rather than use unchecked replacement.
 `compiler/tests/test_tool_cancellation.py`,
 `compiler/tests/test_formatter_write_safety.py`, the `bindings` and `devices`
 publication cases, and the driver and command input-preservation cases.
+
+### D1046 — A signal ends a command at once unless it holds something to recover
+
+**D907 said** that an interrupt, termination or hangup is recorded by a
+signal-safe notification and answered in ordinary control flow. Only the
+tool supervisor and the publication steps looked at the record. `refine
+check` has neither, so the signal cost the whole remaining check before the
+process ended, and a stage that did not end left a process that no polite
+signal could stop: `timeout` without `-k` waited for ever. `refine fmt` of a
+directory went on to read, format and report every remaining source.
+
+**Chosen:** the handler ends the process by the signal's default action,
+there and then, whenever the command holds nothing a signal could leave half
+done. Something is held from before it exists until it is gone: an open
+publication and its workspace, a private directory, a tool's capture and
+the unreaped tool, and the rewrite of a source `refine fmt` is replacing;
+reading, parsing, checking and lowering hold nothing. While something is
+held the signal is recorded as before, and the command answers it where one
+stage hands over to the next: after the frontend, when the outputs are
+reserved, after the optimizer and after emission, as well as in the tool
+supervisor and every publication step; `refine fmt` stops before its next
+source. A recorded signal that is not answered within ten seconds ends the
+process by that signal, as `SIGKILL` would, leaving the workspace its
+destination records describe: a stage that never reaches a boundary cannot
+hold the process, and ten seconds is longer than stopping a tool and
+putting the outputs back takes. A caller that started refine with `SIGALRM`
+ignored has no such limit. A command ended by an unrecorded signal ends by
+the signal itself, with no last line; one that answered a recorded signal
+still writes `refine: cancelled by signal N` and exits with 128 plus the
+number.
+
+**The alternatives:** asking for the record inside every stage, which
+reaches each loop of the compiler through an interface the stages do not
+have, for a property the default action gives at no cost wherever nothing is
+held; ending at once whatever is held, which leaves a workspace that
+refuses the directory's next build after every interrupted link; a second
+signal as the way past an unanswered first, which a `timeout` never sends
+and an impatient second Ctrl-C would turn into that leftover workspace; and
+no limit, which leaves the non-terminating stage unstoppable. The grace
+period's length is a choice: it needs the maintainer's confirmation.
+
+**Pinned by** `compiler/tests/test_tool_cancellation.py`, whose `unheld`
+controls end by each signal at once, whose `grace` control is ended by a
+recorded signal it never answers only after the period, and whose
+`unheld-check` commands end a long `refine check` by each signal, together
+with its controls of a recorded signal while a tool runs.
+
+### D1047 — The file-size and closed-pipe signals reach the recovery written for their errors
+
+**D907 said** that a preparation refused for a resource limit removes the
+workspace it made, and D526 that `refine run` removes its directory on every
+way out. Both were written for the error a write returns. A write past the
+file-size limit returns that error only when `SIGXFSZ` is ignored or caught;
+its default action ended refine inside the write, so `refine fmt` left a
+source cut at the limit and a build left its workspace, and every control of
+the limit had ignored the signal first. `SIGPIPE` on refine's own report did
+the same to a run's directory.
+
+**Chosen:** refine ignores `SIGXFSZ` for the length of a command, so the
+write fails with the error and the recovery written for it runs; a tool and
+the program `refine run` starts are given the inherited disposition back.
+`SIGPIPE` is one of the signals D1046 records: with nothing held it ends the
+process as before, and while a run's directory exists the write fails
+instead, the directory is removed, and refine exits with 128 plus the
+signal's number.
+
+**The alternatives:** catching `SIGXFSZ` and recording it as a cancellation,
+which abandons a build for a limit only one of its outputs met; blocking it
+around each write, which every new write would have to remember; and
+ignoring `SIGPIPE` throughout, which turns `refine check | head` from a
+quiet end into a reported write failure.
+
+**Pinned by** `compiler/tests/test_formatter_write_safety.py`'s
+`test_file_size_signal_does_not_cut_the_source` and
+`compiler/tests/test_tool_cancellation.py`'s `limit` and `pipe` controls.
 
 ### D359 — `refine fmt --check` names every line, and `--stdout` prints the layout
 

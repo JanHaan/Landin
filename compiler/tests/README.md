@@ -1085,7 +1085,9 @@ controls use owned scratch roots and readiness barriers for the formatter's
 open window, publication conflicts and tool cancellation. The cancellation
 helper checks delivery to the process group and reaping of the direct child;
 it also checks refusal before spawning under automatic child reaping,
-unchanged OS-observed signal policy and complete advice with long tool paths.
+unchanged OS-observed signal policy and complete advice with long tool paths,
+and that a signal ends a process holding nothing at once, is recorded while
+something is held, and ends it after the grace period when never answered.
 It does not claim to reap arbitrary descendants. `--native-only` runs just
 the process adapter controls. The FreeBSD runtime guests compile and run
 the same C controls with their own compiler, without claiming a native

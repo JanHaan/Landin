@@ -175,7 +175,9 @@ A preparation the host refuses for a resource, such as the file-size limit
 or a full disk, says so and removes the publication workspace it made when
 nothing was captured; free the resource and retry. A build cancelled by a
 signal reports no output failure: refine's last line names the signal, and
-nothing it would have replaced was.
+nothing it would have replaced was. A command that held nothing when the
+signal came, such as `refine check`, is ended by the signal itself and
+writes no last line (D1046).
 
 A late failure can follow successful staging or installation, and the
 diagnostic says which state publication ended in. "Is published" means the

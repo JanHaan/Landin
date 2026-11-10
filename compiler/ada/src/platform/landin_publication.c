@@ -108,6 +108,8 @@ static void quarantine(struct arena *a)
 }
 static int next_token = 1;
 extern int landin_cancellation_requested(void);
+extern void landin_cancellation_hold(void);
+extern void landin_cancellation_release(void);
 extern int landin_overlaps_any(const char *, const char *const *, size_t);
 extern int landin_entry_names_alias(int, const char *, const char *);
 static landin_publication_hook fault_hook;
@@ -1013,6 +1015,7 @@ static void free_finished_arena(struct arena *arena)
         free(p->bytes); free_tree(p->expected_tree); free_tree(p->fresh_tree);
         free(p->path); free(p->name); free(p->stage);
         free(p->recovery); free(p->rollback); free(p);
+        landin_cancellation_release();
     }
     struct arena **at = &arenas;
     while (*at != arena) at = &(*at)->next;
@@ -1084,6 +1087,9 @@ static int landin_publication_open_locked(const char *path, int deletion,
     int parent = -1, fd = -1, absence_conflict = 0;
     int require_absent = (deletion & LANDIN_PUBLICATION_REQUIRE_ABSENT) != 0;
     *token = 0; if (stage_room) *stage = 0;
+    /* Held from here until the publication is freed: its workspace is on
+       disk for as long. */
+    landin_cancellation_hold();
     if (!p) goto fail;
     p->expected_fd = -1;
     if (deletion & ~(LANDIN_PUBLICATION_DELETE_ONLY | LANDIN_PUBLICATION_REQUIRE_ABSENT))
@@ -1097,6 +1103,7 @@ static int landin_publication_open_locked(const char *path, int deletion,
     if (retained_workspace(parent, parent_path, p->name, why, room) != 0) {
         release_anchor(p);
         close(parent); free(parent_path); free(p->path); free(p->name); free(p);
+        landin_cancellation_release();
         return -1;
     }
     barrier("before-snapshot", p->path);
@@ -1168,6 +1175,7 @@ fail:
         free(p->path); free(p->name); free(p->bytes); free(p->stage);
         free(p->recovery); free(p->rollback);
         free_tree(p->expected_tree); free_tree(p->fresh_tree); free(p); }
+    landin_cancellation_release();
     free(parent_path); return -1;
 }
 /* The pinned directory can move after anchor selection. Report an observed

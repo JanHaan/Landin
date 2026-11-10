@@ -2034,6 +2034,12 @@ package body Landin.Diagnostics.Citations is
             when 907 =>
                "A command publishes its outputs without destroying confl"
                & "icting inputs or saves",
+            when 1046 =>
+               "A signal ends a command at once unless it holds somethin"
+               & "g to recover",
+            when 1047 =>
+               "The file-size and closed-pipe signals reach the recovery"
+               & " written for their errors",
             when 359 =>
                "`refine fmt --check` names every line, and `--stdout` pr"
                & "ints the layout",
@@ -3756,6 +3762,10 @@ package body Landin.Diagnostics.Citations is
             when 358 =>
                "Decisions: The toolchain, C and the machine",
             when 907 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1046 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1047 =>
                "Decisions: The toolchain, C and the machine",
             when 359 =>
                "Decisions: The toolchain, C and the machine",
@@ -5534,6 +5544,13 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d907-a-command-publishes-i"
                & "ts-outputs-without-destroying-conflicting-inputs-or-save"
                & "s",
+            when 1046 =>
+               "https://www.701.dev/spec.html#d1046-a-signal-ends-a-comm"
+               & "and-at-once-unless-it-holds-something-to-recover",
+            when 1047 =>
+               "https://www.701.dev/spec.html#d1047-the-file-size-and-cl"
+               & "osed-pipe-signals-reach-the-recovery-written-for-their-e"
+               & "rrors",
             when 359 =>
                "https://www.701.dev/spec.html#d359-refine-fmt-check-name"
                & "s-every-line-and-stdout-prints-the-layout",

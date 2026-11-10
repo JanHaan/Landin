@@ -1332,10 +1332,18 @@ Concurrent writes through another descriptor to that inode and hostile
 same-credential or privileged access to private storage remain outside the
 contract. Public directory-entry changes are handled through the capture
 and no-clobber protocol even when made through a directory descriptor.
-Tool cancellation uses signal-safe
-notification and ordinary Ada cleanup, forwards to the active process group,
-stops its remaining ordinary members and reaps its direct child before
-recovery; group escape and credential changes are outside supervision.
+A signal ends the process at once by its default action unless something is
+held that it would leave half done; each adapter that creates such a thing
+calls `landin_cancellation_hold` before it exists and
+`landin_cancellation_release` once it is gone, and an adapter that adds one
+must do the same (D1046). While something is held, cancellation uses
+signal-safe notification and ordinary Ada cleanup, forwards to the active
+process group, stops its remaining ordinary members and reaps its direct
+child before recovery; group escape and credential changes are outside
+supervision. The driver asks for the record where one stage hands over to
+the next, and a record left unanswered for ten seconds ends the process.
+The file-size signal is ignored for a command and given back to its
+children (D1047).
 Automatic child reaping (`SIGCHLD` ignored or `SA_NOCLDWAIT`) is refused
 before spawning without changing the inherited policy. Native callers must
 not change that policy or let another waiter or handler reap owned children.

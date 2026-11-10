@@ -609,6 +609,10 @@ package body Landin.Driver is
 
       if not Misused then
          for Path of Named loop
+            --  A signal that arrived while a source was being rewritten
+            --  is recorded, so that rewrite ends whole; no later source
+            --  is read, formatted or reported after it.
+            exit when Host.Cancellation_Requested;
             declare
                Content : Unbounded.Unbounded_String;
                Read    : Landin.Platform.Read_Status;
@@ -1786,6 +1790,21 @@ package body Landin.Driver is
             end if;
             return "cannot prepare " & Kind & " " & Path & ": " & Said;
          end Preparation_Failure;
+
+         --  Whether a signal has asked this command to stop, asked where
+         --  one stage hands over to the next.  While an output is reserved
+         --  or a private directory exists the host records the signal
+         --  rather than end the process, and this is what answers it: the
+         --  group is abandoned as a refused preparation abandons it.
+         function Stop_Requested return Boolean;
+         function Stop_Requested return Boolean is
+         begin
+            if not Cancelled and then Host.Cancellation_Requested then
+               Cancelled := True;
+               Publication_Failed := True;
+            end if;
+            return Cancelled;
+         end Stop_Requested;
 
          procedure Reserve_Output
            (Path : String; Defer_Preparation_Failure : Boolean := False);
@@ -4249,7 +4268,7 @@ package body Landin.Driver is
                   Reserve_Output
                     (Stack_Path, Defer_Preparation_Failure => True);
                end if;
-               if Bad_Use then
+               if Bad_Use or else Stop_Requested then
                   return;
                end if;
             end if;
@@ -4398,6 +4417,9 @@ package body Landin.Driver is
             Landin.IR.Pipeline.Run_On_Verified
               (Landin.Stages.Code (Context).all, Facts,
                Optimization, Evidence);
+            if Stop_Requested then
+               return;
+            end if;
 
             --  Specialization can expose an additional atom domain. The
             --  selected source identity and source-byte spaces stay fixed;
@@ -4664,7 +4686,7 @@ package body Landin.Driver is
                   end if;
                end;
                Report_Publication_Failure;
-               if Publication_Failed then
+               if Publication_Failed or else Stop_Requested then
                   return;
                end if;
                if Emit_Map then
@@ -5671,6 +5693,11 @@ package body Landin.Driver is
               and then not Landin.Stages.Failed (Context)
             then
                Checking.Run (Context, Panic, Watch_Stage'Access);
+               --  `refine run` holds its private directory from before
+               --  the first stage, so a signal during them is recorded.
+               if Host.Cancellation_Requested then
+                  Cancelled := True;
+               end if;
                Policy_Denied := Landin.Diagnostics.Warning_Policy.Denied
                  (Warnings, Landin.Stages.Report (Context));
                if not Landin.Stages.Failed (Context) then
@@ -5684,6 +5711,7 @@ package body Landin.Driver is
                if Emit /= Emit_Nothing
                  and then not Policy_Denied
                  and then not Bad_Use
+                 and then not Cancelled
                  and then not Landin.Stages.Failed (Context)
                then
                   Current_Stage := Unbounded.To_Unbounded_String ("emission");
