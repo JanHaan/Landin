@@ -580,10 +580,33 @@ class Lane:
 
 
 
+def unknown_case(asked, known, kind):
+    """Refuse a --case this lane does not hold, saying what it takes.
+
+    The lane names a fixture by its directory alone, where the other
+    runners take CLASS/NAME and this lane's own transcript writes
+    CLASS-NAME, so the refusal gives the spelling to use.
+    """
+    import difflib
+    said, listed = [], False
+    for name in asked:
+        if name in known:
+            continue
+        bare = [k for k in known if name in (kind + '/' + k, kind + '-' + k)]
+        close = bare or difflib.get_close_matches(name.rpartition('/')[2], known, 3, 0.6)
+        listed = listed or not close
+        said.append(repr(name) + (' (write ' + bare[0] + ')' if bare
+                                  else ' (nearest: ' + ', '.join(close) + ')' if close else ''))
+    require(not said, 'unknown exact case ' + ', '.join(said)
+            + ': --case takes the bare directory name of a fixture the ' + kind
+            + ' lane holds, without its class'
+            + ('; the ' + str(len(known)) + ' it holds: ' + ' '.join(known) if listed else ''))
+
+
 def work_items(args):
     candidates = select(args.arch, args.kind)
     if args.case:
-        require(set(args.case) <= {p.name for p, _ in candidates}, 'unknown exact case')
+        unknown_case(args.case, sorted({p.name for p, _ in candidates}), args.kind)
         candidates = [(p, m) for p, m in candidates if p.name in args.case]
     if getattr(args, 'shard', None):
         # Whole fixtures, so each keeps its levels and profiles together.
@@ -736,7 +759,7 @@ def main():
     parser.add_argument('--runner-ssh', help='existing Linux-hosted VM SSH argv; uses guest sudo')
     parser.add_argument('--prepare-only', action='store_true', help='emit and inspect a transferable Linux payload')
     parser.add_argument('--prepared', type=Path, help='execute a checked Linux payload without a compiler')
-    parser.add_argument('--case', action='append', help='exact fixture name, development only')
+    parser.add_argument('--case', action='append', help="a fixture's bare directory name, without its class; development only")
     parser.add_argument('--shard', type=shard, metavar='I/N',
                         help='fixtures I, I+N, ... of the selection; all N together are the lane')
     args = parser.parse_args()

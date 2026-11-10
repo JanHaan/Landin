@@ -57,6 +57,29 @@ class FreeBSDControls(unittest.TestCase):
                     for i, j in ((0, 1), (0, 2), (1, 2)):
                         self.assertFalse(owners[i] & owners[j], 'a fixture is split across shards')
 
+    def test_an_unknown_case_says_the_spelling_the_lane_takes(self):
+        def work(*cases):
+            return LANE.work_items(SimpleNamespace(arch='amd64', kind='runtime', case=list(cases), shard=None))
+        known = {base.name for base, *_ in LANE.work_items(
+            SimpleNamespace(arch='amd64', kind='runtime', case=None, shard=None))}
+        name = sorted(known)[0]
+        self.assertEqual({base.name for base, *_ in work(name)}, {name})
+        for spelling in ('runtime/' + name, 'runtime-' + name):
+            with self.subTest(spelling=spelling), self.assertRaises(ValueError) as raised:
+                work(spelling)
+            self.assertIn(repr(spelling) + ' (write ' + name + ')', str(raised.exception))
+            self.assertIn('bare directory name', str(raised.exception))
+        with self.assertRaises(ValueError) as raised:
+            work(name + 'x')
+        self.assertIn(repr(name + 'x') + ' (nearest: ', str(raised.exception))
+        self.assertNotIn('it holds:', str(raised.exception))
+        #  With nothing near, every name the lane knows is in the refusal.
+        with self.assertRaises(ValueError) as raised:
+            work('zzzz-qqqq-0000')
+        said = str(raised.exception)
+        self.assertIn("'zzzz-qqqq-0000'", said)
+        self.assertTrue(all(' ' + k in said for k in known))
+
     def test_a_shard_takes_no_selection_or_transfer(self):
         self.assertEqual(LANE.shard('2/3'), (2, 3))
         for text in ('0/3', '4/3', '3', 'a/b', '1/65'):
