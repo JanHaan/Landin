@@ -14,6 +14,7 @@ L0007  Live     [1410], [1420]: a module directory is invalid or unreadable
 L0015  Live     D267: an imported source namespace is unavailable for the target
 L0016  Live     D275: a project root holds a module the compiler's library supplies instead
 L0532  Live     D563: an import's first directory holds no source and a later root holds its module
+L0616  Live     D1055: an import selects the directory of a source the request named as the entry module
 L0008  Live     D252: a source `refine fmt --check` finds out of the layout
 L0009  Live     D255: a CPU feature level the selected target does not have
 L0010  Live     [1830]: the tour describes this and the kernel omits it

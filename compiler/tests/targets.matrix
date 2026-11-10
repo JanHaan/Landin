@@ -221,6 +221,8 @@ negative/assembly-rv64-system-call | linux-rv64
 negative/assembly-shorthand-after-operand | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assembly-shorthand-hosted | linux-x86-64
 negative/assembly-synthetic-target | synthetic-32
+negative/assembly-tab-led-line | linux-x86-64
+negative/assembly-tab-led-line-cortex | cortex-m0
 negative/assembly-template-names | cortex-m0
 negative/assigned-on-one-path-only | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assignment-as-expression | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -610,6 +612,7 @@ negative/immutable-variant-runtime-array-payload | linux-x86-64, linux-arm64, da
 negative/import-alias-original-unbound | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/import-alias-reserved | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/import-alias-selected-collision | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/import-of-named-entry | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/import-option-collision | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/import-selected-alias-collision | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/import-selected-duplicate | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
