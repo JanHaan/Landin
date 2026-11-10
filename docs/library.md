@@ -1053,6 +1053,10 @@ A `status` holds the size, its `entry_kind`, the last modification as a
 `wall_time` and whether it is `read_only`. `status_of` follows a final
 symbolic link or not, as asked.
 
+`platform/posix` uses the name differently: its `status_of` takes an open
+descriptor, as `status_of_file` does here, and its call for a path is
+`status_at`.
+
 A read-only file refuses an open for writing with `no_access`. The
 exception is a process the system lets past every permission, as POSIX's
 root.
@@ -1188,7 +1192,9 @@ Each fake is named one way:
 | its constructor, which fills the state and returns the handle | the name with `_over` | `fake.volume_over` |
 
 The fakes are `fake.volume`, `fake.network`, `fake.clock`, `fake.entropy`,
-`fake.terminals` and `fake.signals`. Four of them are described
+`fake.terminals` and `fake.signals`. `fake.terminals` is the one without a
+`_space`: its state is the caller's `screen` records, which
+`terminals_over` takes directly. Four of the fakes are described
 elsewhere:
 
 | Fake | Described with |
@@ -1955,8 +1961,15 @@ failed check's handler. `--stack-report` gives the margin as
 A switch carries each stack's limit with the registers it saves.
 
 A prepared stack is at least 128 words, or 176 with a Cortex-M float unit,
-beside the few words its first frame keeps at its top. Size it from the report's depth of the task's
-function and the margin.
+beside the few words its first frame keeps at its top.
+
+Size a stack from two figures of `--stack-report`: the margin, and the
+`depth_bytes` of the `routines` row named
+`core.fibre.stacks.first_frame`. That routine is the first frame every
+fibre starts in, and it calls the task, so its depth is what a stack must
+hold below its top. No task has a row of its own. The depth is a bound
+over every task the program can start, with the deepest provider of each
+concept counted, and not the depth of the one task a group admits.
 
 Every target with a native backend admits this module, and synthetic-32
 does not. A program over `fibre.whole` or the blocking host does not
@@ -2563,6 +2576,15 @@ A `status` gives:
 - the file's permission bits and its links;
 - its owner and group, as a `user_id` and a `group_id`;
 - when it was last read, written and changed.
+
+Its names and flags differ from `core/io`'s for the same things:
+
+| | `platform/posix` | `core/io` |
+|---|---|---|
+| the status of a path | `status_at` | `status_of` |
+| the status of an open file | `status_of`, over a descriptor | `status_of_file` |
+| whether a final symbolic link is followed | `follow`, a `bool` | `following` or `not_following`, atoms |
+| what `synchronize` writes | `data_only`, a `bool` | `data_and_status` or `data_only`, atoms |
 
 ### Locks
 

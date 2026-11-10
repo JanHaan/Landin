@@ -27,8 +27,8 @@ end starting
 --  whose description has a float unit, whose frames hold its registers
 --  too (D620).  A smaller stack is then out of memory here rather than a
 --  trap in the builtin.  Every routine checks its own frame against the
---  limit in its prologue (D471), so how deep a task may go is the stack's
---  business, not this module's.
+--  limit in its prologue (D471); how deep a task may go is the depth that
+--  `--stack-report` gives the row of `first_frame`, below.
 fixed if compiler.feature.fp then
     least_prepared_words: usize = 176
 else

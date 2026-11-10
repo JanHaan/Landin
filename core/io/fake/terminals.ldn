@@ -18,7 +18,7 @@ end screens_value
 public terminals: type = screens_value
 
 --- Terminals over `screens`, which the handle lends; keep them alive while
---- it is used.
+--- it is used.  The screens are its whole state, so it has no `_space`.
 public terminals_over: (screens: []screen)
                        -> (host: terminals from screens) =
     host = (screens: screens)
