@@ -4,6 +4,8 @@ package body Landin.Platform.Overlays is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   use type Interfaces.Unsigned_64;
+
    --  The text before a held path's last '/', and the text after it.  A
    --  path with no '/' is in no directory an overlay can list.
    function Directory_Of (Path : String) return String;
@@ -37,9 +39,89 @@ package body Landin.Platform.Overlays is
    function Holds (Host : Overlay; Path : String) return Boolean
      is (Host.Held.Contains (Path));
 
+   function Same_Object (Left, Right : File_Identity) return Boolean
+     is (Left.Valid and then Right.Valid
+         and then Left.Device = Right.Device
+         and then Left.Inode = Right.Inode);
+
+   --  Path with a '/' after it, which every path beneath it begins with.
+   function Beneath (Path : String) return String
+     is (if Path'Length > 0 and then Path (Path'Last) = '/' then Path
+         else Path & "/");
+
+   function Starts (Text, Prefix : String) return Boolean
+     is (Text'Length >= Prefix'Length
+         and then Text (Text'First .. Text'First + Prefix'Length - 1)
+           = Prefix);
+
+   --  Whether a held path lies beneath Path, which makes Path a directory
+   --  the host need not have.
+   function Implied_Directory (Host : Overlay; Path : String) return Boolean;
+
+   function Implied_Directory (Host : Overlay; Path : String) return Boolean
+   is
+      Prefix : constant String := Beneath (Path);
+      Found  : constant Content_Maps.Cursor :=
+        (if Path = "" then Content_Maps.No_Element
+         else Host.Held.Ceiling (Prefix));
+   begin
+      return Content_Maps.Has_Element (Found)
+        and then Content_Maps.Key (Found)'Length > Prefix'Length
+        and then Starts (Content_Maps.Key (Found), Prefix);
+   end Implied_Directory;
+
+   function Held_As (Host : Overlay; Path : String) return String is
+   begin
+      if Host.Held.Contains (Path) then
+         return Path;
+      elsif Host.Held.Is_Empty or else Path = "" then
+         return "";
+      end if;
+      declare
+         File      : constant File_Identity :=
+           Host.Under.Existing_Identity (Path);
+         Directory : constant String := Directory_Of (Path);
+         Name      : constant String := Entry_Of (Path);
+         Asked     : Boolean := False;
+         Within    : File_Identity;
+      begin
+         for Position in Host.Held.Iterate loop
+            declare
+               Held_Path : constant String := Content_Maps.Key (Position);
+               Held_In   : constant String := Directory_Of (Held_Path);
+            begin
+               if File.Valid
+                 and then Same_Object
+                   (File, Host.Under.Existing_Identity (Held_Path))
+               then
+                  return Held_Path;
+               elsif Directory /= "" and then Held_In /= ""
+                 and then Held_In /= Directory
+                 and then Entry_Of (Held_Path) = Name
+               then
+                  --  A buffer the host may not have yet, in a directory
+                  --  the loader spelled another way.
+                  if not Asked then
+                     Within := Host.Under.Existing_Identity (Directory);
+                     Asked := True;
+                  end if;
+                  if Same_Object
+                    (Within, Host.Under.Existing_Identity (Held_In))
+                  then
+                     return Held_Path;
+                  end if;
+               end if;
+            end;
+         end loop;
+      end;
+      return "";
+   end Held_As;
+
    overriding function Exists
      (Host : Overlay; Path : String) return Boolean
-     is (Host.Held.Contains (Path) or else Host.Under.Exists (Path));
+     is (Host.Held.Contains (Path) or else Host.Under.Exists (Path)
+         or else Implied_Directory (Host, Path)
+         or else Held_As (Host, Path) /= "");
 
    overriding function Working_Directory (Host : Overlay) return String
      is (Host.Under.Working_Directory);
@@ -90,7 +172,8 @@ package body Landin.Platform.Overlays is
    overriding function Is_Directory
      (Host : Overlay; Path : String) return Boolean
      is (not Host.Held.Contains (Path)
-         and then Host.Under.Is_Directory (Path));
+         and then (Host.Under.Is_Directory (Path)
+                   or else Implied_Directory (Host, Path)));
 
    overriding function Is_Link
      (Host : Overlay; Path : String) return Boolean
@@ -102,8 +185,17 @@ package body Landin.Platform.Overlays is
       Content : out Ada.Strings.Unbounded.Unbounded_String;
       Status  : out Read_Status)
    is
-      Found : constant Content_Maps.Cursor := Host.Held.Find (Path);
+      Found : Content_Maps.Cursor := Host.Held.Find (Path);
    begin
+      if not Content_Maps.Has_Element (Found) then
+         declare
+            Other : constant String := Held_As (Host, Path);
+         begin
+            if Other /= "" then
+               Found := Host.Held.Find (Other);
+            end if;
+         end;
+      end if;
       if Content_Maps.Has_Element (Found) then
          Content := Unbounded.To_Unbounded_String
            (Content_Maps.Element (Found));
@@ -189,7 +281,7 @@ package body Landin.Platform.Overlays is
       Content : out Unbounded.Unbounded_String;
       Identity : out File_Identity; Status : out Read_Status) is
    begin
-      if Host.Holds (Path) then
+      if Held_As (Host, Path) /= "" then
          Read_File (Host, Path, Content, Status);
          Identity := (others => <>);
       else
@@ -306,7 +398,9 @@ package body Landin.Platform.Overlays is
    end Unlock_Output;
 
    --  The host's listing with every held entry of the same directory
-   --  merged into its sorted place, once.
+   --  merged into its sorted place, once: a held file in it, and the first
+   --  name of a held path further beneath it, which is a directory.  A
+   --  directory only held paths make is listed from them alone.
    overriding procedure List_Directory
      (Host    : Overlay;
       Path    : String;
@@ -316,37 +410,72 @@ package body Landin.Platform.Overlays is
       Directory : constant String :=
         (if Path'Length > 1 and then Path (Path'Last) = '/'
          then Path (Path'First .. Path'Last - 1) else Path);
+      Prefix : constant String := Beneath (Directory);
       Listed : Path_List;
+      Names  : Name_Sets.Set;
       Next   : Positive := 1;
+      Asked  : Boolean := False;
+      Within : File_Identity;
    begin
       Host.Under.List_Directory (Path, Listed, Status);
       Entries.Clear;
-      if Status /= List_Ok then
-         return;
-      end if;
       for Position in Host.Held.Iterate loop
          declare
             Held_Path : constant String := Content_Maps.Key (Position);
+            Held_In   : constant String := Directory_Of (Held_Path);
          begin
-            if Directory_Of (Held_Path) = Directory then
+            if Directory /= "" and then Starts (Held_Path, Prefix)
+              and then Held_Path'Length > Prefix'Length
+            then
                declare
-                  Name : constant String := Entry_Of (Held_Path);
+                  Rest  : constant String :=
+                    Held_Path (Held_Path'First + Prefix'Length
+                               .. Held_Path'Last);
+                  Slash : constant Natural :=
+                    Ada.Strings.Fixed.Index (Rest, "/");
                begin
-                  while Next <= Natural (Listed.Length)
-                    and then Listed.Element (Next) < Name
-                  loop
-                     Entries.Append (Listed.Element (Next));
-                     Next := Next + 1;
-                  end loop;
-                  if Next <= Natural (Listed.Length)
-                    and then Listed.Element (Next) = Name
-                  then
-                     Next := Next + 1;
-                  end if;
-                  Entries.Append (Name);
+                  Names.Include
+                    (if Slash = 0 then Rest
+                     else Rest (Rest'First .. Slash - 1));
                end;
+            elsif Status = List_Ok and then Held_In /= ""
+              and then Directory /= ""
+            then
+               --  The same directory under another spelling.
+               if not Asked then
+                  Within := Host.Under.Existing_Identity (Directory);
+                  Asked := True;
+               end if;
+               if Same_Object
+                 (Within, Host.Under.Existing_Identity (Held_In))
+               then
+                  Names.Include (Entry_Of (Held_Path));
+               end if;
             end if;
          end;
+      end loop;
+      if Status /= List_Ok then
+         --  Only a directory the host does not have is made of what is
+         --  held; one it has and cannot list stays unlistable.
+         if Names.Is_Empty or else Host.Under.Exists (Directory) then
+            return;
+         end if;
+         Listed.Clear;
+         Status := List_Ok;
+      end if;
+      for Name of Names loop
+         while Next <= Natural (Listed.Length)
+           and then Listed.Element (Next) < Name
+         loop
+            Entries.Append (Listed.Element (Next));
+            Next := Next + 1;
+         end loop;
+         if Next <= Natural (Listed.Length)
+           and then Listed.Element (Next) = Name
+         then
+            Next := Next + 1;
+         end if;
+         Entries.Append (Name);
       end loop;
       while Next <= Natural (Listed.Length) loop
          Entries.Append (Listed.Element (Next));

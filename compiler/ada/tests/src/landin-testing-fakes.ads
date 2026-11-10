@@ -25,6 +25,9 @@ package Landin.Testing.Fakes is
      (Host : in out Fake_Filesystem; Path, Target : String);
    procedure Set_Identity_Uncertain
      (Host : in out Fake_Filesystem; Path : String);
+   --  Inject an exception where Existing_Identity is asked about Path.
+   procedure Raise_On_Identity
+     (Host : in out Fake_Filesystem; Path : String);
    overriding function Observe_Identity
      (Host : Fake_Filesystem; Path : String)
       return Landin.Platform.Identity_Observation;
@@ -438,6 +441,12 @@ package Landin.Testing.Fakes is
      (Host : in out Fake_Channel; Offset : Natural;
       Files : Fake_Filesystem_Access; Path, Content : String);
 
+   --  Remove a disk file, or a directory and what it holds, when input
+   --  resumes after a pause.
+   procedure Remove_At
+     (Host : in out Fake_Channel; Offset : Natural;
+      Files : Fake_Filesystem_Access; Path : String);
+
    function Output (Host : Fake_Channel) return String;
 
    function Logged (Host : Fake_Channel) return String;
@@ -555,6 +564,7 @@ private
    type Fake_Filesystem is limited new Landin.Platform.Filesystem
    with record
       Uncertain_Identities : Landin.Platform.Path_List;
+      Raising_Identities : Landin.Platform.Path_List;
       Aliases : Landin.Platform.Path_List;
       Links : Landin.Platform.Path_List;
       Executable : Unbounded.Unbounded_String;
@@ -614,6 +624,7 @@ private
       Offset  : Natural;
       Path    : Unbounded.Unbounded_String;
       Content : Unbounded.Unbounded_String;
+      Removes : Boolean := False;
    end record;
 
    package Edit_Vectors is new Ada.Containers.Vectors

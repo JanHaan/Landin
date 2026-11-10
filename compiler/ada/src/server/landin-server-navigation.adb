@@ -46,7 +46,7 @@ package body Landin.Server.Navigation is
         (Index_Type => Positive, Element_Type => Line_Range);
 
       --  Text is read as one-based for these indices.
-      Bytes : constant String (1 .. Text'Length) := Text;
+      Bytes : constant String := Landin.Source.One_Based (Text);
       Lines : Line_Ranges.Vector;
       Length : Natural := 0;
       --  The first byte of the line being looked above.
@@ -127,25 +127,25 @@ package body Landin.Server.Navigation is
          end;
       end loop;
       declare
-         Result : String (1 .. Length);
-         Next   : Positive := 1;
+         Next : Positive := 1;
       begin
-         for Index in reverse 1 .. Natural (Lines.Length) loop
-            if Index < Natural (Lines.Length) then
-               Result (Next) := ASCII.LF;
-               Next := Next + 1;
-            end if;
-            declare
-               Line : constant Line_Range := Lines.Element (Index);
-            begin
-               if Line.From <= Line.Stop then
-                  Result (Next .. Next + Line.Stop - Line.From) :=
-                    Bytes (Line.From .. Line.Stop);
-                  Next := Next + Line.Stop - Line.From + 1;
+         return Result : String (1 .. Length) do
+            for Index in reverse 1 .. Natural (Lines.Length) loop
+               if Index < Natural (Lines.Length) then
+                  Result (Next) := ASCII.LF;
+                  Next := Next + 1;
                end if;
-            end;
-         end loop;
-         return Result;
+               declare
+                  Line : constant Line_Range := Lines.Element (Index);
+               begin
+                  if Line.From <= Line.Stop then
+                     Result (Next .. Next + Line.Stop - Line.From) :=
+                       Bytes (Line.From .. Line.Stop);
+                     Next := Next + Line.Stop - Line.From + 1;
+                  end if;
+               end;
+            end loop;
+         end return;
       end;
    end Doc_Comment;
 

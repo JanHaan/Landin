@@ -248,16 +248,19 @@ package body Landin.Server.Texts is
       end if;
    end Edit;
 
+   --  The result is built where a returned String lives, the secondary
+   --  stack, which grows on the heap: a whole source in a local object
+   --  would have to fit what is left of the primary stack.
    function Content (From : Buffer) return String is
-      Result : String (1 .. From.Length);
-      Next   : Positive := 1;
+      Next : Positive := 1;
    begin
-      for Part of From.Pieces loop
-         Result (Next .. Next + Part.Length - 1) :=
-           Part.Data.Data (Part.First .. Part.First + Part.Length - 1);
-         Next := Next + Part.Length;
-      end loop;
-      return Result;
+      return Result : String (1 .. From.Length) do
+         for Part of From.Pieces loop
+            Result (Next .. Next + Part.Length - 1) :=
+              Part.Data.Data (Part.First .. Part.First + Part.Length - 1);
+            Next := Next + Part.Length;
+         end loop;
+      end return;
    end Content;
 
    function Length (From : Buffer) return Natural is (From.Length);

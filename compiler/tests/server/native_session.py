@@ -10,16 +10,21 @@ already-built refine.
 Deliberate real-host exception: each session's `workspace/` is copied into
 its own temporary directory, and `file:///workspace` in what is sent and
 what is expected is that directory's URI, so the expected bytes are the
-transcript's own with only that prefix changed.  The fake host's library,
+transcript's own with only that prefix changed; a path a message spells
+outside a URI, `/workspace/...` after anything but a URI's own characters,
+becomes that directory's path the same way.  The fake host's library,
 `file:///opt/landin/lib/landin`, becomes the library a refine built in this
 checkout finds beside itself, the checkout's root (D275); a session's own
 `library/` stand-in is the fake host's alone.  A `pause` is a moment the
-script waits for the server to have answered what came before it.
+script waits for the server to have answered what came before it; a `disk:`
+or `gone:` after it changes the copy then, and a `link:` makes a symbolic
+link in the copy before the server starts.
 """
 import argparse
 import json
 import os
 from pathlib import Path
+import re
 import select
 import shutil
 import subprocess
@@ -54,8 +59,10 @@ def unescaped(text):
 
 
 def parse(transcript):
-    """(chunks of input split at each pause, disk edits, messages, status)."""
+    """(chunks of input split at each pause, disk edits, links, messages,
+    status).  A disk edit is a path and its bytes, or None to remove it."""
     chunks, edits, current, expected, status = [], [], b"", [], None
+    links = []
     for line in transcript.split("\n")[:-1]:
         if line.startswith("-> "):
             current += framed(line[3:])
@@ -67,14 +74,21 @@ def parse(transcript):
             current = b""
         elif line.startswith("disk: "):
             uri, content = line[6:].split(" | ", 1)
-            edits[-1].append((urllib.parse.urlparse(uri).path,
-                              unescaped(content)))
+            edits[-1].append((urllib.parse.unquote(
+                urllib.parse.urlparse(uri).path), unescaped(content)))
+        elif line.startswith("gone: "):
+            edits[-1].append((urllib.parse.unquote(
+                urllib.parse.urlparse(line[6:]).path).rstrip("/"), None))
+        elif line.startswith("link: "):
+            uri, target = line[6:].split(" | ", 1)
+            links.append(tuple(urllib.parse.unquote(
+                urllib.parse.urlparse(one).path) for one in (uri, target)))
         elif line.startswith("<- "):
             expected.append(line[3:])
         elif line.startswith("exit: "):
             status = int(line[6:])
     chunks.append(current)
-    return chunks, edits, expected, status
+    return chunks, edits, links, expected, status
 
 
 def messages(output):
@@ -107,7 +121,12 @@ def run(refine, name):
         transcript = transcript.replace(
             "file://localhost/workspace",
             "file://localhost" + urllib.parse.quote(str(workspace), safe="/"))
-        chunks, edits, expected, status = parse(transcript)
+        transcript = re.sub(r"(?<![/\w.~%-])/workspace(?=/)",
+                            lambda found: str(workspace), transcript)
+        chunks, edits, links, expected, status = parse(transcript)
+        for path, target in links:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            os.symlink(target, path)
 
         process = subprocess.Popen([refine, "lsp", "--stdio"],
                                    stdin=subprocess.PIPE,
@@ -116,8 +135,12 @@ def run(refine, name):
         output = b""
         deadline = time.monotonic() + SECONDS
         for index, chunk in enumerate(chunks):
-            process.stdin.write(chunk)
-            process.stdin.flush()
+            try:
+                process.stdin.write(chunk)
+                process.stdin.flush()
+            except BrokenPipeError:
+                # The server is gone; its status and what it sent say why.
+                break
             if index == len(chunks) - 1:
                 break
             # A pause: wait until the server has said everything it will
@@ -135,7 +158,13 @@ def run(refine, name):
                     output += data
                     quiet_since = time.monotonic()
             for path, content in edits[index]:
-                Path(path).write_bytes(content)
+                if content is not None:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    Path(path).write_bytes(content)
+                elif os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.unlink(path)
         #  communicate flushes and closes standard input itself, and a
         #  Python before 3.13 refuses to flush one already closed.
         try:

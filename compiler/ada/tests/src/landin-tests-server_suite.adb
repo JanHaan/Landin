@@ -1209,6 +1209,223 @@ package body Landin.Tests.Server_Suite is
       Session ("", "file:///else/main.ldn");
    end The_Library_Is_Found_Beside_The_Server;
 
+   --  A source is held and analysed on the heap, never in an object on
+   --  the primary stack: this document is larger than the stack a host
+   --  gives by default, sound and with a body that does not parse, which
+   --  takes the stand-in and the repair search over it as well.
+   procedure A_Document_Larger_Than_The_Stack_Is_Served
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Document_Larger_Than_The_Stack_Is_Served
+     (Item : in out Landin.Testing.Context)
+   is
+      URI : constant String := "file:///else/big.ldn";
+      Padding : constant String := "-- " & [1 .. 76 => 'x'] & LF;
+      Lines : constant Positive := 10 * 1024 * 1024 / Padding'Length;
+
+      procedure Session (Sound : Boolean);
+
+      procedure Session (Sound : Boolean) is
+         Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+         Channel : Landin.Testing.Fakes.Fake_Channel;
+         Script : Unbounded.Unbounded_String;
+         Text : Unbounded.Unbounded_String;
+         Status : Landin.Server.Sessions.Exit_Status;
+
+         procedure Send (Message : String);
+
+         procedure Send (Message : String) is
+         begin
+            Unbounded.Append (Script, Transport.Framed (Message));
+         end Send;
+      begin
+         Unbounded.Append
+           (Text, "public main: () -> (code: i32) =" & LF
+            & (if Sound then "    code = 0" else "    code = (0") & LF
+            & "end main" & LF);
+         for Line in 1 .. Lines loop
+            Unbounded.Append (Text, Padding);
+         end loop;
+         Host.Add_Directory ("/else");
+         Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+               & """params"":{""capabilities"":{}}}");
+         --  The message that opens it is assembled piece by piece: a
+         --  concatenation this long would not fit this test's own stack.
+         declare
+            Opening : Unbounded.Unbounded_String :=
+              Unbounded.To_Unbounded_String
+                ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+                 & """params"":{""textDocument"":{""uri"":"
+                 & Landin.Json.Quoted (URI)
+                 & ",""version"":1,""text"":");
+         begin
+            Unbounded.Append
+              (Opening, Landin.Json.Quoted (Unbounded.To_String (Text)));
+            Unbounded.Append (Opening, "}}}");
+            Unbounded.Append
+              (Script, "Content-Length:"
+                       & Natural'Image (Unbounded.Length (Opening))
+                       & ASCII.CR & LF & ASCII.CR & LF);
+            Unbounded.Append (Script, Opening);
+         end;
+         Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":"
+               & """textDocument/hover"",""params"":{""textDocument"":"
+               & "{""uri"":" & Landin.Json.Quoted (URI) & "},""position"":"
+               & "{""line"":0,""character"":8}}}");
+         Send ("{""jsonrpc"":""2.0"",""id"":3,""method"":"
+               & """textDocument/formatting"",""params"":{""textDocument"":"
+               & "{""uri"":" & Landin.Json.Quoted (URI) & "},""options"":"
+               & "{""tabSize"":4,""insertSpaces"":true}}}");
+         Send ("{""jsonrpc"":""2.0"",""id"":4,""method"":""shutdown""}");
+         Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+         Channel.Script_Unbounded (Script);
+         Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+         declare
+            Output : constant String := Landin.Testing.Fakes.Output (Channel);
+            Label : constant String :=
+              (if Sound then "a sound" else "a broken")
+              & " document larger than the stack";
+         begin
+            Landin.Testing.Check_Equal (Item, Status, 0, Label & " ends well");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Output, (if Sound then """id"":2,""result"":{""contents"""
+                           else """id"":2,""result"":")) > 0,
+               Label & " answers a hover");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Output, (if Sound then """id"":3,""result"":["
+                           else """id"":3,""result"":null")) > 0,
+               Label & " answers formatting");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Count
+                 (Output, (if Sound then """diagnostics"":[]"
+                           else """code"":""L01")) = 1,
+               Label & " is reported on");
+         end;
+      end Session;
+   begin
+      Session (Sound => True);
+      Session (Sound => False);
+   end A_Document_Larger_Than_The_Stack_Is_Served;
+
+   --  A defect met while a notification is handled is said and the session
+   --  goes on, as one met while a request is answered: here the host fails
+   --  where the opened path's identity is asked.
+   procedure A_Notification_Defect_Leaves_The_Session
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Notification_Defect_Leaves_The_Session
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Channel : Landin.Testing.Fakes.Fake_Channel;
+      Script : Unbounded.Unbounded_String;
+      Status : Landin.Server.Sessions.Exit_Status;
+
+      procedure Send (Message : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+   begin
+      Host.Add_Directory ("/else");
+      Host.Raise_On_Identity ("/else/main.ldn");
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & """file:///else/main.ldn"",""version"":1,""text"":"
+            & """aa: u8 = 1\n""}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & """file:///else/other.ldn"",""version"":1,""text"":"
+            & """bb: u8 = 2\n""}}}");
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+      declare
+         Output : constant String := Landin.Testing.Fakes.Output (Channel);
+      begin
+         Landin.Testing.Check
+           (Item, Status = 0
+            and then Ada.Strings.Fixed.Index
+              (Output, "refine: internal compiler defect handling"
+                       & " textDocument/didOpen") > 0
+            and then Ada.Strings.Fixed.Index
+              (Output, """uri"":""file:///else/other.ldn"",""version"":1,"
+                       & """diagnostics"":[]") > 0
+            and then Ada.Strings.Fixed.Index
+              (Output, """id"":2,""result"":null") > 0,
+            "a notification's defect is said and the session goes on: "
+            & Output);
+      end;
+   end A_Notification_Defect_Leaves_The_Session;
+
+   --  A report with no place in a source goes to window/showMessage when
+   --  the module's report first holds it, not at every publication while it
+   --  still does: here a source beside the opened one cannot be read.
+   procedure A_Report_With_No_Place_Is_Shown_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Report_With_No_Place_Is_Shown_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Channel : Landin.Testing.Fakes.Fake_Channel;
+      Script : Unbounded.Unbounded_String;
+      Status : Landin.Server.Sessions.Exit_Status;
+      URI : constant String := "file:///workspace/app/main.ldn";
+
+      procedure Send (Message : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+   begin
+      Host.Add_Directory ("/workspace");
+      Host.Add_Directory ("/workspace/app");
+      Host.Add_File ("/workspace/app/main.ldn", "aa: u8 = 1" & LF);
+      Host.Add_Unreadable ("/workspace/app/locked.ldn");
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},""initializationOptions"":"
+            & "{""roots"":[""file:///workspace""]}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (URI)
+            & ",""version"":1,""text"":""aa: u8 = 1\n""}}}");
+      for Version in 2 .. 3 loop
+         Channel.Pause_At (Unbounded.Length (Script));
+         Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didChange"","
+               & """params"":{""textDocument"":{""uri"":"
+               & Landin.Json.Quoted (URI) & ",""version"":"
+               & (if Version = 2 then "2" else "3")
+               & "},""contentChanges"":[{""text"":""aa: u8 = "
+               & (if Version = 2 then "2" else "3") & "\n""}]}}");
+      end loop;
+      Channel.Pause_At (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+      declare
+         Output : constant String := Landin.Testing.Fakes.Output (Channel);
+      begin
+         Landin.Testing.Check
+           (Item, Status = 0
+            and then Ada.Strings.Fixed.Count
+              (Output, """method"":""window/showMessage""") = 1
+            and then Ada.Strings.Fixed.Index (Output, "L0003: ") > 0
+            and then Ada.Strings.Fixed.Index
+              (Output, """id"":2,""result"":null") > 0,
+            "three publications of one module say its unreadable source"
+            & " once: " & Output);
+      end;
+   end A_Report_With_No_Place_Is_Shown_Once;
+
    procedure Root_URIs_Accept_Trailing_Slashes
      (Item : in out Landin.Testing.Context);
 
@@ -2007,6 +2224,15 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "opening a missing import refreshes its importer",
          Opening_A_Missing_Import_Refreshes_Its_Importer'Access);
+      Landin.Testing.Register
+        (Into, "server", "a document larger than the stack is served",
+         A_Document_Larger_Than_The_Stack_Is_Served'Access);
+      Landin.Testing.Register
+        (Into, "server", "a report with no place is shown once",
+         A_Report_With_No_Place_Is_Shown_Once'Access);
+      Landin.Testing.Register
+        (Into, "server", "a notification defect leaves the session",
+         A_Notification_Defect_Leaves_The_Session'Access);
       Landin.Testing.Register
         (Into, "server", "root URIs accept trailing slashes",
          Root_URIs_Accept_Trailing_Slashes'Access);

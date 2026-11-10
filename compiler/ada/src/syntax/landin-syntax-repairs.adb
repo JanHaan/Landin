@@ -144,18 +144,79 @@ package body Landin.Syntax.Repairs is
    --  before this is asked, since a trial joins them with a blank.
    function Unspaced (Text : String) return String;
 
+   --  Counted first and written where it is returned: a working copy as
+   --  long as Text is a whole source on the primary stack when Text is one.
    function Unspaced (Text : String) return String is
-      Kept   : String (1 .. Text'Length) := [others => ' '];
       Length : Natural := 0;
+      Next   : Natural := 0;
    begin
       for Byte of Text loop
          if Byte not in ' ' | ASCII.HT then
             Length := Length + 1;
-            Kept (Length) := Byte;
          end if;
       end loop;
-      return Kept (1 .. Length);
+      return Kept : String (1 .. Length) do
+         for Byte of Text loop
+            if Byte not in ' ' | ASCII.HT then
+               Next := Next + 1;
+               Kept (Next) := Byte;
+            end if;
+         end loop;
+      end return;
    end Unspaced;
+
+   --  [1750]: a line ends at LF, CR LF or a lone CR.  These read a
+   --  source whose first byte is at index one.
+   function Ends_Line (Byte : Character) return Boolean
+     is (Byte in ASCII.LF | ASCII.CR);
+
+   --  Whether a line begins at Index: at the first byte, or after a line
+   --  end.  The LF of a CR LF is part of that line end and begins nothing.
+   function Begins_Line (Text : String; Index : Positive) return Boolean
+     is (Index <= Text'First
+         or else Text (Index - 1) = ASCII.LF
+         or else (Text (Index - 1) = ASCII.CR
+                  and then (Index > Text'Last
+                            or else Text (Index) /= ASCII.LF)));
+
+   --  The first byte of the line holding Index; a line end belongs to the
+   --  line it ends.
+   function Line_Begin (Text : String; Index : Positive) return Positive;
+
+   function Line_Begin (Text : String; Index : Positive) return Positive is
+      First : Positive := Index;
+   begin
+      while not Begins_Line (Text, First) loop
+         First := First - 1;
+      end loop;
+      return First;
+   end Line_Begin;
+
+   --  The line end at or after Index: the index of its first byte, or one
+   --  past the text when the last line has none.
+   function Line_Stop (Text : String; Index : Positive) return Positive;
+
+   function Line_Stop (Text : String; Index : Positive) return Positive is
+      Stop : Positive := Index;
+   begin
+      while Stop <= Text'Last and then not Ends_Line (Text (Stop)) loop
+         Stop := Stop + 1;
+      end loop;
+      return Stop;
+   end Line_Stop;
+
+   --  The first byte after the line end that begins at Stop.
+   function After_Line_End (Text : String; Stop : Positive) return Positive
+     is (if Stop < Text'Last and then Text (Stop) = ASCII.CR
+           and then Text (Stop + 1) = ASCII.LF
+         then Stop + 2 else Stop + 1);
+
+   --  The last byte of the text of the line above the one that begins at
+   --  First: the byte before the line end between them.
+   function Text_Above (Text : String; First : Positive) return Natural
+     is (if First >= 3 and then Text (First - 1) = ASCII.LF
+           and then Text (First - 2) = ASCII.CR
+         then First - 3 else First - 2);
 
    --  A line as it would be written, without its indentation or the
    --  blanks it ends with.
@@ -179,27 +240,43 @@ package body Landin.Syntax.Repairs is
    function Squeezed (Text : String) return String;
 
    function Squeezed (Text : String) return String is
-      Kept   : String (1 .. Text'Length);
+      --  The last byte that is not a blank: the blanks after it are the
+      --  ones at the end, which are dropped.
+      Stop   : Natural := Text'Last;
       Length : Natural := 0;
+      Next   : Natural := 0;
       Blank  : Boolean := True;
    begin
-      for Byte of Text loop
+      while Stop >= Text'First and then Text (Stop) in ' ' | ASCII.HT loop
+         Stop := Stop - 1;
+      end loop;
+      for Byte of Text (Text'First .. Stop) loop
          if Byte in ' ' | ASCII.HT then
             if not Blank then
                Length := Length + 1;
-               Kept (Length) := ' ';
                Blank := True;
             end if;
          else
             Length := Length + 1;
-            Kept (Length) := Byte;
             Blank := False;
          end if;
       end loop;
-      if Length > 0 and then Kept (Length) = ' ' then
-         Length := Length - 1;
-      end if;
-      return Kept (1 .. Length);
+      Blank := True;
+      return Kept : String (1 .. Length) do
+         for Byte of Text (Text'First .. Stop) loop
+            if Byte in ' ' | ASCII.HT then
+               if not Blank then
+                  Next := Next + 1;
+                  Kept (Next) := ' ';
+                  Blank := True;
+               end if;
+            else
+               Next := Next + 1;
+               Kept (Next) := Byte;
+               Blank := False;
+            end if;
+         end loop;
+      end return;
    end Squeezed;
 
    --  Left and Right side by side, with a blank between them where their
@@ -360,7 +437,7 @@ package body Landin.Syntax.Repairs is
       end In_A_Body;
 
       Text   : constant String := Landin.Source.Text (Snapshot);
-      Bytes  : constant String (1 .. Text'Length) := Text;
+      Bytes  : constant String := Landin.Source.One_Based (Text);
       Source : constant Landin.Source.Source_Id := Landin.Source.Id (Snapshot);
       Result : Diag.Diagnostic_List;
       Last_Line : Natural := 0;
@@ -424,13 +501,15 @@ package body Landin.Syntax.Repairs is
          then
             return Made;
          end if;
-         while First > 1 and then Bytes (First - 1) /= ASCII.LF loop
-            First := First - 1;
-         end loop;
-         while Last <= Bytes'Last and then Bytes (Last) /= ASCII.LF loop
-            Last := Last + 1;
-         end loop;
-         Line_Tokens (First, Last - 1, Pieces, Clean);
+         First := Line_Begin (Bytes, First);
+         --  Last is the last byte of the line's end, or one past the text.
+         declare
+            Stop : constant Positive := Line_Stop (Bytes, First);
+         begin
+            Last := (if Stop > Bytes'Last then Stop
+                     else After_Line_End (Bytes, Stop) - 1);
+            Line_Tokens (First, Stop - 1, Pieces, Clean);
+         end;
          if not Clean or else Natural (Pieces.Length) < 2
            or else Pieces.First_Element.Kind /= Tok.Kw_Import
          then
@@ -455,18 +534,14 @@ package body Landin.Syntax.Repairs is
               (Parsed, Landin.Syntax.Nth_Import
                  (Parsed, Landin.Syntax.Import_Count (Parsed))).Last) + 1;
             declare
-               Line_Last : Natural := Insert;
+               Line_Last : constant Natural := Line_Stop (Bytes, Insert);
             begin
-               while Line_Last <= Bytes'Last
-                 and then Bytes (Line_Last) /= ASCII.LF
-               loop
-                  Line_Last := Line_Last + 1;
-               end loop;
                Line_Tokens (Insert, Line_Last - 1, Pieces, Clean);
                if not Clean or else not Pieces.Is_Empty then
                   return Made;
                end if;
-               Insert := Line_Last + 1;
+               Insert := (if Line_Last > Bytes'Last then Line_Last + 1
+                          else After_Line_End (Bytes, Line_Last));
             end;
          end if;
          --  A declaration sharing the last import's line leaves no safe
@@ -488,7 +563,12 @@ package body Landin.Syntax.Repairs is
                  and then (for some Position in Insert .. Bytes'Last - 1 =>
                    Bytes (Position) = ASCII.CR
                    and then Bytes (Position + 1) = ASCII.LF)
-               then ASCII.CR & ASCII.LF else "" & ASCII.LF);
+               then ASCII.CR & ASCII.LF
+               elsif Insert <= Bytes'Last
+                 and then (for some Position in Insert .. Bytes'Last =>
+                   Bytes (Position) = ASCII.CR)
+               then "" & ASCII.CR
+               else "" & ASCII.LF);
             Last_Byte : constant Natural := Natural'Min (Last, Bytes'Last);
             Move : Diag.Fix := Diag.Make_Fix
               (Diag.Move_Token, Diag.Likely,
@@ -822,20 +902,17 @@ package body Landin.Syntax.Repairs is
 
       function Mends_File (Given : String; First : Natural) return Boolean
       is
-         Whole   : constant String (1 .. Given'Length) := Given;
+         Whole   : constant String := Landin.Source.One_Based (Given);
          Sources : Landin.Source.Sets.Source_Set;
          Names   : Landin.Source.Names.Table;
          Stream  : Tok.Token_Stream;
          Reports : Diag.Diagnostic_List;
          Id      : constant Landin.Source.Source_Id :=
            Sources.Add ("repair", Whole);
-         Line_End : Natural := First;
+         Line_End : constant Natural :=
+           (if First = 0 then 0 else Line_Stop (Whole, First));
          After    : Natural := 0;
       begin
-         while Line_End <= Whole'Last and then Whole (Line_End) /= ASCII.LF
-         loop
-            Line_End := Line_End + 1;
-         end loop;
          Tok.Lexer.Lex (Sources.Get (Id), Names, Stream);
          Landin.Diagnostics.Lexical.Report (Stream, Reports);
          declare
@@ -885,15 +962,13 @@ package body Landin.Syntax.Repairs is
          Line : Natural := First;
       begin
          while Line > 2 loop
-            Line := Line - 1;   --  the line end before this line
-            while Line > 1 and then Bytes (Line - 1) /= ASCII.LF loop
-               Line := Line - 1;
-            end loop;
+            --  The line end before this line belongs to the line above.
+            Line := Line_Begin (Bytes, Line - 1);
             declare
                Theirs : constant Natural := Indent (Line);
                Word   : constant Natural := Line + Theirs;
             begin
-               if Word <= Bytes'Last and then Bytes (Word) /= ASCII.LF
+               if Word <= Bytes'Last and then not Ends_Line (Bytes (Word))
                  and then Theirs < Mine
                then
                   return Starts_With (Word, Bytes'Last, "match");
@@ -1010,14 +1085,12 @@ package body Landin.Syntax.Repairs is
          if First <= 2 then
             return False;
          end if;
-         while Above > 1 and then Bytes (Above - 1) /= ASCII.LF loop
-            Above := Above - 1;
-         end loop;
+         Above := Line_Begin (Bytes, Above);
          while Above < First - 1 and then Bytes (Above) in ' ' | ASCII.HT
          loop
             Above := Above + 1;
          end loop;
-         return Starts_With (Above, First - 2, "match");
+         return Starts_With (Above, Text_Above (Bytes, First), "match");
       end Above_Begins_Match;
 
       --  Whether a line opens more brackets than it closes.
@@ -1054,7 +1127,7 @@ package body Landin.Syntax.Repairs is
          At_Byte : constant Positive :=
            Natural'Min (Natural (Where.First) + 1, Bytes'Last);
          Line_First : Positive :=
-           (if Bytes (At_Byte) = ASCII.LF and then At_Byte > 1
+           (if Ends_Line (Bytes (At_Byte)) and then At_Byte > 1
             then At_Byte - 1 else At_Byte);
          Line_Last  : Natural := Line_First;
          Pieces : Piece_Vectors.Vector;
@@ -1069,15 +1142,13 @@ package body Landin.Syntax.Repairs is
          Broken    : Boolean := False;
          Broken_At : Natural := 0;
       begin
-         while Line_First > 1 and then Bytes (Line_First - 1) /= ASCII.LF
-         loop
-            Line_First := Line_First - 1;
-         end loop;
-         while Line_Last < Bytes'Last and then Bytes (Line_Last) /= ASCII.LF
+         Line_First := Line_Begin (Bytes, Line_First);
+         while Line_Last < Bytes'Last
+           and then not Ends_Line (Bytes (Line_Last))
          loop
             Line_Last := Line_Last + 1;
          end loop;
-         if Bytes (Line_Last) = ASCII.LF then
+         if Ends_Line (Bytes (Line_Last)) then
             Line_Last := Line_Last - 1;
          end if;
          --  A report at a closer or a divider that begins its line is
@@ -1098,13 +1169,9 @@ package body Landin.Syntax.Repairs is
                  or else Starts_With (First_Word, Line_Last, "elsif")
                  or else Starts_With (First_Word, Line_Last, "complete"))
             then
-               Line_Last := Line_First - 2;
-               Line_First := Line_Last;
-               while Line_First > 1
-                 and then Bytes (Line_First - 1) /= ASCII.LF
-               loop
-                  Line_First := Line_First - 1;
-               end loop;
+               Line_Last := Text_Above (Bytes, Line_First);
+               Line_First :=
+                 Line_Begin (Bytes, Natural'Max (Line_Last, 1));
                --  A closer on the body's first line cut short no
                --  statement: the line above it is the signature, and a
                --  trial of a signature as a statement mends nothing.
@@ -1182,14 +1249,12 @@ package body Landin.Syntax.Repairs is
                        and then Above_Begins_Match (Line_First)))
          then
             declare
-               Above_Last  : constant Natural := Line_First - 2;
-               Above_First : Natural := Above_Last;
+               Above_Last  : constant Natural :=
+                 Text_Above (Bytes, Line_First);
+               Above_First : constant Natural :=
+                 (if Above_Last = 0 then 0
+                  else Line_Begin (Bytes, Above_Last));
             begin
-               while Above_First > 1
-                 and then Bytes (Above_First - 1) /= ASCII.LF
-               loop
-                  Above_First := Above_First - 1;
-               end loop;
                if Above_Last >= Body_First
                  and then not Continues (Above_First)
                then

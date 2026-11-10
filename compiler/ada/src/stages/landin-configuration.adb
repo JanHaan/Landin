@@ -312,16 +312,32 @@ package body Landin.Configuration is
      is (In_Table.C_Runtime_Linked);
 
    procedure Add_Override
-     (Into : in out Table; Name : String; Value : String) is
+     (Into : in out Table; Name : String; Value : String;
+      Required : Boolean := True) is
    begin
       Into.Settings.Append
         (Override_Entry'
-           (Ada.Strings.Unbounded.To_Unbounded_String (Name),
-            Ada.Strings.Unbounded.To_Unbounded_String (Value)));
+           (Name     => Ada.Strings.Unbounded.To_Unbounded_String (Name),
+            Value    => Ada.Strings.Unbounded.To_Unbounded_String (Value),
+            Required => Required,
+            Unused   => False));
    end Add_Override;
 
    function Override_Count (In_Table : Table) return Natural
      is (Natural (In_Table.Settings.Length));
+
+   function Override_Required
+     (In_Table : Table; Index : Positive) return Boolean
+     is (In_Table.Settings.Element (Index).Required);
+
+   procedure Note_Unused_Override (Into : in out Table; Index : Positive) is
+   begin
+      Into.Settings.Reference (Index).Unused := True;
+   end Note_Unused_Override;
+
+   function Override_Unused
+     (In_Table : Table; Index : Positive) return Boolean
+     is (In_Table.Settings.Element (Index).Unused);
 
    function Override_Name
      (In_Table : Table; Index : Positive) return String

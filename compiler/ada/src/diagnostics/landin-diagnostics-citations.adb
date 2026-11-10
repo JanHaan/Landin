@@ -2042,6 +2042,15 @@ package body Landin.Diagnostics.Citations is
             when 253 =>
                "An editor is answered past a broken body, and a build is"
                & " not",
+            when 1068 =>
+               "An editor's build option reaches the modules that declar"
+               & "e it",
+            when 1069 =>
+               "A buffer is the file it names, however the path to it is"
+               & " spelled",
+            when 1070 =>
+               "A buffer in a directory not yet on disk is a source of t"
+               & "hat module",
             when 260 =>
                "A parse reports a mistake once, inside the construct it "
                & "is in",
@@ -3778,6 +3787,12 @@ package body Landin.Diagnostics.Citations is
             when 360 =>
                "Decisions: The toolchain, C and the machine",
             when 253 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1068 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1069 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1070 =>
                "Decisions: The toolchain, C and the machine",
             when 260 =>
                "Decisions: The toolchain, C and the machine",
@@ -5571,6 +5586,15 @@ package body Landin.Diagnostics.Citations is
             when 253 =>
                "https://www.701.dev/spec.html#d253-an-editor-is-answered"
                & "-past-a-broken-body-and-a-build-is-not",
+            when 1068 =>
+               "https://www.701.dev/spec.html#d1068-an-editor-s-build-op"
+               & "tion-reaches-the-modules-that-declare-it",
+            when 1069 =>
+               "https://www.701.dev/spec.html#d1069-a-buffer-is-the-file"
+               & "-it-names-however-the-path-to-it-is-spelled",
+            when 1070 =>
+               "https://www.701.dev/spec.html#d1070-a-buffer-in-a-direct"
+               & "ory-not-yet-on-disk-is-a-source-of-that-module",
             when 260 =>
                "https://www.701.dev/spec.html#d260-a-parse-reports-a-mis"
                & "take-once-inside-the-construct-it-is-in",

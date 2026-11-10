@@ -3212,7 +3212,15 @@ package body Landin.Stages.Configuration is
             for Setting of Options loop
                Found_Name := Found_Name or else Spelled (Setting.Name) = Word;
             end loop;
-            if not Found_Name then
+            if not Found_Name
+              and then not Landin.Configuration.Override_Required
+                (Activity.all, Index)
+            then
+               --  D1068: a setting given to several programs is not this
+               --  one's to refuse; its caller says which it left unused.
+               Landin.Configuration.Note_Unused_Override
+                 (Activity.all, Index);
+            elsif not Found_Name then
                declare
                   Item : Landin.Diagnostics.Diagnostic :=
                     Landin.Diagnostics.Make

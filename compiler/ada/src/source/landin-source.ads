@@ -42,6 +42,13 @@ package Landin.Source is
 
    Empty_Span : constant Span := (First => 0, Last => 0);
 
+   --  Text with its first byte at index one, for a reader that turns the
+   --  zero-based offsets of a span into indices.  The copy is made where a
+   --  returned String lives, which grows on the heap; a whole source in a
+   --  local `String (1 .. Text'Length)` has to fit what is left of the
+   --  primary stack, and a source of a few MiB does not.
+   function One_Based (Text : String) return String;
+
    function Length (Item : Span) return Byte_Offset
      is (Item.Last - Item.First);
 

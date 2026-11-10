@@ -50,9 +50,6 @@ package body Landin.Server.Sessions is
    package String_Sets is new Ada.Containers.Indefinite_Ordered_Sets
      (Element_Type => String);
 
-   package Text_Maps is new Ada.Containers.Indefinite_Ordered_Maps
-     (Key_Type => String, Element_Type => String);
-
    package Caches is
       subtype Compilation_Access is Landin.Server.Analysis.Compilation_Access;
       type Cached_Analysis is record
@@ -117,8 +114,77 @@ package body Landin.Server.Sessions is
      (Key_Type => String, Element_Type => Landin.Server.Documents.Document);
    use type String_Sets.Set;
 
-   package Path_User_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+   package Set_Maps is new Ada.Containers.Indefinite_Ordered_Maps
      (Key_Type => String, Element_Type => String_Sets.Set);
+
+   function Starts (Text, Prefix : String) return Boolean
+     is (Text'Length >= Prefix'Length
+         and then Text (Text'First .. Text'First + Prefix'Length - 1)
+           = Prefix);
+
+   --  The text before a path's last '/', or "" for a path with none or
+   --  with only the one it begins with.
+   function Directory_Of (Path : String) return String;
+
+   function Directory_Of (Path : String) return String is
+      Slash : constant Natural :=
+        Ada.Strings.Fixed.Index (Path, "/", Ada.Strings.Backward);
+   begin
+      return (if Slash > Path'First then Path (Path'First .. Slash - 1)
+              else "");
+   end Directory_Of;
+
+   --  A set kept under a name, absent while it is empty.  Paths and module
+   --  keys are whole strings here: a path may hold any byte but NUL, a
+   --  line feed included, so no byte can join several into one text.
+   procedure Add (Into : in out Set_Maps.Map; Name, Member : String);
+   procedure Remove (From : in out Set_Maps.Map; Name, Member : String);
+   function Members (From : Set_Maps.Map; Name : String)
+     return String_Sets.Set;
+
+   procedure Add (Into : in out Set_Maps.Map; Name, Member : String) is
+      Position : constant Set_Maps.Cursor := Into.Find (Name);
+   begin
+      if Set_Maps.Has_Element (Position) then
+         Into.Reference (Position).Include (Member);
+      else
+         Into.Insert (Name, String_Sets.To_Set (Member));
+      end if;
+   end Add;
+
+   procedure Remove (From : in out Set_Maps.Map; Name, Member : String) is
+      Position : Set_Maps.Cursor := From.Find (Name);
+   begin
+      if Set_Maps.Has_Element (Position) then
+         From.Reference (Position).Exclude (Member);
+         if From.Reference (Position).Is_Empty then
+            From.Delete (Position);
+         end if;
+      end if;
+   end Remove;
+
+   function Members (From : Set_Maps.Map; Name : String)
+     return String_Sets.Set
+   is
+      Position : constant Set_Maps.Cursor := From.Find (Name);
+   begin
+      return (if Set_Maps.Has_Element (Position)
+              then Set_Maps.Element (Position) else String_Sets.Empty_Set);
+   end Members;
+
+   --  What the publications of one module in one round found, through each
+   --  of its documents when it has several under one path.
+   type Round is record
+      --  Every source published, as the loader spelled its path.
+      Paths    : String_Sets.Set;
+      --  What a change on disk is compared with; see Watch_Path.
+      Watched  : String_Sets.Set;
+      --  Each report with no place in a source, as it is shown.
+      Told     : String_Sets.Set;
+      --  False once a publication ended in a defect: what it would have
+      --  read is unknown, so nothing the module reported before is dropped.
+      Complete : Boolean := True;
+   end record;
 
    procedure Serve
      (Channel : in out Landin.Platform.Channel'Class;
@@ -152,39 +218,20 @@ package body Landin.Server.Sessions is
       --  Modules whose documents changed since they were last published.
       Stale     : String_Sets.Set;
       --  Every path each module's last report published to, so a path it
-      --  no longer reports on is cleared.
-      Published : Text_Maps.Map;
-      --  Candidate directories of imports missing at the last report.
-      Missing   : Text_Maps.Map;
+      --  no longer reports on is cleared, and its inverse.
+      Published : Set_Maps.Map;
+      Path_Users : Set_Maps.Map;
+      --  What each module's last report rests on, as the tokens Watch_Path
+      --  and Watch_Directory make, and its inverse: a change on disk makes
+      --  stale the modules that watch what it names.
+      Watched   : Set_Maps.Map;
+      Watchers  : Set_Maps.Map;
+      --  The reports with no place in a source that each module's last
+      --  publication showed, so the next one does not show them again.
+      Told      : Set_Maps.Map;
+      --  Configured options already said to be unused by some module.
+      Said_Unused : String_Sets.Set;
       Cached    : Analysis_Cache;
-      --  The inverse of Published, maintained when a report is replaced or
-      --  its last open document closes.  A source change visits users of
-      --  its path and its module directory's published sources.
-      Path_Users : Path_User_Maps.Map;
-
-      procedure Add_User (Path, Key : String);
-
-      procedure Add_User (Path, Key : String) is
-         Users : String_Sets.Set :=
-           (if Path_Users.Contains (Path)
-            then Path_Users.Element (Path) else String_Sets.Empty_Set);
-      begin
-         Users.Include (Key);
-         Path_Users.Include (Path, Users);
-      end Add_User;
-
-      procedure Remove_User (Path, Key : String);
-
-      procedure Remove_User (Path, Key : String) is
-         Users : String_Sets.Set := Path_Users.Element (Path);
-      begin
-         Users.Exclude (Key);
-         if Users.Is_Empty then
-            Path_Users.Delete (Path);
-         else
-            Path_Users.Replace (Path, Users);
-         end if;
-      end Remove_User;
 
       procedure Send (Item : String);
 
@@ -196,29 +243,20 @@ package body Landin.Server.Sessions is
       --  A publication belongs to a path, even when several open entry
       --  modules read it.  Refresh another reporter instead of erasing its
       --  diagnostics when one module stops reporting that path.
-      procedure Clear_Unless_Shared
-        (Key, Path : String; Closing_URI : String := "");
+      procedure Clear_Unless_Shared (Key, Path : String);
 
-      procedure Clear_Unless_Shared
-        (Key, Path : String; Closing_URI : String := "")
-      is
+      procedure Clear_Unless_Shared (Key, Path : String) is
          Shared : Boolean := False;
       begin
-         for Position in Published.Iterate loop
-            if Text_Maps.Key (Position) /= Key
-              and then Unbounded.Index
-                (Unbounded.To_Unbounded_String
-                   (ASCII.LF & Text_Maps.Element (Position)),
-                 ASCII.LF & Path & ASCII.LF) > 0
-            then
+         for User of Members (Path_Users, Path) loop
+            if User /= Key then
                Shared := True;
-               Stale.Include (Text_Maps.Key (Position));
+               Stale.Include (User);
             end if;
          end loop;
          if not Shared then
             Send (Landin.Server.Answers.Cleared
-              (if Closing_URI /= "" then Closing_URI
-               else Landin.Server.Documents.URI_For (Store, Path)));
+              (Landin.Server.Documents.URI_For (Store, Path)));
          end if;
       end Clear_Unless_Shared;
 
@@ -232,10 +270,16 @@ package body Landin.Server.Sessions is
 
       procedure Respond (Id : String; Result : String);
 
+      --  Assembled on the heap: a result may be a large file's edits, and
+      --  a concatenation that long is built on the primary stack.
       procedure Respond (Id : String; Result : String) is
+         Whole : Unbounded.Unbounded_String;
       begin
-         Send ("{""jsonrpc"":""2.0"",""id"":" & Id & ",""result"":"
-               & Result & "}");
+         Unbounded.Append
+           (Whole, "{""jsonrpc"":""2.0"",""id"":" & Id & ",""result"":");
+         Unbounded.Append (Whole, Result);
+         Unbounded.Append (Whole, "}");
+         Send (Unbounded.To_String (Whole));
       end Respond;
 
       procedure Refuse (Id : String; Code : Integer; Message : String);
@@ -259,17 +303,23 @@ package body Landin.Server.Sessions is
          Send (J.Result (Written));
       end Refuse;
 
-      --  window/showMessage, for what belongs to no document.
-      procedure Tell (Kind : Positive; Message : String);
+      --  window/showMessage, for what belongs to no document, or
+      --  window/logMessage, for what an editor keeps without interrupting.
+      procedure Tell
+        (Kind : Positive; Message : String; Shown : Boolean := True);
 
-      procedure Tell (Kind : Positive; Message : String) is
+      procedure Tell
+        (Kind : Positive; Message : String; Shown : Boolean := True)
+      is
          Written : J.Builder;
       begin
          J.Begin_Object (Written);
          J.Name (Written, "jsonrpc");
          J.Write_String (Written, "2.0");
          J.Name (Written, "method");
-         J.Write_String (Written, "window/showMessage");
+         J.Write_String
+           (Written,
+            (if Shown then "window/showMessage" else "window/logMessage"));
          J.Name (Written, "params");
          J.Begin_Object (Written);
          J.Name (Written, "type");
@@ -352,18 +402,74 @@ package body Landin.Server.Sessions is
             raise;
       end With_Analysis;
 
-      --  Publish every source of the module of URI.
+      --  The host's proof that two spellings name one existing object, as
+      --  a token, or "" where it has none.
+      function Identity_Token (Path : String) return String;
+
+      function Identity_Token (Path : String) return String is
+         Found : constant Landin.Platform.File_Identity :=
+           Host.Existing_Identity (Path);
+      begin
+         return (if Found.Valid
+                 then "i" & Found.Device'Image & Found.Inode'Image
+                 else "");
+      end Identity_Token;
+
+      --  What a report that listed Directory rests on: the directory as it
+      --  was spelled, and as the object the host has there.
+      procedure Watch_Directory
+        (Into : in out String_Sets.Set; Directory : String);
+
+      procedure Watch_Directory
+        (Into : in out String_Sets.Set; Directory : String)
+      is
+         Object : constant String := Identity_Token (Directory);
+      begin
+         if Directory /= "" then
+            Into.Include ("d" & Directory);
+            if Object /= "" then
+               Into.Include (Object);
+            end if;
+         end if;
+      end Watch_Directory;
+
+      --  What a report that read the source at Path rests on: the path
+      --  and the file there, and its module's directory, since a module is
+      --  its directory's sources.  With no roots, an entry source is
+      --  analysed alone; its siblings do not belong to that compilation.
+      procedure Watch_Path
+        (Into : in out String_Sets.Set; Key, Path : String);
+
+      procedure Watch_Path
+        (Into : in out String_Sets.Set; Key, Path : String)
+      is
+         Object : constant String := Identity_Token (Path);
+      begin
+         Into.Include ("p" & Path);
+         if Object /= "" then
+            Into.Include (Object);
+         end if;
+         if Path /= Key then
+            Watch_Directory (Into, Directory_Of (Path));
+         end if;
+      end Watch_Path;
+
+      --  Publish every source of the module of URI, and add what was
+      --  published and read to Into.
       procedure Publish
         (URI   : String;
          Cache : access Landin.Stages.Syntax.Parse_Cache;
-         Shared : Boolean);
+         Shared : Boolean;
+         Into  : in out Round);
 
       procedure Publish
         (URI   : String;
          Cache : access Landin.Stages.Syntax.Parse_Cache;
-         Shared : Boolean) is
+         Shared : Boolean;
+         Into  : in out Round) is
          Key : constant String :=
            Landin.Server.Documents.Module_Key (Store, URI);
+         Before : constant String_Sets.Set := Members (Told, Key);
 
          procedure Visit
            (Context : in out Landin.Stages.Compilation;
@@ -373,8 +479,6 @@ package body Landin.Server.Sessions is
            (Context : in out Landin.Stages.Compilation;
             Answer  : Landin.Server.Analysis.Result)
          is
-            Now     : String_Sets.Set;
-            Was     : String_Sets.Set;
             Buckets : array (1 .. Landin.Stages.Source_Count (Context)) of
               Landin.Server.Answers.Diagnostic_Indexes.Vector;
             By_Path : Path_Maps.Map;
@@ -395,20 +499,6 @@ package body Landin.Server.Sessions is
               (Landin.Server.Documents.Held_Path (Store, URI),
                Store.Open.Element (URI));
 
-            if Published.Contains (Key) then
-               declare
-                  Earlier : constant String := Published.Element (Key);
-                  First   : Positive := Earlier'First;
-               begin
-                  for Index in Earlier'Range loop
-                     if Earlier (Index) = ASCII.LF then
-                        Was.Include (Earlier (First .. Index - 1));
-                        First := Index + 1;
-                     end if;
-                  end loop;
-               end;
-            end if;
-
             --  Dispatch each report item once.  Source identities are the
             --  one-based positions in the compilation's source set.
             for Index in 1 .. Answer.Found.Count loop
@@ -418,9 +508,23 @@ package body Landin.Server.Sessions is
                     Diag.Source_Of (Diag.Primary (Item));
                begin
                   if Source = Landin.Source.No_Source then
-                     Tell ((if Diag.Level (Item) = Diag.Error then 1 else 2),
-                           Diag.Code (Item) & ": "
-                           & Diag.Message (Diag.Primary (Item)));
+                     --  Shown when the module's report first holds it, not
+                     --  again at every publication while it still does.
+                     declare
+                        Kind : constant Positive :=
+                          (if Diag.Level (Item) = Diag.Error then 1 else 2);
+                        Text : constant String :=
+                          Diag.Code (Item) & ": "
+                          & Diag.Message (Diag.Primary (Item));
+                        Mark : constant String := Kind'Image & Text;
+                     begin
+                        if not Before.Contains (Mark)
+                          and then not Into.Told.Contains (Mark)
+                        then
+                           Tell (Kind, Text);
+                        end if;
+                        Into.Told.Include (Mark);
+                     end;
                   elsif Source <= Landin.Source.Source_Id (Buckets'Last) then
                      Buckets (Positive (Source)).Append (Index);
                   end if;
@@ -434,7 +538,10 @@ package body Landin.Server.Sessions is
                   Snap : Landin.Source.Snapshot renames
                     Landin.Stages.Source (Context, Id).Element.all;
                   Path : constant String := Landin.Source.Name (Snap);
-                  Position : constant Path_Maps.Cursor := By_Path.Find (Path);
+                  --  D1069: the document whose file this source is, however
+                  --  the loader spelled its path.
+                  Position : constant Path_Maps.Cursor :=
+                    By_Path.Find (Store.Held.Held_As (Path));
                   URI : constant String :=
                     (if Path_Maps.Has_Element (Position)
                      then Unbounded.To_String
@@ -455,8 +562,9 @@ package body Landin.Server.Sessions is
                        Landin.Modules.Module_Of (Modules.all, Id))
                     and then Buckets (Positive (Id)).Is_Empty;
                begin
+                  Watch_Path (Into.Watched, Key, Path);
                   if not Implicit then
-                     Now.Include (Path);
+                     Into.Paths.Include (Path);
                      Send (Landin.Server.Answers.Diagnostics
                        (URI      => URI,
                         Version  => Version,
@@ -469,31 +577,26 @@ package body Landin.Server.Sessions is
                end;
             end loop;
 
-            --  A path last published to and not reported on now is clear.
-            for Path of Was loop
-               if not Now.Contains (Path) then
-                  Clear_Unless_Shared (Key, Path);
-                  Remove_User (Path, Key);
+            for Directory of Answer.Missing_Directories loop
+               Watch_Directory (Into.Watched, Directory);
+            end loop;
+            for Directory of Answer.Listed_Directories loop
+               Watch_Directory (Into.Watched, Directory);
+            end loop;
+
+            --  D1068: said once in a session for each option, and to the
+            --  editor's log: the setting is the whole workspace's, and a
+            --  module that does not declare it is the usual case.
+            for Name of Answer.Unused_Options loop
+               if not Said_Unused.Contains (Name) then
+                  Said_Unused.Include (Name);
+                  Tell (2, "refine: the build option `" & Name
+                           & "` is not declared by the module of " & URI
+                           & " and is not applied to it; a module that"
+                           & " declares it is checked with it",
+                        Shown => False);
                end if;
             end loop;
-            for Path of Now loop
-               if not Was.Contains (Path) then
-                  Add_User (Path, Key);
-               end if;
-            end loop;
-            declare
-               Kept : Unbounded.Unbounded_String;
-               Absent : Unbounded.Unbounded_String;
-            begin
-               for Path of Now loop
-                  Unbounded.Append (Kept, Path & ASCII.LF);
-               end loop;
-               for Path of Answer.Missing_Directories loop
-                  Unbounded.Append (Absent, Path & ASCII.LF);
-               end loop;
-               Published.Include (Key, Unbounded.To_String (Kept));
-               Missing.Include (Key, Unbounded.To_String (Absent));
-            end;
          end Visit;
       begin
          if Shared then
@@ -513,11 +616,92 @@ package body Landin.Server.Sessions is
          when Storage_Error =>
             raise;
          when Error : others =>
+            Into.Complete := False;
             Channel.Log ("refine lsp: internal compiler defect analysing "
                          & URI & ": "
                          & Ada.Exceptions.Exception_Message (Error));
             Tell (1, "refine: internal compiler defect analysing " & URI);
       end Publish;
+
+      --  Replace what the module of Key last reported with what its round
+      --  found.  This is done once for a module, after each of its
+      --  documents has published: one of two documents at a path may read
+      --  a source the other does not, and a path dropped after the first
+      --  and restored by the second would make every other reporter of it
+      --  stale, and those this one, without end.
+      procedure Settle (Key : String; Found : Round);
+
+      procedure Settle (Key : String; Found : Round) is
+         Was       : constant String_Sets.Set := Members (Published, Key);
+         Was_Watch : constant String_Sets.Set := Members (Watched, Key);
+         Now       : String_Sets.Set := Found.Paths;
+         Now_Watch : String_Sets.Set := Found.Watched;
+         Now_Told  : String_Sets.Set := Found.Told;
+      begin
+         if not Found.Complete then
+            Now.Union (Was);
+            Now_Watch.Union (Was_Watch);
+            Now_Told.Union (Members (Told, Key));
+         end if;
+         --  A path last published to and not reported on now is clear.
+         for Path of Was loop
+            if not Now.Contains (Path) then
+               Clear_Unless_Shared (Key, Path);
+               Remove (Path_Users, Path, Key);
+            end if;
+         end loop;
+         for Path of Now loop
+            if not Was.Contains (Path) then
+               Add (Path_Users, Path, Key);
+            end if;
+         end loop;
+         for Token of Was_Watch loop
+            if not Now_Watch.Contains (Token) then
+               Remove (Watchers, Token, Key);
+            end if;
+         end loop;
+         for Token of Now_Watch loop
+            if not Was_Watch.Contains (Token) then
+               Add (Watchers, Token, Key);
+            end if;
+         end loop;
+         Published.Include (Key, Now);
+         Watched.Include (Key, Now_Watch);
+         Told.Include (Key, Now_Told);
+      end Settle;
+
+      --  Forget what the module of Key reported, clearing what it alone
+      --  published.  Closing names the document being closed and Closed
+      --  the published paths that were its file.
+      procedure Forget
+        (Key, Closing : String; Closed : String_Sets.Set);
+
+      procedure Forget
+        (Key, Closing : String; Closed : String_Sets.Set)
+      is
+         Cleared_URI : Boolean := False;
+      begin
+         for Path of Members (Published, Key) loop
+            if Closed.Contains (Path) then
+               if not Cleared_URI then
+                  Send (Landin.Server.Answers.Cleared (Closing));
+                  Cleared_URI := True;
+               end if;
+            else
+               Clear_Unless_Shared (Key, Path);
+            end if;
+            Remove (Path_Users, Path, Key);
+         end loop;
+         if not Cleared_URI then
+            Send (Landin.Server.Answers.Cleared (Closing));
+         end if;
+         for Token of Members (Watched, Key) loop
+            Remove (Watchers, Token, Key);
+         end loop;
+         Published.Exclude (Key);
+         Watched.Exclude (Key);
+         Told.Exclude (Key);
+      end Forget;
 
       --  Publish every stale module, each through one of its documents.
       procedure Publish_Stale;
@@ -539,28 +723,13 @@ package body Landin.Server.Sessions is
             --  more than one of the pending modules.  Unique sources need
             --  no copy, and one pending module needs no cache at all.
             for Key of Stale loop
-               if Published.Contains (Key) then
-                  declare
-                     Earlier : constant String := Published.Element (Key);
-                     First : Positive := Earlier'First;
-                  begin
-                     for Index in Earlier'Range loop
-                        if Earlier (Index) = ASCII.LF then
-                           declare
-                              Path : constant String :=
-                                Earlier (First .. Index - 1);
-                           begin
-                              if Seen.Contains (Path) then
-                                 Shared.Include (Path);
-                              else
-                                 Seen.Include (Path);
-                              end if;
-                           end;
-                           First := Index + 1;
-                        end if;
-                     end loop;
-                  end;
-               end if;
+               for Path of Members (Published, Key) loop
+                  if Seen.Contains (Path) then
+                     Shared.Include (Path);
+                  else
+                     Seen.Include (Path);
+                  end if;
+               end loop;
             end loop;
          end if;
          --  URI aliases can project different bytes while a round is being
@@ -610,6 +779,8 @@ package body Landin.Server.Sessions is
                Key : constant String := Stale.First_Element;
                Has_Alias : Boolean := False;
                Paths : String_Sets.Set;
+               Found : Round;
+               Any   : Boolean := False;
             begin
                Stale.Delete_First;
                Remove (Cached, Key);
@@ -630,10 +801,14 @@ package body Landin.Server.Sessions is
                   then
                      Publish
                        (Unbounded.To_String (Held.URI), Cache'Access,
-                        not Shared.Is_Empty);
+                        not Shared.Is_Empty, Found);
+                     Any := True;
                      exit when not Has_Alias;
                   end if;
                end loop;
+               if Any then
+                  Settle (Key, Found);
+               end if;
             end;
          end loop;
          if Statistics /= null then
@@ -646,41 +821,49 @@ package body Landin.Server.Sessions is
       procedure Mark_Stale (URI : String);
 
       procedure Mark_Stale_Path (Path : String) is
-         Slash : constant Natural :=
-           Ada.Strings.Fixed.Index (Path, "/", Ada.Strings.Backward);
-         Directory : constant String :=
-           (if Slash > Path'First then Path (Path'First .. Slash - 1)
-            else "");
+         Directory : constant String := Directory_Of (Path);
+
+         procedure Mark (Token : String);
+         procedure Mark_Beneath (Prefix : String);
+
+         procedure Mark (Token : String) is
+         begin
+            if Token /= "" then
+               Stale.Union (Members (Watchers, Token));
+            end if;
+         end Mark;
+
+         --  Every watcher of a token that begins with Prefix.
+         procedure Mark_Beneath (Prefix : String) is
+            Position : Set_Maps.Cursor := Watchers.Ceiling (Prefix);
+         begin
+            while Set_Maps.Has_Element (Position)
+              and then Starts (Set_Maps.Key (Position), Prefix)
+            loop
+               Stale.Union (Set_Maps.Element (Position));
+               Set_Maps.Next (Position);
+            end loop;
+         end Mark_Beneath;
       begin
          Clear (Cached);
-         if Path_Users.Contains (Path) then
-            for User of Path_Users.Element (Path) loop
-               Stale.Include (User);
-            end loop;
-         end if;
+         --  The source itself, by its name and as the file the host has
+         --  there, which a report may have read under another spelling.
+         Mark ("p" & Path);
+         Mark (Identity_Token (Path));
          --  A module is its directory's source inventory.  A newly added
          --  file has no prior path users, but changes every compilation
-         --  which reached another source in that same directory.
-         for Position in Path_Users.Iterate loop
-            declare
-               Known : constant String := Path_User_Maps.Key (Position);
-               Last_Slash : constant Natural :=
-                 Ada.Strings.Fixed.Index
-                   (Known, "/", Ada.Strings.Backward);
-            begin
-               if Directory /= "" and then Last_Slash > Known'First
-                 and then Known (Known'First .. Last_Slash - 1) = Directory
-               then
-                  for User of Path_User_Maps.Element (Position) loop
-                     --  With no roots, an entry source is analysed alone;
-                     --  its siblings do not belong to that compilation.
-                     if User /= Known then
-                        Stale.Include (User);
-                     end if;
-                  end loop;
-               end if;
-            end;
-         end loop;
+         --  that listed its directory: one that read another source there,
+         --  found it empty, or looked for it and found none, where a newly
+         --  created source can satisfy a formerly absent import.
+         if Directory /= "" then
+            Mark ("d" & Directory);
+            Mark (Identity_Token (Directory));
+         end if;
+         --  A change reported for a directory, removed or renamed with
+         --  what it held: itself and everything beneath it.
+         Mark ("d" & Path);
+         Mark_Beneath ("d" & Path & "/");
+         Mark_Beneath ("p" & Path & "/");
          for Held of Store.Open loop
             declare
                Key : constant String := Landin.Server.Documents.Module_Key
@@ -690,16 +873,6 @@ package body Landin.Server.Sessions is
                   Stale.Include (Key);
                end if;
             end;
-         end loop;
-         --  A newly created source can satisfy a formerly absent import.
-         for Position in Missing.Iterate loop
-            if Directory /= "" and then Unbounded.Index
-              (Unbounded.To_Unbounded_String
-                 (ASCII.LF & Text_Maps.Element (Position)),
-               ASCII.LF & Directory & ASCII.LF) > 0
-            then
-               Stale.Include (Text_Maps.Key (Position));
-            end if;
          end loop;
       end Mark_Stale_Path;
 
@@ -1111,8 +1284,10 @@ package body Landin.Server.Sessions is
                      begin
                         if J.Is_Kind (Message, File_URI, J.String_Value) then
                            declare
+                              --  A change may name a directory, with or
+                              --  without a final slash.
                               Path : constant String :=
-                                Landin.Server.Documents.Path_Of
+                                Landin.Server.Documents.Root_Path_Of
                                   (J.Text (Message, File_URI));
                            begin
                               if Path /= "" then
@@ -1133,7 +1308,15 @@ package body Landin.Server.Sessions is
                   Closing_Path : constant String :=
                     Landin.Server.Documents.Held_Path (Store, URI);
                   Others_Open : Boolean := False;
+                  --  The published paths that are this document's file,
+                  --  asked while it is still held.
+                  Closed : String_Sets.Set;
                begin
+                  for Path of Members (Published, Key) loop
+                     if Store.Held.Held_As (Path) = Closing_Path then
+                        Closed.Include (Path);
+                     end if;
+                  end loop;
                   Clear (Cached);
                   Landin.Server.Documents.Close (Store, URI);
                   Mark_Stale_Path (Closing_Path);
@@ -1150,42 +1333,21 @@ package body Landin.Server.Sessions is
                   else
                      --  Nothing of the module is open: clear what it said.
                      Stale.Exclude (Key);
-                     if Published.Contains (Key) then
-                        declare
-                           Earlier : constant String :=
-                             Published.Element (Key);
-                           First   : Positive := Earlier'First;
-                           Cleared_URI : Boolean := False;
-                        begin
-                           for Index in Earlier'Range loop
-                              if Earlier (Index) = ASCII.LF then
-                                 if Earlier (First .. Index - 1)
-                                   = Closing_Path
-                                 then
-                                    Send (Landin.Server.Answers.Cleared (URI));
-                                    Cleared_URI := True;
-                                 else
-                                    Clear_Unless_Shared
-                                      (Key, Earlier (First .. Index - 1));
-                                 end if;
-                                 Remove_User
-                                   (Earlier (First .. Index - 1), Key);
-                                 First := Index + 1;
-                              end if;
-                           end loop;
-                           if not Cleared_URI then
-                              Send (Landin.Server.Answers.Cleared (URI));
-                           end if;
-                        end;
-                        Published.Delete (Key);
-                        Missing.Exclude (Key);
-                     else
-                        Send (Landin.Server.Answers.Cleared (URI));
-                     end if;
+                     Forget (Key, URI, Closed);
                   end if;
                end;
             end if;
          end if;
+      exception
+         when Storage_Error =>
+            raise;
+         when Error : others =>
+            --  As a request's defect is answered and the session goes on,
+            --  so a notification's is said and the session goes on.
+            Channel.Log ("refine lsp: internal compiler defect handling "
+                         & Method & ": "
+                         & Ada.Exceptions.Exception_Message (Error));
+            Tell (1, "refine: internal compiler defect handling " & Method);
       end Notification;
 
       procedure Request

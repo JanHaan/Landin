@@ -188,9 +188,19 @@ package Landin.Configuration is
                               and then Name (Index) in '0' .. '9')));
 
    --  Request inputs survive Prepare; outputs are rebuilt for each run.
+   --  An override no reached source declares is L0002 when it is Required,
+   --  as a build's `--option=` is.  One that is not is left unused and
+   --  noted, for a caller that gives one setting to several programs
+   --  (D1068).
    procedure Add_Override
-     (Into : in out Table; Name : String; Value : String);
+     (Into : in out Table; Name : String; Value : String;
+      Required : Boolean := True);
    function Override_Count (In_Table : Table) return Natural;
+   function Override_Required
+     (In_Table : Table; Index : Positive) return Boolean;
+   procedure Note_Unused_Override (Into : in out Table; Index : Positive);
+   function Override_Unused
+     (In_Table : Table; Index : Positive) return Boolean;
    function Override_Name
      (In_Table : Table; Index : Positive) return String;
    function Override_Value
@@ -312,6 +322,8 @@ private
 
    type Override_Entry is record
       Name, Value : Ada.Strings.Unbounded.Unbounded_String;
+      Required : Boolean := True;
+      Unused   : Boolean := False;
    end record;
    package Overrides is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Override_Entry);

@@ -25,6 +25,13 @@ package body Landin.Source is
    --  diagnostic never points at the wrong line.
    ---------------------------------------------------------------------
 
+   function One_Based (Text : String) return String is
+   begin
+      return Copy : String (1 .. Text'Length) do
+         Copy := Text;
+      end return;
+   end One_Based;
+
    function Rebased (Text : String) return Mutable_Text;
 
    --  Allocated first and filled in place: a rebasing copy on the stack
