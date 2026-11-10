@@ -234,9 +234,9 @@ what in words on standard error and returns 1.
   bytes the system gave [1660]. With no argument it fails, and the program
   prints how to use it.
 - `count_lines` declares its failures as `! ...`, which lets the compiler
-  infer the set from every `fail` and `try` in the body. Only a routine
+  infer the set from every `fail` and `try` in the body. Only a function
   that is not `public` may leave its set to the compiler [0960].
-- `io.lines_over` makes a line reader over a buffer in the routine's frame,
+- `io.lines_over` makes a line reader over a buffer in the function's frame,
   and `io.read_line` lends each line [0790] [0800]. A line too long for the
   buffer is the failure `io.line_too_long`, which the count takes as one
   more line.
@@ -879,7 +879,7 @@ read 19
 `wc` with no file named: the program reads its standard input to the end
 and prints how many lines, words and bytes it held.
 
-The counting routine, `count`, asks only for an `io.reader` [1290] [1230],
+The counting function, `count`, asks only for an `io.reader` [1290] [1230],
 the narrowest capability it uses. So the same code counts a pipe, a file or
 bytes in memory, and it counts bytes held in memory on targets with no
 standard input at all, Cortex-M included.
@@ -1097,7 +1097,7 @@ own to call back. Read `main`, which loads and looks up, and then
 - `posix.find_symbol` gives an address with no type. The program names
   the C function type it is, `adder(added)`, and nothing can check that
   the library's function is one [1580], as a C cast cannot.
-- `doubled` is an `extern(c)` routine [1570], so the plugin can call it
+- `doubled` is an `extern(c)` function [1570], so the plugin can call it
   through a C function pointer.
 - A symbol the library does not define is `posix.no_symbol`, a failure to
   recover from [1030]. A library that cannot be loaded is
@@ -1680,7 +1680,8 @@ In the code:
   next read [0790] [0800], so the program copies each name it keeps with
   `mem.copy`.
 - A name is bytes as the system stores them and need not be UTF-8; one
-  that `text.valid` refuses prints with its other bytes escaped as `\xHH`.
+  that `text.valid` refuses prints with each byte outside printable ASCII
+  written as `\xHH`.
 - `core/sort` sorts the copies by the `cmp.ordered` conformance the
   program declares for them [1280].
 - A `defer` closes the directory on every way out of `list` [1100].
@@ -3515,7 +3516,7 @@ GTTGGCCAGGCTGGTCTCGAACTCCTGACCTCAGGTGATCCGCCCGCCTCGGCCTCCCAA
 builds, walks and frees many perfect binary trees. A missing child is an
 atom rather than a null pointer [0480], and each tree's nodes come from a
 `core/region` over the hosted heap, so releasing the region frees the tree
-at once [1360]. The correctness input is 10 and the performance input 21.
+in one step [1360]. The correctness input is 10 and the performance input 21.
 
 Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-binary-trees/main.ldn`.
 

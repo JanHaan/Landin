@@ -129,7 +129,7 @@ fixed if compiler.os == linux then
     --- Signal: asked to end, SIGTERM.
     public sigterm: i32 = 15
 
-    --- The bit of `signal` in the kernel's signal mask.
+    --- The bit of `signal` in the kernel's signal mask; 0 outside 1 to 64.
     public signal_bit:
         (signal: i32) -> (bit: u64) =
         bit = 0

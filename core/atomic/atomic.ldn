@@ -258,23 +258,23 @@ public sole_add: (item: type is scalar, at: ptr mut cell(item), value: item)
     previous = item.sole_add(addr at.val.value, value)
 end sole_add
 
---- Store `value` into `at` and return what it held, in one indivisible
---- step that acquires and releases.  Refused on Cortex-M0.
+--- Store `value` into `at` and return what it held, in one indivisible step
+--- that acquires and releases.  Refused where no type is `exchangeable`.
 public exchange: (item: type is exchangeable, at: ptr mut cell(item),
                   value: item) -> (previous: item) =
     previous = item.exchange(addr at.val.value, value)
 end exchange
 
---- Add `value` to `at`, wrapping, and return what it held, in one
---- indivisible step that acquires and releases.  Refused on Cortex-M0.
+--- Add `value` to `at`, wrapping, and return what it held, in one indivisible
+--- step that acquires and releases.  Refused where no type is `exchangeable`.
 public add: (item: type is exchangeable, at: ptr mut cell(item), value: item)
             -> (previous: item) =
     previous = item.add(addr at.val.value, value)
 end add
 
---- Add `value` to `at`, wrapping, and return what it held, in one
---- indivisible step with no ordering beyond the cell's own: a counter
---- several contexts bump.  Refused on Cortex-M0.
+--- Add `value` to `at`, wrapping, and return what it held, in one indivisible
+--- step with no ordering beyond the cell's own: a counter several contexts
+--- bump.  Refused where no type is `exchangeable`.
 public add_relaxed: (item: type is exchangeable, at: ptr mut cell(item),
                      value: item) -> (previous: item) =
     previous = item.add_relaxed(addr at.val.value, value)
@@ -283,8 +283,8 @@ end add_relaxed
 --- Store `desired` into `at` if it holds `expected`, and return what it
 --- held, in one indivisible step: the store happened exactly when the
 --- result equals `expected`, and never fails spuriously.  A store acquires
---- and releases; a comparison that fails only acquires.  Refused on
---- Cortex-M0.
+--- and releases; a comparison that fails only acquires.  Refused where no
+--- type is `exchangeable`.
 public compare_exchange: (item: type is exchangeable, at: ptr mut cell(item),
                           expected: item, desired: item)
                          -> (observed: item) =

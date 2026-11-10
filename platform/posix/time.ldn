@@ -36,10 +36,10 @@ public clock_time:
     time = try system_clock_time(clock)
 end clock_time
 
---- Sleep for `span`, POSIX's `nanosleep`, measured on the monotonic clock
---- on Linux and on the system's own clock for sleeping elsewhere. It
---- fails with the errno: `eintr` when a signal came first, which leaves
---- part of the span unslept, and `einval` for nanoseconds of a second or
+--- Sleep for `span`, POSIX's `nanosleep`, measured on the monotonic clock on
+--- Linux and on the system's own clock for sleeping elsewhere. It fails with
+--- the errno: `eintr` when a signal came first, which leaves part of the span
+--- unslept, and `einval` for negative seconds or nanoseconds of a second or
 --- more. It may return late, never early, of the clock it sleeps on.
 public sleep:
     (span: time_value) -> none ! errno =

@@ -380,7 +380,7 @@ end new
 --- Fill `state` and return a handle that records its last error there
 --- rather than in the calling thread's cell, whichever thread calls. It
 --- shares the process's arguments and descriptors like any other handle;
---- calling this before any root exists traps, as `host` does.
+--- calling this before any root exists traps, as `new` does.
 public over: (inout state: space) -> (handle: host from state) =
     _ = posix.arguments()
     state = (failure: 0, signal: 0)

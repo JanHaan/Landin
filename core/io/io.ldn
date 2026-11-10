@@ -15,7 +15,7 @@ public no_access: atom
 public io_failed: atom
 --- The argument index does not identify an available argument.
 public no_argument: atom
---- The name a directory was to be made at is already taken.
+--- The name a file or directory was to be made at is already taken.
 public already_exists: atom
 --- No environment variable has the name asked for, or the index does not
 --- identify one.

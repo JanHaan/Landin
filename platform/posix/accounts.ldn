@@ -126,7 +126,7 @@ end identity_of
 --- decimal.  A line with another number of fields, an empty name or an
 --- ID that is not a decimal below `0xFFFFFFFF` is `malformed_entry`.  A
 --- comment, an empty line and an NIS line beginning `+` or `-`, which a
---- lookup skips, are no accounts either.
+--- lookup skips, are `malformed_entry` too.
 public parse_account:
     (line: []u8) -> (found: account from line) ! malformed_entry =
     mut at: [7]field = [7 of (start: 0, stop: 0)]

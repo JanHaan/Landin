@@ -10,7 +10,7 @@ duration_value: type = distinct u64
 instant_value: type = distinct u64
 
 --- A span of time, a whole number of nanoseconds from zero to 2^64 - 1,
---- about 584 years.  `u64(span)` is the count and `io.duration(n)` makes
+--- about 584 years.  `u64(span)` is the count and `time.duration(n)` makes
 --- one, as `nanoseconds` does; `milliseconds` and the others make one from
 --- a coarser count and trap when it would not fit.  Two spans compare with
 --- `==`, `<>`, `<`, `<=`, `>` and `>=`, as their counts do; the type has

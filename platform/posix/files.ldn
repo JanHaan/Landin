@@ -417,13 +417,13 @@ public unlock:
     try system_unlock(opened)
 end unlock
 
---- Take a lock of `kind` on `length` bytes of the file open as `opened`
---- from `start`; a `length` of zero reaches however far the file ever will.
---- It is POSIX's record lock, `fcntl`'s `F_SETLK`, or `F_SETLKW` with
---- `wait`. It fails `eagain` or `eacces`, as the system chooses, when
---- another process holds one in the way and `wait` is false; `edeadlk` when
---- waiting would deadlock; and `ebadf` for a shared lock on a file not open
---- for reading or an exclusive one on a file not open for writing.
+--- Take a lock of `kind` on `length` bytes of the file open as `opened` from
+--- `start`; a `length` of zero reaches however far the file ever will. It is
+--- POSIX's record lock, `fcntl`'s `F_SETLK`, or `F_SETLKW` with `wait`. It
+--- fails `eagain` or `eacces`, as the system chooses, when another process
+--- holds one in the way and `wait` is false; `edeadlk` when waiting would
+--- deadlock; `ebadf` for a shared lock on a file not open to read or an
+--- exclusive one on one not open to write; `einval` past the largest offset.
 ---
 --- A record lock belongs to the process, not to a descriptor: the process
 --- never stands in its own way, through any descriptor, and a lock over one

@@ -34,8 +34,8 @@ C makes you encode things that the compiler cannot see:
 - a `typedef` that mixes freely with its base
 - a flag variable to escape two loops
 - a label to jump to for cleanup
-- I/O that any routine can reach
-- a heap that every routine reaches for
+- I/O that any function can reach
+- a heap that every function reaches for
 
 Landin has a direct form for each, and the entries below take them in this
 order. The compiler checks the first six. The last two, passing the I/O
@@ -62,7 +62,7 @@ minutes_only: (total: u32) -> (whole_minutes: u32) =
 end minutes_only
 ```
 
-A routine returns as many named results as it needs [0920]. The compiler
+A function returns as many named results as it needs [0920]. The compiler
 checks that each one is set on every path [0930]. The caller takes the
 results apart by name and ignores the rest with `_` [0990]. Nothing is
 passed by address, so nothing can be left unwritten.
@@ -243,13 +243,13 @@ end count_lines
 ```
 
 Create the provider in `main` and pass it down [1660], rather than making
-one where you need it. Then the signature says what a routine touches, and
-a test can hand the routine a fake. This is a convention, not a rule: any
-hosted routine may call `blocking.new()` itself, and the compiler does not
+one where you need it. Then the signature says what a function touches, and
+a test can hand the function a fake. This is a convention, not a rule: any
+hosted function may call `blocking.new()` itself, and the compiler does not
 stop it [1680].
 
 The same `count_lines` reads a file, standard input, a pipe, or a fake in
-a test, with no mocking framework. To test a routine over files, use
+a test, with no mocking framework. To test a function over files, use
 `fake.volume` from `core/io/fake`. To run a whole program over memory, use
 `io.memory_over`: it makes the memory world, which is firmware's own world
 rather than a fake.
@@ -271,7 +271,7 @@ duplicate: (provider: type is mem.allocator, memory: provider, bytes: []u8)
 end duplicate
 ```
 
-A routine that allocates takes the allocator as a parameter. Its caller
+A function that allocates takes the allocator as a parameter. Its caller
 therefore decides where the memory comes from: the heap, an arena over a
 buffer in its own frame, or a test's allocator that fails on purpose
 [1360]. Containers do not keep an allocator either: each call that grows a
@@ -279,7 +279,7 @@ container is given it.
 
 Like passing capabilities, this is a convention that the compiler does not
 check. [`malloc` and `free`](#malloc-and-free) shows the heap and an arena
-serving the same routine.
+serving the same function.
 
 ## The first things you reach for
 
@@ -491,7 +491,7 @@ settings_present: (host: blocking.host)
 end settings_present
 ```
 
-A routine that can fail declares its failures as a set of atoms after `!`.
+A function that can fail declares its failures as a set of atoms after `!`.
 A caller handles them with `else` or passes them on with `try` [0940]
 [1030]. Nothing is set behind your back and nothing can be forgotten: a
 call that can fail and is neither handled nor passed on is a compile error.
@@ -724,7 +724,7 @@ words_in: (bytes: []u8) -> (words: usize) =
 end words_in
 ```
 
-There is no `assert` macro; a routine does its work.
+There is no `assert` macro; a function does its work.
 `compiler.unreachable()` never returns. It stops the program as a failed
 check does, and a hosted program first prints where it stopped [1560].
 
@@ -733,7 +733,7 @@ line instead, give `expect` a `caller` parameter, which the compiler fills
 with the call's place [1040].
 
 Nothing turns the check off as `NDEBUG` does. Many of C's assertions need
-no routine at all: indexing, conversions and overflow are checked already
+no function at all: indexing, conversions and overflow are checked already
 [0570] [0310] [0300].
 
 ## Everyday C
@@ -970,7 +970,7 @@ end highest_reading
 
 What stands in for `void *` depends on its use:
 
-- A routine that works for any type takes the type as a parameter and its
+- A function that works for any type takes the type as a parameter and its
   operations as a concept, and the compiler checks every call [1290].
 - Values of different types behind one interface are `any C`, dispatched
   through a table at run time [1370].
@@ -1163,7 +1163,7 @@ int main(int argc, char **argv)
 ```
 
 A program whose `main` is C's can call any public `extern(c)` Landin
-routine [1570]. No Landin entry runs first in such a program to keep the
+function [1570]. No Landin entry runs first in such a program to keep the
 process's arguments and environment, so C hands them over itself. It calls
 `_landin_host_initialize_arguments(argc, argv, envp)`, from
 `platform/posix`, before the first `system.new()` or `blocking.new()` and
@@ -1373,7 +1373,7 @@ takes an hour or two. These parts have the least in common with C:
 | [Control flow](../tour.md#control-flow) | errors with `fail`, `try` and `else`, `defer` and `undo`, `match` |
 | [Types you declare](../tour.md#types-you-declare) | atoms, variants, distinct and range types, register layouts |
 | [Lifetime and escape](../tour.md#lifetime-and-escape) | how the compiler catches a pointer to a dead frame, without a borrow checker |
-| [Concepts and generic code](../tour.md#concepts-and-generic-code) | one routine for every type, without `void *` or macros |
+| [Concepts and generic code](../tour.md#concepts-and-generic-code) | one function for every type, without `void *` or macros |
 | [The toolchain, C, and the machine](../tour.md#the-toolchain-c-and-the-machine) | linking, C calls both ways, assembly and placement |
 
 ## What has no answer yet
@@ -1382,10 +1382,6 @@ takes an hour or two. These parts have the least in common with C:
 | --- | --- |
 | pointer arithmetic that keeps the base's origin | the address as an integer; the result borrows nothing |
 | printing a float, `%f` | scale it to a whole number and print the parts, as [Printing formatted values](../examples.md#printing-formatted-values) does with tenths |
-
-Threads have an answer: `hosted/thread` starts threads as a group that the
-starting routine joins, as [the library reference](library.md#hostedthread)
-describes.
 
 Open work belongs to `ROADMAP.md`. Its register says for each gap what
 would close it and when it will be taken up.

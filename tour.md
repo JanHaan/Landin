@@ -31,8 +31,9 @@ Run it with `refine run main.ldn`, or keep an executable with
 
 - `core/io` is the interface for reading and writing; `hosted/blocking`
   provides it over the operating system.
-- `main` is a routine, Landin's word for a function. It returns one named
-  result, `code`, the exit status, and sets it by assigning it.
+- `main` is a function; the compiler's messages also say routine for one.
+  It returns one named result, `code`, the exit status, and sets it by
+  assigning it.
 - `host` is your handle on the operating system: pass it to whatever needs
   to read or write.
 - `io.write` can fail, and a failure cannot pass unnoticed; `else none`
@@ -82,7 +83,7 @@ end main
 
 - The `!` list says every way `count_file_lines` can fail, and `try`
   passes a failure on to the caller ([0960]).
-- `defer` closes the file however the routine ends ([1100]).
+- `defer` closes the file however the function ends ([1100]).
 - `main` decides what a failure means: `else (problem)` handles it in
   place.
 - `io.write_format` fills each `{}` with the next value.
@@ -108,12 +109,13 @@ run commands and talk over sockets.
 
 ## How to read this tour
 
-Read it in order up to the end of MODULES and you can write ordinary
-programs; the rest is reference. The bracketed numbers, such as [0430],
-never change: when the compiler refuses a program, its error ends with the
-entry that explains the rule. Everything is implemented unless marked
-DEFERRED or *not yet*. [`spec.md`](spec.md) is the specification and
-decides wherever the two could be read differently.
+- Read it in order up to the end of MODULES and you can write ordinary
+  programs; the rest is reference.
+- The bracketed numbers, such as [0430], never change: when the compiler
+  refuses a program, its error ends with the entry that explains the rule.
+- Everything is implemented unless marked DEFERRED or *not yet*.
+- [`spec.md`](spec.md) is the specification and decides wherever the two
+  could be read differently.
 
 *32 TB is an unverified goal. What it measures at the hosted end, and what
 evidence would prove it, are still open, and nothing hosted today
@@ -232,7 +234,7 @@ to its module.
 public version: u32 = 3
 ```
 
-`public` is about modules, not the linker. A public routine or datum is
+`public` is about modules, not the linker. A public function or datum is
 still a local symbol inside the program's image, so no C library or linked
 object can collide with it. To give C or the linker a name, see [1600] and
 [1610].
@@ -279,7 +281,7 @@ names visible before the declaration. If an outer `t` names a type,
 the statements after it see the local. A binding in a condition follows
 the same rule ([1070]).
 
-Module declarations and routine signatures see all their names at once
+Module declarations and function signatures see all their names at once
 ([0130], [1290]).
 
 Control words are reserved everywhere a name could go (spec [1760]).
@@ -1487,9 +1489,9 @@ Every construct opens with its own word and closes with `end`, so you never
 count braces.
 
 The short snippets in this section are statements. Read them as standing
-inside a routine that has a parameter `x: i32`, a writable slice
+inside a function that has a parameter `x: i32`, a writable slice
 `items: []mut i32`, a path `path: utf8` and a result `out: i32`. Helpers
-such as `is_ready()`, `expensive()` or `cleanup()` stand for routines that
+such as `is_ready()`, `expensive()` or `cleanup()` stand for functions that
 do what their names say.
 
 ### [1050] Branching with `if`
@@ -1599,10 +1601,10 @@ leave it early. Its cleanups then run as a loop's do ([1180]).
 
 ### [0940] Errors: what can fail is in the signature
 
-A routine that can fail lists, after `!`, the atoms it can fail with, and
+A function that can fail lists, after `!`, the atoms it can fail with, and
 `fail` leaves with one of them. An atom is a declared name that is its own
 value, such as `port_zero: atom` ([0630]). A caller cannot ignore a failure:
-at every call to a failing routine, it either passes the failure on or
+at every call to a failing function, it either passes the failure on or
 handles it.
 
 Here is all of it at once. `port_from` reads a port number with the
@@ -1648,7 +1650,7 @@ A call to something that can fail takes one of four forms:
 
 | you write | when the call fails |
 |---|---|
-| `try f()` | your routine fails with the same atom |
+| `try f()` | your function fails with the same atom |
 | `f() else value` | `value` stands in for the result |
 | `f() else (e) ... end` | the block runs with the atom bound to `e` |
 | `f() else none` | nothing; the next statement runs |
@@ -1666,7 +1668,7 @@ end open_file
 Three facts about error sets and their atoms:
 
 - An error set is a set. Aliases flatten, order does not matter, and a
-  routine that fails with `a` passes where `a | b` is expected.
+  function that fails with `a` passes where `a | b` is expected.
 - The atoms carry no payload.
 - The atoms travel in a register of their own, so failing costs about what
   returning does.
@@ -1675,7 +1677,7 @@ Exact rules: spec [1980].
 
 ### [0960] Passing a failure on: `try`
 
-`try f()` calls `f`. If `f` fails, your routine runs its cleanups ([1100])
+`try f()` calls `f`. If `f` fails, your function runs its cleanups ([1100])
 and then fails with the same atom. Every atom you might pass on must be in
 your own `!` set.
 
@@ -1687,11 +1689,11 @@ end read_config
 ```
 
 The `try` sits at the call, so you can see in the source every place a
-routine may leave early.
+function may leave early.
 
 `! ...` means "whatever my callees can fail with": the compiler works the
 set out from every `fail` and `try` in the body. An inferred set that comes
-out empty means the routine cannot fail.
+out empty means the function cannot fail.
 
 Use `! ...` inside a module, where the compiler sees every caller anyway.
 These must write their set out:
@@ -1702,7 +1704,7 @@ These must write their set out:
   anything exported to C, because their complete signature is their type.
 
 `try for item in source do ... end for` passes on a failure from any
-traversal step ([1150]). The enclosing routine must declare or infer the
+traversal step ([1150]). The enclosing function must declare or infer the
 atoms, and its caller handles them with the ordinary `else` on that call.
 
 Exact rules: spec [1980].
@@ -1781,7 +1783,7 @@ Used any other way, that call needs `else value`, a block, or `try`.
 
 ### [0970] Leaving early: `return` and `fail`
 
-`return` leaves the routine with its named results as they stand, and
+`return` leaves the function with its named results as they stand, and
 `fail` leaves with an error. Each takes an optional `when condition`.
 
 ```landin
@@ -1831,12 +1833,12 @@ end sum_digits
 
 Collecting diagnostics needs somewhere to put them, and that is an
 ordinary parameter. The library's destination for diagnostics is the
-concept `core/diag.log`. A routine takes it as `inout log: any diag.log`,
+concept `core/diag.log`. A function takes it as `inout log: any diag.log`,
 meaning any kind of log at all ([1370]). Its `note` entry takes a position
 in the text, a severity and the message bytes.
 
 Recording a note is a diagnostic; failing to record it is an operation
-failure. So `note` declares `io.io_failed`, and a routine that records
+failure. So `note` declares `io.io_failed`, and a function that records
 notes lists it too.
 
 - A bounded logger never fails. When it is full it stops keeping entries,
@@ -1847,7 +1849,7 @@ notes lists it too.
 - Both pass as `any diag.log`, so the producer does not know which policy
   its caller chose. The sink is a capability ([1680]): passing one makes
   the destination explicit, though the parameter list alone does not
-  prove that the routine cannot make another sink or reach the host.
+  prove that the function cannot make another sink or reach the host.
 
 ### [1100] Cleanup on the way out: `defer`
 
@@ -2030,7 +2032,7 @@ straight to the next test.
 
 `try for` walks a source whose steps can fail ([1320]'s
 `fallible_iterable`, or a plain `iterable`). A failure leaves the loop
-through the routine's error set ([0960]). It runs `defer` and `undo` on the
+through the function's error set ([0960]). It runs `defer` and `undo` on the
 way and skips `complete`. `break` and `continue` work as usual.
 
 ### [1160] Writing through a loop binding
@@ -2262,8 +2264,8 @@ Two things stay:
   float, a text boundary, and converting an integer that is zero at the
   target's width into a pointer.
 
-A region reaches only the code written inside it. A routine called from it
-is checked as that routine is written. A deferred call is checked where you
+A region reaches only the code written inside it. A function called from it
+is checked as that function is written. A deferred call is checked where you
 wrote it, not where the exit that runs it stands.
 
 ## ARRAYS, SLICES AND TEXT
@@ -2616,7 +2618,7 @@ allocator.
 `core/text` counts positions as byte offsets of the opaque type
 `text.position`:
 
-- On plain `[]u8`, the routines are `first`, `at_end`, `next`, `advance`,
+- On plain `[]u8`, the functions are `first`, `at_end`, `next`, `advance`,
   `offset`, `byte` and `slice`. Reading a byte at the end fails with
   `past_end`, and a slice keeps its source's origin.
 - On `utf8`, the same positions step a whole scalar with `start`, `step`,
@@ -2787,7 +2789,7 @@ found, not whether it is known.
 
 **Functions in a struct.** A module struct may hold a function. The field
 names a declared function, or an anonymous one that captures nothing. What
-is stored is the routine's address; nothing is called. There is no all-zero
+is stored is the function's address; nothing is called. There is no all-zero
 function address [0540], so such a struct must be written out in full.
 
 Exact rules: spec [1940].
@@ -2816,9 +2818,9 @@ root holds another version.
 ### [1480] Where modules come from: the roots
 
 You tell the compiler where modules are. `refine` takes repeated
-`--root=DIR` options and then the entry module's directory, or its source
-files, which then form one module. With no `--root`, the named files form
-one synthetic module.
+`--root=DIR` options and then the entry module: its directory, or its
+source files, which together form one module. With no `--root` you name the
+source files, and they form one module in the same way.
 
 The roots are searched in the order you give ([1420]), and that order alone
 decides: the compiler consults no home directory and adds no system root of
@@ -2826,9 +2828,10 @@ its own choosing.
 
 **The library root.** The compiler does add one root: the library it ships
 with, found beside its executable. `core`, `hosted` and `platform` always
-come from there, after every root you name. Because the search is otherwise
-project-first, a project can override an ordinary module by putting its own
-copy in its first root. Vendoring a package is just that.
+come from there and from nowhere else, so a root you name cannot replace
+them. Every other module is searched for in your roots, project first, so a
+project can override an ordinary module by putting its own copy in its
+first root. Vendoring a package is just that.
 
 **The companion tool.** Fetching packages, solving versions, lock files and
 naming authority belong to a companion tool. It will ship alongside the
@@ -2843,8 +2846,8 @@ than one that can download things.
 - Whether a path's leading segments name an owner and a package is a
   convention for people and that tool. The compiler only sees directories.
 
-**The repository's namespaces.** Four source namespaces belong to the
-repository:
+**The compiler's namespaces.** Four source namespaces come with the
+compiler:
 
 | namespace | holds | available |
 |---|---|---|
@@ -2881,7 +2884,7 @@ Fine print:
 ## What you can write now
 
 That is the end of the part to read in order. You can now write ordinary
-programs: routines with failures, your own types, loops and matches, arrays
+programs: functions with failures, your own types, loops and matches, arrays
 and text, modules, and the host's files and streams through
 `hosted/blocking` and `core/io`. [`examples.md`](examples.md) has complete
 programs to read and copy.
@@ -3098,7 +3101,7 @@ the allocation you supply must be live, aligned and as large as you say
 ## LIFETIME AND ESCAPE
 
 Landin checks borrows and escapes locally. It has no Rust-style ownership
-and no lifetime parameters. Inside each routine, the compiler knows where
+and no lifetime parameters. Inside each function, the compiler knows where
 every pointer, slice and `any` points. That place is the reference's
 *origin*, and there are three:
 
@@ -3106,25 +3109,25 @@ every pointer, slice and `any` points. That place is the reference's
 |---|---|---|
 | static | module storage and literals | the whole program |
 | allocated | what an allocator handed out | until you give it back |
-| frame | a routine's locals | until the routine returns |
+| frame | a function's locals | until the function returns |
 
 Everything in this section follows from a few rules:
 
-- A frame reference never leaves its routine ([0770]).
-- A routine does not keep a pointer it was given unless its signature says
+- A frame reference never leaves its function ([0770]).
+- A function does not keep a pointer it was given unless its signature says
   `escaping` ([0780]).
 - While a view into a local is in use, the local cannot be grown or moved
   ([0830]).
 - A returned reference says what it came from, with `from` ([0790]).
 
-The compiler checks each rule one routine at a time, against signatures.
-A change in one body therefore never changes what another routine may do.
+The compiler checks each rule one function at a time, against signatures.
+A change in one body therefore never changes what another function may do.
 The price is that some mistakes go uncaught; [0860] lists them.
 
-### [0770] A frame reference cannot leave its routine
+### [0770] A frame reference cannot leave its function
 
-A pointer to a local dies with the routine. Returning one is an error, and
-so is storing it anywhere that outlives the routine.
+A pointer to a local dies with the function. Returning one is an error, and
+so is storing it anywhere that outlives the function.
 
 ```landin
 bad: () -> (p: ptr u32) =
@@ -3167,7 +3170,7 @@ end caller_of_increment
 So a pointer to a local can go into any call whose parameter does not say
 `escaping`.
 
-A routine that does keep a reference marks the parameter `escaping`. The
+A function that does keep a reference marks the parameter `escaping`. The
 caller may then pass only something that lives long enough: allocated or
 static, never frame.
 
@@ -3233,7 +3236,7 @@ on_the_frame: (escaping seed: ptr mut node) -> none =
 end on_the_frame
 ```
 
-The routine may keep `item` in `head` and nowhere else. A frame reference
+The function may keep `item` in `head` and nowhere else. A frame reference
 never goes into a parameter's storage, and a reference from the caller's
 parameter goes into anything its frame holds.
 
@@ -3259,7 +3262,7 @@ end view_then_reset
 ```
 
 The fix is always nearby: finish with the view before the call, or take
-it again after. The check looks at one routine body, so there is nothing
+it again after. The check looks at one function body, so there is nothing
 to annotate.
 
 Only `inout` and `sink` trigger the check, since they are the two ways a
@@ -3271,7 +3274,7 @@ escape are among the checks that stay.
 
 ### [0790] A returned reference says where it came from: `from`
 
-When a routine returns a reference derived from a parameter, its signature
+When a function returns a reference derived from a parameter, its signature
 says so with `from`. The caller then knows that the thing it passed in has
 to hold still while it uses the result.
 
@@ -3382,11 +3385,11 @@ after checking its arithmetic; `core` gets no special privilege for it.
 [0500] says why there is no `offset` or `slice_from` to do this for you,
 and [0510] keeps uninitialized storage out of reach.
 
-A signature brings tracking back. A routine that indexes a table C gave
+A signature brings tracking back. A function that indexes a table C gave
 it writes `from table` on its result, and the compiler checks its callers
 against that as against any signature. The compiler does not check the
-routine's body against it, since a pointer made from an integer satisfies
-any `from`. The contract is its author's claim, so keep such routines
+function's body against it, since a pointer made from an integer satisfies
+any `from`. The contract is its author's claim, so keep such functions
 small.
 
 ### [0820] Arenas are ordinary allocators you give storage to
@@ -3491,7 +3494,7 @@ still exists. So these go through:
 
 - Use after free or reset. The compiler does not know which arena or
   allocator a pointer came from, or that it has been given back.
-- A pointer that went through longer-lived storage. Inside one routine a
+- A pointer that went through longer-lived storage. Inside one function a
   struct carries its fields' origins ([0840]). Store a pointer into a heap
   node, though, and read it back later through the node: it now has the
   node's origin, and whatever it pointed to may be gone.
@@ -3846,7 +3849,7 @@ it shapes how you design a concept.
 The same goes for what an implementation is handed: by convention, a
 concept with no allocator among its parameters says its implementations
 do not allocate. The compiler does not check that, since any hosted
-routine can make a heap of its own ([1680]).
+function can make a heap of its own ([1680]).
 
 Resist widening a concept until it fits its hungriest implementation;
 that hands every implementation the sum of everyone's needs. Either the
@@ -3935,7 +3938,7 @@ allocator: type = concept (provider: type)
 end allocator
 ```
 
-A routine that adds to a list takes the list `inout` and the allocator as
+A function that adds to a list takes the list `inout` and the allocator as
 an ordinary argument:
 
 ```landin
@@ -4240,7 +4243,7 @@ calling convention, so code built at two levels links together. `spec.md`
 lists the levels and their features.
 
 **Values that differ by target.** When only a value differs, you need no
-`fixed if` at all. A module value may read a fact, and a routine branches
+`fixed if` at all. A module value may read a fact, and a function branches
 on that value with an ordinary `if`:
 
 ```landin
@@ -4253,11 +4256,11 @@ An integer fact takes its type from context. You read an atom fact, which
 is one of `compiler.arch`, `compiler.os`, `compiler.byte_order` and
 `compiler.build_mode`, by comparing it with one of its atoms.
 
-**Inside a routine.** A routine body reads no fact directly, and
+**Inside a function.** A function body reads no fact directly, and
 `fixed if` cannot begin a statement. Instead:
 
 - What differs by value branches on a module value like those above.
-- What needs a call that one system lacks is a routine declared in each
+- What needs a call that one system lacks is a function declared in each
   arm of a module-level `fixed if`.
 
 **Conditions.** A condition is a closed fold: literals, parentheses, unary
@@ -4297,7 +4300,7 @@ An assertion may also measure your own types, as in
 the type is laid out.
 
 `compiler.assert` is a builtin call rather than a keyword, like the rest
-of [1560]. That leaves the word `assert` free for an ordinary routine of
+of [1560]. That leaves the word `assert` free for an ordinary function of
 your own, such as the `assert` of [1040].
 
 ### [1530] Your own build switches
@@ -4386,10 +4389,10 @@ so every target's backend is Landin's own. The
 - The emitted assembly is deterministic: the same program and options
   give the same bytes, whatever the build directory, environment or order.
   The linked executable is not covered by that promise.
-- Every ordinary routine and every interrupt handler sets up the frame
+- Every ordinary function and every interrupt handler sets up the frame
   pointer, so a debugger or a backtrace can always walk the stack. On
-  Cortex-M0 a routine with no calls, no assembly and no stack changes may
-  leave it alone (spec [1990]). A naked routine ([1570]) owns its frame
+  Cortex-M0 a function with no calls, no assembly and no stack changes may
+  leave it alone (spec [1990]). A naked function ([1570]) owns its frame
   instead.
 - The whole program is compiled together ([1480]). The compiler may keep
   private caches, but there is no stable separate-compilation interface.
@@ -4649,7 +4652,10 @@ It does export. Which symbols the linker sees:
   `public`. That is how you export a module datum deliberately.
 - Without `link`, C imports and public C definitions use their declared
   name.
-- Every other routine and datum, public or private, is a local symbol
+- The program's entry is global, and so are a public definition in a
+  machine convention and a Cortex-M definition with [1640]'s section,
+  alignment, vector or `keep` (spec [1975]).
+- Every other function and datum, public or private, is a local symbol
   under its own name, so no C library can collide with it. It is renamed,
   with its module path, only when the program holds that name twice.
 
@@ -4765,9 +4771,9 @@ function types:
 - A naked body is one assembly block with no compiler prologue. The stack,
   registers, calls and return instruction are yours, and falling off the
   end traps.
-- Neither convention keeps a routine from section garbage collection
+- Neither convention keeps a function from section garbage collection
   ([1640]).
-- Naked routines also work on hosted x86-64, arm64 and RV64;
+- Naked functions also work on hosted x86-64, arm64 and RV64;
   `platform/linux`'s process entry is one.
 
 ### [1620] Atomics
@@ -4833,7 +4839,7 @@ Exact rules: spec [1990].
 
 ### [1630] Inline assembly, for what has no builtin
 
-`assembler.block` takes fixed quoted or raw text in a routine body, and
+`assembler.block` takes fixed quoted or raw text in a function body, and
 after it the operands that carry values in and out. An operand names its
 direction, its name, its type and the register it is placed `at`:
 
@@ -4875,7 +4881,7 @@ end restore_interrupts
   refuses a float operand.
 - A pointer crosses as `usize(p)` and comes back through `ptr(u)`, whose
   zero check then happens there. The integer keeps no permission. So a
-  routine around a block that writes storage takes it as `ptr mut u8` or
+  function around a block that writes storage takes it as `ptr mut u8` or
   `[]mut u8`: its callers are checked against that parameter, and an
   immutable buffer is refused there rather than handed to the system.
 - A flag comes back as `x <> 0`.
@@ -4899,7 +4905,7 @@ end root
 - Every block may overwrite the registers a call may, and the flags.
 - A register a call must preserve is declared, as an operand or as a
   discarded output `out _ at rbx`, or `out _ at v8` for a float one. That
-  declaration is what makes the routine save it.
+  declaration is what makes the function save it.
 - The frame, stack and link registers are never named, so a block cannot
   break a backtrace.
 - The language reserves no register of its own.
@@ -4997,7 +5003,7 @@ vector annotation needs a firmware-entry request ([1650]).
 
 - The table is kept and refers to each handler in it, so those handlers
   survive.
-- An interrupt routine nothing refers to and nothing keeps can disappear.
+- An interrupt function nothing refers to and nothing keeps can disappear.
 - `keep` retains the section that holds the declaration. Several objects
   placed in one section share that retention.
 - A link name alone retains nothing.
@@ -5014,7 +5020,7 @@ vector annotation needs a firmware-entry request ([1650]).
   change its type's layout.
 - `align` and `vector` take decimal literals; digit separators are fine,
   hex and expressions are refused.
-- `region: "NAME"` places a routine or module datum in a region of the
+- `region: "NAME"` places a function or module datum in a region of the
   device description, by name rather than by section. Code needs a region
   that may execute and mutable data one that may be written, and reset
   copies or clears it there.
@@ -5028,7 +5034,7 @@ vector annotation needs a firmware-entry request ([1650]).
 
 **A second boot stage.** Some boot ROMs run a second stage before the
 image: RP2040's reads its flash through one. On such a chip that stage
-lives in the device description, as a naked routine marked
+lives in the device description, as a naked function marked
 `link(boot_stage)`. The description's boot kind places it at the start of
 the image, and the compiler seals it with the checksum the ROM checks.
 Nothing else is marked that way, and nothing else in a description is
@@ -5262,7 +5268,7 @@ always link their C library.
 
 **The argument root.** A program that imports `hosted/system`, directly or
 through `hosted/blocking`, imports `platform/posix` with it. Its entry
-then first calls this C-callable routine with the real values, before the
+then first calls this C-callable function with the real values, before the
 body of `main` begins, so the environment is kept beside the arguments and
 lent the same way:
 
@@ -5270,8 +5276,8 @@ lent the same way:
 void _landin_host_initialize_arguments(int argc, char **argv, char **envp);
 ```
 
-When C owns `main` and calls exported Landin routines, it calls that
-routine itself, with its own `envp` or C's `environ`:
+When C owns `main` and calls exported Landin functions, it calls that
+function itself, with its own `envp` or C's `environ`:
 
 - Call it before `blocking.new()` acquires an argument capability, and
   before starting any thread that may acquire one. File, stream and heap
@@ -5289,7 +5295,7 @@ routine itself, with its own `envp` or C's `environ`:
   name gives Landin no arguments.
 
 **Freestanding.** There is no `main`. The compiler request names the
-entry: an infallible ordinary `() -> none` or `() -> noreturn` routine, or
+entry: an infallible ordinary `() -> none` or `() -> noreturn` function, or
 a naked `() -> none` one, in the entry module ([1630] shows the request).
 The compiler's reset initializes RAM before calling it. Returning from it,
 or a failed check, traps, since there is no hosted exit to go to. General
@@ -5308,7 +5314,7 @@ Exact rules: spec [1975] for hosted programs, spec [1990] for firmware.
 
 The entry point is the usual place to make the program's roots — the host,
 an allocator, a diagnostics log — and pass them down as ordinary arguments.
-The language does not reserve that to the entry point: any routine can call
+The language does not reserve that to the entry point: any function can call
 the constructors ([1680]).
 
 What a root imports:
@@ -5328,9 +5334,9 @@ wall clock.
 
 This is the essential flow of `examples/derived_hosted`, a complete log
 filter. Its `main` is one line, `code = app.entry()`, and the work starts
-in `entry`, a public routine of the program's own `app` module. That
+in `entry`, a public function of the program's own `app` module. That
 module imports `hosted/blocking`, `hosted/heap`, `core/region`, `core/diag`
-and `core/io`, and `run_logged` is the application's routine that does
+and `core/io`, and `run_logged` is the application's function that does
 the work:
 
 ```landin
@@ -5400,10 +5406,10 @@ implements `writer` and nothing else.
 
 A diagnostics log asks for `any io.writer`, which is why `entry` builds
 one from the same `host`: an `any io.world` is not an `any io.writer`, and
-neither converts to the other. A routine holding only an erased world can
+neither converts to the other. A function holding only an erased world can
 go on in either of these ways:
 
-- pass it as it is to a routine generic over a writer, or
+- pass it as it is to a function generic over a writer, or
 - make an `any io.writer` from the adapter `io.writer_of(world)` lends it.
 
 **Arguments and paths.** Both providers lend each argument and path as a
@@ -5467,12 +5473,12 @@ Exact rules: spec [1960].
 
 Concurrency is a capability, like an allocator or the host ([1660],
 [1680]). There is no `async`, no second calling convention and no
-coloured function type. A routine that wants two things in flight asks
+coloured function type. A function that wants two things in flight asks
 for something that runs them, and whether they really overlap is that
-provider's answer, not the routine's. Each one runs on a stack of its own,
+provider's answer, not the function's. Each one runs on a stack of its own,
 a fibre.
 
-**A task** is an ordinary routine. It takes its state `inout` and fails
+**A task** is an ordinary function. It takes its state `inout` and fails
 with `core/failure`'s set, and nothing in it knows it runs on a fibre:
 
 ```landin
@@ -5497,7 +5503,7 @@ ask: (inout self: asking) -> none ! failure.reason =
 end ask
 ```
 
-**A group.** A routine starts tasks as a group, over storage it lends, and
+**A group.** A function starts tasks as a group, over storage it lends, and
 waits for them before it goes on, so whatever they borrow from it outlives
 them:
 
@@ -5529,7 +5535,7 @@ end ask_both
   not check that you wrote it.
 - The state is kept in the group until its task ends, so `admit` takes it
   `escaping into` the group ([0780]). `a` may point at `heard`, a
-  parameter of the routine that made the group; a local declared after
+  parameter of the function that made the group; a local declared after
   the group is refused.
 
 **Providers.** Two concepts say what a provider is:
@@ -5564,7 +5570,7 @@ runs to its end as it is admitted. A program that needs turns says so:
 ever.
 
 **Choosing a provider on a hosted system.** The choice is made where the
-roots are minted ([1660]), and the routines below never learn it:
+roots are minted ([1660]), and the functions below never learn it:
 
 | provider | a call that waits | groups | signals |
 | --- | --- | --- | --- |
@@ -5585,9 +5591,9 @@ call left is not raced for. A switch is a full compiler memory boundary,
 and a fibre never moves to another thread.
 
 **A fibre's stack does not grow.** In a program that prepares a stack, a
-routine compares its frame with the current stack's limit before it
+function compares its frame with the current stack's limit before it
 reserves the frame; the few that skip the check, small ones that call
-nothing, fit in a margin kept for them. Past the limit, the routine traps
+nothing, fit in a margin kept for them. Past the limit, the function traps
 `stack_exhausted` at its own declaration, before it has written below the
 stack ([1670]):
 
@@ -5603,7 +5609,7 @@ main.ldn:15:1: trap: stack_exhausted
 - How deep a task goes depends on the target: `ask` takes up to 4.4 KiB of
   its stack on RV64 and less on the others, which is why its stacks are
   8 KiB.
-- `refine compile --stack-report=PATH` writes each routine's frame and the
+- `refine compile --stack-report=PATH` writes each function's frame and the
   deepest stack its calls can reach, and names the `any` calls, recursion
   and foreign calls that leave that open. Size a stack from its task's row
   and the margin.
@@ -5643,7 +5649,7 @@ surprises you, one of these is usually why.
 
 ### [1680] Pass the capability, don't track the effect
 
-Landin has no effect system. A routine that does I/O, allocates or reads
+Landin has no effect system. A function that does I/O, allocates or reads
 the clock takes the thing that does it as a parameter: an allocator, an
 `io` writer, a peripheral handle, a random source. A caller can then hand
 it an in-memory world or a bounded allocator.
@@ -5651,7 +5657,7 @@ it an in-memory world or a bounded allocator.
 The parameter list says what a caller supplies, not everything the call
 can reach:
 
-- Any hosted routine may call the public host and heap constructors
+- Any hosted function may call the public host and heap constructors
   itself.
 - A driver may make a pointer from an address [0460].
 

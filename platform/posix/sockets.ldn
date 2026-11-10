@@ -450,10 +450,10 @@ public set_ipv6_only:
     try flag_set(socket, ipv6_only, on)
 end set_ipv6_only
 
---- Limit how long a receive or an `accept` on `socket` waits,
---- `SO_RCVTIMEO`, after which it fails `eagain`; a span of zero waits as
---- long as it takes.  The system keeps microseconds, so a part of one
---- counts as a whole one, and Linux keeps its own ticks.
+--- Limit how long a receive or an `accept` on `socket` waits, `SO_RCVTIMEO`,
+--- after which it fails `eagain`; a span of zero waits as long as it takes.
+--- The system keeps microseconds, so a part of one counts as a whole one, and
+--- Linux keeps its own ticks.  A negative span is `einval`.
 public set_receive_timeout:
     (socket: descriptor, span: time_value) -> none ! errno =
     fail einval when span.seconds < 0 or span.nanoseconds >= 1000000000

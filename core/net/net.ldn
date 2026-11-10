@@ -642,7 +642,7 @@ public receive_from: (provider: type is network, host: provider,
     received = try provider.receive_from(host, socket, into)
 end receive_from
 
---- Stop receiving, sending or both on a connection: `io.sending` lets
+--- Stop receiving, sending or both on a connection: `net.sending` lets
 --- the peer read the end of what was sent.
 public shutdown: (provider: type is network, host: provider,
                   connection: io.file, stopping: direction)

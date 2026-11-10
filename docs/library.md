@@ -62,7 +62,7 @@ reads a file both ways. Its runs over
 [a smaller one](../compiler/tests/fixtures/runtime/library-read-whole-file-fits/output.txt)
 and
 [a missing one](../compiler/tests/fixtures/runtime/library-read-whole-file-missing/output.txt)
-are the compiler's own tests. The `read_all` routine of
+are the compiler's own tests. The `read_all` function of
 [reverse-complement](../examples.md#benchmark-game-reverse-complement) is
 the same loop over standard input.
 
@@ -124,7 +124,7 @@ end main
 Three points about it:
 
 - `numbered` can fail, so its signature ends in `!`. Writing `! ...` asks
-  the compiler to work out the set from the `try`s in the body. A routine
+  the compiler to work out the set from the `try`s in the body. A function
   that is not `public` may do that [0960].
 - `main` cannot fail, so it handles each failure with `else` [1030].
   `else (problem)` names the atom, and `failure.words(problem)` turns the
@@ -191,7 +191,7 @@ This table says what each part of a signature means:
 | `-> (lines: line_reader(provider) from buffer, host)` | A named result. `from buffer, host` says that the result borrows from both and must not outlive either [0790]. |
 | `-> (name: []u8, value: []u8)` | Several named results. The caller reads them as fields of the call's result or takes them apart by name [0990]. |
 | `! no_argument` | What the call can fail with [0940]. The caller passes the failure on with `try` or handles it with `else`. |
-| `! ...` | A routine that is not `public` may let the compiler work its set out from its body [0960]. The library's public calls always write theirs. |
+| `! ...` | A function that is not `public` may let the compiler work its set out from its body [0960]. The library's public calls always write theirs. |
 | `inout` | The call may change the argument in place [0900]. |
 | `sink` | The call consumes the argument [0910]. |
 
@@ -229,7 +229,7 @@ The library covers:
 - running programs, clocks, sleeping, the system's entropy and a
   deterministic generator;
 - blocking TCP and UDP sockets over IPv4 and IPv6;
-- threads started as a group the routine joins, `hosted/thread`;
+- threads started as a group the function joins, `hosted/thread`;
 - the rest of the file system: opening with options, renaming, a file's
   status, read-only files, synchronizing, truncation, reading and writing
   at an offset, temporary files, the working directory's path and
@@ -407,10 +407,9 @@ An insertion-ordered hash map with explicit entry walks.
 | `map.remove` | Remove a key. |
 | `map.entries`, `map.next_entry` | Walk the entries in insertion order. |
 
-Keys are constrained on the `hashable` concept of `core/cmp`. `hashable`
-ships for ten integer scalars, `bool` and `[]u8`, and `core/text` adds
-UTF-8 evidence. An alternative policy uses a `distinct`
-wrapper. Floating-point keys need an explicit equality and hashing
+Keys are constrained on the `hashable` concept of `core/cmp`, whose table
+lists the types `hashable` ships for. An alternative policy uses a
+`distinct` wrapper. Floating-point keys need an explicit equality and hashing
 policy.
 
 Keep keys and their backing stable while the map stores them, and
@@ -459,10 +458,9 @@ Allocation-free in-place heapsort and selection sort using ordering evidence, an
 
 None of the three allocates, and none promises stability.
 
-Items are constrained on the `ordered` concept of `core/cmp`. `ordered`
-ships for the ten integer scalars, and `core/text` supplies UTF-8 byte
-ordering. Custom `ordered` evidence must obey a strict weak
-ordering.
+Items are constrained on the `ordered` concept of `core/cmp`, whose table
+lists the types `ordered` ships for. Custom `ordered` evidence must obey a
+strict weak ordering.
 
 `sort_by` takes the order as a comparison, `less(by, left, right)`. On
 every call it passes the comparison the context `by` that the caller
@@ -527,7 +525,7 @@ whole scalar, so each position is where a scalar starts, or the end:
 | `find_scalar(source, scalar)`, `find_scalar_from` | Where a scalar first is, or `not_found`. |
 
 Read the scalar at a position as `source[at]`. Walk the text by stepping
-until `done`. This routine walks a key that way, and checks each scalar
+until `done`. This function walks a key that way, and checks each scalar
 and where it begins:
 
 ```landin
@@ -556,7 +554,7 @@ position inside a scalar traps too.
 
 A match begins and ends where scalars do. The text before the match, the
 match and the text after it are therefore each a range of the source:
-`utf8` with the source's origin, and nothing copied. This routine splits
+`utf8` with the source's origin, and nothing copied. This function splits
 a record at its first `=`:
 
 ```landin
@@ -735,7 +733,7 @@ How a value passes through the buffer:
 
 To print a float, scale it to an integer and print the parts. Converting
 a float to an integer truncates toward zero, and traps when the value
-does not fit. So this routine adds a half to round, and takes the sign
+does not fit. So this function adds a half to round, and takes the sign
 off first so that a negative value rounds the same way:
 
 ```landin
@@ -824,7 +822,7 @@ The table below shows typical use, as in the tour's first program:
 - Every call takes `host`, the handle `blocking.new()` makes in
   [hosted/blocking](../hosted/blocking). A hosted program imports that
   module beside `core/io`.
-- A call written with `try` is in a routine that can fail. `main` cannot
+- A call written with `try` is in a function that can fail. `main` cannot
   fail, so it handles each failure with `else` instead, as the program at
   the end of the page does.
 
@@ -851,7 +849,7 @@ An erased capability is built from the address of a handle binding:
 - It is itself a provider of its concept and of every concept that
   concept builds on (D492). So an `any io.world` or an `any net.network`
   goes as it is, with no adapter, to `io.buffered_over`, `io.lines_over`
-  or any routine generic over a writer or a reader.
+  or any function generic over a writer or a reader.
 - It does not convert to an `any` of another concept. Where an
   `any io.writer` is wanted, an erased world lends a writer to erase with
   `writer_of`.
@@ -1825,22 +1823,22 @@ alone.
 
 ## core/fibre
 
-Fibres: tasks a routine starts as a group and waits for before it goes on.
+Fibres: tasks a function starts as a group and waits for before it goes on.
 
 | Call | What it does |
 |---|---|
 | `fibre.group_over` | Cut a backing the caller lends into equal stacks, run by any `fibre.scheduler`, and return the group `from` both. |
 | `fibre.turns_over` | The same over a `fibre.turns`, for tasks that must take turns. |
-| `fibre.admit` | Wait for a free stack, copy a state onto it and start a task that calls a routine with the copy. |
+| `fibre.admit` | Wait for a free stack, copy a state onto it and start a task that calls a function with the copy. |
 | `fibre.join` | Wait until every task has ended, and fail with the first failure any had. |
 | `fibre.yield` | Let the provider's other fibres run, through `turns` evidence. |
 
-A task is an ordinary routine, `(inout state: T) -> none !
+A task is an ordinary function, `(inout state: T) -> none !
 failure.reason`. Its state is a value copied onto its own stack, so one
 group holds tasks of different state types.
 
 The state is kept until the task ends, `escaping into` the group: what it
-refers to must outlive the group, as the routine's own parameters and the
+refers to must outlive the group, as the function's own parameters and the
 locals declared before the group do.
 
 Two concepts say what runs the tasks:
@@ -1937,7 +1935,7 @@ How a round runs:
   ended, the round calls its `stacks.idler` before it goes on: a device
   waits for an interrupt there, and `stacks.spin` returns at once.
 
-In a program that prepares a stack, every routine checks its frame
+In a program that prepares a stack, every function checks its frame
 against the stack it runs on before it reserves the frame. It traps
 `stack_exhausted` at its own site when the frame would go below the
 stack's limit. So a task that goes too deep stops at the call that would
@@ -1956,9 +1954,9 @@ failed check's handler. `--stack-report` gives the margin as
 
 A switch carries each stack's limit with the registers it saves.
 
-A prepared stack is at least 128 words, beside the few words its first
-frame keeps at its top. Size it from the report's depth of the task's
-routine and the margin.
+A prepared stack is at least 128 words, or 176 with a Cortex-M float unit,
+beside the few words its first frame keeps at its top. Size it from the report's depth of the task's
+function and the margin.
 
 Every target with a native backend admits this module, and synthetic-32
 does not. A program over `fibre.whole` or the blocking host does not
@@ -2275,7 +2273,7 @@ waiting for the child both wait. A provider built over it supplies
 and standard streams. They come from the root the hosted entry
 establishes through `platform/posix`'s
 `_landin_host_initialize_arguments`. A C `main` that drives Landin's
-exported routines calls that initializer itself, as "A C `main` that
+exported functions calls that initializer itself, as "A C `main` that
 calls Landin" below describes.
 
 The handle borrows nothing, since the root and the descriptors belong to
@@ -2301,7 +2299,7 @@ it is zero.
 ### A C `main` that calls Landin
 
 A Landin entry point sets up the arguments before its body runs. A program
-whose `main` is C's, calling public Landin routines, does it itself, by
+whose `main` is C's, calling public Landin functions, does it itself, by
 calling `_landin_host_initialize_arguments(argc, argv, envp)` from
 `platform/posix`:
 
@@ -2409,23 +2407,23 @@ nothing to write with.
 
 ## hosted/thread
 
-Threads: tasks a routine starts as a group and waits for before it goes
+Threads: tasks a function starts as a group and waits for before it goes
 on, each on a thread of its own, written once over `platform/posix`.
 
 | Call | What it does |
 |---|---|
 | `thread.group_over(host, backing, count)` | Cut a backing the caller lends into `count` equal stacks, over a `hosted/system` handle, and return the group `from` both. |
-| `thread.admit` | Wait for a free stack, copy a state onto it and start a thread that calls a routine with the copy. |
+| `thread.admit` | Wait for a free stack, copy a state onto it and start a thread that calls a function with the copy. |
 | `thread.join` | Wait until every thread has ended, and fail with the first failure any task had. |
 | `thread.least_stack()` | The least bytes one stack takes on this system. |
 
 The module is `core/fibre`'s group over threads:
 
-- A task is an ordinary routine,
+- A task is an ordinary function,
   `(inout state: T) -> none ! failure.reason`.
 - Its state is copied onto its own stack and kept `escaping into` the
   group.
-- A routine making a group defers `thread.join(group) else none`, as it
+- A function making a group defers `thread.join(group) else none`, as it
   would a region's release.
 
 Threads are no provider of `core/fibre`'s concepts. A thread runs beside
@@ -2434,7 +2432,7 @@ is the atomic wrapper's or a lock's.
 
 ### How a group behaves
 
-- Everything the routine did before `admit` happens before the task's
+- Everything the function did before `admit` happens before the task's
   first action, and everything the task did happens before `join`
   returns. Nothing else orders the two.
 - `join` blocks the calling thread, so a fibre that joins holds its
@@ -2444,7 +2442,7 @@ is the atomic wrapper's or a lock's.
   the process is sent reaches the provider that reads it, through a
   signalfd or kqueue, and never a thread's default disposition.
 - Every stack is prepared as a fibre's is, so a task that goes too deep
-  traps `stack_exhausted` at the routine whose frame would not fit.
+  traps `stack_exhausted` at the function whose frame would not fit.
   Nothing is allocated and no guard page is mapped.
 - The first failure is kept and the rest are dropped; nothing cancels a
   thread.
@@ -2678,7 +2676,7 @@ How signals reach a child:
 
 | Call | What it does |
 |---|---|
-| `start_thread` | Start a thread that calls a C routine with an argument, on a stack area the caller lends. |
+| `start_thread` | Start a thread that calls a C function with an argument, on a stack area the caller lends. |
 | `join_thread` | Wait until it has ended. |
 | `thread_start_bytes`, `thread_start_alignment` | What the area takes on this system. |
 
@@ -2817,7 +2815,7 @@ since asking clears the words and the next call may replace them.
 
 It is the C library's `dlopen`, `dlsym`, `dlclose` and `dlerror` on every
 system. So a static Linux program that loads a library is refused before
-it links, naming the routine and `--link=libc`. What is loaded is C, or
+it links, naming the function and `--link=libc`. What is loaded is C, or
 another language's code reached through its C entry points.
 
 ### How each system does it
@@ -2978,7 +2976,7 @@ The typed wrappers are the calls the library makes:
 `rt_sigaction` takes the kernel's `signal_action`, which RV64 lays out
 without a restorer.
 
-No routine but `_landin_start` and `_landin_start_main` is a global
+No function but `_landin_start` and `_landin_start_main` is a global
 symbol, so none of them replaces the C library's function of the same
 name under `--link=libc`.
 
@@ -3128,7 +3126,7 @@ A copy of the real one, damaged byte by byte, shows it.
 
 ### What the parser costs
 
-The parser has a size. On Linux x86-64 its routines are 9.5 KB of a
+The parser has a size. On Linux x86-64 its functions are 9.5 KB of a
 static program at `--optimize size` and 12.1 KB at `speed`.
 
 Reading a clock through `platform/posix` brings them with the clock

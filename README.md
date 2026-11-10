@@ -28,11 +28,11 @@ application is at the other. This is what it is like to write:
 - **Manual memory.** Arenas are the idiom, and you pass allocators in as
   arguments. There is no garbage collector, no reference counting and no
   destructors.
-- **Failures in the signature.** A routine declares what can go wrong as a
+- **Failures in the signature.** A function declares what can go wrong as a
   set of atoms. A caller handles them with `else` or passes them on with
   `try`.
 - **Useful local checks, not a borrow checker.** Pointers and slices get
-  origin and escape checks within a routine. The language does not claim
+  origin and escape checks within a function. The language does not claim
   memory safety: it is deliberately unsafe, with useful local checks.
 - **Generic code through concepts,** dispatched statically or at run time
   through `any`.
@@ -58,12 +58,9 @@ The archive for your platform on
 directory. Unpack it into a directory of its own and put its `bin` on your
 `PATH`.
 
-The archives differ by release:
-
-- Archives up to 0.2.7 hold `refine` without its library.
-- Later archives leave the compiler's debug information out and publish it
-  beside them as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
-  only to read a crash of the compiler itself.
+The archive leaves the compiler's debug information out and publishes it
+beside it as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
+only to read a crash of the compiler itself.
 
 ### With nix
 
@@ -254,9 +251,12 @@ Firmware targets:
 
 | target | builds | on boards | runs in the gate |
 | --- | --- | --- | --- |
-| Cortex-M | boot or RAM firmware for the device description it imports, or for the reference firmware profile of 32 KiB flash and 16 KiB RAM | RP2040, RP2350 and STM32H753 ports recorded on their boards, the STM32H753's Cortex-M7 using its float unit and caches | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
-| Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7), with one windowed ILP32 ABI (application binary interface) and distinct instruction configurations | both boards have recorded RAM and boot checks | chip controls and the complete freestanding inventory on exact Espressif QEMU CPUs with explicitly virtual corpus RAM, plus strict assembler boundaries |
-| RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities | ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each run recorded against its expected output, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
+| Cortex-M | boot or RAM firmware for the device description it imports, or for the reference firmware profile of 32 KiB flash and 16 KiB RAM | RP2040, RP2350 and STM32H753, whose Cortex-M7 uses its float unit and caches | under the pinned QEMU, with GDB |
+| Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7) | ESP32 and ESP32-S3 | under Espressif's QEMU |
+| RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities | ESP32-C3, ESP32-C5 and RP2350 Hazard3 | under Espressif's QEMU |
+
+[What refine does today](docs/capabilities.md#targets) says what each board
+run records and what the gate checks for each target.
 
 ### Language, library and tooling
 
@@ -268,7 +268,7 @@ Firmware targets:
 - **The library:** `core` modules of allocators, containers, text, I/O,
   time, networking, random numbers and atomic cells, each provider with a
   fake for testing, and `hosted` providers over POSIX, among them threads
-  started as a group a routine joins. A Linux executable links no C
+  started as a group a function joins. A Linux executable links no C
   library unless `--link=libc` asks for one.
 - **The C boundary:** each hosted target's C ABI, packed and flexible
   records, callbacks and variadic calls, Cortex-M's AAPCS32 with its float
@@ -276,7 +276,7 @@ Firmware targets:
   generator over Clang.
 - **Code generation:** byte-identical output on every target whatever the
   build environment; register allocation, inlining and simplification at
-  speed; and only the routines a program reaches are emitted.
+  speed; and only the functions a program reaches are emitted.
   [The Benchmark Game, measured](docs/benchmarks.md) compares five ports
   with seven other languages.
 - **Tooling:** source debugging on every target, a formatter, a language

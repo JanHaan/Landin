@@ -32,10 +32,10 @@ end injector_value
 public injector: type (inner_provider: type) = injector_value(inner_provider)
 
 --- Fill `state` for an injector over `inner` with a budget of
---- `allowed_attempts` allocation and resize calls that may reach it, and
---- return its handle. An inner failure consumes one of them too; an injected
---- failure never calls the inner provider and counts only in `attempts` and
---- `injected_failures`.
+--- `allowed_attempts` allocation, resize and in-place growth calls that may
+--- reach it, and return its handle. An inner failure consumes one of them
+--- too; an injected failure never calls the inner provider and counts only in
+--- `attempts` and `injected_failures`.
 public over: (inner_provider: type is mem.allocator, inout state: space,
               inner: inner_provider, allowed_attempts: usize)
              -> (handle: injector(inner_provider) from state, inner) =
@@ -147,19 +147,19 @@ end injector_resize
     is mem.allocator (alloc: injector_alloc, grow: injector_grow,
                       resize: injector_resize, free: injector_free)
 
---- Return how many allocation attempts may still reach the inner provider.
+--- Return how many attempts may still reach the inner provider.
 public remaining: (inner_provider: type,
                    memory: injector(inner_provider)) -> (count: usize) =
     count = memory.state.val.remaining
 end remaining
 
---- Return all allocation attempts, including injected and inner failures.
+--- Return all attempts, including injected and inner failures.
 public attempts: (inner_provider: type,
                   memory: injector(inner_provider)) -> (count: usize) =
     count = memory.state.val.attempts
 end attempts
 
---- Return allocation attempts passed through to the inner provider.
+--- Return the attempts passed through to the inner provider.
 public delegated: (inner_provider: type,
                    memory: injector(inner_provider)) -> (count: usize) =
     count = memory.state.val.delegated

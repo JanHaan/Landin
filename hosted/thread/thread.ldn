@@ -118,11 +118,11 @@ public least_stack: () -> (bytes: usize) =
     bytes += skip_to(bytes, unit)
 end least_stack
 
---- Make a group of threads over `host`, whose last-error cell keeps the
---- errno of a start the system refused. It cuts `backing` into `count`
---- equal stacks and fails `mem.out_of_memory` when they would be smaller
---- than `least_stack()`, before any thread starts. The group borrows the
---- handle and the backing for as long as it is used [0790].
+--- Make a group of threads over `host`, whose last-error cell keeps the errno
+--- of a start the system refused. It cuts `backing` into `count` equal stacks
+--- and fails `mem.out_of_memory` when `count` is zero or the stacks would be
+--- smaller than `least_stack()`, before any thread starts. The group borrows
+--- the handle and the backing for as long as it is used [0790].
 public group_over: (host: system.host, backing: []mut u8, count: usize)
                    -> (g: group from host, backing) ! mem.out_of_memory =
     fail mem.out_of_memory when count == 0 or lenof backing == 0

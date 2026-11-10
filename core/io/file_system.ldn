@@ -24,7 +24,7 @@ public open_options: type = struct
 end open_options
 
 --- Read and write a file that exists, from its start, keeping what it
---- holds: `io.updating`.
+--- holds.
 public updating: open_options = (read: true, write: true, append: false,
                                  create: false, exclusive: false,
                                  truncate: false)

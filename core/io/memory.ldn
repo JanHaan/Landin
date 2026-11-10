@@ -15,8 +15,8 @@ public slot_state: type = closed_slot | reading_slot | writing_slot
 --- writable capacity.  The caller gives it `closed_slot`. Keep all referenced
 --- ranges alive and initialize the fields before constructing the provider.
 ---
---- Finite caller-backed provider of every io concept. Handles are indexes,
---- not ownership tokens.
+--- The provider over these slots is finite and caller-backed. Handles are
+--- indexes, not ownership tokens.
 --- Clients preserve length <= capacity and supply all retained backing.
 public memory_file: type = struct
     name: []u8

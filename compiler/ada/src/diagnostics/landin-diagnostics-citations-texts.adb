@@ -106,11 +106,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    public version: u32 = 3"
                & LF
                & LF
-               & "`public` is about modules, not the linker. A public rout"
-               & "ine or datum is still a local symbol inside the program'"
-               & "s image, so no C library or linked object can collide wi"
-               & "th it. To give C or the linker a name, see [1600] and [1"
-               & "610]."
+               & "`public` is about modules, not the linker. A public func"
+               & "tion or datum is still a local symbol inside the program"
+               & "'s image, so no C library or linked object can collide w"
+               & "ith it. To give C or the linker a name, see [1600] and ["
+               & "1610]."
                & LF
                & LF
                & "Exact rules: spec [1975].",
@@ -163,8 +163,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "llows the same rule ([1070])."
                & LF
                & LF
-               & "Module declarations and routine signatures see all their"
-               & " names at once ([0130], [1290])."
+               & "Module declarations and function signatures see all thei"
+               & "r names at once ([0130], [1290])."
                & LF
                & LF
                & "Control words are reserved everywhere a name could go (s"
@@ -1816,12 +1816,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "a `break name` can leave it early. Its cleanups then run"
                & " as a loop's do ([1180]).",
             when 940 =>
-               "A routine that can fail lists, after `!`, the atoms it c"
-               & "an fail with, and `fail` leaves with one of them. An ato"
-               & "m is a declared name that is its own value, such as `por"
-               & "t_zero: atom` ([0630]). A caller cannot ignore a failure"
-               & ": at every call to a failing routine, it either passes t"
-               & "he failure on or handles it."
+               "A function that can fail lists, after `!`, the atoms it "
+               & "can fail with, and `fail` leaves with one of them. An at"
+               & "om is a declared name that is its own value, such as `po"
+               & "rt_zero: atom` ([0630]). A caller cannot ignore a failur"
+               & "e: at every call to a failing function, it either passes"
+               & " the failure on or handles it."
                & LF
                & LF
                & "Here is all of it at once. `port_from` reads a port numb"
@@ -1900,7 +1900,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "|---|---|"
                & LF
-               & "| `try f()` | your routine fails with the same atom |"
+               & "| `try f()` | your function fails with the same atom |"
                & LF
                & "| `f() else value` | `value` stands in for the result |"
                & LF
@@ -1929,8 +1929,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "- An error set is a set. Aliases flatten, order does not"
-               & " matter, and a routine that fails with `a` passes where "
-               & "`a | b` is expected."
+               & " matter, and a function that fails with `a` passes where"
+               & " `a | b` is expected."
                & LF
                & "- The atoms carry no payload."
                & LF
@@ -1940,9 +1940,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Exact rules: spec [1980].",
             when 960 =>
-               "`try f()` calls `f`. If `f` fails, your routine runs its"
-               & " cleanups ([1100]) and then fails with the same atom. Ev"
-               & "ery atom you might pass on must be in your own `!` set."
+               "`try f()` calls `f`. If `f` fails, your function runs it"
+               & "s cleanups ([1100]) and then fails with the same atom. E"
+               & "very atom you might pass on must be in your own `!` set."
                & LF
                & LF
                & "    read_config: (path: utf8) -> (data: []u8) ! ... ="
@@ -1955,13 +1955,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The `try` sits at the call, so you can see in the source"
-               & " every place a routine may leave early."
+               & " every place a function may leave early."
                & LF
                & LF
                & "`! ...` means ""whatever my callees can fail with"": the c"
                & "ompiler works the set out from every `fail` and `try` in"
                & " the body. An inferred set that comes out empty means th"
-               & "e routine cannot fail."
+               & "e function cannot fail."
                & LF
                & LF
                & "Use `! ...` inside a module, where the compiler sees eve"
@@ -1978,9 +1978,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "`try for item in source do ... end for` passes on a fail"
-               & "ure from any traversal step ([1150]). The enclosing rout"
-               & "ine must declare or infer the atoms, and its caller hand"
-               & "les them with the ordinary `else` on that call."
+               & "ure from any traversal step ([1150]). The enclosing func"
+               & "tion must declare or infer the atoms, and its caller han"
+               & "dles them with the ordinary `else` on that call."
                & LF
                & LF
                & "Exact rules: spec [1980].",
@@ -2080,9 +2080,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Used any other way, that call needs `else value`, a bloc"
                & "k, or `try`.",
             when 970 =>
-               "`return` leaves the routine with its named results as th"
-               & "ey stand, and `fail` leaves with an error. Each takes an"
-               & " optional `when condition`."
+               "`return` leaves the function with its named results as t"
+               & "hey stand, and `fail` leaves with an error. Each takes a"
+               & "n optional `when condition`."
                & LF
                & LF
                & "    clamp_low: (x: i32, floor: i32) -> (r: i32) ="
@@ -2156,15 +2156,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Collecting diagnostics needs somewhere to put them, and "
                & "that is an ordinary parameter. The library's destination"
-               & " for diagnostics is the concept `core/diag.log`. A routi"
-               & "ne takes it as `inout log: any diag.log`, meaning any ki"
-               & "nd of log at all ([1370]). Its `note` entry takes a posi"
-               & "tion in the text, a severity and the message bytes."
+               & " for diagnostics is the concept `core/diag.log`. A funct"
+               & "ion takes it as `inout log: any diag.log`, meaning any k"
+               & "ind of log at all ([1370]). Its `note` entry takes a pos"
+               & "ition in the text, a severity and the message bytes."
                & LF
                & LF
                & "Recording a note is a diagnostic; failing to record it i"
                & "s an operation failure. So `note` declares `io.io_failed"
-               & "`, and a routine that records notes lists it too."
+               & "`, and a function that records notes lists it too."
                & LF
                & LF
                & "- A bounded logger never fails. When it is full it stops"
@@ -2178,7 +2178,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "know which policy its caller chose. The sink is a capabi"
                & "lity ([1680]): passing one makes the destination explici"
                & "t, though the parameter list alone does not prove that t"
-               & "he routine cannot make another sink or reach the host.",
+               & "he function cannot make another sink or reach the host.",
             when 1100 =>
                "`defer call` runs the call when its block is left: by fa"
                & "lling off the end, `return`, `break`, `continue` or a fa"
@@ -2432,9 +2432,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "`try for` walks a source whose steps can fail ([1320]'s "
                & "`fallible_iterable`, or a plain `iterable`). A failure l"
-               & "eaves the loop through the routine's error set ([0960])."
-               & " It runs `defer` and `undo` on the way and skips `comple"
-               & "te`. `break` and `continue` work as usual.",
+               & "eaves the loop through the function's error set ([0960])"
+               & ". It runs `defer` and `undo` on the way and skips `compl"
+               & "ete`. `break` and `continue` work as usual.",
             when 1160 =>
                "A loop binding carries no marker, because the source's t"
                & "ype already decides. Over a `[]mut t` the element is a w"
@@ -2756,10 +2756,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "'s width into a pointer."
                & LF
                & LF
-               & "A region reaches only the code written inside it. A rout"
-               & "ine called from it is checked as that routine is written"
-               & ". A deferred call is checked where you wrote it, not whe"
-               & "re the exit that runs it stands.",
+               & "A region reaches only the code written inside it. A func"
+               & "tion called from it is checked as that function is writt"
+               & "en. A deferred call is checked where you wrote it, not w"
+               & "here the exit that runs it stands.",
             when 520 =>
                "`[n]t` is `n` elements of type `t`, stored inline. Assig"
                & "nment copies the whole array. The length is part of the "
@@ -3244,10 +3244,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ue type `text.position`:"
                & LF
                & LF
-               & "- On plain `[]u8`, the routines are `first`, `at_end`, `"
-               & "next`, `advance`, `offset`, `byte` and `slice`. Reading "
-               & "a byte at the end fails with `past_end`, and a slice kee"
-               & "ps its source's origin."
+               & "- On plain `[]u8`, the functions are `first`, `at_end`, "
+               & "`next`, `advance`, `offset`, `byte` and `slice`. Reading"
+               & " a byte at the end fails with `past_end`, and a slice ke"
+               & "eps its source's origin."
                & LF
                & "- On `utf8`, the same positions step a whole scalar with"
                & " `start`, `step`, `done` and `width`. `find` returns whe"
@@ -3469,10 +3469,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Functions in a struct. A module struct may hold a functi"
                & "on. The field names a declared function, or an anonymous"
-               & " one that captures nothing. What is stored is the routin"
-               & "e's address; nothing is called. There is no all-zero fun"
-               & "ction address [0540], so such a struct must be written o"
-               & "ut in full."
+               & " one that captures nothing. What is stored is the functi"
+               & "on's address; nothing is called. There is no all-zero fu"
+               & "nction address [0540], so such a struct must be written "
+               & "out in full."
                & LF
                & LF
                & "Exact rules: spec [1940].",
@@ -3507,10 +3507,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ion.",
             when 1480 =>
                "You tell the compiler where modules are. `refine` takes "
-               & "repeated `--root=DIR` options and then the entry module'"
-               & "s directory, or its source files, which then form one mo"
-               & "dule. With no `--root`, the named files form one synthet"
-               & "ic module."
+               & "repeated `--root=DIR` options and then the entry module:"
+               & " its directory, or its source files, which together form"
+               & " one module. With no `--root` you name the source files,"
+               & " and they form one module in the same way."
                & LF
                & LF
                & "The roots are searched in the order you give ([1420]), a"
@@ -3521,9 +3521,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "The library root. The compiler does add one root: the li"
                & "brary it ships with, found beside its executable. `core`"
-               & ", `hosted` and `platform` always come from there, after "
-               & "every root you name. Because the search is otherwise pro"
-               & "ject-first, a project can override an ordinary module by"
+               & ", `hosted` and `platform` always come from there and fro"
+               & "m nowhere else, so a root you name cannot replace them. "
+               & "Every other module is searched for in your roots, projec"
+               & "t first, so a project can override an ordinary module by"
                & " putting its own copy in its first root. Vendoring a pac"
                & "kage is just that."
                & LF
@@ -3548,8 +3549,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "mpiler only sees directories."
                & LF
                & LF
-               & "The repository's namespaces. Four source namespaces belo"
-               & "ng to the repository:"
+               & "The compiler's namespaces. Four source namespaces come w"
+               & "ith the compiler:"
                & LF
                & LF
                & "| namespace | holds | available |"
@@ -3887,9 +3888,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e raw storage safe: the allocation you supply must be li"
                & "ve, aligned and as large as you say ([1720]).",
             when 770 =>
-               "A pointer to a local dies with the routine. Returning on"
-               & "e is an error, and so is storing it anywhere that outliv"
-               & "es the routine."
+               "A pointer to a local dies with the function. Returning o"
+               & "ne is an error, and so is storing it anywhere that outli"
+               & "ves the function."
                & LF
                & LF
                & "    bad: () -> (p: ptr u32) ="
@@ -3948,9 +3949,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "eter does not say `escaping`."
                & LF
                & LF
-               & "A routine that does keep a reference marks the parameter"
-               & " `escaping`. The caller may then pass only something tha"
-               & "t lives long enough: allocated or static, never frame."
+               & "A function that does keep a reference marks the paramete"
+               & "r `escaping`. The caller may then pass only something th"
+               & "at lives long enough: allocated or static, never frame."
                & LF
                & LF
                & "The next example assumes a struct `node` with a field `n"
@@ -4056,10 +4057,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end on_the_frame"
                & LF
                & LF
-               & "The routine may keep `item` in `head` and nowhere else. "
-               & "A frame reference never goes into a parameter's storage,"
-               & " and a reference from the caller's parameter goes into a"
-               & "nything its frame holds."
+               & "The function may keep `item` in `head` and nowhere else."
+               & " A frame reference never goes into a parameter's storage"
+               & ", and a reference from the caller's parameter goes into "
+               & "anything its frame holds."
                & LF
                & LF
                & "Exact rules: spec [1910].",
@@ -4092,8 +4093,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "The fix is always nearby: finish with the view before th"
-               & "e call, or take it again after. The check looks at one r"
-               & "outine body, so there is nothing to annotate."
+               & "e call, or take it again after. The check looks at one f"
+               & "unction body, so there is nothing to annotate."
                & LF
                & LF
                & "Only `inout` and `sink` trigger the check, since they ar"
@@ -4105,10 +4106,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "An unchecked region ([1120]) does not turn the check off"
                & ": origins and escape are among the checks that stay.",
             when 790 =>
-               "When a routine returns a reference derived from a parame"
-               & "ter, its signature says so with `from`. The caller then "
-               & "knows that the thing it passed in has to hold still whil"
-               & "e it uses the result."
+               "When a function returns a reference derived from a param"
+               & "eter, its signature says so with `from`. The caller then"
+               & " knows that the thing it passed in has to hold still whi"
+               & "le it uses the result."
                & LF
                & LF
                & "Here a `batch` holds a writable slice of readings and ho"
@@ -4260,13 +4261,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "] keeps uninitialized storage out of reach."
                & LF
                & LF
-               & "A signature brings tracking back. A routine that indexes"
-               & " a table C gave it writes `from table` on its result, an"
-               & "d the compiler checks its callers against that as agains"
-               & "t any signature. The compiler does not check the routine"
-               & "'s body against it, since a pointer made from an integer"
-               & " satisfies any `from`. The contract is its author's clai"
-               & "m, so keep such routines small.",
+               & "A signature brings tracking back. A function that indexe"
+               & "s a table C gave it writes `from table` on its result, a"
+               & "nd the compiler checks its callers against that as again"
+               & "st any signature. The compiler does not check the functi"
+               & "on's body against it, since a pointer made from an integ"
+               & "er satisfies any `from`. The contract is its author's cl"
+               & "aim, so keep such functions small.",
             when 820 =>
                "An arena is a library value from `core/arena`: you hand "
                & "it a block of bytes, it hands out pieces of it, and indi"
@@ -4428,10 +4429,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "as been given back."
                & LF
                & "- A pointer that went through longer-lived storage. Insi"
-               & "de one routine a struct carries its fields' origins ([08"
-               & "40]). Store a pointer into a heap node, though, and read"
-               & " it back later through the node: it now has the node's o"
-               & "rigin, and whatever it pointed to may be gone."
+               & "de one function a struct carries its fields' origins ([0"
+               & "840]). Store a pointer into a heap node, though, and rea"
+               & "d it back later through the node: it now has the node's "
+               & "origin, and whatever it pointed to may be gone."
                & LF
                & "- Anything across the C boundary."
                & LF
@@ -4893,8 +4894,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "The same goes for what an implementation is handed: by c"
                & "onvention, a concept with no allocator among its paramet"
                & "ers says its implementations do not allocate. The compil"
-               & "er does not check that, since any hosted routine can mak"
-               & "e a heap of its own ([1680])."
+               & "er does not check that, since any hosted function can ma"
+               & "ke a heap of its own ([1680])."
                & LF
                & LF
                & "Resist widening a concept until it fits its hungriest im"
@@ -5020,8 +5021,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end allocator"
                & LF
                & LF
-               & "A routine that adds to a list takes the list `inout` and"
-               & " the allocator as an ordinary argument:"
+               & "A function that adds to a list takes the list `inout` an"
+               & "d the allocator as an ordinary argument:"
                & LF
                & LF
                & "    record_reading: (provider: type is mem.allocator, in"
@@ -5448,8 +5449,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Values that differ by target. When only a value differs,"
                & " you need no `fixed if` at all. A module value may read "
-               & "a fact, and a routine branches on that value with an ord"
-               & "inary `if`:"
+               & "a fact, and a function branches on that value with an or"
+               & "dinary `if`:"
                & LF
                & LF
                & "    fast_count: bool = compiler.feature.popcnt"
@@ -5465,15 +5466,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "comparing it with one of its atoms."
                & LF
                & LF
-               & "Inside a routine. A routine body reads no fact directly,"
-               & " and `fixed if` cannot begin a statement. Instead:"
+               & "Inside a function. A function body reads no fact directl"
+               & "y, and `fixed if` cannot begin a statement. Instead:"
                & LF
                & LF
                & "- What differs by value branches on a module value like "
                & "those above."
                & LF
-               & "- What needs a call that one system lacks is a routine d"
-               & "eclared in each arm of a module-level `fixed if`."
+               & "- What needs a call that one system lacks is a function "
+               & "declared in each arm of a module-level `fixed if`."
                & LF
                & LF
                & "Conditions. A condition is a closed fold: literals, pare"
@@ -5524,8 +5525,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "`compiler.assert` is a builtin call rather than a keywor"
                & "d, like the rest of [1560]. That leaves the word `assert"
-               & "` free for an ordinary routine of your own, such as the "
-               & "`assert` of [1040].",
+               & "` free for an ordinary function of your own, such as the"
+               & " `assert` of [1040].",
             when 1530 =>
                "An `option` declares a typed build switch with a default"
                & ", which the build can override. A misspelt switch is a c"
@@ -5626,12 +5627,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "rectory, environment or order. The linked executable is "
                & "not covered by that promise."
                & LF
-               & "- Every ordinary routine and every interrupt handler set"
-               & "s up the frame pointer, so a debugger or a backtrace can"
-               & " always walk the stack. On Cortex-M0 a routine with no c"
-               & "alls, no assembly and no stack changes may leave it alon"
-               & "e (spec [1990]). A naked routine ([1570]) owns its frame"
-               & " instead."
+               & "- Every ordinary function and every interrupt handler se"
+               & "ts up the frame pointer, so a debugger or a backtrace ca"
+               & "n always walk the stack. On Cortex-M0 a function with no"
+               & " calls, no assembly and no stack changes may leave it al"
+               & "one (spec [1990]). A naked function ([1570]) owns its fr"
+               & "ame instead."
                & LF
                & "- The whole program is compiled together ([1480]). The c"
                & "ompiler may keep private caches, but there is no stable "
@@ -6023,10 +6024,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- Without `link`, C imports and public C definitions use"
                & " their declared name."
                & LF
-               & "- Every other routine and datum, public or private, is a"
-               & " local symbol under its own name, so no C library can co"
-               & "llide with it. It is renamed, with its module path, only"
-               & " when the program holds that name twice."
+               & "- The program's entry is global, and so are a public def"
+               & "inition in a machine convention and a Cortex-M definitio"
+               & "n with [1640]'s section, alignment, vector or `keep` (sp"
+               & "ec [1975])."
+               & LF
+               & "- Every other function and datum, public or private, is "
+               & "a local symbol under its own name, so no C library can c"
+               & "ollide with it. It is renamed, with its module path, onl"
+               & "y when the program holds that name twice."
                & LF
                & LF
                & "The rules for a link name:"
@@ -6186,11 +6192,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ologue. The stack, registers, calls and return instructi"
                & "on are yours, and falling off the end traps."
                & LF
-               & "- Neither convention keeps a routine from section garbag"
-               & "e collection ([1640])."
+               & "- Neither convention keeps a function from section garba"
+               & "ge collection ([1640])."
                & LF
-               & "- Naked routines also work on hosted x86-64, arm64 and R"
-               & "V64; `platform/linux`'s process entry is one.",
+               & "- Naked functions also work on hosted x86-64, arm64 and "
+               & "RV64; `platform/linux`'s process entry is one.",
             when 1620 =>
                "Atomic operations are `compiler` builtins, not assembly,"
                & " so the compiler knows which memory they touch and can s"
@@ -6286,10 +6292,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Exact rules: spec [1990].",
             when 1630 =>
-               "`assembler.block` takes fixed quoted or raw text in a ro"
-               & "utine body, and after it the operands that carry values "
-               & "in and out. An operand names its direction, its name, it"
-               & "s type and the register it is placed `at`:"
+               "`assembler.block` takes fixed quoted or raw text in a fu"
+               & "nction body, and after it the operands that carry values"
+               & " in and out. An operand names its direction, its name, i"
+               & "ts type and the register it is placed `at`:"
                & LF
                & LF
                & "    disable_interrupts: () -> (previous: u32) ="
@@ -6348,11 +6354,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "- A pointer crosses as `usize(p)` and comes back through"
                & " `ptr(u)`, whose zero check then happens there. The inte"
-               & "ger keeps no permission. So a routine around a block tha"
-               & "t writes storage takes it as `ptr mut u8` or `[]mut u8`:"
-               & " its callers are checked against that parameter, and an "
-               & "immutable buffer is refused there rather than handed to "
-               & "the system."
+               & "ger keeps no permission. So a function around a block th"
+               & "at writes storage takes it as `ptr mut u8` or `[]mut u8`"
+               & ": its callers are checked against that parameter, and an"
+               & " immutable buffer is refused there rather than handed to"
+               & " the system."
                & LF
                & "- A flag comes back as `x <> 0`."
                & LF
@@ -6387,7 +6393,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- A register a call must preserve is declared, as an ope"
                & "rand or as a discarded output `out _ at rbx`, or `out _ "
                & "at v8` for a float one. That declaration is what makes t"
-               & "he routine save it."
+               & "he function save it."
                & LF
                & "- The frame, stack and link registers are never named, s"
                & "o a block cannot break a backtrace."
@@ -6529,8 +6535,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- The table is kept and refers to each handler in it, so"
                & " those handlers survive."
                & LF
-               & "- An interrupt routine nothing refers to and nothing kee"
-               & "ps can disappear."
+               & "- An interrupt function nothing refers to and nothing ke"
+               & "eps can disappear."
                & LF
                & "- `keep` retains the section that holds the declaration."
                & " Several objects placed in one section share that retent"
@@ -6560,11 +6566,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- `align` and `vector` take decimal literals; digit sepa"
                & "rators are fine, hex and expressions are refused."
                & LF
-               & "- `region: ""NAME""` places a routine or module datum in a"
-               & " region of the device description, by name rather than b"
-               & "y section. Code needs a region that may execute and muta"
-               & "ble data one that may be written, and reset copies or cl"
-               & "ears it there."
+               & "- `region: ""NAME""` places a function or module datum in "
+               & "a region of the device description, by name rather than "
+               & "by section. Code needs a region that may execute and mut"
+               & "able data one that may be written, and reset copies or c"
+               & "lears it there."
                & LF
                & "- Without a device description, the image has the refere"
                & "nce firmware profile's 32 KiB of flash and 16 KiB of RAM"
@@ -6582,11 +6588,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "A second boot stage. Some boot ROMs run a second stage b"
                & "efore the image: RP2040's reads its flash through one. O"
                & "n such a chip that stage lives in the device description"
-               & ", as a naked routine marked `link(boot_stage)`. The desc"
-               & "ription's boot kind places it at the start of the image,"
-               & " and the compiler seals it with the checksum the ROM che"
-               & "cks. Nothing else is marked that way, and nothing else i"
-               & "n a description is code.",
+               & ", as a naked function marked `link(boot_stage)`. The des"
+               & "cription's boot kind places it at the start of the image"
+               & ", and the compiler seals it with the checksum the ROM ch"
+               & "ecks. Nothing else is marked that way, and nothing else "
+               & "in a description is code.",
             when 730 =>
                "A hardware register mixes kinds of field, and confusing "
                & "them is the classic driver bug. Landin describes a regis"
@@ -6947,18 +6953,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "The argument root. A program that imports `hosted/system"
                & "`, directly or through `hosted/blocking`, imports `platf"
                & "orm/posix` with it. Its entry then first calls this C-ca"
-               & "llable routine with the real values, before the body of "
-               & "`main` begins, so the environment is kept beside the arg"
-               & "uments and lent the same way:"
+               & "llable function with the real values, before the body of"
+               & " `main` begins, so the environment is kept beside the ar"
+               & "guments and lent the same way:"
                & LF
                & LF
                & "    void _landin_host_initialize_arguments(int argc, cha"
                & "r **argv, char **envp);"
                & LF
                & LF
-               & "When C owns `main` and calls exported Landin routines, i"
-               & "t calls that routine itself, with its own `envp` or C's "
-               & "`environ`:"
+               & "When C owns `main` and calls exported Landin functions, "
+               & "it calls that function itself, with its own `envp` or C'"
+               & "s `environ`:"
                & LF
                & LF
                & "- Call it before `blocking.new()` acquires an argument c"
@@ -6983,12 +6989,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Freestanding. There is no `main`. The compiler request n"
                & "ames the entry: an infallible ordinary `() -> none` or `"
-               & "() -> noreturn` routine, or a naked `() -> none` one, in"
-               & " the entry module ([1630] shows the request). The compil"
-               & "er's reset initializes RAM before calling it. Returning "
-               & "from it, or a failed check, traps, since there is no hos"
-               & "ted exit to go to. General build and package orchestrati"
-               & "on are outside the firmware path."
+               & "() -> noreturn` function, or a naked `() -> none` one, i"
+               & "n the entry module ([1630] shows the request). The compi"
+               & "ler's reset initializes RAM before calling it. Returning"
+               & " from it, or a failed check, traps, since there is no ho"
+               & "sted exit to go to. General build and package orchestrat"
+               & "ion are outside the firmware path."
                & LF
                & LF
                & "An image loaded into RAM. For a debugger-loaded SRAM ima"
@@ -7013,8 +7019,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (128)
                & Character'Val (148)
                & " and pass them down as ordinary arguments. The language "
-               & "does not reserve that to the entry point: any routine ca"
-               & "n call the constructors ([1680])."
+               & "does not reserve that to the entry point: any function c"
+               & "an call the constructors ([1680])."
                & LF
                & LF
                & "What a root imports:"
@@ -7044,11 +7050,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "This is the essential flow of `examples/derived_hosted`,"
                & " a complete log filter. Its `main` is one line, `code = "
-               & "app.entry()`, and the work starts in `entry`, a public r"
-               & "outine of the program's own `app` module. That module im"
-               & "ports `hosted/blocking`, `hosted/heap`, `core/region`, `"
-               & "core/diag` and `core/io`, and `run_logged` is the applic"
-               & "ation's routine that does the work:"
+               & "app.entry()`, and the work starts in `entry`, a public f"
+               & "unction of the program's own `app` module. That module i"
+               & "mports `hosted/blocking`, `hosted/heap`, `core/region`, "
+               & "`core/diag` and `core/io`, and `run_logged` is the appli"
+               & "cation's function that does the work:"
                & LF
                & LF
                & "    public entry: () -> (code: i32) ="
@@ -7160,12 +7166,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "A diagnostics log asks for `any io.writer`, which is why"
                & " `entry` builds one from the same `host`: an `any io.wor"
                & "ld` is not an `any io.writer`, and neither converts to t"
-               & "he other. A routine holding only an erased world can go "
-               & "on in either of these ways:"
+               & "he other. A function holding only an erased world can go"
+               & " on in either of these ways:"
                & LF
                & LF
-               & "- pass it as it is to a routine generic over a writer, o"
-               & "r"
+               & "- pass it as it is to a function generic over a writer, "
+               & "or"
                & LF
                & "- make an `any io.writer` from the adapter `io.writer_of"
                & "(world)` lends it."
@@ -7268,16 +7274,16 @@ package body Landin.Diagnostics.Citations.Texts is
             when 1675 =>
                "Concurrency is a capability, like an allocator or the ho"
                & "st ([1660], [1680]). There is no `async`, no second call"
-               & "ing convention and no coloured function type. A routine "
-               & "that wants two things in flight asks for something that "
-               & "runs them, and whether they really overlap is that provi"
-               & "der's answer, not the routine's. Each one runs on a stac"
-               & "k of its own, a fibre."
+               & "ing convention and no coloured function type. A function"
+               & " that wants two things in flight asks for something that"
+               & " runs them, and whether they really overlap is that prov"
+               & "ider's answer, not the function's. Each one runs on a st"
+               & "ack of its own, a fibre."
                & LF
                & LF
-               & "A task is an ordinary routine. It takes its state `inout"
-               & "` and fails with `core/failure`'s set, and nothing in it"
-               & " knows it runs on a fibre:"
+               & "A task is an ordinary function. It takes its state `inou"
+               & "t` and fails with `core/failure`'s set, and nothing in i"
+               & "t knows it runs on a fibre:"
                & LF
                & LF
                & "    answers: type = struct"
@@ -7319,9 +7325,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    end ask"
                & LF
                & LF
-               & "A group. A routine starts tasks as a group, over storage"
-               & " it lends, and waits for them before it goes on, so what"
-               & "ever they borrow from it outlives them:"
+               & "A group. A function starts tasks as a group, over storag"
+               & "e it lends, and waits for them before it goes on, so wha"
+               & "tever they borrow from it outlives them:"
                & LF
                & LF
                & "    ask_both: (runs: any fibre.scheduler, clock: any tim"
@@ -7373,9 +7379,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "- The state is kept in the group until its task ends, so"
                & " `admit` takes it `escaping into` the group ([0780]). `a"
-               & "` may point at `heard`, a parameter of the routine that "
-               & "made the group; a local declared after the group is refu"
-               & "sed."
+               & "` may point at `heard`, a parameter of the function that"
+               & " made the group; a local declared after the group is ref"
+               & "used."
                & LF
                & LF
                & "Providers. Two concepts say what a provider is:"
@@ -7424,8 +7430,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Choosing a provider on a hosted system. The choice is ma"
-               & "de where the roots are minted ([1660]), and the routines"
-               & " below never learn it:"
+               & "de where the roots are minted ([1660]), and the function"
+               & "s below never learn it:"
                & LF
                & LF
                & "| provider | a call that waits | groups | signals |"
@@ -7460,12 +7466,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A fibre's stack does not grow. In a program that prepare"
-               & "s a stack, a routine compares its frame with the current"
-               & " stack's limit before it reserves the frame; the few tha"
-               & "t skip the check, small ones that call nothing, fit in a"
-               & " margin kept for them. Past the limit, the routine traps"
-               & " `stack_exhausted` at its own declaration, before it has"
-               & " written below the stack ([1670]):"
+               & "s a stack, a function compares its frame with the curren"
+               & "t stack's limit before it reserves the frame; the few th"
+               & "at skip the check, small ones that call nothing, fit in "
+               & "a margin kept for them. Past the limit, the function tra"
+               & "ps `stack_exhausted` at its own declaration, before it h"
+               & "as written below the stack ([1670]):"
                & LF
                & LF
                & "    main.ldn:15:1: trap: stack_exhausted"
@@ -7482,11 +7488,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "s up to 4.4 KiB of its stack on RV64 and less on the oth"
                & "ers, which is why its stacks are 8 KiB."
                & LF
-               & "- `refine compile --stack-report=PATH` writes each routi"
-               & "ne's frame and the deepest stack its calls can reach, an"
-               & "d names the `any` calls, recursion and foreign calls tha"
-               & "t leave that open. Size a stack from its task's row and "
-               & "the margin."
+               & "- `refine compile --stack-report=PATH` writes each funct"
+               & "ion's frame and the deepest stack its calls can reach, a"
+               & "nd names the `any` calls, recursion and foreign calls th"
+               & "at leave that open. Size a stack from its task's row and"
+               & " the margin."
                & LF
                & "- A backing too small for its stacks fails `mem.out_of_m"
                & "emory`, where the group is made or when a task is admitt"
@@ -7532,19 +7538,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Exact rules: spec [1995].",
             when 1680 =>
-               "Landin has no effect system. A routine that does I/O, al"
-               & "locates or reads the clock takes the thing that does it "
-               & "as a parameter: an allocator, an `io` writer, a peripher"
-               & "al handle, a random source. A caller can then hand it an"
-               & " in-memory world or a bounded allocator."
+               "Landin has no effect system. A function that does I/O, a"
+               & "llocates or reads the clock takes the thing that does it"
+               & " as a parameter: an allocator, an `io` writer, a periphe"
+               & "ral handle, a random source. A caller can then hand it a"
+               & "n in-memory world or a bounded allocator."
                & LF
                & LF
                & "The parameter list says what a caller supplies, not ever"
                & "ything the call can reach:"
                & LF
                & LF
-               & "- Any hosted routine may call the public host and heap c"
-               & "onstructors itself."
+               & "- Any hosted function may call the public host and heap "
+               & "constructors itself."
                & LF
                & "- A driver may make a pointer from an address [0460]."
                & LF

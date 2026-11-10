@@ -45,8 +45,8 @@ public extern(c) pthread_create:
     (thread: ptr mut thread_handle, attributes: ptr thread_attributes,
      routine: thread_routine, argument: usize) -> (status: i32)
 
---- Wait until `thread` has ended, and release it, discarding its result:
---- 0, or the errno. A thread is joined once.
+--- Wait until `thread` has ended and release it. `result` takes what it
+--- returned, or is `no_address`: 0, or the errno. A thread is joined once.
 public extern(c) pthread_join: (thread: thread_handle, result: address_filled)
                                -> (status: i32)
 

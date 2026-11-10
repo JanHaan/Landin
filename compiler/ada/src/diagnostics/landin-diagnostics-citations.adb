@@ -245,7 +245,7 @@ package body Landin.Diagnostics.Citations is
             when 510 =>
                "Storage that is not filled yet: `mem.storage(t)`",
             when 770 =>
-               "A frame reference cannot leave its routine",
+               "A frame reference cannot leave its function",
             when 780 =>
                "Keeping a pointer you were given: `escaping`",
             when 830 =>

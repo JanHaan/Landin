@@ -30,8 +30,8 @@ public entry: type = entry_value
 public message_capacity: usize = 256
 
 --- Diagnostic capability. `note` records severity, position and message;
---- `failed` reports whether an error diagnostic has been observed. I/O
---- failures propagate separately from `note`.
+--- `failed` reports whether an error diagnostic has been observed. An I/O
+--- failure of `note` is returned separately from error severity.
 public log: type = concept (logger: type)
     --- Record a diagnostic, copying or consuming the message during the call.
     --- I/O failure is returned separately from error severity.
