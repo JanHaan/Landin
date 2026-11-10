@@ -1,0 +1,9 @@
+class: negative
+summary: the armv6-m admission names the mnemonic it refuses and why: a float unit's instruction and a Thumb-2 instruction each say what has them, and only a control transfer is told that an ordinary block is straight-line
+program: program.ldn
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-armv6-m-names-the-mnemonic/program.ldn
+expect: expected.txt
+codes: L0330, L0330, L0330
+constructs: 1630, 1990
+targets: cortex-m0
+status: 1

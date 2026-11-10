@@ -1,0 +1,11 @@
+root: (x: u32) -> none =
+    assembler.block("vsqrt.f64 d0, d1", in x: u32 at general = x)
+end root
+
+call: () -> none =
+    assembler.block("bl somewhere")
+end call
+
+wide_move: () -> none =
+    assembler.block("movw r0, #1")
+end wide_move
