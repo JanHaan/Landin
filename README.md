@@ -57,6 +57,10 @@ The archive for your platform on
 directory. Unpack it into a directory of its own and put its `bin` on your
 `PATH`.
 
+A Linux archive's `refine` is linked against glibc and asks for the
+system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64. On
+NixOS or a musl distribution, install with nix or build from source.
+
 The archive leaves the compiler's debug information out and publishes it
 beside it as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
 only to read a crash of the compiler itself.
@@ -303,7 +307,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R16.10 — Measure generated code (planned).**
+**Current roadmap work: R13.79 — What the defect review found.**
 
 ## Questions, bugs and ideas
 
