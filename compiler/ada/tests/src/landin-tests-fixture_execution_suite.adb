@@ -306,16 +306,29 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  work in the order it was collected, which is the order it always
    --  ran in.  That is the property the equivalence check holds: the same
    --  transcript, whatever LANDIN_TEST_JOBS says.
+   --
+   --  As each piece ends, standard error is told its verdict in one line,
+   --  `fixture: CASE: CLASS/NAME: pass (12 of 403)`, FAIL for one with a
+   --  failed check.  That is the run's progress inside a case of half an
+   --  hour, so a slow run is told from a stalled one by the line that
+   --  stopped coming, and its per-fixture verdict list, which the
+   --  transcript's one `pass` row is not.  The lines come in the order
+   --  the pieces ended and count them, so they are never in the
+   --  transcript; scripts/parallel-equivalence.sh compares them sorted
+   --  and without their counts.
    generic
       type Element is private;
       type Element_Array is array (Positive range <>) of Element;
       with procedure Perform
         (Piece : Element; Item : in out Landin.Testing.Context);
+      with function Label (Piece : Element) return String;
    procedure Across_Workers
-     (Work : Element_Array; Item : in out Landin.Testing.Context);
+     (Work : Element_Array; Item : in out Landin.Testing.Context;
+      Of_Case : String);
 
    procedure Across_Workers
-     (Work : Element_Array; Item : in out Landin.Testing.Context)
+     (Work : Element_Array; Item : in out Landin.Testing.Context;
+      Of_Case : String)
    is
       type Context_Array is
         array (Positive range <>) of Landin.Testing.Context;
@@ -362,6 +375,52 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end Next;
          end Dispenser;
 
+         --  One line at a time, numbered in the order the pieces end.
+         --  A lock rather than a protected procedure, whose body may not
+         --  write a file.
+         protected Reporter is
+            entry Seize (Ordinal : out Positive);
+            procedure Release;
+         private
+            Held : Boolean := False;
+            Done : Natural := 0;
+         end Reporter;
+
+         protected body Reporter is
+            entry Seize (Ordinal : out Positive) when not Held is
+            begin
+               Held := True;
+               Done := Done + 1;
+               Ordinal := Done;
+            end Seize;
+
+            procedure Release is
+            begin
+               Held := False;
+            end Release;
+         end Reporter;
+
+         procedure Report (Slot : Positive);
+
+         procedure Report (Slot : Positive) is
+            Ordinal : Positive;
+         begin
+            Reporter.Seize (Ordinal);
+            begin
+               Ada.Text_IO.Put_Line
+                 (Ada.Text_IO.Standard_Error,
+                  Landin.Testing.Fixture_Line
+                    (Of_Case, Label (Work (Slot)),
+                     Landin.Testing.Failures (Results (Slot)) = 0,
+                     Ordinal, Count));
+               Ada.Text_IO.Flush (Ada.Text_IO.Standard_Error);
+            exception
+               when others =>
+                  null;
+            end;
+            Reporter.Release;
+         end Report;
+
          task type Worker;
 
          task body Worker is
@@ -384,6 +443,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
                         "raised "
                         & Ada.Exceptions.Exception_Name (Error));
                end;
+               Report (Slot);
             end loop;
          end Worker;
 
@@ -817,6 +877,149 @@ package body Landin.Tests.Fixture_Execution_Suite is
    begin
       Record_Report_With (Path, Host, Runner, Refine_Path, Wrote, Said);
    end Record_Report;
+
+   procedure Fixtures_Reporting_With
+     (Code    : String;
+      Host    : Landin.Platform.Filesystem'Class;
+      Paths   : out Landin.Platform.Path_List;
+      Problem : out Unbounded.Unbounded_String);
+
+   procedure Fixtures_Reporting_With
+     (Code    : String;
+      Host    : Landin.Platform.Filesystem'Class;
+      Paths   : out Landin.Platform.Path_List;
+      Problem : out Unbounded.Unbounded_String)
+   is
+      Found : Catalogue;
+   begin
+      Paths.Clear;
+      Problem := Unbounded.Null_Unbounded_String;
+      if Code'Length /= 5 or else Code (Code'First) /= 'L'
+        or else (for some C of Code (Code'First + 1 .. Code'Last) =>
+                   C not in '0' .. '9')
+      then
+         Problem := Unbounded.To_Unbounded_String
+           ("a code is L and four digits, as `refine explain` takes it,"
+            & " and this is not: " & Code);
+         return;
+      end if;
+
+      Discover (Found, Fixture_Root, Host);
+      if Problem_Count (Found) /= 0 then
+         Problem := Unbounded.To_Unbounded_String (Nth_Problem (Found, 1));
+         return;
+      end if;
+      for Index in 1 .. Count (Found) loop
+         declare
+            Case_Item : constant Fixture := Nth (Found, Index);
+            Label     : constant String := Label_Of (Case_Item);
+            Text      : Unbounded.Unbounded_String;
+            Status    : Landin.Platform.Read_Status;
+         begin
+            if Expect (Case_Item) /= "" then
+               Host.Read_File
+                 (Fixture_Root & "/" & Label & "/" & Expect (Case_Item),
+                  Text, Status);
+               if Status = Landin.Platform.Read_Ok
+                 and then Unbounded.Index (Text, "[" & Code & "]") > 0
+               then
+                  Paths.Append (Label);
+               end if;
+            end if;
+         end;
+      end loop;
+      if Paths.Is_Empty then
+         Problem := Unbounded.To_Unbounded_String
+           ("no recorded fixture's `expect` file carries " & Code);
+      end if;
+   end Fixtures_Reporting_With;
+
+   procedure Fixtures_Reporting
+     (Code    : String;
+      Paths   : out Landin.Platform.Path_List;
+      Problem : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      Host : Landin.Platform.Native.Native_Filesystem;
+   begin
+      Fixtures_Reporting_With (Code, Host, Paths, Problem);
+   end Fixtures_Reporting;
+
+   --  A code selects the recorded fixtures whose reports carry it, and
+   --  no other: the ones a change to its text changes.
+   procedure A_Code_Selects_The_Reports_Carrying_It
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Code_Selects_The_Reports_Carrying_It
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Paths : Landin.Platform.Path_List;
+      Problem : Unbounded.Unbounded_String;
+
+      procedure Add (Class_Name, Name, Report : String);
+
+      procedure Add (Class_Name, Name, Report : String) is
+         Directory : constant String :=
+           Fixture_Root & "/" & Class_Name & "/" & Name;
+      begin
+         Host.Add_Directory (Directory);
+         Host.Add_File
+           (Directory & "/fixture.meta",
+            "class: " & Class_Name & ASCII.LF
+            & "summary: a recorded report" & ASCII.LF
+            & "program: program.ldn" & ASCII.LF
+            & "constructs: 0380" & ASCII.LF
+            & "targets: linux-x86-64" & ASCII.LF
+            & (if Report = "" then ""
+               else "expect: expected.txt" & ASCII.LF
+                 & "args: " & Directory & "/program.ldn" & ASCII.LF));
+         Host.Add_File (Directory & "/program.ldn", "x: u8 = 1" & ASCII.LF);
+         if Report /= "" then
+            Host.Add_File (Directory & "/expected.txt", Report);
+         end if;
+      end Add;
+   begin
+      Host.Add_Directory (Fixture_Root);
+      Host.Add_Directory (Fixture_Root & "/positive");
+      Host.Add_Directory (Fixture_Root & "/negative");
+      Add ("negative", "first", "error[L0100]: one" & ASCII.LF);
+      Add ("negative", "other", "error[L0101]: another" & ASCII.LF);
+      Add ("negative", "second",
+           "error[L0101]: another" & ASCII.LF
+           & "error[L0100]: one, later" & ASCII.LF);
+      Add ("negative", "named-in-text",
+           "error[L0101]: see L0100, which is not this report's"
+           & ASCII.LF);
+      Add ("positive", "warned", "warning[L0100]: one" & ASCII.LF);
+      Add ("positive", "unrecorded", "");
+
+      --  Spelled in two parts: a whole code in a test's text is read by
+      --  check.py as evidence for that code, which this case is not.
+      Fixtures_Reporting_With ("L" & "0100", Host, Paths, Problem);
+      Landin.Testing.Check
+        (Item, Unbounded.Length (Problem) = 0
+           and then Natural (Paths.Length) = 3
+           and then Paths.Element (1) = "positive/warned"
+           and then Paths.Element (2) = "negative/first"
+           and then Paths.Element (3) = "negative/second",
+         "every recorded report carrying the code is selected, in run"
+         & " order, and no other: " & Unbounded.To_String (Problem));
+
+      Fixtures_Reporting_With ("L" & "0999", Host, Paths, Problem);
+      Landin.Testing.Check
+        (Item, Paths.Is_Empty
+           and then Unbounded.To_String (Problem)
+             = "no recorded fixture's `expect` file carries L0999",
+         "a code no report carries selects nothing and says so: "
+         & Unbounded.To_String (Problem));
+
+      Fixtures_Reporting_With ("0100", Host, Paths, Problem);
+      Landin.Testing.Check
+        (Item, Paths.Is_Empty
+           and then Unbounded.Index (Problem, "L and four digits") > 0,
+         "a selector that is not a code is refused: "
+         & Unbounded.To_String (Problem));
+   end A_Code_Selects_The_Reports_Carrying_It;
 
    --  A report re-recorded by name writes the bytes refine reports now,
    --  and only while its status and codes are still the ones pinned: a
@@ -1437,10 +1640,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Emit_Positive (Nth (Found, Piece), Host, Program, Slot);
          end Emit_One;
 
+         function Label_Of (Piece : Positive) return String
+           is ("positive/" & Name (Nth (Found, Piece)));
+
          procedure Emit_Each is new Across_Workers
            (Element => Positive,
             Element_Array => Index_Array,
-            Perform => Emit_One);
+            Perform => Emit_One,
+            Label => Label_Of);
       begin
          --  Collected first, run second: the work order is the corpus
          --  order whatever the workers do with it.
@@ -1459,7 +1666,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
          end loop;
 
          Ran := Last;
-         Emit_Each (Work (1 .. Last), Item);
+         Emit_Each (Work (1 .. Last), Item,
+                    "every positive fixture is emitted");
       end;
 
       Landin.Testing.Check_Equal
@@ -3548,10 +3756,15 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end;
          end Run_One;
 
+         function Label_Of (Piece : Piece_Record) return String
+           is ((if Piece.Kind = Runtime_Piece then "runtime/" else "abi/")
+               & Name (Nth (Found, Piece.Index)));
+
          procedure Run_Each is new Across_Workers
            (Element => Piece_Record,
             Element_Array => Piece_Array,
-            Perform => Run_One);
+            Perform => Run_One,
+            Label => Label_Of);
       begin
          --  In corpus order.  The counters come from the collection rather
          --  than from the workers, so they say the same thing at any job
@@ -3596,7 +3809,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end if;
          end;
          Load_Host_Failures (Host, Item);
-         Run_Each (Work (1 .. Last), Item);
+         Run_Each (Work (1 .. Last), Item, "runtime fixtures execute");
          for Index in Expected_Seen'Range loop
             if Expected_Seen (Index) /= 0 then
                Say_Expected (Host_Failures.Element (Expected_Seen (Index)));
@@ -4477,6 +4690,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a report is recorded by name",
          A_Report_Is_Recorded_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "a code selects the reports carrying it",
+         A_Code_Selects_The_Reports_Carrying_It'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "every target names its lane",
          Every_Target_Names_Its_Lane'Access);

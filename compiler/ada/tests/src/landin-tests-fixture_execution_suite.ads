@@ -31,6 +31,18 @@ package Landin.Tests.Fixture_Execution_Suite is
       Wrote : out Boolean;
       Said  : out Ada.Strings.Unbounded.Unbounded_String);
 
+   --  Every recorded fixture, CLASS/NAME as --fixture names it and in the
+   --  order a run takes them, whose `expect` file carries diagnostic CODE,
+   --  `L` and four digits, as a report writes it: `[L0100]`.  These are
+   --  the reports a change to that diagnostic's text changes, which
+   --  --fixture-code=CODE runs and --record-code=CODE records again.
+   --  Problem says why nothing is selected: a CODE that is not one, a
+   --  fixture whose metadata is faulty, or no report carrying it.
+   procedure Fixtures_Reporting
+     (Code    : String;
+      Paths   : out Landin.Platform.Path_List;
+      Problem : out Ada.Strings.Unbounded.Unbounded_String);
+
    --  Host scope retains recorded diagnostics but omits native target
    --  workload emission and execution. The ordinary suite includes both.
    procedure Register

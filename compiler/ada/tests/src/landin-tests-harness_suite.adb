@@ -547,6 +547,19 @@ package body Landin.Tests.Harness_Suite is
          Landin.Testing.Progress_Line ("lexer", 42, 1, 3.25),
          "progress: lexer: 42 cases, 1 failed, 3.2s",
          "the line names the suite, its cases, failures and seconds");
+      Landin.Testing.Check_Equal
+        (Item,
+         Landin.Testing.Fixture_Line
+           ("runtime fixtures execute", "runtime/hello", True, 12, 403),
+         "fixture: runtime fixtures execute: runtime/hello: pass"
+         & " (12 of 403)",
+         "a fixture's line names its case, its verdict and how far the"
+         & " case is");
+      Landin.Testing.Check_Equal
+        (Item,
+         Landin.Testing.Fixture_Line ("c", "abi/x", False, 1, 1),
+         "fixture: c: abi/x: FAIL (1 of 1)",
+         "a failed fixture's line says FAIL");
    end Progress_Reports_Each_Suite;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

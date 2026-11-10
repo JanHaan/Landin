@@ -169,6 +169,33 @@ class ParallelEquivalence(unittest.TestCase):
         result = self.run_wrapper(PASS, errors=(first + second, second + first))
         self.assertEqual(result.returncode, 1)
 
+    def test_fixture_lines_compare_by_verdict_and_not_by_order(self):
+        #  A corpus case tells standard error each fixture's verdict as
+        #  its worker ends, so the order and the counts are the workers'.
+        case = "fixture: runtime fixtures execute: runtime/"
+        one = (case + "a: pass (1 of 2)\n" + case + "b: pass (2 of 2)\n"
+               "progress: fixture execution: 1 cases, 0 failed, 9.0s\n")
+        many = (case + "b: pass (1 of 2)\n" + case + "a: pass (2 of 2)\n"
+                "progress: fixture execution: 1 cases, 0 failed, 1.0s\n")
+        result = self.run_wrapper(PASS, errors=(one, many))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.evidence["one-job.stderr"], one)
+        self.assertEqual(result.evidence["many-jobs.stderr"], many)
+        self.assertEqual(
+            result.evidence["many-jobs.stderr.comparison"],
+            "progress: fixture execution: 1 cases, 0 failed, <TIME>\n"
+            + case + "a: pass\n" + case + "b: pass\n")
+        self.assertIn("progress: ", result.stdout)
+        self.assertIn("one-job.stderr", result.stdout)
+        #  A fixture whose verdict differs, or that one run never
+        #  reached, is still a difference.
+        for other in (many.replace("a: pass", "a: FAIL"),
+                      many.replace(case + "a: pass (2 of 2)\n", "")):
+            with self.subTest(other=other):
+                result = self.run_wrapper(PASS, errors=(one, other))
+                self.assertEqual(result.returncode, 1)
+                self.assertNotEqual(result.evidence["stderr.diff"], "")
+
     def test_progress_like_stdout_is_not_normalized(self):
         first = PASS + "progress: suite: 1 cases, 0 failed, 1.0s\n"
         second = first.replace("1.0s", "2.0s")

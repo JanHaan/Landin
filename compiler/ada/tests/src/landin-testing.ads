@@ -139,6 +139,18 @@ package Landin.Testing is
    procedure Write_Progress
      (Suite : String; Cases, Failed : Natural; Seconds : Duration);
 
+   --  The line a corpus case writes to standard error as each fixture of
+   --  its work ends, the Ordinal-th of Total to end:
+   --  "fixture: runtime fixtures execute: runtime/hello: pass (12 of 403)",
+   --  with FAIL for one that failed a check.  Together they are the
+   --  per-fixture verdicts of a run, which the transcript's one row for
+   --  the case is not, and its progress inside a case that takes half an
+   --  hour.  The order and the count are the workers', so like the
+   --  progress lines these are never in the transcript.
+   function Fixture_Line
+     (Of_Case, Label : String; Passed : Boolean; Ordinal, Total : Positive)
+      return String;
+
    --  Record_Timings is False by default and the test program is the only
    --  caller that passes True.  The harness suite exercises Run itself, so
    --  a nested run would otherwise clear the timings of the run containing

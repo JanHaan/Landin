@@ -69,6 +69,13 @@ recording is not a verdict:
 | `./scripts/test.sh --record=layout` | `layout.targets` alone |
 | `./scripts/test.sh --record=server/NAME` | the one session `server/NAME/session.lsp` |
 | `./scripts/test.sh --record=CLASS/NAME` | one recorded fixture's `expect` file, with what `refine` reports for it now |
+| `./scripts/test.sh --record-code=LNNNN` | the `expect` file of every recorded fixture whose report carries that diagnostic code, `[LNNNN]` as a report writes it: the reports a change to the diagnostic's text changes |
+
+`--fixture-code=LNNNN` selects the same fixtures as `--fixture` does, so
+after a diagnostic's text changes one run shows which recorded reports no
+longer hold and one records them. Either repeats, and may accompany its
+plain form; a code no report carries is refused rather than selecting
+nothing.
 
 A fixture's report is rewritten only while `refine` still exits with its
 `status` and, for a positive, negative, runtime or ABI fixture, still reports
@@ -181,6 +188,20 @@ an hour says where it is while it runs and a stuck one is told from a slow
 one by the suite that stopped reporting; `LANDIN_TEST_TIMINGS=1` adds the
 table of suites and slowest cases at the end. Neither is in the transcript on
 standard output, which is the same on every host.
+
+`fixture execution`'s two corpus-wide cases, which are most of a complete
+run, also write one line as each fixture ends:
+`fixture: runtime fixtures execute: runtime/hello: pass (12 of 403)`, with
+`FAIL` for a fixture that failed a check. A fixture a cross-lanes row lists
+as failing on the host, and that failed only so, is `pass` here and has its
+own `expected host failure` line. These lines are the run's per-fixture
+verdicts, which the transcript's one row for the case is not, so a log
+shows that a given fixture ran on its lane; and they are its progress,
+so a stalled run is told from a slow one by the lines that stopped coming.
+They come in the order the workers finished and count them, so they stay
+out of the transcript, and `scripts/parallel-equivalence.sh` compares them
+sorted and without their counts while keeping the raw stream, whose path
+it prints before each run, as `one-job.stderr` and `many-jobs.stderr`.
 
 `./scripts/dev-test.sh --host` runs every compiler case except the two
 native target-workload emission/execution cases. Its `HOST-ONLY` banner

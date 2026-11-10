@@ -84,6 +84,10 @@ procedure Landin_Tests is
    --  What each --record=WHAT names, in the order given, an empty one for
    --  a bare --record and so every recorded artefact.
    Recordings   : Landin.Platform.Path_List;
+   --  Every --fixture-code and --record-code, in the order given: each
+   --  becomes the --fixture or --record of every recorded fixture whose
+   --  report carries the code, once the fixture tree is known to be here.
+   Fixture_Codes, Record_Codes : Landin.Platform.Path_List;
    Of_Shard     : Landin.Testing.Shard := Landin.Testing.Whole;
    --  A fixture run's FILTERED line for each fixture, and the note of each
    --  another lane runs, around the transcript.
@@ -191,6 +195,17 @@ procedure Landin_Tests is
          "       and --record=WHAT repeats, recording each in turn");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
+         "       --fixture-code=LNNNN is --fixture, and --record-code=LNNNN"
+         & " --record, for every recorded");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       fixture whose expect file carries that diagnostic code:"
+         & " the reports a change to its");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       text changes");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
          "       and any of --target=NAME --runner=PROGRAM"
          & " --toolchain=DRIVER");
       Text_IO.Put_Line
@@ -295,6 +310,15 @@ procedure Landin_Tests is
             then
                Selecting := True;
                Fixtures.Append (Value (Argument, "--fixture="));
+            elsif Starts_With (Argument, "--fixture-code=")
+              and then Argument'Length > 15
+            then
+               Selecting := True;
+               Fixture_Codes.Append (Value (Argument, "--fixture-code="));
+            elsif Starts_With (Argument, "--record-code=")
+              and then Argument'Length > 14
+            then
+               Record_Codes.Append (Value (Argument, "--record-code="));
             elsif Argument = "--record" then
                Recordings.Append ("");
             elsif Starts_With (Argument, "--record=")
@@ -349,7 +373,7 @@ procedure Landin_Tests is
       end if;
 
       --  Recording writes and runs nothing else, so it takes no selection.
-      if not Recordings.Is_Empty then
+      if not Recordings.Is_Empty or else not Record_Codes.Is_Empty then
          Mode :=
            (if Selecting or else Kept > 0 or else Seen_Shard then Misuse
             else Record_Artefacts);
@@ -363,13 +387,15 @@ procedure Landin_Tests is
          if Kept > 1 or else Seen_Shard
            or else (Kept = 1
                     and then (Ada.Command_Line.Argument (Rest (1)) /= "--host"
-                              or else not Fixtures.Is_Empty))
+                              or else not Fixtures.Is_Empty
+                              or else not Fixture_Codes.Is_Empty))
          then
             Mode := Misuse;
             return;
          end if;
          Host_Only := Kept = 1;
-         Mode := (if not Fixtures.Is_Empty then Run_Fixture
+         Mode := (if not Fixtures.Is_Empty or else not Fixture_Codes.Is_Empty
+                  then Run_Fixture
                   elsif Unbounded.Length (Selected.Last_Element.Name) = 0
                     and then Natural (Selected.Length) = 1
                   then Run_Suite else Run_Case);
@@ -393,6 +419,54 @@ begin
       Print_Usage;
       Ada.Command_Line.Set_Exit_Status (2);
       return;
+   end if;
+
+   --  A code names the fixtures whose recorded reports carry it.  Read
+   --  from the fixture tree, so only where it is; elsewhere the refusals
+   --  below say where to run from.
+   if Ada.Directories.Exists (Marker) then
+      declare
+         procedure Expand
+           (Codes : Landin.Platform.Path_List;
+            Into  : in out Landin.Platform.Path_List;
+            Ok    : in out Boolean);
+
+         procedure Expand
+           (Codes : Landin.Platform.Path_List;
+            Into  : in out Landin.Platform.Path_List;
+            Ok    : in out Boolean) is
+         begin
+            for Code of Codes loop
+               declare
+                  Paths   : Landin.Platform.Path_List;
+                  Problem : Unbounded.Unbounded_String;
+               begin
+                  Landin.Tests.Fixture_Execution_Suite.Fixtures_Reporting
+                    (Code, Paths, Problem);
+                  if Unbounded.Length (Problem) /= 0 then
+                     Text_IO.Put_Line
+                       (Text_IO.Standard_Error,
+                        "landin_tests: " & Unbounded.To_String (Problem));
+                     Ok := False;
+                  end if;
+                  for Path of Paths loop
+                     if not Into.Contains (Path) then
+                        Into.Append (Path);
+                     end if;
+                  end loop;
+               end;
+            end loop;
+         end Expand;
+
+         Ok : Boolean := True;
+      begin
+         Expand (Fixture_Codes, Fixtures, Ok);
+         Expand (Record_Codes, Recordings, Ok);
+         if not Ok then
+            Ada.Command_Line.Set_Exit_Status (2);
+            return;
+         end if;
+      end;
    end if;
 
    --  Recording writes the artefact and runs no case, so a run that
