@@ -4835,7 +4835,37 @@ package body Landin.Diagnostics.Citations.Texts is
                & "It provides no other concept, and the compiler, not the "
                & "program, declares these conformances. An `any` is not er"
                & "ased again: where an `any C` is wanted, pass the one you"
-               & " have rather than its address.",
+               & " have rather than its address."
+               & LF
+               & LF
+               & "Printing is where most programs first meet `any`. `io.wr"
+               & "ite_format` takes its values as a `[]any text.formattabl"
+               & "e`, each built from a value's address:"
+               & LF
+               & LF
+               & "    print_born: (host: blocking.host, name: utf8, year: "
+               & "u32) -> none ="
+               & LF
+               & "        io.write_format(host, io.out(host), ""{} was born"
+               & " in {}.\n"","
+               & LF
+               & "                        [any(addr name), any(addr year)]"
+               & ") else none"
+               & LF
+               & "    end print_born"
+               & LF
+               & LF
+               & "        print_born(host, ""Ada"", 1815) -- Ada was born in"
+               & " 1815."
+               & LF
+               & LF
+               & "Integers, `bool`, `utf8` and byte strings are formattabl"
+               & "e, floats not yet, and a type of your own becomes format"
+               & "table by conforming ([1240]). The text is made in a smal"
+               & "l buffer on the stack and written as it fills, so printi"
+               & "ng allocates nothing; a template whose `{}` and values d"
+               & "iffer in number fails with `text.invalid_format` and wri"
+               & "tes nothing.",
             when 1380 =>
                "You build an `any` explicitly from a pointer. The concep"
                & "t comes from context where it can; otherwise name it."

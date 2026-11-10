@@ -1,14 +1,14 @@
 # Learn Landin in Y minutes
 
 Ada, but small. Zig, but sweeter. One systems language from 32 KB to
-32 TB*. Move fast, keep the pointers, and let the compiler tell you when
-you are being an idiot.
+32 TB[*](#what-is-still-open). Move fast, keep the pointers, and let the
+compiler tell you when you are being an idiot.
 
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.2.8 — what each version changed is in
-[the handoff](handoff.md#versions).
+Coming from C? [Landin for C programmers](docs/from-c.md) maps each habit
+you bring to its Landin form.
 
 ## Hello, world
 
@@ -26,72 +26,21 @@ public main: () -> (code: i32) =
 end main
 ```
 
-Run it:
+Run it with `refine run main.ldn`, or keep an executable with
+`refine compile main.ldn -o hello`.
 
-```sh
-refine run main.ldn
-```
-
-`refine run` compiles the program, runs it and removes what it built; words
-after `--` are the program's arguments. To keep an executable, compile it:
-
-```sh
-refine compile main.ldn -o hello
-./hello
-```
-
-Line by line:
-
-- `import core/io` brings in the interfaces for reading and writing, and
-  `import hosted/blocking` an implementation of them over the operating
-  system, whose reads and writes wait until they are done.
-- `main` takes nothing and returns one named result, `code`, which becomes
-  the exit status. A routine sets its results by assigning them.
-- `blocking.new()` is the program's handle on the operating system. Files,
-  the terminal and the network are all reached through it. Pass it to the
-  routines that need it rather than making one in each, and a routine's
-  parameters say what it touches ([1660]). That is a convention: the
-  compiler does not stop a routine from calling `blocking.new()` itself
-  ([1680]).
-- `host` appears twice because `io.write` asks two things of it: the
-  first argument is what does the writing, and `io.out(host)` is that
-  host's standard output, the file written to.
-- `io.write` can fail, and Landin will not let a failure pass unnoticed.
-  `else none` says that here it does not matter ([1030]). It is the
-  handler to reach for last: [1030] also shows passing a failure on and
-  reporting it, as the next program does.
-
-To print values, `io.write_format` writes a template and its values in one
-call. Each `{}` takes the next value from the list:
-
-```landin
-print_born: (host: blocking.host, name: utf8, year: u32) -> none =
-    io.write_format(host, io.out(host), "{} was born in {}.\n",
-                    [any(addr name), any(addr year)]) else none
-end print_born
-```
-
-`main` passes it the handle; taking the handle as a parameter is how
-`print_born` says that it writes:
-
-```landin
-    print_born(host, "Ada", 1815) -- Ada was born in 1815.
-```
-
-- `any(addr name)` hands `write_format` the address of a value it can
-  turn into text ([1370]). Integers, `bool`, `utf8` and byte strings are
-  formattable; floats are not yet. A type of your own becomes formattable
-  by declaring a conformance ([1240]).
-- The text is made in a small buffer on the stack and written as it
-  fills, so printing allocates nothing, a line that fits is one write and
-  a longer one goes out in pieces. A template whose `{}` and values differ
-  in number fails with `text.invalid_format` and writes nothing.
+- `core/io` is the interface for reading and writing; `hosted/blocking`
+  provides it over the operating system.
+- `main` is a routine, Landin's word for a function. It returns one named
+  result, `code`, the exit status, and sets it by assigning it.
+- `host` is your handle on the operating system: pass it to whatever needs
+  to read or write. `io.write` can fail, and a failure cannot pass
+  unnoticed; `else none` says it does not matter here ([1030]).
 
 ## Reading a file
 
 This program counts the lines of the file named by its first argument.
-Give it a directory of its own beside `hello`, `mkdir lines && cd lines`,
-and save it there as `main.ldn`:
+Save it as `main.ldn` in a directory of its own:
 
 ```landin
 import core/failure
@@ -130,39 +79,11 @@ public main: () -> (code: i32) =
 end main
 ```
 
-- The `!` list after the result of `count_file_lines` says every way it
-  can fail. `try` passes a failure straight on to the caller ([0960]).
-- `io.argument_at(host, 0)` is the first argument after the program's own
-  name.
-- `io.lines_over` reads through a buffer you supply and hands out one line
-  at a time ([1130] for `loop`, [0400] for `inc`).
-- `defer` closes the file when the routine ends, by returning or by a
-  failure, but not on a trap, which runs no cleanup ([1100]). There are no
-  destructors, so nothing closes it for you.
-- `main` decides what a failure means. `else (problem)` handles it in
-  place ([1030]): `failure.words`, from `core/failure`, has words for
-  every library failure, `io.err(host)` is standard error, and `code = 1`
-  is the exit status.
-
-A program that writes many lines gathers them in a buffered writer over a
-buffer you supply, which writes them in one call each time it fills, and
-`defer` flushes what is left on the way out:
-
-```landin
-    mut storage: [4096]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage)
-    defer io.flush(out) else none
-    for number in 1..1000 do
-        io.format(out, "{}\n", [any(addr number)]) else none
-    end for
-```
-
-`io.format` fills a template into the buffer as `write_format` writes one
-to the file, and `io.put` writes bytes as they are
-([the library reference](docs/library.md#the-buffered-writer)).
-
-Make a small file, then run the program on it and on a file that is not
-there:
+- The `!` list says every way `count_file_lines` can fail, and `try`
+  passes a failure on to the caller ([0960]).
+- `defer` closes the file however the routine ends ([1100]).
+- `main` decides what a failure means: `else (problem)` handles it in
+  place, and `io.write_format` fills each `{}` with the next value.
 
 ```sh
 refine compile main.ldn -o lines
@@ -178,49 +99,19 @@ error: not found
 1
 ```
 
-The tour explains each piece in order, starting below.
+A program that writes many lines gathers them in a
+[buffered writer](docs/library.md#the-buffered-writer).
 [`examples.md`](examples.md) has complete programs that list directories,
 run commands and talk over sockets.
 
 ## How to read this tour
 
-Read it from the top. Each entry is one idea, with an example, and the
-sections build on each other. The first part, up to the end of MODULES, is
-the path: read it in order and you can write ordinary programs. The rest
-is reference, to read when you need it.
-
-The numbers in brackets, such as [0430], never change, so other documents
-and the compiler's own messages can point here: an error ends with a note
-such as "the tour describes it at [0520]". The numbers are not in reading
-order, and do not need to be.
-
-Everything here is implemented unless its entry is marked DEFERRED, as
-[0620] is, or says *not yet*, as formatting floats does.
-
-Some words come up before the entry that explains them:
-
-| word | meaning |
-| --- | --- |
-| routine | a function; the tour uses both words |
-| refusal | an error the compiler reports, ending with the entry that explains the rule |
-| atom set | the named outcomes, such as `not_found`, that a routine declares it can fail with ([0630], [0940]) |
-| slice | a view of part of an array: an address and a length, copying nothing ([0570]) |
-| origin | what storage a pointer, slice or `any` refers to, and so how long it lives: static, allocated or a routine's frame ([0770]) |
-| provider | the value that implements a concept, such as an allocator or the operating system's I/O ([1360], [1660]) |
-| handle | the small copyable value passed around to reach a provider, such as `host` above |
-| evidence | a type's table of entries for a concept, which generic code and `any` both use ([1690]) |
-| erased | held as an `any C`, whose concrete type is known only at run time ([1370]) |
-| fibre | a task on a stack of its own, giving way to others only where it waits ([1675]); a thread is the system's, from `hosted/thread` |
-
-This tour teaches; it leaves out rules a reader would guess anyway.
-[`spec.md`](spec.md) is the specification, and where the two could be read
-differently, it decides. If you write C,
-[Landin for C programmers](docs/from-c.md) maps each habit you bring to its
-Landin form.
-
-*32 TB is an unverified goal. What it measures at the hosted end, and what
-evidence would prove it, are still open, and nothing hosted today
-establishes it. Terabytes may vary.
+Read it in order up to the end of MODULES and you can write ordinary
+programs; the rest is reference. The bracketed numbers, such as [0430],
+never change: when the compiler refuses a program, its error ends with the
+entry that explains the rule. Everything is implemented unless marked
+DEFERRED or *not yet*. [`spec.md`](spec.md) is the specification and
+decides wherever the two could be read differently.
 
 ---
 
@@ -3934,6 +3825,27 @@ It provides no other concept, and the compiler, not the program, declares
 these conformances. An `any` is not erased again: where an `any C` is
 wanted, pass the one you have rather than its address.
 
+Printing is where most programs first meet `any`. `io.write_format` takes
+its values as a `[]any text.formattable`, each built from a value's
+address:
+
+```landin
+print_born: (host: blocking.host, name: utf8, year: u32) -> none =
+    io.write_format(host, io.out(host), "{} was born in {}.\n",
+                    [any(addr name), any(addr year)]) else none
+end print_born
+```
+
+```landin
+    print_born(host, "Ada", 1815) -- Ada was born in 1815.
+```
+
+Integers, `bool`, `utf8` and byte strings are formattable, floats not yet,
+and a type of your own becomes formattable by conforming ([1240]). The
+text is made in a small buffer on the stack and written as it fills, so
+printing allocates nothing; a template whose `{}` and values differ in
+number fails with `text.invalid_format` and writes nothing.
+
 ### [1380] Building one with `any(...)`
 
 You build an `any` explicitly from a pointer. The concept comes from
@@ -5472,6 +5384,13 @@ what this tour leaves parked: structure-of-arrays [0620], affine values
 README](README.md#current-compiler-capabilities) says what it does today.
 Production status, release versioning, package acquisition and
 self-hosting are not part of the current plan.
+
+*32 TB is an unverified goal. What it measures at the hosted end, and what
+evidence would prove it, are still open, and nothing hosted today
+establishes it. Terabytes may vary.
+
+Version 0.2.8 — what each version changed is in
+[the handoff](handoff.md#versions).
 
 Warnings are the compiler's observations about legal source, never extra
 language rules: you can select, suppress or deny them by code, and a denied
