@@ -1,0 +1,71 @@
+--  A child's inherited stream is the parent's, and a stream the parent
+--  has closed is closed in the child.  The program closes its own
+--  standard input, and then its standard output, as a process started
+--  with `<&-` or `>&-` finds them, and starts a shell with that stream
+--  inherited and others piped.  The pipes `io.spawn` makes are then given
+--  the closed stream's number by the system; left there, the child's
+--  inherited stream would be an end of its own pipe.  The shell says
+--  whether the stream is open, on a stream that is piped.
+import core/cmp
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+import platform/posix
+
+--  Run `script` with `streams` and give back what the shell wrote to its
+--  piped streams, which is one short line.
+said: (host: blocking.host, script: []u8, streams: io.child_streams,
+       into: []mut u8) -> (count: usize) ! failure.reason =
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"),
+          value: text.host_over("/bin:/usr/bin"))]
+    mut child: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                       arguments, variables, streams)
+    count = 0
+    loop do
+        got: io.child_read = try io.read_child(host, child,
+                                               into[count..<lenof into])
+        break when got.finished
+        count += got.count
+    end loop
+    done: io.child = child
+    ended: io.ending = try io.wait(host, done)
+    match ended.how
+        io.exited(status): fail io.io_failed when status <> 0
+        io.signalled: fail io.io_failed
+    end match
+end said
+
+public main: () -> (code: i32) =
+    code = 1
+    host := blocking.new()
+    mut line: [32]u8 = zeroed
+
+    --  Standard input closed, inherited; the output piped.
+    posix.close(posix.standard_input) else none
+    count: usize = said(host,
+                        "( exec 3<&0 ) 2>/dev/null && echo open || echo closed",
+                        (input: io.inherited, output: io.piped,
+                         errors: io.discarded), line) else (problem)
+        _ = problem
+        return
+    end
+    return when cmp.compare(line[0..<count], "closed\n") <> cmp.equal
+
+    code = 2
+    --  Standard output closed too, inherited; the input and the errors
+    --  piped, so the input's pipe is given both closed numbers.
+    posix.close(posix.standard_output) else none
+    again: usize = said(host,
+                        "( exec 3>&1 ) 2>/dev/null && echo open >&2 || echo closed >&2",
+                        (input: io.piped, output: io.inherited,
+                         errors: io.piped), line) else (problem)
+        _ = problem
+        return
+    end
+    return when cmp.compare(line[0..<again], "closed\n") <> cmp.equal
+    code = 42
+end main

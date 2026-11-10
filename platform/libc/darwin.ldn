@@ -187,6 +187,10 @@ fixed if compiler.os == darwin then
         bits: [1]u32
     end signal_set
 
+    --- The signal a child's end raises in its parent, SIGCHLD, as Darwin
+    --- numbers it.
+    public sigchld: i32 = 20
+
     --- C's `struct sigaction` as Darwin declares it.
     public signal_action: type = struct
         handler: u64

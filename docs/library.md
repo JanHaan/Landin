@@ -986,7 +986,7 @@ Each of the program's three standard streams is connected as
 
 | Choice | The child's stream is |
 |---|---|
-| `inherited` | the parent's own |
+| `inherited` | the parent's own, and closed when the parent has it closed |
 | `discarded` | connected to nothing |
 | `piped` | a pipe whose other end the parent holds |
 
@@ -1292,6 +1292,12 @@ How signals are delivered:
   before it is read may be one event, as the systems keep them.
 - A fibre waiting for a signal is stopped as any waiting fibre is, by
   failing its wait: `stop_watching` does that.
+- On Linux, watch in the process's first thread. `hosted/events` takes a
+  signal there by blocking it in the calling thread, and the first thread
+  of a program whose event loop runs on a `hosted/thread` thread would
+  still be given the signal and ended by it. `watch` in any other thread
+  fails with `io_failed`, and `events.last_errno` reads `EPERM`. On Darwin
+  and FreeBSD a watch is the process's, and any thread may make it.
 
 ### The fake
 
@@ -2563,6 +2569,12 @@ Every descriptor the module makes is closed when the process executes a
 program; `closed_on_exec` says whether a descriptor is. No open makes a
 terminal the process's controlling terminal, `O_NOCTTY`.
 
+`duplicate_above(opened, lowest)` duplicates a descriptor at the lowest
+free number that is `lowest` or above, closed on exec. A process started
+with a standard stream closed is given that stream's number by its next
+`pipe` or open; `duplicate_above(made, 3)` moves such a descriptor clear
+of the three, as `hosted/system` does with every one it makes for a child.
+
 ### Files and directories
 
 | Call | What it does |
@@ -2684,6 +2696,16 @@ How SIGPIPE is handled:
 - `spawn` gives every child SIGPIPE's default back.
 - A program that imports no part of the POSIX layer keeps the system's
   default.
+
+How SIGCHLD is handled:
+
+- A process whose starter ignored SIGCHLD inherits the ignore, and the
+  system then discards how each of its children ended: `wait` would fail
+  with `echild`.
+- The argument initializer therefore gives SIGCHLD its default back when
+  it finds it ignored. A handler is kept.
+- A program that wants its children discarded ignores SIGCHLD itself
+  after the initializer has run.
 
 How signals reach a child:
 

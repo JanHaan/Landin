@@ -31331,6 +31331,33 @@ overrides a C handler; and restoring in a child only what the parent changed.
 without the ignore, `runtime/posix-broken-pipe`, which fails when the child
 keeps it, `runtime/posix-broken-pipe-libc` and `abi/sigpipe-handler-kept`.
 
+### D1125 — SIGCHLD ignored at start is given its default back
+
+**The tour said** nothing. An ignored SIGCHLD survives an exec, and a
+process that has it ignored has each child reaped by the system as it ends:
+`wait` then fails with `echild`, and how the child ended is lost. A program
+started by a service that ignores SIGCHLD read its child's output and was
+told that waiting for it failed. D322 keeps an inherited ignore of SIGPIPE,
+which serves the library's contract; this one breaks it.
+
+**Chosen:** the argument initializer, on its first call, gives SIGCHLD the
+system's default disposition when it finds it ignored. A handler is kept,
+as D322 keeps SIGPIPE's. A program that wants its children discarded ignores
+SIGCHLD itself after the root is established, and a C `main` that ignored it
+before the call does so again after it. A program that imports no POSIX
+layer keeps what it inherited.
+
+**The alternatives:** refusing `spawn` while SIGCHLD is ignored, as the
+compiler's own tool supervision does, which makes every program that runs
+another fail under such a service for a state it cannot see in its source;
+restoring the default in `spawn` each time, which changes a disposition as a
+side effect of a call that is not about signals; and leaving it, with a note
+beside `wait`.
+
+**Pinned by** `abi/sigchld-ignored-restored`, whose C `main` ignores SIGCHLD
+before the initializer and whose wait fails without the rule. Darwin's and
+FreeBSD's arm of it was written by reading and is run by their lanes.
+
 ### D323 — `platform/posix` gives sockets in the system's own records
 
 **The tour said** nothing of sockets beneath the portable concept.
@@ -34634,6 +34661,39 @@ no hosted architecture has. Both were declined.
 
 **Pinned by** `runtime/thread-stack-past-limit-traps` on Darwin, whose
 report ends the process from the thread, and on every other hosted target.
+
+### D1126 — On Linux only a process's first thread watches a signal
+
+**The tour said** nothing. D494 and D521 start every thread of
+`hosted/thread` with the asynchronous signals blocked, so that a signal the
+process is sent reaches the provider that reads it. On Linux `hosted/events`
+takes a signal by blocking it in the calling thread and reading a signalfd,
+and the kernel gives a signal sent to the process to any thread that has it
+unblocked. The process's first thread is never started by `hosted/thread`
+and has nothing blocked, so a signal watched by an event loop on a worker
+thread was still delivered to the first thread, where its default ended the
+process. On Darwin and FreeBSD the disposition and kqueue's filter are the
+process's, and the same program received the event.
+
+**Chosen:** on Linux `signal.watch` through `hosted/events` is refused in
+any thread but the process's first, `io_failed` with `EPERM` as the last
+errno, and the signal keeps its default. The first thread is the one whose
+thread ID is the process's. On Darwin and FreeBSD a watch is taken in any
+thread, as before.
+
+**The alternatives:** blocking the asynchronous signals in the first thread
+once it has started a thread, and unblocking them at `join`, which leaves a
+program whose first thread waits in `join` and watches nothing deaf to
+SIGINT and SIGTERM; a handler in the first thread that forwards the signal,
+which D449 declined when it kept Landin code out of handlers; and
+documenting the difference between the systems, which leaves a program that
+shuts down cleanly on macOS to be killed on Linux. A maintainer may still
+prefer one of them: the refusal is the conservative choice.
+
+**Pinned by** `runtime/thread-signal-watch-in-worker` on the Linux targets,
+whose worker's watch is taken without the rule, leaving SIGTERM to end the
+process in the first thread; `runtime/thread-signal-reaches-events` holds
+the watch in the first thread on every hosted target.
 
 ### D527 — `io.write_format` writes a template and its values in one call
 

@@ -49,6 +49,13 @@ word: usize = sizeof usize
 --- `epipe` rather than ending the process; a handler a C `main` installed
 --- first is kept.  `spawn` gives every child the default back.
 ---
+--- It also gives SIGCHLD its default back when the process inherited it
+--- ignored, as the child of a service that reaps nothing does: the system
+--- would otherwise discard how each child of this process ended, and
+--- `wait` would fail with `echild` (D1125).  A handler is kept, and a
+--- program that wants its children discarded ignores SIGCHLD itself after
+--- this call.
+---
 --- The first call needs a nonnegative count and a non-null table, and
 --- keeps that exact triple without copying: the caller keeps both tables
 --- and their strings readable while any argument or variable lent from
@@ -89,6 +96,9 @@ public extern(c) _landin_host_initialize_arguments:
     --  A write to a pipe or a socket nobody reads is EPIPE, an error the
     --  program answers, rather than SIGPIPE ending the process.
     system_ignore_broken_pipe()
+    --  A child's end is kept for `wait`, though whoever started this
+    --  process ignored SIGCHLD.
+    system_keep_child_status()
     if variables <> 0 then
         root_environment = environment
         --  On Linux, the auxiliary vector after the initial stack's envp,
@@ -255,6 +265,18 @@ public closed_on_exec:
     (opened: descriptor) -> (yes: bool) ! errno =
     yes = try system_closed_on_exec(opened)
 end closed_on_exec
+
+--- A duplicate of `opened` at the lowest number not open that is `lowest`
+--- or above, closed on exec: `fcntl`'s `F_DUPFD_CLOEXEC`. `opened` is left
+--- open. With 3 it moves a descriptor clear of the standard streams, which
+--- a pipe or an open is given the number of when the process was started
+--- with one of them closed. It fails with the errno: `ebadf` for a
+--- descriptor that is not open, `einval` for a `lowest` no descriptor may
+--- have, `emfile` when no such number is left.
+public duplicate_above:
+    (opened: descriptor, lowest: i32) -> (result: descriptor) ! errno =
+    result = try system_duplicate_above(opened, lowest)
+end duplicate_above
 
 process_value: type = distinct i32
 
@@ -656,6 +678,19 @@ fixed if compiler.os == linux then
         _ = linux.rt_sigaction(linux.sigpipe, addr ignoring, linux.no_action)
     end system_ignore_broken_pipe
 
+    --  Give SIGCHLD its default when it was inherited ignored, which an
+    --  exec keeps and under which the kernel reaps every child at once.
+    system_keep_child_status: () -> none =
+        mut previous: linux.signal_action = zeroed
+        return when linux.rt_sigaction(i32(linux.sigchld), linux.no_action,
+                                       addr previous) < 0
+        return when previous.handler <> linux.sig_ign
+        mut standard: linux.signal_action = zeroed
+        standard.handler = linux.sig_dfl
+        _ = linux.rt_sigaction(i32(linux.sigchld), addr standard,
+                               linux.no_action)
+    end system_keep_child_status
+
     --  Whether SIGPIPE is ignored, for a program to ask.
     system_broken_pipe_ignored: () -> (ignored: bool) =
         mut previous: linux.signal_action = zeroed
@@ -866,6 +901,18 @@ elsif compiler.os == darwin or compiler.os == freebsd then
         ignoring.handler = libc.sig_ign
         _ = libc.sigaction(libc.sigpipe, addr ignoring, libc.no_address)
     end system_ignore_broken_pipe
+
+    --  Give SIGCHLD its default when it was inherited ignored, which an
+    --  exec keeps and under which the system reaps every child at once.
+    system_keep_child_status: () -> none =
+        mut previous: libc.signal_action = zeroed
+        return when libc.sigaction(libc.sigchld, libc.no_address,
+                                   addr previous) <> 0
+        return when previous.handler <> libc.sig_ign
+        mut standard: libc.signal_action = zeroed
+        standard.handler = libc.sig_dfl
+        _ = libc.sigaction(libc.sigchld, addr standard, libc.no_address)
+    end system_keep_child_status
 
     --  Whether SIGPIPE is ignored, for a program to ask.
     system_broken_pipe_ignored: () -> (ignored: bool) =

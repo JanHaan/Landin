@@ -1,0 +1,31 @@
+--  Landin's side of a C main that ignored SIGCHLD before it called the
+--  argument initializer: it runs a shell that exits with 7 and waits for
+--  it, reporting the code, or -1 when the spawn or the wait failed.
+import core/io
+import core/text
+import platform/posix
+
+public extern(c) l_shell_code: () -> (result: i32) =
+    result = -1
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over("exit 7")]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    child: posix.process_id =
+        posix.spawn(text.host_over("/bin/sh"), arguments[0..<2],
+                    variables[0..<1],
+                    (input: posix.standard_input,
+                     output: posix.standard_output,
+                     errors: posix.standard_error)) else (problem)
+            _ = problem
+            return
+        end
+    status: posix.child_status = posix.wait(child) else (problem)
+        _ = problem
+        return
+    end
+    match status.how
+        posix.exited(code): result = code
+        posix.signalled(signal): result = -2 - signal
+    end match
+end l_shell_code

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1126 on Linux signal.watch through hosted/events in a thread of hosted/thread is refused, io_failed with EPERM, because the block that takes a signal is the calling thread's alone and the signal would still end the process in its first thread, while the same watch in the first thread is taken and given back
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1660, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64

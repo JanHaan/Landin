@@ -27,6 +27,7 @@ import hosted/system
 import platform/kqueue
 import platform/libc
 import platform/linux
+import platform/linux/numbers
 import platform/posix
 
 --  What the loop answered a waiting record: nothing yet, its descriptor,
@@ -748,8 +749,20 @@ fixed if compiler.os == linux then
 
     --  Take `number` from its default disposition: blocked, and read
     --  through the loop's signalfd, which the loop watches from the first.
+    --  The block is the calling thread's alone, and the kernel gives a
+    --  signal sent to the process to any thread that has it unblocked.
+    --  The threads hosted/thread starts have it blocked (D521); the
+    --  process's first thread has not, and nothing here can block it
+    --  there.  So only the first thread may take a signal: in any other
+    --  the signal would still end the process, by its default in the
+    --  first thread, and the call is refused with `eperm` instead (D1126).
     take_signal: (state: ptr mut loop_state, number: i32)
                  -> none ! posix.errno =
+        process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0,
+                                         0, 0)
+        thread: i64 = linux.system_call(numbers.gettid_number, 0, 0, 0, 0,
+                                        0, 0)
+        fail posix.eperm when thread <> process
         mut adding: u64 = linux.signal_bit(number)
         result: i32 = linux.rt_sigprocmask(linux.sig_block, addr adding,
                                            linux.no_mask)

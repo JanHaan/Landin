@@ -1214,6 +1214,13 @@
         }
       }
     },
+    "abi/sigchld-ignored-restored": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "A C main, its signal dispositions and the argument initializer exist only on a hosted system, and Cortex-M0 has no signals."
+    },
     "abi/sigpipe-handler-kept": {
       "mode": "refuse",
       "codes": [
@@ -4766,6 +4773,13 @@
     "runtime/slice-place-in-value-arm": {
       "mode": "execute"
     },
+    "runtime/spawn-inherited-closed-stream": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no processes or descriptors."
+    },
     "runtime/specialization-speed-growth": {
       "mode": "execute"
     },
@@ -4918,6 +4932,13 @@
       "reason": "Firmware has no threads."
     },
     "runtime/thread-signal-reaches-events": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no threads."
+    },
+    "runtime/thread-signal-watch-in-worker": {
       "codes": [
         "L0015"
       ],

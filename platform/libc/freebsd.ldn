@@ -194,6 +194,10 @@ fixed if compiler.os == freebsd then
         bits: [4]u32
     end signal_set
 
+    --- The signal a child's end raises in its parent, SIGCHLD, as FreeBSD
+    --- numbers it.
+    public sigchld: i32 = 20
+
     --- C's `struct sigaction` as FreeBSD declares it.
     public signal_action: type = struct
         handler: u64
