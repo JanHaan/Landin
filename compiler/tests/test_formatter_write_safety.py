@@ -11,6 +11,15 @@ Every source that can be damaged by a fault lives in a disposable directory
 under --scratch, /tmp/landin-loop by default; name a directory on another
 file system (tmpfs, ZFS, ext4, APFS) to hold the adapter to that one.  The
 file-size limit reproduces issue 0076.
+
+A case whose precondition this host cannot arrange fails; it does not skip.
+A scratch file system without extended attributes or POSIX ACLs, or a run
+as root, would otherwise drop the cases that hold the adapter to keeping
+them while the run still ended OK and the gate, which reads the exit
+status, stayed green.  --allow-unsupported turns those failures back into
+skips for a developer whose file system has no such support and who
+knows it; no gate passes it.  The cases of another platform skip as
+before, since no host can run them.
 """
 import argparse
 import errno
@@ -28,6 +37,18 @@ import unittest
 
 REFINE = None
 SCRATCH = Path("/tmp/landin-loop")
+ALLOW_UNSUPPORTED = False
+
+
+def unsupported(case, what):
+    """A precondition this host cannot arrange: a failure, unless allowed."""
+    if ALLOW_UNSUPPORTED:
+        case.skipTest(what)
+    case.fail("%s, so this case cannot run and what it holds is unchecked; "
+              "name another file system with --scratch, run unprivileged, "
+              "or pass --allow-unsupported to go without it" % what)
+
+
 LOOSE = b"  x: u32 = 0\n" + b"-- comment\n" * 2000
 LAID_OUT = b"x: u32 = 0\n" + b"-- comment\n" * 2000
 ADAPTER = (Path(__file__).resolve().parents[1]
@@ -120,7 +141,7 @@ class FormatterWriteSafety(unittest.TestCase):
                 os.setxattr(self.source, name, b"retained metadata")
         except OSError as error:
             if error.errno == errno.ENOTSUP:
-                self.skipTest("test filesystem has no extended attributes")
+                unsupported(self, "%s has no extended attributes" % SCRATCH)
             raise
         inode = self.source.stat().st_ino
         self.assert_formatted(self.fmt(), inode)
@@ -143,7 +164,7 @@ class FormatterWriteSafety(unittest.TestCase):
             os.setxattr(self.source, "system.posix_acl_access", acl)
         except OSError as error:
             if error.errno == errno.ENOTSUP:
-                self.skipTest("test filesystem has no POSIX ACL support")
+                unsupported(self, "%s has no POSIX ACL support" % SCRATCH)
             raise
         inode = self.source.stat().st_ino
         self.assert_formatted(self.fmt(), inode)
@@ -160,7 +181,7 @@ class FormatterWriteSafety(unittest.TestCase):
             os.setxattr(self.root, "system.posix_acl_default", acl)
         except OSError as error:
             if error.errno == errno.ENOTSUP:
-                self.skipTest("test filesystem has no default ACL support")
+                unsupported(self, "%s has no default ACL support" % SCRATCH)
             raise
         inode = self.source.stat().st_ino
         self.assert_formatted(self.fmt(), inode)
@@ -196,7 +217,7 @@ class FormatterWriteSafety(unittest.TestCase):
 
     def test_unwritable_directory_is_refused_naming_the_copy(self):
         if os.geteuid() == 0:
-            self.skipTest("a privileged process writes any directory")
+            unsupported(self, "a privileged process writes any directory")
         self.root.chmod(0o555)
         self.addCleanup(self.root.chmod, 0o755)
         self.assert_refused(self.fmt(), b"cannot keep a copy of it")
@@ -358,7 +379,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--refine", required=True, type=Path)
     parser.add_argument("--scratch", type=Path, default=SCRATCH)
+    parser.add_argument("--allow-unsupported", action="store_true",
+                        help="skip, rather than fail, a case the scratch "
+                             "file system or a privileged user cannot run")
     arguments, rest = parser.parse_known_args()
     REFINE = arguments.refine.resolve()
     SCRATCH = arguments.scratch
+    ALLOW_UNSUPPORTED = arguments.allow_unsupported
     unittest.main(argv=[__file__] + rest)
