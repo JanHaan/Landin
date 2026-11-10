@@ -5233,6 +5233,12 @@ def lowering_verifies():
     A structural check is the only kind that can see that, which is the
     same reason the catalogue owns every code literal: some invariants are
     about where a line is, not about what a run produces.
+
+    So where the line is is what is held.  The call has to be a statement
+    of `Run`'s own statement list: outside every comment, since a call
+    commented out is text and no call, and at the depth of `Run`'s own
+    statements, six columns in, since one under an `if` or in a nested
+    block runs only sometimes.
     """
     where = "compiler/ada/src/stages/landin-stages-lowering.adb"
     path = os.path.join(ROOT, where)
@@ -5240,8 +5246,12 @@ def lowering_verifies():
     if missing:
         return missing
 
-    text = read_file(path, encoding="utf-8")
-    if "Landin.IR.Verifier.Verify" in text:
+    text = ada_without_comments(read_file(path, encoding="utf-8"))
+    body = re.search(r"^   (?:overriding )?procedure Run\b.*?^   begin\n"
+                     r"(.*?)^   end Run;",
+                     text, re.S | re.M)
+    if body and re.search(r"^ {6}Landin\.IR\.Verifier\.Verify\s*\(",
+                          body.group(1), re.M):
         return []
     return [(where, 1,
              "this builds every Unit and no longer verifies one; no"
@@ -10850,7 +10860,8 @@ def usage():
     lines = ["usage:",
              "  python3 check.py --help       prints this",
              "  python3 check.py              checks everything",
-             "  python3 check.py FILE...      checks those files",
+             "  python3 check.py FILE...      applies those files' per-file"
+             " rules only",
              "  python3 check.py %-12s regenerates every file below, and"
              " the editor files highlight/generate.py writes" % GENERATE_ALL]
     for flag, files in GENERATED:
@@ -11017,8 +11028,18 @@ def main(argv):
 
     left = ("; %d file(s) left to the full run" % unchecked
             if unchecked else "")
-    print("\n%s%s" % ("all clean" if not total else "%d problem(s)" % total,
-                       left))
+    if full_run:
+        verdict = "all clean" if not total else "%d problem(s)" % total
+    else:
+        #  A run over named files applies their per-file rules and none of
+        #  the checks that begin `if not full_run`, most of which read the
+        #  same files.  "all clean" there once sent an edit to the gate
+        #  that the full run refuses.
+        verdict = ("%s; only the per-file rules ran, and the checks of the"
+                   " full run, python3 check.py, did not"
+                   % ("per-file rules clean" if not total
+                      else "%d problem(s)" % total))
+    print("\n%s%s" % (verdict, left))
     return 1 if total else 0
 
 
