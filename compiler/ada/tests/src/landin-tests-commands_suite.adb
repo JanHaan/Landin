@@ -559,6 +559,14 @@ package body Landin.Tests.Commands_Suite is
          Landin.Testing.Check_Equal
            (Item, US.To_String (Before.Trace), US.To_String (After.Trace),
             "equal requests give equal verbose output");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (After.Trace),
+                            "  source: ""main.ldn""" & ASCII.LF),
+            "-v names every source the request read: "
+            & US.To_String (After.Trace));
+         Landin.Testing.Check
+           (Item, US.Length (Legacy.Trace) = 0,
+            "a request without -v names none");
       end;
       Landin.Testing.Check_Equal
         (Item, Host.Write_Count, 0, "check produces no artifacts");

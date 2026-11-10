@@ -1580,6 +1580,32 @@ package body Landin.Driver is
                   end if;
                end;
             end if;
+            --  A Cortex-M core the table lacks is near `cortex-m0` in
+            --  spelling only: offering that target would read as if it
+            --  covered the core, so the cores it does cover are named.
+            if Starts_With (Name, "cortex-m") then
+               declare
+                  Covered : Unbounded.Unbounded_String;
+                  use type Landin.Targets.Firmware.Core_Kind;
+               begin
+                  for Core in Landin.Targets.Firmware.Arm_Core loop
+                     Unbounded.Append
+                       (Covered,
+                        (if Core = Landin.Targets.Firmware.Arm_Core'First
+                         then ""
+                         elsif Core = Landin.Targets.Firmware.Arm_Core'Last
+                         then " and "
+                         else ", ")
+                        & Landin.Targets.Firmware.Spelling (Core)
+                        & " (--level="
+                        & Landin.Targets.Firmware.Level_Name (Core) & ")");
+                  end loop;
+                  return "; no Cortex-M core of that name is supported:"
+                    & " --target="
+                    & Landin.Targets.Name (Landin.Targets.Cortex_M)
+                    & " covers " & Unbounded.To_String (Covered);
+               end;
+            end if;
             for Index in 1 .. Landin.Targets.Selection.Described_Count loop
                Landin.Diagnostics.Suggestions.Consider
                  (Offered, Asked,
@@ -1677,6 +1703,41 @@ package body Landin.Driver is
             Landin.Diagnostics.Set_Transcript (Item, Said);
             Landin.Stages.Report (Context, Item);
          end Note_Tool_Failure;
+
+         --  D780: ld refuses an object of the other AAPCS32 variant as
+         --  "A uses VFP register arguments, B does not", in either order,
+         --  naming refine's own object by its output path.  The variant
+         --  is the description's float unit's, so the relay says which
+         --  one that is and the GCC flags that build a C archive for it.
+         function Float_Variant_Advice (Said : String) return String;
+         function Float_Variant_Advice (Said : String) return String is
+         begin
+            if not Landin.Targets.Is_Firmware (Facts)
+              or else Ada.Strings.Fixed.Index
+                (Said, "uses VFP register arguments") = 0
+            then
+               return "";
+            end if;
+            declare
+               Unit : constant Landin.Targets.Firmware.Float_Unit :=
+                 Landin.IR.Firmware_Profile
+                   (Landin.Stages.Code (Context).all).Float;
+               use type Landin.Targets.Firmware.Float_Unit;
+            begin
+               return LF & "the object ld names by the output's path is"
+                 & " this program's, and the other is a C archive's built"
+                 & " for the other AAPCS32 variant; "
+                 & (if Unit = Landin.Targets.Firmware.No_Float_Unit
+                    then "the device description names no float unit, so"
+                      & " this program passes floats in core registers:"
+                      & " build the archive with -mfloat-abi=soft"
+                    else "the device description's float unit is "
+                      & Landin.Targets.Firmware.Spelling (Unit)
+                      & ", so this program passes floats in VFP registers:"
+                      & " build the archive with -mfloat-abi=hard -mfpu="
+                      & Landin.Targets.Firmware.Spelling (Unit));
+            end;
+         end Float_Variant_Advice;
 
          --  Protect both the consumed object and its current public spelling.
          --  Tools have a bounded known-input contract; this does not sandbox
@@ -2829,8 +2890,9 @@ package body Landin.Driver is
                  ("a static link of " & Landin.Targets.Name (Facts)
                   & " starts at platform/linux's `_landin_start`, and"
                   & " no library holding platform/linux was found",
-                  "name the library with --library=PATH, or link"
-                  & " with --link=libc, which keeps C's runtime");
+                  "name the directory holding core, hosted and platform"
+                  & " with --library=DIR, or link with --link=libc, which"
+                  & " keeps C's runtime");
                return True;
             elsif not Executable then
                return False;
@@ -4067,6 +4129,8 @@ package body Landin.Driver is
                           (Driver & " failed with status"
                            & Integer'Image (Ran.Exit_Code),
                            Logical_Text (Unbounded.To_String (Ran.Output))
+                           & Float_Variant_Advice
+                               (Unbounded.To_String (Ran.Output))
                            & (if Selected_Layout =
                                Landin.Targets.Firmware.RAM_Layout
                              then LF & "RAM layout capacity is bounded by"
@@ -5715,10 +5779,22 @@ package body Landin.Driver is
                               and then not Rooted_Files))
          then
             Bad_Use := True;
+            --  A file named beside a directory is how one reaches for
+            --  adding a source to the directory's module, a file that
+            --  imports a device description among them, and the files
+            --  form is the way to do it.
             Note_Failure
               (Code_Unknown_Option,
                "a rooted request names one entry-module directory, or the"
-               & " entry module's source files");
+               & " entry module's source files"
+               & (if (for some Path of Inputs => Host.Is_Directory (Path))
+                    and then (for some Path of Inputs =>
+                                Loading.Is_Source_Name (Path)
+                                and then not Host.Is_Directory (Path))
+                  then "; to add a source file to a directory's module,"
+                    & " name that directory's `.ldn` files in place of the"
+                    & " directory"
+                  else ""));
          end if;
 
          --  Target facts and emission options are known before any source

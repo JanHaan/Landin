@@ -85,7 +85,9 @@ package body Landin.Commands.Catalogue is
    function Description (Flag : Option) return String is
      (case Flag is
          when Help_Flag => "Print this command's help and exit",
-         when Verbose => "Describe the request; repeat to trace tool commands",
+         when Verbose =>
+           "Describe the request and name the sources read; repeat to"
+           & " trace tool commands",
          when Quiet => "Suppress progress, retaining warnings and errors",
          when Color => "Diagnostic color: auto (default), always, never",
          when Diagnostics =>

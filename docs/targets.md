@@ -1056,9 +1056,26 @@ eight-byte-aligned initial MSP `0x20004000`, so static images cannot overlap
 `0x20003000`. RP2040's is `devices/descriptions/rp2040`, imported as
 `descriptions/rp2040` under `--root=devices`, and RP2350's
 `devices/descriptions/rp2350`.
+A program that imports no description is built against one unchanged by
+naming one more source file beside its own: a file holding only
+`import descriptions/NAME` joins the entry module, as every file named
+together does, and the import selects the profile. A rooted request names
+either the entry module's directory or its source files and never both
+(L0002), so a program kept in a directory is then named by that directory's
+`.ldn` files: `refine compile --root=devices prog/*.ldn with-rp2040.ldn`.
 The driver refuses a known compiler-framed routine larger than the selected
 stack reservation, counting its saved registers and reserved homes. This
 per-routine check does not bound stack use through calls or interrupt nesting.
+`--stack-report=PATH` has a row for every routine the compiler emitted, which
+in a firmware program is more than the image holds (D467). Only a program
+with a public `main` leaves out what it cannot reach (D296); a firmware
+program has none, so every routine of every module it imports is emitted,
+each in its own section, and the link's `--gc-sections` then drops the ones
+nothing reaches (D303). A firmware that imports `core/text` for one routine
+therefore lists the module's other routines too, `doubling_enlarge` and
+`decimal_u32` among its openings, though none of them is in the image. Read
+the rows of the entry, the handlers and the routines they call; `OUTPUT.map`
+beside the image lists the sections the link discarded.
 The vector image has the description's word count at its boot address, the
 start of the region it places `vectors` in, after RP2040's 256-byte
 second-stage slot for `rp2040-boot2` (D545), which holds the description's

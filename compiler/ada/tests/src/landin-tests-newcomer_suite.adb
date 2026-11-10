@@ -723,6 +723,10 @@ package body Landin.Tests.Newcomer_Suite is
            (Item, Emitted.Status = Landin.Driver.Status_Reported
               and then Contains (Report (Emitted),
                 "no library holding platform/linux was found")
+              and then Contains (Report (Emitted),
+                "name the directory holding core, hosted and platform with"
+                & " --library=DIR")
+              and then not Contains (Report (Emitted), "--library=PATH")
               and then Host.Written ("plain.s") = "",
             "static assembly without platform/linux is refused, not"
             & " written without it: " & Report (Emitted));

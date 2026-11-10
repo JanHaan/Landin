@@ -3924,6 +3924,112 @@ package body Landin.Tests.Cortex_Suite is
          & " record of three bytes in r0, a byte at a time");
    end C_Record_Transport;
 
+   --  D780: ld refuses a C archive of the other AAPCS32 variant, in
+   --  either order of the two objects, and the relay says which variant
+   --  the description selects and the GCC flags that build for it.
+   procedure Float_Variant_Refusal (Item : in out Landin.Testing.Context);
+   procedure Float_Variant_Refusal (Item : in out Landin.Testing.Context) is
+      LF_Text : constant String := [1 => LF];
+      Description : constant String :=
+        "compiler.device(""dev"")" & LF_Text
+        & "compiler.core(""cortex-m7"")" & LF_Text
+        & "compiler.vectors(16)" & LF_Text
+        & "compiler.boot(""vector-table"")" & LF_Text
+        & "linker.region(""CODE"", 0, 64 * 1024, ""rx"")" & LF_Text
+        & "linker.region(""RAM"", 0x2000_0000, 64 * 1024, ""rwx"")" & LF_Text
+        & "linker.place(""vectors"", ""CODE"")" & LF_Text
+        & "linker.place(""text"", ""CODE"")" & LF_Text
+        & "linker.place(""rodata"", ""CODE"")" & LF_Text
+        & "linker.place(""data"", ""RAM"")" & LF_Text
+        & "linker.place(""bss"", ""RAM"")" & LF_Text
+        & "linker.place(""stack"", ""RAM"", 4 * 1024)" & LF_Text;
+      Archive_Uses : constant String :=
+        "ld: error: libpeer.a(peer.o) uses VFP register arguments,"
+        & " /w/p.elf does not";
+      Program_Uses : constant String :=
+        "ld: error: /w/p.elf uses VFP register arguments,"
+        & " libpeer.a(peer.o) does not";
+
+      function Refused (Unit : Boolean; Said : String) return String;
+      function Refused (Unit : Boolean; Said : String) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Firmware_Library;
+         Host.Add_Directory ("/w");
+         Host.Add_Directory ("/w/app");
+         Host.Add_Directory ("/w/devices");
+         Host.Add_Directory ("/w/devices/descriptions");
+         Host.Add_Directory ("/w/devices/descriptions/dev");
+         Host.Add_File ("/w/app/main.ldn",
+           "import descriptions/dev" & LF_Text
+           & "start: () -> none = end start" & LF_Text);
+         Host.Add_File ("/w/devices/descriptions/dev/memory.ldn",
+           (if Unit then "compiler.float_unit(""fpv5-d16"")" & LF_Text
+            else "") & Description);
+         --  The assembly succeeds and the link is refused.
+         Tools.Add_Result (0, "");
+         Tools.Add_Result (1, Said & LF_Text);
+         Args.Append ("--root=/w/devices");
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--level=armv7e-m");
+         Args.Append ("--firmware-entry=start");
+         Args.Append ("--emit=exe");
+         Args.Append ("-o");
+         Args.Append ("/w/p.elf");
+         Args.Append ("/w/app");
+         declare
+            Ran : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Ran.Status = Landin.Driver.Status_Reported
+                 and then Tools.Run_Count = 2
+                 and then Contains (U.To_String (Ran.Report), "error[L0501]")
+                 and then Contains (U.To_String (Ran.Report), Said),
+               "the link's refusal is relayed as L0501: "
+               & U.To_String (Ran.Report));
+            return U.To_String (Ran.Report);
+         end;
+      end Refused;
+
+      Soft_Advice : constant String :=
+        "the device description names no float unit, so this program"
+        & " passes floats in core registers: build the archive with"
+        & " -mfloat-abi=soft";
+      Hard_Advice : constant String :=
+        "the device description's float unit is fpv5-d16, so this program"
+        & " passes floats in VFP registers: build the archive with"
+        & " -mfloat-abi=hard -mfpu=fpv5-d16";
+   begin
+      for Said of Landin.Platform.Path_List'[Archive_Uses, Program_Uses] loop
+         declare
+            Soft : constant String := Refused (False, Said);
+            Hard : constant String := Refused (True, Said);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Soft, Soft_Advice)
+                 and then not Contains (Soft, "-mfloat-abi=hard")
+                 and then Contains (Soft, "the object ld names by the"
+                   & " output's path is this program's"),
+               "without a unit the relay names the base variant and"
+               & " -mfloat-abi=soft: " & Soft);
+            Landin.Testing.Check
+              (Item, Contains (Hard, Hard_Advice)
+                 and then not Contains (Hard, "-mfloat-abi=soft"),
+               "with the unit the relay names the VFP variant and its"
+               & " flags: " & Hard);
+         end;
+      end loop;
+      --  Another refusal of the linker's is relayed as it was.
+      Landin.Testing.Check
+        (Item, not Contains
+           (Refused (True, "ld: error: undefined reference to `peer'"),
+            "-mfloat-abi"),
+         "a refusal about something else is given no float advice");
+   end Float_Variant_Refusal;
+
    --  D588: the boot ROM's checksum, and the object it is sealed into.
    procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context);
    procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context) is
@@ -4876,6 +4982,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "C records cross by value at both variants",
          C_Record_Transport'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "a float variant link refusal names the flags",
+         Float_Variant_Refusal'Access);
    end Register;
 
 end Landin.Tests.Cortex_Suite;
