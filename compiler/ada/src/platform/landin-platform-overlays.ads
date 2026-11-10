@@ -114,7 +114,8 @@ package Landin.Platform.Overlays is
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String;
-      Require_Absent : Boolean := False);
+      Require_Absent : Boolean := False;
+      Directory : Boolean := False);
    overriding procedure Advance_Publication
      (Host : Overlay; Handle : Publication_Handle;
       Action : Publication_Action; Protected_Paths : Path_List;

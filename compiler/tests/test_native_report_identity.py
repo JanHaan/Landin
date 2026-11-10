@@ -6,6 +6,7 @@ filesystem identity, using only files owned by each TemporaryDirectory.
 --directory can select a case-sensitive or case-insensitive mounted volume.
 """
 import argparse
+import errno
 import json
 import os
 from pathlib import Path
@@ -109,7 +110,11 @@ class NativeReportIdentity(unittest.TestCase):
         result = self.compile(output, report)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn(b"L0005", result.stderr)
-        self.assertIn(b"choose an ordinary output root", result.stderr)
+        # The rule that refuses a link is said in its own words, not in
+        # those of a symbolic-link loop that is not there.
+        self.assertIn(b"it is a symbolic link, and an output replaces only a"
+                      b" regular file", result.stderr)
+        self.assertNotIn(os.strerror(errno.ELOOP).encode(), result.stderr)
         self.assertEqual(self.snapshot(), before,
                          "linked entries and their targets must be preserved")
         self.assertFalse(self.invoked.exists())

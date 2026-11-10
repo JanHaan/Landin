@@ -609,6 +609,10 @@ package body Landin.Driver is
 
       if not Misused then
          for Path of Named loop
+            --  A signal that arrived while a source was being rewritten
+            --  is recorded, so that rewrite ends whole; no later source
+            --  is read, formatted or reported after it.
+            exit when Host.Cancellation_Requested;
             declare
                Content : Unbounded.Unbounded_String;
                Read    : Landin.Platform.Read_Status;
@@ -1467,6 +1471,12 @@ package body Landin.Driver is
               & " and " & Other & "; choose another output path and retry"
             else "cannot prove " & Kind & " separate from " & Other_Kind
               & ": " & Path & " and " & Other
+              & (if (for some Byte of String'(Path & Other) =>
+                       Byte in '~' | ':' or else Character'Pos (Byte) > 127)
+                 then "; this filesystem's rules for names are not known"
+                   & " here, and one holding '~', ':' or a character outside"
+                   & " ASCII may be another spelling of a different name"
+                 else "")
               & "; check output paths and access, or choose another"
               & " output path and retry");
 
@@ -1719,11 +1729,20 @@ package body Landin.Driver is
                end if;
             end Observe_Program_Path;
             procedure Protect_Program (Name : String) is
+               Resolved : constant String :=
+                 (if Name = "" then "" else Tools.Resolve_Program (Name));
             begin
-               Observe_Program_Path (Name);
-               if Name /= "" then
-                  Observe_Program_Path (Tools.Resolve_Program (Name));
+               --  A bare name is looked for along PATH and nowhere else,
+               --  so once PATH has answered, the file of that name in the
+               --  working directory is not the tool and reserves nothing.
+               --  A name with a directory in it is a path, and a name
+               --  nothing answers to is kept as it was spelled.
+               if Resolved = ""
+                 or else Ada.Strings.Fixed.Index (Name, "/") /= 0
+               then
+                  Observe_Program_Path (Name);
                end if;
+               Observe_Program_Path (Resolved);
             end Protect_Program;
          begin
             Protect_Program (Unbounded.To_String (Toolchain));
@@ -1755,11 +1774,21 @@ package body Landin.Driver is
          --  A definitively absent selection has no object to alias. Keep its
          --  spelling reserved without asking the object-overlap API to resolve
          --  nonexistent parents, which must conservatively answer unknown.
+         --  Whether the last True answer was the same spelling, or only a
+         --  pair of names the host could not tell apart; the refusal says
+         --  which, so it never claims a collision that was not found.
+         Tool_Name_Proven : Boolean := True;
+         function Names_Tool return String is
+           (if Tool_Name_Proven then " names a selected tool"
+            else " cannot be proved separate from the name of a selected"
+              & " tool");
+
          function Is_Absent_Tool_Name (Path : String) return Boolean;
          function Is_Absent_Tool_Name (Path : String) return Boolean is
             Output : constant Landin.Platform.Identity_Observation :=
               Host.Observe_Identity (Path);
          begin
+            Tool_Name_Proven := True;
             for Name of Absent_Tool_Names loop
                if Path = Name or else Absolute (Path) = Absolute (Name) then
                   return True;
@@ -1774,6 +1803,7 @@ package body Landin.Driver is
                      then
                         Observed_Input (Name, Seen.Identity);
                         if Host.Paths_Overlap (Path, Name) then
+                           Tool_Name_Proven := Host.Same_File (Path, Name);
                            return True;
                         end if;
                      end if;
@@ -1804,6 +1834,28 @@ package body Landin.Driver is
             return "cannot prepare " & Kind & " " & Path & ": " & Said;
          end Preparation_Failure;
 
+         --  Whether a signal has asked this command to stop, asked where
+         --  one stage hands over to the next.  While an output is reserved
+         --  or a private directory exists the host records the signal
+         --  rather than end the process, and this is what answers it: the
+         --  group is abandoned as a refused preparation abandons it.
+         function Stop_Requested return Boolean;
+         function Stop_Requested return Boolean is
+         begin
+            if not Cancelled and then Host.Cancellation_Requested then
+               Cancelled := True;
+               Publication_Failed := True;
+            end if;
+            return Cancelled;
+         end Stop_Requested;
+
+         --  The one artifact that is a directory tree: a Darwin debug
+         --  bundle.  Every other output is a file, and a directory found
+         --  where one is to be written is refused when it is reserved.
+         function Is_Directory_Artifact (Path : String) return Boolean is
+           (Path'Length > 5
+            and then Path (Path'Last - 4 .. Path'Last) = ".dSYM");
+
          procedure Reserve_Output
            (Path : String; Defer_Preparation_Failure : Boolean := False);
          procedure Reserve_Output
@@ -1822,7 +1874,7 @@ package body Landin.Driver is
                Publication_Failed := True;
                Note_Failure
                  (Code_Unknown_Option, "output " & Path
-                  & " names a selected tool; choose another output path"
+                  & Names_Tool & "; choose another output path"
                   & " and retry");
                return;
             end if;
@@ -1842,7 +1894,9 @@ package body Landin.Driver is
                   return;
                end if;
             end loop;
-            Publication.Prepare (Artifacts, Host, Path, Status, Reason);
+            Publication.Prepare
+              (Artifacts, Host, Path, Status, Reason,
+               Directory => Is_Directory_Artifact (Path));
             if Status /= Landin.Platform.Write_Ok
               and then Host.Cancellation_Requested
             then
@@ -1871,7 +1925,7 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option, "output " & Path
-                     & " names a selected tool; choose another output path"
+                     & Names_Tool & "; choose another output path"
                      & " and retry");
                   return;
                end if;
@@ -1987,7 +2041,7 @@ package body Landin.Driver is
                      Bad_Use := True;
                      Note_Failure
                        (Code_Unknown_Option, "output " & Path
-                        & " names a selected tool; choose another output path"
+                        & Names_Tool & "; choose another output path"
                         & " and retry");
                   end if;
                   for Input of Known_Inputs loop
@@ -2409,7 +2463,7 @@ package body Landin.Driver is
                Bad_Use := True;
                Note_Failure
                  (Code_Unknown_Option, "stage report output " & Path
-                  & " names a selected tool; choose another output path"
+                  & Names_Tool & "; choose another output path"
                   & " and retry");
                return;
             end if;
@@ -2487,7 +2541,7 @@ package body Landin.Driver is
                Bad_Use := True;
                Note_Failure
                  (Code_Unknown_Option, "stage report output " & Path
-                  & " names a selected tool; choose another output path"
+                  & Names_Tool & "; choose another output path"
                   & " and retry");
                return;
             end if;
@@ -2517,8 +2571,8 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Written := Landin.Platform.Not_Writable;
                   Reason := Unbounded.To_Unbounded_String
-                    ("stage report names a selected tool;"
-                     & " choose another output path and retry");
+                    ("stage report" & Names_Tool
+                     & "; choose another output path and retry");
                else
                   Publication.Commit (Stage_Report, Host, Written, Reason);
                end if;
@@ -4512,7 +4566,7 @@ package body Landin.Driver is
                   Reserve_Output
                     (Stack_Path, Defer_Preparation_Failure => True);
                end if;
-               if Bad_Use then
+               if Bad_Use or else Stop_Requested then
                   return;
                end if;
             end if;
@@ -4661,6 +4715,9 @@ package body Landin.Driver is
             Landin.IR.Pipeline.Run_On_Verified
               (Landin.Stages.Code (Context).all, Facts,
                Optimization, Evidence);
+            if Stop_Requested then
+               return;
+            end if;
 
             --  Specialization can expose an additional atom domain. The
             --  selected source identity and source-byte spaces stay fixed;
@@ -4927,7 +4984,7 @@ package body Landin.Driver is
                   end if;
                end;
                Report_Publication_Failure;
-               if Publication_Failed then
+               if Publication_Failed or else Stop_Requested then
                   return;
                end if;
                if Emit_Map then
@@ -5940,6 +5997,11 @@ package body Landin.Driver is
               and then not Landin.Stages.Failed (Context)
             then
                Checking.Run (Context, Panic, Watch_Stage'Access);
+               --  `refine run` holds its private directory from before
+               --  the first stage, so a signal during them is recorded.
+               if Host.Cancellation_Requested then
+                  Cancelled := True;
+               end if;
                Policy_Denied := Landin.Diagnostics.Warning_Policy.Denied
                  (Warnings, Landin.Stages.Report (Context));
                if not Landin.Stages.Failed (Context) then
@@ -5953,6 +6015,7 @@ package body Landin.Driver is
                if Emit /= Emit_Nothing
                  and then not Policy_Denied
                  and then not Bad_Use
+                 and then not Cancelled
                  and then not Landin.Stages.Failed (Context)
                then
                   Current_Stage := Unbounded.To_Unbounded_String ("emission");

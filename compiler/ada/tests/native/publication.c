@@ -194,7 +194,7 @@ static void directory_snapshot(void)
     REQUIRE(snprintf(output, sizeof output, "%s/program.dSYM", parent) > 0);
     REQUIRE(mkdir(output, 0700) == 0);
     REQUIRE(snprintf(oldleaf, sizeof oldleaf, "%s/old", output) > 0); put(oldleaf, "old-debug");
-    int token = prepare(output, 0, "", stage);
+    int token = prepare(output, LANDIN_PUBLICATION_DIRECTORY, "", stage);
     REQUIRE(mkdir(stage, 0700) == 0);
     REQUIRE(snprintf(newleaf, sizeof newleaf, "%s/new", stage) > 0); put(newleaf, "new-debug");
     REQUIRE(step(token, 0) == 0 && step(token, 1) == 0);
@@ -217,7 +217,8 @@ static void mismatch_finish_preserves_tree(void)
     REQUIRE(mkdir(output, 0700) == 0);
     REQUIRE(snprintf(first, sizeof first, "%s/first", output) > 0); put(first, "keep-first");
     REQUIRE(snprintf(changed, sizeof changed, "%s/changed", output) > 0); put(changed, "old-child");
-    int token = prepare(output, 0, "", stage); REQUIRE(mkdir(stage, 0700) == 0);
+    int token = prepare(output, LANDIN_PUBLICATION_DIRECTORY, "", stage);
+    REQUIRE(mkdir(stage, 0700) == 0);
     REQUIRE(step(token, 0) == 0);
     REQUIRE(unlink(changed) == 0); put(changed, "new-child");
     REQUIRE(step(token, 1) != 0 && step(token, 4) != 0);
@@ -238,7 +239,35 @@ static void different_output_kind_is_refused(void)
     path(output, sizeof output, "firmware.bin"); REQUIRE(mkdir(output, 0700) == 0);
     REQUIRE(snprintf(sentinel, sizeof sentinel, "%s/sentinel", output) > 0);
     put(sentinel, "unowned directory contents"); REQUIRE(stat(output, &before) == 0);
-    int token = prepare(output, 0, "", stage); staged(stage, "generated image");
+    /* A file artifact named where a directory stands is refused when it is
+       prepared, and the directory is not read to say so: an entry in it
+       that cannot be read at all does not change the refusal, and no
+       workspace is made. */
+    char secret[8192], listing[4096];
+    int token = 0;
+    REQUIRE(snprintf(secret, sizeof secret, "%s/secret", output) > 0);
+    put(secret, "never read"); REQUIRE(chmod(secret, 0) == 0);
+    REQUIRE(landin_publication_open(output, 0, "", &token, stage, sizeof stage,
+                                    why, sizeof why) != 0 && token == 0
+            && strstr(why, "is a directory, but the generated artifact is a regular file")
+            != NULL);
+    path(listing, sizeof listing, "");
+    {
+        DIR *entries = opendir(listing);
+        struct dirent *item;
+        REQUIRE(entries != NULL);
+        while ((item = readdir(entries)) != NULL)
+            REQUIRE(strncmp(item->d_name, ".refine-publication-", 20) != 0);
+        closedir(entries);
+    }
+    REQUIRE(chmod(secret, 0600) == 0 && unlink(secret) == 0);
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && content(sentinel, "unowned directory contents"));
+    ++passed;
+    /* Declared a tree and generated as a file, it is still caught when the
+       stage is validated. */
+    token = prepare(output, LANDIN_PUBLICATION_DIRECTORY, "", stage);
+    staged(stage, "generated image");
     REQUIRE(step(token, 0) != 0 && strstr(why, "directory") != NULL);
     REQUIRE(step(token, 3) == 0 && step(token, 4) == 0);
     REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev

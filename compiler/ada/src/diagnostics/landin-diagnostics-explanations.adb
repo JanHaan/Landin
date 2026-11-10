@@ -121,7 +121,25 @@ package body Landin.Diagnostics.Explanations is
                & "`-o` names the file to write. An existing directory ther"
                & "e is refused before anything is compiled, with a file un"
                & "der it as the example: write `-o d/main` rather than `-o"
-               & " d`."
+               & " d`. A report or depfile option that names an existing d"
+               & "irectory is refused when the output is prepared, before "
+               & "anything is compiled as well."
+               & LF
+               & LF
+               & "An output replaces only a regular file. A symbolic link,"
+               & " FIFO or device at the destination is refused by name, a"
+               & "nd so is an output whose directory is itself a symbolic "
+               & "link: name the directory the link points to. A file that"
+               & " would be replaced must be readable, since its bytes are"
+               & " what a failed build puts back. A relative output needs "
+               & "a working directory that still exists."
+               & LF
+               & LF
+               & "An entry of the output directory named `.refine-publicat"
+               & "ion-...` is inspected only when it is a directory of the"
+               & " invoking user's. One that cannot be opened, or whose lo"
+               & "ck another process holds, is refused in those words: mak"
+               & "e it readable or wait, inspect it, and remove it."
                & LF
                & LF
                & "A preparation the host refuses for a resource, such as t"
@@ -129,7 +147,10 @@ package body Landin.Diagnostics.Explanations is
                & "he publication workspace it made when nothing was captur"
                & "ed; free the resource and retry. A build cancelled by a "
                & "signal reports no output failure: refine's last line nam"
-               & "es the signal, and nothing it would have replaced was."
+               & "es the signal, and nothing it would have replaced was. A"
+               & " command that held nothing when the signal came, such as"
+               & " `refine check`, is ended by the signal itself and write"
+               & "s no last line (D1046)."
                & LF
                & LF
                & "A late failure can follow successful staging or installa"

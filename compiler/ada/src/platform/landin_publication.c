@@ -21,6 +21,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <time.h>
 #include <unistd.h>
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -62,8 +63,13 @@ static int landin_publication_step_locked(int token, int action,
     const char *const *paths, size_t path_count, const uint64_t *ids, size_t count,
     char *why, size_t room);
 
+/* An arena holds three directories. stage and recovery are the
+   transaction's: every entry in them is one a destination record explains.
+   work is the directory a tool is started in, so whatever a tool leaves
+   beside itself (a core file, a profile, a wrapper's log) lands where
+   retirement may delete it, and never among the staged outputs. */
 struct arena {
-    int parent, private_fd, recovery_fd, root_fd;
+    int parent, private_fd, recovery_fd, root_fd, work_fd;
     int producer_fd;
     struct stat parent_id;
     char *path, *name, *recovery_path;
@@ -74,6 +80,9 @@ struct arena {
 struct publication {
     int token, absent, deletion, captured, installed, unchanged, finished;
     int rollback_pending, expected_fd, capture_valid, finish_failed;
+    /* An unchanged output keeps its file; mode_changed says the file was
+       given the mode this build would have created it with. */
+    int directory, mode_changed;
     /* 0: no destination record; 1: its building name exists with
        journal_id; 2: sealed under journal. */
     int journal_state;
@@ -108,6 +117,8 @@ static void quarantine(struct arena *a)
 }
 static int next_token = 1;
 extern int landin_cancellation_requested(void);
+extern void landin_cancellation_hold(void);
+extern void landin_cancellation_release(void);
 extern int landin_overlaps_any(const char *, const char *const *, size_t);
 extern int landin_entry_names_alias(int, const char *, const char *);
 static landin_publication_hook fault_hook;
@@ -365,13 +376,18 @@ static int landin_publication_stage_directory_locked(const char *text)
         if (a->refs && found
             && (!found[strlen(a->path)] || found[strlen(a->path)] == '/'
                 || found[strlen(a->path)] == '=')) {
-            int fd = dup(a->private_fd);
+            /* The tool's working directory, beside the stage it writes. */
+            int fd = dup(a->work_fd);
             return fd < 0 ? -2 : fd;
         }
     }
     if (reserved_stage(text, 1)) { errno = ESTALE; return -2; }
     return -1;
 }
+/* The stage as a tool started in the arena's work directory names it. The
+   spelling is shorter than any arena path, so a rebased argument never
+   outgrows the argument it replaces. */
+#define LANDIN_STAGE_FROM_WORK "../stage"
 static int landin_publication_rebase_argument_locked(const char *arg, int directory,
                                        char *out, size_t room)
 {
@@ -386,9 +402,12 @@ static int landin_publication_rebase_argument_locked(const char *arg, int direct
             struct stat actual;
             if (!a->refs || strncmp(arg, a->path, n)
                 || (arg[n] && arg[n] != '/' && arg[n] != '=')) continue;
-            if (fstat(a->private_fd, &actual) != 0 || !same(&actual, &selected)) return -1;
-            if (used + 1 >= room) return -1;
-            out[used++] = '.'; arg += n; matched = 1; break;
+            if (fstat(a->work_fd, &actual) != 0 || !same(&actual, &selected)) return -1;
+            if (used + sizeof LANDIN_STAGE_FROM_WORK >= room) return -1;
+            memcpy(out + used, LANDIN_STAGE_FROM_WORK,
+                   sizeof LANDIN_STAGE_FROM_WORK - 1);
+            used += sizeof LANDIN_STAGE_FROM_WORK - 1;
+            arg += n; matched = 1; break;
         }
         if (!matched) {
             if (used + 1 >= room) return -1;
@@ -403,7 +422,10 @@ static int landin_publication_rebase_argument_locked(const char *arg, int direct
 static int landin_publication_stage_write_locked(const char *path, const char *bytes,
     size_t size)
 {
-    int fd = stage_open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    /* The arena is the privacy boundary while a file is staged. The file
+       itself is the one that will be installed, so it is created as any
+       program creates an output: 0666 less the caller's umask. */
+    int fd = stage_open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
     if (fd < 0 && fd != -2 && errno == EEXIST)
         fd = stage_open(path, O_WRONLY, 0);
     if (fd < 0) return fd;
@@ -460,7 +482,7 @@ static void strip_dots(char *path)
 }
 static int parent_for(const char *path, const char *root, char **parent_path,
                       char **name, int require_absent,
-                      struct root_anchor **anchor)
+                      struct root_anchor **anchor, char *said, size_t said_room)
 {
     char *absolute = NULL, *root_abs = NULL, *walk = NULL, *save = NULL, *part;
     struct root_anchor *chosen = NULL;
@@ -472,9 +494,19 @@ static int parent_for(const char *path, const char *root, char **parent_path,
     if (fd != -2) return fd;
     fd = -1;
     if (!*path) { errno = EINVAL; return -1; }
-    char *cwd = getcwd(NULL, 0);
-    if (!cwd) return -1;
-    size_t n = strlen(cwd) + strlen(path) + strlen(root) + 8;
+    /* Only a relative path needs the working directory, and a process
+       whose directory was removed still names its outputs absolutely. */
+    char *cwd = NULL;
+    if (*path != '/' || (*root && *root != '/')) {
+        cwd = getcwd(NULL, 0);
+        if (!cwd) {
+            int error = errno;
+            reason(said, said_room, "it is relative to the working directory, which cannot be named: %s; change to an existing directory, or give an absolute output path",
+                   strerror(error));
+            errno = error; return -1;
+        }
+    }
+    size_t n = (cwd ? strlen(cwd) : 0) + strlen(path) + strlen(root) + 8;
     absolute = malloc(n); root_abs = malloc(n);
     if (!absolute || !root_abs) goto done;
     snprintf(absolute, n, "%s%s%s", *path == '/' ? "" : cwd,
@@ -603,6 +635,17 @@ static int parent_for(const char *path, const char *root, char **parent_path,
         /* The explicitly selected parent is the anchor. No implicit creation
            for ordinary compiler output paths. Final-component links refuse. */
         fd = open(absolute, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+        if (fd < 0) {
+            /* The refusal of a link is this adapter's rule; the error the
+               system gives for it (not a directory, a loop) describes
+               something else. */
+            int error = errno;
+            struct stat named;
+            if (lstat(absolute, &named) == 0 && S_ISLNK(named.st_mode))
+                reason(said, said_room, "its directory %s is a symbolic link, and an output is not written through one; name the directory the link points to",
+                       absolute);
+            errno = error;
+        }
     }
     if (fd >= 0) {
         *parent_path = strdup(absolute);
@@ -639,7 +682,8 @@ static struct publication *lookup(int token)
     for (p = publications; p; p = p->next) if (p->token == token) return p;
     return NULL;
 }
-static struct arena *arena_for(int parent, const char *path)
+static struct arena *arena_for(int parent, const char *path, char *said,
+                               size_t said_room)
 {
     struct stat st;
     struct arena *a;
@@ -668,33 +712,95 @@ static struct arena *arena_for(int parent, const char *path)
              entropy[6], entropy[7], entropy[8], entropy[9], entropy[10], entropy[11]);
     if (mkdirat(parent, leaf, 0700) != 0) { free(a->path); free(a); return NULL; }
     snprintf(a->path, n, "%s/%s", path, leaf);
-    a->name = strdup(strrchr(a->path, '/') + 1);
-    a->root_fd = openat(parent, a->name,
+    a->root_fd = a->private_fd = a->recovery_fd = a->work_fd = -1;
+    a->name = strdup(leaf);
+    a->recovery_path = malloc(n);
+    if (!a->name || !a->recovery_path) goto undo;
+    a->root_fd = openat(parent, leaf,
                         O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-    if (a->root_fd < 0) { free(a->name); free(a->path); free(a); return NULL; }
+    if (a->root_fd < 0) goto undo;
     if (mkdirat(a->root_fd, "stage", 0700) != 0
-        || mkdirat(a->root_fd, "recovery", 0700) != 0) {
-        close(a->root_fd); free(a->name); free(a->path); free(a); return NULL;
-    }
+        || mkdirat(a->root_fd, "recovery", 0700) != 0
+        || mkdirat(a->root_fd, "work", 0700) != 0) goto undo;
     a->private_fd = openat(a->root_fd, "stage",
                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     a->recovery_fd = openat(a->root_fd, "recovery",
                             O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-    if (a->private_fd < 0 || a->recovery_fd < 0) {
-        if (a->private_fd >= 0) close(a->private_fd);
-        if (a->recovery_fd >= 0) close(a->recovery_fd);
-        close(a->root_fd); free(a->name); free(a->path); free(a); return NULL;
-    }
-    a->recovery_path = malloc(n);
-    if (!a->recovery_path) {
-        close(a->private_fd); close(a->recovery_fd); close(a->root_fd);
-        free(a->name); free(a->path); free(a); return NULL;
-    }
+    a->work_fd = openat(a->root_fd, "work",
+                        O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (a->private_fd < 0 || a->recovery_fd < 0 || a->work_fd < 0) goto undo;
     snprintf(a->recovery_path, n, "%s/recovery", a->path);
     strcat(a->path, "/stage");
     a->parent = parent; a->parent_id = st; a->refs = 1;
     a->next = arenas; arenas = a;
     return a;
+undo:
+    {
+        /* Nothing was staged or captured: remove what this call made, each
+           by rmdir, which cannot remove anything else. A workspace that
+           will not go is named, like every other retained one. */
+        int error = errno, removed = 1;
+        if (a->private_fd >= 0) close(a->private_fd);
+        if (a->recovery_fd >= 0) close(a->recovery_fd);
+        if (a->work_fd >= 0) close(a->work_fd);
+        if (a->root_fd >= 0) {
+            const char *const made[] = {"work", "recovery", "stage"};
+            for (size_t i = 0; i < sizeof made / sizeof made[0]; ++i)
+                if (unlinkat(a->root_fd, made[i], AT_REMOVEDIR) != 0
+                    && errno != ENOENT) removed = 0;
+            close(a->root_fd);
+        }
+        if (unlinkat(parent, leaf, AT_REMOVEDIR) != 0 && errno != ENOENT)
+            removed = 0;
+        if (!removed)
+            reason(said, said_room, "%s; the publication workspace %s/%s it had begun could not be removed, so inspect and remove it before retrying",
+                   strerror(error), path, leaf);
+        free(a->name); free(a->recovery_path); free(a->path); free(a);
+        errno = error; return NULL;
+    }
+}
+/* Delete everything under FD, which is consumed. Only ever the work
+   directory: a private directory this process made for its tools to run
+   in, where nothing is an output and nothing is kept. Entries are removed
+   through descriptors and never through a link. */
+static int empty_directory(int fd)
+{
+    DIR *listing = fd < 0 ? NULL : fdopendir(fd);
+    struct dirent *item;
+    int failed = 0;
+    if (!listing) { if (fd >= 0) close(fd); return -1; }
+    while (!failed && (errno = 0, item = readdir(listing)) != NULL) {
+        struct stat about;
+        if (!strcmp(item->d_name, ".") || !strcmp(item->d_name, "..")) continue;
+        if (fstatat(dirfd(listing), item->d_name, &about,
+                    AT_SYMLINK_NOFOLLOW) != 0) {
+            failed = errno != ENOENT; continue;
+        }
+        if (S_ISDIR(about.st_mode)) {
+            int child = openat(dirfd(listing), item->d_name,
+                               O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+            if (empty_directory(child) != 0
+                || unlinkat(dirfd(listing), item->d_name, AT_REMOVEDIR) != 0)
+                failed = 1;
+        } else if (unlinkat(dirfd(listing), item->d_name, 0) != 0
+                   && errno != ENOENT) failed = 1;
+    }
+    if (!failed && errno) failed = 1;
+    int error = errno;
+    closedir(listing);
+    errno = error;
+    return failed ? -1 : 0;
+}
+static int retire_work(struct arena *a)
+{
+    /* Usually nothing was left, and an empty directory goes without the
+       descriptor a listing needs, which a failing preparation may lack. */
+    if (unlinkat(a->root_fd, "work", AT_REMOVEDIR) == 0 || errno == ENOENT)
+        return 0;
+    if (errno != ENOTEMPTY && errno != EEXIST) return -1;
+    if (empty_directory(dup(a->work_fd)) != 0) return -1;
+    return unlinkat(a->root_fd, "work", AT_REMOVEDIR) != 0 && errno != ENOENT
+        ? -1 : 0;
 }
 static int own_arena_name(int parent, const char *name)
 {
@@ -778,6 +884,20 @@ static int disconnected_workspace_empty(int root, int parent, const char *name)
         && errno == ENOENT;
 }
 #endif
+enum { LANDIN_RECORD_LIMIT = 1 << 20 };
+/* The shared lock of a workspace being inspected, or -1 when it stays held
+   for two seconds or the invocation is cancelled. */
+static int scan_lock(int root)
+{
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        const struct timespec interval = {0, 20000000};
+        if (flock(root, LOCK_SH | LOCK_NB) == 0) return 0;
+        if (errno != EWOULDBLOCK && errno != EINTR) return -1;
+        if (landin_cancellation_requested()) { errno = EINTR; return -1; }
+        nanosleep(&interval, NULL);
+    }
+    errno = EWOULDBLOCK; return -1;
+}
 /* Records are atomically published. The shared root lock prevents a newly
    completed record (and its later stage) from racing this allow-list scan;
    record construction remains private and does not hold that lock. */
@@ -785,7 +905,12 @@ static int retained_workspace(int parent, const char *parent_path,
                                const char *target, char *why, size_t room)
 {
     struct stat parent_id;
-    if (fstat(parent, &parent_id) != 0) return -1;
+    if (fstat(parent, &parent_id) != 0) {
+        int error = errno;
+        reason(why, room, "cannot inspect the output directory %s: %s",
+               parent_path, strerror(error));
+        errno = error; return -1;
+    }
     for (struct arena *a = arenas; a; a = a->next) {
         if (a->retained && same(&parent_id, &a->parent_id)) {
             char location[PATH_MAX + 256];
@@ -806,24 +931,54 @@ static int retained_workspace(int parent, const char *parent_path,
             errno = EBUSY; return -1;
         }
     }
-    DIR *directory = fdopendir(dup(parent));
+    int listed = dup(parent);
+    DIR *directory = listed < 0 ? NULL : fdopendir(listed);
     struct dirent *item;
     int refused = 0;
-    if (!directory) return -1;
+    if (!directory) {
+        int error = errno;
+        if (listed >= 0) close(listed);
+        reason(why, room, "cannot list the output directory %s for retained publications: %s",
+               parent_path, strerror(error));
+        errno = error; return -1;
+    }
     rewinddir(directory);
     while (!refused) {
+        char specific[256] = "";
+        struct stat entry;
         errno = 0; item = readdir(directory);
         if (!item) { refused = errno != 0; break; }
         if (strncmp(item->d_name, ".refine-publication-", 20)
             || own_arena_name(parent, item->d_name)) continue;
-        int root = openat(parent, item->d_name,
+        /* A workspace is a directory its user made. Any other entry under
+           the reserved prefix, and a directory that is another user's,
+           holds nothing of this user's to recover: it is passed over, as
+           it must be where several users write to one directory. The
+           installation itself never replaces what is there. */
+        if (fstatat(parent, item->d_name, &entry, AT_SYMLINK_NOFOLLOW) != 0) {
+            if (errno == ENOENT) continue;
+            snprintf(specific, sizeof specific, "it cannot be examined: %s",
+                     strerror(errno));
+        } else if (!S_ISDIR(entry.st_mode) || entry.st_uid != geteuid()) {
+            barrier("discovery-foreign", item->d_name);
+            continue;
+        }
+        int root = *specific ? -1 : openat(parent, item->d_name,
                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        if (root < 0 && errno == ENOENT) continue;
+        if (!*specific && root < 0 && errno == ENOENT) continue;
+        if (!*specific && root < 0)
+            snprintf(specific, sizeof specific, "it cannot be opened: %s; make it readable to inspect it, or remove it",
+                     strerror(errno));
         if (root >= 0) barrier("discovery-opened", target);
         DIR *records = NULL;
         struct known_name *stage_names = NULL, *recovery_names = NULL;
         int live_producer = 0;
-        if (root >= 0 && flock(root, LOCK_SH) == 0) {
+        /* Its owner holds this lock only around a rename or a removal.
+           One held longer is not waited for without bound. */
+        int locked = root >= 0 ? scan_lock(root) : -1;
+        if (root >= 0 && locked != 0 && !*specific)
+            snprintf(specific, sizeof specific, "another process holds its lock; retry when that process has finished");
+        if (root >= 0 && locked == 0) {
             struct stat pinned, named;
             if (fstat(root, &pinned) == 0 && S_ISDIR(pinned.st_mode)) {
                 int found = fstatat(parent, item->d_name, &named, AT_SYMLINK_NOFOLLOW);
@@ -862,7 +1017,8 @@ static int retained_workspace(int parent, const char *parent_path,
             if (!record) { refused = errno != 0; break; }
             const char *name = record->d_name;
             if (!strcmp(name, ".") || !strcmp(name, "..")
-                || !strcmp(name, "stage") || !strcmp(name, "recovery")) continue;
+                || !strcmp(name, "stage") || !strcmp(name, "recovery")
+                || !strcmp(name, "work")) continue;
             if (numbered(name, ".destination-building-")) {
                 struct stat temporary;
                 if (fstatat(root, name, &temporary, AT_SYMLINK_NOFOLLOW) != 0
@@ -873,8 +1029,11 @@ static int retained_workspace(int parent, const char *parent_path,
             int fd = openat(root, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
             size_t length = 0;
             struct stat record_id;
+            /* A record is a few names; nothing larger is read to be told so. */
             char *bytes = fd < 0 || fstat(fd, &record_id) != 0
-                || !S_ISREG(record_id.st_mode) ? NULL : read_bytes(fd, &length);
+                || !S_ISREG(record_id.st_mode)
+                || record_id.st_size > LANDIN_RECORD_LIMIT
+                ? NULL : read_bytes(fd, &length);
             const char magic[] = "LANDIN-PUBLICATION-1\n";
             const char end[] = "END-LANDIN-PUBLICATION-1\n";
             if (!bytes || length < sizeof magic + sizeof end - 2
@@ -932,8 +1091,14 @@ static int retained_workspace(int parent, const char *parent_path,
                          || !entries_known(root, "recovery", recovery_names, 0))) refused = 1;
         free_names(stage_names); free_names(recovery_names);
         if (records) closedir(records);
-        if (root >= 0) { (void)flock(root, LOCK_UN); close(root); }
-        if (refused) {
+        if (root >= 0) {
+            if (locked == 0) (void)flock(root, LOCK_UN);
+            close(root);
+        }
+        if (refused && *specific) {
+            reason(why, room, "publication workspace %s/%s may hold an earlier output of this directory, and %s",
+                   parent_path, item->d_name, specific);
+        } else if (refused) {
             reason(why, room, "retained or active publication for %s in %s/%s; inspect its destination records and recover the previous or new output before retrying",
                    target, parent_path, item->d_name);
         }
@@ -1013,11 +1178,12 @@ static void free_finished_arena(struct arena *arena)
         free(p->bytes); free_tree(p->expected_tree); free_tree(p->fresh_tree);
         free(p->path); free(p->name); free(p->stage);
         free(p->recovery); free(p->rollback); free(p);
+        landin_cancellation_release();
     }
     struct arena **at = &arenas;
     while (*at != arena) at = &(*at)->next;
     *at = arena->next;
-    close(arena->private_fd); close(arena->recovery_fd);
+    close(arena->private_fd); close(arena->recovery_fd); close(arena->work_fd);
     close(arena->root_fd); close(arena->parent);
     if (arena->producer_fd >= 0) close(arena->producer_fd);
     free(arena->path); free(arena->name); free(arena->recovery_path); free(arena);
@@ -1042,7 +1208,8 @@ static int discard_unprepared(struct publication *p)
     }
     if (a->refs > 1) { --a->refs; return 0; }
     if (a->producer_fd >= 0 || flock(a->root_fd, LOCK_EX) != 0) return -1;
-    if (unlinkat(a->root_fd, "stage", AT_REMOVEDIR) != 0
+    if (retire_work(a) != 0
+        || unlinkat(a->root_fd, "stage", AT_REMOVEDIR) != 0
         || unlinkat(a->root_fd, "recovery", AT_REMOVEDIR) != 0
         || unlinkat(a->parent, a->name, AT_REMOVEDIR) != 0) {
         int error = errno;
@@ -1074,6 +1241,15 @@ static const char *preparation_route(int error)
         return "check the output directory, or choose another output path";
     }
 }
+/* What an existing destination is, for a refusal to replace it. */
+static const char *entry_kind(mode_t mode)
+{
+    if (S_ISLNK(mode)) return "a symbolic link";
+    if (S_ISFIFO(mode)) return "a FIFO";
+    if (S_ISCHR(mode) || S_ISBLK(mode)) return "a device";
+    if (S_ISSOCK(mode)) return "a socket";
+    return "not a regular file";
+}
 static int landin_publication_open_locked(const char *path, int deletion,
     const char *root,
                             int *token, char *stage, size_t stage_room,
@@ -1081,43 +1257,91 @@ static int landin_publication_open_locked(const char *path, int deletion,
 {
     struct publication *p = calloc(1, sizeof *p);
     char *parent_path = NULL;
+    /* A refusal that is this adapter's own rule says so in its own words;
+       only a failure of the system is reported with the system's. */
+    char said[PATH_MAX + 512] = "";
     int parent = -1, fd = -1, absence_conflict = 0;
     int require_absent = (deletion & LANDIN_PUBLICATION_REQUIRE_ABSENT) != 0;
+    int directory = (deletion & LANDIN_PUBLICATION_DIRECTORY) != 0;
     *token = 0; if (stage_room) *stage = 0;
+    reason(why, room, "");
+    /* Held from here until the publication is freed: its workspace is on
+       disk for as long. */
+    landin_cancellation_hold();
     if (!p) goto fail;
     p->expected_fd = -1;
-    if (deletion & ~(LANDIN_PUBLICATION_DELETE_ONLY | LANDIN_PUBLICATION_REQUIRE_ABSENT))
+    if (deletion & ~(LANDIN_PUBLICATION_DELETE_ONLY | LANDIN_PUBLICATION_REQUIRE_ABSENT
+                     | LANDIN_PUBLICATION_DIRECTORY))
         { errno = EINVAL; goto fail; }
     deletion &= LANDIN_PUBLICATION_DELETE_ONLY;
+    p->directory = directory;
     if (landin_cancellation_requested()) { errno = EINTR; goto fail; }
     p->path = strdup(path);
     parent = parent_for(path, root, &parent_path, &p->name, require_absent,
-                        &p->anchor);
+                        &p->anchor, said, sizeof said);
     if (parent < 0) goto fail;
     if (retained_workspace(parent, parent_path, p->name, why, room) != 0) {
+        int failure = errno;
+        if (room && !*why)
+            reason(why, room, "cannot inspect the output directory %s for retained publications: %s",
+                   parent_path, strerror(failure));
         release_anchor(p);
         close(parent); free(parent_path); free(p->path); free(p->name); free(p);
+        landin_cancellation_release();
+        errno = failure;
         return -1;
     }
     barrier("before-snapshot", p->path);
     if (fstatat(parent, p->name, &p->expected, AT_SYMLINK_NOFOLLOW) == 0) {
         if (require_absent) { absence_conflict = 1; errno = EEXIST; goto fail; }
         if (S_ISDIR(p->expected.st_mode)) {
-            p->expected_tree = snapshot_entry(parent, p->name);
-            if (!p->expected_tree) goto fail;
-        } else if (!S_ISREG(p->expected.st_mode)) { errno = ELOOP; goto fail; }
+            /* A tree is read only to be replaced by a tree. A file that is
+               to be written where a directory stands is refused now, before
+               that directory is walked and before anything is compiled; a
+               deletion is refused at validation, as it always was, and has
+               no use for the tree either. */
+            if (!directory && !deletion) {
+                reason(said, sizeof said, "%s is a directory, but the generated artifact is a regular file; choose another output",
+                       path);
+                errno = EISDIR; goto fail;
+            }
+            if (directory) {
+                p->expected_tree = snapshot_entry(parent, p->name);
+                if (!p->expected_tree) {
+                    int error = errno;
+                    if (error == ELOOP)
+                        reason(said, sizeof said, "the directory it would replace holds an entry that is neither a regular file nor a directory; remove %s or choose another output",
+                               path);
+                    else if (error == EAGAIN)
+                        reason(said, sizeof said, "the directory it would replace changed while it was read; retry");
+                    errno = error; goto fail;
+                }
+            }
+        } else if (!S_ISREG(p->expected.st_mode)) {
+            reason(said, sizeof said, "it is %s, and an output replaces only a regular file; remove it or choose another output path",
+                   entry_kind(p->expected.st_mode));
+            errno = EINVAL; goto fail;
+        }
         if (S_ISREG(p->expected.st_mode)) {
         fd = openat(parent, p->name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
         struct stat actual;
-        if (fd < 0 || fstat(fd, &actual) != 0 || !same(&actual, &p->expected))
-            { errno = EAGAIN; goto fail; }
+        if (fd < 0) {
+            int error = errno;
+            reason(said, sizeof said, "the file it would replace cannot be read, so it could not be put back if this build failed: %s; make it readable, remove it, or choose another output path",
+                   strerror(error));
+            errno = error; goto fail;
+        }
+        if (fstat(fd, &actual) != 0 || !same(&actual, &p->expected)) {
+            reason(said, sizeof said, "the file it would replace changed while it was read; retry");
+            errno = EAGAIN; goto fail;
+        }
         p->bytes = read_bytes(fd, &p->size);
         if (!p->bytes) goto fail;
         p->expected_fd = fd; fd = -1;
         }
     } else if (errno == ENOENT) p->absent = 1;
     else goto fail;
-    p->arena = arena_for(parent, parent_path);
+    p->arena = arena_for(parent, parent_path, said, sizeof said);
     if (!p->arena) goto fail;
     parent = -1;
     barrier("arena-ready", p->path);
@@ -1154,6 +1378,8 @@ fail:
                 (p->arena->root_fd, known, "", location, sizeof location);
             reason(why, room, "cannot prepare %s: %s; retained publication workspace %s; inspect its stage, recovery and destination records before retrying",
                    path, strerror(failure), location);
+        } else if (*said) {
+            reason(why, room, "cannot prepare %s: %s", path, said);
         } else {
             reason(why, room, "cannot prepare %s: %s; %s",
                    path, strerror(failure), preparation_route(failure));
@@ -1168,6 +1394,7 @@ fail:
         free(p->path); free(p->name); free(p->bytes); free(p->stage);
         free(p->recovery); free(p->rollback);
         free_tree(p->expected_tree); free_tree(p->fresh_tree); free(p); }
+    landin_cancellation_release();
     free(parent_path); return -1;
 }
 /* The pinned directory can move after anchor selection. Report an observed
@@ -1352,6 +1579,17 @@ static int landin_publication_step_locked(int token, int action,
     if (action == 2) {
         if (p->deletion) return 0;
         barrier("before-install", p->path);
+        /* The same bytes keep their file, with the mode this build made:
+           an executable that lost its execute bit is given it back. A file
+           whose mode is not this user's to change is replaced instead. */
+        if (p->unchanged && S_ISREG(p->expected.st_mode)
+            && S_ISREG(p->fresh.st_mode) && !p->mode_changed
+            && ((p->expected.st_mode ^ p->fresh.st_mode) & 07777) != 0) {
+            if (p->expected_fd >= 0
+                && fchmod(p->expected_fd, p->fresh.st_mode & 07777) == 0)
+                p->mode_changed = 1;
+            else p->unchanged = 0;
+        }
         if (p->unchanged) {
             if (no_replace(recovery_fd, p->recovery, parent, p->name,
                            S_ISDIR(p->expected.st_mode)) != 0) goto fail;
@@ -1367,6 +1605,12 @@ static int landin_publication_step_locked(int token, int action,
     }
     if (action == 3) {
         if (p->rollback_pending) { errno = EALREADY; goto fail; }
+        if (p->mode_changed) {
+            /* The previous file goes back as it was, mode included. */
+            if (fchmod(p->expected_fd, p->expected.st_mode & 07777) != 0)
+                goto fail;
+            p->mode_changed = 0;
+        }
         if (p->installed) {
             barrier("before-rollback-capture", p->path);
             if (renameat(parent, p->name, recovery_fd, p->rollback) != 0) {
@@ -1428,19 +1672,26 @@ static int landin_publication_step_locked(int token, int action,
         release_anchor(p);
         if (--p->arena->refs == 0) {
             if (flock(p->arena->root_fd, LOCK_EX) != 0) goto fail;
-            /* rmdir succeeds only when every known artifact is gone. */
-            if (unlinkat(p->arena->root_fd, "stage", AT_REMOVEDIR) != 0
-                || unlinkat(p->arena->root_fd, "recovery", AT_REMOVEDIR) != 0
-                || finish_journals(p->arena) != 0
-                || unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0) {
+            /* rmdir succeeds only when every known artifact is gone. What
+               the tools left in their own directory goes first. */
+            const char *kept = "work";
+            if (retire_work(p->arena) != 0
+                || (kept = "stage",
+                    unlinkat(p->arena->root_fd, "stage", AT_REMOVEDIR) != 0)
+                || (kept = "recovery",
+                    unlinkat(p->arena->root_fd, "recovery", AT_REMOVEDIR) != 0)
+                || (kept = "destination records",
+                    finish_journals(p->arena) != 0)
+                || (kept = "directory",
+                    unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0)) {
                 int error = errno;
                 quarantine(p->arena);
                 p->finish_failed = 1;
                 (void)flock(p->arena->root_fd, LOCK_UN);
                 char location[PATH_MAX + 256];
                 describe_recovery(p->arena, location, sizeof location);
-                reason(why, room, "retained publication directory %s: %s",
-                       location, strerror(error)); return -1;
+                reason(why, room, "retained publication directory %s: its %s could not be removed: %s",
+                       location, kept, strerror(error)); return -1;
             }
             (void)flock(p->arena->root_fd, LOCK_UN);
             free_finished_arena(p->arena);

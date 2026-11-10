@@ -854,10 +854,11 @@ package body Landin.Testing.Fakes is
       Stage : out Unbounded.Unbounded_String;
       Status : out Landin.Platform.Write_Status;
       Reason : out Unbounded.Unbounded_String;
-      Require_Absent : Boolean := False)
+      Require_Absent : Boolean := False;
+      Directory : Boolean := False)
    is
       use type Landin.Platform.Move_Status;
-      pragma Unreferenced (Root);
+      pragma Unreferenced (Root, Directory);
       Existing : Natural;
       Slash : constant Natural := Ada.Strings.Fixed.Index
         (Path, "/", Ada.Strings.Backward);

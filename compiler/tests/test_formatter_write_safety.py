@@ -60,6 +60,15 @@ def limit_file_size():
     resource.setrlimit(resource.RLIMIT_FSIZE, (1024, 1024))
 
 
+def limit_growth():
+    # The signal at its default action, which is what a limit set with
+    # ulimit -f, by a job scheduler or by a container runtime leaves in
+    # force; Python itself starts with it ignored.
+    signal.signal(signal.SIGXFSZ, signal.SIG_DFL)
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (2048, 2048))
+
+
 class FormatterWriteSafety(unittest.TestCase):
     def setUp(self):
         SCRATCH.mkdir(exist_ok=True)
@@ -105,6 +114,27 @@ class FormatterWriteSafety(unittest.TestCase):
         result = self.fmt(limited=True)
         self.assert_refused(result, b"File too large")
         self.assertEqual(list(self.root.iterdir()), [self.source],
+                         "a refused write leaves no copy behind")
+
+    def test_file_size_signal_does_not_cut_the_source(self):
+        # The original fits under the limit and its layout does not, so the
+        # limit is met inside the rewrite itself.  The signal's default
+        # action ended the process there, with the source cut at the limit
+        # and no message naming the copy beside it.
+        grown = self.root / "grown.ldn"
+        original = (b"public main: () -> (code: i32) =\n"
+                    + b"code = 0\n" * 170 + b"end main\n")
+        grown.write_bytes(original)
+        result = subprocess.run([str(REFINE), "fmt", str(grown)],
+                                capture_output=True, timeout=30,
+                                preexec_fn=limit_growth)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(b"L0005", result.stderr)
+        self.assertIn(b"File too large", result.stderr)
+        self.assertIn(b"its bytes are as they were", result.stderr)
+        self.assertEqual(grown.read_bytes(), original)
+        self.assertEqual(sorted(path.name for path in self.root.iterdir()),
+                         ["grown.ldn", "source.ldn"],
                          "a refused write leaves no copy behind")
 
     def test_replacement_preserves_mode_and_symlink(self):

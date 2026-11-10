@@ -179,6 +179,8 @@ struct update_lease {
 static struct update_lease *leases;
 static int next_lease = 1;
 extern int landin_cancellation_requested(void);
+extern void landin_cancellation_hold(void);
+extern void landin_cancellation_release(void);
 static struct update_lease *find_lease(int token)
 {
     struct update_lease *lease;
@@ -530,17 +532,23 @@ void landin_close_update(int token)
 int landin_replace_update(int token, const char *data, size_t size, char *reason,
     size_t room)
 {
+    /* The rewrite is the one part of a lease a signal must not cut short:
+       reading and formatting hold nothing. */
+    landin_cancellation_hold();
     registry_lock();
     int result = landin_replace_update_locked(token, data, size, reason, room);
     registry_unlock();
+    landin_cancellation_release();
     return result;
 }
 
 int landin_replace_existing_file(const char *path, const char *data,
                                  size_t size, char *reason, size_t room)
 {
+    landin_cancellation_hold();
     registry_lock();
     int result = landin_replace_existing_file_locked(path, data, size, reason, room);
     registry_unlock();
+    landin_cancellation_release();
     return result;
 }

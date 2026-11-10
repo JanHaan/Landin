@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,8 @@ int landin_tool_cancel_reserved(int child, int *status, int *owned);
 int landin_cancellation_begin(void);
 void landin_cancellation_end(void);
 int landin_cancellation_requested(void);
+void landin_cancellation_hold(void);
+void landin_cancellation_release(void);
 int landin_program_run(char *const args[], int *signal_number,
                        int *status, int *child);
 const char *landin_signal_name(int signal_number);
@@ -69,36 +72,134 @@ const char *landin_process_start_error(int error)
     return NULL;
 }
 
-/* Invocation cancellation is notification only. No filesystem work, Ada
-   cleanup, or potentially reused process-group identifier reaches a handler.
-   The supervising thread forwards the signal while it still owns an
-   unreaped child. Inherited ignored signals stay ignored. */
+/* Invocation cancellation.  A signal that finds nothing to recover ends the
+   process at once by its default action, as it would a program with no
+   handler: a command that is only reading and computing holds nothing a
+   signal could leave half done.  While something is held (an open
+   publication, a private directory, a tool's capture, a source being
+   rewritten) the signal is recorded instead, and the supervising thread
+   unwinds: no filesystem work, Ada cleanup, or potentially reused
+   process-group identifier reaches a handler, and the supervisor forwards
+   the signal while it still owns an unreaped child.  A recorded signal
+   also starts the grace period below, so a stage that never looks at the
+   record cannot keep the process alive.  Inherited ignored signals stay
+   ignored.
+
+   SIGPIPE is one of them: refine writing its own report into a closed pipe
+   while `refine run` holds a private directory must reach the removal of
+   that directory, and with nothing held it still ends the process as the
+   default action would.
+
+   SIGXFSZ is ignored for the invocation, so a write past the file-size
+   limit returns EFBIG to the adapters, whose recovery is written for that
+   error; its default action would end the process inside the write.  A
+   child gets the inherited disposition back in its spawn attributes. */
 static volatile sig_atomic_t landin_cancel_signal = 0;
+static atomic_int landin_cancel_holds;
 static int landin_cancel_active = 0;
-static const int landin_cancel_numbers[] = {SIGINT, SIGTERM, SIGHUP};
-static struct sigaction landin_cancel_saved[3];
+enum { LANDIN_CANCEL_COUNT = 4, LANDIN_CANCEL_GRACE_SECONDS = 10 };
+static const int landin_cancel_numbers[LANDIN_CANCEL_COUNT] =
+    {SIGINT, SIGTERM, SIGHUP, SIGPIPE};
+static struct sigaction landin_cancel_saved[LANDIN_CANCEL_COUNT];
+static struct sigaction landin_cancel_saved_limit, landin_cancel_saved_alarm;
+static int landin_cancel_limit_ignored = 0, landin_cancel_grace = 0;
+
+/* One hold for each thing a signal's default action would leave behind.
+   The handler only reads the count; a signal racing a change is the same
+   signal arriving just before or just after it. */
+void landin_cancellation_hold(void)
+{
+    atomic_fetch_add(&landin_cancel_holds, 1);
+}
+void landin_cancellation_release(void)
+{
+    atomic_fetch_sub(&landin_cancel_holds, 1);
+}
+
+/* End by NUMBER's default action from inside a handler. */
+static void landin_cancel_default(int number)
+{
+    struct sigaction action;
+    sigset_t only;
+    memset(&action, 0, sizeof action);
+    action.sa_handler = SIG_DFL;
+    sigemptyset(&action.sa_mask);
+    sigaction(number, &action, NULL);
+    sigemptyset(&only);
+    sigaddset(&only, number);
+    raise(number);
+    /* Blocked while its own handler runs: deliver it here, not on return,
+       so no further instruction of the interrupted stage executes. */
+    pthread_sigmask(SIG_UNBLOCK, &only, NULL);
+}
 
 static void landin_cancel_notify(int number)
 {
     int saved = errno;
-    if (landin_cancel_signal == 0)
+    if (landin_cancel_signal == 0) {
+        if (atomic_load(&landin_cancel_holds) <= 0)
+            landin_cancel_default(number);
         landin_cancel_signal = number;
+        if (landin_cancel_grace)
+            alarm(LANDIN_CANCEL_GRACE_SECONDS);
+    }
     errno = saved;
+}
+
+/* The recorded signal was not answered within the grace period: whatever
+   is running has not reached a point that looks.  End by that signal as
+   SIGKILL would end it, leaving what the publication records describe. */
+static void landin_cancel_expire(int number)
+{
+    int recorded = (int)landin_cancel_signal;
+    (void)number;
+    if (recorded != 0)
+        landin_cancel_default(recorded);
+}
+
+/* The dispositions a child of this invocation starts with by default:
+   the file-size signal refine ignores for itself, unless the caller had
+   already ignored it. */
+static void landin_cancel_child_defaults(sigset_t *defaults)
+{
+    if (landin_cancel_limit_ignored
+        && landin_cancel_saved_limit.sa_handler != SIG_IGN)
+        sigaddset(defaults, SIGXFSZ);
 }
 
 int landin_cancellation_begin(void)
 {
-    struct sigaction action;
-    size_t index;
+    struct sigaction action, ignore, expire;
+    size_t index = 0;
     if (landin_cancel_active)
         return 0;
     memset(&action, 0, sizeof action);
     action.sa_handler = landin_cancel_notify;
     sigemptyset(&action.sa_mask);
-    for (index = 0; index < 3; ++index)
+    for (index = 0; index < LANDIN_CANCEL_COUNT; ++index)
         sigaddset(&action.sa_mask, landin_cancel_numbers[index]);
+    sigaddset(&action.sa_mask, SIGALRM);
+    memset(&ignore, 0, sizeof ignore);
+    ignore.sa_handler = SIG_IGN;
+    sigemptyset(&ignore.sa_mask);
+    memset(&expire, 0, sizeof expire);
+    expire.sa_handler = landin_cancel_expire;
+    sigemptyset(&expire.sa_mask);
     landin_cancel_signal = 0;
-    for (index = 0; index < 3; ++index) {
+    index = 0;
+    if (sigaction(SIGXFSZ, &ignore, &landin_cancel_saved_limit) != 0)
+        return errno;
+    landin_cancel_limit_ignored = 1;
+    /* A caller that ignores the alarm keeps it ignored, and has no grace
+       period. */
+    if (sigaction(SIGALRM, NULL, &landin_cancel_saved_alarm) != 0)
+        goto failed;
+    if (landin_cancel_saved_alarm.sa_handler != SIG_IGN) {
+        if (sigaction(SIGALRM, &expire, NULL) != 0)
+            goto failed;
+        landin_cancel_grace = 1;
+    }
+    for (index = 0; index < LANDIN_CANCEL_COUNT; ++index) {
         int number = landin_cancel_numbers[index];
         if (sigaction(number, NULL, &landin_cancel_saved[index]) != 0)
             goto failed;
@@ -116,6 +217,11 @@ failed:
             sigaction(landin_cancel_numbers[index],
                        &landin_cancel_saved[index], NULL);
         }
+        if (landin_cancel_grace)
+            sigaction(SIGALRM, &landin_cancel_saved_alarm, NULL);
+        landin_cancel_grace = 0;
+        sigaction(SIGXFSZ, &landin_cancel_saved_limit, NULL);
+        landin_cancel_limit_ignored = 0;
         return error;
     }
 }
@@ -125,9 +231,16 @@ void landin_cancellation_end(void)
     size_t index;
     if (!landin_cancel_active)
         return;
-    for (index = 0; index < 3; ++index)
+    for (index = 0; index < LANDIN_CANCEL_COUNT; ++index)
         sigaction(landin_cancel_numbers[index], &landin_cancel_saved[index],
                    NULL);
+    if (landin_cancel_grace) {
+        alarm(0);
+        sigaction(SIGALRM, &landin_cancel_saved_alarm, NULL);
+        landin_cancel_grace = 0;
+    }
+    sigaction(SIGXFSZ, &landin_cancel_saved_limit, NULL);
+    landin_cancel_limit_ignored = 0;
     landin_cancel_active = 0;
     landin_cancel_signal = 0;
 }
@@ -175,8 +288,12 @@ static int landin_tool_capture_locked(char *path, size_t capacity)
     struct landin_capture *capture = calloc(1, sizeof *capture);
     int error;
     if (!capture) return -1;
+    /* Held from before the directory exists until it is removed. */
+    landin_cancellation_hold();
     if (landin_owned_create("landin-tool-", &capture->owned) != 0) {
-        free(capture); return -1;
+        error = errno;
+        landin_cancellation_release();
+        free(capture); errno = error; return -1;
     }
     capture->fd = openat(capture->owned.root, "capture",
                          O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
@@ -194,7 +311,9 @@ failed:
     if (capture->fd >= 0) close(capture->fd);
     landin_owned_remove(&capture->owned);
     if (capture->owned.root >= 0) close(capture->owned.root);
-    close(capture->owned.parent); free(capture); errno = error; return -1;
+    close(capture->owned.parent); free(capture);
+    landin_cancellation_release();
+    errno = error; return -1;
 }
 static int landin_tool_capture_read_locked(int fd, char **bytes, size_t *length)
 {
@@ -240,6 +359,7 @@ static int landin_tool_capture_close_locked(int fd, char *reason, size_t capacit
             snprintf(reason, capacity, "cannot close anonymous tool capture");
         if (capture->owned.root >= 0) close(capture->owned.root);
         close(capture->owned.parent); free(capture);
+        landin_cancellation_release();
     }
     return result >= 0 && closed == 0 ? 0 : -1;
 }
@@ -302,8 +422,15 @@ int landin_tool_start_in_directory(char *const args[], char *const env[],
         return error;
     }
     error = posix_spawnattr_setpgroup(&attributes, 0);
+    if (error == 0) {
+        sigset_t defaults;
+        sigemptyset(&defaults);
+        landin_cancel_child_defaults(&defaults);
+        error = posix_spawnattr_setsigdefault(&attributes, &defaults);
+    }
     if (error == 0)
-        error = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
+        error = posix_spawnattr_setflags
+            (&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
     if (error == 0) {
         input = landin_tool_source(given_input, moved);
         capture = landin_tool_source(given_capture, moved);
@@ -356,8 +483,13 @@ int landin_tool_start_in_directory(char *const args[], char *const env[],
     for (index = 0; index <= STDERR_FILENO; index++)
         if (moved[index] >= 0)
             close(moved[index]);
-    if (error == 0)
+    if (error == 0) {
         *child = (int)pid;
+        /* An unreaped tool is something to recover: it is stopped and
+           reaped by its supervisor, not orphaned by a signal's default
+           action. Held until this adapter reaps it. */
+        landin_cancellation_hold();
+    }
     return error;
 }
 
@@ -384,6 +516,7 @@ int landin_tool_wait_reserved(int child, int *status, int no_hang, int *owned)
     if (reaped > 0) {
         *owned = 0;
         *status = WIFEXITED(word) ? WEXITSTATUS(word) : -1;
+        landin_cancellation_release();
     } else if (reaped < 0 && errno == ECHILD) {
         *owned = 0;
     }
@@ -622,6 +755,7 @@ int landin_program_run(char *const args[], int *signal_number,
     }
     if (old_interrupt.sa_handler != SIG_IGN) sigaddset(&defaults, SIGINT);
     if (old_quit.sa_handler != SIG_IGN) sigaddset(&defaults, SIGQUIT);
+    landin_cancel_child_defaults(&defaults);
     error = posix_spawnattr_setsigdefault(&attributes, &defaults);
     /* The program starts with refine's mask as it was before the block. */
     if (error == 0)
@@ -641,6 +775,14 @@ int landin_program_run(char *const args[], int *signal_number,
     sigaction(SIGQUIT, &ignore, &old_quit);
     landin_program_child = 0;
     landin_program_pending = 0;
+    /* From here a termination or hangup is forwarded, so the invocation's
+       grace period ends; one recorded just before is the program's too. */
+    if (landin_cancel_active) {
+        int recorded = (int)landin_cancel_signal;
+        if (landin_cancel_grace) alarm(0);
+        if (recorded == SIGTERM || recorded == SIGHUP)
+            landin_program_pending = recorded;
+    }
     landin_program_catch(SIGTERM, &old_terminate);
     landin_program_catch(SIGHUP, &old_hangup);
     error = posix_spawn(&pid, args[0], NULL, &attributes, args, environ);

@@ -34,6 +34,8 @@ int landin_tool_stop(int, int *);
 int landin_cancellation_begin(void);
 void landin_cancellation_end(void);
 int landin_cancellation_requested(void);
+void landin_cancellation_hold(void);
+void landin_cancellation_release(void);
 
 static int owned_child;
 static volatile sig_atomic_t received;
@@ -495,6 +497,14 @@ int main(int argc, char **argv)
         tool(atoi(argv[2]), atoi(argv[3]), strcmp(mode, "stubborn-tool") == 0);
         return 2;
     }
+    if (strcmp(mode, "limit-tool") == 0) {
+        /* The invocation ignores the file-size signal for itself only. */
+        struct sigaction action;
+        require(sigaction(SIGXFSZ, NULL, &action) == 0
+                && action.sa_handler == SIG_DFL,
+                "tool starts with the default file-size signal");
+        return 23;
+    }
     if (strcmp(mode, "quick") == 0) {
         struct sigaction action;
         require(argc == 5, "quick arguments");
@@ -517,6 +527,61 @@ int main(int argc, char **argv)
     require(landin_cancellation_begin() == 0, "begin cancellation");
     events = dup(STDOUT_FILENO);
     require(events >= 0, "inheritable event descriptor");
+    if (strcmp(mode, "unheld") == 0) {
+        /* Nothing is held, so nothing would be left half done: the signal
+           ends the process by its default action, at once. Reaching the
+           deadline instead is the failure. */
+        puts("READY");
+        while (!timed_out)
+            pause();
+        fail("a signal with nothing held did not end the process");
+    }
+    /* Every other controller models an invocation that holds something a
+       signal must not leave behind, as an open publication or a private
+       directory does in refine; only then is a signal recorded. */
+    landin_cancellation_hold();
+    if (strcmp(mode, "grace") == 0) {
+        /* Recorded, and then never answered: the grace period ends the
+           process by the recorded signal. */
+        puts("READY");
+        await_signal(1);
+        require(landin_cancellation_requested() == number, "signal recorded");
+        puts("RECORDED");
+        for (;;)
+            pause();
+    }
+    if (strcmp(mode, "pipe") == 0) {
+        /* A closed reader while something is held is recorded as well. */
+        require(raise(SIGPIPE) == 0, "raise the closed-pipe signal");
+        require(landin_cancellation_requested() == SIGPIPE,
+                "closed-pipe signal recorded while held");
+        landin_cancellation_release();
+        landin_cancellation_end();
+        require(landin_cancellation_requested() == 0, "end resets request");
+        alarm(0);
+        puts("PASS");
+        return 0;
+    }
+    if (strcmp(mode, "limit") == 0) {
+        struct sigaction action;
+        require(sigaction(SIGXFSZ, NULL, &action) == 0
+                && action.sa_handler == SIG_IGN,
+                "file-size signal ignored for the invocation");
+        require(pipe(ready) == 0, "tool readiness pipe");
+        child = start(argv[0], "limit-tool", 0, ready[1], events);
+        close(ready[1]); close(ready[0]);
+        require(landin_tool_wait(child, &status, 0) == child && status == 23,
+                "tool saw the default file-size signal");
+        reaped(child);
+        landin_cancellation_release();
+        landin_cancellation_end();
+        require(sigaction(SIGXFSZ, NULL, &action) == 0
+                && action.sa_handler == SIG_DFL,
+                "file-size signal restored after the invocation");
+        alarm(0);
+        puts("PASS");
+        return 0;
+    }
     if (strcmp(mode, "before") == 0) {
         if (automatic)
             require(raise(number) == 0, "automatic before-spawn signal");
@@ -588,6 +653,7 @@ int main(int argc, char **argv)
     }
     close(ready[0]);
     close(events);
+    landin_cancellation_release();
     landin_cancellation_end();
     check_restored(strcmp(mode, "ignore") == 0 ? number : 0);
     landin_cancellation_end();

@@ -196,6 +196,91 @@ def child_policy_commands(refine, executable, output):
     return results
 
 
+def unheld_commands(refine, output):
+    """A command that holds nothing is ended by a signal at once.
+
+    `refine check` reads and computes; it has no output to put back and no
+    directory to remove, so a signal's default action is all there is to do.
+    Recorded and looked at only when the command ended, the signal used to
+    cost the whole remaining check before the process went."""
+    root = output / 'unheld'
+    root.mkdir()
+    source = root / 'large.ldn'
+    count = 6000
+    source.write_text(''.join(
+        'f%d: () -> (r: i32) =\n    r = %d\nend f%d\n' % (index, index, index)
+        for index in range(count))
+        + 'public main: () -> (code: i32) =\n'
+        + ''.join('    code = f%d()\n' % index for index in range(count))
+        + 'end main\n')
+    whole = time.monotonic()
+    complete = subprocess.run([str(refine), 'check', str(source)], cwd=root,
+                              capture_output=True, timeout=300)
+    whole = time.monotonic() - whole
+    results = []
+    for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        process = subprocess.Popen([str(refine), 'check', str(source)], cwd=root,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        time.sleep(min(0.2, whole / 4))
+        sent = time.monotonic()
+        process.send_signal(number)
+        try:
+            stdout, stderr = process.communicate(timeout=300)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+        took = time.monotonic() - sent
+        # Ended by the signal, and long before the check would have ended.
+        passed = (process.returncode == -number and took < max(0.5, whole / 2)
+                  and b'cancelled by signal' not in stderr)
+        row = dict(command='check', signal=number.name, passed=passed,
+                   exit_status=process.returncode, seconds_after_signal=took,
+                   whole_check_seconds=whole, complete_exit=complete.returncode,
+                   stderr=stderr.decode(errors='replace')[-400:])
+        results.append(row)
+        print(('PASS ' if passed else 'FAIL ') + 'unheld-check-' + number.name,
+              flush=True)
+        if not passed:
+            raise AssertionError(row)
+    # `refine run` holds its private directory from before the first stage,
+    # so the same signal is recorded there, and answered where the frontend
+    # hands over: the directory is removed and no tool is ever started.
+    driver = shutil.which('clang' if sys.platform == 'darwin' else 'gcc')
+    temporary = root / 'temporary'
+    temporary.mkdir()
+    started = root / 'tool-started'
+    wrapper = root / 'driver'
+    wrapper.write_text('#!/bin/sh\n: > ' + shlex.quote(str(started))
+                       + '\nexec ' + shlex.quote(driver) + ' "$@"\n')
+    wrapper.chmod(0o700)
+    for number in (signal.SIGTERM, signal.SIGHUP):
+        process = subprocess.Popen(
+            [str(refine), 'run', '--toolchain=' + str(wrapper), str(source)],
+            cwd=root, env=dict(os.environ, TMPDIR=str(temporary)),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        time.sleep(min(0.2, whole / 4))
+        process.send_signal(number)
+        try:
+            stdout, stderr = process.communicate(timeout=300)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+        left = sorted(path.name for path in temporary.iterdir())
+        passed = (process.returncode == 128 + number and not started.exists()
+                  and not left and not stdout
+                  and b'cancelled by signal' in stderr)
+        row = dict(command='run', signal=number.name, passed=passed,
+                   exit_status=process.returncode, left=left,
+                   tool_started=started.exists(),
+                   stderr=stderr.decode(errors='replace')[-400:])
+        results.append(row)
+        print(('PASS ' if passed else 'FAIL ') + 'held-run-' + number.name,
+              flush=True)
+        if not passed:
+            raise AssertionError(row)
+    return results
+
+
 def run_case(executable, output, mode, number):
     number = int(number)
     label = mode + ("-" + signal.Signals(number).name if number else "")
@@ -210,7 +295,8 @@ def run_case(executable, output, mode, number):
     received = bytearray()
     pending = bytearray()
     injected = False
-    deadline = time.monotonic() + 20
+    started = time.monotonic()
+    deadline = started + 20
     error = None
     eof = False
     try:
@@ -269,6 +355,19 @@ def run_case(executable, output, mode, number):
     passed = (error is None and process.returncode == 0 and not stderr
               and eof and expected.issubset(lines) and not pending
               and injected == bool(number))
+    if mode == "pipe":
+        passed = (error is None and process.returncode == 0 and not stderr
+                  and eof and "PASS" in lines)
+    elif mode in ("unheld", "grace"):
+        # Ended by the signal itself, not by an exit status that names it:
+        # at once when nothing is held, and when a recorded signal is never
+        # answered, only once the grace period has run.
+        elapsed = time.monotonic() - started
+        passed = (error is None and process.returncode == -number
+                  and not stderr and eof and injected and "PASS" not in lines
+                  and (elapsed < 5 and "RECORDED" not in lines
+                       if mode == "unheld"
+                       else 8 <= elapsed < 15 and "RECORDED" in lines))
     result = dict(case=label, command=command, cwd=str(cwd),
                   exit_status=process.returncode, stdout=stdout, stderr=stderr,
                   error=error, passed=passed, event_pipe_eof=eof)
@@ -321,7 +420,11 @@ def main():
         for mode, number in [("normal", 0)] + [
                 (mode, number) for mode in ("cancel", "before", "ignore", "stubborn")
                 for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)] + [
-                    ("reap-ignore", 0), ("reap-nowait", 0), ("lost-owner", signal.SIGINT)]:
+                    ("reap-ignore", 0), ("reap-nowait", 0), ("lost-owner", signal.SIGINT)] + [
+                        ("unheld", number) for number in (
+                            signal.SIGINT, signal.SIGTERM, signal.SIGHUP,
+                            signal.SIGPIPE)] + [
+                                ("grace", signal.SIGTERM), ("pipe", 0), ("limit", 0)]:
             result = run_case(executable, output, mode, number)
             summary["cases"].append(result)
             result_path.write_text(json.dumps(summary, indent=2) + "\n")
@@ -342,6 +445,7 @@ def main():
             raise AssertionError(summary['attached'])
     if args.refine:
         summary['commands'] = command_controls(args.refine.resolve(), output)
+        summary['unheld_commands'] = unheld_commands(args.refine.resolve(), output)
         summary['child_policy_commands'] = child_policy_commands(
             args.refine.resolve(), executable, output)
         result_path.write_text(json.dumps(summary, indent=2) + '\n')

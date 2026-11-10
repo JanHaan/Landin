@@ -124,43 +124,62 @@ begin
          exception
             when Ada.IO_Exceptions.Device_Error
                | Ada.IO_Exceptions.Use_Error =>
-               Output_Lost := True;
+               --  A reader that went away while a run's directory was
+               --  held is a recorded signal (D1047): the cancellation it
+               --  is, rather than a host fault.
                Abandon_Launch (Result);
+               if Landin.Platform.Native.Tools.Cancellation_Requested = 0
+               then
+                  Output_Lost := True;
+               end if;
          end;
       end if;
 
-      if Unbounded.Length (Result.Trace) > 0 then
-         String'Write
-           (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
-            Unbounded.To_String (Result.Trace));
-      end if;
+      --  What compiling said, then the program.  Writing can fail: the
+      --  reader of the pipe has gone, which while a run's directory exists
+      --  is a recorded signal and a refused write rather than the end of
+      --  the process.  The directory is removed on that way out too, and
+      --  a recorded signal is reported as the cancellation it is.
+      begin
+         if Unbounded.Length (Result.Trace) > 0 then
+            String'Write
+              (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
+               Unbounded.To_String (Result.Trace));
+         end if;
 
-      if Unbounded.Length (Result.Report) > 0 then
-         String'Write
-           (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
-            Unbounded.To_String (Result.Report));
-      end if;
-
-      if Output_Lost then
-         Text_IO.Put_Line
-           (Text_IO.Standard_Error,
-            "refine: cannot write to standard output");
-         Finish_Command (Status_Host_Fault);
-         return;
-      end if;
-
-      --  D526: `refine run`'s program, once what compiling it said is
-      --  written, so the program's output follows it.
-      if Unbounded.Length (Result.Launch_Program) > 0 then
-         Text_IO.Flush (Text_IO.Standard_Output);
-         Text_IO.Flush (Text_IO.Standard_Error);
-         Landin.Commands.Launch (Result, Host, Tools);
          if Unbounded.Length (Result.Report) > 0 then
             String'Write
               (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
                Unbounded.To_String (Result.Report));
          end if;
-      end if;
+
+         if Output_Lost then
+            Text_IO.Put_Line
+              (Text_IO.Standard_Error,
+               "refine: cannot write to standard output");
+            Finish_Command (Status_Host_Fault);
+            return;
+         end if;
+
+         --  D526: `refine run`'s program, once what compiling it said is
+         --  written, so the program's output follows it.
+         if Unbounded.Length (Result.Launch_Program) > 0 then
+            Text_IO.Flush (Text_IO.Standard_Output);
+            Text_IO.Flush (Text_IO.Standard_Error);
+            Landin.Commands.Launch (Result, Host, Tools);
+            if Unbounded.Length (Result.Report) > 0 then
+               String'Write
+                 (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
+                  Unbounded.To_String (Result.Report));
+            end if;
+         end if;
+      exception
+         when others =>
+            Abandon_Launch (Result);
+            if Landin.Platform.Native.Tools.Cancellation_Requested = 0 then
+               raise;
+            end if;
+      end;
 
       Finish_Command
         (Command_Line.Exit_Status (Result.Status));

@@ -26,7 +26,7 @@ package body Landin.Platform.Publication is
      (Group : in out Transaction; Files : Filesystem'Class; Path : String;
       Status : out Write_Status; Reason : out Unbounded_String;
       Delete_Only : Boolean := False; Root : String := "";
-      Require_Absent : Boolean := False)
+      Require_Absent : Boolean := False; Directory : Boolean := False)
    is
       Item : Publication_Entry;
    begin
@@ -52,7 +52,7 @@ package body Landin.Platform.Publication is
       Item.Requires_Absence := Require_Absent;
       Open_Publication
         (Files, Path, Delete_Only, Root, Item.Handle, Item.Stage, Status,
-         Reason, Require_Absent);
+         Reason, Require_Absent, Directory);
       if Status = Write_Ok then
          Group.Entries.Append (Item);
          if Paths_Overlap_Any (Files, Path, Group.Protected_Paths) then
