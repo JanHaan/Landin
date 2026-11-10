@@ -1126,6 +1126,14 @@ derives one more output section, `.init_array`, keeping every
 would otherwise drop unseen; after the link `Landin.Build_Reports.Firmware`
 reads the image's section headers and L0587 refuses, and removes, an image
 holding C constructors, a TLS section or a dynamic linkage (D924).
+A C archive must supply `memcpy`, `memmove`, `memset` and `memcmp` itself
+when its code needs them. GCC requires the four of a freestanding program
+and calls them for a structure it copies, clears or compares, whatever
+`-ffreestanding` says; firmware has no C library and refine's own code
+calls none of them, so an archive without them fails the link with L0501
+relaying the linker's undefined reference to `memcpy`.
+`environments/cortex-m/probes/c-runtime.c` supplies them for the corpus,
+as byte loops.
 Assembler/linker failures retain the invoked tool's diagnostic and driver
 failure status, a library built for the other float variant among them
 (D780).
@@ -1233,7 +1241,17 @@ the entry; reset clears the cells, so read them before resetting. The entry
 uses no stack and restores every register but mscratch, so a debugger
 that can read registers sees the interrupted code's. Cortex-M keeps its
 loop: its fault status registers are memory-mapped and its stacked frame
-holds the faulting pc. Reset clears mstatus.MIE, writes mtvec, sets sp to
+holds the faulting pc.
+
+To stop a debugger at the entry, break at its address:
+`hbreak *_landin_firmware_unhandled` in GDB. The compiler-owned routine
+has unwind rules and no line information, so for the plain
+`break _landin_firmware_unhandled`, or `hbreak` without the asterisk, GDB
+guesses a prologue and places the breakpoint past it, beyond the entry,
+and a session that waits for a trap never stops. Cortex-M's entry takes
+the plain form.
+
+Reset clears mstatus.MIE, writes mtvec, sets sp to
 `_landin_firmware_stack_top`, copies `.data`, `.ramtext` and used
 writable regions and clears `.bss` by the Cortex-M symbols, fences, sets
 MIE and calls the entry.
