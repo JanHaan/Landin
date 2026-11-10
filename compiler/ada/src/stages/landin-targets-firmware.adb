@@ -1,4 +1,3 @@
-with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Targets.Assembly;
@@ -430,20 +429,15 @@ package body Landin.Targets.Firmware is
       function Check_Line (Line : String) return String;
 
       function Check_Line (Line : String) return String is
-         Clean : constant String := Ada.Strings.Fixed.Trim
-           (Ada.Characters.Handling.To_Lower (Line), Ada.Strings.Both);
+         Clean : constant String := Asm.Statement (Line);
          Stop : Natural := Clean'First;
       begin
          if Clean'Length = 0 then
             return "";
          end if;
          Seen := True;
-         if Clean (Clean'First) = '.' then
-            return "assembly text holds no directive";
-         elsif Asm.Foreign_Comment (Cortex_M0, Clean) /= "" then
-            return Asm.Foreign_Comment (Cortex_M0, Clean);
-         elsif Asm.Separated_Number (Clean) /= "" then
-            return Asm.Separator_Refusal (Asm.Separated_Number (Clean));
+         if Asm.Statement_Refusal (Cortex_M0, Clean) /= "" then
+            return Asm.Statement_Refusal (Cortex_M0, Clean);
          end if;
          if Naked then
             declare
@@ -465,6 +459,9 @@ package body Landin.Targets.Firmware is
          then
             return "ordinary assembly is straight-line and defines no"
               & " label; a naked routine's body may";
+         end if;
+         if not Naked and then Asm.Assigns_Symbol (Clean) then
+            return Asm.Symbol_Refusal;
          end if;
          while Stop <= Clean'Last and then Clean (Stop) not in ' ' | ASCII.HT
          loop
@@ -502,8 +499,8 @@ package body Landin.Targets.Firmware is
                     & " blocks require straight-line control flow");
             end if;
             declare
-               Tail : constant String := Ada.Strings.Fixed.Trim
-                 (Clean (Stop .. Clean'Last), Ada.Strings.Both);
+               Tail : constant String :=
+                 Asm.Without_Margins (Clean (Stop .. Clean'Last));
                Comma : constant Natural :=
                  Ada.Strings.Fixed.Index (Tail, ",");
             begin
@@ -518,11 +515,10 @@ package body Landin.Targets.Firmware is
                   return "Cortex-M0 barriers require the sy domain";
                elsif Base in "mrs" | "msr" and then Comma /= 0 then
                   declare
-                     Register : constant String := Ada.Strings.Fixed.Trim
-                       ((if Base = "mrs"
-                         then Tail (Comma + 1 .. Tail'Last)
-                         else Tail (Tail'First .. Comma - 1)),
-                        Ada.Strings.Both);
+                     Register : constant String := Asm.Without_Margins
+                       (if Base = "mrs"
+                        then Tail (Comma + 1 .. Tail'Last)
+                        else Tail (Tail'First .. Comma - 1));
                      Readable : constant Boolean := Register in
                        "apsr" | "ipsr" | "epsr" | "iapsr" | "eapsr"
                          | "iepsr" | "xpsr" | "primask"

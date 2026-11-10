@@ -1,0 +1,9 @@
+class: negative
+summary: D1054 reads a line of assembly text without the tabs around it, so a tab-led directive, branch and label are refused as the same lines are without the tab, and with them a label whose colon follows a tab and a symbol assignment
+program: program.ldn
+expect: expected.txt
+args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-tab-led-line/program.ldn
+codes: L0330, L0330, L0330, L0330, L0330, L0330
+status: 1
+constructs: 1630, 1990
+targets: linux-x86-64

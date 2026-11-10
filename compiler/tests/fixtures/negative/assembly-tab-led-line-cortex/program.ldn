@@ -1,0 +1,8 @@
+f: () -> none =
+    assembler.block("nop\n\t.incbin \"/dev/null\"")
+    assembler.block("\tb there")
+    assembler.block("\tthere: nop")
+    assembler.block(" \t .globl leaked")
+    assembler.block("there\t: nop")
+    assembler.block("leaked = 0x1234")
+end f

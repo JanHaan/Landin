@@ -2416,8 +2416,9 @@ and establishes neither device completion nor cache coherence. D227's
 external-writer obligations remain.
 
 The text is at most 4096 decoded ASCII bytes, or 32768 in a naked Xtensa
-body (D903), using LF, horizontal tabs and printable characters. A line may
-end in the selected target's own line
+body (D903), using LF, horizontal tabs and printable characters. Every
+rule below reads a line without the blanks and tabs around it (D1054). A
+line may end in the selected target's own line
 comment, from its marker to the end of the line: `@` on Cortex-M0, `//` on
 arm64 and `#` on x86-64, RV64, RV32 and Xtensa, the spelling that target's GNU or Apple
 assembler reads (D597). In an ordinary and a naked block alike the comment
@@ -18294,6 +18295,60 @@ forward exit, a backward branch and a label sharing its line with an
 instruction, called through the C import of its symbol on every hosted
 target, and `negative/assembly-hosted-straight-line`, an ordinary block's
 label refused naming the naked body that may have one.
+
+### D1054 — A tab around a line of assembly text is margin, as a blank is
+
+**From** [1630], [1990], D248, D597 and D598.
+
+**The tour said** at [1630] that a block's text is the platform
+assembler's, and [1990] admits LF, horizontal tabs and printable characters
+and then states the rules of a line: no directive, no label in an ordinary
+block, no control transfer. The admission read each line after removing the
+blanks around it and no tab. A line that began with a tab therefore began,
+to every rule, with the tab: it was no directive because its first
+character was not `.`, its mnemonic was the empty text before the tab, and
+its label was looked for at the tab. `"\t.incbin \"/any/file\""` was
+accepted and assembled, copying a file of the build host into the program;
+`"\tjmp there"` and `"\tthere: nop"` left an ordinary block. Cortex-M's
+admission held the same test in a copy of its own, protected at the
+default `armv6-m` level only because its instruction allowlist refused the
+empty mnemonic.
+
+**Chosen:** the blanks and tabs around a line are margin, on every target
+and at every level, and every rule of a line reads the line without them:
+the directive, comment-form, separator and digit-separator refusals, the
+label, the mnemonic and Cortex-M's operand rules. A tab inside the line
+separates a mnemonic from its operands as a blank does. One function
+removes the margin and one makes the refusals every target makes before it
+reads a label or a mnemonic, and the hosted rules and Cortex-M's both call
+them, so the two cannot differ again. The text an accepted block emits is
+unchanged.
+
+Two more spellings met the same rules from the side, and are refused with
+them. GNU as reads `name :` as the label `name:`, so a label's colon is
+looked for past the blanks and tabs after the line's first word; an
+operand's colon, `%fs:0` or `:lo12:`, comes after more than blanks. And
+`name = value` defines a symbol as a label does, one that could stand for
+a symbol the program imports, so an ordinary block refuses it as "ordinary
+assembly is straight-line and defines no symbol"; a naked body, which may
+define labels (D598), may assign one. No instruction of a supported target
+has `=` in or straight after its mnemonic.
+
+**The alternatives:** refusing a tab in block text, which [1990] admits
+and which assembly sources indent with, so a port would have to rewrite
+its indentation; and keeping two tests with the tab added to each, which
+is the copy that let the firmware rule fall behind the hosted one's
+history once already.
+
+**Pinned by** `negative/assembly-tab-led-line`, a tab-led file directive,
+branch, label and symbol directive, a label with a tab before its colon
+and a symbol assignment on x86-64,
+`negative/assembly-tab-led-line-cortex`, the same at `--level=armv7-m`
+where no allowlist stands behind the rule, and the targets case `a tab is a
+margin of assembly text`, which holds the refusals on every architecture
+and at every Cortex-M level, and that a tab between a mnemonic and its
+operand, a segment or relocation colon and Arm's `=value` operand are
+still accepted.
 
 ### D630 — Float assembly operands are a second class, `float`
 
