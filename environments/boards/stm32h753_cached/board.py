@@ -173,9 +173,8 @@ def segments(stream):
                 found.append(('raw', bytes(raw)))
                 raw = bytearray()
             end = stream.index(common.ETX, i)
-            text = stream[i + 1:end].decode('ascii')
-            fields = dict((k, int(v, 16)) for k, v in common.FIELD.findall(text))
-            found.append(('frame', text[0], fields))
+            # A malformed frame fails the run, as common.frames has it.
+            found.append(('frame', *common.parse_frame(stream[i + 1:end])))
             i = end + 2 if end + 1 < len(stream) and stream[end + 1] == common.LF else end + 1
         else:
             raw.append(stream[i])
@@ -402,8 +401,9 @@ def main():
             (args.output / 'uart.bin').write_bytes(raw)
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(raw).hexdigest()
-            result['frames'] = [dict(tag=p[1], **{k: '%08x' % v for k, v in p[2].items()})
-                                for p in segments(run_stream(raw)) if p[0] == 'frame']
+            # Never a failure here: the lock is not released and the result
+            # not written yet.
+            result['frames'] = common.frame_record(run_stream(raw))
         common.retain_kernel_usb(args.pace, result)
         lock.release()
         result['seconds'] = round(time.monotonic() - began, 3)

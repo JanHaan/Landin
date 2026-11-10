@@ -140,16 +140,43 @@ def require(condition, message, kind=Failed):
         raise kind(message)
 
 
-def frames(stream):
+class Fields(dict):
+    """A frame's fields.  One an oracle reads and the board did not send
+    fails the run, naming the field, where a plain dict's KeyError is an
+    exception no tool classifies."""
+    def __missing__(self, key):
+        raise Failed('a frame has no field %r; its fields are %s'
+                     % (key, ', '.join(sorted(self)) or 'none'))
+
+
+def parse_frame(body):
+    """The (tag, fields) of BODY, the bytes between a frame's STX and ETX.
+    A board that sent no tag, or a byte that is not ASCII, as a line does
+    around a reset and as miscompiled firmware may, sent a malformed frame:
+    that fails the run as any other wrong answer does."""
+    try:
+        text = body.decode('ascii')
+    except UnicodeDecodeError:
+        raise Failed('malformed frame: %r is not ASCII' % bytes(body[:48])) from None
+    require(text, 'malformed frame: nothing between its STX and ETX')
+    return text[0], Fields((k, int(v, 16)) for k, v in FIELD.findall(text))
+
+
+def frames(stream, malformed=None):
     """Every STX ... ETX frame in STREAM, as (tag, {key: value}), and the
-    stream with the frames and the LF after each removed: the echo."""
+    stream with the frames and the LF after each removed: the echo.  A
+    malformed frame fails; with MALFORMED, a list, its bytes are added to
+    the list instead and it is left out, for a reader that must not fail."""
     found, echo, i = [], bytearray(), 0
     while i < len(stream):
         if stream[i] == STX:
             end = stream.index(ETX, i)
-            text = stream[i + 1:end].decode('ascii')
-            fields = dict((k, int(v, 16)) for k, v in FIELD.findall(text))
-            found.append((text[0], fields))
+            try:
+                found.append(parse_frame(stream[i + 1:end]))
+            except Failed:
+                if malformed is None:
+                    raise
+                malformed.append(bytes(stream[i + 1:end]))
             i = end + 2 if end + 1 < len(stream) and stream[end + 1] == LF else end + 1
         else:
             echo.append(stream[i])
@@ -177,9 +204,14 @@ def tagged(stream, tag):
 
 
 def frame_record(stream):
-    """Every complete frame of STREAM as a result writes it."""
-    return [dict(tag=t, **{k: '%08x' % v for k, v in f.items()})
-            for t, f in frames_safe(stream)]
+    """Every complete frame of STREAM as a result writes it.  It never
+    fails: the tools call it while they clean up, before a board's fixed
+    image is restored and the result is written, so a malformed frame is
+    written as its bytes, `malformed`, after the frames that were read."""
+    malformed = []
+    found = frames(complete(stream), malformed)[0]
+    return ([dict(tag=t, **{k: '%08x' % v for k, v in f.items()}) for t, f in found]
+            + [dict(tag=None, malformed=body[:64].hex()) for body in malformed])
 
 
 def ask(console, byte, tag, count, seconds=5):
@@ -435,16 +467,52 @@ def write_state(path, text, base=None):
         raise
 
 
-def lock_holders(path, locks='/proc/locks'):
-    """The processes holding a flock on PATH, from LOCKS."""
-    inode = os.stat(path).st_ino
-    holders = set()
+def flocks(locks='/proc/locks'):
+    """Every flock in LOCKS, as (process, device, inode) with the device as
+    LOCKS writes it."""
+    found = []
     for line in Path(locks).read_text().splitlines():
         fields = line.split()
         # 1: FLOCK  ADVISORY  WRITE PID MAJ:MIN:INODE START END
-        if len(fields) >= 6 and fields[1] == 'FLOCK' and fields[5].rsplit(':', 1)[-1] == str(inode):
-            holders.add(int(fields[4]))
-    return holders
+        if len(fields) >= 6 and fields[1] == 'FLOCK' and fields[5].count(':') == 2:
+            device, _, inode = fields[5].rpartition(':')
+            found.append((int(fields[4]), device, inode))
+    return found
+
+
+def lock_device(path, locks='/proc/locks'):
+    """How LOCKS names the filesystem PATH is on, its MAJ:MIN.
+
+    The kernel writes the filesystem's own device there, which is not
+    always the one `stat` reports for a file: a btrfs subvolume has a
+    device number of its own.  So it is read off a flock this process
+    takes on a scratch file beside PATH; where that cannot be done, or
+    LOCKS does not show it, `stat`'s device is written as LOCKS would."""
+    try:
+        with tempfile.NamedTemporaryFile(dir=os.path.dirname(os.path.abspath(path)),
+                                         prefix='.lock-device-') as scratch:
+            fcntl.flock(scratch, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            inode = str(os.fstat(scratch.fileno()).st_ino)
+            mine = {device for pid, device, held in flocks(locks)
+                    if pid == os.getpid() and held == inode}
+        if len(mine) == 1:
+            return mine.pop()
+    except OSError:
+        pass
+    device = os.stat(path).st_dev
+    return '%02x:%02x' % (os.major(device), os.minor(device))
+
+
+def lock_holders(path, locks='/proc/locks'):
+    """The processes holding a flock on PATH, from LOCKS: on its inode of
+    its filesystem, since an inode number alone is also some other file's
+    on every other filesystem."""
+    inode = str(os.stat(path).st_ino)
+    candidates = [(pid, device) for pid, device, held in flocks(locks) if held == inode]
+    if not candidates:
+        return set()
+    here = lock_device(path, locks)
+    return {pid for pid, device in candidates if device == here}
 
 
 def ancestors(pid=None, proc=Path('/proc')):
@@ -1853,16 +1921,30 @@ class ProbehivePins:
     arm64 without the FPGA development toolchain."""
     def __init__(self, run, probehive, build, pin, seconds=300):
         self.run, self.probehive, self.build, self.pin = run, Path(probehive), build, pin
-        try:
-            found = run.command('gpio-environment', ['nix', 'develop', str(self.probehive) + '#gpio', '-c',
-                'python3', '-c',
-                'import json, os, sys, litex; print(json.dumps([sys.executable, dict(os.environ)]))'],
-                timeout=seconds, cwd=self.probehive)
-        except subprocess.TimeoutExpired:
-            raise Failed('probehive\'s lightweight GPIO shell, which gives scripts/gpio.py its LiteX,'
-                         ' did not open within %g s; prepare it with `nix develop %s#gpio -c true`'
-                         ' and run again' % (seconds, self.probehive))
-        self.python, self.env = json.loads(found.strip().splitlines()[-1])
+        # The shell's whole environment is what a later read needs, and is
+        # nothing a log may hold: a command's output is written under the
+        # run's output, which the gate uploads as a public artifact, and an
+        # environment is where a host keeps its paths, its account names
+        # and any credential it is ever given.  So the shell writes it to a
+        # file only this user can read, outside the output, removed here.
+        with tempfile.TemporaryDirectory(prefix='landin-gpio-') as private:
+            answer = Path(private) / 'environment.json'
+            try:
+                run.command('gpio-environment', ['nix', 'develop', str(self.probehive) + '#gpio', '-c',
+                    'python3', '-c',
+                    'import json, os, sys, litex\n'
+                    'with open(sys.argv[1], "w") as out:\n'
+                    '    json.dump([sys.executable, dict(os.environ)], out)\n'
+                    'print("the GPIO shell opened with", len(os.environ), "variables")',
+                    answer], timeout=seconds, cwd=self.probehive)
+            except subprocess.TimeoutExpired:
+                raise Failed('probehive\'s lightweight GPIO shell, which gives scripts/gpio.py its LiteX,'
+                             ' did not open within %g s; prepare it with `nix develop %s#gpio -c true`'
+                             ' and run again' % (seconds, self.probehive))
+            try:
+                self.python, self.env = json.loads(answer.read_text())
+            except (OSError, ValueError) as error:
+                raise Failed('probehive\'s GPIO shell did not say where its Python is: %s' % error)
 
     def gpio(self, name, *pins):
         return self.run.command(name, [self.python, self.probehive / 'scripts/gpio.py',

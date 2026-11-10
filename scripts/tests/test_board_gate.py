@@ -63,6 +63,16 @@ elif action == 'wait-signal':
     (out / 'ready').write_text('')
     time.sleep(60)
     sys.exit(3)
+elif action == 'talk-then-finish-an-action':
+    # As a tool does: told to stop, it finishes what it will not cut short.
+    def stop(number, frame):
+        time.sleep(1)
+        (out / 'stopped').write_text('')
+        sys.exit(130)
+    signal.signal(signal.SIGTERM, stop)
+    print('a line for the gate to copy', flush=True)
+    time.sleep(60)
+    sys.exit(3)
 else:
     write('failed', action, failure='fake ' + action); sys.exit(1)
 '''
@@ -437,6 +447,51 @@ class Cancellation(unittest.TestCase):
             forwarder(signal.SIGINT, None)
         forwarder(signal.SIGTERM, None)
         self.assertEqual(forwarder.signals, ['SIGINT', 'SIGTERM'])
+
+    def test_a_signal_while_a_step_starts_reaches_the_step_and_raises_nothing(self):
+        # Cancelled raised while Popen was returning left the tool running,
+        # unsignalled and unwaited for, and the gate released the lock.
+        forwarder = GATE.Forwarder()
+        started = []
+
+        def launch():
+            process = GATE.subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+            started.append(process)
+            self.addCleanup(process.kill)
+            forwarder(signal.SIGTERM, None)
+            self.assertIsNone(process.poll(), 'the step is told once it is known, not before')
+            return process
+
+        process = forwarder.start(launch)
+        self.assertIs(forwarder.child, process)
+        self.assertEqual(process.wait(PATIENCE), -signal.SIGTERM)
+        self.assertEqual((forwarder.signals, forwarder.pending), (['SIGTERM'], []))
+        # One that could not be started is not waited for by a later signal.
+        forwarder.child = None
+        with self.assertRaises(OSError):
+            forwarder.start(lambda: GATE.subprocess.Popen(['/nonexistent/board-tool']))
+        self.assertFalse(forwarder.starting)
+
+    def test_a_step_whose_output_cannot_be_copied_has_ended_before_the_lock_is_free(self):
+        self.rig.environ['GATE_FAKE_RP2040_RAM'] = 'talk-then-finish-an-action'
+        output = self.rig.tmp / 'out'
+        output.mkdir()
+
+        class Gone:
+            def write(self, line):
+                raise BrokenPipeError(32, 'the runner went away')
+
+        with redirect_stdout(io.StringIO()), mock.patch.object(GATE.sys.stdout, 'buffer', Gone(),
+                                                               create=True):
+            with self.assertRaises(BrokenPipeError):
+                GATE.run_step(self.rig.root, 'rp2040', 'ram', self.rig.bundles / 'rp2040/ram',
+                              output, [], GATE.Forwarder(), self.rig.environ)
+        # run_step is over, so the caller releases the rig lock: the tool
+        # has finished its action and ended, and is not still at the board.
+        self.assertTrue((output / 'rp2040-ram/stopped').exists())
+        argv = json.loads((output / 'rp2040-ram/argv.json').read_text())
+        with self.assertRaises(ProcessLookupError):
+            os.kill(argv['pid'], 0)
 
 
 if __name__ == '__main__':

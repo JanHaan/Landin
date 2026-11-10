@@ -670,7 +670,13 @@ still refused after the wait fails the step as the command does.
 
 SIGINT or SIGTERM stops a tool at its next point. A power cycle or a
 download under way finishes first, because one cut short leaves a port off
-or a chip halted in its boot ROM. A boot check cancelled before its fixed
+or a chip halted in its boot ROM. The ESP ports' cycle is two switches with
+a wait between them, and the whole of it is the action that finishes: a
+signal while the port is off waits until it is on again. A cycle that
+fails of itself between the two, a hub that does not list again or a
+switch that fails its tries, still leaves the port off, and no tool
+switches a port on when it starts; `uhubctl -l HUB -p PORT -a on` by hand
+does. A boot check cancelled before its fixed
 image is restored records the restoration pending instead of starting it:
 GitHub's runner sends SIGTERM 7.5 s after SIGINT and kills the step 2.5 s
 later, too soon for a restoration, and one killed half way leaves the board
@@ -678,5 +684,7 @@ worse off than one never begun. The port's next boot check restores it.
 The tool then closes the probe sessions and consoles it opened, releases
 the lock and records `cancelled` with the signal and the phase: the command
 running or last run, and the last paced action. Later signals are only
-noted. `gate.py` passes each signal to the running step, and between steps
-stops itself.
+noted. `gate.py` passes each signal to the running step, one that arrives
+while a step is starting included, and between steps stops itself. It
+releases the rig lock only once the step's tool has ended: when it cannot
+go on copying a tool's output it tells the tool to stop and waits for it.

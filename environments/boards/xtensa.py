@@ -133,9 +133,7 @@ def cycle_boot(chip, args, run, open_console, probe, names, settle):
             common.switch_ports(hub, args.console_hub, [args.console_port], 'on', keeps=console_guard)
         common.switch_ports(hub, args.hub, [args.port], 'on', keeps=guard)
 
-    esp.paced(args, 'power off', off)
-    time.sleep(args.off_seconds)
-    esp.paced(args, 'power on', on)
+    esp.power_cycle(args, off, on)
     settle(run)
     args.pace.before('startup proof')
     # S3 retains the independent true-power-on proof before opening UART.
