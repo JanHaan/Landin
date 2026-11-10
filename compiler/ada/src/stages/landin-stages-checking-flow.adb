@@ -229,6 +229,17 @@ package body Landin.Stages.Checking.Flow is
       Dead_Nested   : Dead_Nested_Maps.Map;
    end record;
 
+   --  What a loop's head facts converged to, and the entry facts they
+   --  converged from, kept for the next walk of the same loop; see where
+   --  a loop statement is walked.
+   type Loop_Memo is record
+      Entry_State : Assigned_Set;
+      Head        : Assigned_Set;
+   end record;
+
+   package Loop_Memo_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Syn.Node_Id, Element_Type => Loop_Memo, "<" => Syn."<");
+
    Nothing_Assigned : constant Assigned_Set :=
      (Fields        => Field_Sets.Empty_Set,
       Elements      => Element_Sets.Empty_Set,
@@ -343,6 +354,12 @@ package body Landin.Stages.Checking.Flow is
       --  scratch list that is thrown away.
       Sink : not null access Landin.Diagnostics.Diagnostic_List :=
         Into'Unchecked_Access;
+      --  Whether Sink is such a scratch list: what is walked now is
+      --  walked again before anything it reports is kept.
+      Quiet : Boolean := False;
+      --  Each loop's converged head, for the walks an enclosing loop's
+      --  passes make of it.
+      Loop_Memos : Loop_Memo_Maps.Map;
 
       function Tree_For (Id : Landin.Source.Source_Id)
         return not null access constant Syn.Tree
@@ -2402,6 +2419,19 @@ package body Landin.Stages.Checking.Flow is
                   --  loop without a break has no exit.  D430 lets this
                   --  join establish assignments, which D156/D157 limited
                   --  to entry and condition facts.
+                  --
+                  --  A loop inside a loop is walked once for every pass of
+                  --  the outer one, and two rules keep that from doubling
+                  --  the work at each level of nesting.  Under a pass that
+                  --  does not report, the reporting pass is left out: it
+                  --  walks from the head the last pass converged at and
+                  --  finds what that pass found, and its reports are
+                  --  thrown away with the outer pass's.  And a walk whose
+                  --  entry facts hold all that the walk before it entered
+                  --  with starts from that walk's converged head joined
+                  --  with them: facts only move one way, so that head is
+                  --  part of this walk's and the passes that led to it are
+                  --  not made again.  Any other entry starts from itself.
                   declare
                      Entry_State : constant Assigned_Set := State;
                      Head : Assigned_Set := State;
@@ -2411,6 +2441,7 @@ package body Landin.Stages.Checking.Flow is
                      Outer_Sink : constant
                        not null access Landin.Diagnostics.Diagnostic_List :=
                          Sink;
+                     Outer_Quiet : constant Boolean := Quiet;
                      Passes : Natural := 0;
                      Converged : Boolean := False;
                      Test_Stops : Boolean := False;
@@ -2435,6 +2466,7 @@ package body Landin.Stages.Checking.Flow is
                         Sink := (if Reporting
                                  then Outer_Sink
                                  else Scratch'Unchecked_Access);
+                        Quiet := Outer_Quiet or else not Reporting;
                         Test_Stops := False;
 
                         if Is_While then
@@ -2460,6 +2492,7 @@ package body Landin.Stages.Checking.Flow is
                                  Test_Stops := True;
                                  Converged := True;
                                  Sink := Outer_Sink;
+                                 Quiet := Outer_Quiet;
                                  return;
                               end if;
                            end;
@@ -2505,8 +2538,28 @@ package body Landin.Stages.Checking.Flow is
                         Converged := Next = Head;
                         Head := Next;
                         Sink := Outer_Sink;
+                        Quiet := Outer_Quiet;
                      end Pass;
                   begin
+                     declare
+                        Known : constant Loop_Memo_Maps.Cursor :=
+                          Loop_Memos.Find (Node);
+                     begin
+                        if Loop_Memo_Maps.Has_Element (Known) then
+                           declare
+                              Before : Loop_Memo renames
+                                Loop_Memos.Constant_Reference (Known);
+                              Both : Assigned_Set := Entry_State;
+                           begin
+                              Merge (Both, First => False,
+                                     Branch => Before.Entry_State);
+                              if Both = Entry_State then
+                                 Merge (Head, First => False,
+                                        Branch => Before.Head);
+                              end if;
+                           end;
+                        end if;
+                     end;
                      loop
                         Passes := Passes + 1;
                         if Passes > Pass_Limit then
@@ -2517,7 +2570,11 @@ package body Landin.Stages.Checking.Flow is
                         Pass (Reporting => False);
                         exit when Converged;
                      end loop;
-                     Pass (Reporting => True);
+                     Loop_Memos.Include
+                       (Node, (Entry_State => Entry_State, Head => Head));
+                     if not Outer_Quiet then
+                        Pass (Reporting => True);
+                     end if;
 
                      if Test_Stops then
                         --  The test never falls through, so neither does

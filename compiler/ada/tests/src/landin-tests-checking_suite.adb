@@ -544,6 +544,102 @@ package body Landin.Tests.Checking_Suite is
       Check_Source (Conforming => True);
    end Large_Loop_Frames_Stay_Off_The_Host_Stack;
 
+   --  A loop inside a loop is walked once for each pass of the outer one.
+   --  When every walk made its own passes from the entry facts and then a
+   --  reporting pass, the innermost statement of N nested loops was walked
+   --  2**N times by each of the two flow checkers, and these routines,
+   --  forty deep, would not finish in a lifetime.  The first is the plain
+   --  nest; in the second every loop's head facts change on each walk,
+   --  because the pointer it carries is bound again before it, so each
+   --  walk needs a second pass unless it starts from the head the walk
+   --  before converged at.
+   procedure Nested_Loops_Are_Not_Rewalked_Per_Level
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Loops_Are_Not_Rewalked_Per_Level
+     (Item : in out Landin.Testing.Context)
+   is
+      Depth : constant Positive := 40;
+
+      function Indent (Level : Natural) return String
+        is ([1 .. 4 * Level => ' ']);
+
+      function Plain return String;
+      function Carried return String;
+
+      function Plain return String is
+         Text : US.Unbounded_String := US.To_Unbounded_String
+           ("nest: () -> (code: i32) =" & LF & "    mut x: i32 = 0" & LF);
+      begin
+         for Level in 1 .. Depth loop
+            US.Append
+              (Text, Indent (Level) & "while x < " & Image (Level) & " do"
+                     & LF);
+         end loop;
+         US.Append (Text, Indent (Depth + 1) & "x = x + 1" & LF);
+         for Level in reverse 1 .. Depth loop
+            US.Append (Text, Indent (Level) & "end while" & LF);
+         end loop;
+         US.Append (Text, "    code = x" & LF & "end nest" & LF);
+         return US.To_String (Text);
+      end Plain;
+
+      function Carried return String is
+         Text : US.Unbounded_String := US.To_Unbounded_String
+           ("nest: (p: ptr i32, q: ptr i32, flag: bool)"
+            & " -> (result: ptr i32 from p, q) =" & LF
+            & "    result = p" & LF);
+      begin
+         for Level in 1 .. Depth loop
+            US.Append
+              (Text, Indent (Level) & "mut a" & Image (Level)
+                     & ": ptr i32 = p" & LF
+                     & Indent (Level) & "while flag do" & LF);
+         end loop;
+         for Level in reverse 1 .. Depth loop
+            US.Append
+              (Text, Indent (Level + 1) & "result = a" & Image (Level) & LF
+                     & Indent (Level + 1) & "a" & Image (Level) & " = q" & LF
+                     & Indent (Level) & "end while" & LF);
+         end loop;
+         US.Append (Text, "end nest" & LF);
+         return US.To_String (Text);
+      end Carried;
+
+      procedure Check_Source (Name, Source : String);
+
+      procedure Check_Source (Name, Source : String) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, Name & ".ldn", Source);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check
+           (Item, Ran = 4 and then not Landin.Stages.Failed (Work),
+            "the " & Name & " nest of" & Depth'Image
+            & " loops is checked and accepted"
+            & (if Landin.Diagnostics.Count (Landin.Stages.Report (Work)) > 0
+               then ": " & Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Landin.Stages.Report (Work), 1))
+                 & " " & Landin.Diagnostics.Message
+                   (Landin.Diagnostics.Primary
+                      (Landin.Diagnostics.Get
+                         (Landin.Stages.Report (Work), 1)))
+               else ""));
+      end Check_Source;
+   begin
+      Check_Source ("plain", Plain);
+      Check_Source ("carried", Carried);
+   end Nested_Loops_Are_Not_Rewalked_Per_Level;
+
    --  D333 evaluates every slice operand under lenof, while a fixed-array
    --  path or literal is measured without running its selectors/elements.
    procedure Measured_Slices_Check_Origins
@@ -16696,6 +16792,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "undo reads use only failure states",
          Undo_Reads_Use_Only_Failure_States'Access);
+      Landin.Testing.Register
+        (Into, "checking", "nested loops are not rewalked per level",
+         Nested_Loops_Are_Not_Rewalked_Per_Level'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

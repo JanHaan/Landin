@@ -549,6 +549,9 @@ package body Landin.Stages.Checking.References is
       --  scratch list that is thrown away.
       Sink : not null access Landin.Diagnostics.Diagnostic_List :=
         Into'Unchecked_Access;
+      --  Whether Sink is such a scratch list: what is walked now is
+      --  walked again before anything it reports is kept.
+      Quiet : Boolean := False;
 
       procedure Join
         (Into_Fact : in out Reference_Fact; Other : Reference_Fact);
@@ -683,6 +686,45 @@ package body Landin.Stages.Checking.References is
          end record;
          overriding procedure Finalize (Value : in out Owner);
       end Arenas;
+
+      --  What a loop's head facts converged to, and the entry facts they
+      --  converged from, kept for the next walk of the same loop; see
+      --  where a loop statement is walked.  Chained, as the arena's nodes
+      --  are, and the tables are the arena's.
+      type Loop_Memo;
+      type Loop_Memo_Access is access Loop_Memo;
+      type Loop_Memo is record
+         Node        : Syn.Node_Id;
+         Entry_State : Table_Access;
+         Head        : Table_Access;
+         Before      : Loop_Memo_Access;
+      end record;
+
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Object => Loop_Memo, Name => Loop_Memo_Access);
+
+      package Loop_Memos is
+         type Owner is new Ada.Finalization.Limited_Controlled with record
+            Last : Loop_Memo_Access := null;
+         end record;
+         overriding procedure Finalize (Value : in out Owner);
+      end Loop_Memos;
+
+      package body Loop_Memos is
+         overriding procedure Finalize (Value : in out Owner) is
+         begin
+            while Value.Last /= null loop
+               declare
+                  Item : Loop_Memo_Access := Value.Last;
+               begin
+                  Value.Last := Item.Before;
+                  Free (Item);
+               end;
+            end loop;
+         end Finalize;
+      end Loop_Memos;
+
+      Walked_Loops : Loop_Memos.Owner;
 
       package body Arenas is
          overriding procedure Finalize (Value : in out Owner) is
@@ -4429,6 +4471,19 @@ package body Landin.Stages.Checking.References is
                --  adds to it, so the passes converge; the last one is
                --  repeated with reporting on, because the earlier passes
                --  reported from facts that were not yet complete.
+               --
+               --  A loop inside a loop is walked once for every pass of
+               --  the outer one, and two rules keep that from doubling the
+               --  work at each level of nesting.  Under a pass that does
+               --  not report, the reporting pass is left out: it walks
+               --  from the head the last pass converged at and finds what
+               --  that pass found, and its reports are thrown away with
+               --  the outer pass's.  And a walk whose entry facts hold all
+               --  that the walk before it entered with starts from that
+               --  walk's converged head joined with them: facts only
+               --  grow, so that head is part of this walk's and the passes
+               --  that led to it are not made again.  Any other entry
+               --  starts from itself.
                declare
                   Is_While : constant Boolean :=
                     Syn.Kind (Tree, Node) = Syn.While_Statement;
@@ -4442,6 +4497,8 @@ package body Landin.Stages.Checking.References is
                   Scratch : aliased Landin.Diagnostics.Diagnostic_List;
                   Outer_Sink : constant
                     not null access Landin.Diagnostics.Diagnostic_List := Sink;
+                  Outer_Quiet : constant Boolean := Quiet;
+                  Known : Loop_Memo_Access := Walked_Loops.Last;
                   Passes : Natural := 0;
                   Converged : Boolean := False;
 
@@ -4470,6 +4527,7 @@ package body Landin.Stages.Checking.References is
                      Sink := (if Reporting
                               then Outer_Sink
                               else Scratch'Unchecked_Access);
+                     Quiet := Outer_Quiet or else not Reporting;
                      Origins := Head;
                      Falls_Through := True;
                      Push (Frame'Unchecked_Access, Tree, Node);
@@ -4505,6 +4563,7 @@ package body Landin.Stages.Checking.References is
                      Converged := Same_Facts (Next, Head);
                      Head := Next;
                      Sink := Outer_Sink;
+                     Quiet := Outer_Quiet;
                   end Pass;
                begin
                   if Is_For then
@@ -4570,6 +4629,15 @@ package body Landin.Stages.Checking.References is
                   end if;
                   Entry_State := Origins;
                   Head := Origins;
+                  while Known /= null and then Known.Node /= Node loop
+                     Known := Known.Before;
+                  end loop;
+                  if Known /= null
+                    and then Same_Facts
+                      (Joined (Entry_State, Known.Entry_State), Entry_State)
+                  then
+                     Head := Joined (Entry_State, Known.Head);
+                  end if;
                   loop
                      Passes := Passes + 1;
                      if Passes > Pass_Limit then
@@ -4579,7 +4647,17 @@ package body Landin.Stages.Checking.References is
                      Pass (Reporting => False);
                      exit when Converged;
                   end loop;
-                  Pass (Reporting => True);
+                  if Known = null then
+                     Walked_Loops.Last := new Loop_Memo'
+                       (Node => Node, Entry_State => Entry_State,
+                        Head => Head, Before => Walked_Loops.Last);
+                  else
+                     Known.Entry_State := Entry_State;
+                     Known.Head := Head;
+                  end if;
+                  if not Outer_Quiet then
+                     Pass (Reporting => True);
+                  end if;
 
                   --  Exhaustion keeps the final test's effects, not the
                   --  pre-test head.  Completion and break edges join only
