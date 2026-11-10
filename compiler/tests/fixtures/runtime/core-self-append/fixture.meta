@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1122 a list of bytes and a growing builder append views of their own bytes through a provider that never grows in place and overwrites every block it is given back: vec.append_bytes and text.append write what the view held when the call began though the growth moved the block, text.format writes two views of its builder and a conformance's own nested format of two more the same way, and every block moved out of is freed once by the time each call returns
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0800, 0830, 0940, 1360, 1380
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

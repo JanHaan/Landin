@@ -74,13 +74,46 @@ written: (inout into: builder, source: []u8, values: []any formattable)
     try append(into, source[run..<at])
 end written
 
+--  End a `format`'s hold on the block its builder first moved out of
+--  while it wrote (D1122), and put back the hold of the `format` it ran
+--  inside, when a conformance called it.  The block is freed, unless the
+--  outer call holds none yet: nothing had moved since that call began, so
+--  this is the block its template and values may view, and it takes it.
+settled: (inout into: builder, outer_keeping: bool, outer_kept: usize,
+          outer_extent: usize) -> none =
+    mine: usize = into.kept
+    extent: usize = into.kept_extent
+    into.keeping = outer_keeping
+    into.kept = outer_kept
+    into.kept_extent = outer_extent
+    return when mine == 0
+    if outer_keeping and outer_kept == 0 then
+        into.kept = mine
+        into.kept_extent = extent
+        return
+    end if
+    match into.growth
+        bounded: return
+        grows(memory): begin
+            --  [0810]: the address of a block the builder's allocator
+            --  gave it and `retired` kept.
+            block: ptr mut u8 = ptr(mine)
+            memory.free(block, extent)
+        end
+    end match
+end settled
+
 --- Append `template` with each `{}` replaced by the next of `values`, in
 --- order, written by its own `formattable` conformance; `{{` writes `{`
 --- and `}}` writes `}`.  A placeholder takes nothing else: width, padding
 --- and hexadecimal are the typed `append` and `align` calls.  The template
 --- is checked first, so `invalid_format` writes nothing, and a builder that
 --- fills partway is put back as it was before `no_space` is reported.  No
---- locale is consulted: the text is the same everywhere.
+--- locale is consulted: the text is the same everywhere.  The template
+--- and the values may be views of the builder's own bytes, `text.used(into)`
+--- or parts of it: each is written as it was when the call began, since a
+--- growing builder that moves while the call writes keeps the block they
+--- view until the call ends (D1122).
 ---
 --- The values are an array literal of erased addresses, which the call
 --- lends as a slice: `text.format(line, "{} {}\n", [any(addr count),
@@ -90,11 +123,18 @@ public format: (inout into: builder, template: utf8,
                -> none ! no_space | invalid_format =
     source: []u8 = bytes(template)
     try checked(source, lenof values)
-    start: usize = into.used
+    start: usize = length(into)
+    outer_keeping: bool = into.keeping
+    outer_kept: usize = into.kept
+    outer_extent: usize = into.kept_extent
+    into.keeping = true
+    into.kept = 0
     written(into, source, values) else (problem)
-        into.used = start
+        truncate(into, start)
+        settled(into, outer_keeping, outer_kept, outer_extent)
         fail problem
     end
+    settled(into, outer_keeping, outer_kept, outer_extent)
 end format
 
 --  Format one value into a builder over `format_onto`'s store.  It goes
@@ -102,7 +142,8 @@ end format
 --  the whole store once what waits there is handed on; and only a value
 --  longer than the whole store is written draining, handed on in pieces as
 --  the store fills.  So a conformance's `length`, `truncate` and alignment
---  offsets hold for every value the store can hold.
+--  offsets are the buffer's own for every value the store can hold, and
+--  for a longer one they count what was handed on (D1123).
 streamed_value: (inout into: builder, onto: any outlet,
                  value: any formattable) -> none ! no_space =
     count: usize = fitted(into.buffer, into.used, value) else (problem)
@@ -165,7 +206,8 @@ end streamed
 --- handed on in pieces as it is written, and a library value's longest
 --- piece goes to `onto` as it is.  `no_space` is the outlet's refusal, or
 --- a conformance of the program's own asking for more room at once than
---- the store has.  Twenty bytes hold every integer the library formats.
+--- the store has, or right-aligning a piece that has been handed on
+--- (D1123).  Twenty bytes hold every integer the library formats.
 --- `io.write_format` is this over a file.
 public format_onto: (store: []mut u8, onto: any outlet, template: utf8,
                      values: []any formattable)
@@ -174,8 +216,9 @@ public format_onto: (store: []mut u8, onto: any outlet, template: utf8,
     try checked(source, lenof values)
     draining: draining_value = (onto: onto)
     policy: any grower = any(addr draining)
-    mut line: builder = (buffer: store, used: 0, held: not_allocated,
-                         policy: policy, growth: bounded)
+    mut line: builder = (buffer: store, used: 0, handed: 0,
+                         held: not_allocated, keeping: false, kept: 0,
+                         kept_extent: 0, policy: policy, growth: bounded)
     try streamed(line, onto, source, values)
     try handed(line, onto)
 end format_onto

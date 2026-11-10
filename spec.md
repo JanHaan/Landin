@@ -32808,6 +32808,56 @@ for bytes, which would keep its fixed text-oriented operations.
 `runtime/r420-vec-large-list`, `runtime/core-vec-pointer-storage` and
 `runtime/r420-stateful-filter-list`.
 
+### D1122 — An append may be given the container's own bytes
+
+**The tour said** at [0800] and [0830] that a view of a container locks it
+against `inout` while the view is in use, because the call could move the
+storage under the view. The lock did not reach a view whose last use is as
+another argument of that same call, so `vec.append_bytes(list, memory,
+vec.used(list))` and `text.append(line, text.used(line))` were accepted, and
+a view kept behind a pointer or made in `unchecked` code is never the origin
+check's to see. A growth then moved the storage, freed the old block, and
+copied from it.
+
+**Chosen:** the library's appends that take bytes beside the container they
+append to, `vec.append_bytes`, `text.append`, `append_text`, `append_host`
+and `text.format`, promise the bytes whichever block they are in: what is
+appended is what the argument held when the call began. A list of bytes
+grows through `mem.reserve_admit_copy`, D356's protocol with the copy of the
+appended bytes made before a moved block is released. A growing builder
+grows the same way when the old block may be read again, in place through
+the allocator's `grow` and otherwise into a fresh block, appending before it
+frees the old one. That is when the appended bytes lie in the block, which
+their addresses say while it is live, and when a `format` is writing:
+`text.format` writes several values and a template, any of which may view
+the builder, so while a `format` writes, the builder keeps the first block a
+growth moves it out of and the call frees it when it ends; a `format` a
+conformance calls inside another keeps its own, and hands it to the outer
+call when that one has kept none. Every other growth still calls the
+allocator's `resize`, as D425 measured it: nothing reads the old block
+again, and `hosted/heap` moves a large block's pages instead of copying
+them. The promise is the call's own:
+a view of the old block is still invalid once the call has returned, and a
+routine of the program's that appends twice from a view it holds behind a
+pointer is not made safe by it. Whether the checker refuses the direct
+spellings is the origin check's rule and changes nothing here: the library
+is sound with them accepted and with them refused.
+
+**The alternatives:** relying on the refusal alone, which leaves the read of
+a freed block to every view the origin check cannot follow and to every
+compiler that accepts the call; never calling `resize`, which costs every
+large builder the copy D425 measured; deriving a `format`'s values again by
+address after a `resize`, which cannot be done, since the block they were in
+is by then another's and its addresses mean nothing; and copying the
+appended bytes aside first, which needs storage an append has no right to
+ask for.
+
+**Pinned by** `runtime/core-self-append`, whose provider never grows in
+place and overwrites every block it is given back, and which fails on each
+of the list's and the builder's cases without the rule;
+`runtime/core-text-builder` and `runtime/core-vec-bytes` hold the growth
+itself.
+
 ### D442 — `platform/linux`'s path parameters take `ptr u8`
 
 **The tour said** at [0260] that a text literal takes `cstring` from its
@@ -34640,6 +34690,37 @@ the rest, a mismatch as no write and a failed write as `io_failed`, on
 Cortex-M0 too; and `negative/core-io-println-is-write-format`,
 `negative/core-io-printf-is-write-format`, under an alias, and
 `negative/core-io-selected-puts-is-write-format`, whose notes show the call.
+
+### D1123 — A builder's offsets count what `format_onto` has handed on
+
+**The tour said** nothing. D527 writes a value longer than `format_onto`'s
+whole store through a builder that hands what it holds to the outlet
+whenever a piece does not fit, and said a conformance's `length`, `truncate`
+and alignment offsets hold "for every value the store holds". For a longer
+value they were offsets into a buffer that had since been emptied:
+`align_right` trapped on a checked subtraction or wrote its fill after the
+piece, and a `truncate` cut nothing or the wrong bytes. How long a value's
+text is, a name or a path, is the program's data and not its error.
+
+**Chosen:** a builder counts the bytes it has handed on, and `text.length`
+is that count and the bytes it holds, so an offset names the same byte
+before and after a hand-over; for every other builder the count is zero and
+`length` is the length of `used`. `align_left` fills after its piece
+wherever the piece's start now is. `align_right` reports `no_space` when any
+of the piece has been handed on, or has to be handed on to make room for the
+fill, since nothing can then be written before it; `io.write_format` reports
+that as `io_failed`, as it does a conformance asking for more room than the
+store has. `truncate` cuts what the builder still holds back to the offset
+and never below what was handed on. The library's own rollbacks, a negative
+number's sign and a failed `format`, cut the same way.
+
+**The alternatives:** leaving the trap, which ends a program on the first
+long value it prints; formatting every value whole into storage from an
+allocator, which D527 declined; and a count the conformance asks for apart
+from `length`, which every conformance already written would not ask.
+
+**Pinned by** `runtime/core-text-format-onto-offsets`, which traps without
+the rule; `runtime/io-write-format` holds the values the store holds.
 
 ### D531 — A released compiler carries no debug information, which ships beside it
 

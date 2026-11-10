@@ -338,7 +338,9 @@ never frees the resources that its items refer to.
 
 A list of bytes is the growable byte container:
 
-- `append_bytes` copies a slice in after the list's bytes.
+- `append_bytes` copies a slice in after the list's bytes. The slice may
+  be the list's own bytes, `vec.used(list)` or a part of it: what is
+  appended is what it held when the call began, though the list moved.
 - `spare_bytes` lends the spare capacity, which a read fills.
 - `extend_bytes` counts what was written there.
 
@@ -622,6 +624,11 @@ caller passes `inout`.
 | `length` | The offset the next piece begins at. |
 | `clear`, `truncate` | Empty the builder, or cut it back. |
 
+An append, and `format`, may be given the builder's own bytes,
+`text.used(line)` or a part of it. What is written is what they held when
+the call began, though the builder grew and moved while it wrote. The
+view is still not to be used after the call.
+
 Each append writes its whole piece, or reports `no_space` and leaves the
 builder as it was:
 
@@ -730,6 +737,21 @@ How a value passes through the buffer:
   once. Twenty bytes hold every integer the library formats. A
   conformance of the program's own that asks for more than the buffer has
   fails with `no_space`.
+
+A conformance of the program's own may be writing a value longer than the
+whole buffer, a row with a long name in it. Its offsets still hold:
+
+- `length` counts the bytes already handed on, so an offset taken before
+  a piece was handed on names the same byte after.
+- `align_left` fills after its piece wherever the piece began.
+- `align_right` needs the whole piece still in the buffer, and room there
+  for the fill. When some of the piece has been handed on, nothing can go
+  before it, and the call fails with `no_space`. Through
+  `io.write_format` that is `io_failed`, after the text before it was
+  written. A column that must hold a long value right-aligned is built in
+  a builder of the program's own that is long enough, and written whole.
+- `truncate` cuts what the buffer still holds. What was handed on stays
+  written.
 
 To print a float, scale it to an integer and print the parts. Converting
 a float to an integer truncates toward zero, and traps when the value

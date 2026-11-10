@@ -1952,6 +1952,11 @@
     "runtime/core-region-resize": {
       "mode": "execute"
     },
+    "runtime/core-self-append": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "A list of bytes and a growing builder appending their own bytes, with a format of two views and a conformance's nested one over a provider of the fixture's own, need 39,832 bytes of flash at size/auto, overflowing the 32 KiB profile by 7,064: the builder's growth and format are most of it, as runtime/core-text-builder's limit records. Each profile still attempts execution; runtime/core-vec-bytes grows a list of bytes through its provider and runtime/core-text-format-firmware formats into a builder within the image, and both require execution; this image limit is not runtime evidence."
+    },
     "runtime/core-sort-context": {
       "mode": "execute"
     },
@@ -1986,6 +1991,9 @@
       "reason": "Formatting every library conformance, a program's own, every malformed template, a partway refusal and a growing builder needs about 42 KiB of flash at size/auto, of which the fixture's own routines are 11 KiB, for the frame-home reason runtime/core-text-builder gives. Each profile still attempts execution; runtime/core-text-format-firmware formats within the image with both refusals and requires execution; this image limit is not runtime evidence."
     },
     "runtime/core-text-format-firmware": {
+      "mode": "execute"
+    },
+    "runtime/core-text-format-onto-offsets": {
       "mode": "execute"
     },
     "runtime/core-text-parse-signed": {

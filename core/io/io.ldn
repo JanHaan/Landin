@@ -404,8 +404,9 @@ format_store: usize = 128
 --- template is checked against its values first, so `text.invalid_format`
 --- writes nothing.  A failed write is `io_failed` and may follow partial
 --- output, as `write`'s may.  A conformance of the program's own that asks for
---- more room at once than the 128 bytes is `io_failed` too, since its text
---- cannot be written.  The values are `text.formattable`'s types; floats are
+--- more room at once than the 128 bytes, or right-aligns a piece of a value
+--- longer than them that was already written, is `io_failed` too, since its
+--- text cannot be written.  The values are `text.formattable`'s types; floats are
 --- not formattable yet.  For many writes to one file, a `buffered_writer`
 --- gathers them into fewer.
 public write_format: (provider: type is writer, host: provider,
