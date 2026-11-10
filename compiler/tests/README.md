@@ -1078,6 +1078,21 @@ is given, and an L0015 one needs none, since the corpus reads its refused
 modules from the refusal. An ABI fixture, whose C peer is hosted, is a
 `restriction` with the `--reason` it is given.
 
+A fixture that asks which descriptors a child process holds makes the
+child the fixture's own program, started again, and asks `poll`. The
+parent passes the word `check` and the decimal numbers of the descriptors
+it holds as arguments to `io.spawn(host, posix.program_name(), ...)`; the
+copy, which knows itself by those arguments, asks `posix.poll` about each
+number with no wait and reads `posix.happened`:
+`poll_invalid` answers a closed descriptor and never an open one, and the
+question opens nothing. `runtime/run-no-descriptor-leak` and
+`runtime/thread-spawn-leaks-no-descriptor` both ask this way. A shell
+cannot be the check, because a shell's own descriptors look like inherited
+ones: Darwin's `/bin/sh`, bash 3.2, keeps a descriptor of its own at the
+lowest free number from 10 up while it works and finds that one open, in
+a subshell's redirection and after an `exec` alike, and dash, Linux's
+`sh`, takes no descriptor number above 9 in a redirection.
+
 It ends by naming, for the fixture's class, each step only the test program
 or another tool can take, as `then run:` lines in the order to take them:
 `./scripts/dev-test.sh --record=lowering` for a positive fixture, whose
@@ -1465,6 +1480,13 @@ routine's frame record and reserved-register exclusion are checked; a C peer
 also checks a live Landin parent frame. `--case`/`--profile` are visibly filtered
 development feedback. The binding runner regenerates and executes the complete
 adapter-category corpus with the pinned Apple target and tests exact archives.
+
+In the gate, `darwin-parity` alone gives a runtime or ABI fixture its
+Darwin verdict. The `darwin-host` and `darwin-host-release` jobs run the
+test program as `--host --target=linux-x86-64`, so its own fixture
+execution, which on a Mac's default lane assembles, links and runs the
+`darwin-arm64` fixtures, runs in no gate job. What the test program does
+with a fixture on that lane is seen only by running it on a Mac.
 
 These scripts require native arm64 macOS. `check.py --parity` selects every
 shared runtime/ABI fixture and its four/six profiles; `diagnostics.py` checks
