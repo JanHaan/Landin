@@ -115,12 +115,20 @@ Before an item closes:
    writer had already seen is what the row was written about. Each listed
    row names the commits that met it, the rows left out for that reason are
    named, and `--whole-window` counts every change since REV for every row.
+   A commit marked `[beside the row's statement]` was made on a parallel
+   branch and merged, by the merge it names: it counts, but it may be the
+   very change the row records, so read it before taking the row.
 
    It is a heuristic and says so: it matches paths an activation writes,
    in backticks or bare, base names of tracked files, Ada unit names and a
    few names of an area that always mean one file. A row that names an area
    in words is counted and not matched; `--unmatched` lists those rows, to
-   be read against the item's changes by hand.
+   be read against the item's changes by hand. A base name several tracked
+   files share, such as `run.py`, matches none of them and is reported with
+   the files it could mean, so write the path in the row. A directory
+   written as an owner, "`core/io`'s `make_temporary`", is matched by every
+   change under it; a row only such a directory matched is listed apart,
+   to be read rather than taken.
 2. When the item changed the compiler's lowering, emission or backends,
    added a target or added positive fixtures, run the three checks only the
    gate otherwise runs on them, each of which has found defects after a

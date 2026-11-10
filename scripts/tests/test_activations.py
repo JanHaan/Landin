@@ -180,6 +180,77 @@ class Activations(unittest.TestCase):
         (self.root / "scripts/debug.sh").write_text("b\n")
         self.assertIn("T2", self.listed()[0])
 
+    def test_a_base_name_several_files_share_is_ambiguous_not_matched(self):
+        #  SR-3 says `run.py`.  With a second run.py tracked, a change to
+        #  either is no longer SR-3's, and the name is reported.
+        self.commit("a second run.py", **{"environments/boards/run.py": "a\n"})
+        for path in ("environments/cortex-m/run.py", "environments/boards/run.py"):
+            with self.subTest(path=path):
+                listed, text = self.listed(path)
+                self.assertNotIn("SR-3", listed)
+                self.assertIn("1 activations name a file by a base name "
+                              "several tracked", text)
+                self.assertIn("  SR-3: `run.py` could be environments/boards/"
+                              "run.py, environments/cortex-m/run.py", text)
+        #  A row naming nothing else is among those to read by hand.
+        self.assertIn("  SR-3 (open):", self.listed("--unmatched", "spec.md")[1])
+        #  The spelled path, SR-2's, still matches.
+        self.assertIn("SR-2", self.listed("environments/cortex-m/run.py")[0])
+
+    def test_a_directory_named_as_an_owner_is_listed_apart(self):
+        rows = ("| T3 | Usability | owner | The next change to `core/io`'s"
+                " `make_temporary`. | x | open |\n"
+                "| T4 | Usability | bare owner | The next change to"
+                " environments/cortex-m's own module. | x | open |\n"
+                "| T5 | Usability | both | The next change to `core/io`'s"
+                " reader or to `core/io/io.ldn`. | x | open |")
+        self.commit("rows", **{"ROADMAP.md": self.roadmap_with(rows)})
+        self.commit("change io", **{"core/io/io.ldn": "a\n",
+                                    "environments/cortex-m/setup.py": "a\n"})
+        listed, text = self.listed()
+        self.assertEqual(listed, {"SR-6", "T3", "T4", "T5"})
+        direct, _, owned = text.partition(
+            "Rows whose activation names a changed directory only as the owner")
+        self.assertTrue(owned, text)
+        #  The directory named outright, and the row that also names the
+        #  changed file, are met; the two owner-only rows are to be read.
+        self.assertIn("SR-6 (open)", direct)
+        self.assertIn("T5 (open)", direct)
+        self.assertNotIn("T3 (open)", direct)
+        self.assertNotIn("T4 (open)", direct)
+        self.assertIn("T3 (open): core/io/io.ldn", owned)
+        self.assertIn("    owner only: core/io/", owned)
+        self.assertIn("T4 (open): environments/cortex-m/setup.py", owned)
+        self.assertNotIn("T5 (open)", owned)
+
+    def test_a_parallel_commit_merged_after_the_row_is_marked(self):
+        #  A stream changes the file; the row recording that change is
+        #  written on the integration branch; the stream is merged after.
+        #  The change is not an ancestor of the statement, so it counts,
+        #  and the reader is told it was made beside the row.
+        git(self.root, "checkout", "-q", "-b", "stream")
+        beside = self.commit("the change the row records",
+                             **{"environments/cortex-m/setup.py": "a\n"})
+        git(self.root, "checkout", "-q", "item")
+        row = ("| T6 | Usability | recorded | The next change to"
+               " `environments/cortex-m/setup.py`. | x | open |")
+        self.commit("add the row", **{"ROADMAP.md": self.roadmap_with(row)})
+        git(self.root, "merge", "-q", "--no-ff", "-m", "merge the stream", "stream")
+        merge = git(self.root, "rev-parse", "HEAD")
+        listed, text = self.listed()
+        self.assertIn("T6", listed)
+        self.assertIn("met by: %s [beside the row's statement, merged in %s]"
+                      % (beside[:12], merge[:12]), text)
+        self.assertIn("it may be the change the row\nrecords, merged afterwards",
+                      text)
+        #  A change made on top of the statement carries no mark.
+        after = self.commit("the next change",
+                            **{"environments/cortex-m/setup.py": "b\n"})
+        text = self.listed()[1]
+        met = text.split("T6 (open)", 1)[1].split("met by: ", 1)[1].split("\n")[0]
+        self.assertIn("%s [beside" % beside[:12], met)
+        self.assertRegex(met, r"%s(?! \[)" % after[:12])
+
     def test_a_row_stated_before_the_window_counts_every_change(self):
         self.commit("change debug", **{"scripts/debug.sh": "a\n"})
         self.assertEqual(self.listed()[0], {"SR-1"})

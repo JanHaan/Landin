@@ -10,13 +10,23 @@ so each is taken, or its activation restated, before the item closes.
 
 It is a heuristic, and says so.  A path is found when an activation
 writes it -- in backticks or bare -- as a tracked file, a tracked
-directory, the base name of a tracked file (`debug.sh`, when no tracked
-file is that exact path), or an Ada unit (`Landin.Driver.Usage`, its
-`.ads` and `.adb`), and AREAS gives a path to the few names of an area
+directory, the base name of exactly one tracked file (`debug.sh`, when no
+tracked file is that exact path), or an Ada unit (`Landin.Driver.Usage`,
+its `.ads` and `.adb`), and AREAS gives a path to the few names of an area
 that activations use for one file.  Any other activation that names an
 area in words, "the next change to the Cortex-M lane runner", has no path
 to match; the count of such rows is printed, and --unmatched lists them
 to be read by hand.
+
+A base name several tracked files share, `run.py`, is not matched: a row
+meaning `environments/boards/run.py` was once listed as met by a change
+to `environments/cortex-m/run.py`.  Each such name is reported with the
+files it could mean, so the row can spell the path.
+
+A directory written as the owner of something narrower, "`core/io`'s
+`make_temporary`", is matched by every change under it, most of which do
+not concern the row.  A row that only such a directory matched is listed
+apart, as one to read, not one the changes are known to meet.
 
 It also names the passes the gate runs and no local check does, when the
 changes reach their inputs: the editor grammar's corpus, and the flake.
@@ -34,6 +44,11 @@ written about, and over a long window about half the matches were such
 changes.  Uncommitted changes always count.  Each listed row names the
 commits that met it, and the rows left out for this are named, so either
 can be read; --whole-window counts every change since BASE for every row.
+
+A commit made on a parallel branch is not among the statement's
+descendants whenever it was made, before the row or after it, so it
+counts; but it may be the very change the row records, merged later.
+Such a commit is marked in "met by" with the merge that brought it in.
 
     python3 scripts/activations.py [--base REV] [--unmatched] [--run]
                                    [--whole-window] [PATH ...]
@@ -121,20 +136,35 @@ def words(activation):
     return seen
 
 
+def owners(activation):
+    """The words ACTIVATION writes as the owner of something: `X`'s, X's."""
+    found = re.findall(r"`([^`\s]+)`'s\b", activation)
+    bare = re.sub(r"`[^`]*`", " ", activation)
+    found.extend(match.group(1) for match in PATHLIKE.finditer(bare)
+                 if bare.startswith("'s", match.end()))
+    return {word.strip(TRIM).removeprefix("./").rstrip("/") for word in found}
+
+
 def resolve(word, tracked, directories):
-    """The tracked paths WORD names: files, and directories ending in `/`."""
+    """(the tracked paths WORD names, the files it could mean but does not).
+
+    Paths are files, and directories ending in `/`.  A base name that
+    several tracked files share names none of them: they are the second
+    value, for the report.
+    """
     if ADA_UNIT.fullmatch(word):
         stem = word.lower().replace(".", "-")
         return sorted(path for path in tracked
-                      if os.path.basename(path) in (stem + ".ads", stem + ".adb"))
+                      if os.path.basename(path) in (stem + ".ads", stem + ".adb")), []
     word = word.rstrip("/")
     if word in tracked:
-        return [word]
+        return [word], []
     if word in directories:
-        return [word + "/"]
+        return [word + "/"], []
     if "/" not in word and "." in word:
-        return sorted(path for path in tracked if os.path.basename(path) == word)
-    return []
+        found = sorted(path for path in tracked if os.path.basename(path) == word)
+        return (found, []) if len(found) <= 1 else ([], found)
+    return [], []
 
 
 def touched(named, changed):
@@ -145,28 +175,45 @@ def touched(named, changed):
 
 
 def activated(rows, tracked, changed):
-    """(rows the changes activate, rows that name no path at all).
+    """(rows the changes activate, rows that name no path at all, the
+    ambiguous base names, the rows only an owning directory matched).
 
-    An activated row is (identity, status, changed paths, activation).
+    An activated row is (identity, status, changed paths, activation).  An
+    ambiguous name is (identity, word, the files it could mean).  The last
+    value is {identity: directories}: activated rows every changed path of
+    which is under a directory the activation names only as an owner.
     """
     directories = set()
     for path in tracked:
         parts = path.split("/")[:-1]
         for end in range(1, len(parts) + 1):
             directories.add("/".join(parts[:end]))
-    hits, unmatched = [], []
+    hits, unmatched, ambiguous, narrower = [], [], [], {}
     for identity, activation, status in rows:
         if status.split(" ", 1)[0] not in STATUSES:
             continue
-        named = [path for word in words(activation)
-                 for path in resolve(word, tracked, directories)]
-        if not named:
+        owned = owners(activation)
+        named, owning = [], []
+        for word in words(activation):
+            paths, candidates = resolve(word, tracked, directories)
+            if candidates:
+                ambiguous.append((identity, word, candidates))
+            for path in paths:
+                if path.endswith("/") and word.rstrip("/") in owned:
+                    owning.append(path)
+                else:
+                    named.append(path)
+        if not named and not owning:
             unmatched.append((identity, status, activation))
             continue
         reached = sorted({path for one in named for path in touched(one, changed)})
+        under = sorted({path for one in owning for path in touched(one, changed)})
         if reached:
             hits.append((identity, status, reached, activation))
-    return hits, unmatched
+        elif under:
+            hits.append((identity, status, under, activation))
+            narrower[identity] = sorted(set(owning))
+    return hits, unmatched, ambiguous, narrower
 
 
 def cells(line):
@@ -217,8 +264,17 @@ def since_statement(hits, commits, since, uncommitted, root=ROOT):
     """HITS less the paths only commits the row's own statement had seen
     changed: (kept hits with the commits that met each, rows left out).
 
-    A hit becomes (identity, status, reached, activation, commits)."""
-    after = {}
+    A hit becomes (identity, status, reached, activation, commits).  A
+    commit that is not a descendant of the row's statement was made on a
+    parallel branch, perhaps before the row and perhaps the change the row
+    records; it is marked, with the merge that brought it in."""
+    after, descend = {}, {}
+
+    def beside(commit):
+        merges = git("rev-list", "--ancestry-path", "--merges", "--reverse",
+                     commit + "..HEAD", root=root).split()
+        return "%s [beside the row's statement%s]" % (
+            commit[:12], ", merged in " + merges[0][:12] if merges else "")
     kept, left = [], []
     for identity, status, reached, activation in hits:
         statement = since.get(identity)
@@ -228,11 +284,16 @@ def since_statement(hits, commits, since, uncommitted, root=ROOT):
             if statement not in after:
                 after[statement] = set(git(
                     "rev-list", statement + "..HEAD", root=root).split())
+                descend[statement] = set(git(
+                    "rev-list", "--ancestry-path", statement + "..HEAD",
+                    root=root).split())
             later = after[statement] & set(commits)
         met = [path for path in reached
                if statement is None or path in uncommitted
                or any(path in commits[commit] for commit in later)]
-        by = sorted(commit[:12] for commit in later
+        by = sorted(commit[:12] if statement is None
+                    or commit in descend[statement] else beside(commit)
+                    for commit in later
                     if any(path in commits[commit] for path in met))
         if met:
             kept.append((identity, status, met, activation, by))
@@ -286,7 +347,7 @@ def main(argv=None, root=ROOT, out=sys.stdout):
     changed = sorted(set(args.paths)) if args.paths else changes(args.base, root)
     tracked = set(git("ls-files", root=root).splitlines())
     rows = register((root / "ROADMAP.md").read_text(encoding="utf-8"))
-    hits, unmatched = activated(rows, tracked, changed)
+    hits, unmatched, ambiguous, narrower = activated(rows, tracked, changed)
     left = []
     if args.paths or args.whole_window:
         hits = [hit + ([],) for hit in hits]
@@ -296,16 +357,40 @@ def main(argv=None, root=ROOT, out=sys.stdout):
                                      uncommitted_changes(root), root)
     source = "the paths given" if args.paths else "changes since %s" % args.base
     print("%d changed paths (%s)" % (len(changed), source), file=out)
-    if hits:
+
+    def show(chosen):
+        for identity, status, reached, activation, by in chosen:
+            print("\n%s (%s): %s\n    activation: %s"
+                  % (identity, status, ", ".join(reached), activation), file=out)
+            if identity in narrower:
+                print("    owner only: " + " ".join(narrower[identity]), file=out)
+            if by:
+                print("    met by: " + ", ".join(by), file=out)
+    direct = [hit for hit in hits if hit[0] not in narrower]
+    owned = [hit for hit in hits if hit[0] in narrower]
+    if direct:
         print("\nRegister rows whose activation names a changed path; take each,"
               "\nor restate its activation, before the item closes:", file=out)
-    for identity, status, reached, activation, by in hits:
-        print("\n%s (%s): %s\n    activation: %s"
-              % (identity, status, ", ".join(reached), activation), file=out)
-        if by:
-            print("    met by: " + " ".join(by), file=out)
-    if not hits:
+    show(direct)
+    if not direct:
         print("\nNo open or scheduled row's activation names a changed path.", file=out)
+    if owned:
+        print("\nRows whose activation names a changed directory only as the"
+              " owner of\nsomething narrower; read whether a change concerns"
+              " that subject:", file=out)
+    show(owned)
+    if any("[beside" in commit for hit in hits for commit in hit[4]):
+        print("\nA commit marked [beside the row's statement] was made on a"
+              " parallel branch,\nnot on top of the commit that states the"
+              " row: it may be the change the row\nrecords, merged afterwards.",
+              file=out)
+    if ambiguous:
+        print("\n%d activations name a file by a base name several tracked"
+              " files share, which\nmatches none of them; spell the path in"
+              " the row:" % len(ambiguous), file=out)
+    for identity, word, candidates in ambiguous:
+        print("  %s: `%s` could be %s" % (identity, word, ", ".join(candidates)),
+              file=out)
     if left:
         print("\n%d rows name a changed path that only commits before their"
               " own statement changed, so they are not listed"
