@@ -237,6 +237,105 @@ public real: atom
 '''
         self.assertEqual([i.name for i in self.read(text)], ['real'])
 
+    def items(self, module, text):
+        return library.read_items(text, module + '/' + module.split('/')[-1] + '.ldn')
+
+    def test_a_qualified_name_in_a_comment_is_a_public_declaration(self):
+        time = self.items('core/time', '--- A span.\npublic duration: type = u64\n')
+        def faults(comment, imports=''):
+            source = imports + '--- ' + comment + '\npublic sleep: atom\n'
+            return library.unresolved_names(
+                {'core/time': time, 'core/io': self.items('core/io', source)},
+                {'core/io/io.ldn': source})
+        #  The module that declares it, by its last segment or an alias.
+        self.assertEqual(faults('Waits a `time.duration`.'), [])
+        self.assertEqual(faults('Waits a `clock.duration`.', 'import core/time as clock\n'), [])
+        self.assertEqual(faults('Calls `time.duration(3)` and `io.sleep`.'), [])
+        #  A value's member is no module's name.
+        self.assertEqual(faults('Reads `text.len` and `self.duration`.'), [])
+        #  The declaration lives elsewhere: refused, naming where and what.
+        (fault,) = faults('Waits an `io.duration`.')
+        self.assertIn('core/io/io.ldn:2: the comment of io.sleep writes `io.duration`, and'
+                      ' core/io declares no public duration', fault)
+        (fault,) = faults('Waits a `clock.span`.', 'import core/time as clock\n')
+        self.assertIn('`clock.span`, and core/time declares no public span', fault)
+        #  collect refuses the tree that holds one.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for base in library.ROOTS:
+                (root / base).mkdir()
+            (root / 'core/io').mkdir()
+            (root / 'core/io/io.ldn').write_text(
+                '--- Waits an `io.duration`.\npublic sleep: atom\n')
+            with self.assertRaisesRegex(ValueError, 'name what their module does not declare'
+                                                    r'[\s\S]*`io\.duration`'):
+                library.collect(root)
+            (root / 'core/io/io.ldn').write_text(
+                '--- Waits, see `io.sleep`.\npublic sleep: atom\n')
+            library.collect(root)
+
+    def test_an_overview_pointer_stays_inside_its_section(self):
+        def faults(body):
+            return library.misplaced_pointers('core/sort', body)
+        table = '| name | does |\n|---|---|\n| `a` | b |'
+        #  Pointers with their referent on the page they are rendered on.
+        self.assertEqual(faults('First.\n\n' + table + '\n\nThe table above lists them.'), [])
+        self.assertEqual(faults('The table below lists them.\n\n' + table), [])
+        self.assertEqual(faults('Intro.\n\nAs said above, it sorts.'), [])
+        #  A comparison is no pointer, and a fenced program is not prose.
+        self.assertEqual(faults('Refuses a count above the capacity or below one.'), [])
+        self.assertEqual(faults('```landin\n-- see above.\n```'), [])
+        #  The page begins at the heading: nothing is above the first block.
+        (fault,) = faults('What `ordered` ships for is in the table above.\n\nMore.')
+        self.assertIn('core/sort: "table above" in its overview points past its own section,'
+                      ' where no table is above it', fault)
+        (fault,) = faults('Intro.\n\nThe module below builds on it.')
+        self.assertIn('"module below"', fault)
+        self.assertIn('nothing is below it', fault)
+        (fault,) = faults('Sorted as described above.')
+        self.assertIn('"described above"', fault)
+        #  A table named on the side that has prose but no table.
+        self.assertEqual(len(faults('Intro.\n\nSee the table above.')), 1)
+        #  The live overview holds, and overviews refuses one that does not.
+        modules, _ = library.collect(ROOT)
+        library.overviews(ROOT, modules)
+        text = (ROOT / 'docs/library.md').read_text()
+        heading = '## core/sort\n'
+        self.assertIn(heading, text)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'docs').mkdir()
+            (root / 'docs/library.md').write_text(
+                text.replace(heading, heading + '\nThe table above says what ships.\n', 1))
+            for name in ('compiler', 'environments'):
+                (root / name).symlink_to(ROOT / name)
+            with self.assertRaisesRegex(ValueError, 'core/sort: "table above"'):
+                library.overviews(root, modules)
+
+    def test_per_target_comments_that_drift_are_reported(self):
+        def module(*comments):
+            return self.items('core/mem', ''.join(
+                'fixed if target.arch == .a%d then\n    --- %s\n    public copy: atom\nend if\n'
+                % (index, comment) for index, comment in enumerate(comments)))
+        same = module('Copies bytes.', 'Copies bytes.')
+        words = module('Copies bytes on x86-64.', 'Copies bytes on arm64.')
+        drift = module('Copies bytes, a word at a time, forwards.',
+                       'Moves the bytes of one block to another and returns nothing at all.')
+        self.assertEqual(library.drifting({'core/mem': same}), [])
+        self.assertEqual(library.drifting({'core/mem': words}), [])
+        self.assertEqual(library.drift_report({'core/mem': words}), [])
+        ((where, name, places),) = library.drifting({'core/mem': drift})
+        self.assertEqual((where, name, places),
+                         ('core/mem', 'copy', ['core/mem/mem.ldn:3', 'core/mem/mem.ldn:7']))
+        report = library.drift_report({'core/mem': drift})
+        self.assertIn('1 name declared once per target has comments that differ by more than'
+                      ' their target words', report[0])
+        self.assertEqual(report[1], '  core/mem.copy (core/mem/mem.ldn:3, core/mem/mem.ldn:7)')
+        #  The site build prints the report for the live library.
+        source = (ROOT / 'docs/site/library.py').read_text()
+        self.assertIn('for line in drift_report(modules):\n        print(line, file=sys.stderr)',
+                      source)
+
     def test_all_live_exports_have_documentation_and_an_overview(self):
         modules, sources = library.collect(ROOT)
         _, descriptions = library.overviews(ROOT, modules)

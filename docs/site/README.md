@@ -244,7 +244,16 @@ aliases, atoms and values, including a value whose expression begins on
 the next line or continues on more deeply indented ones, and keeps each
 conditional declaration with its target condition. It does not type-check, evaluate target conditions or infer
 private representations. An unsupported public form, missing public doc
-comment, missing overview or ambiguous item anchor stops generation.
+comment, missing overview or ambiguous item anchor stops generation. So
+does a comment whose backticked `module.name` names no public declaration
+of that module, the qualifier read as the page's links read it: a module
+the comment's own module imports, that module itself, or the one library
+module with that last segment; any other qualifier is a value's name and
+is left alone. And so does an overview's "above" or "below" that points
+past its module's heading, "the table above" with no table above it in
+that section: `docs/library.md` is one file, and each module is rendered
+as a page of its own, where such a pointer leads nowhere. A comparison,
+"a count above the capacity", is not a pointer.
 
 The search index is one script beside the pages, `library-search.js`, which
 a page loads through a script element the first time its search field is
@@ -276,6 +285,11 @@ A module that declares the same plain values once per target, as
 for three systems, shows them as one table: a row per name, a column per
 target condition, each value linked to its source line, and the
 documentation once, with the words that differ between targets joined.
+Copies of one name's comment are meant to stay parallel: where they differ
+by more than a few target words the page can only set the whole texts side
+by side, and the build prints each such name with its source lines,
+"declared once per target ... comments that differ by more than their
+target words", so a copy edited alone is seen.
 The columns are the conditions most of the repeated names use; a name with
 any other condition keeps its own section. Each column's full condition is
 listed above the table, and the build checks every cell against the
