@@ -144,17 +144,25 @@ package body Landin.Syntax.Repairs is
    --  before this is asked, since a trial joins them with a blank.
    function Unspaced (Text : String) return String;
 
+   --  Counted first and written where it is returned: a working copy as
+   --  long as Text is a whole source on the primary stack when Text is one.
    function Unspaced (Text : String) return String is
-      Kept   : String (1 .. Text'Length) := [others => ' '];
       Length : Natural := 0;
+      Next   : Natural := 0;
    begin
       for Byte of Text loop
          if Byte not in ' ' | ASCII.HT then
             Length := Length + 1;
-            Kept (Length) := Byte;
          end if;
       end loop;
-      return Kept (1 .. Length);
+      return Kept : String (1 .. Length) do
+         for Byte of Text loop
+            if Byte not in ' ' | ASCII.HT then
+               Next := Next + 1;
+               Kept (Next) := Byte;
+            end if;
+         end loop;
+      end return;
    end Unspaced;
 
    --  A line as it would be written, without its indentation or the
@@ -179,27 +187,43 @@ package body Landin.Syntax.Repairs is
    function Squeezed (Text : String) return String;
 
    function Squeezed (Text : String) return String is
-      Kept   : String (1 .. Text'Length);
+      --  The last byte that is not a blank: the blanks after it are the
+      --  ones at the end, which are dropped.
+      Stop   : Natural := Text'Last;
       Length : Natural := 0;
+      Next   : Natural := 0;
       Blank  : Boolean := True;
    begin
-      for Byte of Text loop
+      while Stop >= Text'First and then Text (Stop) in ' ' | ASCII.HT loop
+         Stop := Stop - 1;
+      end loop;
+      for Byte of Text (Text'First .. Stop) loop
          if Byte in ' ' | ASCII.HT then
             if not Blank then
                Length := Length + 1;
-               Kept (Length) := ' ';
                Blank := True;
             end if;
          else
             Length := Length + 1;
-            Kept (Length) := Byte;
             Blank := False;
          end if;
       end loop;
-      if Length > 0 and then Kept (Length) = ' ' then
-         Length := Length - 1;
-      end if;
-      return Kept (1 .. Length);
+      Blank := True;
+      return Kept : String (1 .. Length) do
+         for Byte of Text (Text'First .. Stop) loop
+            if Byte in ' ' | ASCII.HT then
+               if not Blank then
+                  Next := Next + 1;
+                  Kept (Next) := ' ';
+                  Blank := True;
+               end if;
+            else
+               Next := Next + 1;
+               Kept (Next) := Byte;
+               Blank := False;
+            end if;
+         end loop;
+      end return;
    end Squeezed;
 
    --  Left and Right side by side, with a blank between them where their
@@ -360,7 +384,7 @@ package body Landin.Syntax.Repairs is
       end In_A_Body;
 
       Text   : constant String := Landin.Source.Text (Snapshot);
-      Bytes  : constant String (1 .. Text'Length) := Text;
+      Bytes  : constant String := Landin.Source.One_Based (Text);
       Source : constant Landin.Source.Source_Id := Landin.Source.Id (Snapshot);
       Result : Diag.Diagnostic_List;
       Last_Line : Natural := 0;
@@ -822,7 +846,7 @@ package body Landin.Syntax.Repairs is
 
       function Mends_File (Given : String; First : Natural) return Boolean
       is
-         Whole   : constant String (1 .. Given'Length) := Given;
+         Whole   : constant String := Landin.Source.One_Based (Given);
          Sources : Landin.Source.Sets.Source_Set;
          Names   : Landin.Source.Names.Table;
          Stream  : Tok.Token_Stream;

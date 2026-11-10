@@ -81,7 +81,7 @@ package body Landin.Formatting is
       Stream : Tok.Token_Stream;
       --  Offsets count from zero and a caller's string need not start at
       --  one, so the bytes are read through a copy that does.
-      Bytes  : constant String (1 .. Text'Length) := Text;
+      Bytes  : constant String := Landin.Source.One_Based (Text);
    begin
       Answer.Id := Sources.Add (Name, Text);
       Answer.Text := US.To_Unbounded_String (Text);
@@ -871,7 +871,7 @@ package body Landin.Formatting is
       Sources : Landin.Source.Sets.Source_Set;
       Names   : Landin.Source.Names.Table;
       Stream  : Tok.Token_Stream;
-      Again   : constant String (1 .. Text'Length) := Text;
+      Again   : constant String := Landin.Source.One_Based (Text);
       Next    : Positive := 1;
 
       function Matches (Where : Landin.Source.Span) return Boolean;

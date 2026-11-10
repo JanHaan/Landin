@@ -44,11 +44,15 @@ package body Landin.Server.Holes is
          and then (Where.First < Where.Last
                    or else Where.First < Region.Last));
 
-   function Plan_For (Text : String) return Plan is
+   --  Plan_For's work, on the plan where it is returned: a plan holds a
+   --  whole source, which a local object would put on the primary stack.
+   procedure Fill (Text : String; Answer : in out Plan)
+     with Pre => Answer.Length = Text'Length;
+
+   procedure Fill (Text : String; Answer : in out Plan) is
       --  Offsets count from zero and a caller's string need not start at
       --  one, so the bytes are read through a copy that does.
-      Bytes   : constant String (1 .. Text'Length) := Text;
-      Answer  : Plan (Text'Length);
+      Bytes   : constant String := Landin.Source.One_Based (Text);
       Sources : Landin.Source.Sets.Source_Set;
       Names   : Landin.Source.Names.Table;
       Stream  : Tok.Token_Stream;
@@ -215,7 +219,7 @@ package body Landin.Server.Holes is
       begin
          if not Found.Has_Errors then
             Answer.Outcome := Sound;
-            return Answer;
+            return;
          end if;
 
          for Position in 1 .. Syn.Declaration_Count (Tree) loop
@@ -275,7 +279,7 @@ package body Landin.Server.Holes is
                         if Low > Last_Region
                           or else not Inside (Regions.Element (Low), Where)
                         then
-                           return Answer;
+                           return;
                         end if;
                         Has_Error (Low) := True;
                      end;
@@ -338,12 +342,18 @@ package body Landin.Server.Holes is
             if Placed < 4 then
                Answer.Held.Clear;
                Answer.Text := Bytes;
-               return Answer;
+               return;
             end if;
          end;
       end loop;
       Answer.Outcome := Stood_In;
-      return Answer;
+   end Fill;
+
+   function Plan_For (Text : String) return Plan is
+   begin
+      return Answer : Plan (Text'Length) do
+         Fill (Text, Answer);
+      end return;
    end Plan_For;
 
 end Landin.Server.Holes;

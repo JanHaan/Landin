@@ -268,6 +268,9 @@ checked compilations; neither cache has a fixed byte bound.
 |---|---|
 | a message's header block | 4 KiB |
 | a message's body | 64 MiB; a longer one is skipped |
+| a document | what a message's body carries: no smaller bound, and none set by the host's stack |
+| JSON nesting | 64 levels |
+| an integer in a message | within 2^53 - 1 |
 | JSON nesting | 64 levels |
 | an integer in a message | within 2^53 - 1 |
 

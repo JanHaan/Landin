@@ -193,11 +193,19 @@ package body Landin.Server.Transport is
       Channel : in out Landin.Platform.Channel'Class) return Boolean
      is (Unbounded.Length (From.Held) > 0 or else Channel.Pending);
 
+   --  Written in place where the result is returned: a concatenation as
+   --  long as Item is built on the primary stack, which an answer of a few
+   --  MiB, a large file's formatting or diagnostics, does not fit.
    function Framed (Item : String) return String is
       Image : constant String := Natural'Image (Item'Length);
+      Head  : constant String :=
+        "Content-Length: " & Image (Image'First + 1 .. Image'Last)
+        & CR_LF & CR_LF;
    begin
-      return "Content-Length: " & Image (Image'First + 1 .. Image'Last)
-        & CR_LF & CR_LF & Item;
+      return Whole : String (1 .. Head'Length + Item'Length) do
+         Whole (1 .. Head'Length) := Head;
+         Whole (Head'Length + 1 .. Whole'Last) := Item;
+      end return;
    end Framed;
 
 end Landin.Server.Transport;

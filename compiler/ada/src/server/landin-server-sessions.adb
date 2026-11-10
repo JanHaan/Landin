@@ -232,10 +232,16 @@ package body Landin.Server.Sessions is
 
       procedure Respond (Id : String; Result : String);
 
+      --  Assembled on the heap: a result may be a large file's edits, and
+      --  a concatenation that long is built on the primary stack.
       procedure Respond (Id : String; Result : String) is
+         Whole : Unbounded.Unbounded_String;
       begin
-         Send ("{""jsonrpc"":""2.0"",""id"":" & Id & ",""result"":"
-               & Result & "}");
+         Unbounded.Append
+           (Whole, "{""jsonrpc"":""2.0"",""id"":" & Id & ",""result"":");
+         Unbounded.Append (Whole, Result);
+         Unbounded.Append (Whole, "}");
+         Send (Unbounded.To_String (Whole));
       end Respond;
 
       procedure Refuse (Id : String; Code : Integer; Message : String);
