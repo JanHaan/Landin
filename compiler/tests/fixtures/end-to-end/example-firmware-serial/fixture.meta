@@ -1,0 +1,9 @@
+class: end-to-end
+summary: the published firmware example, a Cortex-M0 program with no main that writes a computed line to the micro:bit's UART through register operations, builds as a firmware executable for the reference profile; the Cortex-M lane's firmware case `example` runs it under QEMU and compares what the serial port carried with serial.txt
+program: main.ldn
+constructs: 0740, 0810, 1150, 1650
+targets: cortex-m0
+expect: expected.txt
+args: compile --target=cortex-m0 --firmware-entry=start --emit=exe --dry-run -o firmware.elf ../tests/fixtures/end-to-end/example-firmware-serial/main.ldn
+status: 0
+stream: output

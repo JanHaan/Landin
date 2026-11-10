@@ -767,12 +767,13 @@ package body Landin.Tests.Formatting_Suite is
          end loop;
       end;
       --  One listing for each running example, which check.py's
-      --  RUNNING_EXAMPLES names: publishing one raises both counts.
+      --  RUNNING_EXAMPLES names, and one for each firmware example, its
+      --  FIRMWARE_EXAMPLES: publishing one raises both counts.
       Landin.Testing.Check
-        (Item, Listings = 23, "every running example was read, and"
+        (Item, Listings = 25, "every published example was read, and"
          & Listings'Image & " were: publishing an example raises the count"
          & " in Core_And_Examples_Are_Formatted beside check.py's"
-         & " RUNNING_EXAMPLES");
+         & " RUNNING_EXAMPLES or FIRMWARE_EXAMPLES");
    end Core_And_Examples_Are_Formatted;
 
    --  The fixture corpus is held to the layout `refine fmt` gives, as core

@@ -113,6 +113,62 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS", machine='
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
 
 
+#  examples.md's firmware program and the line its serial port carries.
+EXAMPLE = (Path(__file__).resolve().parents[2]
+           / 'compiler/tests/fixtures/end-to-end/example-firmware-serial')
+
+
+def example(run, refine):
+    """Build and run examples.md's firmware program as the page tells a
+    reader to, and hold what the serial port carried to the fixture's
+    `serial.txt`.
+
+    The page's build is `refine compile --target=cortex-m0
+    --firmware-entry=start main.ldn -o firmware.elf`, with the driver on
+    PATH; the lane names its own pinned driver.  The page's run sends the
+    machine's serial port to the terminal, `-serial stdio`; here it goes to
+    a file.  The program returns once the line is sent and the compiler's
+    return trap then loops, so the emulator runs until it is stopped: the
+    case waits for the bytes, then a moment more for any that should not
+    follow.
+    """
+    (run.out / 'main.ldn').write_bytes((EXAMPLE / 'main.ldn').read_bytes())
+    run.command('compile', [refine, 'compile', '--target=cortex-m0',
+        '--firmware-entry=start', '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
+        'main.ldn', '-o', 'firmware.elf'], timeout=60)
+    expected = (EXAMPLE / 'serial.txt').read_bytes()
+    serial = run.out / 'serial.txt'
+    argv = [str(run.bin / 'qemu-system-arm'), '-M', 'microbit', '-display', 'none',
+            '-monitor', 'none', '-serial', 'file:' + serial.name,
+            '-kernel', 'firmware.elf']
+    record = {'name': 'qemu-example', 'argv': argv, 'timeout_seconds': 25}
+    run.commands.append(record)
+    tick = time.monotonic()
+    carried = b''
+    with (run.out / 'qemu.log').open('wb') as log:
+        process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log,
+                                   stderr=log, start_new_session=True)
+        try:
+            settled = None
+            while time.monotonic() - tick < record['timeout_seconds']:
+                require(process.poll() is None, 'QEMU exited while the example ran')
+                carried = serial.read_bytes() if serial.exists() else b''
+                if len(carried) >= len(expected):
+                    if settled is None:
+                        settled = time.monotonic()
+                    elif time.monotonic() - settled >= 0.5:
+                        break
+                time.sleep(0.05)
+        finally:
+            stop(process)
+            record['seconds'] = time.monotonic() - tick
+            record['exit'] = process.returncode
+            (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
+    require(carried == expected, 'the example\'s serial port carried %r, and'
+            ' examples.md and the fixture\'s serial.txt say %r' % (carried, expected))
+    return [{'kind': 'example', 'machine': 'microbit', 'status': 'passed'}]
+
+
 def build(run, refine, program=None, optimize="none", specialize="off", debug='none',
           level="armv6-m", root=None, roots=(), profile=None):
     source = run.out / 'boot.ldn'
@@ -955,10 +1011,10 @@ def case(name):
         raise RuntimeError('compiler firmware ' + name + ': ' + str(error)) from error
 
 
-#  The lane's cases, in the order it runs them: six once, the rest at each
-#  profile.  `boot` is the cold-booted image built twice.
+#  The lane's cases, in the order it runs them: seven once, the rest at
+#  each profile.  `boot` is the cold-booted image built twice.
 ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images', 'float-unit',
-        'cache-sequence')
+        'cache-sequence', 'example')
 KINDS = ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images',
          'hole', 'byte')
 CASES = ONCE + ('boot',) + KINDS
@@ -996,6 +1052,11 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
         out.mkdir()
         with case('cache-sequence'):
             controls += cache_sequence(Run(out, parent.tools), refine)
+    if 'example' in chosen:
+        out = root / 'example'
+        out.mkdir()
+        with case('example'):
+            controls += example(Run(out, parent.tools), refine)
     if 'refusals' in chosen:
         out = root / 'refusals'
         out.mkdir()
@@ -1094,7 +1155,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--all-profiles', action='store_true')
     parser.add_argument('--case', action='append', choices=CASES,
-                        help='run only this case; repeat for more.  The six run once,'
+                        help='run only this case; repeat for more.  The seven run once,'
                              ' the rest at each profile; a selection is FILTERED')
     args = parser.parse_args()
     supported_host(args.output)

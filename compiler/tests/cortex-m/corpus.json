@@ -2539,6 +2539,12 @@
       "mode": "refuse",
       "reason": "Firmware has no standard output to print to. runtime/sieve-of-eratosthenes executes the same algorithm here."
     },
+    "runtime/example-sum-arguments": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/failure-words": {
       "mode": "execute"
     },

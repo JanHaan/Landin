@@ -78,6 +78,7 @@ abi/thread-storage-per-thread | linux-x86-64, linux-arm64, linux-rv64, darwin-ar
 end-to-end/assembly-refuses-a-public-main-that-is-not-the-entry | linux-x86-64
 end-to-end/check-refuses-a-public-main-that-is-not-the-entry | linux-x86-64
 end-to-end/check-refuses-a-static-c-import | linux-x86-64
+end-to-end/example-firmware-serial | cortex-m0
 end-to-end/feature-level-armv6-m-lacks-idiv | cortex-m0
 end-to-end/feature-level-armv7-m-has-idiv | cortex-m0
 end-to-end/feature-level-armv8-1-a-has-lse | darwin-arm64
@@ -2136,6 +2137,7 @@ runtime/example-merge-sort | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x8
 runtime/example-run-length-encoding | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/example-sensors | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/example-sieve-of-eratosthenes | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/example-sum-arguments | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/failure-words | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/failure-words-own-atom | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/failure-words-report | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

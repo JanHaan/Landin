@@ -35,8 +35,15 @@ class Documents(unittest.TestCase):
 
     def test_every_example_is_its_fixture_with_its_oracle(self):
         found = list(outside_user.examples())
-        listed = (ROOT / "examples.md").read_text().count("Fixture source: `")
+        page = (ROOT / "examples.md").read_text()
+        #  The lane compiles and runs a program on its own host, so it
+        #  takes the runtime fixtures and leaves the firmware example,
+        #  an end-to-end fixture, to the Cortex-M lane.
+        listed = page.count("Fixture source: `compiler/tests/fixtures/runtime/")
         self.assertEqual(len(found), listed)
+        self.assertEqual(page.count("Fixture source: `"), listed + 1)
+        self.assertNotIn("example-firmware-serial",
+                         [name for name, *_ in found])
         reading = sized = 0
         loading = 0
         for name, source, expected, status, given, arguments, shared in \

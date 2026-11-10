@@ -1,0 +1,39 @@
+--  Add up the numbers given as arguments, however many there are, and
+--  print the sum.  An argument that is no number is named on standard
+--  error, and the program then returns 1.
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+
+--- The sum of every argument, each read as decimal digits.  `at_fault` is
+--- the index of the argument being read, which the caller names when the
+--- sum fails.
+sum_arguments: (host: blocking.host, inout at_fault: usize)
+               -> (sum: u64) ! ... =
+    sum = 0
+    for at in usize(0)..<io.argument_count(host) do
+        at_fault = at
+        argument: text.host_string = try io.argument_at(host, at)
+        sum += try text.parse_u64(text.host_bytes(argument))
+    end for
+end sum_arguments
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    if io.argument_count(host) == 0 then
+        io.write(host, io.err(host), "usage: sum NUMBER...\n") else none
+        return
+    end if
+    mut at_fault: usize = 0
+    sum := sum_arguments(host, at_fault) else (problem)
+        number: usize = at_fault + 1
+        words: []u8 = failure.words(problem)
+        io.write_format(host, io.err(host), "sum: argument {}: {}\n",
+                        [any(addr number), any(addr words)]) else none
+        return
+    end
+    io.write_format(host, io.out(host), "{}\n", [any(addr sum)]) else none
+    code = 0
+end main

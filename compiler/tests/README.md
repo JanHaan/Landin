@@ -630,7 +630,7 @@ to fill in the `<-` lines.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Twenty-three of them are collected in `examples.md`,
+single-construct probes. Twenty-four of them are collected in `examples.md`,
 which a reader copies from, so each prints what it computes and returns 0,
 and its `run_expect` holds that output. `check.py`'s `RUNNING_EXAMPLES`
 names them, and the page's listings are held to their sources byte for
@@ -639,9 +639,19 @@ and the page has no other, so `check.py` and the formatting test refuse a
 shorter snippet beside it; a `c-shared` source the program loads appears
 byte for byte in a `c` fence of the same section.
 
+One more program on the page is firmware, which no host runs, so it is
+not a runtime fixture: `end-to-end/example-firmware-serial`, which
+`check.py`'s `FIRMWARE_EXAMPLES` names. The fixture builds the program for
+`cortex-m0` with its entry named, as a dry run that every host's test
+program compares; the Cortex-M lane's firmware suite builds it with the
+page's command in its `example` case, runs it under QEMU's `microbit`
+machine and holds what the serial port carried to the fixture's
+`serial.txt`. `check.py` holds the page's listing to the source, its
+`text` fence to `serial.txt`, and the lane to naming the fixture.
+
 | group | fixtures |
 | --- | --- |
-| everyday tools | `line-count`, `word-count`, `line-numbers`, `plugin-loading`, `directory-listing`, `run-shell`, `tree-copy`, `network-echo` |
+| everyday tools | `line-count`, `example-sum-arguments`, `word-count`, `line-numbers`, `plugin-loading`, `directory-listing`, `run-shell`, `tree-copy`, `network-echo` |
 | printing and failures | `example-formatted-output`, `example-failure-words` |
 | classic exercises | `example-fizzbuzz`, `example-greatest-common-divisor`, `example-insertion-sort`, `example-binary-search`, `example-sieve-of-eratosthenes`, `example-run-length-encoding`, `example-merge-sort`, `example-sensors` |
 | Benchmark Game ports | `benchmark-game-fannkuch-redux`, `benchmark-game-mandelbrot`, `benchmark-game-fasta`, `benchmark-game-reverse-complement`, `benchmark-game-binary-trees` |

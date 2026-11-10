@@ -1138,6 +1138,44 @@ Assembler/linker failures retain the invoked tool's diagnostic and driver
 failure status, a library built for the other float variant among them
 (D780).
 
+### Running a firmware image under QEMU
+
+`refine` ships no emulator, and none is needed to build. A Cortex-M0
+image built without a device description has the reference profile's map,
+32 KiB of flash at zero and 16 KiB of RAM at `0x2000_0000`, and that map
+fits QEMU's `microbit` machine, a BBC micro:bit with an nRF51 Cortex-M0.
+`qemu-system-arm` comes with a distribution's QEMU: Debian's and
+Ubuntu's `qemu-system-arm` package, Fedora's `qemu-system-arm`, Homebrew's
+and Nix's `qemu`.
+
+```sh
+refine compile --target=cortex-m0 --firmware-entry=start main.ldn -o firmware.elf
+qemu-system-arm -M microbit -display none -monitor none -serial stdio -kernel firmware.elf
+```
+
+`-kernel` loads the ELF image where its headers say, and the core starts
+from the vector table at zero, as after a power-on. `-serial stdio` sends
+the machine's UART to the terminal, which is how
+[the firmware example](../examples.md#firmware-for-a-microcontroller)
+prints. The emulator runs until you stop it, with Ctrl-C: firmware has
+nowhere to exit to, and an entry that returns stops in the compiler's
+`_landin_firmware_returned` loop.
+
+A program that writes nothing is read with a debugger. Add `-S -gdb
+tcp::1234` to the QEMU command, which waits for one, and connect a GDB
+that knows Arm, `gdb-multiarch` or `arm-none-eabi-gdb`, from another
+terminal:
+
+```sh
+gdb-multiarch firmware.elf -ex 'target remote :1234' -ex 'break _landin_firmware_returned' -ex continue
+```
+
+At the stop, `print (unsigned) NAME` reads a `u32` module binding by its
+name; the cast is needed because the image carries symbols and no types.
+`break _landin_firmware_unhandled` instead catches a trap or an unhandled
+interrupt. The gate runs its own pinned QEMU the same way; its lanes are
+[the emulator evidence](../environments/cortex-m/README.md).
+
 `.text.*` and `.rodata.*` reside in the regions text and rodata are placed in;
 `.data.*`, `.bss.*` and `.ramtext.*` in the data and BSS regions, with load
 images in the text region for initialized data and RAM code.

@@ -1,0 +1,7 @@
+write "firmware.elf.s"
+write "firmware.elf"
+write "firmware.elf.o"
+write "firmware.elf.ld"
+write "firmware.elf.map"
+run ["arm-eabi-gcc","-mcpu=cortex-m0","-mthumb","-mfloat-abi=soft","-mabi=aapcs","-Wa,--fatal-warnings","-x","assembler","-c","firmware.elf.s","-o","firmware.elf.o"]
+run ["arm-eabi-gcc","-mcpu=cortex-m0","-mthumb","-mfloat-abi=soft","-mabi=aapcs","-nostdlib","-nostartfiles","-nodefaultlibs","firmware.elf.o","-lgcc","-Xlinker","--gc-sections","-Xlinker","--build-id=none","-Xlinker","--emit-relocs","-Xlinker","-T","-Xlinker","firmware.elf.ld","-Xlinker","-Map","-Xlinker","firmware.elf.map","-o","firmware.elf"]
