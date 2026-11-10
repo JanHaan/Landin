@@ -170,6 +170,8 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/example-failure-words/main.ldn"),
     ("Counting lines in a named file",
      "compiler/tests/fixtures/runtime/line-count/main.ldn"),
+    ("Adding up the arguments",
+     "compiler/tests/fixtures/runtime/example-sum-arguments/main.ldn"),
     ("FizzBuzz",
      "compiler/tests/fixtures/runtime/example-fizzbuzz/main.ldn"),
     ("Greatest common divisor",
@@ -201,16 +203,27 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/benchmark-game-binary-trees/main.ldn"),
 ]
 
+#  A firmware example is a program a reader copies too, and no host runs
+#  it: its fixture is an end-to-end one that builds it for the firmware
+#  target, and the Cortex-M lane's firmware suite runs it under the
+#  emulator and holds its serial port to the fixture's `serial.txt`.
+FIRMWARE_EXAMPLES = [
+    ("Firmware for a microcontroller",
+     "compiler/tests/fixtures/end-to-end/example-firmware-serial/main.ldn"),
+]
+FIRMWARE_LANE = "environments/cortex-m/firmware.py"
+
 #  A running example is a program a reader copies, so it does what a
 #  program does: it prints what it computes and returns 0, and its fixture
 #  holds that output.  The status-42 fixtures that check themselves stay
 #  tests, run on Cortex-M where there is no standard output; an example of
 #  the same algorithm is a fixture of its own.  One that reads its standard
-#  input, or takes its size as an argument as a Benchmark Game program
-#  does, also names the input or the arguments its fixture gives it.
+#  input, or works on its arguments, as a Benchmark Game program takes its
+#  size, also names the input or the arguments its fixture gives it.
 READING_EXAMPLES = {"Word count", "Line numbers",
                     "Benchmark Game reverse-complement"}
-ARGUMENT_EXAMPLES = {"Benchmark Game fannkuch-redux",
+ARGUMENT_EXAMPLES = {"Adding up the arguments",
+                     "Benchmark Game fannkuch-redux",
                      "Benchmark Game Mandelbrot", "Benchmark Game FASTA",
                      "Benchmark Game binary-trees"}
 
@@ -8286,14 +8299,17 @@ SERVER_TARGET_SENTENCES = (
     ("`target` is any name `--target=` takes:", "described"),
     ("`firmwareEntry` is a nonempty routine name for a firmware target:",
      "firmware"),
+    ("A device description's profile applies on every firmware target:",
+     "firmware"),
 )
 
 
 def check_server_targets(full_run):
     """The server guide's target lists are the compiler's.
 
-    docs/server.md names every target a client may select and the firmware
-    targets `firmwareEntry` applies to, and nothing read those sentences:
+    docs/server.md names every target a client may select, the firmware
+    targets `firmwareEntry` applies to and the ones a device description's
+    profile applies on, and nothing read those sentences:
     a target added to the compiler would be missing from them until a
     reader noticed.  The first is held to the selection package's names,
     the second to the firmware corpus's targets in scripts/emit_manifest.py.
@@ -8929,6 +8945,85 @@ def check_library_page(full_run):
             for line, message in library_block_faults(lines, read)]
 
 
+def firmware_examples(lines):
+    """The examples page's firmware programs are the ones the lane runs.
+
+    A firmware example cannot be a runtime fixture, which a host executes
+    and whose output it compares.  Its section is held as a running
+    example's is, one Landin fence that is the fixture's source byte for
+    byte, and to three things more: the fixture builds the program for a
+    firmware target with an entry named, the page's `text` fence is the
+    fixture's `serial.txt`, and FIRMWARE_LANE names the fixture, which is
+    what runs it under the emulator and compares that file.
+    """
+    lane = os.path.join(ROOT, FIRMWARE_LANE)
+    out = absent([lane] + [os.path.join(ROOT, path) for _, source
+                           in FIRMWARE_EXAMPLES
+                           for path in (source,
+                                        os.path.dirname(source)
+                                        + "/fixture.meta",
+                                        os.path.dirname(source)
+                                        + "/serial.txt")])
+    if out:
+        return out
+    lane_text = read_file(lane, encoding="utf-8")
+    for title, source in FIRMWARE_EXAMPLES:
+        found = [at for at, line in enumerate(lines)
+                 if line == "## " + title]
+        if len(found) != 1:
+            out.append(("examples.md", 1, "%r has %d sections instead of one"
+                        % (title, len(found))))
+            continue
+        start = found[0]
+        end = next((at for at in range(start + 1, len(lines))
+                    if lines[at].startswith("## ")), len(lines))
+        if "Fixture source: `%s`." % source not in lines[start:end]:
+            out.append(("examples.md", start + 1,
+                        "%s does not name its source %s in a `Fixture "
+                        "source:` line" % (title, source)))
+
+        def fences(tag):
+            held, at = [], start + 1
+            while at < end:
+                if lines[at] == "```" + tag:
+                    closing = next((n for n in range(at + 1, end)
+                                    if lines[n] == "```"), end)
+                    held.append("\n".join(lines[at + 1:closing]) + "\n")
+                    at = closing
+                at += 1
+            return held
+
+        directory = os.path.dirname(source)
+        if fences("landin") != [read_file(os.path.join(ROOT, source),
+                                          encoding="utf-8")]:
+            out.append(("examples.md", start + 1,
+                        "%s has one Landin listing, which is %s byte for "
+                        "byte" % (title, source)))
+        carried = read_file(os.path.join(ROOT, directory, "serial.txt"),
+                            encoding="utf-8")
+        if carried not in fences("text"):
+            out.append(("examples.md", start + 1,
+                        "%s shows what the program prints in a text fence, "
+                        "which is %s/serial.txt byte for byte"
+                        % (title, directory)))
+        fields = fixture_fields(os.path.join(ROOT, directory, "fixture.meta"))
+        arguments = fields.get("args", "").split()
+        if (fields.get("class") != "end-to-end" or fields.get("status") != "0"
+                or not any(one.startswith("--firmware-entry=")
+                           for one in arguments)
+                or not any(one.startswith("--target=") for one in arguments)):
+            out.append((source, 1,
+                        "%s is published as firmware, so its fixture is an "
+                        "end-to-end one whose args build it with --target= "
+                        "and --firmware-entry=, with status 0" % title))
+        if directory not in lane_text:
+            out.append((FIRMWARE_LANE, 1,
+                        "%s is published as firmware, so the lane names its "
+                        "fixture %s, builds it and holds its serial port to "
+                        "serial.txt" % (title, directory)))
+    return out
+
+
 def check_running_examples(full_run):
     """The examples page shows the runtime sources the gate actually runs.
 
@@ -8952,10 +9047,12 @@ def check_running_examples(full_run):
     lines = read_file(document, encoding="utf-8").splitlines()
     out = []
     landin_fences = sum(line == "```landin" for line in lines)
-    if landin_fences != len(RUNNING_EXAMPLES):
+    published = len(RUNNING_EXAMPLES) + len(FIRMWARE_EXAMPLES)
+    if landin_fences != published:
         out.append(("examples.md", 1,
-                    "the page has %d Landin listings for %d running examples"
-                    % (landin_fences, len(RUNNING_EXAMPLES))))
+                    "the page has %d Landin listings for %d running and "
+                    "firmware examples" % (landin_fences, published)))
+    out += firmware_examples(lines)
 
     for title, source in RUNNING_EXAMPLES:
         heading = "## " + title
@@ -9022,7 +9119,7 @@ def check_running_examples(full_run):
         if takes and not (fields.get("run_args")
                           and fields.get("run_expect")):
             out.append((source, 1,
-                        "%s takes its size as an argument, so its metadata "
+                        "%s works on its arguments, so its metadata "
                         "names the arguments it is given and the output "
                         "expected" % title))
 

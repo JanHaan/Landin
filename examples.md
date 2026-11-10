@@ -5,9 +5,10 @@ order:
 
 - Two short lessons come first,
   [Printing formatted values](#printing-formatted-values) and
-  [Reporting a failure in words](#reporting-a-failure-in-words), with
-  [a small tool](#counting-lines-in-a-named-file) that counts the lines of
-  the file you name.
+  [Reporting a failure in words](#reporting-a-failure-in-words), with two
+  small tools: [one](#counting-lines-in-a-named-file) counts the lines of
+  the file you name, and [one](#adding-up-the-arguments) adds up however
+  many numbers you give it.
 - Then come the classic exercises, from [FizzBuzz](#fizzbuzz) to
   [Merge sort](#merge-sort), and [Sensors](#sensors), a program that puts
   the language's main ideas together.
@@ -17,6 +18,9 @@ order:
   and the file system, shortest first, from
   [Loading a library](#loading-a-library) to
   [Copying a tree](#copying-a-tree).
+- Then comes [firmware](#firmware-for-a-microcontroller): a program with
+  no operating system under it, built for a Cortex-M0 and run in an
+  emulator.
 - Last come [the Benchmark Game ports](#benchmark-game-programs), used to
   compare Landin with other languages.
 
@@ -44,6 +48,9 @@ or takes an argument says so in its section.
 Every program here is compiled and run, and what it prints is checked, on
 Linux, macOS and FreeBSD. The `Fixture source:` line above each listing
 says where the program lives in the repository.
+[The firmware example](#firmware-for-a-microcontroller) is the exception
+to both paragraphs: it is built for a microcontroller, runs in an emulator
+and has its own commands.
 
 ## Printing formatted values
 
@@ -315,6 +322,77 @@ refine compile main.ldn -o count
 
 it prints `4 lines`. Named a file that is not there, it prints
 `count: missing.log: not found` on standard error and returns 1.
+
+## Adding up the arguments
+
+The program adds up the numbers you give it as arguments, however many
+there are, and prints the sum. When an argument is not a number, the
+program names it on standard error and returns 1.
+
+- `io.argument_count(host)` is how many arguments the program was given,
+  not counting its own name [1650]. The loop asks the host for each one by
+  its index, `io.argument_at(host, at)`, from 0 up to the count [1150].
+- With no argument at all, `main` prints how to use the program.
+- `text.parse_u64` reads an argument's bytes as decimal digits. Anything
+  else is the failure `text.invalid_number`, and digits too large for a
+  `u64` are `text.number_overflow`; `try` passes either on [0960].
+- `sum_arguments` keeps the index it is working on in `at_fault`, an
+  `inout` parameter, so that `main` can say which argument failed [1030].
+- A sum too large for a `u64` traps, as overflow does [0300].
+
+Fixture source: `compiler/tests/fixtures/runtime/example-sum-arguments/main.ldn`.
+
+```landin
+--  Add up the numbers given as arguments, however many there are, and
+--  print the sum.  An argument that is no number is named on standard
+--  error, and the program then returns 1.
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+
+--- The sum of every argument, each read as decimal digits.  `at_fault` is
+--- the index of the argument being read, which the caller names when the
+--- sum fails.
+sum_arguments: (host: blocking.host, inout at_fault: usize)
+               -> (sum: u64) ! ... =
+    sum = 0
+    for at in usize(0)..<io.argument_count(host) do
+        at_fault = at
+        argument: text.host_string = try io.argument_at(host, at)
+        sum += try text.parse_u64(text.host_bytes(argument))
+    end for
+end sum_arguments
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    if io.argument_count(host) == 0 then
+        io.write(host, io.err(host), "usage: sum NUMBER...\n") else none
+        return
+    end if
+    mut at_fault: usize = 0
+    sum := sum_arguments(host, at_fault) else (problem)
+        number: usize = at_fault + 1
+        words: []u8 = failure.words(problem)
+        io.write_format(host, io.err(host), "sum: argument {}: {}\n",
+                        [any(addr number), any(addr words)]) else none
+        return
+    end
+    io.write_format(host, io.out(host), "{}\n", [any(addr sum)]) else none
+    code = 0
+end main
+```
+
+Given three numbers:
+
+```sh
+refine compile main.ldn -o sum
+./sum 3 40 500
+```
+
+it prints `543`. Given `./sum 3 x 5`, it prints
+`sum: argument 2: not a number` on standard error and returns 1.
 
 ## FizzBuzz
 
@@ -3011,6 +3089,105 @@ a link where a directory goes is refused, and set-ID bits need the owner
 
 The number after each `+` is the entry's time in seconds after the start
 of 2000, which the program gave the source.
+
+## Firmware for a microcontroller
+
+The program is firmware for a Cortex-M0: it adds up the squares of 1 to 10
+and writes the sum as a line to a serial port. No operating system is
+under it, so it has no `main`, no host and no exit status, and you run it
+in an emulator.
+
+- The build names the entry, `--firmware-entry=start`: an ordinary
+  function that takes and returns nothing [1650]. The compiler supplies
+  the vector table and the reset code that calls it [1640].
+- The program imports no device description, so the image has the
+  reference profile's memory: 32 KiB of flash and 16 KiB of RAM [1640].
+  That map fits QEMU's `microbit` machine, a BBC micro:bit.
+- `ptr(uart + offset)` makes a pointer from a device's address [0810], and
+  `compiler.register_write` and `compiler.register_read` are the device
+  transactions [0740]. The serial port is the micro:bit's UART. The
+  program does only what QEMU's model of it needs; a real micro:bit also
+  needs its transmit pin selected.
+- `core/text` needs no host: `text.format` writes the line into a buffer
+  in `start`'s frame [1370].
+- When `start` returns, the compiler's code traps and waits, because
+  firmware has nowhere to return to [1650].
+
+Fixture source: `compiler/tests/fixtures/end-to-end/example-firmware-serial/main.ldn`.
+
+```landin
+--  Firmware for a Cortex-M0: add up the squares of 1 to 10 and write the
+--  sum as a line to the serial port of QEMU's `microbit` machine.  There
+--  is no `main` and no host; the build names `start` as the entry.
+import core/text
+
+--  The micro:bit's serial port, an nRF51 UART, and the four registers of
+--  it the program uses, as offsets from its address.
+uart: usize = 0x4000_2000
+start_transmitter: usize = 0x008
+byte_sent: usize = 0x11c
+enable: usize = 0x500
+transmit: usize = 0x51c
+
+--- Write `value` to the UART's register at `offset`.
+put: (offset: usize, value: u32) -> none =
+    port: ptr mut u32 = ptr(uart + offset)
+    compiler.register_write(port, value, compiler.normal_write,
+                            compiler.write_zero, 0xffff_ffff)
+end put
+
+--- Send one byte and wait until the UART says it has gone.
+send: (byte: u8) -> none =
+    put(byte_sent, 0)
+    put(transmit, u32(byte))
+    sent: ptr u32 = ptr(uart + byte_sent)
+    loop do
+        break when compiler.register_read(sent, compiler.normal_read) <> 0
+    end loop
+end send
+
+--- The sum of the squares of 1 to `last`.
+sum_of_squares: (last: u32) -> (sum: u32) =
+    sum = 0
+    for n in u32(1)..last do
+        sum += n * n
+    end for
+end sum_of_squares
+
+--- The entry: the compiler's reset calls it once memory is ready.
+start: () -> none =
+    put(enable, 4)
+    put(start_transmitter, 1)
+    sum: u32 = sum_of_squares(10)
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room)
+    text.format(line, "sum of squares: {}\n", [any(addr sum)]) else none
+    for byte in room[0..<text.length(line)] do
+        send(byte)
+    end for
+end start
+```
+
+Building needs an Arm GCC for the link, `arm-eabi-gcc` or
+`arm-none-eabi-gcc`, and running needs `qemu-system-arm`:
+
+```sh
+refine compile --target=cortex-m0 --firmware-entry=start main.ldn -o firmware.elf
+qemu-system-arm -M microbit -display none -monitor none -serial stdio -kernel firmware.elf
+```
+
+It prints
+
+```text
+sum of squares: 385
+```
+
+and keeps running until you stop the emulator with Ctrl-C. The image takes
+about 11 KiB of the flash; `--build-report=PATH` gives the exact figures.
+[Running a firmware image under QEMU](docs/targets.md#running-a-firmware-image-under-qemu)
+says where QEMU comes from and how to read a program that prints nothing.
+The gate runs this example on that emulator alone, not on the three
+systems the others run on.
 
 ## Benchmark Game programs
 

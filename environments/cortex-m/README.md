@@ -1,7 +1,13 @@
-# Cortex-M execution profile
+# Cortex-M emulator evidence
 
 This directory is the emulator harness for the Cortex-M and RV32 firmware
-targets. It installs locked QEMU, GDB and cross tools, and its lanes run
+targets: the gate's evidence that firmware runs, and not a guide to
+writing it. To write firmware, start from
+[the firmware example](../../examples.md#firmware-for-a-microcontroller), a
+complete program with its build and run commands;
+[the targets guide](../../docs/targets.md#running-a-firmware-image-under-qemu)
+says how to run an image under a QEMU you install yourself. The harness
+installs locked QEMU, GDB and cross tools, and its lanes run
 independent C and assembly controls, compiler-generated firmware with
 compiler-owned reset, vectors and linking, and the backend corpus, against
 QEMU machines and synthetic peripherals. `setup.py` installs the tools and
@@ -1091,7 +1097,12 @@ maintenance write the line address its range says, a refused range writes
 none, and GDB reads the three refusals and CCR clear at the return (D977).
 QEMU keeps neither enable bit and reads CCSIDR as zero, so this is the
 operations' sequence alone; what a cache does is the STM32H753 board's
-(D975). It invokes the
+(D975). Its `example` case is the firmware program
+[the examples page](../../examples.md#firmware-for-a-microcontroller)
+publishes, the fixture `end-to-end/example-firmware-serial`: it builds the
+program with the page's command, runs it on `microbit` with the serial
+port sent to a file, and holds the bytes to the fixture's `serial.txt`,
+the line the page says the program prints. It invokes the
 compiler with
 `--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
 path. The compiler generates reset, vectors and the linker script; `backend-start.S`
@@ -1175,8 +1186,8 @@ python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_D
 ```
 
 `--case`, repeated, runs only the cases named: `cpu-levels`, `refusals`,
-`independent-c-assembly`, `compact-images`, `float-unit`, `float-debug` and
-`cache-sequence` once, and `boot`, the
+`independent-c-assembly`, `compact-images`, `float-unit`, `float-debug`,
+`cache-sequence` and `example` once, and `boot`, the
 cold-booted image built twice, `interrupts`, `fibre`, `dma`, `machine`,
 `veneers`, `fallthrough`, `images`, `hole` and `byte` at each profile. A
 selection is marked `FILTERED` in its last line and its `result.json`.

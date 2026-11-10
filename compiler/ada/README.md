@@ -481,7 +481,10 @@ backend was given, closes it where a call names its routine, and renders
 `routine`, `file`, `line`, `column`, `callee` when one is named) and one
 `routines` row per emitted routine with `frame_bytes`, `depth_bytes`,
 `closed`, `address_taken`, `switches`, `traps`, the deepest `path` and the
-`openings` it reaches. Files are named relative to their module's root, as
+`openings` it reaches. A row's `frame_bytes` is the routine's whole stack,
+the figure the build report's `routines` row calls `stack_bytes`; the
+build report's own `frame_bytes` is a smaller figure,
+[described with it](#the-build-report). Files are named relative to their module's root, as
 D361's report names them, so the bytes do not depend on where the program
 was read or written. The report is frames and depths; sizing a fibre's
 backing from them, alignment of the top and D461's exception frame
@@ -1508,7 +1511,12 @@ gdb --args compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine check program.l
 ```
 
 Below the run-time library's frames, the first Landin frame is the
-subprogram whose contract failed, and the next is its caller. A defect
+subprogram whose contract failed, and the next is its caller. The report
+and GDB can name different lines of that one contract. The report's
+message names the line of the conjunct that failed; GDB shows the frame at
+the line the aspect begins on, its `with Pre`. A precondition reported at
+`landin-checking.ads:2088` stopped at `:2086`: the same contract, whose
+third line held the failing conjunct. A defect
 raised as `Compiler_Defect` stops the same way under `catch exception
 landin.compiler_defect`. The driver handles every defect so that it can
 write the report, so `catch exception unhandled` never stops on one.

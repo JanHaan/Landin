@@ -3,15 +3,23 @@
 
     python3 bindings/test.py --refine PATH
     LANDIN_REFINE=PATH python3 bindings/test.py
+    python3 bindings/test.py --refine PATH --write
 
 Every case runs the refine named, and the external Clang that $CLANG names
 (clang by default), on headers and policies written here; the cases that
 only a fake host reaches are the compiler's own, in its bindings suite.
+
+`--write` runs no case.  It regenerates every committed binding fixture
+from its pinned inputs, as the cases that compare them do, and writes each
+generated file that differs into the fixture; `--offline` with it refuses
+to fetch a pinned input the cache does not hold.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import os
 import pathlib
@@ -122,6 +130,117 @@ def arm_attributes(path: pathlib.Path) -> dict[int, Any]:
             inner = limit
         at = end
     return attributes
+
+
+#  What `refine bindings` writes, and so what a committed fixture holds of
+#  the generator's.
+GENERATED = ("bindings.ldn", "adapters.c", "exports.h", "bindings.json")
+#  The declaration-only C library header the hosted cases bind against:
+#  the generated adapters name calloc and free, and the sysroot is empty.
+STDLIB_H = ("#ifndef TEST_STDLIB_H\n#define TEST_STDLIB_H\n"
+            "typedef __SIZE_TYPE__ size_t;\n"
+            "void *calloc(size_t, size_t);\nvoid free(void *);\n#endif\n")
+
+
+def clang_and_resources() -> tuple[pathlib.Path, pathlib.Path]:
+    """The external Clang and its resource headers' directory."""
+    requested = os.environ.get("CLANG", "clang")
+    clang = shutil.which(requested)
+    if clang is None:
+        raise RuntimeError(f"external Clang {requested!r} is required")
+    found = pathlib.Path(clang).resolve()
+    process = subprocess.run([str(found), "-print-resource-dir"],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, check=True)
+    resource_include = pathlib.Path(process.stdout.strip()) / "include"
+    if not resource_include.is_dir():
+        raise RuntimeError("Clang resource include directory is missing")
+    return found, resource_include
+
+
+def regenerate(name: str, work: pathlib.Path, clang: pathlib.Path,
+               resource_include: pathlib.Path, *, fixtures: pathlib.Path | None = None,
+               offline: bool = False
+               ) -> tuple[subprocess.CompletedProcess[str], pathlib.Path]:
+    """Generate the committed fixture NAME again, into WORK/generated.
+
+    The policy and the fixture's own headers are read where they are
+    committed, under FIXTURES, and the pinned headers from the input cache,
+    fetched by hash when it lacks one unless OFFLINE.  The cases that hold
+    the fixtures to their inputs and `--write` both generate through here,
+    so what one compares is what the other writes.
+    """
+    directory = (FIXTURE.parent if fixtures is None else fixtures) / name
+    output = work / "generated"
+    work.mkdir(parents=True)
+    if name == FIXTURE.name:
+        (work / "sysroot").mkdir()
+        (work / "includes").mkdir()
+        (work / "includes" / "stdlib.h").write_text(STDLIB_H, encoding="utf-8")
+        command = [
+            refine(), "bindings", "--clang", str(clang),
+            "--target", TARGET_NAME, "--sysroot", str(work / "sysroot"),
+            "--policy", str(directory / "policy.json"), "--out-dir", str(output),
+            "--system-include-dir", str(work / "includes"),
+            "--system-include-dir", str(resource_include),
+            f"r440-bindings.h={directory / 'r440-bindings.h'}",
+        ]
+    else:
+        fixture = CORTEX_FIXTURES[name]
+        cache = fetch_inputs.cache_root()
+        for pinned in fetch_inputs.read_lock():
+            if pinned.startswith(fixture["include"] + "/"):
+                fetch_inputs.fetch(pinned, offline=offline)
+        headers = []
+        for logical, pinned in fixture["headers"]:
+            path = (fetch_inputs.fetch(pinned, offline=offline)
+                    if pinned is not None else directory / logical)
+            headers.append(f"{logical}={path}")
+        command = [
+            refine(), "bindings", "--clang", str(clang),
+            "--target", CORTEX_NAME, "--policy", str(directory / "policy.json"),
+            "--out-dir", str(output),
+            "--include-dir", str(cache / fixture["include"]),
+            "--system-include-dir", str(resource_include), *headers,
+        ]
+    return subprocess.run(command, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, timeout=120), output
+
+
+def write_fixtures(*, fixtures: pathlib.Path | None = None,
+                   offline: bool = False) -> int:
+    """Regenerate every committed binding fixture and write what differs.
+
+    Every fixture is generated before any file is written, so a generator
+    that refuses one leaves all three as they were.  Returns the status
+    `--write` exits with.
+    """
+    root = FIXTURE.parent if fixtures is None else fixtures
+    try:
+        clang, resource_include = clang_and_resources()
+        with tempfile.TemporaryDirectory(prefix="landin-bindings-write-") as held:
+            made = {}
+            for name in (FIXTURE.name, *CORTEX_FIXTURES):
+                process, output = regenerate(
+                    name, pathlib.Path(held) / name, clang, resource_include,
+                    fixtures=fixtures, offline=offline)
+                if process.returncode != 0:
+                    print(f"{name}: refine bindings refused it, and no fixture"
+                          f" was written:\n{process.stderr}", file=sys.stderr)
+                    return 1
+                made[name] = {generated: (output / generated).read_bytes()
+                              for generated in GENERATED}
+            for name, files in made.items():
+                for generated, content in files.items():
+                    target = root / name / generated
+                    same = target.is_file() and target.read_bytes() == content
+                    if not same:
+                        target.write_bytes(content)
+                    print(f"{'unchanged' if same else 'wrote'} {target}")
+    except (RuntimeError, fetch_inputs.InputError) as error:
+        print(f"bindings/test.py --write: {error}", file=sys.stderr)
+        return 1
+    return 0
 
 
 #  Tag_ABI_enum_size, 2: int-sized; Tag_ABI_VFP_args, 1: VFP registers.
@@ -359,17 +478,7 @@ class PolicyNameTests(unittest.TestCase):
 class GeneratorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        requested = os.environ.get("CLANG", "clang")
-        clang = shutil.which(requested)
-        if clang is None:
-            raise RuntimeError(f"external Clang {requested!r} is required")
-        cls.clang = pathlib.Path(clang).resolve()
-        process = subprocess.run([str(cls.clang), "-print-resource-dir"],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 text=True, check=True)
-        cls.resource_include = pathlib.Path(process.stdout.strip()) / "include"
-        if not cls.resource_include.is_dir():
-            raise RuntimeError("Clang resource include directory is missing")
+        cls.clang, cls.resource_include = clang_and_resources()
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="landin-bindings-test-")
@@ -385,11 +494,7 @@ class GeneratorTests(unittest.TestCase):
         sysroot.mkdir()
         includes = parent / "includes"
         includes.mkdir()
-        (includes / "stdlib.h").write_text(
-            "#ifndef TEST_STDLIB_H\n#define TEST_STDLIB_H\n"
-            "typedef __SIZE_TYPE__ size_t;\n"
-            "void *calloc(size_t, size_t);\nvoid free(void *);\n#endif\n",
-            encoding="utf-8")
+        (includes / "stdlib.h").write_text(STDLIB_H, encoding="utf-8")
         (parent / "api.h").write_text(header, encoding="utf-8")
         (parent / "policy.json").write_text(
             json.dumps(policy() if selected_policy is None else selected_policy,
@@ -546,25 +651,11 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(sorted(path.name for path in replacement.iterdir()), ["out"])
 
     def test_committed_fixture_is_exactly_regenerable(self) -> None:
-        parent = self.root / "fixture-regeneration"
-        sysroot, includes, output = self.make_tree(
-            parent,
-            header=(FIXTURE / "r440-bindings.h").read_text(encoding="utf-8"),
-            selected_policy=json.loads((FIXTURE / "policy.json").read_text(
-                encoding="utf-8")))
-        shutil.move(parent / "api.h", parent / "r440-bindings.h")
-        command = [
-            refine(), "bindings", "--clang", str(self.clang),
-            "--target", TARGET_NAME, "--sysroot", str(sysroot),
-            "--policy", str(parent / "policy.json"), "--out-dir", str(output),
-            "--system-include-dir", str(includes),
-            "--system-include-dir", str(self.resource_include),
-            f"r440-bindings.h={parent / 'r440-bindings.h'}",
-        ]
-        process = subprocess.run(command, stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE, text=True)
+        process, output = regenerate(
+            FIXTURE.name, self.root / "fixture-regeneration", self.clang,
+            self.resource_include)
         self.assertEqual(process.returncode, 0, process.stderr)
-        for name in ("bindings.ldn", "adapters.c", "exports.h", "bindings.json"):
+        for name in GENERATED:
             self.assertEqual((output / name).read_bytes(),
                              (FIXTURE / name).read_bytes(), name)
 
@@ -3343,23 +3434,10 @@ static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level 
         for name, fixture in CORTEX_FIXTURES.items():
             with self.subTest(fixture=name):
                 directory = FIXTURE.parent / name
-                for pinned in fetch_inputs.read_lock():
-                    if pinned.startswith(fixture["include"] + "/"):
-                        fetch_inputs.fetch(pinned)
-                headers = []
-                for logical, pinned in fixture["headers"]:
-                    path = (fetch_inputs.fetch(pinned) if pinned is not None
-                            else directory / logical)
-                    headers.append(f"{logical}={path}")
-                output = self.root / name
-                process = subprocess.run(
-                    self.cortex_command(directory, output, headers,
-                                        include=[cache / fixture["include"]]),
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                    timeout=120)
+                process, output = regenerate(name, self.root / name, self.clang,
+                                             self.resource_include)
                 self.assertEqual(process.returncode, 0, process.stderr)
-                for generated in ("bindings.ldn", "adapters.c", "exports.h",
-                                  "bindings.json"):
+                for generated in GENERATED:
                     self.assertEqual((output / generated).read_bytes(),
                                      (directory / generated).read_bytes(), generated)
                 convention = json.loads((directory / "bindings.json").read_text())[
@@ -3375,6 +3453,51 @@ static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level 
                         self.root / (name + "-" + source.strip() + ".o"))
                     self.assertEqual(attributes.get(TAG_ABI_VFP_ARGS, 0),
                                      1 if convention == "aapcs-vfp" else 0)
+
+    def test_write_regenerates_every_committed_fixture(self) -> None:
+        #  `--write` on a copy of the three fixtures: a generated file that
+        #  was edited and one that is missing come back as committed, the
+        #  rest are left alone, and nothing but the generated files is
+        #  touched.
+        copies = self.root / "fixtures"
+        names = (FIXTURE.name, *CORTEX_FIXTURES)
+        for name in names:
+            shutil.copytree(FIXTURE.parent / name, copies / name)
+        (copies / FIXTURE.name / "bindings.ldn").write_text("edited\n")
+        (copies / "cortex-vfp-bindings" / "exports.h").unlink()
+        said = io.StringIO()
+        with contextlib.redirect_stdout(said):
+            status = write_fixtures(fixtures=copies)
+        self.assertEqual(status, 0, said.getvalue())
+        wrote = sorted(line.split(" ", 1)[1] for line in
+                       said.getvalue().splitlines() if line.startswith("wrote "))
+        self.assertEqual(wrote, sorted([
+            str(copies / "cortex-vfp-bindings" / "exports.h"),
+            str(copies / FIXTURE.name / "bindings.ldn")]))
+        self.assertEqual(said.getvalue().count("unchanged "),
+                         len(names) * len(GENERATED) - 2)
+        for name in names:
+            for committed in (FIXTURE.parent / name).iterdir():
+                if committed.is_file():
+                    self.assertEqual((copies / name / committed.name).read_bytes(),
+                                     committed.read_bytes(),
+                                     f"{name}/{committed.name}")
+
+    def test_write_leaves_every_fixture_when_one_is_refused(self) -> None:
+        copies = self.root / "fixtures"
+        for name in (FIXTURE.name, *CORTEX_FIXTURES):
+            shutil.copytree(FIXTURE.parent / name, copies / name)
+        (copies / FIXTURE.name / "bindings.ldn").write_text("edited\n")
+        (copies / "cortex-cmsis-bindings" / "policy.json").write_text("{}\n")
+        said, errors = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(said), contextlib.redirect_stderr(errors):
+            status = write_fixtures(fixtures=copies)
+        self.assertEqual(status, 1)
+        self.assertIn("cortex-cmsis-bindings: refine bindings refused it, and"
+                      " no fixture was written", errors.getvalue())
+        self.assertEqual(said.getvalue(), "")
+        self.assertEqual((copies / FIXTURE.name / "bindings.ldn").read_text(),
+                         "edited\n")
 
     def test_cortex_bindings_refuse_a_program_of_the_other_convention(self) -> None:
         #  D936: compiled for cortex-m0 with no float unit, the base
@@ -3450,4 +3573,11 @@ if __name__ == "__main__":
         at = arguments.index("--refine")
         REFINE = arguments[at + 1]
         del arguments[at:at + 2]
+    if "--write" in arguments:
+        if set(arguments) - {"--write", "--offline"}:
+            sys.exit("bindings/test.py: --write takes --refine PATH and"
+                     " --offline, and runs no case")
+        sys.exit(write_fixtures(offline="--offline" in arguments))
+    if "--offline" in arguments:
+        sys.exit("bindings/test.py: --offline goes with --write")
     unittest.main(argv=[sys.argv[0], *arguments], verbosity=2)

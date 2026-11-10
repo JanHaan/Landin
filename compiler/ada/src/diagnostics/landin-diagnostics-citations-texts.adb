@@ -6490,10 +6490,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Exact rules, with each target's registers, the text rule"
                & "s and your obligations: spec [1990].",
             when 1640 =>
-               "On Cortex-M, a `link(...)` annotation also places a decl"
-               & "aration: in a section, at an alignment, in an interrupt "
-               & "vector slot, and kept against the linker's section garba"
-               & "ge collection."
+               "On a firmware target, a `link(...)` annotation also plac"
+               & "es a declaration: in a section, at an alignment, in an i"
+               & "nterrupt vector slot, and kept against the linker's sect"
+               & "ion garbage collection. Cortex-M, RV32 and Xtensa all pl"
+               & "ace declarations this way. The example and the vector ta"
+               & "ble below are Cortex-M's; RV32 and Xtensa have tables of"
+               & " their own, and the compiler checks a slot against the o"
+               & "ne selected."
                & LF
                & LF
                & "    link(vector: 16)"
@@ -21838,8 +21842,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & " waits for an instance, among it the types of its expres"
                & "sions, its error handling and whether a view keeps its s"
                & "ource still, so a generic routine nothing calls is not r"
-               & "efused for any of them. [1290] says so, and [1350] says "
-               & "that its rule is a generic type's.",
+               & "efused for any of them. What waits is every check of the"
+               & " body's expressions and statements, those that do not de"
+               & "pend on the actuals too: a `try` that also has `else` is"
+               & " L0329 only once a call makes an instance. [1290] says s"
+               & "o, and [1350] says that its rule is a generic type's.",
             when 881 =>
                "Chosen: when the missing concept refines others, L0318's"
                & " note names, after [1290]'s rule, each refined concept t"

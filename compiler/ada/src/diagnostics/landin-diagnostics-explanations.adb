@@ -1594,18 +1594,19 @@ package body Landin.Diagnostics.Explanations is
                & " code there."
                & LF
                & LF
-               & "On Linux the message lists every driver looked for, the "
-               & "target's own GCC and the names Debian, Ubuntu and Fedora"
-               & " give it, and the note says which package to install, th"
-               & "rough `nix-shell -p gcc` on Nix (D364), and that `refine"
-               & " check`, `fmt` and `lsp`, and `compile --emit=asm` or `-"
-               & "-emit=ir`, need no C driver (D384). The program's own re"
-               & "fusals come first, so a static link that meets an undefi"
-               & "ned C symbol is refused for that before anything asks fo"
-               & "r a driver. Choose a target with a backend, change the d"
-               & "ebug mode, link with `--link=libc`, or select or install"
-               & " a toolchain as the note directs. `--toolchain=` only he"
-               & "lps when a toolchain is absent or unavailable.",
+               & "On Linux the message lists every driver looked for, in t"
+               & "he order `refine` tries them, the target's own GCC and t"
+               & "he names Debian, Ubuntu and Fedora give it, and the note"
+               & " says which package to install, through `nix-shell -p gc"
+               & "c` on Nix (D364), and that `refine check`, `fmt` and `ls"
+               & "p`, and `compile --emit=asm` or `--emit=ir`, need no C d"
+               & "river (D384). The program's own refusals come first, so "
+               & "a static link that meets an undefined C symbol is refuse"
+               & "d for that before anything asks for a driver. Choose a t"
+               & "arget with a backend, change the debug mode, link with `"
+               & "--link=libc`, or select or install a toolchain as the no"
+               & "te directs. `--toolchain=` only helps when a toolchain i"
+               & "s absent or unavailable.",
             when Catalogue.Toolchain_Failed =>
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"

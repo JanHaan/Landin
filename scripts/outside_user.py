@@ -88,6 +88,11 @@ def examples():
         listed = c_listings(text, after,
                             following.start() if following else len(text))
         meta = fixture_meta.read(fixture)
+        if meta.cls != "runtime":
+            #  The firmware example: it builds with a cross driver and runs
+            #  under an emulator, neither of which this lane has.  The
+            #  Cortex-M lane's `example` case builds and runs it.
+            continue
         shared = []
         for one in meta.c_shared:
             wanted = (fixture / one).read_text(encoding="utf-8")

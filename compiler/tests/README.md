@@ -608,7 +608,12 @@ both build modes on Linux and on macOS. Both runners take every directory
 under `server/` as a session, apart from one whose name begins with `.` or
 `_`, and fail on a directory that holds no `session.lsp`: a transcript
 misnamed by a merge or a rename is a session nobody runs. A session whose
-`workspace/` or `library/` tree cannot be read whole fails too.
+`workspace/` or `library/` tree cannot be read whole fails too, and so
+does one whose tree holds an empty directory: Git keeps none, so a session
+that needs a directory with nothing in it would pass where it was written
+and fail in every clone. The refusal names the file to add, the one the
+transcript opens there; a session that needs the directory to be missing
+simply has none.
 
 `./scripts/test.sh --record` rewrites every `<-` line with what the server
 sends now, as it does `lowering.ir`, and `./scripts/test.sh
@@ -625,7 +630,7 @@ to fill in the `<-` lines.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Twenty-three of them are collected in `examples.md`,
+single-construct probes. Twenty-four of them are collected in `examples.md`,
 which a reader copies from, so each prints what it computes and returns 0,
 and its `run_expect` holds that output. `check.py`'s `RUNNING_EXAMPLES`
 names them, and the page's listings are held to their sources byte for
@@ -634,9 +639,19 @@ and the page has no other, so `check.py` and the formatting test refuse a
 shorter snippet beside it; a `c-shared` source the program loads appears
 byte for byte in a `c` fence of the same section.
 
+One more program on the page is firmware, which no host runs, so it is
+not a runtime fixture: `end-to-end/example-firmware-serial`, which
+`check.py`'s `FIRMWARE_EXAMPLES` names. The fixture builds the program for
+`cortex-m0` with its entry named, as a dry run that every host's test
+program compares; the Cortex-M lane's firmware suite builds it with the
+page's command in its `example` case, runs it under QEMU's `microbit`
+machine and holds what the serial port carried to the fixture's
+`serial.txt`. `check.py` holds the page's listing to the source, its
+`text` fence to `serial.txt`, and the lane to naming the fixture.
+
 | group | fixtures |
 | --- | --- |
-| everyday tools | `line-count`, `word-count`, `line-numbers`, `plugin-loading`, `directory-listing`, `run-shell`, `tree-copy`, `network-echo` |
+| everyday tools | `line-count`, `example-sum-arguments`, `word-count`, `line-numbers`, `plugin-loading`, `directory-listing`, `run-shell`, `tree-copy`, `network-echo` |
 | printing and failures | `example-formatted-output`, `example-failure-words` |
 | classic exercises | `example-fizzbuzz`, `example-greatest-common-divisor`, `example-insertion-sort`, `example-binary-search`, `example-sieve-of-eratosthenes`, `example-run-length-encoding`, `example-merge-sort`, `example-sensors` |
 | Benchmark Game ports | `benchmark-game-fannkuch-redux`, `benchmark-game-mandelbrot`, `benchmark-game-fasta`, `benchmark-game-reverse-complement`, `benchmark-game-binary-trees` |
@@ -1082,6 +1097,21 @@ is given, and an L0015 one needs none, since the corpus reads its refused
 modules from the refusal. An ABI fixture, whose C peer is hosted, is a
 `restriction` with the `--reason` it is given.
 
+A fixture that asks which descriptors a child process holds makes the
+child the fixture's own program, started again, and asks `poll`. The
+parent passes the word `check` and the decimal numbers of the descriptors
+it holds as arguments to `io.spawn(host, posix.program_name(), ...)`; the
+copy, which knows itself by those arguments, asks `posix.poll` about each
+number with no wait and reads `posix.happened`:
+`poll_invalid` answers a closed descriptor and never an open one, and the
+question opens nothing. `runtime/run-no-descriptor-leak` and
+`runtime/thread-spawn-leaks-no-descriptor` both ask this way. A shell
+cannot be the check, because a shell's own descriptors look like inherited
+ones: Darwin's `/bin/sh`, bash 3.2, keeps a descriptor of its own at the
+lowest free number from 10 up while it works and finds that one open, in
+a subshell's redirection and after an `exec` alike, and dash, Linux's
+`sh`, takes no descriptor number above 9 in a redirection.
+
 It ends by naming, for the fixture's class, each step only the test program
 or another tool can take, as `then run:` lines in the order to take them:
 `./scripts/dev-test.sh --record=lowering` for a positive fixture, whose
@@ -1469,6 +1499,13 @@ routine's frame record and reserved-register exclusion are checked; a C peer
 also checks a live Landin parent frame. `--case`/`--profile` are visibly filtered
 development feedback. The binding runner regenerates and executes the complete
 adapter-category corpus with the pinned Apple target and tests exact archives.
+
+In the gate, `darwin-parity` alone gives a runtime or ABI fixture its
+Darwin verdict. The `darwin-host` and `darwin-host-release` jobs run the
+test program as `--host --target=linux-x86-64`, so its own fixture
+execution, which on a Mac's default lane assembles, links and runs the
+`darwin-arm64` fixtures, runs in no gate job. What the test program does
+with a fixture on that lane is seen only by running it on a Mac.
 
 These scripts require native arm64 macOS. `check.py --parity` selects every
 shared runtime/ABI fixture and its four/six profiles; `diagnostics.py` checks

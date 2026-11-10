@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: the published sum asks the host how many arguments it was given with io.argument_count, reads each with io.argument_at and text.parse_u64, prints their sum, and would name the first argument that is no number on standard error
+program: main.ldn
+root: ../../../../..
+run_args: 3 40 500
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0300, 0940, 0960, 1030, 1150, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

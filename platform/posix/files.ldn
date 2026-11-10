@@ -366,7 +366,7 @@ public set_times:
 end set_times
 
 --- The status of the file open as `opened`, POSIX's `fstat`, as
---- `status_at` gives a path's.
+--- `status_at` gives a path's; `core/io`'s `status_of` takes a path.
 public status_of:
     (opened: descriptor) -> (result: status) ! errno =
     result = try system_status_of(opened)

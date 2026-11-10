@@ -257,6 +257,15 @@ error: `spec.md` decides, and resolving it is the maintainer's decision.
    - The rewrite contains only what the inventory holds.
    - Each piece of information appears once.
    - Each recorded dependency has a pointer at the place that needs it.
+   - After any edit to the prose of `tour.md` or `spec.md`, run
+     `python3 check.py --generate` and rebuild with
+     `./scripts/dev-build.sh`. `refine explain` prints those paragraphs
+     from generated Ada: the run rewrites
+     `compiler/ada/src/diagnostics/landin-diagnostics-citations-texts.adb`,
+     and for a changed title `landin-diagnostics-citations.adb` and the
+     construct matrix too. Deliver the regenerated files with the edit.
+     Until then `python3 check.py` fails with "the citations are stale",
+     and the tour's layout case runs the old compiler.
    - Inside `nix develop`, the full `python3 check.py` passes.
    - For the tour, run `./scripts/dev-test.sh --case='formatting/the
      tour is in the layout'`.
@@ -293,3 +302,9 @@ For a collection of documents, apply the method to each separately, keep
 their order and identifiers, and gather the questions for all of them
 into the one list at the start. Ask there about terms used inconsistently
 across the collection, and about a rule stated in more than one of them.
+
+When the collection is shared among parallel editors, each editor checks
+its base before reading anything, as
+[the brief recipe](../../../docs/process.md#worktrees-and-branches) says:
+a harness may have cut its worktree from another commit than the one the
+brief names, which may lack this skill.

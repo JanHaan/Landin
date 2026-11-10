@@ -67,6 +67,20 @@ stops. So it stops on a fence that is never closed, a table row whose cell
 count does not match its header, and a nested list — each of which it used to
 absorb silently, losing structure that no word count could miss.
 
+The renderer and three tools match a few prose lines by their exact form,
+so a reworded one stops being recognised without any refusal. Each is a
+paragraph of its own, with a blank line before and after:
+
+| document | form | what reads it |
+|---|---|---|
+| `tour.md` | a paragraph that is only `The fine print:`, directly before a list | the renderer sets the list as fine print |
+| `tour.md` | a paragraph that is only `Exact rules: spec [NNNN].`: `Exact rules: `, then at most 80 characters with no full stop inside, then the closing full stop | the renderer sets it as an entry's closing line |
+| `examples.md` | a paragraph that is only ``Fixture source: `PATH`.``, full stop included, directly before the listing | the renderer captions the listing with it; `check.py` holds the section to its source, `scripts/outside_user.py` copies the program out by it and `docs/site/llms.py` counts the programs by it |
+| `examples.md` | a paragraph that begins `It prints`, has no full stop and at most 60 more characters, directly before a `text` fence | the renderer labels the fence as terminal output |
+
+A fine-print or exact-rules line that runs on from the paragraph before it
+is ordinary prose to the renderer.
+
 A fence may be indented, as one that continues a list item is. It is a block
 of its own after the list, closed by a fence line at the same indentation,
 and its lines lose that indentation. Read only at the margin, such a fence
@@ -229,6 +243,20 @@ ordinary comments and trailing comments do not attach. These are the same
 comments the language server shows in hover. The full `check.py` also
 requires a nonempty attached comment for every public declaration and a
 module overview with an existing example.
+
+A library comment that gains or loses a line moves every line below it
+in its file, and tests record library source lines: the expectations of
+23 negative fixtures quote a diagnostic that points into the library
+with its line, and a debugger session or a board run reads lines from the
+image it is given. So reword within the lines a comment has where that
+says enough. When a comment needs another line, add it, find the
+expectations that name the file and re-record them in one run, reading
+each difference as any re-recorded expectation is read:
+
+```sh
+grep -rlE 'core/vec/vec\.ldn:[0-9]+' compiler/tests/fixtures
+./scripts/dev-test.sh --record=negative/NAME --record=negative/OTHER
+```
 
 Write a useful first paragraph explaining the operation, then document
 preconditions, returned views, allocation, failure and mutation behavior as

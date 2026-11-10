@@ -57,19 +57,25 @@ package body Landin.Testing.Sessions is
    --  Unread names the first directory or file that could not be read,
    --  and stays empty when the whole tree was loaded: a session run
    --  against less than its tree is not the session in the repository.
+   --  Hollow names, as Fake_Directory spells it, the first directory that
+   --  holds nothing: Git keeps no empty directory, so a session that
+   --  needs one passes where it was written and is another session in
+   --  every clone.
    procedure Load_Tree
      (Real           : Landin.Platform.Native.Native_Filesystem;
       Host           : in out Landin.Testing.Fakes.Fake_Filesystem;
       Real_Directory : String;
       Fake_Directory : String;
-      Unread         : in out Unbounded.Unbounded_String);
+      Unread         : in out Unbounded.Unbounded_String;
+      Hollow         : in out Unbounded.Unbounded_String);
 
    procedure Load_Tree
      (Real           : Landin.Platform.Native.Native_Filesystem;
       Host           : in out Landin.Testing.Fakes.Fake_Filesystem;
       Real_Directory : String;
       Fake_Directory : String;
-      Unread         : in out Unbounded.Unbounded_String)
+      Unread         : in out Unbounded.Unbounded_String;
+      Hollow         : in out Unbounded.Unbounded_String)
    is
       Entries : Landin.Platform.Path_List;
       Listed  : Landin.Platform.List_Status;
@@ -89,13 +95,16 @@ package body Landin.Testing.Sessions is
          Note (Real_Directory);
          return;
       end if;
+      if Entries.Is_Empty and then Unbounded.Length (Hollow) = 0 then
+         Hollow := Unbounded.To_Unbounded_String (Fake_Directory);
+      end if;
       for Name of Entries loop
          declare
             From : constant String := Real_Directory & "/" & Name;
             To   : constant String := Fake_Directory & "/" & Name;
          begin
             if Real.Is_Directory (From) then
-               Load_Tree (Real, Host, From, To, Unread);
+               Load_Tree (Real, Host, From, To, Unread, Hollow);
             else
                declare
                   Content : Unbounded.Unbounded_String;
@@ -186,6 +195,47 @@ package body Landin.Testing.Sessions is
       end Malformed;
 
       Unread : Unbounded.Unbounded_String;
+      Hollow : Unbounded.Unbounded_String;
+
+      --  The file to add to the empty directory the fake host has at
+      --  Held: the first one there that the transcript names in a URI, or
+      --  any file when it names none.
+      function File_To_Add (Held : String) return String;
+
+      function File_To_Add (Held : String) return String is
+         Library : constant String := "/opt/landin/lib/landin";
+         Beside  : constant String :=
+           (if Starts (Held, Library)
+            then "library" & Held (Held'First + Library'Length .. Held'Last)
+            else Held (Held'First + 1 .. Held'Last));
+         Wanted  : constant String := "file://" & Held & "/";
+      begin
+         for Line of Lines loop
+            declare
+               At_URI : constant Natural :=
+                 Ada.Strings.Fixed.Index (Line, Wanted);
+               Last   : Natural;
+            begin
+               if At_URI > 0 then
+                  Last := At_URI + Wanted'Length;
+                  while Last <= Line'Last
+                    and then Line (Last) not in '"' | '/' | ' '
+                  loop
+                     Last := Last + 1;
+                  end loop;
+                  if Last > At_URI + Wanted'Length
+                    and then Last <= Line'Last
+                    and then Line (Last) = '"'
+                  then
+                     return Directory & "/" & Beside & "/"
+                       & Line (At_URI + Wanted'Length .. Last - 1)
+                       & ", which the transcript names";
+                  end if;
+               end if;
+            end;
+         end loop;
+         return "a file in " & Directory & "/" & Beside;
+      end File_To_Add;
    begin
       Real.Read_File (Directory & "/session.lsp", Content, Read);
       if Read /= Landin.Platform.Read_Ok then
@@ -210,7 +260,7 @@ package body Landin.Testing.Sessions is
 
       if Real.Is_Directory (Directory & "/workspace") then
          Load_Tree (Real, Host, Directory & "/workspace", "/workspace",
-                    Unread);
+                    Unread, Hollow);
       end if;
       --  A server finds its library beside itself, and a Cortex-M module
       --  that imports no description reaches the library's reference
@@ -220,11 +270,20 @@ package body Landin.Testing.Sessions is
       --  that needs `core` without the whole of it.
       if Real.Is_Directory (Directory & "/library") then
          Load_Tree (Real, Host, Directory & "/library",
-                    "/opt/landin/lib/landin", Unread);
+                    "/opt/landin/lib/landin", Unread, Hollow);
       end if;
       if Unbounded.Length (Unread) > 0 then
          Malformed ("the session's tree could not be read whole: "
                     & Unbounded.To_String (Unread) & " is unreadable");
+         return Answer;
+      end if;
+      if Unbounded.Length (Hollow) > 0 then
+         Malformed ("the session's tree holds an empty directory, served"
+                    & " as " & Unbounded.To_String (Hollow) & ", which Git"
+                    & " does not keep, so the session differs in a clone:"
+                    & " add "
+                    & File_To_Add (Unbounded.To_String (Hollow))
+                    & ", or remove the directory");
          return Answer;
       end if;
 

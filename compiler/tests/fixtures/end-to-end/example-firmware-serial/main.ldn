@@ -1,0 +1,50 @@
+--  Firmware for a Cortex-M0: add up the squares of 1 to 10 and write the
+--  sum as a line to the serial port of QEMU's `microbit` machine.  There
+--  is no `main` and no host; the build names `start` as the entry.
+import core/text
+
+--  The micro:bit's serial port, an nRF51 UART, and the four registers of
+--  it the program uses, as offsets from its address.
+uart: usize = 0x4000_2000
+start_transmitter: usize = 0x008
+byte_sent: usize = 0x11c
+enable: usize = 0x500
+transmit: usize = 0x51c
+
+--- Write `value` to the UART's register at `offset`.
+put: (offset: usize, value: u32) -> none =
+    port: ptr mut u32 = ptr(uart + offset)
+    compiler.register_write(port, value, compiler.normal_write,
+                            compiler.write_zero, 0xffff_ffff)
+end put
+
+--- Send one byte and wait until the UART says it has gone.
+send: (byte: u8) -> none =
+    put(byte_sent, 0)
+    put(transmit, u32(byte))
+    sent: ptr u32 = ptr(uart + byte_sent)
+    loop do
+        break when compiler.register_read(sent, compiler.normal_read) <> 0
+    end loop
+end send
+
+--- The sum of the squares of 1 to `last`.
+sum_of_squares: (last: u32) -> (sum: u32) =
+    sum = 0
+    for n in u32(1)..last do
+        sum += n * n
+    end for
+end sum_of_squares
+
+--- The entry: the compiler's reset calls it once memory is ready.
+start: () -> none =
+    put(enable, 4)
+    put(start_transmitter, 1)
+    sum: u32 = sum_of_squares(10)
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room)
+    text.format(line, "sum of squares: {}\n", [any(addr sum)]) else none
+    for byte in room[0..<text.length(line)] do
+        send(byte)
+    end for
+end start

@@ -1421,9 +1421,10 @@ GUIDES = [
          blurb="Which machine produces which kind of evidence, and what "
                "runs where now that the native acceptance is retired."),
     dict(key="cortex-m", src="environments/cortex-m/README.md",
-         out="cortex-m.html", nav="Cortex-M execution profile",
-         blurb="Pinned QEMU CPU probes and a deterministic synthetic peripheral lane, "
-               "with executable evidence and explicit model limits."),
+         out="cortex-m.html", nav="Cortex-M emulator evidence",
+         blurb="The gate's evidence that firmware runs: pinned QEMU CPU probes "
+               "and a deterministic synthetic peripheral lane, with explicit "
+               "model limits. To write firmware, see the examples."),
     dict(key="native-ci", src="environments/native-ci/README.md",
          out="native-ci.html", nav="native acceptance, retired",
          blurb="The exact-revision acceptance that approved every revision "

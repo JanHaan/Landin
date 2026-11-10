@@ -91,8 +91,9 @@ which an editor keeps in its log: a misspelt name is found there.
 analysis checks the same entry shape as a firmware build and publishes
 `L0502` at an invalid candidate, or at the first entry-module source if it
 is missing. With no selection, analysis makes no firmware entry claim.
-On `cortex-m0` a module is checked with the profile of the device
-description it imports (D543), as `refine` checks it: a handler at a slot
+A device description's profile applies on every firmware target:
+`cortex-m0`, `rv32` and `xtensa`. There a module is checked with the
+profile of the description it imports (D543), as `refine` checks it: a handler at a slot
 that description reserves is L0347 naming the device, a description's own
 refusals are published at its directives, and with no description the
 library's constrained reference applies. A description the module imports

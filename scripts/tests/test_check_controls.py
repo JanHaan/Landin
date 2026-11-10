@@ -1552,6 +1552,44 @@ class DeveloperLoops(unittest.TestCase):
 class Vocabularies(unittest.TestCase):
     """The faces, the highlighting vocabulary and the examples page."""
 
+    EXAMPLES = ["examples.md", "compiler/tests/fixtures",
+                checker.FIRMWARE_LANE]
+    FIRMWARE = ("compiler/tests/fixtures/end-to-end/"
+                "example-firmware-serial")
+
+    def examples_with(self, path, old, new):
+        from check_controls import tree
+        with tree(copied=self.EXAMPLES) as root:
+            target = root / path
+            text = target.read_text()
+            self.assertIn(old, text)
+            target.write_text(text.replace(old, new, 1))
+            return [why for _, _, why in checker.check_running_examples(True)]
+
+    def test_a_firmware_example_s_output_is_the_fixture_s(self):
+        said = self.examples_with(self.FIRMWARE + "/serial.txt", "385", "386")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("serial.txt byte for byte", said[0])
+
+    def test_a_firmware_example_s_listing_is_the_fixture_s(self):
+        said = self.examples_with(self.FIRMWARE + "/main.ldn",
+                                  "sum_of_squares(10)", "sum_of_squares(11)")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("one Landin listing, which is", said[0])
+
+    def test_a_firmware_example_the_lane_does_not_run_is_reported(self):
+        said = self.examples_with(checker.FIRMWARE_LANE,
+                                  "end-to-end/example-firmware-serial",
+                                  "end-to-end/another")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("the lane names its fixture", said[0])
+
+    def test_a_firmware_example_built_for_a_host_is_reported(self):
+        said = self.examples_with(self.FIRMWARE + "/fixture.meta",
+                                  " --firmware-entry=start", "")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("--target= and --firmware-entry=", said[0])
+
     def test_the_real_inputs_pass(self):
         for check, inputs in (
                 (checker.check_fonts,
@@ -1559,8 +1597,7 @@ class Vocabularies(unittest.TestCase):
                  + list(checker.LIVE_DOCS)),
                 (checker.check_highlight_vocabulary,
                  ["highlight", "spec.md", "tour.md"]),
-                (checker.check_running_examples,
-                 ["examples.md", "compiler/tests/fixtures"])):
+                (checker.check_running_examples, self.EXAMPLES)):
             with self.subTest(check=check.__name__):
                 self.assertEqual(faults(check, copied=inputs), [])
 
@@ -1571,7 +1608,7 @@ class Vocabularies(unittest.TestCase):
 
     def test_a_missing_examples_page_is_reported_rather_than_skipped(self):
         said = reasons(checker.check_running_examples,
-                       copied=["compiler/tests/fixtures"])
+                       copied=self.EXAMPLES[1:])
         self.assertTrue(said)
         self.assertIn("needed by a check", said[0])
 
@@ -2468,6 +2505,12 @@ class ServerTargets(unittest.TestCase):
     def test_a_firmware_target_missing_is_reported(self):
         said = self.broken("`cortex-m0`, `rv32` or `xtensa`.",
                            "`cortex-m0` or `rv32`.")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("firmware targets are cortex-m0, rv32, xtensa", said[0])
+
+    def test_a_firmware_target_missing_where_a_profile_applies_is_reported(self):
+        said = self.broken("firmware target:\n`cortex-m0`, `rv32` and `xtensa`.",
+                           "firmware target:\n`cortex-m0` and `rv32`.")
         self.assertEqual(len(said), 1, said)
         self.assertIn("firmware targets are cortex-m0, rv32, xtensa", said[0])
 

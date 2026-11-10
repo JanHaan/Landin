@@ -2904,7 +2904,8 @@ package body Landin.Driver is
 
          procedure Note_Unavailable_Toolchain (Driver : String);
 
-         --  D364: the names looked for, and what to install.  A named
+         --  D364: the names looked for, in the order they are tried, as
+         --  the message says, and what to install.  A named
          --  driver is the only one looked for, so it is the one named.
          procedure Note_Unavailable_Toolchain (Driver : String) is
             Looked : Unbounded.Unbounded_String;
@@ -2922,7 +2923,8 @@ package body Landin.Driver is
                 then "cannot run " & Driver & " for target "
                   & Landin.Targets.Name (Facts)
                 else "no compiler driver to link "
-                  & Landin.Targets.Name (Facts) & " was found; looked for "
+                  & Landin.Targets.Name (Facts)
+                  & " was found; looked, in this order, for "
                   & Unbounded.To_String (Looked)),
                Landin.Backend.Toolchain.Install_Advice
                  (Facts, Unbounded.To_String (Toolchain), Native_Target));

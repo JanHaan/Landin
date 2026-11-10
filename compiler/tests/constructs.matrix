@@ -102,7 +102,7 @@
 0780 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Keeping a pointer you were given: `escaping`
 0790 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A returned reference says where it came from: `from`
 0800 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A borrow through `from` lasts across the call
-0810 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A pointer made from an integer is not tracked
+0810 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A pointer made from an integer is not tracked
 0820 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | withdrawn | executed | all | none | none | Arenas are ordinary allocators you give storage to
 0830 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A view into a local holds the local still
 0840 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Mixed origins count as the shortest-lived
