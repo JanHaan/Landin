@@ -354,8 +354,13 @@ if failure:
           file=sys.stderr)
     raise SystemExit(4)
 if os.environ.get("FAKE_EDIT_ON_PROJECT") == project:
-    source = root / "compiler/ada/src/main.adb"
-    source.write_text(source.read_text() + "edited during build\\n")
+    source = root / os.environ.get("FAKE_EDIT_PATH",
+                                   "compiler/ada/src/main.adb")
+    source.write_text(source.read_text() + "# edited during build\\n")
+    if os.environ.get("FAKE_COMMIT_EDIT"):
+        import subprocess
+        subprocess.run(["git", "-C", str(root), "commit", "-q", "-a", "-m",
+                        "during the build"], check=True)
 build = pathlib.Path(os.environ["LANDIN_BUILD_DIR"])
 exec_dir = build / next(arg.split("=", 1)[1] for arg in sys.argv[1:]
                         if arg.startswith("-XLANDIN_EXEC_SUBDIR="))
@@ -664,6 +669,70 @@ path.write_text("-- generated at " + str(path) + "\\n"
                     # only the ordinary build starts from clean.
                     self.assertEqual(marker.exists(), incremental == "yes")
                     self.assertTrue(self.manifest.is_file())
+
+    def tracked(self):
+        """Make the fake root a checkout with every file committed."""
+        (self.root / "README.md").write_text("a document\n")
+        (self.root / ".gitignore").write_text("compiler/ada/build/\ncalls\n"
+                                              "compiler/ada/.build-locks/\n")
+        identity = ["-c", "user.name=t", "-c", "user.email=t@t"]
+        for arguments in (["init", "-q"], ["add", "-A"],
+                          [*identity, "commit", "-q", "-m", "base"]):
+            subprocess.run(["git", "-C", str(self.root), *arguments],
+                           check=True, timeout=HANG)
+        self.env.update(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
+                        GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+
+    def test_a_document_edit_during_the_build_leaves_it_verified(self):
+        #  A README edited beside a build turns the checkout dirty, and a
+        #  commit made beside one moves HEAD.  Neither is anything the
+        #  compiler is built from, and the build was once left unverified.
+        self.tracked()
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        for commit, said in (("", "the checkout went from clean to dirty"),
+                             ("yes", "HEAD moved from ")):
+            with self.subTest(commit=commit):
+                (self.root / "compiler/ada/src/main.adb").write_text(
+                    "a change to build, committed %s\n" % commit)
+                subprocess.run(["git", "-C", str(self.root), "commit", "-q",
+                                "-a", "-m", "a source change"], check=True,
+                               env=self.env, timeout=HANG)
+                began = subprocess.run(
+                    ["git", "-C", str(self.root), "rev-parse", "HEAD"],
+                    check=True, capture_output=True, text=True,
+                    timeout=HANG).stdout.strip()
+                edited = self.run_build(extra={
+                    "FAKE_EDIT_ON_PROJECT": "refine.gpr",
+                    "FAKE_EDIT_PATH": "README.md", "FAKE_COMMIT_EDIT": commit})
+                self.assertEqual(edited.returncode, 0, edited.stderr)
+                self.assertNotIn("left unverified", edited.stderr)
+                self.assertIn("in nothing the compiler is built from",
+                              edited.stdout)
+                self.assertIn(said, edited.stdout)
+                self.assertIn("verified as of the tree it began from",
+                              edited.stdout)
+                #  The manifest is of the tree the build began from.
+                identity = next(row for row in self.requested(self.manifest)
+                                if row.startswith("identity ")).split()
+                self.assertEqual(identity[2:4], [began, "clean"])
+                self.assertFalse((self.build / "build-state").exists())
+                subprocess.run(["git", "-C", str(self.root), "commit", "-q",
+                                "-a", "--allow-empty", "-m", "settle"],
+                               check=True, env=self.env, timeout=HANG)
+
+    def test_a_build_script_edit_during_the_build_is_still_unverified(self):
+        #  A script's edit reaches the provenance digest: what it decided
+        #  for this build is not what it would decide now.
+        self.tracked()
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        edited = self.run_build("-k", extra={
+            "FAKE_EDIT_ON_PROJECT": "refine.gpr",
+            "FAKE_EDIT_PATH": "scripts/toolchain.sh"})
+        self.assertEqual(edited.returncode, 1, edited.stdout + edited.stderr)
+        self.assertIn("left unverified", edited.stderr)
+        self.assertFalse(self.manifest.exists())
 
     def test_failed_build_keeps_the_published_compiler(self):
         first = self.run_build()

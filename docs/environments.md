@@ -219,7 +219,11 @@ Every build says why it builds what it does: no earlier build, sources
 changed, the inventory or a project changed, or the last build did not
 finish. A source edited while a build runs leaves that build unverified,
 and the refusal names each file that changed and says to run the build
-again.
+again. A build script's edit does the same. An edit to a tracked file the
+compiler is not built from, a document for instance, or a commit made
+while the build runs, changes only the checkout state `refine version`
+would report: the build says so and stays verified, as a build of the
+tree it began from, and the next build recompiles the provenance unit.
 
 GPRbuild decides to rebuild the library and to relink by time stamps, the
 library's at one-second resolution, and never by content, so a build tree

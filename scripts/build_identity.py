@@ -193,7 +193,9 @@ def manifest(root, mode, output):
     change to one rebuilds from clean; `source` rows are the sources, which
     the checksum mode recompiles; the `identity` row is the generated
     provenance unit, with the revision and dirty state that went into it so
-    a refusal can say which of them moved.  The scripts that run the build
+    a refusal can say which of them moved, and the digest of the compiler's
+    inputs, so two rows can be told to differ in the checkout's state alone
+    (`provenance_only`).  The scripts that run the build
     are not rows: what they decide reaches the objects through the identity
     unit's digest, the configuration rows and the switches row build.sh
     writes, and a change to them alone recompiles only what it changed.
@@ -206,8 +208,30 @@ def manifest(root, mode, output):
     revision, dirty = known[0], known[2]
     checksum = hashlib.sha256(render(root, mode, known).encode()).hexdigest()
     rows.append(f'identity {checksum} {revision} '
-                + ('dirty' if dirty else 'clean'))
+                + ('dirty' if dirty else 'clean') + f' {known[1]}')
     return '\n'.join(rows) + '\n'
+
+
+def provenance_only(old, new):
+    """Whether two manifests differ only in the checkout's state.
+
+    The provenance unit records HEAD, whether any tracked file is edited
+    and a release tag, beside the digest of what the compiler is built
+    from.  When every other row is the same and the identity rows carry
+    one digest, no input of the compiler differs: a document was edited or
+    restored, or a commit was made, and what was built from the first
+    manifest's tree is still what that manifest describes.  A build
+    script's edit changes the digest, and is not this.
+    """
+    def split(text):
+        rows = text.splitlines()
+        return ([row.split() for row in rows if row.startswith('identity ')],
+                [row for row in rows if not row.startswith('identity ')])
+    (was, before), (now, after) = split(old), split(new)
+    return (old != new and before == after
+            and len(was) == 1 and len(now) == 1
+            and len(was[0]) == 5 and len(now[0]) == 5
+            and was[0][4] == now[0][4])
 
 
 def changed(old, new):
@@ -263,7 +287,14 @@ def main():
     parser.add_argument('--changed', nargs=2, metavar=('BEFORE', 'AFTER'),
                         type=Path, help='say what differs between two'
                         ' manifest files')
+    parser.add_argument('--provenance-only', nargs=2,
+                        metavar=('BEFORE', 'AFTER'), type=Path,
+                        help='succeed when two manifest files differ only'
+                        ' in the checkout state the provenance reports')
     args = parser.parse_args()
+    if args.provenance_only:
+        raise SystemExit(0 if provenance_only(
+            *(path.read_text() for path in args.provenance_only)) else 1)
     if args.changed:
         for line in changed(*(path.read_text() for path in args.changed)):
             print(line)
