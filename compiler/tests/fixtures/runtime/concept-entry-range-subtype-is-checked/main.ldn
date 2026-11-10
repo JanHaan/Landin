@@ -1,0 +1,40 @@
+--  D1088: a range subtype written in a concept entry is part of the
+--  entry's signature.  A conformance with exactly that signature is
+--  accepted, and a call through the concept checks the argument as a call
+--  of the routine itself does: 250 is no percent, and the call traps.
+percent: type = u8 range 0..100
+
+dimmer: type = concept (t: type)
+    set: (self: ptr mut t, level: percent) -> none
+    level: (self: ptr t) -> (value: percent)
+end dimmer
+
+lamp: type = struct
+    duty: u8
+end lamp
+
+lamp_set: (self: ptr mut lamp, level: percent) -> none =
+    self.val.duty = u8(level)
+end lamp_set
+
+lamp_level: (self: ptr lamp) -> (value: percent) =
+    value = percent(self.val.duty)
+end lamp_level
+
+lamp is dimmer (set: lamp_set, level: lamp_level)
+
+set_all: (t: type is dimmer, item: ptr mut t, level: u8) -> none =
+    t.set(item, level)
+end set_all
+
+mut raw: u8 = 250
+
+public main: () -> (code: i32) =
+    mut desk: lamp = (duty: 0)
+    item: any dimmer = any(addr desk)
+    item.set(40)
+    back: percent = item.level()
+    set_all(addr desk, 30)
+    code = i32(back) + i32(desk.duty)
+    item.set(raw)
+end main

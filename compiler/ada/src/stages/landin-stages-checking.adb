@@ -2832,6 +2832,16 @@ package body Landin.Stages.Checking is
       function Value_Constraint
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
          return Landin.Checking.Constraint_Id;
+      --  D1087: a `fixed` formal declared with a range subtype takes only
+      --  a value inside the range, as a parameter of that subtype does.
+      --  Whether Value is outside the range Declared names, reported at
+      --  Where when it is.
+      function Fixed_Value_Outside_Range
+        (Template : Syn.Tree;
+         Declared : Syn.Node_Id;
+         Value    : Ty.Magnitude;
+         Source   : Landin.Source.Source_Id;
+         Where    : Landin.Source.Span) return Boolean;
       --  D188: [0660]'s check, at the one kind of place the tour puts it --
       --  storing into a place whose declared type is a range subtype.  It
       --  refuses a known value outside the bounds, elides a value whose own
@@ -6250,6 +6260,16 @@ package body Landin.Stages.Checking is
                                        Refused =>
                                          Bad.Parameterized_Type_Alias,
                                        Into    => Found);
+                                    Good := False;
+                                 elsif Is_Known
+                                   and then Fixed_Value_Outside_Range
+                                     (Template.all,
+                                      Syn.Declared_Type
+                                        (Template.all, Formal_Node),
+                                      Value,
+                                      This_Application.Source,
+                                      This_Application.Where)
+                                 then
                                     Good := False;
                                  else
                                     Bound (Index).Fixed := Value;
@@ -13379,6 +13399,15 @@ package body Landin.Stages.Checking is
                               Because => "the fixed formal",
                               Into    => Found);
                            Good := False;
+                        elsif Fixed_Value_Outside_Range
+                          (Template_Tree.all,
+                           Syn.Declared_Type
+                             (Template_Tree.all, Formal_Node),
+                           Bound (Index).Fixed,
+                           Syn.Source_Of (Caller_Tree),
+                           Syn.Where (Caller_Tree, Call))
+                        then
+                           Good := False;
                         end if;
                      end;
                   end if;
@@ -18666,6 +18695,13 @@ package body Landin.Stages.Checking is
                  Escaping_Into_Of (Concept_Tree.all, Node);
                Part.Caller := Syn.Is_Caller (Concept_Tree.all, Node);
             end if;
+            --  D188/D1088: an entry's range subtype is part of its
+            --  signature, as a routine's is.
+            if Descriptor.Kind in Ty.Integer_Name then
+               Part.Constraint := Value_Constraint
+                 (Concept_Tree.all,
+                  Syn.Declared_Type (Concept_Tree.all, Node));
+            end if;
             return Part;
          end Part_For;
       begin
@@ -21157,6 +21193,18 @@ package body Landin.Stages.Checking is
                                                Syn.Is_Caller
                                                  (Concept_Tree.all,
                                                   Parameter);
+                                             --  D1088: as a routine's.
+                                             if Descriptor.Kind
+                                                  in Ty.Integer_Name
+                                             then
+                                                Parameters (Position)
+                                                  .Constraint :=
+                                                    Value_Constraint
+                                                      (Concept_Tree.all,
+                                                       Syn.Declared_Type
+                                                         (Concept_Tree.all,
+                                                          Parameter));
+                                             end if;
                                              Valid := Valid and then
                                                Descriptor.Kind
                                                  /= Ty.Ill_Typed;
@@ -21189,6 +21237,17 @@ package body Landin.Stages.Checking is
                                                   Syn.Origin
                                                     (Concept_Tree.all,
                                                      Result_Node));
+                                             if Descriptor.Kind
+                                                  in Ty.Integer_Name
+                                             then
+                                                Results (Position)
+                                                  .Constraint :=
+                                                    Value_Constraint
+                                                      (Concept_Tree.all,
+                                                       Syn.Declared_Type
+                                                         (Concept_Tree.all,
+                                                          Result_Node));
+                                             end if;
                                              Valid := Valid and then
                                                Descriptor.Kind
                                                  /= Ty.Ill_Typed;
@@ -22110,7 +22169,19 @@ package body Landin.Stages.Checking is
                       when Syn.Sink_Convention => "sink ")
                  & (if Part.Name = Landin.Source.Names.No_Name then ""
                     else Spelled (Part.Name) & ": ")
-                 & Type_Spelling (Part_Descriptor (Part), Within);
+                 & Type_Spelling (Part_Descriptor (Part), Within)
+                 --  D188: the bounds are part of the signature, so two
+                 --  that differ only there are not printed alike.
+                 & (if Part.Constraint = Landin.Checking.No_Constraint
+                    then ""
+                    else " range "
+                         & Written
+                             (Landin.Checking.Bounds_Of
+                                (Types.all, Part.Constraint).Lower)
+                         & ".."
+                         & Written
+                             (Landin.Checking.Bounds_Of
+                                (Types.all, Part.Constraint).Upper));
             end Part_Text;
          begin
             if Signature = Landin.Checking.No_Signature then
@@ -22368,6 +22439,15 @@ package body Landin.Stages.Checking is
                                     Parameters (Position).Caller :=
                                       Syn.Is_Caller
                                         (Concept_Tree.all, Parameter);
+                                    --  D1088: as a routine's.
+                                    if Descriptor.Kind in Ty.Integer_Name
+                                    then
+                                       Parameters (Position).Constraint :=
+                                         Value_Constraint
+                                           (Concept_Tree.all,
+                                            Syn.Declared_Type
+                                              (Concept_Tree.all, Parameter));
+                                    end if;
                                     Valid := Valid
                                       and then Descriptor.Kind
                                         /= Ty.Ill_Typed;
@@ -22392,6 +22472,15 @@ package body Landin.Stages.Checking is
                                          (Concept_Tree.all, Result_Node),
                                        Syn.Origin
                                          (Concept_Tree.all, Result_Node));
+                                    if Descriptor.Kind in Ty.Integer_Name
+                                    then
+                                       Results (Position).Constraint :=
+                                         Value_Constraint
+                                           (Concept_Tree.all,
+                                            Syn.Declared_Type
+                                              (Concept_Tree.all,
+                                               Result_Node));
+                                    end if;
                                     Valid := Valid
                                       and then Descriptor.Kind
                                         /= Ty.Ill_Typed;
@@ -22501,6 +22590,9 @@ package body Landin.Stages.Checking is
                                                or else Actual.Convention
                                                  /= Parameters
                                                    (Index).Convention
+                                               or else Actual.Constraint
+                                                 /= Parameters
+                                                   (Index).Constraint
                                              then
                                                 return Actual.Site;
                                              end if;
@@ -38961,14 +39053,89 @@ package body Landin.Stages.Checking is
                  and then Landin.Checking.Signature_Result_Count
                    (Types.all, Signature) = 1
                then
-                  return Landin.Checking.Nth_Signature_Result
-                    (Types.all, Signature, 1).Constraint;
+                  declare
+                     Proved : constant Landin.Checking.Constraint_Id :=
+                       Landin.Checking.Nth_Signature_Result
+                         (Types.all, Signature, 1).Constraint;
+                     Recovery : constant Syn.Node_Id :=
+                       Syn.Recovery_Of (Of_Tree, Node);
+                     Answer : Syn.Node_Id := Syn.No_Node;
+                     Other : Landin.Checking.Constraint_Id;
+                  begin
+                     if Recovery = Syn.No_Node
+                       or else Proved = Landin.Checking.No_Constraint
+                     then
+                        return Proved;
+                     end if;
+                     --  D1086: with a call-site `else` the value is the
+                     --  routine's result or the recovery's answer, and it
+                     --  carries a proof only when both do.  A block that
+                     --  gives no answer leaves the statement instead.
+                     Answer := Syn.Else_Body (Of_Tree, Recovery);
+                     if Answer /= Syn.No_Node
+                       and then Syn.Kind (Of_Tree, Answer) = Syn.Block
+                     then
+                        Answer := Syn.Block_Value (Of_Tree, Answer);
+                        if Answer = Syn.No_Node then
+                           return Proved;
+                        end if;
+                     end if;
+                     Other := Value_Constraint (Of_Tree, Answer);
+                     if Other = Landin.Checking.No_Constraint then
+                        return Landin.Checking.No_Constraint;
+                     elsif Landin.Checking.Contains
+                       (Types.all, Proved, Other)
+                     then
+                        return Proved;
+                     elsif Landin.Checking.Contains
+                       (Types.all, Other, Proved)
+                     then
+                        return Other;
+                     end if;
+                     return Landin.Checking.No_Constraint;
+                  end;
                end if;
             end;
          end if;
 
          return Landin.Checking.No_Constraint;
       end Value_Constraint;
+
+      function Fixed_Value_Outside_Range
+        (Template : Syn.Tree;
+         Declared : Syn.Node_Id;
+         Value    : Ty.Magnitude;
+         Source   : Landin.Source.Source_Id;
+         Where    : Landin.Source.Span) return Boolean
+      is
+         Wanted : constant Landin.Checking.Constraint_Id :=
+           Value_Constraint (Template, Declared);
+         Bounds : Landin.Checking.Constraint_Descriptor;
+      begin
+         if Wanted = Landin.Checking.No_Constraint then
+            return False;
+         end if;
+         Bounds := Landin.Checking.Bounds_Of (Types.all, Wanted);
+         if Ty.Folded (Value) >= Bounds.Lower
+           and then Ty.Folded (Value) <= Bounds.Upper
+         then
+            return False;
+         end if;
+         Bad.Report
+           (Item    => Bad.Literal_Out_Of_Range,
+            Source  => Source,
+            Where   => Where,
+            Message => "this fixed argument is " & Written (Ty.Folded (Value))
+                       & ", and the declared range is "
+                       & Written (Bounds.Lower) & " .. "
+                       & Written (Bounds.Upper),
+            Note    => "[0660]/D1087: a fixed formal of a range subtype"
+                       & " takes only a value inside the range",
+            Related => Syn.Origin (Template, Declared),
+            Because => "the fixed formal's type",
+            Into    => Found);
+         return True;
+      end Fixed_Value_Outside_Range;
 
       procedure Apply_Constraint
         (Of_Tree      : Syn.Tree;

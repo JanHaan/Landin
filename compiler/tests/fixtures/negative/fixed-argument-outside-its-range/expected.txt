@@ -1,0 +1,20 @@
+error[L0300]: this fixed argument is 200, and the declared range is 0 .. 100
+  --> ../tests/fixtures/negative/fixed-argument-outside-its-range/main.ldn:15:11
+   |
+15 |     wide: ring(200) = zeroed -- error
+   |           ^^^^^^^^^
+  --> ../tests/fixtures/negative/fixed-argument-outside-its-range/main.ldn:9:26
+  |
+9 | ring: type (fixed slots: percent) = struct
+  |                          ^^^^^^^ the fixed formal's type
+  = note: [0660]/D1087: a fixed formal of a range subtype takes only a value inside the range
+error[L0300]: this fixed argument is 200, and the declared range is 0 .. 100
+  --> ../tests/fixtures/negative/fixed-argument-outside-its-range/main.ldn:17:17
+   |
+17 |     code += i32(scaled(share: 200, total: 50)) -- error
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/fixed-argument-outside-its-range/main.ldn:5:23
+  |
+5 | scaled: (fixed share: percent, total: u32) -> (part: u32) =
+  |                       ^^^^^^^ the fixed formal's type
+  = note: [0660]/D1087: a fixed formal of a range subtype takes only a value inside the range

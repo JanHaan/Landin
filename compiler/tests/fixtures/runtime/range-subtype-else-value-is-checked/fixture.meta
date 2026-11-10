@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1086 the value a call-site else supplies for a range-subtype result is checked where the call's value is stored
+program: main.ldn
+traps: yes
+trap_report: main.ldn:21:23: trap: out_of_range
+constructs: 0660, 0960, 1030, 1950, 1960
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

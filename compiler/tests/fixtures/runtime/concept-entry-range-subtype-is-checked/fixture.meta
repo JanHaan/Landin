@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1088 a concept entry's range subtype is part of its signature: the exact conformance is accepted and a call through the concept checks its argument
+program: main.ldn
+traps: yes
+trap_report: main.ldn:39:14: trap: out_of_range
+constructs: 0660, 1240, 1360, 1950, 1960
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

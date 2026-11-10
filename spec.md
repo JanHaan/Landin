@@ -7469,6 +7469,48 @@ images, validated extraction, copies, calls and indexed updates. The independent
 `targets/packed image algebra and access plans` case and the retained synthetic
 device contract define separate image and transaction oracles.
 
+### D1086 — A call-site `else` value carries its own proof or none
+
+**The tour said** at [1730] that a value already of a range subtype is not
+checked again, and at [0960] that a call-site `else` supplies the value
+when the call fails. D188 lets a call whose one result is a range subtype
+hand the proof back with the value. With `parse_level(raw) else stored`
+the value on the failure path is `stored`, which nothing checked, and the
+store that took the expression emitted no check: a 200 sat in a `percent`.
+
+**Chosen:** a call with a recovery clause carries the callee's subtype
+only when the recovery's answer carries a subtype too: the value written
+after `else`, or the final value of its block. The expression then
+carries the wider of the two when one contains the other, and none
+otherwise, so the store that takes it owes [0660]'s check. A recovery
+block that gives no answer leaves the statement and takes nothing away. A
+fallback the compiler knows is still refused where it is written.
+
+**The alternatives:** checking only the fallback, at the `else`, which
+needs a second kind of owed check for one expression form; and dropping
+the proof from every call result, which checks the common call twice.
+Both are declined.
+
+**Pinned by** `runtime/range-subtype-else-value-is-checked`.
+
+### D1087 — A `fixed` formal of a range subtype takes only a value inside it
+
+**The tour said** at [0660] that a range subtype is checked at a
+parameter, and at [1350] and [1520] that a `fixed` argument fits its
+declared type. D138 reused the base type's range for that fit, so
+`fixed share: percent` took 200.
+
+**Chosen:** a known `fixed` argument, written or deduced, is held to the
+bounds of the subtype its formal declares, in a generic routine and in a
+generic type, and one outside them is L0300 naming the value and the
+range.
+
+**The alternative:** refusing a range subtype as a `fixed` formal's type,
+as D236 refuses it in composite positions, which takes away the cheapest
+place a range can be enforced. It is declined.
+
+**Pinned by** `negative/fixed-argument-outside-its-range`.
+
 ### D236 — A range subtype constrains scalar positions only
 
 **The tour said** that [0660]'s range subtype is checked at assignment and
@@ -16294,6 +16336,29 @@ the reader nothing they could not read from the concept.
 
 **Pinned by** `negative/fibre-turns-over-scheduler-only`, whose `fibre.whole`
 and `blocking.host` are each named with the `fibre.scheduler` they provide.
+
+### D1088 — A concept entry's range subtype is part of its signature
+
+**The tour said** at [1240] that a conformance function has exactly the
+entry's signature, and D188 that a range subtype's bounds travel with a
+signature so that an indirect call cannot lose the check. An entry
+written `level: percent` was read as its base type: the function with
+that very signature was refused, with a report printing two identical
+signatures, the function over plain `u8` was accepted, and a call through
+the concept passed 250 unchecked.
+
+**Chosen:** an entry's parameters and results keep their range subtype,
+as a routine's do. Conformance compares it, so the base-typed function is
+L0341 and the report prints the bounds, `level: u8 range 0..100`; and a
+call through a type parameter or an `any` checks its arguments and gives
+its results with the subtype, exactly as a call of the routine does.
+
+**The alternative:** refusing a range subtype in a concept entry, which
+would make a concept unable to state a contract a routine can. It is
+declined.
+
+**Pinned by** `negative/concept-entry-range-subtype-is-its-signature` and
+`runtime/concept-entry-range-subtype-is-checked`.
 
 ## DECISIONS: MODULES AND COMPILE TIME
 
