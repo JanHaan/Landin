@@ -240,18 +240,28 @@ is_local: (at: net.address) -> (yes: bool) =
     end if
 end is_local
 
+--  Whether two addresses of one family name the same machine address.
+--  The network reads no zone, so `::1%lo` is `::1` here, and the port is
+--  the caller's to compare.
+same_host: (one: net.address, other: net.address) -> (same: bool) =
+    same = true
+    for index in usize(0)..<16 do
+        if one.octets[index] <> other.octets[index] then same = false end if
+    end for
+end same_host
+
 --  Whether a socket bound to `held` takes what is sent to `wanted`: the
 --  same family and port, and the same address or the unspecified one.
 takes: (held: net.address, wanted: net.address) -> (yes: bool) =
     yes = held.family == wanted.family and held.port == wanted.port
-          and (net.is_unspecified(held) or net.same_address(held, wanted))
+          and (net.is_unspecified(held) or same_host(held, wanted))
 end takes
 
 --  Whether two bindings would take the same traffic.
 overlaps: (one: net.address, other: net.address) -> (yes: bool) =
     yes = one.family == other.family and one.port == other.port
           and (net.is_unspecified(one) or net.is_unspecified(other)
-               or net.same_address(one, net.with_port(other, one.port)))
+               or same_host(one, other))
 end overlaps
 
 --  Whether a socket of `role` holds a port that overlaps `at`: datagram
@@ -628,7 +638,9 @@ network_shutdown: (self: network, connection: io.file,
     end if
     if stopping <> net.receiving then
         slot.val.sending_closed = true
-        self.sockets[slot.val.partner].peer_finished = true
+        if partnered(self, usize(connection)) then
+            self.sockets[slot.val.partner].peer_finished = true
+        end if
     end if
     moved(self)
 end network_shutdown
@@ -665,6 +677,19 @@ network_set_no_delay: (self: network, connection: io.file, on: bool)
     slot.val.no_delay = on
 end network_set_no_delay
 
+--  Whether the connection in slot `index` still has its other end.  A
+--  slot keeps its partner's index after that end has closed, and the next
+--  socket opened may take the index: the socket there is this one's peer
+--  only while this end has not been told its peer is gone and that slot
+--  is a connection naming this one.
+partnered: (self: network, index: usize) -> (yes: bool) =
+    slot: ptr mut network_socket = addr self.sockets[index]
+    yes = false
+    return when slot.val.role <> connection_slot or slot.val.peer_gone
+    other: ptr mut network_socket = addr self.sockets[slot.val.partner]
+    yes = other.val.role == connection_slot and other.val.partner == index
+end partnered
+
 --  The other end of a connection that has gone: what it already received
 --  stays, and then its stream ends, and what it sends is disconnected.
 orphaned: (self: network, index: usize) -> none =
@@ -679,13 +704,17 @@ network_close_socket: (self: network, sink socket: io.file)
     slot: ptr mut network_socket = try slot_of(self, socket, free_slot)
     index: usize = usize(socket)
     if slot.val.role == connection_slot then
-        orphaned(self, slot.val.partner)
+        if partnered(self, index) then
+            orphaned(self, slot.val.partner)
+        end if
     elsif slot.val.role == listening_slot then
         --  Connections waiting to be accepted are reset with it.
         for pending in usize(0)..<lenof self.sockets do
             waiting: ptr mut network_socket = addr self.sockets[pending]
             if waiting.val.pending and waiting.val.listener == index then
-                orphaned(self, waiting.val.partner)
+                if partnered(self, pending) then
+                    orphaned(self, waiting.val.partner)
+                end if
                 waiting.val.pending = false
                 waiting.val.role = free_slot
             end if

@@ -3494,6 +3494,11 @@
       "profile_limit": "selected-image",
       "reason": "The network consumer's routines over core/io's memory network beside a memory world, with its line reader, buffered writer, format and every oracle of the memory network, need 193,760 bytes of flash at size/auto, overflowing the 32 KiB profile by 160,992, 65,508 of them the bytes of the longest datagram the memory network carries, which its oracle sends. A table keeps only the entries something projects (D374), so what remains is the program's and the oracles' own direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/run-shell-memory's limit records. Each profile still attempts execution; runtime/network-addresses-firmware runs the network's address code within the image and requires execution; this image limit is not runtime evidence."
     },
+    "runtime/network-fake-reopened-slot": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Two networks of core/io/fake with a listener, two connections made and closed in turn, a shutdown and an address parsed with its zone need 54,596 bytes of flash at size/auto, overflowing the 32 KiB profile by 21,828, most of it the program's direct calls into the network, as runtime/network-fake-turns-waits's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake over a round of turns within the image and requires execution; this image limit is not runtime evidence."
+    },
     "runtime/network-fake-turns-exchange": {
       "mode": "execute",
       "profile_limit": "selected-image",
