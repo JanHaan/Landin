@@ -8436,6 +8436,17 @@ package body Landin.Tests.Driver_Suite is
               (Assembly, "_landin_firmware_reset:" & LF);
          begin
             Landin.Testing.Check
+              (Item, Contains (Assembly, ".org 768" & LF
+                 & "wsr a0, EXCSAVE1" & LF
+                 & "j _landin_firmware_interrupt_1" & LF & ".org 832" & LF)
+               and then Contains (Assembly, ".org 960" & LF
+                 & "wsr a0, EXCSAVE1" & LF
+                 & "j _landin_firmware_double_exception" & LF
+                 & ".org 1024" & LF)
+               and then not Contains (Assembly, ".org 896" & LF),
+               "the kernel, user and double exception stubs stand where"
+               & " both cores vector: 0x300, 0x340 and 0x3C0");
+            Landin.Testing.Check
               (Item, Entry_At > 0 and then Prelude_At > Entry_At
                and then Jump_At > Prelude_At
                and then Reset_At > Jump_At,

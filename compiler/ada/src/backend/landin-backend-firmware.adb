@@ -921,8 +921,11 @@ package body Landin.Backend.Firmware is
             Line ("j _landin_firmware_high_interrupt_" & N (Level));
          end if;
       end loop;
+      --  Kernel, user and double exception: both configurations vector
+      --  the last to 0x3C0, not to the next 64-byte slot.
       for Offset in 0 .. 2 loop
-         Line (".org " & N (16#300# + Offset * 64));
+         Line (".org " & N (if Offset = 2 then 16#3C0#
+                            else 16#300# + Offset * 64));
          Line ("wsr a0, EXCSAVE1");
          Line ("j " & (if Offset = 2
                        then "_landin_firmware_double_exception"
