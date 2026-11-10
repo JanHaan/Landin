@@ -4973,9 +4973,12 @@ obligations: spec [1990].
 
 ### [1640] Placing code and data on a microcontroller
 
-On Cortex-M, a `link(...)` annotation also places a declaration: in a
-section, at an alignment, in an interrupt vector slot, and kept against the
-linker's section garbage collection.
+On a firmware target, a `link(...)` annotation also places a declaration:
+in a section, at an alignment, in an interrupt vector slot, and kept
+against the linker's section garbage collection. Cortex-M, RV32 and Xtensa
+all place declarations this way. The example and the vector table below
+are Cortex-M's; RV32 and Xtensa have tables of their own, and the compiler
+checks a slot against the one selected.
 
 ```landin
 link(vector: 16)

@@ -16141,8 +16141,11 @@ names are resolved, its signature's names are held to naming something,
 and an operand no actual could make valid is refused; everything else
 waits for an instance, among it the types of its expressions, its error
 handling and whether a view keeps its source still, so a generic routine
-nothing calls is not refused for any of them. [1290] says so, and [1350]
-says that its rule is a generic type's.
+nothing calls is not refused for any of them. What waits is every check
+of the body's expressions and statements, those that do not depend on the
+actuals too: a `try` that also has `else` is L0329 only once a call makes
+an instance. [1290] says so, and [1350] says that its rule is a generic
+type's.
 
 **The alternatives:** checking the body once with its formals symbolic, as
 a generic type's template is walked, which needs every check that asks a
