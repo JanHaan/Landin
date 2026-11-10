@@ -171,7 +171,11 @@ lane's description gives it:
 4 MiB of code memory at 0, VTOR's address, and 4 MiB of RAM at
 `0x20000000` with a 64 KiB stack at its top. Unmapped space there reads
 zero and ignores writes with no fault, so a program that runs away hangs to
-the session's deadline rather than faulting. The harness start grants CP10
+the session's deadline rather than faulting. Every corpus session, on any
+lane, therefore interrupts a program still running at its 20-second limit
+and fails it with its last pc, the caller in the link register and sp: a
+pc outside the image, which `info symbol` cannot name, is a stray jump,
+and one inside it is a loop that did not end. The harness start grants CP10
 and CP11 before anything else, paints d8-d15 before `main` and checks them
 after, the image must carry `Tag_FP_arch: FPv5/FP-D16 for ARMv8` and
 `Tag_ABI_VFP_args: VFP registers`, libgcc comes from `thumb/v7e-m+dp/hard`,
@@ -242,6 +246,13 @@ and `evidence`; `mps2-an505`, `mps2-an500`, `esp32c3` and `sifive-e` are the
 corpus again on those lanes, and the two RV32 ones need `rv32-controls`
 (see [RV32 lanes](#rv32-lanes)). A run that selects lanes says `FILTERED` in its last line
 and its `result.json`, and is not the gate's run.
+
+A run records the SHA-256 of its inputs before its lanes and compares them
+after: when one changed meanwhile it fails with "probe inputs changed while
+the lanes ran", naming each, because no verdict then holds for one tree.
+The inputs are every file under `environments/cortex-m` except its
+Markdown, so this guide may be edited while lanes run and a probe, a
+script, a description or a recorded validation may not.
 
 The gate runs every lane in three jobs, one for each of `run.py`'s
 parts, because one job running all of them risked its hour on a four-CPU

@@ -861,7 +861,7 @@ def observe(output, tools, refine, programs, profiles, level='armv6-m', roots=()
     failed = [r for r in results if r['status'] == 'failed']
     require(not failed, '%d of the %d runs failed: %s' % (
         len(failed), len(results), ', '.join(
-            '%s %s/%s' % (Path(r['program']).name, r['optimize'], r['specialize'])
+            '%s %s/%s' % (r['name'], r['optimize'], r['specialize'])
             for r in failed)))
     return results
 
@@ -879,7 +879,8 @@ def observe_one(output, tools, refine, path, name, profiles, level, roots, peers
                         + ('' if level == 'armv6-m' else '--' + level))
         out.mkdir(parents=True, exist_ok=False)
         run = Run(out, tools)
-        result = {'program': str(path), 'optimize': opt, 'specialize': spec, 'level': level}
+        result = {'program': str(path), 'name': shown, 'optimize': opt, 'specialize': spec,
+                  'level': level}
         if peers:
             result['c_sources'] = [str(source) for source in peers.c_sources]
         try:

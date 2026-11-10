@@ -91,6 +91,16 @@ def inventory(root):
             if p.is_file() and '__pycache__' not in p.parts}
 
 
+def probe_inputs(root):
+    """What a lane's verdict is about: every file under ROOT that a lane
+    can read, which is all of them but the Markdown that describes them.
+    A run records these before its lanes and refuses its own verdicts when
+    one changed meanwhile; the guide beside the lanes is no input, so it
+    may be edited while they run."""
+    return {name: digest for name, digest in inventory(root).items()
+            if not name.endswith('.md')}
+
+
 #  The lock carries every shared library its tools load except the C and C++
 #  runtimes, which come from the host.  Its newest binary asks for glibc 2.38,
 #  so that is the host it needs, whichever distribution supplies it.

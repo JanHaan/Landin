@@ -14,7 +14,8 @@ import time
 from models import EncodingPeripheral
 from packed import TRACE
 from run import Run, current_lock, require, stop, unchanged
-from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
+from setup import (DEFAULT, HERE, installed_tools, inventory, probe_inputs, sha,
+                   supported_host)
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'),
             ('speed', 'auto'), ('none', 'all'), ('speed', 'all')]
@@ -132,7 +133,7 @@ def main():
     args.tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    result = {'status': 'failed', 'inputs': inventory(HERE)}
+    result = {'status': 'failed', 'inputs': probe_inputs(HERE)}
     installed = json.loads((args.tools / 'installation.json').read_text())
     try:
         current_lock(args.tools, installed)
@@ -142,7 +143,7 @@ def main():
         execute(Run(out, args.tools.resolve()), args.refine)
         require(installed['files'] == {area: inventory(args.tools / area)
                 for area in installed['files']}, 'tools changed during execution')
-        require(result['inputs'] == inventory(HERE), 'probe inputs changed')
+        require(result['inputs'] == probe_inputs(HERE), 'probe inputs changed')
         result['status'] = 'passed'
     finally:
         result['files'] = inventory(out)

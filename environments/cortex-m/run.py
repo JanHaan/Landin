@@ -19,7 +19,7 @@ import time
 
 from gdb_server import GdbServer
 from setup import (AREAS, DEFAULT, ESPRESSIF, HERE, RISCV, arm_archive, installed_tools,
-                   inventory, riscv_archive, sha, supported_host)
+                   inventory, probe_inputs, riscv_archive, sha, supported_host)
 
 #  The GDB every session on one thread shares; `Run.debug` starts it.  One
 #  per thread, because a GDB serves one session at a time and the corpus
@@ -519,16 +519,17 @@ def main():
     scope = ('FILTERED: ' + ', '.join(lanes) if args.lane else
              'part %s of every lane: %s' % (args.part, ', '.join(lanes)) if args.part else
              'every lane')
-    record = {'status': 'failed', 'inputs': inventory(HERE), 'platform': os.uname().sysname,
+    record = {'status': 'failed', 'inputs': probe_inputs(HERE), 'platform': os.uname().sysname,
               'machine': os.uname().machine, 'kernel': os.uname().release, 'scope': scope}
     if args.part:
         record['part'] = args.part
     run = Run(out, tools)
     try:
         run.execute(args.refine, lanes)
-        changed = changed_inputs(record['inputs'], inventory(HERE))
+        changed = changed_inputs(record['inputs'], probe_inputs(HERE))
         require(not changed, 'probe inputs changed while the lanes ran, so no lane verdict above '
-                'holds for this tree: ' + ', '.join(changed))
+                'holds for this tree: ' + ', '.join(changed) + '; every file under '
+                'environments/cortex-m but its Markdown is an input')
         record['status'] = 'passed'
     except Exception as exc:
         record['error'] = str(exc)

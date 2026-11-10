@@ -75,6 +75,30 @@ class ProbeFailures(unittest.TestCase):
                          ['changed b.py', 'removed c.py', 'added d.py'])
         self.assertEqual(changed_inputs({'a.py': '1'}, {'a.py': '1'}), [])
 
+    def test_the_guide_is_no_probe_input(self):
+        from setup import inventory, probe_inputs
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'lanes').mkdir()
+            for name in ('run.py', 'README.md', 'lanes/notes.md', 'lanes/start.S',
+                         'validation.json'):
+                (root / name).write_text(name)
+            before = probe_inputs(root)
+            self.assertEqual(sorted(before), ['lanes/start.S', 'run.py', 'validation.json'])
+            self.assertEqual(sorted(inventory(root)), ['README.md', 'lanes/notes.md',
+                                                       'lanes/start.S', 'run.py',
+                                                       'validation.json'])
+            #  Editing the guide while lanes run changes no input; a probe does.
+            (root / 'README.md').write_text('edited')
+            self.assertEqual(probe_inputs(root), before)
+            (root / 'lanes/start.S').write_text('edited')
+            self.assertNotEqual(probe_inputs(root), before)
+        #  Both runs that hold their inputs still read them this way.
+        for name in ('run.py', 'packed_native.py'):
+            source = (Path(__file__).resolve().parent / name).read_text()
+            self.assertNotIn('inventory(HERE)', source)
+            self.assertEqual(source.count('probe_inputs(HERE)'), 2)
+
     def test_stack_observation_sites(self):
         from resources import hook_addresses
         sites, changes = hook_addresses('''000000c0 <reset>:
@@ -912,6 +936,47 @@ class ProbeFailures(unittest.TestCase):
         self.assertIn('the fixture takes longer', text)
         self.assertIn('/x/gdb-backend.log', text)
         self.assertIn('QEMU exited with status 1', str(timed_out(error, Exited(), 3.0)))
+
+    def test_a_session_interrupts_a_program_still_running_and_names_its_pc(self):
+        import backend
+        from backend import SESSION_GRACE, SESSION_LIMIT, still_running, watched_continue
+        watched = '\n'.join(watched_continue())
+        self.assertIn('threading.Timer(%d, lambda: gdb.post_event(interrupt_late))'
+                      % SESSION_LIMIT, watched)
+        self.assertIn('gdb.execute("interrupt")', watched)
+        #  The timer is cancelled and disarmed however the continue ends.
+        self.assertRegex(watched, r'finally:\n    watchdog\.cancel\(\)\n    armed\.clear\(\)')
+        said = '\n'.join(still_running('value("$ra")'))
+        self.assertIn('if late:', said)
+        self.assertIn('still running after %d s' % SESSION_LIMIT, said)
+        self.assertIn('its last pc is %s, called from', said)
+        self.assertIn('where(value("$ra"))', said)
+        #  The lines are Python a session can run: with a stopped program
+        #  the check raises, naming the pc; without `late` nothing happens.
+        seen = {}
+        def check(holds, what):
+            seen['what'] = what
+        for late in ([], [True]):
+            seen.clear()
+            exec('if True:\n' + said, {'late': late, 'check': check, 'pc': 0x10553234,
+                                       'sp': 0x203fffc8, 'value': lambda expr: 0x2e0,
+                                       'where': lambda address: '%#x' % address})
+            self.assertEqual(bool(seen), bool(late))
+        self.assertIn('its last pc is 0x10553234, called from 0x2e0, with sp 0x203fffc8',
+                      seen['what'])
+        #  Both sessions continue under the watchdog and ask before taking
+        #  the stop for the stack guard's; the outer limit is the backstop.
+        profile = {'stack_top': 0x20004000, 'stack_reserved': 4096,
+                   'regions': [], 'device': 'x'}
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), Path(directory))
+            for script in (backend.session(run, 1, 0, False, profile=profile),
+                           backend.rv32_session(run, 1, 0, False, profile=profile)):
+                self.assertIn(watched, script)
+                self.assertLess(script.index('if late:'),
+                                script.index('stopped by the write watchpoint'))
+                self.assertNotIn("'continue',\n'python'", script)
+        self.assertGreater(SESSION_GRACE, 0)
 
     def test_the_inventory_names_the_row_to_write(self):
         import shutil
