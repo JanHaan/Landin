@@ -1,0 +1,12 @@
+handle: type = struct
+    descriptor: u32
+end handle
+
+close: (sink h: handle) -> none =
+    _ = h.descriptor
+end close
+
+close_one: (at: usize) -> none =
+    mut opened: [2]handle = zeroed
+    close(opened[at])
+end close_one

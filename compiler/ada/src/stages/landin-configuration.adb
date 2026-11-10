@@ -260,8 +260,10 @@ package body Landin.Configuration is
            & "`, which a routine body then reads";
       elsif Namespace = "compiler" and then Is_Valued_Fact_Name (Member) then
          return "D437: compiler." & Member & " is read in fixed"
-           & " configuration expressions and module values; a routine"
-           & " body reads a module value that holds it";
+           & " configuration expressions and module values; an array"
+           & " length or a routine body reads a module value that holds"
+           & " it, such as `" & Member & ": usize = compiler." & Member
+           & "`";
       elsif Is_Description_Member (Namespace, Member) then
          return "D542: " & Namespace & "." & Member & " is a directive of a"
            & " device description, written at module level in the"

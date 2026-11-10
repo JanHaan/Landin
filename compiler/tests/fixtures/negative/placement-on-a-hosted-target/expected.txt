@@ -1,0 +1,10 @@
+error[L0347]: linux-x86-64 places nothing: a section, alignment, region or vector is a firmware target's
+  --> ../tests/fixtures/negative/placement-on-a-hosted-target/program.ldn:1:21
+  |
+1 | link(align: 64) mut cell: [4]u8 = zeroed
+  |                     ^^^^
+  --> ../tests/fixtures/negative/placement-on-a-hosted-target/program.ldn:1:1
+  |
+1 | link(align: 64) mut cell: [4]u8 = zeroed
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the declaration it places
+  = note: [1640]: placement is read by a firmware image's linker script, and a hosted program has none; remove it, or select it under `fixed if` for a firmware target

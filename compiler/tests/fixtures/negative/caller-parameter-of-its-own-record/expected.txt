@@ -18,13 +18,3 @@ error[L0339]: a `caller` parameter needs a struct of exactly file_id, line and c
 2 |     visit: (caller value: node) -> none
   |                           ^^^^ this written type
   = note: D192: source filenames live in a separate table
-error[L0339]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
-  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:2:13
-  |
-2 |     visit: (caller value: node) -> none
-  |             ^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/caller-parameter-of-its-own-record/program.ldn:2:27
-  |
-2 |     visit: (caller value: node) -> none
-  |                           ^^^^ this written type
-  = note: D192: source filenames live in a separate table

@@ -1288,6 +1288,12 @@ package body Landin.Stages.Checking.References is
       function Kept_Into_Refusal
         (Kept, Holder : Reference_Fact) return String;
 
+      --  The one of its refusals that a different order of declarations
+      --  answers, which the report's note then says.
+      Kept_Too_Late : constant String :=
+        "this frame-origin reference is kept in storage declared before"
+        & " it, which it may not outlive";
+
       --  D445: after the call, the holder's frame storage holds what an
       --  `escaping into` argument kept there.
       procedure Keep_Into_Holders
@@ -1992,8 +1998,15 @@ package body Landin.Stages.Checking.References is
                            Holder_Argument (Tree, Call, Called, Part)));
                   begin
                      if Refusal /= "" then
-                        Report_Escape (Tree, Argument, Kept, Refusal,
-                                       Part.Site);
+                        Report_Escape
+                          (Tree, Argument, Kept, Refusal, Part.Site,
+                           Advice =>
+                             (if Refusal = Kept_Too_Late
+                              then "; of two locals the one declared"
+                                & " earlier lives longer, so declare what"
+                                & " this refers to before the storage that"
+                                & " keeps it"
+                              else ""));
                      end if;
                   end;
                end if;
@@ -2081,8 +2094,7 @@ package body Landin.Stages.Checking.References is
                  or else not Declared_Within
                    (Kept.Frame_Latest, Holder.Frame_Witness))
             then
-               return "this frame-origin reference is kept in storage"
-                 & " declared before it, which it may not outlive";
+               return Kept_Too_Late;
             end if;
          end if;
          for Source in Kept.From'Range loop
@@ -3141,15 +3153,44 @@ package body Landin.Stages.Checking.References is
 
                --  Viewer says what still views the argument's storage and
                --  Way_Out how to be done with that view first.
+               --  Whether the argument selects a field or an element of
+               --  the binding it is rooted in, and not that binding whole,
+               --  which `module.name` spells too.
+               function Selects_Part return Boolean;
+
+               function Selects_Part return Boolean is
+                  Where : Syn.Node_Id := Argument;
+               begin
+                  if Syn.Kind (Tree, Where)
+                    not in Syn.Member_Selection | Syn.Element_Index
+                  then
+                     return False;
+                  end if;
+                  while Syn.Kind (Tree, Where)
+                    in Syn.Member_Selection | Syn.Element_Index
+                  loop
+                     Where := Syn.Target_Of (Tree, Where);
+                  end loop;
+                  return Syn.Kind (Tree, Where) = Syn.Name_Reference
+                    and then Res.Verdict_Of (Meanings.all, Tree, Where)
+                      = Res.Bound
+                    and then Res.Bound_To (Meanings.all, Tree, Where)
+                      = Mutated;
+               end Selects_Part;
+
+               --  Whole_Binding: the view is a binding's, which holds the
+               --  argument's whole root binding and not one field of it.
                procedure Report
                  (Viewer, Way_Out : String;
                   Related : Landin.Provenance.Origin;
-                  Because : String);
+                  Because : String;
+                  Whole_Binding : Boolean := False);
 
                procedure Report
                  (Viewer, Way_Out : String;
                   Related : Landin.Provenance.Origin;
-                  Because : String) is
+                  Because : String;
+                  Whole_Binding : Boolean := False) is
                begin
                   Bad.Report
                     (Item    => Bad.Borrowed_Place,
@@ -3178,7 +3219,20 @@ package body Landin.Stages.Checking.References is
                                    else ", or, if the routine only"
                                         & " reads it, declare `"
                                         & Spelled (Part.Name)
-                                        & "` without `inout`"),
+                                        & "` without `inout`")
+                                & (if Whole_Binding and then Selects_Part
+                                   then "; the argument is a part of `"
+                                        & Spelled
+                                            (Res.Name_Of
+                                               (Meanings.all, Mutated))
+                                        & "`, and a view held in a binding"
+                                        & " holds all of `"
+                                        & Spelled
+                                            (Res.Name_Of
+                                               (Meanings.all, Mutated))
+                                        & "`: its fields are not tracked"
+                                        & " apart"
+                                   else ""),
                      Related => Related,
                      Because => Because,
                      Into    => Sink.all);
@@ -3228,7 +3282,8 @@ package body Landin.Stages.Checking.References is
                               Related => Syn.Origin
                                 (Used_Tree.all,
                                  Res.Node_Of (Meanings.all, Used)),
-                              Because => "the live derived view");
+                              Because => "the live derived view",
+                              Whole_Binding => True);
                         end;
                         exit;
                      end if;

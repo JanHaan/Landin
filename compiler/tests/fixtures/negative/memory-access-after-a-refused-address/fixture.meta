@@ -1,0 +1,9 @@
+class: negative
+summary: a memory builtin whose address argument was refused where it is written adds no L0344 saying it needs a pointer: the address of a range subtype place is one L0304 and a mistyped index one L0301
+program: program.ldn
+args: ../tests/fixtures/negative/memory-access-after-a-refused-address/program.ldn
+expect: expected.txt
+codes: L0304, L0301
+constructs: 0660, 1620
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

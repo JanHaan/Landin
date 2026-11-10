@@ -1,0 +1,9 @@
+class: negative
+summary: a `layout(c)` record refused for a field C cannot hold is reported once, at the field: a C signature that takes or returns the record adds no refusal of its own
+program: program.ldn
+args: ../tests/fixtures/negative/c-signature-over-a-refused-record/program.ldn
+expect: expected.txt
+codes: L0346
+constructs: 0750, 1580
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

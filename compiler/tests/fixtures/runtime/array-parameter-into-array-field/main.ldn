@@ -1,0 +1,29 @@
+rec: type = struct
+    before: u32
+    name: [4]u8
+    after: u32
+end rec
+
+holder: type = struct
+    inner: rec
+end holder
+
+fill: (name: [4]u8) -> (r: rec) =
+    mut record: rec = (before: 7, name: [0, 0, 0, 0], after: 9)
+    record.name = name
+    r = record
+end fill
+
+echo: (name: [4]u8) -> (out: [4]u8, h: holder) =
+    out = name
+    h = zeroed
+    h.inner.name = out
+end echo
+
+public main: () -> (code: i32) =
+    source: [4]u8 = [10, 11, 12, 9]
+    r := fill(source)
+    (out, h) := echo(source)
+    code = i32(r.name[0]) + i32(r.name[3]) + i32(r.before) + i32(r.after)
+           + i32(h.inner.name[1]) - i32(out[2])
+end main

@@ -1,0 +1,10 @@
+device: type = concept (d: type)
+    put: (self: d, byte: u8) -> none
+end device
+
+link(section: ".ramtext.handle") handle: (port: type is device, bytes: []u8,
+                                          p: port) -> none =
+    for byte in bytes do
+        port.put(p, byte)
+    end for
+end handle

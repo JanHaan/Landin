@@ -1,0 +1,8 @@
+mut shifted: [2 << 1]u8 = zeroed
+mut sized: [2 * sizeof usize]u8 = zeroed
+
+takes: (a: [3 << 1]u8) -> none =
+    mut local: [2 * sizeof usize]u8 = zeroed
+    _ = local
+    _ = a
+end takes

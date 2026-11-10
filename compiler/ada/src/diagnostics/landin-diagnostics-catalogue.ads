@@ -1258,8 +1258,8 @@ package Landin.Diagnostics.Catalogue is
          Source => False, Bytes => False,
          Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
-         Rule => +("a verified frame outside x86-64's signed displacement"
-                   & " encoding")),
+         Rule => +("a verified frame larger than the target's backend can"
+                   & " address")),
       Image_Budget_Exceeded =>
         (Code => "L0505", Level => Error, State => Live,
          Source => False, Bytes => False,
@@ -1279,8 +1279,8 @@ package Landin.Diagnostics.Catalogue is
          Source => False, Bytes => False,
          Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
-         Rule => +("[1990]: one Cortex-M0 firmware frame exceeds the"
-                   & " selected stack reservation")),
+         Rule => +("[1990]: one firmware frame exceeds the selected stack"
+                   & " reservation")),
       Handler_Exceeds_Stack_Margin =>
         (Code => "L0508", Level => Error, State => Live,
          Source => False, Bytes => False,

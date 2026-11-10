@@ -1,0 +1,8 @@
+error[L0304]: a float assembly operand needs a float register, and rv32 has none at any level
+  --> ../tests/fixtures/negative/assembly-float-operand-rv32/program.ldn:2:34
+  |
+2 |     assembler.block("nop", in v: f32 at float = value)
+  |                                  ^^^
+  = note: the tour describes it at [1630]
+  = note: this is a recorded source-form boundary
+  = note: instead, compute the float in Landin, whose arithmetic this target does in software, and keep the block for targets with a float register under `fixed if`

@@ -1,0 +1,9 @@
+class: negative
+summary: L0506 names the part of a handler's signature that differs from the contract: here its parameter count
+program: main.ldn
+root: ../../../../..
+expect: expected.txt
+codes: L0506
+constructs: 0890, 1670
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

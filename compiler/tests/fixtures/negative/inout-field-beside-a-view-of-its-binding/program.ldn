@@ -1,0 +1,19 @@
+table: type = struct
+    slots: [4]u32
+end table
+
+state: type = struct
+    cells: table
+    round: table
+end state
+
+reset: (inout round: table) -> none =
+    round.slots = [0, 0, 0, 0]
+end reset
+
+both: () -> (n: u32) =
+    mut held: state = zeroed
+    services := held.cells.slots[0..<2]
+    reset(held.round)
+    n = services[0]
+end both

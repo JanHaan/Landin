@@ -474,30 +474,49 @@ package body Landin.Targets.Firmware is
               (if Dot = 0 then Mnemonic
                else Mnemonic (Mnemonic'First .. Dot - 1));
          begin
-            if (not Thumb2
-              and then Mnemonic not in "nop" | "wfi" | "wfe" | "sev" | "yield"
-              | "cpsid" | "cpsie" | "dmb" | "dsb" | "isb" | "mrs" | "msr"
-              | "mov" | "movs" | "ldr" | "ldrb" | "ldrh" | "ldrsb"
-              | "ldrsh" | "str" | "strb" | "strh" | "adds" | "subs"
-              | "ands" | "orrs" | "eors" | "bics" | "mvns" | "lsls"
-              | "lsrs" | "asrs" | "rors" | "adcs" | "sbcs" | "muls"
-              | "rsbs" | "cmp" | "cmn" | "tst" | "rev" | "rev16"
-              | "revsh" | "sxtb" | "sxth" | "uxtb" | "uxth" | "svc"
-              and then (not Naked or else Mnemonic not in
-                "b" | "beq" | "bne" | "bcs" | "bcc" | "bhs" | "blo"
-                | "bmi" | "bpl" | "bvs" | "bvc" | "bhi" | "bls"
-                | "bge" | "blt" | "bgt" | "ble" | "bl" | "blx"
-                | "bx" | "push" | "pop" | "udf" | "ldm" | "ldmia" | "stm"
-                | "stmia"))
-              or else (not Naked and then Transfers_Control (Mnemonic))
-            then
-               return
-                 (if Thumb2
-                  then "ordinary assembly requires straight-line control"
-                    & " flow"
-                  else "assembly requires enabled M0 instructions; ordinary"
-                    & " blocks require straight-line control flow");
-            end if;
+            --  Each refusal names the mnemonic and its reason: a
+            --  straight-line rule is cited only for an instruction that
+            --  breaks it, and an instruction armv6-m lacks is told the
+            --  level or float unit that has it.
+            declare
+               Naked_Only : constant Boolean := Mnemonic in
+                 "b" | "beq" | "bne" | "bcs" | "bcc" | "bhs" | "blo"
+                 | "bmi" | "bpl" | "bvs" | "bvc" | "bhi" | "bls"
+                 | "bge" | "blt" | "bgt" | "ble" | "bl" | "blx"
+                 | "bx" | "push" | "pop" | "udf" | "ldm" | "ldmia" | "stm"
+                 | "stmia";
+               Ordinary_M0 : constant Boolean := Mnemonic in
+                 "nop" | "wfi" | "wfe" | "sev" | "yield"
+                 | "cpsid" | "cpsie" | "dmb" | "dsb" | "isb" | "mrs" | "msr"
+                 | "mov" | "movs" | "ldr" | "ldrb" | "ldrh" | "ldrsb"
+                 | "ldrsh" | "str" | "strb" | "strh" | "adds" | "subs"
+                 | "ands" | "orrs" | "eors" | "bics" | "mvns" | "lsls"
+                 | "lsrs" | "asrs" | "rors" | "adcs" | "sbcs" | "muls"
+                 | "rsbs" | "cmp" | "cmn" | "tst" | "rev" | "rev16"
+                 | "revsh" | "sxtb" | "sxth" | "uxtb" | "uxth" | "svc";
+            begin
+               if not Naked
+                 and then (Transfers_Control (Mnemonic)
+                           or else (not Thumb2 and then Naked_Only))
+               then
+                  return "`" & Mnemonic & "` is a naked routine's"
+                    & " instruction: an ordinary block is straight-line"
+                    & " and leaves the stack to the routine";
+               elsif not Thumb2
+                 and then not Ordinary_M0
+                 and then not Naked_Only
+               then
+                  return "`" & Mnemonic & "` is not an instruction of the"
+                    & " armv6-m level"
+                    & (if Base'Length > 1
+                         and then Base (Base'First) = 'v'
+                       then "; a float unit's instructions need a"
+                         & " description with `compiler.float_unit` and"
+                         & " the level armv7e-m"
+                       else "; a Thumb-2 instruction needs the level"
+                         & " armv7-m or above");
+               end if;
+            end;
             declare
                Tail : constant String :=
                  Asm.Without_Margins (Clean (Stop .. Clean'Last));

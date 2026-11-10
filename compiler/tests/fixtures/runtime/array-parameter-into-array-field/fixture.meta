@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1180 a whole array parameter and a named array return are assigned to an array field, also a nested one, as a local array is
+program: main.ldn
+status: 34
+constructs: 0520, 0670, 0710
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

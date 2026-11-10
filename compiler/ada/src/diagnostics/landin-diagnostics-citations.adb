@@ -1556,6 +1556,8 @@ package body Landin.Diagnostics.Citations is
                "A fixed-array field initializes a local array",
             when 52 =>
                "An array literal may be assigned to a fixed-array field",
+            when 1180 =>
+               "An array parameter is a copy source for an array field",
             when 53 =>
                "Repetition may assign a fixed-array field compactly",
             when 54 =>
@@ -3531,6 +3533,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Structs, variants and nesting",
             when 52 =>
                "Decisions: Structs, variants and nesting",
+            when 1180 =>
+               "Decisions: Structs, variants and nesting",
             when 53 =>
                "Decisions: Structs, variants and nesting",
             when 54 =>
@@ -5227,6 +5231,9 @@ package body Landin.Diagnostics.Citations is
             when 52 =>
                "https://www.701.dev/spec.html#d52-an-array-literal-may-b"
                & "e-assigned-to-a-fixed-array-field",
+            when 1180 =>
+               "https://www.701.dev/spec.html#d1180-an-array-parameter-i"
+               & "s-a-copy-source-for-an-array-field",
             when 53 =>
                "https://www.701.dev/spec.html#d53-repetition-may-assign-"
                & "a-fixed-array-field-compactly",

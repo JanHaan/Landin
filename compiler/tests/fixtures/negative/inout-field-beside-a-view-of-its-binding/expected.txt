@@ -1,0 +1,10 @@
+error[L0315]: this argument is passed `inout`, so the call may change its storage while `services` still views it
+  --> ../tests/fixtures/negative/inout-field-beside-a-view-of-its-binding/program.ldn:17:11
+   |
+17 |     reset(held.round)
+   |           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/inout-field-beside-a-view-of-its-binding/program.ldn:16:5
+   |
+16 |     services := held.cells.slots[0..<2]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: the `inout` parameter `round` locks its argument whether or not the routine writes it; finish with `services` before the call and take it again after, or, if the routine only reads it, declare `round` without `inout`; the argument is a part of `held`, and a view held in a binding holds all of `held`: its fields are not tracked apart

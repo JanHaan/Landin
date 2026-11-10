@@ -1,0 +1,9 @@
+class: negative
+summary: a conformance label that is an entry of a parent concept names that parent and says it takes a conformance of its own, while a label of no concept keeps the general refusal
+program: program.ldn
+args: ../tests/fixtures/negative/conformance-label-of-a-parent-concept/program.ldn
+expect: expected.txt
+codes: L0341, L0341, L0341
+constructs: 1240
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1

@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference is kept in storage declared before it, which it may not outlive
+  --> ../tests/fixtures/negative/escaping-into-node-declared-after-the-list/program.ldn:14:21
+   |
+14 |     push_kept(head, addr late)
+   |                     ^^^^^^^^^
+  --> ../tests/fixtures/negative/escaping-into-node-declared-after-the-list/program.ldn:13:5
+   |
+13 |     mut late: node = seed.val
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; of two locals the one declared earlier lives longer, so declare what this refers to before the storage that keeps it

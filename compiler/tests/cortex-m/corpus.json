@@ -1429,6 +1429,9 @@
     "runtime/array-of-structs": {
       "mode": "execute"
     },
+    "runtime/array-parameter-into-array-field": {
+      "mode": "execute"
+    },
     "runtime/array-repetition-evaluates-once": {
       "mode": "execute"
     },
@@ -1564,11 +1567,10 @@
     },
     "runtime/atomic-read-modify-write": {
       "codes": [
-        "L0300",
         "L0344"
       ],
       "mode": "refuse",
-      "reason": "D510: Cortex-M0 has no atomic read-modify-write and no eight-byte atomic access, so the u64 cells and every exchange, add and compare-exchange are refused at their use, naming sole_add and platform/cortex_m's critical section; the L0300 is the u64 cell's refusal leaving its literal argument typed as i32, a cascade the register records."
+      "reason": "D510: Cortex-M0 has no atomic read-modify-write and no eight-byte atomic access, so the u64 cells and every exchange, add and compare-exchange are refused at their use, naming sole_add and platform/cortex_m's critical section."
     },
     "runtime/atomic-store-buffering-between-processes": {
       "codes": [

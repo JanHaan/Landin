@@ -195,7 +195,11 @@ package body Landin.Panics is
         Landin.Stages.Identities (Context).all;
       Next : Site_Number := 1;
       Selected : IR.Declaration_Id := IR.No_Declaration;
-      Wrong_Domain : Boolean := False;
+      Difference : US.Unbounded_String;
+      Wrong_Domain : constant String :=
+        "its kind is not core/panic.panic_kind, whose atoms"
+        & " are out_of_range, overflow, bad_conversion,"
+        & " unreachable and stack_exhausted (D451)";
       Atoms : array (Kind) of IR.Declaration_Id :=
         [others => IR.No_Declaration];
       Core : constant Landin.Modules.Module_Id :=
@@ -213,51 +217,86 @@ package body Landin.Panics is
       function Displayed (Source : Landin.Source.Source_Id) return String
         is (Displayed_Name (Context, Source));
 
+      --  What in the declaration differs from the contract, which the one
+      --  sentence of the contract never said.
+      function Differs (Part : String) return Boolean;
+      function Differs (Part : String) return Boolean is
+      begin
+         Difference := US.To_Unbounded_String (Part);
+         return False;
+      end Differs;
+
       function Valid return Boolean;
       function Valid return Boolean is
          Item : constant IR.Item_Id := IR.Item_For (Unit, Selected);
          Sig : IR.Signature_Id;
       begin
          if Item = IR.No_Item or else IR.Kind_Of (Unit, Item) /= IR.Routine
-           or else not R.Is_Public (Meanings, Selected)
-           or else IR.Is_External (Unit, Item)
-           or else IR.Generic_Template_Of (Unit, Item) /= IR.No_Declaration
-           or else IR.Link_Symbol (Unit, Item) /= Landin.Source.Names.No_Name
          then
-            return False;
+            return Differs ("it is not a routine");
+         elsif not R.Is_Public (Meanings, Selected) then
+            return Differs ("it is not public");
+         elsif IR.Is_External (Unit, Item) then
+            return Differs ("it is an external declaration with no body");
+         elsif IR.Generic_Template_Of (Unit, Item) /= IR.No_Declaration then
+            return Differs ("it is generic");
+         elsif IR.Link_Symbol (Unit, Item) /= Landin.Source.Names.No_Name
+         then
+            return Differs ("it carries a link symbol");
          end if;
          Sig := IR.Signature_Of (Unit, Item);
-         if Sig = IR.No_Signature
-           or else IR.Signature_Machine (Unit, Sig) /= Landin.Machine.Ordinary
-           or else IR.Signature_Uses_C_ABI (Unit, Sig)
-           or else not IR.Signature_Never_Returns (Unit, Sig)
-           or else IR.Signature_Errors (Unit, Sig) /= IR.No_Atom_Set
-           or else IR.Signature_Parameter_Count (Unit, Sig) /= 2
+         if Sig = IR.No_Signature then
+            return Differs ("it has no signature");
+         elsif IR.Signature_Machine (Unit, Sig) /= Landin.Machine.Ordinary
          then
-            return False;
+            return Differs
+              ("its convention is a machine entry's, interrupt or naked");
+         elsif IR.Signature_Uses_C_ABI (Unit, Sig) then
+            return Differs ("its convention is extern(c)");
+         elsif not IR.Signature_Never_Returns (Unit, Sig) then
+            return Differs ("it does not return `noreturn`");
+         elsif IR.Signature_Errors (Unit, Sig) /= IR.No_Atom_Set then
+            return Differs ("it has an error set");
+         elsif IR.Signature_Parameter_Count (Unit, Sig) /= 2 then
+            return Differs
+              ("it takes"
+               & Natural'Image (IR.Signature_Parameter_Count (Unit, Sig))
+               & (if IR.Signature_Parameter_Count (Unit, Sig) = 1
+                  then " parameter" else " parameters")
+               & ", not the kind and the site");
          end if;
          for Index in 1 .. 2 loop
             declare
                Part : constant IR.Signature_Part :=
                  IR.Nth_Signature_Parameter (Unit, Sig, Index);
+               Which : constant String :=
+                 (if Index = 1 then "its first parameter, the kind,"
+                  else "its second parameter, the site,");
             begin
-               if Part.Kind /= Landin.Types.U32
+               if Part.Convention /= IR.In_Value then
+                  return Differs
+                    (Which & " is not passed by value, as a plain `in`"
+                     & " parameter is");
+               elsif Part.Escaping then
+                  return Differs (Which & " is `escaping`");
+               elsif Part.Kind /= Landin.Types.U32
                  or else Part.Nominal /= IR.No_Nominal_Type
-                 or else Part.Convention /= IR.In_Value
                  or else Part.Pointee /= IR.No_Pointee
-                 or else Part.Escaping
                then
-                  return False;
+                  return Differs
+                    (Which & " is not "
+                     & (if Index = 1 then "core/panic.panic_kind"
+                        else "a u32"));
                end if;
                if Index = 2 then
                   if Part.Atoms /= IR.No_Atom_Set then
-                     return False;
+                     return Differs (Which & " is an atom set, not a u32");
                   end if;
                elsif Part.Atoms = IR.No_Atom_Set then
-                  return False;
+                  return Differs
+                    (Which & " is not core/panic.panic_kind");
                elsif IR.Atom_Count (Unit, Part.Atoms) /= Kind_Count then
-                  Wrong_Domain := True;
-                  return False;
+                  return Differs (Wrong_Domain);
                else
                   for Reason in Kind loop
                      declare
@@ -268,8 +307,7 @@ package body Landin.Panics is
                              (Unit, Part.Atoms, Position) = Atoms (Reason);
                         end loop;
                         if not Found then
-                           Wrong_Domain := True;
-                           return False;
+                           return Differs (Wrong_Domain);
                         end if;
                      end;
                   end loop;
@@ -287,11 +325,14 @@ package body Landin.Panics is
                   Part : constant Landin.Checking.Signature_Part :=
                     Landin.Checking.Nth_Signature_Parameter
                       (Types, Source_Sig, Index);
+                  Which : constant String :=
+                    (if Index = 1 then "its first parameter, the kind,"
+                     else "its second parameter, the site,");
                begin
-                  if Part.Constraint /= Landin.Checking.No_Constraint
-                    or else Part.Caller
-                  then
-                     return False;
+                  if Part.Constraint /= Landin.Checking.No_Constraint then
+                     return Differs (Which & " has a range constraint");
+                  elsif Part.Caller then
+                     return Differs (Which & " is a `caller` parameter");
                   end if;
                end;
             end loop;
@@ -377,11 +418,7 @@ package body Landin.Panics is
          Problem := US.To_Unbounded_String
            ("panic_handler must be public, ordinary, non-generic and "
             & "infallible: (core/panic.panic_kind, u32) -> noreturn"
-            & (if Wrong_Domain
-               then "; its kind is not core/panic.panic_kind, whose atoms"
-                    & " are out_of_range, overflow, bad_conversion,"
-                    & " unreachable and stack_exhausted (D451)"
-               else ""));
+            & "; " & US.To_String (Difference));
          return;
       end if;
       --  The ordinary atom ABI is dense declaration order, excluding zero;

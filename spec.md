@@ -8543,6 +8543,33 @@ field-qualified fill rule that a literal does not need. All were declined.
 the recorded IR dump; and
 `runtime/struct-array-field-literal-assignment-order` on Linux x86-64.
 
+### D1180 — An array parameter is a copy source for an array field
+
+**The tour said** that assigning an array copies its complete value [0520].
+D50 made a fixed-array field either endpoint of that copy and named its
+other endpoint as a direct name of module state or a local. An array
+parameter and a named array return were already copy sources for a local
+array, `copy: [16]u8 = name`, and for a field of a struct literal,
+`(name: name)`, but `record.name = name` with `name` a parameter was refused
+with L0334 at the field, "this selects a whole array field, and this
+position does not take one": the checker admitted the field as a
+destination only after recognising the source by its spelling, and a
+parameter's name was not among the spellings.
+
+**Chosen:** a parameter or a named return of fixed-array type is a source of
+D50's copy into a fixed-array field, at any depth of selection, under D50's
+rules for length, element type, mutability of the destination's root and
+order of evaluation. Nothing else about either changes: a parameter is not
+a destination, and a named return is assigned as it was.
+
+**The alternative** was to keep the refusal and have it name the parameter
+and the local copy that works. It was declined because the copy through a
+local reads and writes the same bytes, so the refusal protected nothing and
+only the order of two statements told the accepted program from the refused
+one.
+
+**Pinned by** `runtime/array-parameter-into-array-field`.
+
 ### D53 — Repetition may assign a fixed-array field compactly
 
 **The tour said** that full repetition evaluates one scalar pattern [0560],

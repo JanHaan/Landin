@@ -1,0 +1,20 @@
+error[L0330]: the text names `zero`, a register no ordinary block may name, to read or to write
+  --> ../tests/fixtures/negative/assembly-rv32-zero-register/program.ldn:2:21
+  |
+2 |     assembler.block("sw zero, 4(t0)")
+  |                     ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-rv32-zero-register/program.ldn:2:5
+  |
+2 |     assembler.block("sw zero, 4(t0)")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named; for a zero source load a scratch register, `li t1, 0`, and to write a CSR without reading it use `csrw`
+error[L0330]: the text names `zero`, a register no ordinary block may name, to read or to write
+  --> ../tests/fixtures/negative/assembly-rv32-zero-register/program.ldn:6:21
+  |
+6 |     assembler.block("csrrw zero, cycle, zero")
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-rv32-zero-register/program.ldn:6:5
+  |
+6 |     assembler.block("csrrw zero, cycle, zero")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named; for a zero source load a scratch register, `li t1, 0`, and to write a CSR without reading it use `csrw`

@@ -8,7 +8,7 @@ error[L0330]: assembly text holds no directive
 2 |     assembler.block("nop\n\t.incbin \"/dev/null\"")
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
-error[L0330]: ordinary assembly requires straight-line control flow
+error[L0330]: `b` is a naked routine's instruction: an ordinary block is straight-line and leaves the stack to the routine
   --> ../tests/fixtures/negative/assembly-tab-led-line-cortex/program.ldn:3:5
   |
 3 |     assembler.block("\tb there")

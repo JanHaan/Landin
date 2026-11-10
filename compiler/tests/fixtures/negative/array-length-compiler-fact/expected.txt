@@ -1,0 +1,6 @@
+error[L0203]: unavailable tool reference: compiler.word_size
+  --> ../tests/fixtures/negative/array-length-compiler-fact/program.ldn:1:34
+  |
+1 | mut backing: [2 * 128 * compiler.word_size]u8 = zeroed
+  |                                  ^^^^^^^^^
+  = note: D437: compiler.word_size is read in fixed configuration expressions and module values; an array length or a routine body reads a module value that holds it, such as `word_size: usize = compiler.word_size`

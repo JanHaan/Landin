@@ -1,0 +1,3 @@
+f: (value: f32) -> none =
+    assembler.block("nop", in v: f32 at float = value)
+end f

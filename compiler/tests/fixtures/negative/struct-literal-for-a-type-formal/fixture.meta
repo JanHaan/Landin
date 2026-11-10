@@ -1,0 +1,9 @@
+class: negative
+summary: an untyped struct literal passed where the parameter's type is a generic formal is refused naming the parameter and the typed binding that gives the literal its type
+program: program.ldn
+args: ../tests/fixtures/negative/struct-literal-for-a-type-formal/program.ldn
+expect: expected.txt
+codes: L0304
+constructs: 0670, 1260
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 1
