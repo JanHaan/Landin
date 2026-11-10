@@ -1,0 +1,10 @@
+error[L0103]: a for loop names its element binding, and `_` names nothing
+  --> ../tests/fixtures/negative/for-discard-binding-names-the-counting-loops/program.ldn:3:9
+  |
+3 |     for _ in 0..<3 do
+  |         ^
+  --> ../tests/fixtures/negative/for-discard-binding-names-the-counting-loops/program.ldn:3:5
+  |
+3 |     for _ in 0..<3 do
+  |     ^^^ this traversal
+  = note: [1150]: a for loop binds each item it walks; a loop that only repeats is `loop` [1130] or `while` [1140] with a counter of its own, as `while left > 0 do` with `dec left` in its body

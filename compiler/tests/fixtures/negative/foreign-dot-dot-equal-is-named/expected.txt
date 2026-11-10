@@ -1,0 +1,22 @@
+error[L0102]: Landin writes `..` for a range that includes its end, not `..=`
+  --> ../tests/fixtures/negative/foreign-dot-dot-equal-is-named/program.ldn:3:15
+  |
+3 |     for n in 1..=last do
+  |               ^^^
+  --> ../tests/fixtures/negative/foreign-dot-dot-equal-is-named/program.ldn:3:14
+  |
+3 |     for n in 1..=last do
+  |              ^ written after this
+  = note: [0360]: `first..last` includes `last`, and `first..<last` stops before it
+  = help (guess): write `..`
+error[L0102]: Landin writes `..` for a range that includes its end, not `..=`
+  --> ../tests/fixtures/negative/foreign-dot-dot-equal-is-named/program.ldn:6:20
+  |
+6 |     part := items[0..=2]
+  |                    ^^^
+  --> ../tests/fixtures/negative/foreign-dot-dot-equal-is-named/program.ldn:6:19
+  |
+6 |     part := items[0..=2]
+  |                   ^ written after this
+  = note: [0360]: `first..last` includes `last`, and `first..<last` stops before it
+  = help (guess): write `..`

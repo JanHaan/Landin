@@ -1,0 +1,9 @@
+class: negative
+summary: [0100] a run of names before `:=` with a call on the right was meant to destructure the call, and the refusal spells the parenthesised names back
+program: program.ldn
+codes: L0010
+constructs: 0100, 0990
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/shared-inferred-names-before-a-call-name-the-destructuring/program.ldn
+status: 1

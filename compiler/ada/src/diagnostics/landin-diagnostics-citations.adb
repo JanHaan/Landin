@@ -2198,6 +2198,9 @@ package body Landin.Diagnostics.Citations is
                & "n form",
             when 368 =>
                "A keyword in a binding's place is one report",
+            when 1190 =>
+               "A keyword written as any name is one report, and offers "
+               & "a longer spelling",
             when 369 =>
                "A match arm written as a value names `if` and `elsif`",
             when 370 =>
@@ -3049,6 +3052,9 @@ package body Landin.Diagnostics.Citations is
                "A call's bound recovery recovers inside an `if` arm too",
             when 331 =>
                "A line that begins `(` and binds with `:=` destructures",
+            when 1191 =>
+               "A line-leading `[` that indexes a value that is no array"
+               & " says so",
             when 332 =>
                "An atom union may be written in place as a declared type",
             when 333 =>
@@ -4039,6 +4045,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 368 =>
                "Decisions: The toolchain, C and the machine",
+            when 1190 =>
+               "Decisions: The toolchain, C and the machine",
             when 369 =>
                "Decisions: The toolchain, C and the machine",
             when 370 =>
@@ -4678,6 +4686,8 @@ package body Landin.Diagnostics.Citations is
             when 330 =>
                "Decisions: The core library and the derived programs",
             when 331 =>
+               "Decisions: The core library and the derived programs",
+            when 1191 =>
                "Decisions: The core library and the derived programs",
             when 332 =>
                "Decisions: The core library and the derived programs",
@@ -6006,6 +6016,9 @@ package body Landin.Diagnostics.Citations is
             when 368 =>
                "https://www.701.dev/spec.html#d368-a-keyword-in-a-bindin"
                & "g-s-place-is-one-report",
+            when 1190 =>
+               "https://www.701.dev/spec.html#d1190-a-keyword-written-as"
+               & "-any-name-is-one-report-and-offers-a-longer-spelling",
             when 369 =>
                "https://www.701.dev/spec.html#d369-a-match-arm-written-a"
                & "s-a-value-names-if-and-elsif",
@@ -7032,6 +7045,9 @@ package body Landin.Diagnostics.Citations is
             when 331 =>
                "https://www.701.dev/spec.html#d331-a-line-that-begins-an"
                & "d-binds-with-destructures",
+            when 1191 =>
+               "https://www.701.dev/spec.html#d1191-a-line-leading-that-"
+               & "indexes-a-value-that-is-no-array-says-so",
             when 332 =>
                "https://www.701.dev/spec.html#d332-an-atom-union-may-be-"
                & "written-in-place-as-a-declared-type",

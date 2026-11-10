@@ -1,0 +1,9 @@
+class: negative
+summary: D1190 a keyword written as a declared binding's name is refused once, offering a longer spelling, and its later assignments, updates and uses are the same mistake
+program: program.ldn
+codes: L0100
+constructs: 1760, 1790
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/keyword-as-a-declared-name-is-reported-once/program.ldn
+status: 1

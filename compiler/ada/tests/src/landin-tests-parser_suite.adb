@@ -4438,6 +4438,18 @@ package body Landin.Tests.Parser_Suite is
       Check ("f: () -> none = first, second := 1 end f", Inferred);
       Check ("f: () -> none = mut first, second := 1 end f", Inferred);
       Check ("f: () -> (r: i32) = first, second := 1 r = 2 end f", Inferred);
+      --  A call on the right was meant to be destructured, and the
+      --  refusal spells the parenthesised names back; `mut` has no place
+      --  in that form, so its run keeps the general sentence.
+      Check ("f: () -> none = first, second := pair(1) end f",
+             "an inferred binding names one binding; a call's results are"
+             & " bound by the names in parentheses, `(first, second) :="
+             & " ...`");
+      Check ("f: () -> none = first, second := try m.pair(1) end f",
+             "an inferred binding names one binding; a call's results are"
+             & " bound by the names in parentheses, `(first, second) :="
+             & " ...`");
+      Check ("f: () -> none = mut first, second := pair(1) end f", Inferred);
       Check ("f: () -> none = if mut first, second: bool = true "
              & "then end if end f", Condition);
       Check ("f: () -> none = if first, second: bool = true "

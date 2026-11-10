@@ -1,0 +1,9 @@
+class: negative
+summary: D1190 a keyword written as a field's name is refused once at the field, naming the keyword, with no report that the struct is empty or never closed, and its label in a construction and its selection are the same mistake
+program: program.ldn
+codes: L0100
+constructs: 0670, 0710, 1760
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/keyword-as-a-field-name-is-reported-once/program.ldn
+status: 1

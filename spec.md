@@ -21045,7 +21045,9 @@ and `--( ... )--` respectively; comments receive guidance without an edit
 that guesses their extent. An offered decrement edit requires an empty
 touching `--` comment. Other rows are `*T` where a type belongs, `&&` and
 `||` between operands, and `!=`, which
-replaces the note [0350]'s check used to append. `check.py` holds every row to
+replaces the note [0350]'s check used to append. `..=` where a range's upper
+bound is refused names `..`, which already includes its end [0360], and its
+fix writes it. `check.py` holds every row to
 a spelling the keyword rule does not spell, a paragraph a document defines,
 and a fixture whose recorded report names both the foreign and the Landin
 spelling.
@@ -21094,6 +21096,40 @@ every later keyword in the file a candidate name; and a reserved-word list in
 the note, which [1760] already is.
 
 **Pinned by** `negative/keyword-as-a-binding-name-is-reported-once`.
+
+### D1190 — A keyword written as any name is one report, and offers a longer spelling
+
+**The discrepancy:** D368 made one report of a keyword that begins a
+statement in a binding's place, and noted the word only there. A keyword
+written where a declaration reads its name, `mut fixed := start`, was
+refused by [1760]'s own report without being noted, so each later
+`fixed = fixed + 1` was a second L0100 and each use as a value an L0102. A
+field named `from` was not read as a field at all: the struct's body ended
+at it, and the report was L0101, "a struct needs at least one field", or
+L0103, "this struct is never closed", at the header, with the keyword named
+second or not at all. Neither report said what to write instead.
+
+**Chosen:** every place that reads a name reports a keyword there once for
+the file, as L0100, and notes the word. A keyword followed by `:` where a
+struct's field or a call's label belongs is read as that name, so the field
+and the argument are read on and the struct keeps its fields and its `end`.
+A noted keyword met again where a name belongs, a field selected, a label,
+a declaration or a statement that assigns or updates it, adds no report, as
+D368 already held for its use as a value. A closing word, `end`, `else`,
+`elsif` or `complete`, is never noted, since a later one far more likely
+closes something. The report's note says the word is that keyword
+everywhere and offers the longer spelling [1760] itself gives as an
+ordinary name, `fixed_value` for `fixed`.
+
+**The alternatives:** offering a synonym per keyword, which needs a table of
+guesses at what was meant; a fix that renames the word, which would have to
+rename every use to leave the program meaning what it did; and reading a
+keyword as a name wherever a name belongs after the refusal, which D368
+declined.
+
+**Pinned by** `negative/keyword-as-a-declared-name-is-reported-once`,
+`negative/keyword-as-a-field-name-is-reported-once` and
+`negative/keyword-as-a-binding-name-is-reported-once`.
 
 ### D369 — A match arm written as a value names `if` and `elsif`
 
@@ -33307,7 +33343,8 @@ The parser records where a line-leading `(` or prefix operator continued a
 line, and a later refusal there says so: a construction after a name is L0301
 naming `size(rows: 0, …)` as the route, without the misleading report that
 used to come first; an undeclared name and a value that became an operand say
-the line above was continued.
+the line above was continued. A line-leading `[` is recorded the same way
+(D1191).
 
 **The alternatives:** keeping `(` and `[` on their operand's line, which
 reverses [1750], changes a pinned fixture and reformats about a hundred
@@ -33317,6 +33354,32 @@ sites; and ending statements at line ends.
 `negative/line-leading-parenthesis-continues-as-a-call`,
 `negative/line-leading-parenthesis-argument-is-not-declared-yet` and
 `negative/line-leading-minus-continues-the-value`.
+
+### D1191 — A line-leading `[` that indexes a value that is no array says so
+
+**The discrepancy:** D331 has an empty index or a list that begins a line say
+that the line above was continued, both in the parser. A line-leading `[i]`
+with one value is a well-formed index, so `_ = e` followed by `[i]` reached
+the checker, which reported L0301 "this is not an array, so it has no element
+to index" at the name above, and then the value the line was meant to be as
+missing: L0332 in a handler's block, L0302 at a function's end. Neither said
+what the line end had done.
+
+**Chosen:** the parser records a `[` that begins a line and indexes the value
+the line above ends with, as it records a `(` and an operator. The checker's
+refusal of that index, when the value is no array or slice, is L0301 at the
+`[`: "this line begins with `[`, which continues the line above as an index
+of a value that is no array", with the value above as its second place and
+[1750]'s route, the value in parentheses, as its note. It is the one report:
+a block or a body whose last line was so continued adds none for the value
+that never arrived. An index of an array or slice is still that index, as
+[1750] says.
+
+**The alternatives:** a warning for every line that begins with `[`, which
+refuses a layout [1750] admits; and ending a statement at a line end before
+`[`, D331's declined alternative.
+
+**Pinned by** `negative/line-leading-bracket-indexes-a-value-that-is-no-array`.
 
 ### D332 — An atom union may be written in place as a declared type
 

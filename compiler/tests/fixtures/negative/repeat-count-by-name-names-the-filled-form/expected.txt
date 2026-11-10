@@ -1,0 +1,7 @@
+error[L0010]: only a literal count may stand before `of` in this kernel; write the length in the binding's type and fill it with `[of value]`, as `name: [count]t = [of value]`
+  --> ../tests/fixtures/negative/repeat-count-by-name-names-the-filled-form/program.ldn:4:24
+  |
+4 |     closed = [openings of false]
+  |                        ^^
+  = note: the tour describes it at [0560]
+  = note: this is a recorded source-form boundary

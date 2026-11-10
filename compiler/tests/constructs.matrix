@@ -57,7 +57,7 @@
 0330 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Bitwise operators
 0340 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Logical operators
 0350 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Comparison
-0360 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Ranges
+0360 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Ranges
 0370 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | `sizeof`, `alignof`, `lenof` and `offsetof`
 0380 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | `addr` and `.val`
 0390 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Assignment is a statement

@@ -1,0 +1,9 @@
+pair: (n: u32) -> (low: u32, high: u32) =
+    low = n
+    high = n + 1
+end pair
+
+span: () -> (wide: u32) =
+    low, high := pair(2)
+    wide = high - low
+end span

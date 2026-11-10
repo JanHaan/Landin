@@ -25424,10 +25424,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "equires an empty touching `--` comment. Other rows are `"
                & "*T` where a type belongs, `&&` and `||` between operands"
                & ", and `!=`, which replaces the note [0350]'s check used "
-               & "to append. `check.py` holds every row to a spelling the "
-               & "keyword rule does not spell, a paragraph a document defi"
-               & "nes, and a fixture whose recorded report names both the "
-               & "foreign and the Landin spelling."
+               & "to append. `..=` where a range's upper bound is refused "
+               & "names `..`, which already includes its end [0360], and i"
+               & "ts fix writes it. `check.py` holds every row to a spelli"
+               & "ng the keyword rule does not spell, a paragraph a docume"
+               & "nt defines, and a fixture whose recorded report names bo"
+               & "th the foreign and the Landin spelling."
                & LF
                & LF
                & "A foreign form with no single Landin construct to name k"
@@ -25444,6 +25446,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & "tands where a value belongs is read as the same mistake "
                & "and adds no report, as D242 treats a name an import refu"
                & "sed.",
+            when 1190 =>
+               "Chosen: every place that reads a name reports a keyword "
+               & "there once for the file, as L0100, and notes the word. A"
+               & " keyword followed by `:` where a struct's field or a cal"
+               & "l's label belongs is read as that name, so the field and"
+               & " the argument are read on and the struct keeps its field"
+               & "s and its `end`. A noted keyword met again where a name "
+               & "belongs, a field selected, a label, a declaration or a s"
+               & "tatement that assigns or updates it, adds no report, as "
+               & "D368 already held for its use as a value. A closing word"
+               & ", `end`, `else`, `elsif` or `complete`, is never noted, "
+               & "since a later one far more likely closes something. The "
+               & "report's note says the word is that keyword everywhere a"
+               & "nd offers the longer spelling [1760] itself gives as an "
+               & "ordinary name, `fixed_value` for `fixed`.",
             when 369 =>
                "Chosen: an arm that begins with a literal or a minus sig"
                & "n is refused as L0100, ""a match arm names a case or an a"
@@ -33287,7 +33304,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (166)
                & ")` as the route, without the misleading report that used"
                & " to come first; an undeclared name and a value that beca"
-               & "me an operand say the line above was continued.",
+               & "me an operand say the line above was continued. A line-l"
+               & "eading `[` is recorded the same way (D1191).",
+            when 1191 =>
+               "Chosen: the parser records a `[` that begins a line and "
+               & "indexes the value the line above ends with, as it record"
+               & "s a `(` and an operator. The checker's refusal of that i"
+               & "ndex, when the value is no array or slice, is L0301 at t"
+               & "he `[`: ""this line begins with `[`, which continues the "
+               & "line above as an index of a value that is no array"", wit"
+               & "h the value above as its second place and [1750]'s route"
+               & ", the value in parentheses, as its note. It is the one r"
+               & "eport: a block or a body whose last line was so continue"
+               & "d adds none for the value that never arrived. An index o"
+               & "f an array or slice is still that index, as [1750] says.",
             when 332 =>
                "Chosen: `declared_type ::= type | atom_union` is the typ"
                & "e of a binding, a condition declaration, a parameter, a "

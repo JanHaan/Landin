@@ -1,0 +1,20 @@
+error[L0301]: this line begins with `[`, which continues the line above as an index of a value that is no array
+  --> ../tests/fixtures/negative/line-leading-bracket-indexes-a-value-that-is-no-array/program.ldn:11:9
+   |
+11 |         [i]
+   |         ^
+  --> ../tests/fixtures/negative/line-leading-bracket-indexes-a-value-that-is-no-array/program.ldn:10:13
+   |
+10 |         _ = e
+   |             ^ the line above ends with this
+  = note: [1750]: a line end ends no statement; to begin a value with `[`, write the value that ends the line above in parentheses, as `(name)`, so nothing indexes it
+error[L0301]: this line begins with `[`, which continues the line above as an index of a value that is no array
+  --> ../tests/fixtures/negative/line-leading-bracket-indexes-a-value-that-is-no-array/program.ldn:17:5
+   |
+17 |     [i]
+   |     ^
+  --> ../tests/fixtures/negative/line-leading-bracket-indexes-a-value-that-is-no-array/program.ldn:16:9
+   |
+16 |     _ = e
+   |         ^ the line above ends with this
+  = note: [1750]: a line end ends no statement; to begin a value with `[`, write the value that ends the line above in parentheses, as `(name)`, so nothing indexes it

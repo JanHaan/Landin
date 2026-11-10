@@ -1931,6 +1931,20 @@ package body Landin.Syntax.Parser is
                      end if;
                   end;
 
+                  --  `..=`, another language's inclusive range, stopped
+                  --  on at its `=`: [0360]'s `..` already includes its end.
+                  if Item = Syn.Expression_Expected
+                    and then Kind_At (Low) = Tok.Equal and then Low > 1
+                    and then Kind_At (Low - 1) = Tok.Dot_Dot
+                    and then Touching (Low - 1)
+                  then
+                     return
+                       (Found => True, Form => Syn.Dot_Dot_Equal,
+                        Span => Join (Tok.Where (From, Low - 1),
+                                      Tok.Where (From, Low)),
+                        Written => Unbounded.To_Unbounded_String (".."));
+                  end if;
+
                   --  A bang where an operand was required is logical
                   --  negation from another language, not an error channel.
                   if Item = Syn.Expression_Expected
@@ -4399,6 +4413,34 @@ package body Landin.Syntax.Parser is
             --  Names, types, bindings                     [1760] [1790]
             ------------------------------------------------------------
 
+            --  D368/D1190: the one report of a keyword written where a
+            --  name belongs, about the keyword in hand.  It says the word
+            --  is reserved and offers a spelling that is a name, as [1760]
+            --  itself does with `begin_value`.
+            function Keyword_As_Name return String
+              is ("`" & Tok.Spelling (Peek) & "` is a keyword, and no"
+                  & " keyword is available as a name");
+
+            function Longer_Spelling return String
+              is ("[1760]: a word the keyword rule spells is that keyword"
+                  & " everywhere, so this needs another name; a longer"
+                  & " spelling such as `" & Tok.Spelling (Peek)
+                  & "_value` is an ordinary name");
+
+            --  Notes the keyword in hand, so that its later uses in the
+            --  file are the same mistake.  A closer is never noted: a
+            --  later one is far more likely to close something.
+            procedure Take_Word;
+
+            procedure Take_Word is
+            begin
+               if Peek not in Tok.Kw_End | Tok.Kw_Else | Tok.Kw_Elsif
+                            | Tok.Kw_Complete
+               then
+                  Taken_Words (Peek) := True;
+               end if;
+            end Take_Word;
+
             --  Every position the grammar spells `identifier` in comes
             --  through here, so [1760]'s two narrowings are stated once:
             --  a word the keyword rule spells is that keyword, and the
@@ -4445,21 +4487,35 @@ package body Landin.Syntax.Parser is
                   return After_Previous;
                end if;
 
+               --  D368/D1190: a keyword already reported as a name is
+               --  the same mistake wherever a name belongs again, its
+               --  field selected or its binding declared a second time.
+               if Peek in Tok.Reserved_Word and then Taken_Words (Peek) then
+                  Mark_Reported;
+                  Advance;
+                  return At_Name;
+               end if;
+
                Complain
                  (Item    => Syn.Name_Expected,
                   Where   => (if Peek = Tok.End_Of_Input
                               then After_Previous else At_Name),
                   Message =>
                     (if Peek in Tok.Reserved_Word
-                     then "`" & Tok.Spelling (Peek)
-                          & "` is a keyword, and no keyword is available"
-                          & " as a name"
+                     then Keyword_As_Name
                      elsif Peek = Tok.Underscore
                      then "`_` on its own is the discard, and nothing may"
                           & " be called it"
                      else "a name belongs here"),
-                  Note    => "[1760]: a name is lower case, and a word the"
-                             & " keyword rule spells is that keyword");
+                  Note    =>
+                    (if Peek in Tok.Reserved_Word
+                     then Longer_Spelling
+                     else "[1760]: a name is lower case, and a word the"
+                          & " keyword rule spells is that keyword"));
+
+               if Peek in Tok.Reserved_Word then
+                  Take_Word;
+               end if;
 
                if Peek /= Tok.End_Of_Input then
                   Advance;
@@ -4816,6 +4872,12 @@ package body Landin.Syntax.Parser is
                                      Extent   =>
                                        Join (At_Open, After_Previous),
                                      Children => [Selected, Element]);
+                              --  D331: a later stage that refuses the
+                              --  index says what the line end did.
+                              if Leading then
+                                 Note_Line_Fact
+                                   (Selected, Continues_Line, At_Open);
+                              end if;
                            end if;
                         end if;
                      end;
@@ -6825,7 +6887,15 @@ package body Landin.Syntax.Parser is
             begin
                Advance;
 
-               while Peek = Tok.Identifier loop
+               --  A keyword followed by `:` where a field belongs was
+               --  meant as the field's name: Parse_Declared_Name says so
+               --  once and the field is read on, where stopping at it
+               --  reported the struct as empty or never closed (D1190).
+               while Peek = Tok.Identifier
+                 or else (Peek in Tok.Reserved_Word
+                          and then Peek /= Tok.Kw_End
+                          and then Ahead (1) = Tok.Colon)
+               loop
                   declare
                      Field_Named : Landin.Source.Names.Name_Id;
                      At_Field    : constant Landin.Source.Span :=
@@ -6949,7 +7019,10 @@ package body Landin.Syntax.Parser is
                   if Compact then
                      exit when Peek /= Tok.Comma;
                      Advance;
-                     if Peek /= Tok.Identifier then
+                     if Peek /= Tok.Identifier
+                       and then not (Peek in Tok.Reserved_Word
+                                     and then Ahead (1) = Tok.Colon)
+                     then
                         Complain
                           (Syn.Name_Expected, Here,
                            "a field belongs after the comma",
@@ -7077,10 +7150,57 @@ package body Landin.Syntax.Parser is
                   Refuse_Shared_Names
                     (At_Name, "a condition declaration names one binding");
                elsif Kind_At (Past_Names (0)) = Tok.Colon_Equal then
-                  Refuse_Shared_Names
-                    (At_Name,
-                     "an inferred binding names one binding; shared names"
-                     & " write their type");
+                  declare
+                     --  `low, high := pair(2)`: a call on the right was
+                     --  meant to be destructured, which [0990] writes
+                     --  with the names in parentheses.  The names are
+                     --  spelled back, since the refusal's two notes are
+                     --  [1830]'s and cannot carry the route.
+                     Bound : constant Natural := Past_Names (0);
+                     Step  : Natural := Bound + 1;
+                     List  : Unbounded.Unbounded_String :=
+                       Unbounded.To_Unbounded_String
+                         (if Named = Landin.Source.Names.No_Name then ""
+                          else Landin.Source.Names.Spelling (Names, Named));
+                     Calls : Boolean := False;
+                  begin
+                     if Kind_At (Step) = Tok.Kw_Try then
+                        Step := Step + 1;
+                     end if;
+                     if Kind_At (Step) = Tok.Identifier then
+                        Step := Step + 1;
+                        while Kind_At (Step) = Tok.Dot
+                          and then Kind_At (Step + 1) = Tok.Identifier
+                        loop
+                           Step := Step + 2;
+                        end loop;
+                        Calls := Kind_At (Step) = Tok.Left_Paren;
+                     end if;
+                     if Calls and then not Mutable
+                       and then Named /= Landin.Source.Names.No_Name
+                     then
+                        Step := 1;
+                        while Step < Bound loop
+                           Unbounded.Append
+                             (List,
+                              ", " & Landin.Source.Names.Spelling
+                                (Names,
+                                 Named_Ahead (Tok.Token_Index (Step))));
+                           Step := Step + 2;
+                        end loop;
+                        Refuse_Shared_Names
+                          (At_Name,
+                           "an inferred binding names one binding; a"
+                           & " call's results are bound by the names in"
+                           & " parentheses, `("
+                           & Unbounded.To_String (List) & ") := ...`");
+                     else
+                        Refuse_Shared_Names
+                          (At_Name,
+                           "an inferred binding names one binding; shared"
+                           & " names write their type");
+                     end if;
+                  end;
                else
                   Parse_Later_Names (Later);
                end if;
@@ -8916,17 +9036,17 @@ package body Landin.Syntax.Parser is
                         declare
                            From_Here : constant Landin.Source.Span := Here;
                         begin
-                           Taken_Words (Peek) := True;
-                           Complain
-                             (Item    => Syn.Name_Expected,
-                              Where   => From_Here,
-                              Message => "`" & Tok.Spelling (Peek)
-                                         & "` is a keyword, and no keyword"
-                                         & " is available as a name",
-                              Note    => "[1760]: a word the keyword rule"
-                                         & " spells is that keyword"
-                                         & " everywhere, so the binding"
-                                         & " needs another name");
+                           if Taken_Words (Peek) then
+                              --  Said where the word was first a name.
+                              Mark_Reported;
+                           else
+                              Complain
+                                (Item    => Syn.Name_Expected,
+                                 Where   => From_Here,
+                                 Message => Keyword_As_Name,
+                                 Note    => Longer_Spelling);
+                              Take_Word;
+                           end if;
                            Advance;
                            Skip_Rest_Of_Line;
                         end;
@@ -9798,6 +9918,23 @@ package body Landin.Syntax.Parser is
                begin
                   if Peek = Tok.Identifier then
                      Named := Named_Here;
+                     Advance;
+                  elsif Peek = Tok.Underscore then
+                     --  `for _ in 0..<3 do`: the loop was meant only to
+                     --  repeat.  [1150] binds every item, so the refusal
+                     --  names the loops that count for themselves.
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => At_Name,
+                        Message => "a for loop names its " & Role
+                                   & ", and `_` names nothing",
+                        Note    => "[1150]: a for loop binds each item it"
+                                   & " walks; a loop that only repeats is"
+                                   & " `loop` [1130] or `while` [1140] with"
+                                   & " a counter of its own, as `while left"
+                                   & " > 0 do` with `dec left` in its body",
+                        Related => Opened,
+                        Because => "this traversal");
                      Advance;
                   else
                      Complain
@@ -11449,7 +11586,11 @@ package body Landin.Syntax.Parser is
                                 (Item    => Syn.Array_Repetition,
                                  Where   => At_Of,
                                  Message => "only a literal count may stand"
-                                            & " before `of` in this kernel");
+                                            & " before `of` in this kernel;"
+                                            & " write the length in the"
+                                            & " binding's type and fill it"
+                                            & " with `[of value]`, as `name:"
+                                            & " [count]t = [of value]`");
                               Skip_Remaining;
                               Depth := Depth - 1;
                               return Add
@@ -12667,6 +12808,39 @@ package body Landin.Syntax.Parser is
                                     Related => At_Label,
                                     Because => "the fill begins here");
                               end if;
+                           end;
+                        elsif Peek in Tok.Reserved_Word
+                          and then Ahead (1) = Tok.Colon
+                        then
+                           --  D1190: a keyword written as an argument's
+                           --  label, as the field it names was.  Said once
+                           --  for the word, and its value is read on.
+                           declare
+                              At_Label : constant Landin.Source.Span := Here;
+                              RHS : Node_Id;
+                           begin
+                              if Taken_Words (Peek) then
+                                 Mark_Reported;
+                              else
+                                 Complain
+                                   (Item    => Syn.Name_Expected,
+                                    Where   => At_Label,
+                                    Message => Keyword_As_Name,
+                                    Note    => Longer_Spelling);
+                                 Take_Word;
+                              end if;
+                              Advance;
+                              Advance;
+                              RHS := Parse_Argument_RHS;
+                              Args.Append
+                                (if Named_Seen
+                                 then Add
+                                   (Of_Kind  => Call_Argument,
+                                    At_Token => At_Label,
+                                    Extent   => Join
+                                      (At_Label, Where (Result, RHS)),
+                                    Children => [1 => RHS])
+                                 else RHS);
                            end;
                         else
                            declare

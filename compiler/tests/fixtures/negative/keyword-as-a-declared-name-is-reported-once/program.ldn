@@ -1,0 +1,6 @@
+count: (start: u32) -> (r: u32) =
+    mut fixed := start
+    fixed = fixed + 1
+    fixed += 2
+    r = fixed
+end count

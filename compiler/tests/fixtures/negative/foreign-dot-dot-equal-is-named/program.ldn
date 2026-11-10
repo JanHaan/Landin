@@ -1,0 +1,8 @@
+sum: (items: [4]u32, last: u32) -> (total: u32) =
+    total = 0
+    for n in 1..=last do
+        total += n
+    end for
+    part := items[0..=2]
+    total += part[0]
+end sum
