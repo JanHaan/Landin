@@ -790,13 +790,28 @@ fixture's `levels:`, is required to call neither `__aeabi_lmul` nor a
 directory, with `--root DIR` for the roots it imports from, at the corpus's
 four profiles, or the `--profile`s named, on the constrained reference,
 and prints what each returned, or where it trapped, with its image against
-the map; no oracle is held, so a measured value comes back as a value:
+the map and the stack its run was seen to use; no oracle is held, so a
+measured value comes back as a value:
 
 ```sh
 python3 environments/cortex-m/backend_corpus.py --refine PATH_TO_REFINE \
-  --output NEW_DIRECTORY --program answer.ldn --profile none-off
-cortex program: answer.ldn none/off returned 36 (r12 0): FLASH 1036 of 32768 (.isr_vector 192, .text 844); RAM 12 of 12288 (.bss 12); largest routines __udivsi3 266, depth 250, main 144
+  --output NEW_DIRECTORY --profile none-off \
+  --program compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn
+cortex program: main.ldn none/off returned 42 (r12 0): FLASH 668 of 32768 (.isr_vector 192, .text 476); RAM 20 of 12288 (.bss 20); stack 40 of 4096 observed; largest routines main 286
 ```
+
+`stack N of M observed` is the distance from the stack top to the lowest
+word of the M-byte reservation the run changed, read from the session's
+paint, and each executed corpus image's line and result carry it too. It
+is what this run used, not a bound, and a stack the program made for
+itself, a fibre's, is not the painted one. Repeat `--program` to run
+several programs in one invocation; two that share a file name are told
+apart by their directories. `--c-source FILE`, repeated, gives one
+program's C peers, built by the corpus's C contract (D985) with the
+program's directory on the include path and linked with it, so a C peer
+can be tried without a fixture or an inventory row. `--level` takes the
+corpus's names, which say a lane's float unit: `armv7e-m+fpv5-d16` here is
+`refine compile --level=armv7e-m`, and the others are refine's own.
 
 A program that traps says `trapped: HardFault at` the faulting routine and
 line, and whether it was the UDF #1 a check emits; one that does not fit

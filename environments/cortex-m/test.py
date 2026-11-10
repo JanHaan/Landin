@@ -725,6 +725,57 @@ class ProbeFailures(unittest.TestCase):
         self.assertEqual(line, 'cortex corpus: runtime/x size/auto executed: '
                                + describe_sizes(sizes))
 
+    def test_an_executed_image_reports_its_observed_stack(self):
+        from backend import describe_stack, observed_stack
+        from backend_corpus import corpus_line
+        sizes = {'regions': {'FLASH': {'used': 668, 'limit': 32768}}, 'sections': {},
+                 'routines': {'main': 286}}
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            self.assertIsNone(observed_stack(out))
+            (out / 'stack-observation.json').write_text(json.dumps(
+                {'lowest_changed_word': 0x20003fd8, 'reserved_bytes': 4096,
+                 'stack_top': 0x20004000, 'is_stack_bound': False}))
+            stack = observed_stack(out)
+        self.assertEqual(stack, {'observed_bytes': 40, 'reserved_bytes': 4096})
+        self.assertEqual(describe_stack(stack), 'stack 40 of 4096 observed')
+        self.assertEqual(describe_stack(None), '')
+        line = corpus_line({'fixture': 'runtime/x', 'optimize': 'none', 'specialize': 'off',
+                            'verdict': 'executed', 'image': sizes, 'stack': stack})
+        self.assertTrue(line.endswith('FLASH 668 of 32768; stack 40 of 4096 observed;'
+                                      ' largest routines main 286'), line)
+        #  Both sessions write the stack top the depth is measured from.
+        import backend
+        source = Path(backend.__file__).read_text()
+        self.assertEqual(source.count('"stack_top":{bottom}+{reserved}'), 2)
+
+    def test_programs_of_ones_own_are_named_apart_and_take_c_peers(self):
+        import subprocess
+        import backend_corpus
+        from backend_corpus import ProgramPeers, level_names, program_names
+        self.assertEqual(program_names([Path('/a/one.ldn'), Path('/a/two.ldn')]), ['one', 'two'])
+        self.assertEqual(program_names([Path('/a/main.ldn'), Path('/b/main.ldn')]),
+                         ['a-main', 'b-main'])
+        self.assertEqual(program_names([Path('/x/a/main.ldn'), Path('/y/a/main.ldn')]),
+                         ['a-main-1', 'a-main-2'])
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'peer.c'
+            source.write_text('int peer(void) { return 1; }\n')
+            peers = ProgramPeers([source])
+            self.assertEqual((peers.c_sources, peers.c_args_for('cortex-m0'), peers.c_inputs),
+                             ([source.resolve()], [], ()))
+            with self.assertRaises(FileNotFoundError):
+                ProgramPeers([Path(directory) / 'absent.c'])
+            #  C peers belong to one program, refused before anything is built.
+            with self.assertRaisesRegex(RuntimeError, 'C peers of one program'):
+                backend_corpus.observe(Path(directory), None, None, [source, source],
+                                       [('none', 'off')], c_sources=[source])
+        #  The help names refine's level where the corpus's own differs.
+        self.assertEqual(level_names(), 'the same names, except armv7e-m for armv7e-m+fpv5-d16')
+        self.assertIn(level_names(), ' '.join(subprocess.run(
+            [sys.executable, str(Path(backend_corpus.__file__)), '--help'],
+            capture_output=True, text=True, check=True).stdout.split()))
+
     def test_the_corpus_gives_each_routine_size(self):
         from backend import describe_routines, routine_sizes
         from backend_corpus import corpus_line

@@ -404,7 +404,7 @@ def session(run, port, expected, traps, before=(), profile=None, vfp=False):
         f'check(words[:4] == [0xa55ac33c]*4, "the stack overran its {reserved}-byte reservation")',
         f'check(value("$sp") >= {bottom}, "sp is below the stack reservation")',
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
-        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"is_stack_bound":False}},f)',
+        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"stack_top":{bottom}+{reserved},"is_stack_bound":False}},f)',
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
 
 
@@ -487,7 +487,7 @@ def rv32_session(run, port, expected, traps, before=(), profile=None):
         f'check(words[:4] == [0xa55ac33c]*4, "the stack overran its {reserved}-byte reservation")',
         f'check(value("$sp") >= {bottom}, "sp is below the stack reservation")',
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
-        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"is_stack_bound":False}},f)',
+        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"stack_top":{bottom}+{reserved},"is_stack_bound":False}},f)',
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
 
 
@@ -717,6 +717,34 @@ def image_sizes(run, elf, profile, name='sections', level='armv6-m'):
     return {'regions': {part: {'used': used[part], 'limit': limit}
                         for part, limit in limits.items()},
             'sections': sections, 'routines': routines}
+
+
+def observed_stack(out):
+    """What the session's paint showed of the executed image's stack, from
+    the stack-observation.json beside it: the bytes between the stack top
+    and the lowest word the program changed, with the reservation.
+
+    An observation of this run, not a bound: another input may go deeper,
+    and a stack the program made for itself, a fibre's, is not the painted
+    one.  None where no session wrote one.
+    """
+    path = Path(out) / 'stack-observation.json'
+    if not path.is_file():
+        return None
+    seen = json.loads(path.read_text())
+    bottom_of_use = seen['lowest_changed_word']
+    reserved = seen['reserved_bytes']
+    top = seen.get('stack_top')
+    if top is None:
+        return None
+    return {'observed_bytes': top - bottom_of_use, 'reserved_bytes': reserved}
+
+
+def describe_stack(stack):
+    """One corpus-line clause for `observed_stack`'s record; "" without one."""
+    if not stack:
+        return ''
+    return 'stack %d of %d observed' % (stack['observed_bytes'], stack['reserved_bytes'])
 
 
 def describe_routines(sizes, count=3):
