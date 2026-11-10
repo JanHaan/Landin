@@ -494,6 +494,11 @@ python3 check.py
 # seconds, which scripts/tests/test_hang_guards.py states and holds.
 python3 scripts/script_tests.py
 python3 scripts/script_tests.py test_fuzz_close test_scaling
+# The gate's jobs run them on a runner, outside the development shell.
+# This runs them with only the tools and variables a runner has, so a test
+# leaning on one the shell alone carries, lldb for instance, fails here
+# first; script_tests.py's GATE_TOOLS names what a test may assume.
+python3 scripts/script_tests.py --gate-environment
 
 # Follow HEAD's gate run and return at its first failed job, rather than
 # when its last lane ends; with --all, follow it to its end and name every
