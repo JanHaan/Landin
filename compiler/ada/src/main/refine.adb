@@ -6,6 +6,7 @@
 --  it does not print a stack trace at a user.
 
 with Ada.Command_Line;
+with Ada.IO_Exceptions;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Ada.Text_IO.Text_Streams;
@@ -29,6 +30,13 @@ procedure Refine is
    Tools     : Landin.Platform.Native.Tools.Native_Tool_Runner;
    Meter     : Landin.Platform.Native.Native_Meter;
 
+   --  The status of a host that failed the compiler: no memory, or an
+   --  output that could not be written.
+   Status_Host_Fault : constant Command_Line.Exit_Status := 71;
+
+   --  Whether standard output refused what the command had to say.
+   Output_Lost : Boolean := False;
+
    procedure Finish_Command (Status : Command_Line.Exit_Status);
 
    procedure Finish_Command (Status : Command_Line.Exit_Status) is
@@ -45,6 +53,29 @@ procedure Refine is
         (if Signal_Number = 0 then Status
          else Command_Line.Exit_Status (128 + Signal_Number));
    end Finish_Command;
+
+   --  A run that will not be launched still owns its private directory.
+   procedure Abandon_Launch (Result : in out Landin.Driver.Outcome);
+
+   procedure Abandon_Launch (Result : in out Landin.Driver.Outcome) is
+      use type Landin.Platform.Remove_Status;
+      Removed : Landin.Platform.Remove_Status;
+   begin
+      if Unbounded.Length (Result.Launch_Directory) = 0 then
+         return;
+      end if;
+      Host.Remove_Tree
+        (Unbounded.To_String (Result.Launch_Directory), Removed);
+      if Removed = Landin.Platform.Not_Removable then
+         Unbounded.Append
+           (Result.Report, "refine: could not remove cancelled run's "
+            & "private directory: "
+            & Unbounded.To_String (Result.Launch_Directory) & ": "
+            & Host.Removal_Failure_Reason & ASCII.LF);
+      end if;
+      Result.Launch_Program := Unbounded.Null_Unbounded_String;
+      Result.Launch_Directory := Unbounded.Null_Unbounded_String;
+   end Abandon_Launch;
 
 begin
    for Index in 1 .. Command_Line.Argument_Count loop
@@ -73,34 +104,29 @@ begin
    begin
       --  Compilation can finish just as cancellation arrives. A pending
       --  run still owns its private directory, but must not launch a program.
-      if Landin.Platform.Native.Tools.Cancellation_Requested /= 0
-        and then Unbounded.Length (Result.Launch_Directory) > 0
-      then
-         declare
-            use type Landin.Platform.Remove_Status;
-            Removed : Landin.Platform.Remove_Status;
-         begin
-            Host.Remove_Tree
-              (Unbounded.To_String (Result.Launch_Directory), Removed);
-            if Removed = Landin.Platform.Not_Removable then
-               Unbounded.Append
-                 (Result.Report, "refine: could not remove cancelled run's "
-                  & "private directory: "
-                  & Unbounded.To_String (Result.Launch_Directory) & ": "
-                  & Host.Removal_Failure_Reason & ASCII.LF);
-            end if;
-            Result.Launch_Program := Unbounded.Null_Unbounded_String;
-            Result.Launch_Directory := Unbounded.Null_Unbounded_String;
-         end;
+      if Landin.Platform.Native.Tools.Cancellation_Requested /= 0 then
+         Abandon_Launch (Result);
       end if;
       --  Written as bytes, not as text.  Ada.Text_IO does not recognise
       --  the line feeds inside these strings, so it believes the last line
       --  is unterminated and appends a terminator of its own: a blank line
       --  at the end of every run, and a golden file nobody can record.
+      --
+      --  The output is flushed here, where a failure can still be told:
+      --  a full disk or a closed reader is the host's fault and is said
+      --  as one, where the backstop below would call it a defect.
       if Unbounded.Length (Result.Output) > 0 then
-         String'Write
-           (Text_IO.Text_Streams.Stream (Text_IO.Standard_Output),
-            Unbounded.To_String (Result.Output));
+         begin
+            String'Write
+              (Text_IO.Text_Streams.Stream (Text_IO.Standard_Output),
+               Unbounded.To_String (Result.Output));
+            Text_IO.Flush (Text_IO.Standard_Output);
+         exception
+            when Ada.IO_Exceptions.Device_Error
+               | Ada.IO_Exceptions.Use_Error =>
+               Output_Lost := True;
+               Abandon_Launch (Result);
+         end;
       end if;
 
       if Unbounded.Length (Result.Trace) > 0 then
@@ -113,6 +139,14 @@ begin
          String'Write
            (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
             Unbounded.To_String (Result.Report));
+      end if;
+
+      if Output_Lost then
+         Text_IO.Put_Line
+           (Text_IO.Standard_Error,
+            "refine: cannot write to standard output");
+         Finish_Command (Status_Host_Fault);
+         return;
       end if;
 
       --  D526: `refine run`'s program, once what compiling it said is
@@ -146,7 +180,7 @@ exception
    when Landin.Host_Exhausted =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: host resources exhausted");
-      Finish_Command (71);
+      Finish_Command (Status_Host_Fault);
 
    when Landin.External_Tool_Failed =>
       Text_IO.Put_Line
@@ -158,8 +192,10 @@ exception
    --  compiler never raises Host_Exhausted for memory itself.
    when Storage_Error =>
       Text_IO.Put_Line
-        (Text_IO.Standard_Error, "refine: host resources exhausted");
-      Finish_Command (71);
+        (Text_IO.Standard_Error,
+         "refine: host resources exhausted: memory, or the stack this"
+         & " process is limited to (`ulimit -s`)");
+      Finish_Command (Status_Host_Fault);
 
    --  Anything else arriving here is a defect as well, and the point of a
    --  handler is that a user reads a sentence instead of a traceback.
