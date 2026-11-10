@@ -44,7 +44,9 @@ package Landin.Server.Analysis is
       --  Otherwise these files, as one module.
       Files           : Landin.Platform.Path_List;
       --  Each `name=value` a `--option=` would give.  Valid and distinct:
-      --  the caller has refused anything else.
+      --  the caller has refused anything else.  One the module does not
+      --  declare is left unused and named in the result, not refused: the
+      --  editor's one setting reaches every module it opens (D1068).
       Options         : Landin.Platform.Path_List;
       --  A selected Cortex-M0 build entry, empty when none was requested.
       Firmware_Entry  : Ada.Strings.Unbounded.Unbounded_String;
@@ -65,8 +67,15 @@ package Landin.Server.Analysis is
       Resolved : Boolean := False;
       --  Whether the checking table was prepared for hover queries.
       Checked : Boolean := False;
-      --  Directories an unresolved import could appear in under the roots.
+      --  Directories an import could appear in under the roots and does
+      --  not: every candidate of an unresolved import, and those under
+      --  roots searched before the one a resolved import was found in.
       Missing_Directories : Landin.Platform.Path_List;
+      --  Every directory the loader listed, whether it held a source or
+      --  not, or the nearest directory above one that was not there.
+      Listed_Directories : Landin.Platform.Path_List;
+      --  The name of each requested option no reached source declares.
+      Unused_Options : Landin.Platform.Path_List;
    end record;
 
    type Compilation_Access is access Landin.Stages.Compilation;

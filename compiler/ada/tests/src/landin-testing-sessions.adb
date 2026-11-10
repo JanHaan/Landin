@@ -242,6 +242,46 @@ package body Landin.Testing.Sessions is
                      Unescaped (Line (Split + 3 .. Line'Last)));
                end;
             end;
+         elsif Starts (Line, "gone: ") then
+            declare
+               Path : constant String := Landin.Server.Documents.Root_Path_Of
+                 (After (Line, "gone: "));
+            begin
+               if not Has_Pause or else Path = "" then
+                  Problem ("a removal needs a preceding pause and a file"
+                           & " URI: " & Line);
+                  return Answer;
+               end if;
+               Landin.Testing.Fakes.Remove_At
+                 (Channel, Last_Pause, Host'Unchecked_Access, Path);
+            end;
+         elsif Starts (Line, "link: ") then
+            declare
+               Split : constant Natural := Ada.Strings.Fixed.Index
+                 (Line, " | ");
+               Path : constant String :=
+                 (if Split = 0 then ""
+                  else Landin.Server.Documents.Path_Of
+                    (Line (Line'First + 6 .. Split - 1)));
+               Target : constant String :=
+                 (if Split = 0 then ""
+                  else Landin.Server.Documents.Path_Of
+                    (Line (Split + 3 .. Line'Last)));
+            begin
+               if Path = "" or else Target = "" then
+                  Problem ("a link needs two file URIs: " & Line);
+                  return Answer;
+               end if;
+               for Index in Path'First + 1 .. Path'Last loop
+                  if Path (Index) = '/'
+                    and then not Host.Is_Directory
+                      (Path (Path'First .. Index - 1))
+                  then
+                     Host.Add_Directory (Path (Path'First .. Index - 1));
+                  end if;
+               end loop;
+               Host.Add_Symbolic_Link (Path, Target);
+            end;
          elsif Line'Length > 0 and then not Starts (Line, "#") then
             Problem ("session.lsp has a line that is none of its forms: "
                      & Line);

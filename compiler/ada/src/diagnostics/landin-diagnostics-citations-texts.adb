@@ -24057,6 +24057,43 @@ package body Landin.Diagnostics.Citations.Texts is
                & " the stand-in. Any other hole, and any error outside a b"
                & "ody, leaves the source reported exactly as `refine` repo"
                & "rts it.",
+            when 1068 =>
+               "Chosen: `refine` is unchanged. In a server an option is "
+               & "applied to each module whose reached sources declare it,"
+               & " and a module that declares no option of that name is ch"
+               & "ecked without it. That an option went unused is said onc"
+               & "e in a session for each option, through `window/logMessa"
+               & "ge`, naming the first module met that does not declare i"
+               & "t, so that a misspelt name can be found and the usual ca"
+               & "se interrupts nobody. A value an option's type cannot ho"
+               & "ld is refused as before, in the modules that declare the"
+               & " option. A report with no place in a source is shown thr"
+               & "ough `window/showMessage` when a module's report first h"
+               & "olds it, and not again while every later report of that "
+               & "module still does.",
+            when 1069 =>
+               "Chosen: a path that is not held as it is spelled is stil"
+               & "l the held buffer when the host proves it names the same"
+               & " thing: both paths are one existing file, by device and "
+               & "inode, or they are the same entry name in two spellings "
+               & "of one existing directory, which is a buffer not yet sav"
+               & "ed. The overlay reads, tests and lists by that rule. Wha"
+               & "t a module's report rests on is recorded both by path an"
+               & "d by the identity of each file and directory read, so a "
+               & "change to a file rechecks the modules that read it under"
+               & " any spelling. A report about such a source is published"
+               & " under the URI the editor opened. No path is rewritten: "
+               & "a source no document holds is published under the path t"
+               & "he loader built, as before, and a host that cannot prove"
+               & " an identity compares the bytes of the name.",
+            when 1070 =>
+               "Chosen: to the overlay, every directory above a held pat"
+               & "h is a directory whether or not the host has it, and is "
+               & "listed in its parent. A directory that only held paths m"
+               & "ake is listed from them alone; one the host has and cann"
+               & "ot list stays unlistable. So the buffer is analysed as i"
+               & "ts module, and an import of that module from another fin"
+               & "ds it.",
             when 260 =>
                "Chosen: recovery keeps to the structure the program writ"
                & "es, and only after a mistake, so a program the parser ac"

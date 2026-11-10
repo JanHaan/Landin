@@ -165,6 +165,7 @@ package body Landin.Server.Analysis is
       Keep_Resolution_Report : Boolean := False;
       Names_Only : Boolean := False;
       Missing : aliased Landin.Platform.Path_List;
+      Listed  : aliased Landin.Platform.Path_List;
       procedure Apply_Options (Context : in out Landin.Stages.Compilation);
 
       procedure Apply_Options (Context : in out Landin.Stages.Compilation) is
@@ -177,7 +178,8 @@ package body Landin.Server.Analysis is
                Landin.Configuration.Add_Override
                  (Landin.Stages.Configurations (Context).all,
                   Option (Option'First .. Separator - 1),
-                  Option (Separator + 1 .. Option'Last));
+                  Option (Separator + 1 .. Option'Last),
+                  Required => False);
             end;
          end loop;
       end Apply_Options;
@@ -198,6 +200,7 @@ package body Landin.Server.Analysis is
             Landin.Driver.Loading.Load_Reachable_Program
               (Context, From, Asked.Roots, Entry_Directory,
                Missing'Access, Previous, Watch_Syntax, Cache,
+               Dependency_Directories => Listed'Access,
                Library => Library);
          else
             Landin.Driver.Loading.Load_Files (Context, From, Asked.Files);
@@ -207,7 +210,8 @@ package body Landin.Server.Analysis is
                --  Parses what was read and loads the named file's imports
                --  of the library, refusing the others, as `refine` does.
                Landin.Driver.Loading.Load_Library_Imports
-                 (Context, From, Library, Previous, Watch_Syntax, Cache);
+                 (Context, From, Library, Previous, Watch_Syntax, Cache,
+                  Dependency_Directories => Listed'Access);
             end if;
          end if;
       end Load;
@@ -264,6 +268,19 @@ package body Landin.Server.Analysis is
                 (Landin.Stages.Types (Context).all);
          end if;
          Answer.Missing_Directories := Missing;
+         Answer.Listed_Directories := Listed;
+         declare
+            Settings : Landin.Configuration.Table renames
+              Landin.Stages.Configurations (Context).all;
+         begin
+            for Index in 1 .. Landin.Configuration.Override_Count (Settings)
+            loop
+               if Landin.Configuration.Override_Unused (Settings, Index) then
+                  Answer.Unused_Options.Append
+                    (Landin.Configuration.Override_Name (Settings, Index));
+               end if;
+            end loop;
+         end;
 
          --  Each source's held regions, by its identity in this compilation.
          for Index in 1 .. Landin.Stages.Source_Count (Context) loop

@@ -10,13 +10,24 @@
 --
 --  A held path is read from here and every other from the host beneath.  A
 --  held path the host does not have is listed in its directory, so a new
---  buffer in a module directory is one of the module's files [1410]; its
---  directory is the text before its last '/', compared as bytes, because a
---  held path is a name the holder chose and not one the host resolved.
+--  buffer in a module directory is one of the module's files [1410], and
+--  every directory above a held path is a directory whether or not the host
+--  has it yet, listed in its parent, so a buffer in a module that has never
+--  been saved is found where the loader looks for that module (D1070).
+--
+--  A held path is a name its holder chose, and the loader may reach the
+--  same file by another: through a root that is a symbolic link, or an
+--  import directory that is one.  So a path that is not held as it is
+--  spelled is still the held file when the host beneath proves it: both
+--  names are one existing file, or they are the same entry name in two
+--  spellings of one existing directory (D1069).  A host that cannot prove
+--  an identity leaves the comparison to the bytes of the name.
+--
 --  Nothing is written or removed through an overlay: every write and every
 --  removal is refused, and the host beneath is never changed by one.
 
 private with Ada.Containers.Indefinite_Ordered_Maps;
+private with Ada.Containers.Indefinite_Ordered_Sets;
 
 package Landin.Platform.Overlays is
 
@@ -30,6 +41,11 @@ package Landin.Platform.Overlays is
    procedure Release (Host : in out Overlay; Path : String);
 
    function Holds (Host : Overlay; Path : String) return Boolean;
+
+   --  The held path Path is read as: Path itself when it is held, a held
+   --  path the host proves is the same file, or "" when it is read from
+   --  the host.
+   function Held_As (Host : Overlay; Path : String) return String;
 
    overriding function Exists
      (Host : Overlay; Path : String) return Boolean;
@@ -170,6 +186,9 @@ private
    --  listing returns them.
    package Content_Maps is new Ada.Containers.Indefinite_Ordered_Maps
      (Key_Type => String, Element_Type => String);
+
+   package Name_Sets is new Ada.Containers.Indefinite_Ordered_Sets
+     (Element_Type => String);
 
    type Overlay (Under : not null access constant Filesystem'Class) is
      limited new Filesystem with record

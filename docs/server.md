@@ -40,7 +40,13 @@ the root is the checkout, which is how the examples are checked:
 
 A buffer the editor has not saved is read in place of the file: what the
 server checks is what is on the screen, and the files around it are what is
-on disk. A buffer with no file at all, such as an editor's untitled one, is
+on disk. That holds however the loader reaches the file (D1069): when a root
+or an import directory is a symbolic link, the buffer opened under one path
+is read where an import names the other, a change to it rechecks the
+modules that read it, and reports about it carry the URI the editor opened.
+A buffer in a directory that is not on disk yet is the first source of a
+new module, analysed as that module and found by an import of it (D1070).
+A buffer with no file at all, such as an editor's untitled one, is
 analysed alone, as `refine check FILE` would analyse it, with only the library to
 import from, and so is every file when there are no roots. `fixture.meta` means nothing to the server: a fixture
 directory is analysed as the module its files make, which is not always what
@@ -65,12 +71,20 @@ target describes checks for `synthetic-32` and says, through
 `window/showMessage`, that a target has to be named.
 `level` is a CPU feature level of that target's family, read after it as
 `refine` reads it, and the target's default when absent. An
-option must be declared in a reached source and named in lowercase letters,
-digits and underscores. For example, `option enabled: bool = true` can be
-overridden with `"options": {"enabled": "false"}`. Option values are strings
-containing `true`, `false`, or signed decimal integer text that fits the
-declared type. A value the server refuses is reported once, through
+option is named in lowercase letters, digits and underscores, and its value
+is a string. For example, `option enabled: bool = true` can be
+overridden with `"options": {"enabled": "false"}`. A name or value of
+another shape is reported once, through
 `window/showMessage`, and the rest are used.
+
+The setting is the session's, and it reaches every module the editor opens
+(D1068). A module whose reached sources declare the option is checked with
+it, and a value is `true`, `false` or signed decimal integer text that fits
+the declared type; one that does not fit is refused there, as `--option=`
+refuses it. A module that declares no option of that name is checked
+without it, where `refine` would refuse the command with L0002. The server
+says so once in a session for each option, through `window/logMessage`,
+which an editor keeps in its log: a misspelt name is found there.
 
 `firmwareEntry` is a nonempty routine name for a firmware target:
 `cortex-m0`, `rv32` or `xtensa`. When selected,
@@ -113,7 +127,9 @@ warning is a warning, and an error an error. The server reports the
 catalogue's recommended warnings. Compilation warning controls are refused
 at server startup; they do not configure an editor session. An advisory
 without a safe edit has no code action. A report with no place in any
-source, such as a refused option, goes to `window/showMessage`. In a program
+source, such as a source that cannot be read, goes to `window/showMessage` when
+a module's report first holds it, and is not shown again while each later
+report of that module still does. In a program
 that prepares a stack and selects a panic handler, the server emits the
 program's code in memory at `none`, as `refine check` does, and reports the
 L0508 a build at that profile would (D572); a handler that fits at `none`
@@ -128,10 +144,19 @@ using the remaining overlay or disk bytes.
 
 When the editor reports a disk change through
 `workspace/didChangeWatchedFiles`, the server rechecks every open module
-whose last report read that path or another source in its module directory,
-even if that file is not open. This includes adding a source to a reached
-module. Standalone files remain independent of unrelated siblings. It asks
-clients that support dynamic watched-file registration to watch `**/*.ldn`.
+whose last report read that path or listed its directory, even if that file
+is not open. A report lists the directory of every source it read, every
+import directory it found empty, and every directory it looked for an
+import in and did not find, including those under roots searched before
+the one that had it. So adding a source to a reached module, giving an
+empty module its first source, and creating a module an earlier root now
+supplies all recheck. A change may name a directory, with or without a
+final slash: what read anything beneath it is rechecked, as when a module's
+directory is removed or renamed whole. Standalone files remain independent
+of unrelated siblings. It asks
+clients that support dynamic watched-file registration to watch `**/*.ldn`;
+whether a client reports a removed directory under that pattern is the
+client's choice.
 An open buffer still takes precedence over the file on disk. Editors that
 do not send watched-file notifications must arrange that notification to
 refresh diagnostics after an external write.
@@ -182,7 +207,10 @@ offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
 and one after `shutdown` with InvalidRequest. The server answers each request
 before reading the next message, so it ignores `$/cancelRequest` notifications;
 a late cancellation cannot affect a later request that reuses the ID. A
-notification the server does not know is ignored.
+notification the server does not know is ignored. A defect of the compiler
+met while a request is answered is the request's InternalError, and one met
+while a notification is handled or a module is published is said through
+`window/showMessage`; the session goes on after each.
 
 ## Past a syntax error
 
@@ -229,7 +257,9 @@ change, close or watched disk change discards the checked modules; diagnostics
 then rebuild those affected, and later queries rebuild any others they need.
 Distinct file URIs naming one path retain separate buffers. A query selects its
 URI's buffer; switching to different bytes also discards checked modules,
-including those importing that path.
+including those importing that path. A module with two such documents is
+published once through each, and what it reads is the union of the two: a
+source only one of them imports stays reported until neither does.
 The cache holds at most one compilation per open module,
 and discards all of them when the session ends. This is a compilation-count
 bound, not a fixed byte limit: separate entries may duplicate imports.
@@ -269,8 +299,6 @@ checked compilations; neither cache has a fixed byte bound.
 | a message's header block | 4 KiB |
 | a message's body | 64 MiB; a longer one is skipped |
 | a document | what a message's body carries: no smaller bound, and none set by the host's stack |
-| JSON nesting | 64 levels |
-| an integer in a message | within 2^53 - 1 |
 | JSON nesting | 64 levels |
 | an integer in a message | within 2^53 - 1 |
 

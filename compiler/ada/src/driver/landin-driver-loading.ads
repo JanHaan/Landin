@@ -32,7 +32,9 @@ package Landin.Driver.Loading is
    --  The entry module and every module its imports reach, first in first
    --  out, each loaded once.  Roots are searched in order and must be
    --  nonempty.  When requested, record every root-relative directory
-   --  where an unresolved import could later become available.
+   --  where an import could later become available: each candidate of an
+   --  unresolved one, and each under a root searched before the one a
+   --  resolved import was found in.
    --
    --  Library, when not empty, is the library root
    --  (`Landin.Driver.Library`), and follows every root.  An import of

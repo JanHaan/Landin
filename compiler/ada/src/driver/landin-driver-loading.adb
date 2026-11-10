@@ -1208,6 +1208,20 @@ package body Landin.Driver.Loading is
                                   (Tree.all, Import_Node,
                                    Selected_Root, Unlistable);
                            begin
+                              --  A directory that appears under an earlier
+                              --  root would be the one this import names.
+                              if Missing_Directories /= null
+                                and then Directory_Path /= ""
+                              then
+                                 for Index in First_Root (Logical)
+                                   .. Selected_Root - 1
+                                 loop
+                                    Missing_Directories.Append
+                                      (Joined_Path
+                                         (Searched.Element (Index),
+                                          Logical));
+                                 end loop;
+                              end if;
                               if Unlistable /=
                                 Unbounded.Null_Unbounded_String
                               then

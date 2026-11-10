@@ -332,14 +332,21 @@ package body Landin.Server.Documents is
       Chosen : constant String :=
         (if Preferred /= "" then Preferred
          else Unbounded.To_String (From.Active_URI));
+      --  D1069: the loader may have reached an open document's file by
+      --  another spelling of its path.
+      Held_At : constant String := From.Held.Held_As (Path);
    begin
+      if Held_At = "" then
+         return URI_Of (Path);
+      end if;
       if From.Open.Contains (Chosen)
-        and then Unbounded.To_String (From.Open.Element (Chosen).Path) = Path
+        and then Unbounded.To_String (From.Open.Element (Chosen).Path)
+          = Held_At
       then
          return Chosen;
       end if;
       for Held of From.Open loop
-         if Unbounded.To_String (Held.Path) = Path then
+         if Unbounded.To_String (Held.Path) = Held_At then
             return Unbounded.To_String (Held.URI);
          end if;
       end loop;

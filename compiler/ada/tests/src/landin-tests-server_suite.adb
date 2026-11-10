@@ -1364,6 +1364,68 @@ package body Landin.Tests.Server_Suite is
       end;
    end A_Notification_Defect_Leaves_The_Session;
 
+   --  A report with no place in a source goes to window/showMessage when
+   --  the module's report first holds it, not at every publication while it
+   --  still does: here a source beside the opened one cannot be read.
+   procedure A_Report_With_No_Place_Is_Shown_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Report_With_No_Place_Is_Shown_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Channel : Landin.Testing.Fakes.Fake_Channel;
+      Script : Unbounded.Unbounded_String;
+      Status : Landin.Server.Sessions.Exit_Status;
+      URI : constant String := "file:///workspace/app/main.ldn";
+
+      procedure Send (Message : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+   begin
+      Host.Add_Directory ("/workspace");
+      Host.Add_Directory ("/workspace/app");
+      Host.Add_File ("/workspace/app/main.ldn", "aa: u8 = 1" & LF);
+      Host.Add_Unreadable ("/workspace/app/locked.ldn");
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},""initializationOptions"":"
+            & "{""roots"":[""file:///workspace""]}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (URI)
+            & ",""version"":1,""text"":""aa: u8 = 1\n""}}}");
+      for Version in 2 .. 3 loop
+         Channel.Pause_At (Unbounded.Length (Script));
+         Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didChange"","
+               & """params"":{""textDocument"":{""uri"":"
+               & Landin.Json.Quoted (URI) & ",""version"":"
+               & (if Version = 2 then "2" else "3")
+               & "},""contentChanges"":[{""text"":""aa: u8 = "
+               & (if Version = 2 then "2" else "3") & "\n""}]}}");
+      end loop;
+      Channel.Pause_At (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+      declare
+         Output : constant String := Landin.Testing.Fakes.Output (Channel);
+      begin
+         Landin.Testing.Check
+           (Item, Status = 0
+            and then Ada.Strings.Fixed.Count
+              (Output, """method"":""window/showMessage""") = 1
+            and then Ada.Strings.Fixed.Index (Output, "L0003: ") > 0
+            and then Ada.Strings.Fixed.Index
+              (Output, """id"":2,""result"":null") > 0,
+            "three publications of one module say its unreadable source"
+            & " once: " & Output);
+      end;
+   end A_Report_With_No_Place_Is_Shown_Once;
+
    procedure Root_URIs_Accept_Trailing_Slashes
      (Item : in out Landin.Testing.Context);
 
@@ -2165,6 +2227,12 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "a document larger than the stack is served",
          A_Document_Larger_Than_The_Stack_Is_Served'Access);
+      Landin.Testing.Register
+        (Into, "server", "a report with no place is shown once",
+         A_Report_With_No_Place_Is_Shown_Once'Access);
+      Landin.Testing.Register
+        (Into, "server", "a notification defect leaves the session",
+         A_Notification_Defect_Leaves_The_Session'Access);
       Landin.Testing.Register
         (Into, "server", "root URIs accept trailing slashes",
          Root_URIs_Accept_Trailing_Slashes'Access);

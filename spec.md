@@ -18709,6 +18709,107 @@ syntax error, which is what an editor had before.
 `server/only a body is stood in for`, `server/analysis continues past a body`,
 `server/analysis agrees with refine` and `server/refused sources are served`.
 
+### D1068 — An editor's build option reaches the modules that declare it
+
+**The discrepancy:** D202 has `--option=` name an option that a reached
+source declares, and any other name is L0002: a build is of one program, and
+an option nothing in it declares is a mistake in its command. A server is
+given one `options` setting for a session and analyses every module the
+editor opens with it. Applied as a build applies it, the setting refused
+every module that did not declare each named option before the module was
+checked: its sources were published with no diagnostics, as if they were
+clean, navigation answered nothing in them, and the L0002 report, which has
+no place in a source, was shown again at every publication. Setting an
+option for one program cost the rest of the workspace its checking.
+
+**Chosen:** `refine` is unchanged. In a server an option is applied to each
+module whose reached sources declare it, and a module that declares no
+option of that name is checked without it. That an option went unused is
+said once in a session for each option, through `window/logMessage`, naming
+the first module met that does not declare it, so that a misspelt name can
+be found and the usual case interrupts nobody. A value an option's type
+cannot hold is refused as before, in the modules that declare the option.
+A report with no place in a source is shown through `window/showMessage`
+when a module's report first holds it, and not again while every later
+report of that module still does.
+
+**The alternatives:** keeping the refusal and showing it once, which leaves
+the module unchecked and presented as clean. Leaving an undeclared option
+out without a word, which hides a misspelt name for good. Settings for each
+module, which the protocol's one `initializationOptions` does not carry and
+which every editor package would have to learn.
+
+**Pinned by** the server session `option-not-declared`: a module that
+declares neither of two configured options is checked and reports its own
+error, each option is logged once, a module that declares one is checked
+with it, and a value that does not fit is refused at the option that
+declares it; and by `server/a report with no place is shown once`, where an
+unreadable source beside the opened one is said once across three
+publications.
+
+### D1069 — A buffer is the file it names, however the path to it is spelled
+
+**The discrepancy:** an editor's unsaved buffer is read in place of its file
+(D253's server reads through an overlay of the host), and the overlay knew a
+buffer by the bytes of the path its URI names. The loader builds a source's
+path as a root and an import path. Where a symbolic link lies between the
+two spellings, a root named through a link or an import directory that is
+one, the loader read the saved file from disk and the buffer was ignored;
+an edit of the buffer rechecked no importer, since what an importer had
+read was recorded under the loader's spelling; and diagnostics, definitions
+and quick fixes for that source named the loader's spelling, a URI the
+editor did not have open, beside the buffer with the unsaved changes.
+
+**Chosen:** a path that is not held as it is spelled is still the held
+buffer when the host proves it names the same thing: both paths are one
+existing file, by device and inode, or they are the same entry name in two
+spellings of one existing directory, which is a buffer not yet saved. The
+overlay reads, tests and lists by that rule. What a module's report rests on
+is recorded both by path and by the identity of each file and directory
+read, so a change to a file rechecks the modules that read it under any
+spelling. A report about such a source is published under the URI the
+editor opened. No path is rewritten: a source no document holds is
+published under the path the loader built, as before, and a host that
+cannot prove an identity compares the bytes of the name.
+
+**The alternatives:** resolving the roots and each document's path once,
+where they arrive. That answers a root named through a link and not a link
+inside the workspace, since the loader still builds a root and an import
+path, and it publishes every unopened source under a resolved spelling
+nobody wrote, `/private/tmp` for `/tmp` on macOS. Leaving the match to the
+bytes, which shows an importer checked against a file that is not what is
+on the screen, with nothing to say so.
+
+**Pinned by** the server session `symlinked-import`: an importer is
+rechecked against the unsaved buffer of a source it reaches through a
+symbolic link, and a definition in that source is answered with the URI the
+editor opened.
+
+### D1070 — A buffer in a directory not yet on disk is a source of that module
+
+**The discrepancy:** a module is a directory [1410], and a file under a root
+is analysed as a source of the module its directory makes. The overlay knew
+a held buffer only as a file. An editor creates the directory of a new file
+at its first save, so the first source of a new module was in a directory
+the host did not have: the loader refused the entry module as not a
+directory (L0007), nothing was ever published for the buffer, and the
+refusal was shown at every pause.
+
+**Chosen:** to the overlay, every directory above a held path is a
+directory whether or not the host has it, and is listed in its parent. A
+directory that only held paths make is listed from them alone; one the host
+has and cannot list stays unlistable. So the buffer is analysed as its
+module, and an import of that module from another finds it.
+
+**The alternatives:** analysing such a buffer alone, as an untitled one is,
+which refuses its imports under the roots it lies under and hides it from
+the modules that import it. Telling the person to save, which is what the
+refusal amounted to.
+
+**Pinned by** the server session `unsaved-module-directory`: a buffer in a
+directory that does not exist is checked and reports its own error, and an
+importer of a module that exists only as a buffer is accepted.
+
 ### D260 — A parse reports a mistake once, inside the construct it is in
 
 **The discrepancy:** nothing in the language says where a parser resumes after

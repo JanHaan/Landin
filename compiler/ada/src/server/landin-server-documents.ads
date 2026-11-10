@@ -114,6 +114,8 @@ package Landin.Server.Documents is
 
    --  The URI a report about Path is published under: the preferred or
    --  active document held there, another open document, or Path's URI.
+   --  A document is held at Path when the host proves its path names the
+   --  same file, however the two are spelled (D1069).
    function URI_For
      (From : Store; Path : String; Preferred : String := "") return String;
 

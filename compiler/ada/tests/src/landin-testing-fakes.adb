@@ -249,6 +249,9 @@ package body Landin.Testing.Fakes is
    is
       Index : constant Natural := Resolve_Find (Host, Path);
    begin
+      if Host.Raising_Identities.Contains (Path) then
+         raise Program_Error with "a fake identity injected an exception";
+      end if;
       if Index = 0 then
          return (others => <>);
       end if;
@@ -352,6 +355,12 @@ package body Landin.Testing.Fakes is
    begin
       Host.Uncertain_Identities.Append (Path);
    end Set_Identity_Uncertain;
+
+   procedure Raise_On_Identity
+     (Host : in out Fake_Filesystem; Path : String) is
+   begin
+      Host.Raising_Identities.Append (Path);
+   end Raise_On_Identity;
 
    overriding function Observe_Identity
      (Host : Fake_Filesystem; Path : String)
@@ -2097,8 +2106,23 @@ package body Landin.Testing.Fakes is
         (Timed_Edit'
            (Offset  => Offset,
             Path    => Unbounded.To_Unbounded_String (Path),
-            Content => Unbounded.To_Unbounded_String (Content)));
+            Content => Unbounded.To_Unbounded_String (Content),
+            Removes => False));
    end Edit_At;
+
+   procedure Remove_At
+     (Host : in out Fake_Channel; Offset : Natural;
+      Files : Fake_Filesystem_Access; Path : String)
+   is
+   begin
+      Host.Files := Files;
+      Host.Edits.Append
+        (Timed_Edit'
+           (Offset  => Offset,
+            Path    => Unbounded.To_Unbounded_String (Path),
+            Content => Unbounded.Null_Unbounded_String,
+            Removes => True));
+   end Remove_At;
 
    --  The input left before the next pause, in bytes.
    function Before_Pause (Host : Fake_Channel) return Natural;
@@ -2127,10 +2151,17 @@ package body Landin.Testing.Fakes is
       loop
          declare
             Edit : constant Timed_Edit := Host.Edits (Host.Next_Edit);
+            Path : constant String := Unbounded.To_String (Edit.Path);
+            Gone : Landin.Platform.Remove_Status;
          begin
-            Add_File
-              (Host.Files.all, Unbounded.To_String (Edit.Path),
-               Unbounded.To_String (Edit.Content));
+            if not Edit.Removes then
+               Add_File
+                 (Host.Files.all, Path, Unbounded.To_String (Edit.Content));
+            elsif Host.Files.Is_Directory (Path) then
+               Host.Files.Remove_Tree (Path, Gone);
+            else
+               Host.Files.Remove_File (Path, Gone);
+            end if;
             Host.Next_Edit := Host.Next_Edit + 1;
          end;
       end loop;
