@@ -24,7 +24,7 @@
 #  `nix develop` does, is packaged with a warning that names the path: the
 #  archive starts only where that path exists.  An archive for others is
 #  packaged from a compiler built with the pinned toolchain outside nix
-#  (README.md, "From source"), as the release workflow's is.
+#  (the README, "From source"), as the release workflow's is.
 set -euo pipefail
 
 usage() {
@@ -57,7 +57,7 @@ package: which is not a system path. The archive will start only on a machine
 package: that has that path; on any other the shell says "cannot execute:
 package: required file not found". A compiler built in nix develop is linked
 package: this way. For an archive that starts elsewhere, package a compiler
-package: built with the pinned toolchain outside nix, as README.md's "From
+package: built with the pinned toolchain outside nix, as the README's "From
 package: source" builds it and the release workflow does.
 EOF
     elif [ "$inspected" != 0 ]; then

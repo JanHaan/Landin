@@ -96,8 +96,9 @@ GATE_TOOLS = (
     "gzip", "nproc", "seq", "timeout", "realpath", "install", "dd", "du",
     "echo", "test", "kill", "ps", "which", "flock", "getconf", "tty",
     "cksum",
-    #  The runners' C compiler, which two tests build a helper with.
-    "cc",
+    #  The runners' C compiler, which two tests build a helper with, and
+    #  the binutils the packaging test splits debug information with.
+    "cc", "objcopy", "readelf",
 )
 #  The variables kept from the caller's environment.  Everything else,
 #  the development shell's exports among them, is dropped.

@@ -212,7 +212,7 @@ class Archive(unittest.TestCase):
                                       "program interpreter\npackage:   %s\n"
                                       % (binary, loader), ran.stderr)
                         self.assertIn("is not a system path", ran.stderr)
-                        self.assertIn("README.md's \"From\npackage: source\"",
+                        self.assertIn("the README's \"From\npackage: source\"",
                                       ran.stderr)
                     else:
                         self.assertEqual(ran.stderr, "")
