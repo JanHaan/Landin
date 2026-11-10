@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1089 a module value reading a float declared below it folds as it does in the other order, a range subtype's value included
+program: main.ldn
+status: 42
+constructs: 0130, 0210, 0310, 0660, 1940
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

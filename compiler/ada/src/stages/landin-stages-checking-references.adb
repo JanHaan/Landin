@@ -503,6 +503,13 @@ package body Landin.Stages.Checking.References is
          Invalid    : Boolean := False;
          From       : Parameter_Bits := [others => False];
          Derives    : Local_Set;
+         --  D1084: the locals of Derives whose own storage the reference
+         --  may point into, or whose storage a call's `from` lent it: an
+         --  address or a range taken of the local, an array of it lent as
+         --  a slice, a result borrowing an argument rooted in it.  The
+         --  rest of Derives are locals a reference was only read out of,
+         --  which leaves other storage under it.
+         Interior   : Local_Set;
          Presence   : Value_Fact := Unknown_Value;
       end record;
 
@@ -514,6 +521,17 @@ package body Landin.Stages.Checking.References is
       begin
          Include (Fact.Derives, Local);
       end Derive;
+
+      --  Record that a fact may point into LOCAL's storage.
+      procedure Derive_Interior
+        (Fact : in out Reference_Fact; Local : Local_Id);
+
+      procedure Derive_Interior
+        (Fact : in out Reference_Fact; Local : Local_Id) is
+      begin
+         Include (Fact.Derives, Local);
+         Include (Fact.Interior, Local);
+      end Derive_Interior;
 
       No_Reference : constant Reference_Fact := (others => <>);
 
@@ -600,6 +618,7 @@ package body Landin.Stages.Checking.References is
             end if;
          end loop;
          Union (Into_Fact.Derives, Other.Derives);
+         Union (Into_Fact.Interior, Other.Interior);
       end Join;
 
       procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
@@ -1277,9 +1296,49 @@ package body Landin.Stages.Checking.References is
       procedure Check_Escaping_Arguments
         (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
 
+      --  [0830]/D1084: a view no name holds, and which is in use all the
+      --  same.  An operand is held from its evaluation until the call or
+      --  expression it was evaluated for has taken it, and is on this
+      --  stack exactly that long.  A `for` loop's source is held while its
+      --  body runs: Of_Loop is the loop, and Element its element binding
+      --  when that names the walked storage in place.
+      type Unnamed_View is record
+         Node    : Syn.Node_Id := Syn.No_Node;
+         Fact    : Reference_Fact := No_Reference;
+         Of_Loop : Syn.Node_Id := Syn.No_Node;
+         Element : Res.Declaration_Id := Res.No_Declaration;
+      end record;
+
+      package Unnamed_View_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Unnamed_View);
+
+      Unnamed_Views : Unnamed_View_Vectors.Vector;
+
+      --  Whether NODE's value can view storage: it holds a reference, or
+      --  is [0570]'s array lent as a slice.
+      function Is_View (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      --  Whether a view may point into ID's storage, or into storage a
+      --  call's `from` lent it out of ID.
+      function Views
+        (Fact : Reference_Fact; Id : Res.Declaration_Id) return Boolean;
+
+      --  Whether VIEW is an address or a range taken of a field of the
+      --  binding LENT is in other than the field LENT is, so that nothing
+      --  done to LENT can reach the storage under it.
+      function Views_Another_Field
+        (Tree : Syn.Tree; Lent, View : Syn.Node_Id) return Boolean;
+
+      --  Hold an evaluated operand's view until Unnamed_Views is cut back.
+      procedure Hold_View
+        (Tree : Syn.Tree; Node : Syn.Node_Id; Fact : Reference_Fact);
+
+      --  Walked names a `for` loop being analysed: reaching its back edge
+      --  is then a use as well, of the source the loop is walking.
       function Has_Future_Use
         (Borrower : Res.Declaration_Id;
-         After    : Landin.Source.Byte_Offset) return Boolean;
+         After    : Landin.Source.Byte_Offset;
+         Walked   : Syn.Node_Id := Syn.No_Node) return Boolean;
       function Live_Holder
         (Borrower : Res.Declaration_Id;
          After    : Landin.Source.Byte_Offset;
@@ -1330,6 +1389,18 @@ package body Landin.Stages.Checking.References is
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id
         is (Res.Declaration_At (Meanings.all, Syn.Source_Of (Tree), Node));
 
+      --  [1420]/[1940]: another module's value named through its module,
+      --  `store.cells`, which resolution binds to the binding itself.  It
+      --  is the same place as that name unqualified, so every rule that
+      --  asks which binding a place is rooted in stops here.
+      function Names_Module_Binding
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Tree, Node) = Syn.Member_Selection
+            and then Res.Verdict_Of (Meanings.all, Tree, Node) = Res.Bound
+            and then Res.Sort_Of
+              (Meanings.all, Res.Bound_To (Meanings.all, Tree, Node))
+                = Res.Module_Binding);
+
       function Root_Declaration
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id
       is
@@ -1338,11 +1409,13 @@ package body Landin.Stages.Checking.References is
          while Syn.Kind (Tree, Root)
            in Syn.Member_Selection | Syn.Element_Index
               | Syn.Inclusive_Slice | Syn.Half_Open_Slice
+           and then not Names_Module_Binding (Tree, Root)
          loop
             Root := Syn.Target_Of (Tree, Root);
          end loop;
-         if Syn.Kind (Tree, Root) = Syn.Name_Reference
-           and then Res.Verdict_Of (Meanings.all, Tree, Root) = Res.Bound
+         if (Syn.Kind (Tree, Root) = Syn.Name_Reference
+             and then Res.Verdict_Of (Meanings.all, Tree, Root) = Res.Bound)
+           or else Names_Module_Binding (Tree, Root)
          then
             return Res.Bound_To (Meanings.all, Tree, Root);
          end if;
@@ -2101,6 +2174,125 @@ package body Landin.Stages.Checking.References is
          end loop;
       end Keep_Into_Holders;
 
+      function Is_View (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Node /= Syn.No_Node
+            and then (Has_References (Tree, Node)
+                      or else Landin.Checking.Is_Lent_Array
+                        (Types.all, Tree, Node)));
+
+      function Views
+        (Fact : Reference_Fact; Id : Res.Declaration_Id) return Boolean
+        is (Local_Of (Id) /= 0
+            and then Contains (Fact.Interior, Local_Of (Id)));
+
+      function Views_Another_Field
+        (Tree : Syn.Tree; Lent, View : Syn.Node_Id) return Boolean
+      is
+         --  The place an address or a range is taken of, under the
+         --  conversions that keep it; no node for any other view.
+         function Viewed_Place return Syn.Node_Id;
+         --  How many fields and elements a place selects below its
+         --  binding without leaving that binding's storage, or -1.
+         function Depth (Place : Syn.Node_Id) return Integer;
+
+         function Viewed_Place return Syn.Node_Id is
+            Where : Syn.Node_Id := View;
+         begin
+            loop
+               case Syn.Kind (Tree, Where) is
+                  when Syn.Any_Construction | Syn.Address_Of =>
+                     Where := Syn.Operand_Of (Tree, Where);
+                  when Syn.Inclusive_Slice | Syn.Half_Open_Slice =>
+                     Where := Syn.Target_Of (Tree, Where);
+                  when Syn.Name_Reference | Syn.Member_Selection
+                     | Syn.Element_Index =>
+                     return Where;
+                  when others =>
+                     return Syn.No_Node;
+               end case;
+            end loop;
+         end Viewed_Place;
+
+         function Depth (Place : Syn.Node_Id) return Integer is
+            Where : Syn.Node_Id := Place;
+            Steps : Natural := 0;
+         begin
+            while Syn.Kind (Tree, Where)
+              in Syn.Member_Selection | Syn.Element_Index
+              and then not Names_Module_Binding (Tree, Where)
+            loop
+               Where := Syn.Target_Of (Tree, Where);
+               if Landin.Checking.Type_Of (Types.all, Tree, Where)
+                    in Ty.Pointer_Value | Ty.Slice_Value
+               then
+                  return -1;
+               end if;
+               Steps := Steps + 1;
+            end loop;
+            return Steps;
+         end Depth;
+
+         Left : Syn.Node_Id := Lent;
+         Right : Syn.Node_Id := Viewed_Place;
+         Left_Depth, Right_Depth : Integer;
+         --  The step nearest the binding at which the two paths part.
+         Left_Parts, Right_Parts : Syn.Node_Id := Syn.No_Node;
+      begin
+         if Right = Syn.No_Node
+           or else Root_Declaration (Tree, Left) = Res.No_Declaration
+           or else Root_Declaration (Tree, Left)
+             /= Root_Declaration (Tree, Right)
+         then
+            return False;
+         end if;
+         Left_Depth := Depth (Left);
+         Right_Depth := Depth (Right);
+         if Left_Depth < 0 or else Right_Depth < 0 then
+            return False;
+         end if;
+         while Left_Depth > Right_Depth loop
+            Left := Syn.Target_Of (Tree, Left);
+            Left_Depth := Left_Depth - 1;
+         end loop;
+         while Right_Depth > Left_Depth loop
+            Right := Syn.Target_Of (Tree, Right);
+            Right_Depth := Right_Depth - 1;
+         end loop;
+         while Left_Depth > 0 loop
+            if Syn.Kind (Tree, Left) /= Syn.Kind (Tree, Right)
+              or else Syn.Kind (Tree, Left) /= Syn.Member_Selection
+              or else Syn.Name (Tree, Left) /= Syn.Name (Tree, Right)
+            then
+               Left_Parts := Left;
+               Right_Parts := Right;
+            end if;
+            Left := Syn.Target_Of (Tree, Left);
+            Right := Syn.Target_Of (Tree, Right);
+            Left_Depth := Left_Depth - 1;
+         end loop;
+         return Left_Parts /= Syn.No_Node
+           and then Syn.Kind (Tree, Left_Parts) = Syn.Member_Selection
+           and then Syn.Kind (Tree, Right_Parts) = Syn.Member_Selection
+           and then Landin.Checking.Type_Of
+             (Types.all, Tree, Syn.Target_Of (Tree, Left_Parts))
+               = Ty.Aggregate
+           and then Landin.Checking.Field_Index
+             (Types.all, Tree, Left_Parts) > 0
+           and then Landin.Checking.Field_Index
+             (Types.all, Tree, Right_Parts) > 0
+           and then Landin.Checking.Field_Index (Types.all, Tree, Left_Parts)
+             /= Landin.Checking.Field_Index (Types.all, Tree, Right_Parts);
+      end Views_Another_Field;
+
+      procedure Hold_View
+        (Tree : Syn.Tree; Node : Syn.Node_Id; Fact : Reference_Fact) is
+      begin
+         if Count (Fact.Interior) > 0 and then Is_View (Tree, Node) then
+            Unnamed_Views.Append
+              (Unnamed_View'(Node => Node, Fact => Fact, others => <>));
+         end if;
+      end Hold_View;
+
       --  [0830]: a borrow is live while some path from the mutating call
       --  reaches a read of the borrower before an assignment replaces it.
       --  The continuation is read off Positions: the rest of the statement
@@ -2109,7 +2301,8 @@ package body Landin.Stages.Checking.References is
       --  which is where a read written above the call executes next.
       function Has_Future_Use
         (Borrower : Res.Declaration_Id;
-         After    : Landin.Source.Byte_Offset) return Boolean
+         After    : Landin.Source.Byte_Offset;
+         Walked   : Syn.Node_Id := Syn.No_Node) return Boolean
       is
          --  What the paths through a run of statements do to the borrow.
          --  Reads: some path reads it before replacing it.  Falls: some
@@ -2141,7 +2334,8 @@ package body Landin.Stages.Checking.References is
          function Reads_Around (Loop_Node : Syn.Node_Id) return Boolean;
 
          function Is_Replacement (Place : Syn.Node_Id) return Boolean
-           is (Syn.Kind (Of_Tree, Place) = Syn.Name_Reference
+           is (Borrower /= Res.No_Declaration
+               and then Syn.Kind (Of_Tree, Place) = Syn.Name_Reference
                and then Res.Sort_Of (Meanings.all, Borrower)
                  /= Res.Pattern_Binding
                and then Root_Declaration (Of_Tree, Place) = Borrower);
@@ -2187,7 +2381,8 @@ package body Landin.Stages.Checking.References is
                end;
             end if;
 
-            if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+            if Syn.Kind (Of_Tree, Node)
+                 in Syn.Name_Reference | Syn.Member_Selection
               and then Syn.Where (Of_Tree, Node).First >= From
               and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                 = Res.Bound
@@ -2255,7 +2450,9 @@ package body Landin.Stages.Checking.References is
                   if Reads_In (Syn.Value_Of (Of_Tree, Node), Since) then
                      return Reading;
                   end if;
-                  if Declaration_At (Of_Tree, Node) = Borrower then
+                  if Borrower /= Res.No_Declaration
+                    and then Declaration_At (Of_Tree, Node) = Borrower
+                  then
                      --  A declaration starts a new lifetime on a loop
                      --  back edge. Later reads use that new value.
                      Result.Falls := False;
@@ -2519,6 +2716,7 @@ package body Landin.Stages.Checking.References is
                          = Landin.Tokens.Plain_Assignment)
                       or else
                         (Syn.Kind (Of_Tree, Current) = Syn.Binding
+                         and then Borrower /= Res.No_Declaration
                          and then Declaration_At (Of_Tree, Current)
                            = Borrower))
                     and then not Transfers (Syn.Value_Of (Of_Tree, Current))
@@ -2563,6 +2761,10 @@ package body Landin.Stages.Checking.References is
 
                if Frame.Of_Loop /= Syn.No_Node then
                   if Pending.Falls or Pending.Continues then
+                     if Frame.Of_Loop = Walked then
+                        --  D1084: the next iteration walks the source.
+                        return True;
+                     end if;
                      if Reads_Around (Frame.Of_Loop)
                        or else Scan_Statements
                          (Syn.Complete_Body (Of_Tree, Frame.Of_Loop),
@@ -2672,6 +2874,12 @@ package body Landin.Stages.Checking.References is
 
          function Same_Path (Left, Right : Syn.Node_Id) return Boolean is
          begin
+            if Names_Module_Binding (Tree, Left)
+              or else Names_Module_Binding (Tree, Right)
+            then
+               return Root_Declaration (Tree, Left)
+                 = Root_Declaration (Tree, Right);
+            end if;
             if Syn.Kind (Tree, Left) /= Syn.Kind (Tree, Right) then
                return False;
             end if;
@@ -2903,10 +3111,56 @@ package body Landin.Stages.Checking.References is
                   then Res.No_Declaration
                   else Root_Declaration (Tree, Argument));
                Used : Res.Declaration_Id := Res.No_Declaration;
+               Unnamed : Boolean := False;
 
                function Convention_Word return String
                  is (if Part.Convention = Syn.Sink_Convention
                      then "`sink`" else "`inout`");
+
+               --  Viewer says what still views the argument's storage and
+               --  Way_Out how to be done with that view first.
+               procedure Report
+                 (Viewer, Way_Out : String;
+                  Related : Landin.Provenance.Origin;
+                  Because : String);
+
+               procedure Report
+                 (Viewer, Way_Out : String;
+                  Related : Landin.Provenance.Origin;
+                  Because : String) is
+               begin
+                  Bad.Report
+                    (Item    => Bad.Borrowed_Place,
+                     Source  => Syn.Source_Of (Tree),
+                     Where   => Syn.Where (Tree, Argument),
+                     Message => "this argument is passed "
+                                & Convention_Word
+                                & ", so the call may "
+                                & (if Part.Convention = Syn.Sink_Convention
+                                   then "take" else "change")
+                                & " its storage while " & Viewer,
+                     Note    => "[0800]/[0830]: the "
+                                & Convention_Word
+                                & (if Part.Name = Landin.Source.Names.No_Name
+                                   then ""
+                                   else " parameter `"
+                                        & Spelled (Part.Name) & "`")
+                                & " locks its argument whether or"
+                                & " not the routine writes it; "
+                                & Way_Out
+                                & (if Part.Convention = Syn.Sink_Convention
+                                   then ""
+                                   elsif Part.Name
+                                     = Landin.Source.Names.No_Name
+                                   then ""
+                                   else ", or, if the routine only"
+                                        & " reads it, declare `"
+                                        & Spelled (Part.Name)
+                                        & "` without `inout`"),
+                     Related => Related,
+                     Because => Because,
+                     Into    => Sink.all);
+               end Report;
             begin
                if Part.Convention
                     in Syn.Inout_Convention | Syn.Sink_Convention
@@ -2937,57 +3191,105 @@ package body Landin.Stages.Checking.References is
                            --  The convention locks the argument, whether the
                            --  routine writes it or not, so the report names
                            --  the convention, the view and the ways out.
-                           Bad.Report
-                             (Item    => Bad.Borrowed_Place,
-                              Source  => Syn.Source_Of (Tree),
-                              Where   => Syn.Where (Tree, Argument),
-                              Message => "this argument is passed "
-                                         & Convention_Word
-                                         & ", so the call may "
-                                         & (if Part.Convention
-                                              = Syn.Sink_Convention
-                                            then "take"
-                                            else "change")
-                                         & " its storage while `"
+                           Report
+                             (Viewer  => "`"
                                          & Spelled
                                              (Res.Name_Of
                                                 (Meanings.all, Used))
                                          & "` still views it",
-                              Note    => "[0800]/[0830]: the "
-                                         & Convention_Word
-                                         & (if Part.Name
-                                              = Landin.Source.Names.No_Name
-                                            then ""
-                                            else " parameter `"
-                                                 & Spelled (Part.Name)
-                                                 & "`")
-                                         & " locks its argument whether or"
-                                         & " not the routine writes it;"
-                                         & " finish with `"
+                              Way_Out => "finish with `"
                                          & Spelled
                                              (Res.Name_Of
                                                 (Meanings.all, Used))
                                          & "` before the call and take it"
-                                         & " again after"
-                                         & (if Part.Convention
-                                              = Syn.Sink_Convention
-                                            then ""
-                                            elsif Part.Name
-                                              = Landin.Source.Names.No_Name
-                                            then ""
-                                            else ", or, if the routine only"
-                                                 & " reads it, declare `"
-                                                 & Spelled (Part.Name)
-                                                 & "` without `inout`"),
+                                         & " again after",
                               Related => Syn.Origin
                                 (Used_Tree.all,
                                  Res.Node_Of (Meanings.all, Used)),
-                              Because => "the live derived view",
-                              Into    => Sink.all);
+                              Because => "the live derived view");
                         end;
                         exit;
                      end if;
                   end loop;
+
+                  --  D1084: a view passed beside its source is in use for
+                  --  the whole call, which may move the storage under it
+                  --  before the routine reads the view.
+                  if Used = Res.No_Declaration then
+                     for Other in 1 .. Landin.Checking
+                       .Signature_Parameter_Count (Types.all, Called)
+                     loop
+                        declare
+                           Beside : constant Syn.Node_Id :=
+                             (if Other = Position then Syn.No_Node
+                              else Runtime_Argument (Tree, Call, Other));
+                        begin
+                           if Beside /= Syn.No_Node
+                             and then Landin.Checking.Nth_Signature_Parameter
+                               (Types.all, Called, Other).Convention
+                                 not in Syn.Inout_Convention
+                                      | Syn.Sink_Convention
+                             and then Is_View (Tree, Beside)
+                             and then Views
+                               (Known_Fact (Tree, Known, Beside).Value,
+                                Mutated)
+                             and then not Views_Another_Field
+                               (Tree, Argument, Beside)
+                           then
+                              Report
+                                (Viewer  => "another argument of the same"
+                                            & " call still views it",
+                                 Way_Out => "copy what the other argument"
+                                            & " views into storage of its"
+                                            & " own before the call",
+                                 Related => Syn.Origin (Tree, Beside),
+                                 Because => "the argument that views it");
+                              Unnamed := True;
+                              exit;
+                           end if;
+                        end;
+                     end loop;
+                  end if;
+
+                  --  D1084: so is an operand evaluated before this call and
+                  --  not yet taken, and the source a `for` loop around the
+                  --  call is walking.
+                  if Used = Res.No_Declaration and then not Unnamed then
+                     for Held of reverse Unnamed_Views loop
+                        if Views (Held.Fact, Mutated)
+                          and then not Views_Another_Field
+                            (Tree, Argument, Held.Node)
+                        then
+                           if Held.Of_Loop = Syn.No_Node then
+                              Report
+                                (Viewer  => "a view taken earlier in this"
+                                            & " expression is still in use",
+                                 Way_Out => "make this call first, in a"
+                                            & " statement of its own, and"
+                                            & " take the view after it",
+                                 Related => Syn.Origin (Tree, Held.Node),
+                                 Because => "the view taken before the"
+                                            & " call");
+                              exit;
+                           elsif Has_Future_Use
+                             (Held.Element, Syn.Where (Tree, Call).Last,
+                              Walked => Held.Of_Loop)
+                           then
+                              Report
+                                (Viewer  => "the `for` loop around it is"
+                                            & " still walking a view of it",
+                                 Way_Out => "make the call after the loop,"
+                                            & " leave the loop straight"
+                                            & " after the call, or loop over"
+                                            & " an index and read each"
+                                            & " element as it is needed",
+                                 Related => Syn.Origin (Tree, Held.Node),
+                                 Because => "the view the loop walks");
+                              exit;
+                           end if;
+                        end if;
+                     end loop;
+                  end if;
                end if;
             end;
          end loop;
@@ -3004,7 +3306,7 @@ package body Landin.Stages.Checking.References is
          --  capture their target's storage during the ordinary expression
          --  walk, before evaluating their indexes; no syntax is replayed.
          if Id /= Res.No_Declaration then
-            Derive (Result, Local_Of (Id));
+            Derive_Interior (Result, Local_Of (Id));
             case Res.Sort_Of (Meanings.all, Id) is
                --  [1920]: a destructured name binds a local, so its
                --  storage is the frame's as an ordinary local's is.
@@ -3012,7 +3314,7 @@ package body Landin.Stages.Checking.References is
                   | Res.Result_Binding =>
                   if Runtime_Alias (Id) then
                      Result := Alias_Storage (Local_Of (Id));
-                     Derive (Result, Local_Of (Id));
+                     Derive_Interior (Result, Local_Of (Id));
                   else
                      Result.Frame := True;
                      Result.Frame_Witness := Id;
@@ -3046,7 +3348,7 @@ package body Landin.Stages.Checking.References is
                   --  D85/D121: this is the payload's actual backing place,
                   --  distinct from origins carried by its copied value.
                   Result := Alias_Storage (Local_Of (Id));
-                  Derive (Result, Local_Of (Id));
+                  Derive_Interior (Result, Local_Of (Id));
                when others =>
                   null;
             end case;
@@ -3154,7 +3456,12 @@ package body Landin.Stages.Checking.References is
                end if;
             end;
          end if;
-         case Syn.Kind (Tree, Node) is
+         --  A module binding named through its module is read as its own
+         --  name is.
+         case Syn.Node_Kind'
+           (if Names_Module_Binding (Tree, Node) then Syn.Name_Reference
+            else Syn.Kind (Tree, Node))
+         is
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Tree, Node) = Res.Bound then
                   declare
@@ -3292,14 +3599,29 @@ package body Landin.Stages.Checking.References is
                   end if;
                   --  Capture the base before the selectors run: an index
                   --  can replace that base while its old address is in use.
-                  for Slot in 2 .. Syn.Slot_Count (Tree, Node) loop
-                     declare
-                        Ignored : constant Origin_Fact :=
-                          Fact_Of (Tree, Syn.Slot (Tree, Node, Slot));
-                     begin
-                        pragma Unreferenced (Ignored);
-                     end;
-                  end loop;
+                  --  D1084: a descriptor read for the base is a view held
+                  --  while they run.
+                  declare
+                     Held_Before : constant Ada.Containers.Count_Type :=
+                       Unnamed_Views.Length;
+                  begin
+                     if Syn.Slot_Count (Tree, Node) >= 2
+                       and then Falls_Through
+                       and then Target_Kind
+                         in Ty.Pointer_Value | Ty.Slice_Value
+                     then
+                        Hold_View (Tree, Target, Target_Fact.Value);
+                     end if;
+                     for Slot in 2 .. Syn.Slot_Count (Tree, Node) loop
+                        declare
+                           Ignored : constant Origin_Fact :=
+                             Fact_Of (Tree, Syn.Slot (Tree, Node, Slot));
+                        begin
+                           pragma Unreferenced (Ignored);
+                        end;
+                     end loop;
+                     Unnamed_Views.Set_Length (Held_Before);
+                  end;
                end;
                declare
                   Id : constant Res.Declaration_Id :=
@@ -3369,6 +3691,35 @@ package body Landin.Stages.Checking.References is
                      Known : Argument_Facts (1 .. Written + 1);
                      Called : constant Landin.Checking.Signature_Id :=
                        Call_Signature (Tree, Node);
+                     Held_Before : constant Ada.Containers.Count_Type :=
+                       Unnamed_Views.Length;
+
+                     --  Whether the written argument fills an `inout` or
+                     --  `sink` parameter: it lends its place, and D149 and
+                     --  the call's own lock answer for it.
+                     function Is_Lent (Expression : Syn.Node_Id)
+                       return Boolean;
+
+                     function Is_Lent (Expression : Syn.Node_Id)
+                       return Boolean is
+                     begin
+                        if not Landin.Checking.Holds (Types.all, Called) then
+                           return False;
+                        end if;
+                        for Formal in 1 .. Landin.Checking
+                          .Signature_Parameter_Count (Types.all, Called)
+                        loop
+                           if Landin.Checking.Nth_Signature_Parameter
+                             (Types.all, Called, Formal).Convention
+                               in Syn.Inout_Convention | Syn.Sink_Convention
+                             and then Runtime_Argument (Tree, Node, Formal)
+                               = Expression
+                           then
+                              return True;
+                           end if;
+                        end loop;
+                        return False;
+                     end Is_Lent;
                   begin
                      Known (1) := (Node => Self, Fact => Fact_Of (Tree, Self));
                      for Position in 1 .. Written loop
@@ -3385,8 +3736,22 @@ package body Landin.Stages.Checking.References is
                            Known (Position + 1) :=
                              (Node => Expression,
                               Fact => Fact_Of (Tree, Expression));
+                           --  D1084: a view given by value is in use until
+                           --  the call returns, so while the arguments
+                           --  after it are evaluated.
+                           if Position < Written
+                             and then Falls_Through
+                             and then Count
+                               (Known (Position + 1).Fact.Value.Interior) > 0
+                             and then not Is_Lent (Expression)
+                           then
+                              Hold_View
+                                (Tree, Expression,
+                                 Known (Position + 1).Fact.Value);
+                           end if;
                         end;
                      end loop;
+                     Unnamed_Views.Set_Length (Held_Before);
                      if not Falls_Through then
                         return No_Value_Edge;
                      end if;
@@ -3481,8 +3846,30 @@ package body Landin.Stages.Checking.References is
                                                        = Syn.Inout_Convention
                                                  then Fact.Storage
                                                  else Fact.Value));
-                                             if Id /= Res.No_Declaration then
+                                             --  D1084: a pointer, slice or
+                                             --  `any` given by value lends
+                                             --  what it refers to, which the
+                                             --  argument's own fact names;
+                                             --  the binding holding it is
+                                             --  only where it was read from.
+                                             if Id = Res.No_Declaration then
+                                                null;
+                                             elsif Landin.Checking
+                                               .Nth_Signature_Parameter
+                                                 (Types.all, Called,
+                                                  Formal).Convention
+                                                    /= Syn.Inout_Convention
+                                               and then Landin.Checking
+                                                 .Type_Of
+                                                   (Types.all, Tree, Argument)
+                                                 in Ty.Pointer_Value
+                                                  | Ty.Slice_Value
+                                                  | Ty.Any_Value
+                                             then
                                                 Derive (Part, Local_Of (Id));
+                                             else
+                                                Derive_Interior
+                                                  (Part, Local_Of (Id));
                                              end if;
                                           end;
                                        end if;
@@ -3585,10 +3972,29 @@ package body Landin.Stages.Checking.References is
                null;
          end case;
 
-         for Slot in 1 .. Syn.Slot_Count (Tree, Node) loop
-            exit when not Falls_Through;
-            Join (Result, Fact_Of (Tree, Syn.Slot (Tree, Node, Slot)));
-         end loop;
+         --  D1084: an operand that is a view is held while the operands
+         --  after it are evaluated.
+         declare
+            Held_Before : constant Ada.Containers.Count_Type :=
+              Unnamed_Views.Length;
+         begin
+            for Slot in 1 .. Syn.Slot_Count (Tree, Node) loop
+               exit when not Falls_Through;
+               declare
+                  Operand : constant Origin_Fact :=
+                    Fact_Of (Tree, Syn.Slot (Tree, Node, Slot));
+               begin
+                  Join (Result, Operand);
+                  if Slot < Syn.Slot_Count (Tree, Node)
+                    and then Falls_Through
+                  then
+                     Hold_View
+                       (Tree, Syn.Slot (Tree, Node, Slot), Operand.Value);
+                  end if;
+               end;
+            end loop;
+            Unnamed_Views.Set_Length (Held_Before);
+         end;
          --  Each reference-bearing child has already supplied an origin,
          --  an explicit raw boundary, or an empty-value proof. A constructor
          --  with none of those destinations must not invent external storage
@@ -4036,7 +4442,9 @@ package body Landin.Stages.Checking.References is
          if Id = Res.No_Declaration or else Local_Of (Id) = 0 then
             return;
          end if;
-         if Syn.Kind (Tree, Place) = Syn.Name_Reference then
+         if Syn.Kind (Tree, Place) = Syn.Name_Reference
+           or else Names_Module_Binding (Tree, Place)
+         then
             Set_Origin (Local_Of (Id), Fact);
          elsif not Through_Descriptor then
             declare
@@ -4501,6 +4909,9 @@ package body Landin.Stages.Checking.References is
                   Known : Loop_Memo_Access := Walked_Loops.Last;
                   Passes : Natural := 0;
                   Converged : Boolean := False;
+                  --  D1084: the source a `for` walks, held while its body
+                  --  runs; no node when the loop walks no storage.
+                  Walked_Source : Unnamed_View;
 
                   --  Each source bit grows once; the presence chain has two
                   --  upward steps.  The frame witness can descend through
@@ -4514,7 +4925,7 @@ package body Landin.Stages.Checking.References is
                         Long_Long_Integer (Declarations)
                         * Long_Long_Integer (Fact_Width)
                         * (4 + Long_Long_Integer (Parameters)
-                           + 2 * Long_Long_Integer (Declarations))
+                           + 3 * Long_Long_Integer (Declarations))
                         + 2));
 
                   procedure Pass (Reporting : Boolean);
@@ -4621,11 +5032,54 @@ package body Landin.Stages.Checking.References is
                                 and then Has_References (Element)
                                then Source_Fact else No_Origin));
                         end if;
+                        --  D1084: the loop walks its source for as long as
+                        --  it runs.  A slice or another value holding
+                        --  references is the view it was evaluated to; an
+                        --  array place is walked where it stands [1150].
+                        if Syn.Traversal_Upper (Tree, Node) = Syn.No_Node
+                          and then Falls_Through
+                        then
+                           declare
+                              Walked : Reference_Fact :=
+                                (if Has_References (Tree, Source_Node)
+                                 then Source_Fact.Value else No_Reference);
+                              Root : constant Res.Declaration_Id :=
+                                Root_Declaration (Tree, Source_Node);
+                           begin
+                              if Source_Kind = Ty.Fixed_Array
+                                and then Syn.Kind (Tree, Source_Node)
+                                  in Syn.Name_Reference
+                                   | Syn.Member_Selection
+                                   | Syn.Element_Index
+                              then
+                                 Join (Walked, Source_Fact.Storage);
+                                 if Root /= Res.No_Declaration
+                                   and then Local_Of (Root) /= 0
+                                 then
+                                    Derive (Walked, Local_Of (Root));
+                                 end if;
+                              end if;
+                              if Count (Walked.Interior) > 0 then
+                                 Walked_Source :=
+                                   (Node    => Source_Node,
+                                    Fact    => Walked,
+                                    Of_Loop => Node,
+                                    Element =>
+                                      (if Element /= Res.No_Declaration
+                                         and then Runtime_Alias (Element)
+                                       then Element
+                                       else Res.No_Declaration));
+                              end if;
+                           end;
+                        end if;
                      end;
                   end if;
                   if not Falls_Through then
                      Statement_Value := No_Value_Edge;
                      return;
+                  end if;
+                  if Walked_Source.Node /= Syn.No_Node then
+                     Unnamed_Views.Append (Walked_Source);
                   end if;
                   Entry_State := Origins;
                   Head := Origins;
@@ -4657,6 +5111,9 @@ package body Landin.Stages.Checking.References is
                   end if;
                   if not Outer_Quiet then
                      Pass (Reporting => True);
+                  end if;
+                  if Walked_Source.Node /= Syn.No_Node then
+                     Unnamed_Views.Delete_Last;
                   end if;
 
                   --  Exhaustion keeps the final test's effects, not the

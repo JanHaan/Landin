@@ -1,0 +1,36 @@
+error[L0300]: this known float is not a bool value
+  --> ../tests/fixtures/negative/module-float-declared-below-is-known/main.ldn:4:17
+  |
+4 | as_bool: bool = bool(half) -- error: 0.5 is no bool
+  |                 ^^^^^^^^^^
+  = note: [0310]: only zero and one convert to bool
+error[L0300]: this known float cannot be converted to `u8`
+  --> ../tests/fixtures/negative/module-float-declared-below-is-known/main.ldn:5:13
+  |
+5 | as_u8: u8 = u8(large) -- error: 300.5 is no u8
+  |             ^^^^^^^^^
+  = note: [0310]: an impossible known conversion is a compile error
+error[L0300]: this known float cannot be converted to `i32`
+  --> ../tests/fixtures/negative/module-float-declared-below-is-known/main.ldn:6:15
+  |
+6 | as_i32: i32 = i32(huge) -- error
+  |               ^^^^^^^^^
+  = note: [0310]: an impossible known conversion is a compile error
+error[L0300]: this known float does not fit the destination width
+  --> ../tests/fixtures/negative/module-float-declared-below-is-known/main.ldn:7:15
+  |
+7 | as_f32: f32 = f32(vast) -- error
+  |               ^^^^^^^^^
+  = note: [0310]: an impossible known conversion is a compile error
+error[L0300]: this known float cannot be converted to `u8`
+  --> ../tests/fixtures/negative/module-float-declared-below-is-known/main.ldn:8:20
+  |
+8 | in_array: [2]u8 = [u8(large), 1] -- error
+  |                    ^^^^^^^^^
+  = note: [0310]: an impossible known conversion is a compile error
+error[L0300]: this known float cannot be converted to `u8`
+  --> ../tests/fixtures/negative/module-float-declared-below-is-known/main.ldn:9:18
+  |
+9 | compared: bool = u8(large) == 44 -- error
+  |                  ^^^^^^^^^
+  = note: [0310]: an impossible known conversion is a compile error

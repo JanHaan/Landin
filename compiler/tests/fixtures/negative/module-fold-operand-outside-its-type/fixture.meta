@@ -1,0 +1,9 @@
+class: negative
+summary: D1090 a conversion or a width-dependent operator inside a module value is held to what its type holds, and reported where it stands
+program: main.ldn
+codes: L0300, L0300, L0300, L0300, L0300, L0300, L0300, L0300, L0300
+constructs: 0300, 0310, 0320, 0330, 0660, 1940, 1950
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/module-fold-operand-outside-its-type/main.ldn
+status: 1

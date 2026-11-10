@@ -1,0 +1,18 @@
+--  D1089: declaration order means nothing in a module [0130], so a module
+--  value that names a float written below it is refused for an impossible
+--  conversion exactly as it is with the two lines the other way round.
+as_bool: bool = bool(half) -- error: 0.5 is no bool
+as_u8: u8 = u8(large) -- error: 300.5 is no u8
+as_i32: i32 = i32(huge) -- error
+as_f32: f32 = f32(vast) -- error
+in_array: [2]u8 = [u8(large), 1] -- error
+compared: bool = u8(large) == 44 -- error
+
+half: f64 = 0.5
+large: f64 = 300.5
+huge: f32 = 3.0e9
+vast: f64 = 1.0e300
+
+public main: () -> (code: i32) =
+    code = 0
+end main

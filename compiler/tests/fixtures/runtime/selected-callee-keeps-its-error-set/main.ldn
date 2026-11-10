@@ -1,0 +1,53 @@
+--  D1091: `! ...` works out a routine's set from every `try` in its body,
+--  a `try` of a selected callee included, so its callers recover the
+--  failure a concept entry or a function field raised.
+closed: atom
+
+service: type = concept (item: type)
+    read: (self: ptr item) -> (value: i32) ! closed
+end service
+
+state: type = struct
+    value: i32
+end state
+
+read_value: (self: ptr state) -> (answer: i32) ! closed =
+    fail closed when self.val.value == 0
+    answer = self.val.value
+end read_value
+
+state is service (read: read_value)
+
+handler: type = struct
+    call: (n: i32) -> (r: i32) ! closed
+end handler
+
+checked: (n: i32) -> (r: i32) ! closed =
+    fail closed when n == 0
+    r = n
+end checked
+
+through_entry: (item: type is service, value: ptr item)
+               -> (answer: i32) ! ... =
+    answer = try item.read(value)
+end through_entry
+
+through_field: (h: handler, n: i32) -> (r: i32) ! ... =
+    r = try h.call(n)
+end through_field
+
+through_element: (table: [1]handler, n: i32) -> (r: i32) ! ... =
+    r = try table[0].call(n)
+end through_element
+
+public main: () -> (code: i32) =
+    empty: state = (value: 0)
+    full: state = (value: 20)
+    h: handler = (call: checked)
+    code = through_entry(addr empty) else 9
+    code += through_entry(addr full) else 0
+    code += through_field(h, 0) else 6
+    code += through_field(h, 4) else 0
+    code += through_element([h], 0) else 2
+    code += through_element([h], 1) else 0
+end main

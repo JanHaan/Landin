@@ -21,14 +21,14 @@ wrote: (state: io.memory_space, start: usize, expected: []u8)
     end for
 end wrote
 
-formatted: (host: io.memory, inout state: io.memory_space)
+formatted: (host: io.memory, state: ptr mut io.memory_space)
            -> (step: i32) ! ... =
     step = 2
     count: u32 = 42
     done: bool = true
     try io.write_format(host, io.out(host), "{} and {}\n",
                         [any(addr count), any(addr done)])
-    return when state.writes <> 1 or not wrote(state, 0, "42 and true\n")
+    return when state.val.writes <> 1 or not wrote(state.val, 0, "42 and true\n")
     step = 3
     --  Two hundred letters, more than the store holds: what waits is
     --  written first, then the value as it is, then the rest of the line.
@@ -39,23 +39,23 @@ formatted: (host: io.memory, inout state: io.memory_space)
         inc at
     end while
     long: []u8 = letters[0..<200]
-    start: usize = state.output_used
+    start: usize = state.val.output_used
     try io.write_format(host, io.out(host), "long: {}.\n", [any(addr long)])
     letters[200] = u8('.')
     letters[201] = u8('\n')
-    return when state.writes <> 4
-      or not wrote(state, start + 6, letters[0..<202])
+    return when state.val.writes <> 4
+      or not wrote(state.val, start + 6, letters[0..<202])
     step = 4
-    held: usize = state.output_used
+    held: usize = state.val.output_used
     mut refused: bool = false
     io.write_format(host, io.out(host), "{} {}\n", [any(addr count)])
         else (problem)
         refused = problem == text.invalid_format
     end
-    return when not refused or state.writes <> 4
-      or state.output_used <> held
+    return when not refused or state.val.writes <> 4
+      or state.val.output_used <> held
     step = 5
-    state.fail_write_at = state.writes + 1
+    state.val.fail_write_at = state.val.writes + 1
     refused = false
     io.write_format(host, io.out(host), "{}\n", [any(addr count)])
         else (problem)
@@ -77,5 +77,5 @@ public main: () -> (code: i32) =
     mut state: io.memory_space = zeroed
     host := io.memory_over(state, files[0..<1], no_arguments, "",
                            output[0..<512], errors[0..<1])
-    code = formatted(host, state) else 1
+    code = formatted(host, addr state) else 1
 end main

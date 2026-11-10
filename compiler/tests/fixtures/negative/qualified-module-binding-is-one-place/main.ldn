@@ -1,0 +1,30 @@
+--  [1420]: `store.cells` is the binding `cells` names in its own module, so
+--  the rules that ask which binding a place is in answer the same for
+--  both spellings: D149's exclusivity and [0830]'s live view.
+import store
+
+replace: (inout left: u32, inout right: u32) -> none =
+    left = 1
+    right = 2
+end replace
+
+reset_cells: (inout buffer: [4]i32) -> none =
+    buffer = [9, 9, 9, 9]
+end reset_cells
+
+both: (xs: []i32, inout buffer: [4]i32) -> (k: i32) =
+    buffer = [9, 9, 9, 9]
+    k = xs[0]
+end both
+
+public main: () -> (code: i32) =
+    replace(store.counter, store.counter) -- error: one place twice
+    xs := store.cells[0..<2]
+    reset_cells(store.cells) -- error: `xs` views store.cells
+    code = xs[0]
+    for x in store.cells do
+        reset_cells(store.cells) -- error: the loop walks store.cells
+        code += x
+    end for
+    code += both(store.cells[0..<2], store.cells) -- error
+end main

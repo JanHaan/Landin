@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1084 admits a loop left straight after the call, a field beside another field, and a reference only read out of the record passed inout
+program: main.ldn
+status: 42
+constructs: 0800, 0830, 0900, 1150, 1240, 1360, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

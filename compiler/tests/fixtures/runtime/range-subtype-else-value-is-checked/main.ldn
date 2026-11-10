@@ -1,0 +1,23 @@
+--  D1086: the value a call-site `else` supplies has not been checked into
+--  the callee's range subtype, so the store that takes the call's value
+--  checks it.  Here the fallback is 200 and the store traps.
+percent: type = u8 range 0..100
+
+bad_level: atom
+
+parse_level: (raw: u8) -> (level: percent) ! bad_level =
+    fail bad_level when raw > 100
+    level = raw
+end parse_level
+
+mut stored: u8 = 200
+
+public main: () -> (code: i32) =
+    --  A fallback that is itself a percent carries its proof, and one the
+    --  compiler knows is checked where it is written.
+    spare: percent = 50
+    kept: percent = parse_level(255) else spare
+    known: percent = parse_level(255) else 60
+    direct: percent = parse_level(255) else stored
+    code = i32(direct) + i32(kept) + i32(known)
+end main

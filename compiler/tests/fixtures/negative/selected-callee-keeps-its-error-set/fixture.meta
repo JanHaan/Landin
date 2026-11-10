@@ -1,0 +1,9 @@
+class: negative
+summary: D1091 a call through a type parameter's entry, a function field or an array of them is tried or recovered, and its atoms are in the declared set
+program: main.ldn
+codes: L0329, L0329, L0329, L0329, L0329
+constructs: 0940, 0960, 1000, 1240, 1290, 1980
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/selected-callee-keeps-its-error-set/main.ldn
+status: 1

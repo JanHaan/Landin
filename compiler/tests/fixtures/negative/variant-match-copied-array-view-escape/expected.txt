@@ -29,12 +29,12 @@ error[L0314]: this returned reference still has frame origin
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:40:37
+  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:40:31
    |
-40 |         row(inout values): result = values[0..<2]
-   |                                     ^^^^^^^^^^^^^
+40 |         row(values): result = values[0..<2]
+   |                               ^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:37:16
    |
-37 | value_backed: (source: packet) -> (result: []mut u32 from source) =
+37 | value_backed: (source: packet) -> (result: []u32 from source) =
    |                ^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter

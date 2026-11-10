@@ -1,0 +1,20 @@
+error[L0341]: this conformance function does not have the concept entry's signature
+  --> ../tests/fixtures/negative/concept-entry-range-subtype-is-its-signature/main.ldn:23:1
+   |
+23 | lamp is dimmer (set: lamp_set, level: lamp_level)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/concept-entry-range-subtype-is-its-signature/main.ldn:15:32
+   |
+15 | lamp_set: (self: ptr mut lamp, level: u8) -> none =
+   |                                ^^^^^^^^^ supplied `(self: ptr mut lamp, level: u8) -> none`
+  = note: [1240]: required `(self: ptr mut lamp, level: u8 range 0..100) -> none`
+error[L0341]: this conformance function does not have the concept entry's signature
+  --> ../tests/fixtures/negative/concept-entry-range-subtype-is-its-signature/main.ldn:23:1
+   |
+23 | lamp is dimmer (set: lamp_set, level: lamp_level)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/concept-entry-range-subtype-is-its-signature/main.ldn:19:1
+   |
+19 | lamp_level: (self: ptr lamp) -> (value: u8) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ supplied `(self: ptr lamp) -> (value: u8)`
+  = note: [1240]: required `(self: ptr lamp) -> (value: u8 range 0..100)`

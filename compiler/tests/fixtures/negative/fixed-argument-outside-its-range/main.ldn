@@ -1,0 +1,19 @@
+--  D1087: a `fixed` formal declared with a range subtype takes only a value
+--  inside the range, in a generic routine and in a generic type.
+percent: type = u8 range 0..100
+
+scaled: (fixed share: percent, total: u32) -> (part: u32) =
+    part = total * u32(share) / 100
+end scaled
+
+ring: type (fixed slots: percent) = struct
+    cells: [slots]u8
+end ring
+
+public main: () -> (code: i32) =
+    fits: ring(100) = zeroed
+    wide: ring(200) = zeroed -- error
+    code = i32(scaled(share: 100, total: 50))
+    code += i32(scaled(share: 200, total: 50)) -- error
+    code += i32(lenof fits.cells) + i32(lenof wide.cells)
+end main

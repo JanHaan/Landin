@@ -1364,6 +1364,10 @@ that reference type, independently of the binding that holds it [0430] [0450].
 `addr` retains that place's writability: its result is `ptr mut T` for a
 writable place and `ptr T` for a read-only place. Taking an address does not
 grant permission to modify immutable storage.
+Nor does matching: an `inout` payload binding of a match arm [1220] is a
+writable name for storage of the matched value, so the value matched has to
+be a place that may be written by these same rules, and the binding is
+L0303 where it is not (D1085).
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
 two is wrong is the reader's to decide.
@@ -1508,6 +1512,25 @@ call itself ends at that assignment, except where the call's recovery can
 `break` or `continue` past it (D291). A deferred call on a return or failure
 edge is checked against what is live on that edge, and no later statement is
 a use there (D292).
+A view no name holds is in use as well, until what it was evaluated for is
+done with it (D1084). The source of a `for` is in use while the loop runs:
+passing what it views `inout` or `sink` in the body is refused when a path
+from the call reaches another iteration, or reads the loop's element where
+that names the walked storage in place [1160]. An argument is in use until
+its call returns, so what it views is passed `inout` or `sink` neither to
+that call, in either order, nor to a call nested in a later argument; an
+operand of any other expression is held the same way while the operands
+after it are evaluated. What such a view views is the storage under it: a
+binding an address or a range was taken of, an array of it lent as a slice
+[0570], and for a call result what each argument its `from` names views,
+with the binding that argument is rooted in when the argument is a record
+or an array or is passed `inout`. A pointer, slice or `any` given by value
+lends what it refers to and not the binding that holds it; a reference only
+read out of a binding's field has other storage under it and holds nothing
+here; and an address or range of one field holds no other field of the
+same binding where fields alone reach both.
+A module binding named through its module, `store.cells`, is the binding
+its own name is [1420], here and in D149's test of one place passed twice.
 Volatile reference paths remain exempt [0850].
 
 A match payload alias keeps its selected storage live even when the payload
@@ -4370,6 +4393,37 @@ range`. The bounded IR control checks exact images and retained runtime u8
 operations on both target widths, plus final-image and positive/negative
 fold-range overflow refusals. Container capacity arithmetic inside a function
 remains subject to the runtime rule.
+
+### D1090 — Inside a module fold, a conversion and a width-dependent operator take only what their type holds
+
+**The tour said** at [0310] that an impossible conversion of a value known
+at compile time is a compile error, and D224 gave ordinary module
+arithmetic a wider folding range while saying that conversions, shifts,
+bit operators and wrapping operators keep their own type-dependent rules.
+The fold compared only its final value with the binding's type. So
+`a: i64 = i64(u8(k))` with a `k` of 1000 held 1000, `(200 + 100) >> 1` as
+a `u8` was 22, the 300 having been cut to eight bits first, and a range
+subtype applied inside a larger expression reached the backend unchecked.
+
+**Chosen:** the wider range belongs to `+ - * / %`, comparison and unary
+minus alone. A conversion inside a module value takes only a value its
+target holds: an integer its integer type holds, zero or one for `bool`,
+and a value inside the bounds for a range subtype. A shift, `&`, `|`, `^`,
+`~` and a wrapping operator take only operands their operand type holds;
+a shift's amount stays under [0320]'s own rule. A value that is not held
+is L0300 at the conversion or the operand, naming the value and the type,
+and a binding that reads the refused one reports nothing more. A wide
+intermediate that only ordinary arithmetic and a comparison meet folds as
+D224 says.
+
+**The alternatives:** cutting the value to the type's width, which is
+what D224 itself declines, an image nobody wrote in place of an error;
+and narrowing every intermediate to its type, which takes back D224's
+wider range. Both are declined.
+
+**Pinned by** `negative/module-fold-operand-outside-its-type`, with
+`runtime/module-range-subtype-negative-mask-operand` for a negative
+operand its signed type holds.
 
 ## DECISIONS: POINTERS AND RAW STORAGE
 
@@ -7468,6 +7522,48 @@ unsigned carriers or pointers use the existing C boundary.
 images, validated extraction, copies, calls and indexed updates. The independent
 `targets/packed image algebra and access plans` case and the retained synthetic
 device contract define separate image and transaction oracles.
+
+### D1086 — A call-site `else` value carries its own proof or none
+
+**The tour said** at [1730] that a value already of a range subtype is not
+checked again, and at [0960] that a call-site `else` supplies the value
+when the call fails. D188 lets a call whose one result is a range subtype
+hand the proof back with the value. With `parse_level(raw) else stored`
+the value on the failure path is `stored`, which nothing checked, and the
+store that took the expression emitted no check: a 200 sat in a `percent`.
+
+**Chosen:** a call with a recovery clause carries the callee's subtype
+only when the recovery's answer carries a subtype too: the value written
+after `else`, or the final value of its block. The expression then
+carries the wider of the two when one contains the other, and none
+otherwise, so the store that takes it owes [0660]'s check. A recovery
+block that gives no answer leaves the statement and takes nothing away. A
+fallback the compiler knows is still refused where it is written.
+
+**The alternatives:** checking only the fallback, at the `else`, which
+needs a second kind of owed check for one expression form; and dropping
+the proof from every call result, which checks the common call twice.
+Both are declined.
+
+**Pinned by** `runtime/range-subtype-else-value-is-checked`.
+
+### D1087 — A `fixed` formal of a range subtype takes only a value inside it
+
+**The tour said** at [0660] that a range subtype is checked at a
+parameter, and at [1350] and [1520] that a `fixed` argument fits its
+declared type. D138 reused the base type's range for that fit, so
+`fixed share: percent` took 200.
+
+**Chosen:** a known `fixed` argument, written or deduced, is held to the
+bounds of the subtype its formal declares, in a generic routine and in a
+generic type, and one outside them is L0300 naming the value and the
+range.
+
+**The alternative:** refusing a range subtype as a `fixed` formal's type,
+as D236 refuses it in composite positions, which takes away the cheapest
+place a range can be enforced. It is declined.
+
+**Pinned by** `negative/fixed-argument-outside-its-range`.
 
 ### D236 — A range subtype constrains scalar positions only
 
@@ -10641,6 +10737,31 @@ only scalar value an expression needs.
 and IR records; and
 `runtime/variant-match-array-payload-bindings-update-storage` on Linux x86-64.
 
+### D1085 — An `inout` payload binding needs a matched value that may be written
+
+**The tour said** at [1220] that a match arm's binding takes a parameter
+convention and that `inout` makes it a writable alias of the payload, and
+at [0430] and [0450] that a read-only reference and an immutable binding
+are never written through. D78 and D85 gave the alias its storage. None of
+them said what the matched value must be, and the checker asked only the
+binding's own convention, so `case(inout v): v = 2` wrote the payload of
+an immutable binding, of an `in` parameter, and of whatever a `ptr s` or a
+`[]s` reached; on firmware that store's target is in flash.
+
+**Chosen:** an `inout` payload binding requires the matched value to be a
+place that may be written, by [1900]'s rules for an assignment's target: a
+mutable binding, a named return, an `inout` parameter, an element of
+writable storage a `for` walks, or a place reached through a `mut`
+reference. Anything else is L0303 at the binding, naming the matched
+value. A binding without `inout` reads the payload of any value, as before.
+
+**The alternatives:** refusing each write through the binding where it is
+made, which leaves `addr v` and an `inout` argument to find separately and
+reports far from the cause; and making the binding a copy when the value
+is read-only, which gives one spelling two meanings. Both are declined.
+
+**Pinned by** `negative/inout-payload-binding-of-read-only-subject`.
+
 ### D86 — A named ordinary struct field has a measured layout
 
 **The tour said** that fields stay in written order with their natural
@@ -12054,6 +12175,74 @@ region is used afterwards; and a binding per handle, which still refuses it.
 Both are declined.
 
 **Pinned by** `runtime/defer-at-return-edge`.
+
+### D1084 — A view no name holds is in use until what took it is done
+
+**The tour said** at [0830] that a view taken from a local borrows it, and
+that the local is not passed `inout` or `sink` while the view is still in
+use; at [0800] that a result with `from` is such a view; at [1150] that a
+`for` walks each element of a slice in place; and at [1320] that a
+container is walked as `for value in vec.used(numbers)`. Every example
+gives the view a name, and the check built from them asked one question:
+is a named view read after the call. A view written as a loop's source, or
+passed beside its source, has no name and no later read. So
+`for value in vec.used(numbers) do try vec.push(numbers, memory, value)`
+and `append_all(numbers, memory, vec.used(numbers))` were accepted, and
+each read a block the list's growth had just freed.
+
+**Chosen:** a view is in use until what it was evaluated for is done with
+it, whether or not a name holds it.
+
+- The source of a `for` is in use from the loop's head to its last
+  iteration. In the body, passing what it views `inout` or `sink` is L0315
+  when some path from the call reaches the next iteration, or reads the
+  loop's element where the element names the walked storage in place
+  [1160]. A call the loop leaves straight after, by `break`, `return` or a
+  failure, is accepted, and so is one in `complete`, which runs when the
+  walk is over.
+- An argument is in use until its call returns. What it views is not
+  passed `inout` or `sink` to the same call, in either order and whether
+  the view is written in the call or held by a name whose last use the
+  call is; nor to a call nested in a later argument, since arguments are
+  evaluated left to right [0410]. An operand of any other expression is
+  held the same way while the operands after it are evaluated, and a
+  slice or pointer read for a selection while its index is.
+- What an unnamed view views is the storage under it: the binding an
+  address or a range was taken of, and an array of it lent as a slice
+  [0570]. A call result views what each argument its `from` names views,
+  and the binding that argument is rooted in when the argument is a
+  record or an array, as a container is, or is passed `inout`. A pointer,
+  slice or `any` given by value lends what it refers to, not the binding
+  that holds it, so `first(xs)` is no view of the binding `xs`. A
+  reference only read out of a field of a binding has other storage under
+  it and holds nothing, so a record is passed `inout` to an entry of an
+  `any` the record holds. An address or a range of one field holds no
+  other field of the same binding, where both are reached by fields
+  alone.
+
+[0830]'s rule for a view a name holds is unchanged, and still counts a
+reference read out of a field when the name is read after the call.
+
+A result whose `from` names a container is a view of the container even
+when what it returns is a reference the container only stored, as
+`vec.get` of a list of pointers returns: the signature says so and the
+caller is held to it.
+
+**The alternatives:** keeping the rule to named views, which leaves the
+traversal the tour teaches unchecked; holding a loop's source on every
+path, a loop left straight after the call included, which refuses the
+find-then-insert every such loop is written for; counting a reference
+read out of a field as the named rule does, which refuses a record that
+holds its own policy, as `core/text`'s builder does, though none of the
+record's storage is under that reference; narrowing the named rule to
+match, which changes what accepted programs mean to no purpose here; and
+holding the whole binding for a view of one field, which refuses a field
+passed beside the address of its neighbour. All five are declined.
+
+**Pinned by** `negative/for-source-view-holds-its-source`,
+`negative/view-argument-beside-its-source` and
+`negative/qualified-module-binding-is-one-place`, with
+`runtime/unnamed-view-finished-or-apart` for what is accepted.
 
 ### D433 — A pointer arm's binding may be `sink`, and consumes the matched place
 
@@ -13819,6 +14008,36 @@ admitting the address without the origin, which loses the escape refusal.
 
 **Pinned by** `runtime/destructured-locals-are-places` and
 `negative/destructured-local-escape`.
+
+### D1091 — A selected callee keeps its error set under every call rule
+
+**The tour said** at [0960] that a call that can fail is written with
+`try` or `else`, at [0940] that every atom a `try` passes on is in the
+routine's declared set and that `! ...` is whatever its callees can fail
+with, and at [1290] that this is worked out for each concrete instance.
+Those rules ran before the bodies they speak of were checked, and read a
+callee's set from the declaration its name resolved to. A callee that is
+selected, a concept entry through a type parameter, a function a struct
+field holds or one an array holds, had no such declaration yet: an
+untried call passed and stopped lowering with an internal defect, a `try`
+of one added nothing to a declared or an inferred set, and a caller that
+recovered the failure of a `! ...` routine was told the call could not
+fail.
+
+**Chosen:** the three rules read a selected callee's set from where the
+language puts it. A function a field or an element holds has the
+signature of that field's or element's function type, which is known
+before any body is checked. A concept entry reached through a
+constrained type parameter is selected in each ready instance before the
+sets are worked out, for every call of it, tried, recovered or neither,
+as it already was for a recovered call. L0329 then reports each as it
+reports a call of a named routine.
+
+**The alternative:** refusing a failing callee in these positions, which
+takes `try` away from generic code and callbacks. It is declined.
+
+**Pinned by** `negative/selected-callee-keeps-its-error-set` and
+`runtime/selected-callee-keeps-its-error-set`.
 
 ## DECISIONS: CONTROL FLOW
 
@@ -16303,6 +16522,29 @@ the reader nothing they could not read from the concept.
 **Pinned by** `negative/fibre-turns-over-scheduler-only`, whose `fibre.whole`
 and `blocking.host` are each named with the `fibre.scheduler` they provide.
 
+### D1088 — A concept entry's range subtype is part of its signature
+
+**The tour said** at [1240] that a conformance function has exactly the
+entry's signature, and D188 that a range subtype's bounds travel with a
+signature so that an indirect call cannot lose the check. An entry
+written `level: percent` was read as its base type: the function with
+that very signature was refused, with a report printing two identical
+signatures, the function over plain `u8` was accepted, and a call through
+the concept passed 250 unchecked.
+
+**Chosen:** an entry's parameters and results keep their range subtype,
+as a routine's do. Conformance compares it, so the base-typed function is
+L0341 and the report prints the bounds, `level: u8 range 0..100`; and a
+call through a type parameter or an `any` checks its arguments and gives
+its results with the subtype, exactly as a call of the routine does.
+
+**The alternative:** refusing a range subtype in a concept entry, which
+would make a concept unable to state a contract a routine can. It is
+declined.
+
+**Pinned by** `negative/concept-entry-range-subtype-is-its-signature` and
+`runtime/concept-entry-range-subtype-is-checked`.
+
 ## DECISIONS: MODULES AND COMPILE TIME
 
 The module graph, what an import binds, and what is settled before
@@ -17299,6 +17541,30 @@ whose pointer is `ptr mut atomic.cell(u32)`; `negative/r630-optional`'s
 `negative/atomic-cell-holds-unsigned-scalars`,
 `negative/generic-closed-parameter-refusals` and
 `negative/for-iterable-missing-conformance`.
+
+### D1089 — A module value is typed before it is folded, in any order
+
+**The tour said** at [0130] that order does not matter in a module, and
+[1940] that one module value may name another written below it. The fold
+read a float literal's width from what checking its declaration had
+noted, so a value checked before the float it names took that float for
+unknown: an impossible conversion passed and ended in an internal defect
+at emission, and a range subtype's value that was known and in range was
+refused as unknown. Swapping the two lines swapped the outcome.
+
+**Chosen:** while module declarations are checked, a module binding the
+fold reaches is given its types first, by the check its own turn would
+make, which then is not made twice. A chain that comes back to a binding
+already being typed folds as it did, and [1940]'s report of a value
+worked out from itself is unchanged.
+
+**The alternative:** a pass typing every module initializer before any
+is folded. Typing one already folds others, for the bound of an array
+type and for a known conversion, so the order would only move. It is
+declined.
+
+**Pinned by** `negative/module-float-declared-below-is-known` and
+`runtime/module-float-declared-below-is-known`.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 

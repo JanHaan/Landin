@@ -2204,7 +2204,8 @@ end spill
 `mut` allows it, and never replaces the slice.
 
 A plain binding reads the payload in place, without copying it; `inout`
-adds permission to write it. On a pointer union's `ptr` arm,
+adds permission to write it, where the matched value may itself be
+written: `s` above is an `inout` parameter. On a pointer union's `ptr` arm,
 `ptr (sink p):` passes the pointer on to a `sink` parameter ([0910]), which
 consumes the matched place.
 
@@ -3268,6 +3269,11 @@ to annotate.
 Only `inout` and `sink` trigger the check, since they are the two ways a
 call can change the storage itself. While the view lives, you may still
 read the local, pass it `in` or pass it by pointer.
+
+A view needs no name to be in use. The slice a `for` walks is in use until
+the loop is done, so the loop's body does not pass what it walks `inout`
+unless it leaves the loop straight after; and a view given to a call is in
+use until the call returns, so its source is not passed `inout` beside it.
 
 An unchecked region ([1120]) does not turn the check off: origins and
 escape are among the checks that stay.

@@ -1,0 +1,9 @@
+class: negative
+summary: D1085 an inout payload binding needs a matched value that may be written, whatever the binding's own convention
+program: main.ldn
+codes: L0303, L0303, L0303, L0303, L0303, L0303, L0303
+constructs: 0430, 0440, 0680, 0690, 1160, 1900
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn
+status: 1

@@ -2668,10 +2668,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "A plain binding reads the payload in place, without copy"
-               & "ing it; `inout` adds permission to write it. On a pointe"
-               & "r union's `ptr` arm, `ptr (sink p):` passes the pointer "
-               & "on to a `sink` parameter ([0910]), which consumes the ma"
-               & "tched place."
+               & "ing it; `inout` adds permission to write it, where the m"
+               & "atched value may itself be written: `s` above is an `ino"
+               & "ut` parameter. On a pointer union's `ptr` arm, `ptr (sin"
+               & "k p):` passes the pointer on to a `sink` parameter ([091"
+               & "0]), which consumes the matched place."
                & LF
                & LF
                & "`describe` matches the `compass` of [0640], two directio"
@@ -4101,6 +4102,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e the two ways a call can change the storage itself. Whi"
                & "le the view lives, you may still read the local, pass it"
                & " `in` or pass it by pointer."
+               & LF
+               & LF
+               & "A view needs no name to be in use. The slice a `for` wal"
+               & "ks is in use until the loop is done, so the loop's body "
+               & "does not pass what it walks `inout` unless it leaves the"
+               & " loop straight after; and a view given to a call is in u"
+               & "se until the call returns, so its source is not passed `"
+               & "inout` beside it."
                & LF
                & LF
                & "An unchecked region ([1120]) does not turn the check off"
@@ -9687,12 +9696,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & " holds it [0430] [0450]. `addr` retains that place's wri"
                & "tability: its result is `ptr mut T` for a writable place"
                & " and `ptr T` for a read-only place. Taking an address do"
-               & "es not grant permission to modify immutable storage. The"
-               & " value's type is the place's type [0310], and the report"
-               & " names the place as well as the value, because which of "
-               & "the two is wrong is the reader's to decide. 'inc' and 'd"
-               & "ec' say what 'x += 1' says [0400], so each wants a place"
-               & " that may be written and an integer type.",
+               & "es not grant permission to modify immutable storage. Nor"
+               & " does matching: an `inout` payload binding of a match ar"
+               & "m [1220] is a writable name for storage of the matched v"
+               & "alue, so the value matched has to be a place that may be"
+               & " written by these same rules, and the binding is L0303 w"
+               & "here it is not (D1085). The value's type is the place's "
+               & "type [0310], and the report names the place as well as t"
+               & "he value, because which of the two is wrong is the reade"
+               & "r's to decide. 'inc' and 'dec' say what 'x += 1' says [0"
+               & "400], so each wants a place that may be written and an i"
+               & "nteger type.",
             when 1910 =>
                "Assigned before it is read. [0080] says a binding declar"
                & "ed with no value must be assigned before use and [0930] "
@@ -9866,8 +9880,32 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ll's recovery can `break` or `continue` past it (D291). "
                & "A deferred call on a return or failure edge is checked a"
                & "gainst what is live on that edge, and no later statement"
-               & " is a use there (D292). Volatile reference paths remain "
-               & "exempt [0850]."
+               & " is a use there (D292). A view no name holds is in use a"
+               & "s well, until what it was evaluated for is done with it "
+               & "(D1084). The source of a `for` is in use while the loop "
+               & "runs: passing what it views `inout` or `sink` in the bod"
+               & "y is refused when a path from the call reaches another i"
+               & "teration, or reads the loop's element where that names t"
+               & "he walked storage in place [1160]. An argument is in use"
+               & " until its call returns, so what it views is passed `ino"
+               & "ut` or `sink` neither to that call, in either order, nor"
+               & " to a call nested in a later argument; an operand of any"
+               & " other expression is held the same way while the operand"
+               & "s after it are evaluated. What such a view views is the "
+               & "storage under it: a binding an address or a range was ta"
+               & "ken of, an array of it lent as a slice [0570], and for a"
+               & " call result what each argument its `from` names views, "
+               & "with the binding that argument is rooted in when the arg"
+               & "ument is a record or an array or is passed `inout`. A po"
+               & "inter, slice or `any` given by value lends what it refer"
+               & "s to and not the binding that holds it; a reference only"
+               & " read out of a binding's field has other storage under i"
+               & "t and holds nothing here; and an address or range of one"
+               & " field holds no other field of the same binding where fi"
+               & "elds alone reach both. A module binding named through it"
+               & "s module, `store.cells`, is the binding its own name is "
+               & "[1420], here and in D149's test of one place passed twic"
+               & "e. Volatile reference paths remain exempt [0850]."
                & LF
                & LF
                & "A match payload alias keeps its selected storage live ev"
@@ -12668,6 +12706,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & " width and overflow checks. This records existing behavi"
                & "or; it adds no compile-time execution or unbounded integ"
                & "er type.",
+            when 1090 =>
+               "Chosen: the wider range belongs to `+ - * / %`, comparis"
+               & "on and unary minus alone. A conversion inside a module v"
+               & "alue takes only a value its target holds: an integer its"
+               & " integer type holds, zero or one for `bool`, and a value"
+               & " inside the bounds for a range subtype. A shift, `&`, `|"
+               & "`, `^`, `~` and a wrapping operator take only operands t"
+               & "heir operand type holds; a shift's amount stays under [0"
+               & "320]'s own rule. A value that is not held is L0300 at th"
+               & "e conversion or the operand, naming the value and the ty"
+               & "pe, and a binding that reads the refused one reports not"
+               & "hing more. A wide intermediate that only ordinary arithm"
+               & "etic and a comparison meet folds as D224 says.",
             when 189 =>
                "Chosen: [1795]'s `atom_union` admits one `pointer_type` "
                & "member beside its atom names, and a union that flattens "
@@ -14735,6 +14786,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ect the other representation's evidence. Ordinary atom-v"
                & "alue assignment, matching and equality still compare dec"
                & "laration identities, not encodings.",
+            when 1086 =>
+               "Chosen: a call with a recovery clause carries the callee"
+               & "'s subtype only when the recovery's answer carries a sub"
+               & "type too: the value written after `else`, or the final v"
+               & "alue of its block. The expression then carries the wider"
+               & " of the two when one contains the other, and none otherw"
+               & "ise, so the store that takes it owes [0660]'s check. A r"
+               & "ecovery block that gives no answer leaves the statement "
+               & "and takes nothing away. A fallback the compiler knows is"
+               & " still refused where it is written.",
+            when 1087 =>
+               "Chosen: a known `fixed` argument, written or deduced, is"
+               & " held to the bounds of the subtype its formal declares, "
+               & "in a generic routine and in a generic type, and one outs"
+               & "ide them is L0300 naming the value and the range.",
             when 236 =>
                "Chosen: it does not compose. A range subtype constrains "
                & "a binding, a parameter, a named return and a conversion,"
@@ -17111,6 +17177,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e backend replays D74's target-dependent payload placeme"
                & "nt and the payload element width for both module and fra"
                & "me storage; no offset or width enters the IR.",
+            when 1085 =>
+               "Chosen: an `inout` payload binding requires the matched "
+               & "value to be a place that may be written, by [1900]'s rul"
+               & "es for an assignment's target: a mutable binding, a name"
+               & "d return, an `inout` parameter, an element of writable s"
+               & "torage a `for` walks, or a place reached through a `mut`"
+               & " reference. Anything else is L0303 at the binding, namin"
+               & "g the matched value. A binding without `inout` reads the"
+               & " payload of any value, as before.",
             when 86 =>
                "Chosen: a top-level field of an ordinary struct may name"
                & " a laid-out child ordinary struct whose own fields are s"
@@ -18096,6 +18171,56 @@ package body Landin.Diagnostics.Citations.Texts is
                & " used later on the fall-through path is not in use. On t"
                & "he fall-through exit the cleanup runs after the handle's"
                & " last use, as it always did.",
+            when 1084 =>
+               "Chosen: a view is in use until what it was evaluated for"
+               & " is done with it, whether or not a name holds it."
+               & LF
+               & LF
+               & "- The source of a `for` is in use from the loop's head t"
+               & "o its last iteration. In the body, passing what it views"
+               & " `inout` or `sink` is L0315 when some path from the call"
+               & " reaches the next iteration, or reads the loop's element"
+               & " where the element names the walked storage in place [11"
+               & "60]. A call the loop leaves straight after, by `break`, "
+               & "`return` or a failure, is accepted, and so is one in `co"
+               & "mplete`, which runs when the walk is over."
+               & LF
+               & "- An argument is in use until its call returns. What it "
+               & "views is not passed `inout` or `sink` to the same call, "
+               & "in either order and whether the view is written in the c"
+               & "all or held by a name whose last use the call is; nor to"
+               & " a call nested in a later argument, since arguments are "
+               & "evaluated left to right [0410]. An operand of any other "
+               & "expression is held the same way while the operands after"
+               & " it are evaluated, and a slice or pointer read for a sel"
+               & "ection while its index is."
+               & LF
+               & "- What an unnamed view views is the storage under it: th"
+               & "e binding an address or a range was taken of, and an arr"
+               & "ay of it lent as a slice [0570]. A call result views wha"
+               & "t each argument its `from` names views, and the binding "
+               & "that argument is rooted in when the argument is a record"
+               & " or an array, as a container is, or is passed `inout`. A"
+               & " pointer, slice or `any` given by value lends what it re"
+               & "fers to, not the binding that holds it, so `first(xs)` i"
+               & "s no view of the binding `xs`. A reference only read out"
+               & " of a field of a binding has other storage under it and "
+               & "holds nothing, so a record is passed `inout` to an entry"
+               & " of an `any` the record holds. An address or a range of "
+               & "one field holds no other field of the same binding, wher"
+               & "e both are reached by fields alone."
+               & LF
+               & LF
+               & "[0830]'s rule for a view a name holds is unchanged, and "
+               & "still counts a reference read out of a field when the na"
+               & "me is read after the call."
+               & LF
+               & LF
+               & "A result whose `from` names a container is a view of the"
+               & " container even when what it returns is a reference the "
+               & "container only stored, as `vec.get` of a list of pointer"
+               & "s returns: the signature says so and the caller is held "
+               & "to it.",
             when 433 =>
                "Chosen: `match_binding` admits `sink` beside `inout`. On"
                & " a pointer union's `ptr` arm, `ptr (sink l):` binds the "
@@ -19207,6 +19332,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "il assigned, as an ordinary local's would be. It stays r"
                & "ead-only. Lowering already gave each such name a frame s"
                & "lot.",
+            when 1091 =>
+               "Chosen: the three rules read a selected callee's set fro"
+               & "m where the language puts it. A function a field or an e"
+               & "lement holds has the signature of that field's or elemen"
+               & "t's function type, which is known before any body is che"
+               & "cked. A concept entry reached through a constrained type"
+               & " parameter is selected in each ready instance before the"
+               & " sets are worked out, for every call of it, tried, recov"
+               & "ered or neither, as it already was for a recovered call."
+               & " L0329 then reports each as it reports a call of a named"
+               & " routine.",
             when 7 =>
                "Chosen: the written `true` and `false` literals select o"
                & "r skip an `if` arm for definite assignment [1910]. `if t"
@@ -21890,6 +22026,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & ".turns` itself"". A type that conforms to none of them, a"
                & " concept with no parents, and a key with more than one i"
                & "nput are noted as before.",
+            when 1088 =>
+               "Chosen: an entry's parameters and results keep their ran"
+               & "ge subtype, as a routine's do. Conformance compares it, "
+               & "so the base-typed function is L0341 and the report print"
+               & "s the bounds, `level: u8 range 0..100`; and a call throu"
+               & "gh a type parameter or an `any` checks its arguments and"
+               & " gives its results with the subtype, exactly as a call o"
+               & "f the routine does.",
             when 139 =>
                "Chosen: `fixed if expression then declaration* (elsif ex"
                & "pression then declaration*)* (else declaration*)? end if"
@@ -22481,6 +22625,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "de for no source, as the language server's hover and a p"
                & "ointer union's interned name are, is unqualified, as bef"
                & "ore.",
+            when 1089 =>
+               "Chosen: while module declarations are checked, a module "
+               & "binding the fold reaches is given its types first, by th"
+               & "e check its own turn would make, which then is not made "
+               & "twice. A chain that comes back to a binding already bein"
+               & "g typed folds as it did, and [1940]'s report of a value "
+               & "worked out from itself is unchanged.",
             when 267 =>
                "Chosen: `core/*` is the shared freestanding library. Eve"
                & "ry public interface of core/cmp, core/diag, core/fault, "

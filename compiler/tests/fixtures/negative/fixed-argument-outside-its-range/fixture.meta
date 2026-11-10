@@ -1,0 +1,9 @@
+class: negative
+summary: D1087 a fixed formal of a range subtype takes only a value inside the range, in a generic routine and a generic type
+program: main.ldn
+codes: L0300, L0300
+constructs: 0660, 1350, 1520
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/fixed-argument-outside-its-range/main.ldn
+status: 1

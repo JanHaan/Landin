@@ -1,0 +1,27 @@
+--  D1088: a range subtype written in a concept entry is part of the
+--  entry's signature, so a function over the plain base type does not
+--  have that signature [1240].
+percent: type = u8 range 0..100
+
+dimmer: type = concept (t: type)
+    set: (self: ptr mut t, level: percent) -> none
+    level: (self: ptr t) -> (value: percent)
+end dimmer
+
+lamp: type = struct
+    duty: u8
+end lamp
+
+lamp_set: (self: ptr mut lamp, level: u8) -> none =
+    self.val.duty = level
+end lamp_set
+
+lamp_level: (self: ptr lamp) -> (value: u8) =
+    value = self.val.duty
+end lamp_level
+
+lamp is dimmer (set: lamp_set, level: lamp_level)
+
+public main: () -> (code: i32) =
+    code = 0
+end main

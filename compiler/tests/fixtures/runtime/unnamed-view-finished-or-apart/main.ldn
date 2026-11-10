@@ -1,0 +1,80 @@
+--  D1084's accepted side: a loop left straight after the call, a field
+--  beside another field of the same record, a reference only read out of
+--  the record that is passed `inout`, and a value passed beside it.
+import core/vec
+import hosted/heap
+
+step: type = concept (t: type)
+    advance: (self: ptr t, inout target: counter) -> none
+end step
+
+by_two: type = struct
+    unused: u8
+end by_two
+
+pair: type = struct
+    items: [2]i32
+end pair
+
+counter: type = struct
+    cells: [4]i32
+    left: pair
+    right: pair
+    total: i32
+    how: any step
+end counter
+
+add_two: (self: ptr by_two, inout target: counter) -> none =
+    target.total += 2
+end add_two
+
+by_two is step (advance: add_two)
+
+twice: by_two = (unused: 0)
+
+bump: (inout c: counter) -> none =
+    c.total += 1
+end bump
+
+fill: (inout into: pair, from_these: []i32) -> none =
+    into.items[0] = from_these[0]
+    into.items[1] = from_these[1]
+end fill
+
+add: (inout total: i32, amount: i32) -> none =
+    total += amount
+end add
+
+run: () -> (n: i32) =
+    memory := heap.new()
+    mut c: counter = (cells: [1, 2, 3, 4], left: (items: [0, 0]),
+                      right: (items: [5, 6]), total: 0,
+                      how: any(addr twice))
+    --  The call is the last thing the loop does with the view.
+    for x in c.cells do
+        if x == 3 then
+            bump(c)
+            break
+        end if
+    end for
+    --  A range of one field beside another field passed `inout`.
+    fill(c.left, c.right.items[0..<2])
+    --  A field walked while another field is passed `inout`.
+    for x in c.left.items do
+        add(c.total, x)
+    end for
+    --  The policy the record holds, called with the record: the reference
+    --  was only read out of `c`, and other storage is under it.
+    how: any step = c.how
+    how.advance(c)
+    --  A value is copied before the call, so nothing views the list.
+    mut numbers := vec.new(item: i32)
+    vec.push(numbers, memory, c.total) else none
+    vec.push(numbers, memory, vec.get(numbers, 0) else 0) else none
+    n = (vec.get(numbers, 1) else 0) + c.cells[0] + c.left.items[1] + 21
+    vec.release(numbers, memory)
+end run
+
+public main: () -> (code: i32) =
+    code = run()
+end main

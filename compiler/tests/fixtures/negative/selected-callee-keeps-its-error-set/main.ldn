@@ -1,0 +1,62 @@
+--  D1091: a call whose callee is selected, a concept entry through a type
+--  parameter, a function a field holds or one an array holds, is held to
+--  [0960] and [0940] as a call of a named routine is: it is tried or
+--  recovered, and what `try` passes on is in the routine's declared set.
+closed: atom
+other: atom
+
+service: type = concept (item: type)
+    read: (self: ptr item) -> (value: i32) ! closed
+end service
+
+state: type = struct
+    value: i32
+end state
+
+read_value: (self: ptr state) -> (answer: i32) ! closed =
+    fail closed when self.val.value == 0
+    answer = self.val.value
+end read_value
+
+state is service (read: read_value)
+
+handler: type = struct
+    call: (n: i32) -> (r: i32) ! closed
+end handler
+
+checked: (n: i32) -> (r: i32) ! closed =
+    fail closed when n == 0
+    r = n
+end checked
+
+untried_entry: (item: type is service, value: ptr item)
+               -> (answer: i32) ! closed =
+    answer = item.read(value) -- error: neither tried nor recovered
+end untried_entry
+
+untried_field: (h: handler) -> (r: i32) ! closed =
+    r = h.call(1) -- error
+end untried_field
+
+untried_element: (table: [1]handler) -> (r: i32) ! closed =
+    r = table[0].call(1) -- error
+end untried_element
+
+undeclared_entry: (item: type is service, value: ptr item)
+                  -> (answer: i32) ! other =
+    answer = try item.read(value) -- error: `closed` is not in the set
+end undeclared_entry
+
+undeclared_field: (h: handler) -> (r: i32) ! other =
+    r = try h.call(1) -- error: `closed` is not in the set
+end undeclared_field
+
+public main: () -> (code: i32) =
+    backing: state = (value: 1)
+    h: handler = (call: checked)
+    code = untried_entry(addr backing) else 1
+    code += untried_field(h) else 1
+    code += untried_element([h]) else 1
+    code += undeclared_entry(addr backing) else 1
+    code += undeclared_field(h) else 1
+end main

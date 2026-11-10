@@ -1,0 +1,70 @@
+error[L0303]: this `inout` binding would write the matched value, which may not be written
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:20:17
+   |
+20 |         a(inout v): v = 2 -- error: `c` is an `in` parameter
+   |                 ^
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:19:11
+   |
+19 |     match c.k
+   |           ^ the matched value, which is read-only here
+  = note: [1900]/D1085: an `inout` payload binding needs what an assignment to the payload needs: a mutable binding, a named return, an `inout` parameter or a `mut` reference; bind it without `inout` to read it
+error[L0303]: this `inout` binding would write the matched value, which may not be written
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:28:17
+   |
+28 |         a(inout v): bump(v) -- error: `p` is read-only
+   |                 ^
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:27:11
+   |
+27 |     match p.val.k
+   |           ^^^^^ the matched value, which is read-only here
+  = note: [1900]/D1085: an `inout` payload binding needs what an assignment to the payload needs: a mutable binding, a named return, an `inout` parameter or a `mut` reference; bind it without `inout` to read it
+error[L0303]: this `inout` binding would write the matched value, which may not be written
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:29:21
+   |
+29 |         cells(inout items): items[0] = 2 -- error
+   |                     ^^^^^
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:27:11
+   |
+27 |     match p.val.k
+   |           ^^^^^ the matched value, which is read-only here
+  = note: [1900]/D1085: an `inout` payload binding needs what an assignment to the payload needs: a mutable binding, a named return, an `inout` parameter or a `mut` reference; bind it without `inout` to read it
+error[L0303]: this `inout` binding would write the matched value, which may not be written
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:36:17
+   |
+36 |         a(inout v): v = 4 -- error: `xs` is read-only
+   |                 ^
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:35:11
+   |
+35 |     match xs[0].k
+   |           ^^^^^ the matched value, which is read-only here
+  = note: [1900]/D1085: an `inout` payload binding needs what an assignment to the payload needs: a mutable binding, a named return, an `inout` parameter or a `mut` reference; bind it without `inout` to read it
+error[L0303]: this `inout` binding would write the matched value, which may not be written
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:42:21
+   |
+42 |             a(inout v): v = 5 -- error: an element of read-only storage
+   |                     ^
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:41:15
+   |
+41 |         match item.k
+   |               ^^^^ the matched value, which is read-only here
+  = note: [1900]/D1085: an `inout` payload binding needs what an assignment to the payload needs: a mutable binding, a named return, an `inout` parameter or a `mut` reference; bind it without `inout` to read it
+error[L0303]: this `inout` binding would write the matched value, which may not be written
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:73:17
+   |
+73 |         a(inout v): v = 6 -- error: `local` is not `mut`
+   |                 ^
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:72:11
+   |
+72 |     match local.k
+   |           ^^^^^ the matched value, which is read-only here
+  = note: [1900]/D1085: an `inout` payload binding needs what an assignment to the payload needs: a mutable binding, a named return, an `inout` parameter or a `mut` reference; bind it without `inout` to read it
+error[L0303]: this `inout` binding would write the matched value, which may not be written
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:78:17
+   |
+78 |         a(inout v): v = 7 -- error: an immutable module binding
+   |                 ^
+  --> ../tests/fixtures/negative/inout-payload-binding-of-read-only-subject/main.ldn:77:11
+   |
+77 |     match fixed_shape.k
+   |           ^^^^^^^^^^^ the matched value, which is read-only here
+  = note: [1900]/D1085: an `inout` payload binding needs what an assignment to the payload needs: a mutable binding, a named return, an `inout` parameter or a `mut` reference; bind it without `inout` to read it

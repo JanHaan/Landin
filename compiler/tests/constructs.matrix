@@ -173,7 +173,7 @@
 1490 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | The word `fixed`
 1500 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Choosing declarations by target
 1510 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Checking a layout at compile time
-1520 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A compile-time value parameter
+1520 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A compile-time value parameter
 1530 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Your own build switches
 1540 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | No compile-time execution
 1550 | tour | - | - | - | - | - | - | - | - | - | advisory | none | none | none | What the compiler produces
@@ -223,7 +223,7 @@
 1960 | spec | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A trap stops at the operation
 1970 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | The first hosted path has one entry shape
 1975 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | The selected hosted C boundaries
-1980 | spec | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Declared errors are an orthogonal payload-free atom outcome
+1980 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Declared errors are an orthogonal payload-free atom outcome
 1990 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | cortex-m | none | none | Firmware and machine directives have explicit target contracts
 1995 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A stack switch resumes another stack, and every frame checks its stack
 1996 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Each thread has its own instance of thread storage
