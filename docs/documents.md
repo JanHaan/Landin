@@ -152,6 +152,17 @@ module's own bare names, so a local that shares a routine's name can hide a
 missing consumer but never invent one. Its two lists in `check.py` are the
 routines the compiler starts and the generated tables.
 
+`refine explain` prints a paragraph of `tour.md` or `spec.md`, or a
+decision, from Ada that `python3 check.py --generate` writes. So an edit
+to the prose of either document, a reworded sentence included, needs that
+run, which rewrites
+`compiler/ada/src/diagnostics/landin-diagnostics-citations-texts.adb`; a
+changed title also rewrites `landin-diagnostics-citations.adb` beside it
+and `compiler/tests/constructs.matrix`. Until it is run the full
+`python3 check.py` fails with "the citations are stale". The regenerated
+sources are committed with the edit, and the compiler is rebuilt before
+any test of it runs, the tour's layout case among them.
+
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
 The documents selected in `docs/site/render_html.py` are published as reading

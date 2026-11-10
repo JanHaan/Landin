@@ -305,6 +305,23 @@ checkout. Read-only investigation may share a checkout when its source
 snapshot is clear; a run that changes build outputs must respect the
 existing build locks and its checkout's ownership.
 
+A harness may cut a child's worktree from another commit than the one its
+brief names: an agent's isolated worktree started from `origin/main` when
+the brief named the session branch's commit, and lacked the skill the
+brief said to read first. So the brief names the base commit and tells the
+child to check it before reading anything:
+
+```sh
+git merge-base HEAD BASE
+```
+
+When that prints the named base, the worktree holds it. When it prints
+another commit and the branch has no work yet, the child runs
+`git reset --hard BASE` in its own worktree and checks `git rev-parse
+HEAD`. A child that cannot move its branch stops and reports the commit
+it started from, so that the integrator takes its diff against that
+commit and not against the named base.
+
 Assign owned paths, branch, base commit and nonoverlapping decision,
 diagnostic and register ranges in the brief. Check the integration branch
 and active streams before allocating identities. Announce overlaps before
@@ -571,6 +588,34 @@ verification job, cross-host determinism included, to succeed or to be
 skipped under verified reuse or the event's scope; document and script
 checks must always succeed, and on a board-scope event so must every
 physical board leg.
+
+Read a gate run's verdict with `python3 scripts/gate_watch.py`, or from
+the run's complete job listing, every page of it, with each job name
+judged by its newest attempt:
+
+```sh
+gh api --paginate 'repos/{owner}/{repo}/actions/runs/RUN/jobs?filter=all&per_page=100'
+```
+
+The `filter=latest` listing is not that reading. After a rerun of failed
+jobs it holds only the jobs the last attempt ran: a run whose first
+attempt had 53 jobs listed 45 after three were rerun, without the eight
+that had succeeded and were not rerun, so it cannot show that every
+required job passed.
+
+Read a job's evidence from its attempt's log archive, a zip holding each
+step's own file:
+
+```sh
+gh api 'repos/{owner}/{repo}/actions/runs/RUN/attempts/N/logs' > logs.zip
+```
+
+`gh run view RUN --job JOB --log` and the jobs API's log can end early:
+they returned 1,880 lines of a `release` job, labelled `UNKNOWN STEP`, and
+stopped before its GDB step, which the archive held whole. A job that a
+rerun carried over has no log in the later attempt; its log is in the
+archive of the attempt that ran it, the job's `run_attempt` in the
+`filter=all` listing.
 
 Linux x86-64, Linux arm64 and Darwin host checks run the production C
 publication, private-directory and cancellation controls alongside formatter write
