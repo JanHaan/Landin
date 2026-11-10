@@ -6,6 +6,7 @@ with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
+with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
 with Landin.Configuration;
@@ -760,7 +761,12 @@ package body Landin.Stages.Lowering is
            Source (Context, Syn.Source_Of (Of_Tree));
          Lexeme : constant String :=
            Landin.Source.Slice (Snap, Syn.Where (Of_Tree, Node));
-         Decoded : Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
+         --  On the heap: a literal may be longer than a frame can hold.
+         type Unit_Buffer is access Landin.Tokens.Text.Code_Unit_Array;
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Landin.Tokens.Text.Code_Unit_Array, Unit_Buffer);
+         Decoded : Unit_Buffer :=
+           new Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
          Length : Natural;
          Fault : Landin.Tokens.Text.Problem;
          Fault_First, Fault_Last : Natural;
@@ -777,12 +783,16 @@ package body Landin.Stages.Lowering is
       begin
          Landin.Tokens.Text.Decode_View
            (Lexeme, Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal,
-            Encoding, Decoded, Length, Fault, Fault_First, Fault_Last);
+            Encoding, Decoded.all, Length, Fault, Fault_First, Fault_Last);
          if Fault not in Landin.Tokens.Text.Well_Formed then
             raise Landin.Compiler_Defect with
               "a malformed text literal reached lowering";
          end if;
-         return Decoded (1 .. Length);
+         return Units : constant Landin.Tokens.Text.Code_Unit_Array :=
+           Decoded (1 .. Length)
+         do
+            Free (Decoded);
+         end return;
       end Text_Units;
 
       function Text_Element
@@ -803,21 +813,23 @@ package body Landin.Stages.Lowering is
          Units : constant Landin.Tokens.Text.Code_Unit_Array :=
            Text_Units (Of_Tree, Node);
          Element : constant Ty.Scalar_Name := Text_Element (Of_Tree, Node);
-         Key : String
-           (1 .. 1 + Units'Length * (if Element = Ty.U16 then 2 else 1));
          Cursor : Positive := 2;
       begin
-         Key (1) := (if Element = Ty.U16 then Character'Val (16) else
-                       Character'Val (8));
-         for Unit of Units loop
-            if Element = Ty.U16 then
-               Key (Cursor) := Character'Val (Natural (Unit) / 256);
+         --  Built in the result, not on this frame.
+         return Key : String
+           (1 .. 1 + Units'Length * (if Element = Ty.U16 then 2 else 1))
+         do
+            Key (1) := (if Element = Ty.U16 then Character'Val (16) else
+                          Character'Val (8));
+            for Unit of Units loop
+               if Element = Ty.U16 then
+                  Key (Cursor) := Character'Val (Natural (Unit) / 256);
+                  Cursor := Cursor + 1;
+               end if;
+               Key (Cursor) := Character'Val (Natural (Unit) mod 256);
                Cursor := Cursor + 1;
-            end if;
-            Key (Cursor) := Character'Val (Natural (Unit) mod 256);
-            Cursor := Cursor + 1;
-         end loop;
-         return Key;
+            end loop;
+         end return;
       end Text_Key;
 
       function Character_Magnitude
@@ -860,22 +872,27 @@ package body Landin.Stages.Lowering is
          Key : constant String := Text_Key (Of_Tree, Node);
          Units : constant Landin.Tokens.Text.Code_Unit_Array :=
            Text_Units (Of_Tree, Node);
-         Image : Ty.Folded_Array (1 .. Units'Length + 1);
+         type Image_Buffer is access Ty.Folded_Array;
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Ty.Folded_Array, Image_Buffer);
+         Held : Image_Buffer;
          Made : IR.Item_Id;
       begin
          if Text_Data.Contains (Key) then
             return;
          end if;
+         Held := new Ty.Folded_Array (1 .. Units'Length + 1);
          for Index in Units'Range loop
-            Image (Index) := Ty.Folded (Units (Index));
+            Held (Index) := Ty.Folded (Units (Index));
          end loop;
-         Image (Image'Last) := 0;
+         Held (Held'Last) := 0;
          Made := IR.Add_Item
            (Unit.all, IR.Datum, Res.No_Declaration, Ty.Fixed_Array, Site);
          IR.Set_Array
            (Unit.all, Made, Text_Element (Of_Tree, Node),
-            IR.Element_Total (Image'Length));
-         IR.Set_Array_Image (Unit.all, Made, Image);
+            IR.Element_Total (Held'Length));
+         IR.Set_Array_Image (Unit.all, Made, Held.all);
+         Free (Held);
          IR.Mark_Read_Only (Unit.all, Made);
          Text_Data.Insert (Key, Made);
       end Register_Text_Datum;
