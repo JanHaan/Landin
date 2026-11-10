@@ -42,6 +42,13 @@ A run that itself reused a pass skipped its lanes, so neither rule ever
 takes it as a full pass.  Manual dispatch always runs the lanes.  Anything
 uncertain runs every lane.
 
+GitHub is asked in requests it answers: a run's jobs thirty to a page,
+since a hundred-job page of a run holding 193 jobs was answered 502, and a
+server error is asked again a bounded number of times.  When a request
+still fails, `reuse` says that it could not ask and which request failed,
+as a warning annotation on the run, and every lane runs: a check that
+cannot ask has no pass to point at.
+
     key [REV]                       print the key of REV, HEAD by default
     same A B                        succeed only when A and B have one key
     reuse WORKFLOW JOB ...          print reuse=true or reuse=false, and why;
@@ -67,11 +74,21 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 
 DECLARATION = re.compile(r"^Gate: explanatory$", re.M)
 TRUSTED = ("OWNER", "MEMBER", "COLLABORATOR")
 MAX_AGE = timedelta(days=7)
+#  Jobs to a page of a run's listing.  GitHub answered 502 for hundred-job
+#  pages once a run held 193 jobs over four attempts, and one such answer
+#  ended a reuse check; thirty-job pages answered.
+PAGE = 30
+#  Times one request is made while GitHub answers a server error, and the
+#  seconds before the second; each later wait is one PAUSE longer.
+TRIES = 4
+PAUSE = 2.0
 
 #  Exact repository paths.  scripts/tests/test_gate_inputs.py names every
 #  file that mentions one of these by name, so a new reader is a decision.
@@ -154,21 +171,21 @@ def recent_push(run, now):
     return timedelta(0) <= now - started <= MAX_AGE
 
 
-def run_jobs(api, run_id, pages=20):
+def run_jobs(api, run_id, pages=60):
     """RUN_ID's jobs, the latest attempt of each by name, as one listing.
 
     GitHub's `filter=latest` answered three of one run's 47 jobs, with a
     `total_count` of three, on its first attempt, so a full run read that
     way looks incomplete and its pass is not reused.  `filter=all` lists
-    every attempt's jobs, a hundred to a page; each page is read until the
+    every attempt's jobs, PAGE to a page; each page is read until the
     listing's own total is reached, and the latest attempt of each job is
     kept.  A listing that ends short of its total is returned short, so
     `complete` refuses it.
     """
     jobs, total = [], None
     for page in range(1, pages + 1):
-        listing = api("actions/runs/%d/jobs?filter=all&per_page=100&page=%d"
-                      % (run_id, page))
+        listing = api("actions/runs/%d/jobs?filter=all&per_page=%d&page=%d"
+                      % (run_id, PAGE, page))
         total = listing.get("total_count")
         batch = listing.get("jobs", [])
         jobs.extend(batch)
@@ -293,7 +310,36 @@ def decide(event_name, event, api, key_of, checked_out, workflow, required, now)
     return False, "; ".join(reasons) or "no recent push run ran every lane"
 
 
-def github(path):
+class Unanswered(Exception):
+    """A request GitHub did not answer; the text names the request."""
+
+
+def asked(path, fetch, tries=TRIES, pause=PAUSE, sleep=time.sleep):
+    """FETCH(PATH)'s answer, asked again while GitHub answers a server error.
+
+    A 5xx status is GitHub's own failure and often passes: it is asked up
+    to TRIES times.  Any other failure to get an answer is not repeated.
+    Either way the request that failed is named, for the run's log.
+    """
+    for attempt in range(1, tries + 1):
+        try:
+            return fetch(path)
+        except urllib.error.HTTPError as error:
+            said = "HTTP %d %s" % (error.code, error.reason)
+            if not 500 <= error.code <= 599:
+                raise Unanswered("GET %s: %s" % (path, said)) from error
+            if attempt == tries:
+                raise Unanswered("GET %s: %s, asked %d times"
+                                 % (path, said, tries)) from error
+            print("gate_inputs: GET %s: %s; asking again (%d of %d)"
+                  % (path, said, attempt + 1, tries), file=sys.stderr)
+            sleep(pause * attempt)
+        except (urllib.error.URLError, TimeoutError, ValueError) as error:
+            raise Unanswered("GET %s: %s: %s" % (
+                path, type(error).__name__, error)) from error
+
+
+def fetch_github(path):
     url = "%s/repos/%s/%s" % (os.environ["GITHUB_API_URL"],
                               os.environ["GITHUB_REPOSITORY"], path)
     request = urllib.request.Request(url, headers={
@@ -301,6 +347,10 @@ def github(path):
         "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)
+
+
+def github(path):
+    return asked(path, fetch_github)
 
 
 def checkout():
@@ -577,6 +627,13 @@ def main(argv):
                     os.environ["GITHUB_EVENT_NAME"], event, github,
                     fetched_key, checked_out, argv[1], argv[2:], now)
                 why += "; " + explanatory_why
+        except Unanswered as error:
+            #  Not a finding about this tree: the check never got to ask.
+            reuse = False
+            why = ("could not ask GitHub whether a pass may be reused, so "
+                   "every lane runs (%s)" % error)
+            print("::warning title=The reuse check could not ask GitHub::"
+                  + why, file=sys.stderr)
         except Exception as error:  # noqa: BLE001 -- any doubt runs everything
             reuse, why = False, "%s: %s" % (type(error).__name__, error)
         print("gate_inputs: " + why, file=sys.stderr)
