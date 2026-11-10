@@ -106,8 +106,8 @@ package Landin.Targets is
 
    --  Whether FACTS describes a microcontroller, whose programs are
    --  firmware: a device profile, a firmware entry, placement, vector
-   --  slots and a derived linker script, and no hosted system.  Cortex-M
-   --  and RV32 are; what is Thumb's alone asks for Cortex_M0 itself.
+   --  slots and a derived linker script, and no hosted system.  Cortex-M,
+   --  RV32 and Xtensa are; what is Thumb's alone asks for Cortex_M0 itself.
    function Is_Firmware (Facts : Target_Facts) return Boolean
      is (Architecture_Of (Facts) in Cortex_M0 | RV32 | Xtensa);
 

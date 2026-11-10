@@ -8280,14 +8280,17 @@ SERVER_TARGET_SENTENCES = (
     ("`target` is any name `--target=` takes:", "described"),
     ("`firmwareEntry` is a nonempty routine name for a firmware target:",
      "firmware"),
+    ("A device description's profile applies on every firmware target:",
+     "firmware"),
 )
 
 
 def check_server_targets(full_run):
     """The server guide's target lists are the compiler's.
 
-    docs/server.md names every target a client may select and the firmware
-    targets `firmwareEntry` applies to, and nothing read those sentences:
+    docs/server.md names every target a client may select, the firmware
+    targets `firmwareEntry` applies to and the ones a device description's
+    profile applies on, and nothing read those sentences:
     a target added to the compiler would be missing from them until a
     reader noticed.  The first is held to the selection package's names,
     the second to the firmware corpus's targets in scripts/emit_manifest.py.
