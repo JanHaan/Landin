@@ -810,9 +810,18 @@ runner. The control is the runner's job-started hook,
 which accepts only a push to `main`, a schedule on `main` or a dispatch
 from a branch by the maintainer, each of `gate.yml` at the run's own ref
 with no pull request in its environment or payload. GitHub fails a job
-whose pre-job script exits nonzero before any of its steps
+whose pre-job script exits nonzero
 ([running scripts before or after a job](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/run-scripts)),
-so nothing from a refused job's checkout runs on the rig. A second layer is
+but a failed job is not a job none of whose steps ran: a step under
+`if: always()` and an action's `pre:` entry have conditions a failed
+earlier step can satisfy. A refusal therefore does not rest on the exit
+status. The hook removes the actions the runner downloaded for the job and
+kills the runner's worker process for it before exiting, and no step runs
+without the worker, so nothing from a refused job's checkout runs on the
+rig. The hook's controls run that against a stand-in worker; a refused job
+on the deployed runner has not been observed since the change, and the
+[hook's page](../environments/rig-runner/README.md#what-a-refusal-does)
+gives the one experiment that does. A second layer is
 the repository's setting that a fork's pull request waits for approval
 before its workflows run, set for all external contributors as GitHub
 recommends. The board jobs read no
