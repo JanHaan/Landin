@@ -226,7 +226,7 @@ package body Landin.Tests.Newcomer_Suite is
          Landin.Testing.Check
            (Item, Contains (Report (Result),
               "error[L0500]: no compiler driver to link linux-arm64 was"
-              & " found; looked for aarch64-linux-gnu-gcc,"
+              & " found; looked, in this order, for aarch64-linux-gnu-gcc,"
               & " aarch64-redhat-linux-gcc and aarch64-unknown-linux-gnu-gcc")
             and then Contains (Report (Result),
               "apt install gcc-aarch64-linux-gnu")

@@ -1785,8 +1785,9 @@ A firmware link takes `linker.library`, `linker.directory` and `-L` as a
 hosted link does, each library a static archive `libNAME.a` (D923), so none
 of them raises this code there.
 
-On Linux the message lists every driver looked for, the target's own GCC
-and the names Debian, Ubuntu and Fedora give it, and the note says which
+On Linux the message lists every driver looked for, in the order `refine`
+tries them, the target's own GCC and the names Debian, Ubuntu and Fedora
+give it, and the note says which
 package to install, through `nix-shell -p gcc` on Nix (D364), and that
 `refine check`, `fmt` and `lsp`, and `compile --emit=asm` or `--emit=ir`,
 need no C driver (D384). The program's own refusals come first, so a static

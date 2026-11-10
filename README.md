@@ -117,13 +117,23 @@ This `refine` reads the clone's library, so put its directory on your
 
 Linking on Linux uses GCC as the linker driver, even when the program
 links no C library. `refine run` links, so it needs GCC too. The GCC is
-the one your distribution installs:
+the one your distribution installs. `refine` looks for it under these
+names, in this order, and runs the first one it can start, so any one of
+them is enough:
 
-- `x86_64-linux-gnu-gcc` on Debian and Ubuntu;
-- `x86_64-redhat-linux-gcc` on Fedora;
-- or `gcc`, which `nix-shell -p gcc` provides on NixOS.
+- `x86_64-pc-linux-gnu-gcc`, the name a GCC built from its own sources
+  takes;
+- `x86_64-linux-gnu-gcc`, on Debian and Ubuntu;
+- `x86_64-redhat-linux-gcc`, on Fedora;
+- `gcc`, which `nix-shell -p gcc` provides on NixOS.
 
-Without one, `refine` says what to install. Checking, formatting, the
+On an arm64 machine the names are `aarch64-linux-gnu-gcc`,
+`aarch64-redhat-linux-gcc`, `aarch64-unknown-linux-gnu-gcc` and `gcc`, in
+that order. `--toolchain=NAME` names a driver yourself, and then `refine`
+tries that one alone.
+
+Without one, `refine` names each driver it looked for, in the same order,
+and says what to install. Checking, formatting, the
 language server and emitting assembly or the intermediate representation
 (IR) need none.
 
