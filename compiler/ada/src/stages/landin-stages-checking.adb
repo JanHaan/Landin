@@ -34217,7 +34217,12 @@ package body Landin.Stages.Checking is
            Source (Context, Syn.Source_Of (Of_Tree));
          Where : constant Landin.Source.Span := Syn.Where (Of_Tree, Node);
          Lexeme : constant String := Landin.Source.Slice (Snap, Where);
-         Units : Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
+         --  Where the units go while the spelling is judged: nothing here
+         --  reads them, and a literal may be longer than a frame can hold.
+         type Unit_Buffer is access Landin.Tokens.Text.Code_Unit_Array;
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Landin.Tokens.Text.Code_Unit_Array, Unit_Buffer);
+         Units : Unit_Buffer;
          Length, Fault_First, Fault_Last : Natural;
          Fault : Landin.Tokens.Text.Problem;
          Encoding : Landin.Tokens.Text.Literal_Encoding;
@@ -34294,9 +34299,11 @@ package body Landin.Stages.Checking is
             elsif Descriptor.View = Ty.Utf16_View
             then Landin.Tokens.Text.UTF16_Units
             else Landin.Tokens.Text.UTF8_Units);
+         Units := new Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
          Landin.Tokens.Text.Decode_View
            (Lexeme, Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal,
-            Encoding, Units, Length, Fault, Fault_First, Fault_Last);
+            Encoding, Units.all, Length, Fault, Fault_First, Fault_Last);
+         Free (Units);
          if Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant then
             Bad.Report
               (Item    => Bad.Type_Mismatch,

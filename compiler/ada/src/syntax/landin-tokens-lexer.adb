@@ -1,4 +1,5 @@
 with Ada.Characters.Handling;
+with Ada.Unchecked_Deallocation;
 
 with Landin.Tokens.Text;
 
@@ -532,6 +533,57 @@ package body Landin.Tokens.Lexer is
          return Cursor - From;
       end Quote_Run;
 
+      --  Where a literal's decoded bytes go while its spelling is
+      --  judged: nothing reads them back.  On the heap, kept from one
+      --  literal to the next and grown to the longest, because a literal
+      --  may carry megabytes and a frame may not.
+      type Buffer is access String;
+      procedure Free is new Ada.Unchecked_Deallocation (String, Buffer);
+      Scratch : Buffer;
+
+      procedure Reserve (Length : Natural);
+
+      procedure Reserve (Length : Natural) is
+      begin
+         if Scratch = null or else Scratch'Length < Length then
+            Free (Scratch);
+            Scratch := new String (1 .. Natural'Max (Length, 256));
+         end if;
+      end Reserve;
+
+      --  D1077: the first bidirectional control in a comment or literal
+      --  that spans First .. Stop, if it holds one.  U+061C, U+200E,
+      --  U+200F, U+202A .. U+202E and U+2066 .. U+2069 reorder what an
+      --  editor or a review page shows around them, so the text a person
+      --  reads can end somewhere other than where the scanner ends it.
+      --  One observation for each comment or literal, at its first.
+      procedure Note_Bidirectional (First, Stop : Natural);
+
+      procedure Note_Bidirectional (First, Stop : Natural) is
+         At_Byte : Natural := First;
+
+         function Byte (Offset : Natural) return Natural
+           is (Character'Pos (Text (At_Byte + Offset)));
+      begin
+         while At_Byte < Stop loop
+            if Byte (0) = 16#D8# and then Byte (1) = 16#9C# then
+               Complain (Bidirectional_Control, At_Byte, At_Byte + 1);
+               return;
+            elsif Byte (0) = 16#E2# and then At_Byte + 2 <= Stop
+              and then
+                ((Byte (1) = 16#80#
+                  and then Byte (2) in 16#8E# .. 16#8F# | 16#AA# .. 16#AE#)
+                 or else
+                   (Byte (1) = 16#81#
+                    and then Byte (2) in 16#A6# .. 16#A9#))
+            then
+               Complain (Bidirectional_Control, At_Byte, At_Byte + 2);
+               return;
+            end if;
+            At_Byte := At_Byte + 1;
+         end loop;
+      end Note_Bidirectional;
+
       procedure Scan_Quoted;
 
       --  The quote-delimited literals: character [0250], text [0260] and
@@ -589,17 +641,18 @@ package body Landin.Tokens.Lexer is
          end loop;
 
          Emit (Refused, First, Position - 1);
+         Note_Bidirectional (First, Position - 1);
 
          if Closed then
             if Refused = Text_Literal then
                declare
-                  Lexeme : constant String := Text (First .. Position - 1);
-                  Bytes : String (1 .. Lexeme'Length);
+                  Lexeme : String renames Text (First .. Position - 1);
                   Length, Fault_First, Fault_Last : Natural;
                   Fault : Landin.Tokens.Text.Problem;
                begin
+                  Reserve (Lexeme'Length);
                   Landin.Tokens.Text.Decode
-                    (Lexeme, Bytes, Length, Fault,
+                    (Lexeme, Scratch (1 .. Lexeme'Length), Length, Fault,
                      Fault_First, Fault_Last);
                   if Fault not in Landin.Tokens.Text.Well_Formed
                                     | Landin.Tokens.Text.
@@ -628,13 +681,13 @@ package body Landin.Tokens.Lexer is
                end;
             elsif Refused = Raw_Literal then
                declare
-                  Lexeme : constant String := Text (First .. Position - 1);
-                  Bytes : String (1 .. Lexeme'Length);
+                  Lexeme : String renames Text (First .. Position - 1);
                   Length, Fault_First, Fault_Last : Natural;
                   Fault : Landin.Tokens.Text.Problem;
                begin
+                  Reserve (Lexeme'Length);
                   Landin.Tokens.Text.Decode_Raw
-                    (Lexeme, Bytes, Length, Fault,
+                    (Lexeme, Scratch (1 .. Lexeme'Length), Length, Fault,
                      Fault_First, Fault_Last);
                   if Fault not in Landin.Tokens.Text.Well_Formed then
                      Complain
@@ -699,6 +752,7 @@ package body Landin.Tokens.Lexer is
                --  One never closed is still one piece, to the end of the
                --  file, so the bytes after its opener are kept too.
                Keep (Block_Comment, First, Position - 1);
+               Note_Bidirectional (First, Position - 1);
 
                if Depth > 0 then
                   --  The opener and the end of the file are the two places
@@ -734,6 +788,7 @@ package body Landin.Tokens.Lexer is
             end loop;
 
             Keep ((if Doc then Doc_Comment else Line_Comment), First, Stop);
+            Note_Bidirectional (First, Stop);
             if Stop < Position - 1 then
                Keep (Blanks, Stop + 1, Position - 1);
             end if;
@@ -908,6 +963,7 @@ package body Landin.Tokens.Lexer is
          end;
       end loop;
 
+      Free (Scratch);
       Emit (End_Of_Input, Last + 1, Last);
    end Lex;
 

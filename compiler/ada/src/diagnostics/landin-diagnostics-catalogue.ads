@@ -270,6 +270,8 @@ package Landin.Diagnostics.Catalogue is
       Literal_Rounded_Away,
       --  D949: text made of bytes with no scan outside `unchecked`.
       Unvalidated_Text_Checked,
+      --  D1077: a bidirectional control in a comment or a literal.
+      Bidirectional_Control,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -1210,6 +1212,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D949: compiler.utf8_unvalidated outside an unchecked"
                    & " region")),
+      Bidirectional_Control =>
+        (Code => "L0628", Level => Warning, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D1077: a bidirectional control character in a comment"
+                   & " or a literal")),
       --  The backend's reports need not have a source. A missing entry uses an
       --  entry-module anchor when available, but permits a point in an empty
       --  file or a source-free fallback. L0500 is the one diagnostic here a

@@ -1,0 +1,31 @@
+warning[L0628]: a bidirectional control character is written here, and can show this text in another order than it is read in
+  --> ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn:4:20
+  |
+4 | --  a line comment \xE2\x80\xAE with an override
+  |                    ^^^^^^^^^^^^
+  = note: D1077: remove it, or write its escape in a text or character literal, `\u{202E}` where text is meant and `\xE2\x80\xAE` where bytes are; a raw literal and a comment have no escape
+warning[L0628]: a bidirectional control character is written here, and can show this text in another order than it is read in
+  --> ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn:5:21
+  |
+5 | --( a block comment \xE2\x81\xA6 with two \xE2\x81\xA9 isolates )--
+  |                     ^^^^^^^^^^^^
+  = note: D1077: remove it, or write its escape in a text or character literal, `\u{202E}` where text is meant and `\xE2\x80\xAE` where bytes are; a raw literal and a comment have no escape
+warning[L0628]: a bidirectional control character is written here, and can show this text in another order than it is read in
+  --> ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn:6:21
+  |
+6 | shown: []u8 = "admin\xE2\x80\xAE\xE2\x81\xA6--"
+  |                     ^^^^^^^^^^^^
+  = note: D1077: remove it, or write its escape in a text or character literal, `\u{202E}` where text is meant and `\xE2\x80\xAE` where bytes are; a raw literal and a comment have no escape
+warning[L0628]: a bidirectional control character is written here, and can show this text in another order than it is read in
+  --> ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn:7:14
+  |
+7 | mark: u32 = '\xE2\x80\x8F'
+  |              ^^^^^^^^^^^^
+  = note: D1077: remove it, or write its escape in a text or character literal, `\u{202E}` where text is meant and `\xE2\x80\xAE` where bytes are; a raw literal and a comment have no escape
+warning[L0628]: a bidirectional control character is written here, and can show this text in another order than it is read in
+  --> ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn:8:18
+  |
+8 | raw: []u8 = """as\xE2\x80\xAEwritten"""
+  |                  ^^^^^^^^^^^^
+  = note: D1077: remove it, or write its escape in a text or character literal, `\u{202E}` where text is meant and `\xE2\x80\xAE` where bytes are; a raw literal and a comment have no escape
+refine: checked ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

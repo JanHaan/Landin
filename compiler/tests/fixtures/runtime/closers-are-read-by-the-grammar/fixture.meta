@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1074 a program the grammar derives is read by the grammar: a function's `end` deeper than its header before a routine closed at the margin, an `end` ending its line under an indented signature, and a bare block's `end` before an `if`, `match` or `unchecked` statement all close what they close, and the program runs
+constructs: 1080, 1120, 1750, 1800, 1810
+program: main.ldn
+status: 127
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

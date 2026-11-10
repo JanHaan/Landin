@@ -12,6 +12,8 @@ with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics.Lexical;
 with Landin.Diagnostics;
+with Landin.Driver;
+with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Source.Names;
 with Landin.Source.Sets;
@@ -19,6 +21,7 @@ with Landin.Source;
 with Landin.Stages.Syntax;
 with Landin.Stages;
 with Landin.Targets;
+with Landin.Testing.Fakes;
 with Landin.Testing.Layout;
 with Landin.Tokens.Spacing;
 with Landin.Tokens.Lexer;
@@ -522,6 +525,79 @@ package body Landin.Tests.Lexer_Suite is
       Check ("1.5e3x", Landin.Tokens.Malformed_Float);
       Check ("0x1.8p3q", Landin.Tokens.Malformed_Float);
    end Numbers_Run_To_The_End_Of_Their_Spelling;
+
+   --  A literal is decoded where a frame cannot overflow: a table or an
+   --  image written as text is megabytes, and the scan once copied each
+   --  literal twice onto the stack, which ended the compiler at half a
+   --  mebibyte of data with "host resources exhausted".
+   procedure Long_Literals_Are_Scanned
+     (Item : in out Landin.Testing.Context);
+
+   procedure Long_Literals_Are_Scanned
+     (Item : in out Landin.Testing.Context)
+   is
+      Size : constant := 12 * 2 ** 20;
+      Text : Ada.Strings.Unbounded.Unbounded_String;
+   begin
+      Ada.Strings.Unbounded.Append (Text, "blob: []u8 = """);
+      Ada.Strings.Unbounded.Append
+        (Text, Ada.Strings.Unbounded."*" (Size / 4, "\x41"));
+      Ada.Strings.Unbounded.Append
+        (Text, """" & ASCII.LF & "raw: []u8 = """"""");
+      Ada.Strings.Unbounded.Append
+        (Text, Ada.Strings.Unbounded."*" (Size, "a"));
+      Ada.Strings.Unbounded.Append (Text, """""""" & ASCII.LF);
+      declare
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+      begin
+         Landin.Tokens.Lexer.Lex
+           (Sources.Get
+              (Sources.Add
+                 ("long.ldn", Ada.Strings.Unbounded.To_String (Text))),
+            Names, Stream);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Stream), 0,
+            "two literals of twelve mebibytes each scan without a fault");
+         Landin.Testing.Check
+           (Item, Natural (Landin.Tokens.Count (Stream)) in 11 .. 20,
+            "and are one token each");
+      end;
+   end Long_Literals_Are_Scanned;
+
+   --  The same literal through a whole check: the checker judges its
+   --  spelling against its context and lowering registers its bytes, and
+   --  each once held the decoded units on its frame.  768 KiB of data is
+   --  past where the check ended with status 71.
+   procedure A_Long_Literal_Is_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Long_Literal_Is_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      Size : constant := 768 * 2 ** 10;
+      Text : Ada.Strings.Unbounded.Unbounded_String;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Arguments : Landin.Platform.Path_List;
+      Ran : Landin.Driver.Outcome;
+   begin
+      Ada.Strings.Unbounded.Append (Text, "blob: []u8 = """);
+      Ada.Strings.Unbounded.Append
+        (Text, Ada.Strings.Unbounded."*" (Size, "\x41"));
+      Ada.Strings.Unbounded.Append
+        (Text, """" & ASCII.LF
+               & "length: () -> (r: usize) =" & ASCII.LF
+               & "    r = lenof blob" & ASCII.LF
+               & "end length" & ASCII.LF);
+      Host.Add_File ("blob.ldn", Ada.Strings.Unbounded.To_String (Text));
+      Arguments.Append ("blob.ldn");
+      Ran := Landin.Driver.Execute (Arguments, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Ran.Status, Landin.Driver.Status_Success,
+         "a module holding 768 KiB in one text literal is accepted");
+   end A_Long_Literal_Is_Checked;
 
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context);
 
@@ -1703,6 +1779,12 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "raw literal decoding",
          Raw_Literal_Decoding'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "long literals are scanned",
+         Long_Literals_Are_Scanned'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "a long literal is checked",
+         A_Long_Literal_Is_Checked'Access);
       Landin.Testing.Register
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);

@@ -1,0 +1,9 @@
+class: negative
+summary: D1074 a recovery clause, a bare block and an anonymous function each left without its `end` as the last construct of a routine are reported never closed, where the function's own closer was once taken for theirs and the routine compiled with the rest of its body inside them
+program: program.ldn
+codes: L0104, L0104, L0104
+constructs: 1010, 1030, 1080, 1800
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/a-forgotten-end-is-not-the-functions/program.ldn
+expect: expected.txt
+status: 1

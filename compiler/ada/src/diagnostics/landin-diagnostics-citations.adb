@@ -2099,9 +2099,20 @@ package body Landin.Diagnostics.Citations is
             when 260 =>
                "A parse reports a mistake once, inside the construct it "
                & "is in",
+            when 1074 =>
+               "A program the grammar derives is read by the grammar alo"
+               & "ne",
             when 261 =>
                "A refused statement is reported as the smallest change t"
                & "hat mends it",
+            when 1077 =>
+               "A bidirectional control in a comment or a literal is war"
+               & "ned about",
+            when 1075 =>
+               "Removing one of two brackets is a guess",
+            when 1076 =>
+               "The repair search reads a routine for its first refused "
+               & "line alone",
             when 264 =>
                "Hosted system identity selects libc records, independent"
                & "ly of C transport",
@@ -3896,7 +3907,15 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 260 =>
                "Decisions: The toolchain, C and the machine",
+            when 1074 =>
+               "Decisions: The toolchain, C and the machine",
             when 261 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1077 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1075 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1076 =>
                "Decisions: The toolchain, C and the machine",
             when 264 =>
                "Decisions: The toolchain, C and the machine",
@@ -5771,9 +5790,21 @@ package body Landin.Diagnostics.Citations is
             when 260 =>
                "https://www.701.dev/spec.html#d260-a-parse-reports-a-mis"
                & "take-once-inside-the-construct-it-is-in",
+            when 1074 =>
+               "https://www.701.dev/spec.html#d1074-a-program-the-gramma"
+               & "r-derives-is-read-by-the-grammar-alone",
             when 261 =>
                "https://www.701.dev/spec.html#d261-a-refused-statement-i"
                & "s-reported-as-the-smallest-change-that-mends-it",
+            when 1077 =>
+               "https://www.701.dev/spec.html#d1077-a-bidirectional-cont"
+               & "rol-in-a-comment-or-a-literal-is-warned-about",
+            when 1075 =>
+               "https://www.701.dev/spec.html#d1075-removing-one-of-two-"
+               & "brackets-is-a-guess",
+            when 1076 =>
+               "https://www.701.dev/spec.html#d1076-the-repair-search-re"
+               & "ads-a-routine-for-its-first-refused-line-alone",
             when 264 =>
                "https://www.701.dev/spec.html#d264-hosted-system-identit"
                & "y-selects-libc-records-independently-of-c-transport",

@@ -1818,6 +1818,9 @@
       "mode": "refuse",
       "reason": "Firmware has no system clock and no C runtime."
     },
+    "runtime/closers-are-read-by-the-grammar": {
+      "mode": "execute"
+    },
     "runtime/cmp-bytes-ordered": {
       "mode": "execute"
     },

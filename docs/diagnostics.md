@@ -409,6 +409,20 @@ value := "never closed
 unclosed_raw: []u8 = """"never closed"""
 ```
 
+### L0628
+
+A comment or a literal holds a bidirectional control character: U+061C,
+U+200E, U+200F, U+202A to U+202E or U+2066 to U+2069 (D1077). These reorder
+what an editor, a terminal or a review page shows around them, so a comment
+can appear to end before code that is in fact inside it, and a text literal
+can appear to hold something other than its bytes. The program means what
+its bytes say and is accepted; the warning is given once for each comment or
+literal, at its first such character. Remove the character, or in a text or
+character literal write its escape: `"\u{202E}"` where text is meant, and
+its bytes, `"\xE2\x80\xAE"`, in a `[]u8`. `--allow=L0628`
+suppresses the warning for a source that writes right-to-left text on
+purpose; `--deny=L0628` makes it an invocation error.
+
 ## The parser
 
 A parser report is about the first mistake on its line and is given once.
@@ -417,7 +431,10 @@ says what that change is, shows the line as it would read, and offers it as
 a fix: a token removed, written, swapped with its neighbour or moved to the
 statement's start, or a value written where a line break left one out. The
 fix is likely, a guess at what was meant, except removing one copy of a
-token written twice, which is exact. No change moves `lenof` or the operand
+token written twice, which is exact unless the token is a bracket: a line
+with `))` may as well have lost its `(` (D1075). Only the first refused line
+of a routine can be restated, since a repair must leave the routine parsing
+up to its line, and the later ones are not searched (D1076). No change moves `lenof` or the operand
 it measures, which would read the word as a name nobody declared (D864). A
 report stands on a token: a missing one at a line's end stands on the token
 it belongs after.

@@ -302,6 +302,18 @@ package body Landin.Syntax.Repairs is
       Found    : Landin.Diagnostics.Diagnostic_List)
       return Landin.Diagnostics.Diagnostic_List
    is
+      Readings : Natural;
+   begin
+      return Restated (Snapshot, Parsed, Found, Readings);
+   end Restated;
+
+   function Restated
+     (Snapshot : Landin.Source.Snapshot;
+      Parsed   : Landin.Syntax.Tree;
+      Found    : Landin.Diagnostics.Diagnostic_List;
+      Readings : out Natural)
+      return Landin.Diagnostics.Diagnostic_List
+   is
       --  The routine whose body holds Where, by its own name being on an
       --  earlier line than Where's, and whether it returns a value.  A
       --  report on the line a routine's signature is written on is not
@@ -437,7 +449,9 @@ package body Landin.Syntax.Repairs is
       end In_A_Body;
 
       Text   : constant String := Landin.Source.Text (Snapshot);
-      Bytes  : constant String := Landin.Source.One_Based (Text);
+      --  A snapshot's text begins at one, and is the function's result,
+      --  not a second copy on this frame.
+      Bytes  : String renames Text;
       Source : constant Landin.Source.Source_Id := Landin.Source.Id (Snapshot);
       Result : Diag.Diagnostic_List;
       Last_Line : Natural := 0;
@@ -902,17 +916,27 @@ package body Landin.Syntax.Repairs is
 
       function Mends_File (Given : String; First : Natural) return Boolean
       is
-         Whole   : constant String := Landin.Source.One_Based (Given);
          Sources : Landin.Source.Sets.Source_Set;
          Names   : Landin.Source.Names.Table;
          Stream  : Tok.Token_Stream;
          Reports : Diag.Diagnostic_List;
          Id      : constant Landin.Source.Source_Id :=
-           Sources.Add ("repair", Whole);
-         Line_End : constant Natural :=
-           (if First = 0 then 0 else Line_Stop (Whole, First));
+           Sources.Add ("repair", Given);
+         --  First and Line_End count Given's bytes from one, whatever its
+         --  own bounds are, as the reports' offsets do from zero.
+         Line_End : Natural := First;
          After    : Natural := 0;
       begin
+         Readings := Readings + 1;
+         --  A line ends at LF, CR LF or a lone CR, and First is zero
+         --  when no line is held to.
+         if First /= 0 then
+            while Line_End <= Given'Length
+              and then not Ends_Line (Given (Given'First + Line_End - 1))
+            loop
+               Line_End := Line_End + 1;
+            end loop;
+         end if;
          Tok.Lexer.Lex (Sources.Get (Id), Names, Stream);
          Landin.Diagnostics.Lexical.Report (Stream, Reports);
          declare
@@ -1350,6 +1374,19 @@ package body Landin.Syntax.Repairs is
             Result.Append (Item);
             return;
          end if;
+         --  D1076: a repair counts only when its routine then parses to
+         --  the end of the line, and a routine the parser refused before
+         --  this line is refused there with any change to this line: no
+         --  trial can count, so none is read.  One routine of many refused
+         --  lines is therefore tried for its first alone, which is what
+         --  D261 always answered, without reading the routine again for
+         --  every change to every later line.
+         if Line_First >= Routine_First + 2
+           and then Errors_Between (Routine_First - 1, Line_First - 2) > 0
+         then
+            Result.Append (Item);
+            return;
+         end if;
          --  `break` and `continue` parse only in a loop.
          for One of Pieces loop
             if One.Kind in Tok.Kw_Break | Tok.Kw_Continue then
@@ -1526,9 +1563,17 @@ package body Landin.Syntax.Repairs is
             --  copy removed: either copy gives it, so nothing is guessed.
             --  Changes that write the same tokens were merged as they were
             --  found, so one entry is every change that mends the line.
+            --  D1075: a bracket written twice is not that.  `f(a * b - c))`
+            --  is as much a line that lost its `(` as one that gained a
+            --  `)`, and the search, which writes only what the parser asked
+            --  for, never tries the opener: one repair found is not one
+            --  reading.
             Level  : constant Diag.Applicability :=
               (if Natural (Found_Trials.Length) = 1
                  and then Removes_A_Copy (Found_Trials.First_Element, Pieces)
+                 and then Pieces (Found_Trials.First_Element.At_Token).Kind
+                   not in Tok.Left_Paren | Tok.Right_Paren
+                        | Tok.Left_Bracket | Tok.Right_Bracket
                then Diag.Exact
                else Diag.Likely);
             Here   : constant Piece := Pieces (Best.At_Token);
@@ -1628,6 +1673,7 @@ package body Landin.Syntax.Repairs is
          end;
       end Try_Line;
    begin
+      Readings := 0;
       for Index in 1 .. Diag.Count (Found) loop
          if Diag.Level (Diag.Get (Found, Index)) = Diag.Error then
             Error_Starts.Append

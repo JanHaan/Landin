@@ -1,0 +1,9 @@
+class: negative
+summary: D1075 removing one of two closing brackets is offered as a guess, because the line may as well have lost its opener, while a `:` written twice still has one reading and an exact fix
+program: program.ldn
+codes: L0110, L0110, L0101
+constructs: 1810, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/a-doubled-closing-bracket-is-a-guess/program.ldn
+expect: expected.txt
+status: 1

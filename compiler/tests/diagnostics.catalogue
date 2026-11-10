@@ -115,6 +115,7 @@ L0578  Live     D688: a .ramtext routine in a profile whose data region code doe
 L0349  Live     D251: an unused local with an effect-free literal initializer
 L0350  Live     D760: an untyped float literal converted to an integer that its f32 rounding changes
 L0600  Live     D949: compiler.utf8_unvalidated outside an unchecked region
+L0628  Live     D1077: a bidirectional control character in a comment or a literal
 L0500  Live     [1550]: the requested output cannot be made with the target, settings or available toolchain
 L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure
 L0502  Live     [1970] [1990]: a missing or invalid hosted main or explicitly selected firmware entry

@@ -29,6 +29,9 @@ package body Landin.Diagnostics.Lexical is
                "this text literal contains malformed bytes or an escape",
             when Landin.Tokens.Invalid_Comment_Encoding =>
                "this comment contains malformed UTF-8",
+            when Landin.Tokens.Bidirectional_Control =>
+               "a bidirectional control character is written here, and"
+               & " can show this text in another order than it is read in",
             when Landin.Tokens.Unknown_Byte_Run =>
                (case Landin.Tokens.First_Byte (Fault) is
                    when ';' =>
@@ -60,6 +63,8 @@ package body Landin.Diagnostics.Lexical is
                | Landin.Tokens.Capitalised_Identifier
                | Landin.Tokens.Invalid_Comment_Encoding =>
                Rows.Unknown_Bytes,
+            when Landin.Tokens.Bidirectional_Control =>
+               Rows.Bidirectional_Control,
             when Landin.Tokens.Unterminated_Block_Comment =>
                Rows.Unterminated_Comment,
             when Landin.Tokens.Unterminated_Literal       =>
@@ -175,6 +180,14 @@ package body Landin.Diagnostics.Lexical is
                   Add_Note
                     (Report,
                      "[1750]: comment text must be shortest-form UTF-8");
+
+               when Landin.Tokens.Bidirectional_Control =>
+                  Add_Note
+                    (Report,
+                     "D1077: remove it, or write its escape in a text or"
+                     & " character literal, `\u{202E}` where text is meant"
+                     & " and `\xE2\x80\xAE` where bytes are; a raw literal"
+                     & " and a comment have no escape");
 
                when Landin.Tokens.Unknown_Byte_Run =>
                   Add_Note

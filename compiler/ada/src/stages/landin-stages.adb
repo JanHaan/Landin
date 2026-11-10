@@ -1,5 +1,6 @@
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Text;
+with Landin.Tokens.Text;
 
 package body Landin.Stages is
 
@@ -142,11 +143,31 @@ package body Landin.Stages is
             return True;
          end if;
 
+         --  An offset splits a character only when a well-formed UTF-8
+         --  sequence begins before it and runs past it.  A source need
+         --  not be UTF-8 outside its literals and comments: a byte in
+         --  128 .. 191 with no such sequence around it, as Latin-1
+         --  writes its upper half, is a character of its own, which the
+         --  scanner reports and an edit beside it does not split.
          declare
-            Byte : constant String :=
-              Landin.Source.Slice (Snap, (Offset, Offset + 1));
+            First : constant Landin.Source.Byte_Offset :=
+              (if Offset >= 3 then Offset - 3 else 0);
+            Last  : constant Landin.Source.Byte_Offset :=
+              Landin.Source.Byte_Offset'Min
+                (Landin.Source.Length (Snap), Offset + 3);
+            Window : constant String :=
+              Landin.Source.Slice (Snap, (First, Last));
+            Before : constant Natural := Natural (Offset - First);
          begin
-            return Character'Pos (Byte (Byte'First)) not in 128 .. 191;
+            for Back in 1 .. Before loop
+               if Landin.Tokens.Text.UTF8_Length
+                    (Window, Window'First + Before - Back, Window'Last)
+                 > Back
+               then
+                  return False;
+               end if;
+            end loop;
+            return True;
          end;
       end Between_Characters;
    begin

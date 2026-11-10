@@ -14,6 +14,7 @@ package body Landin.Formatting is
    use type Landin.Source.Byte_Offset;
    use type Syn.Node_Id;
    use type Syn.Node_Kind;
+   use type Tok.Fault_Kind;
    use type Tok.Space_Kind;
    use type Tok.Token_Kind;
 
@@ -61,11 +62,12 @@ package body Landin.Formatting is
       Answer : in out Result);
 
    --  Whether Text scans to the same tokens and the same comments, in the
-   --  same order, as Before did.
+   --  same order, as Before did; and when it does, whether it Parses.
    function Same_Things
      (Before : Thing_Vectors.Vector;
       Bytes  : String;
-      Text   : String) return Boolean;
+      Text   : String;
+      Parses : out Boolean) return Boolean;
 
    ---------------------------------------------------------------------
    --  Format
@@ -79,9 +81,6 @@ package body Landin.Formatting is
       Answer : Result;
       Names  : Landin.Source.Names.Table;
       Stream : Tok.Token_Stream;
-      --  Offsets count from zero and a caller's string need not start at
-      --  one, so the bytes are read through a copy that does.
-      Bytes  : constant String := Landin.Source.One_Based (Text);
    begin
       Answer.Id := Sources.Add (Name, Text);
       Answer.Text := US.To_Unbounded_String (Text);
@@ -95,7 +94,16 @@ package body Landin.Formatting is
             Answer.Found := Landin.Diagnostics.Sorted (Answer.Found);
             return Answer;
          end if;
-         Lay_Out (Bytes, Answer.Id, Stream, Tree, Answer);
+         --  Offsets count from zero and a caller's string need not start
+         --  at one, so the bytes are read from the snapshot, which does.
+         --  It is the function's result and not a copy on this frame: a
+         --  source is bounded by the host's memory, not by the stack.
+         declare
+            Bytes : constant String :=
+              Landin.Source.Text (Sources.Get (Answer.Id));
+         begin
+            Lay_Out (Bytes, Answer.Id, Stream, Tree, Answer);
+         end;
       end;
       return Answer;
    end Format;
@@ -849,11 +857,20 @@ package body Landin.Formatting is
 
       --  Identical bytes have the same tokens and comments as the input
       --  already scanned by Format.  Changed output still needs a scan.
-      if US.To_String (Output) /= Bytes
-        and then not Same_Things (Things, Bytes, US.To_String (Output))
-      then
-         raise Landin.Compiler_Defect
-           with "formatting changed a token or a comment";
+      if US.To_String (Output) /= Bytes then
+         declare
+            Parses : Boolean;
+         begin
+            if not Same_Things
+                     (Things, Bytes, US.To_String (Output), Parses)
+            then
+               raise Landin.Compiler_Defect
+                 with "formatting changed a token or a comment";
+            elsif not Parses then
+               raise Landin.Compiler_Defect
+                 with "formatting left a file that no longer parses";
+            end if;
+         end;
       end if;
       Answer.Outcome := Formatted;
       Answer.Text := Output;
@@ -866,12 +883,12 @@ package body Landin.Formatting is
    function Same_Things
      (Before : Thing_Vectors.Vector;
       Bytes  : String;
-      Text   : String) return Boolean
+      Text   : String;
+      Parses : out Boolean) return Boolean
    is
       Sources : Landin.Source.Sets.Source_Set;
       Names   : Landin.Source.Names.Table;
       Stream  : Tok.Token_Stream;
-      Again   : constant String := Landin.Source.One_Based (Text);
       Next    : Positive := 1;
 
       function Matches (Where : Landin.Source.Span) return Boolean;
@@ -887,15 +904,24 @@ package body Landin.Formatting is
          begin
             Next := Next + 1;
             return Bytes (Natural (Was.First) + 1 .. Natural (Was.Last))
-              = Again (Natural (Where.First) + 1 .. Natural (Where.Last));
+              = Text (Text'First + Natural (Where.First)
+                      .. Text'First - 1 + Natural (Where.Last));
          end;
       end Matches;
    begin
+      Parses := True;
       Tok.Lexer.Lex
         (Sources.Get (Sources.Add ("formatted", Text)), Names, Stream);
-      if Tok.Fault_Count (Stream) > 0 then
-         return False;
-      end if;
+      --  A refusal in the scan of the layout is a change to what was
+      --  scanned before; D1077's observation is not one, being about bytes
+      --  the layout keeps.
+      for Index in 1 .. Tok.Fault_Count (Stream) loop
+         if Tok.Kind (Tok.Nth_Fault (Stream, Index))
+           /= Tok.Bidirectional_Control
+         then
+            return False;
+         end if;
+      end loop;
       for Index in 1 .. Tok.Count (Stream) loop
          declare
             Leading : constant Tok.Space_Range := Tok.Leading (Stream, Index);
@@ -920,7 +946,21 @@ package body Landin.Formatting is
             end if;
          end;
       end loop;
-      return Next = Natural (Before.Length) + 1;
+      if Next /= Natural (Before.Length) + 1 then
+         return False;
+      end if;
+      --  The same tokens are the same program only if they still parse:
+      --  the layout moves where lines begin, and nothing the parser
+      --  accepts may depend on that (D1074).  Should it ever, the file is
+      --  refused here rather than rewritten into one that does not compile.
+      declare
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Tree  : constant Syn.Tree := Syn.Parser.Parse (Stream, Names, Found);
+         pragma Unreferenced (Tree);
+      begin
+         Parses := not Found.Has_Errors;
+      end;
+      return True;
    end Same_Things;
 
    function Differences

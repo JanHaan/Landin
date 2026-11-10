@@ -19341,7 +19341,9 @@ positive programs, 596 gave one report on the changed line.
 a mistake, so a program the parser accepts is read exactly as before. A
 function's closer is found before its body is read: the first `end name`
 after it that begins a line no deeper than the declaration's, or shares its
-line, or a bare `end` alone on such a line when it comes first. Nothing in
+line, or, for a body written deeper than its function and with no such
+`end name`, a bare `end` alone on the first line after the body's first that
+is no deeper than the function (D1074). Nothing in
 the body is read past that closer: to the body it is the `end` that closes
 whatever is open, and recovery that would skip further stops there, so a
 mistake is never reported in another routine. Inside the body, a statement
@@ -19383,6 +19385,71 @@ holds, which reports the first mistake's consequences as if they were others.
 `negative/a-nested-mistake-after-a-refused-statement-is-reported`, whose
 second, independent report the indentation does not quiet.
 
+### D1074 — A program the grammar derives is read by the grammar alone
+
+**The discrepancy:** D260 found a function's closer by indentation before
+its body was read, and said that a program that parses is never read
+differently for it. That did not hold. A function whose `end` stood deeper
+than its header was refused when a later routine closed with `end` at the
+margin, because that later `end` was taken for its closer; re-indenting the
+lines of the library and the fixtures, and changing nothing else, refused
+201 of 3,042 files. `refine fmt` indents a signature's second line, which
+switched that search on, and so rewrote a file that compiled into one that
+did not. A bare block followed by an `if`, `match` or `unchecked` statement
+was refused, its `end` held back for an `end if` that nothing open could
+take. And a recovery clause, a bare block or an anonymous function left
+without its `end` as the last construct of a routine was accepted: the
+closer found for the function read as `end` to everything in the body, the
+construct took it, and the function took it again, so the routine compiled
+with the rest of its body inside the construct.
+
+**Chosen:** a file is read first by the grammar alone. No closer is looked
+for beforehand: a function is closed by the `end` its body leaves, and a
+bare block's `end` is its own whatever follows it. When that reading has
+nothing to report it is the parse, so in a program the grammar derives the
+place a line begins decides nothing, as [1750] says. When it has anything to
+report it is given up at that point, having reported nothing, and the file is
+read again with D260's recovery, which makes every report; a file with a
+mistake costs at most one more reading up to its first mistake.
+
+Three things change in the recovering reading. A construct that closes
+with a bare `end` and meets the closer found for its function, in a body
+that has reported nothing, is reported as never closed, and the closer stays
+the function's; after a report in the routine it is taken quietly as
+before, being what that mistake did to the rest of the body. A bare block
+leaves an `end` for a construct around it only when `end if`, `end match` or
+`end unchecked` is written on one line and an `if`, `match` or `unchecked` is
+open around the block. And the bare `end` a function is fenced by is looked
+for only as far as the first line no deeper than the function: when that
+line is anything else, what follows is another declaration's, and the
+function is closed by whichever `end` its body leaves.
+
+`refine fmt` parses what it laid out, and a layout that no longer parses is
+a compiler defect that leaves the file as it was, beside the one for a
+changed token.
+
+What the grammar derives is accepted as derived even where a person would
+read the layout otherwise: a routine whose last block lost its `end`,
+followed at the margin by a function-typed binding and a stray `end`, is one
+routine with that binding inside it.
+
+**The alternatives:** bounding the closer's search and letting a function
+take any `end` while its body has reported nothing, which still reads a
+program by its indentation wherever the search finds a closer. Keeping the
+search and reporting only its disagreements, which makes the layout part of
+the language against [1750]. Reading every body twice, once each way, which
+doubles the parse of every program to serve the ones with a mistake.
+Reporting a forgotten `end` from the layout alone, a body's last lines being
+deeper or shallower than the construct, which is the same dependence turned
+into a report.
+
+**Pinned by** `runtime/closers-are-read-by-the-grammar`, each of whose
+routines was refused or read otherwise for its layout;
+`negative/a-forgotten-end-is-not-the-functions`, whose three reports are
+recorded; `parser/indentation decides nothing`, which reads every fixture
+program again with no indentation and with every line at a drawn depth; and
+`formatting/the layout keeps what parses`.
+
 ### D261 — A refused statement is reported as the smallest change that mends it
 
 **The discrepancy:** a parser reports what it needed where it stopped, which
@@ -19410,7 +19477,7 @@ A repair is Likely. It is Exact, which a tool may apply unasked and an editor
 prefers, only when every change that mends the line writes the same line and
 that line removes one copy of a token written twice in a row: `x:: u32` and
 `1 + + 2` have one reading, and nothing is guessed. A stand-in for a name, a
-value or a type is never Exact.
+value or a type is never Exact, and nor is the removal of a bracket (D1075).
 
 When parsing has already refused a statement or module declaration beginning
 with an identifier, a plausible misspelling of its leading keyword is
@@ -19518,6 +19585,86 @@ recorded; `negative/struct-closed-by-end-struct-is-given-its-name`, whose
 repair the `fixes` suite compiles clean; `positive/value-continued-at-any-indentation`, which holds a
 continued value the grammar accepts to being accepted; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
+
+### D1077 — A bidirectional control in a comment or a literal is warned about
+
+**The discrepancy:** [1750] admits any well-formed UTF-8 inside comments and
+literals, and the scanner checked nothing more. U+202A to U+202E, U+2066 to
+U+2069, U+200E, U+200F and U+061C reorder what an editor or a review page
+shows around them, so a comment can appear to end before code that is
+inside it and a literal can appear to hold other text than its bytes: what
+a reviewer reads is not what is compiled. Nothing was reported. The
+compiler's own notes and help lines, which quote source, passed the same
+characters to the terminal.
+
+**Chosen:** a comment or a literal holding one of those eleven characters
+is reported once, at its first, as the warning L0628. The program is
+accepted and means what its bytes say; `--allow=L0628` is for a source that
+writes right-to-left text on purpose and `--deny=L0628` refuses. A text or
+character literal can carry the character as an escape, `\u{...}` where
+text is meant and `\xNN` bytes in a `[]u8`, which is not warned about. Every report writes these characters, where it quotes
+them, as the `\xNN` of their bytes, as it writes a control character.
+
+**The alternatives:** refusing them, which would change [1750] and refuse
+right-to-left text in a comment that holds a mark to keep its punctuation
+in place. Warning only where the controls of a line do not balance, which
+is the rule of the Unicode algorithm restated in a scanner and still shows
+a reviewer reordered text. Saying nothing and leaving it to editors, which
+is where it stood.
+
+**Pinned by** `negative/a-bidirectional-control-is-warned-about`, whose
+report is recorded, and `diagnostics/bidirectional controls are escaped`.
+
+### D1075 — Removing one of two brackets is a guess
+
+**The discrepancy:** D261 makes a repair Exact when every change that mends
+the line writes the same line and that line removes one copy of a token
+written twice in a row. Two closing brackets in a row met the rule, and
+`r = scale(a * b - c))` was offered `scale(a * b - c)` as a fix a tool may
+apply unasked. The line is as much `scale(a * (b - c))` with its `(` lost,
+which computes something else; the search writes only the token the parser
+asked for, never an opener, so it found one repair without there being one
+reading.
+
+**Chosen:** the removal of `(`, `)`, `[` or `]` is Likely, however few
+repairs were found. Exact remains for a token whose second copy cannot be
+one half of a pair: `x:: u32`, `mut mut`, a closing word written again.
+
+**The alternatives:** searching for the opener as well and calling the
+removal Exact when no placement of one parses, which is a parse for every
+position of a line to learn what the brackets' own shape already says.
+Requiring the line's brackets to balance before the removal, which a doubled
+closer never does.
+
+**Pinned by** `negative/a-doubled-closing-bracket-is-a-guess`, whose
+recorded report offers both removals as guesses and the removal of a
+doubled `:` as exact.
+
+### D1076 — The repair search reads a routine for its first refused line alone
+
+**The discrepancy:** D261 tries the first error of every refused line of a
+routine, and a change that parses alone is read again inside its whole
+routine. A repair counts only when the routine then parses to the end of its
+line, so in a routine of many refused lines only the first could ever be
+restated: the routine is refused before every later one whatever is done to
+it. The search read the routine for every change to every one of them all
+the same, and 1,500 lines of `r = r + + 1` took six minutes to report.
+
+**Chosen:** a line is not tried when the parser reported an error earlier in
+its routine. No change to it can count, so none is read, and its report
+stands as the parser made it. What D261 answers does not change; a routine
+is read again a few times for its first refused line, and a file as often
+as it has refused routines.
+
+**The alternatives:** reading the routine with the other refused lines
+blanked, which would restate more of them and is a change to what D261
+answers rather than to what it costs. A count of readings or of bytes after
+which the search stops, which bounds the cost by refusing work that could
+have counted, where this refuses only work that could not. A fixed number
+of repaired lines to a routine, which is that with another unit.
+
+**Pinned by** `parser/the repair search reads a routine once`, which holds
+the count of readings to the routines tried.
 
 ### D264 — Hosted system identity selects libc records, independently of C transport
 
