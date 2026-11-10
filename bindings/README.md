@@ -645,28 +645,8 @@ register structs are not selected and refuse nothing.
 `compiler/tests/fixtures/abi/cortex-vfp-bindings` binds the STM32H753's
 `IRQn_Type`, NVIC functions and `SCB_GetFPUType` for the VFP variant; no
 CMSIS inline function takes a float or a double, so the floats and doubles
-come from the fixture's own `landin-vfp.h`. Regenerate them from the
-repository root with a built refine:
-
-```sh
-CLANG=${CLANG:-clang-19}
-python3 scripts/fetch_inputs.py  # every pinned input, these among them
-inputs=${LANDIN_INPUTS:-$HOME/.cache/landin/inputs}
-fixtures=compiler/tests/fixtures/abi
-refine bindings --clang="$CLANG" --target=cortex-m0 \
-  --policy="$fixtures/cortex-cmsis-bindings/policy.json" \
-  --out-dir="$fixtures/cortex-cmsis-bindings" \
-  --include-dir="$inputs/rp2040-cmsis" \
-  --system-include-dir="$("$CLANG" -print-resource-dir)/include" \
-  "RP2040.h=$inputs/rp2040-cmsis/RP2040.h"
-refine bindings --clang="$CLANG" --target=cortex-m0 \
-  --policy="$fixtures/cortex-vfp-bindings/policy.json" \
-  --out-dir="$fixtures/cortex-vfp-bindings" \
-  --include-dir="$inputs/stm32h753-cmsis" \
-  --system-include-dir="$("$CLANG" -print-resource-dir)/include" \
-  "stm32h753xx.h=$inputs/stm32h753/stm32h753xx.h" \
-  "landin-vfp.h=$fixtures/cortex-vfp-bindings/landin-vfp.h"
-```
+come from the fixture's own `landin-vfp.h`. Both are regenerated, with the
+hosted fixture, by [one command](#regenerating-the-committed-fixtures).
 
 `bindings/test.py` fetches only the inputs it reads. Each fixture's
 `NOTICE` names the licences its generated files are derived under.
@@ -731,27 +711,37 @@ and explicit module policy spelling. Local adapter execution is host-C evidence,
 not execution of emitted Linux Landin instructions or compiler-level rejection
 of frame-origin arguments.
 
-### Regenerating the committed ABI fixture
+### Regenerating the committed fixtures
 
-From the repository root, with `CLANG` naming the desired frontend (the
-gate's `bindings` job uses Ubuntu 24.04's `clang-19` at the version
-`environments/pins.sh` names; `nix develop` provides a `clang-19` that
-`bindings/test.py` runs with, as the gate does) and a built refine:
+Three fixtures hold generated files: `abi/r440-bindings-generated`,
+`abi/cortex-cmsis-bindings` and `abi/cortex-vfp-bindings`. One command
+regenerates all three from the repository root, with `CLANG` naming the
+desired frontend (the gate's `bindings` job uses Ubuntu 24.04's `clang-19`
+at the version `environments/pins.sh` names; `nix develop` provides a
+`clang-19` that `bindings/test.py` runs with, as the gate does) and a
+built refine:
 
 ```sh
-CLANG=${CLANG:-clang}
-fixture=compiler/tests/fixtures/abi/r440-bindings-generated
-work=$(mktemp -d)
-mkdir "$work/sysroot" "$work/includes"
-printf 'typedef __SIZE_TYPE__ size_t;\nvoid *calloc(size_t, size_t);\nvoid free(void *);\n' > "$work/includes/stdlib.h"
-refine bindings \
-  --clang="$CLANG" --target=linux-x86-64 --sysroot="$work/sysroot" \
-  --policy="$fixture/policy.json" --out-dir="$fixture" \
-  --system-include-dir="$work/includes" \
-  --system-include-dir="$("$CLANG" -print-resource-dir)/include" \
-  "r440-bindings.h=$fixture/r440-bindings.h"
-rm -r "$work"
+CLANG=clang-19 python3 bindings/test.py --refine PATH --write
 ```
+
+It generates each fixture into a temporary directory exactly as the cases
+that compare them do, and then writes each of the four generated files
+that differs, `bindings.ldn`, `adapters.c`, `exports.h` and
+`bindings.json`, into its fixture, saying `wrote` or `unchanged` for each.
+When `refine bindings` refuses one fixture, none is written. What each
+fixture is generated from:
+
+| fixture | target | headers | include directories |
+|---|---|---|---|
+| `r440-bindings-generated` | `linux-x86-64`, with an empty sysroot | its own `r440-bindings.h` | a declaration-only `stdlib.h` the command writes, and Clang's resource headers |
+| `cortex-cmsis-bindings` | `cortex-m0` | the pinned `rp2040-cmsis/RP2040.h` | the pinned `rp2040-cmsis`, and Clang's resource headers |
+| `cortex-vfp-bindings` | `cortex-m0` | the pinned `stm32h753/stm32h753xx.h` and its own `landin-vfp.h` | the pinned `stm32h753-cmsis`, and Clang's resource headers |
+
+The pinned headers come from the input cache, `$LANDIN_INPUTS` or
+`~/.cache/landin/inputs`, and one the cache lacks is fetched by its hash,
+as `scripts/fetch_inputs.py` fetches it; with `--offline` the command
+refuses instead.
 
 The small declaration-only `stdlib.h` supplies the same C ABI declarations used
 by the test's empty-sysroot configuration; actual adapter linking uses libc.
