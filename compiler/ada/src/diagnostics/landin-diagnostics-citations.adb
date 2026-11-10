@@ -2057,6 +2057,28 @@ package body Landin.Diagnostics.Citations is
             when 1061 =>
                "A standard output that cannot be written is the host's f"
                & "ailure",
+            when 1046 =>
+               "A signal ends a command at once unless it holds somethin"
+               & "g to recover",
+            when 1047 =>
+               "The file-size and closed-pipe signals reach the recovery"
+               & " written for their errors",
+            when 1048 =>
+               "A published file has the mode a fresh build gives it",
+            when 1049 =>
+               "Only a directory of the invoking user's is inspected as "
+               & "an earlier publication",
+            when 1050 =>
+               "A tool runs in a directory of its own beside the stage",
+            when 1051 =>
+               "A destination the publication rules refuse is refused in"
+               & " their words, and before anything is generated",
+            when 1052 =>
+               "A name and the same name continued in ASCII are two name"
+               & "s on every filesystem",
+            when 1053 =>
+               "A path the host cannot hold is an outcome, not a defect "
+               & "or another file",
             when 359 =>
                "`refine fmt --check` names every line, and `--stdout` pr"
                & "ints the layout",
@@ -3831,6 +3853,22 @@ package body Landin.Diagnostics.Citations is
             when 1060 =>
                "Decisions: The toolchain, C and the machine",
             when 1061 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1046 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1047 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1048 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1049 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1050 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1051 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1052 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1053 =>
                "Decisions: The toolchain, C and the machine",
             when 359 =>
                "Decisions: The toolchain, C and the machine",
@@ -5662,6 +5700,34 @@ package body Landin.Diagnostics.Citations is
             when 1061 =>
                "https://www.701.dev/spec.html#d1061-a-standard-output-th"
                & "at-cannot-be-written-is-the-host-s-failure",
+            when 1046 =>
+               "https://www.701.dev/spec.html#d1046-a-signal-ends-a-comm"
+               & "and-at-once-unless-it-holds-something-to-recover",
+            when 1047 =>
+               "https://www.701.dev/spec.html#d1047-the-file-size-and-cl"
+               & "osed-pipe-signals-reach-the-recovery-written-for-their-e"
+               & "rrors",
+            when 1048 =>
+               "https://www.701.dev/spec.html#d1048-a-published-file-has"
+               & "-the-mode-a-fresh-build-gives-it",
+            when 1049 =>
+               "https://www.701.dev/spec.html#d1049-only-a-directory-of-"
+               & "the-invoking-user-s-is-inspected-as-an-earlier-publicati"
+               & "on",
+            when 1050 =>
+               "https://www.701.dev/spec.html#d1050-a-tool-runs-in-a-dir"
+               & "ectory-of-its-own-beside-the-stage",
+            when 1051 =>
+               "https://www.701.dev/spec.html#d1051-a-destination-the-pu"
+               & "blication-rules-refuse-is-refused-in-their-words-and-bef"
+               & "ore-anything-is-generated",
+            when 1052 =>
+               "https://www.701.dev/spec.html#d1052-a-name-and-the-same-"
+               & "name-continued-in-ascii-are-two-names-on-every-filesyste"
+               & "m",
+            when 1053 =>
+               "https://www.701.dev/spec.html#d1053-a-path-the-host-cann"
+               & "ot-hold-is-an-outcome-not-a-defect-or-another-file",
             when 359 =>
                "https://www.701.dev/spec.html#d359-refine-fmt-check-name"
                & "s-every-line-and-stdout-prints-the-layout",
