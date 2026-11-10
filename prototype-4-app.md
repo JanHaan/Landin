@@ -18,7 +18,7 @@
 > recorded in `spec.md`, and `[0820]` a numbered paragraph of `tour.md` or
 > `spec.md`; `refine explain D212` prints either.
 
-Current with specification 0.2.8. Its own findings W1-W7 are all
+Current with specification 0.2.9. Its own findings W1-W7 are all
 resolved below.
 
 A log filter: read a file, run every line through a chain of filters

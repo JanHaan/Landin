@@ -356,7 +356,7 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 
 ### Version and targets
 
-- `refine version` (also `--version`) prints `refine 0.2.8` for an exact
+- `refine version` (also `--version`) prints `refine 0.2.9` for an exact
   release checkout, or `refine dev (01234567)` for a development commit. A
   modified checkout adds `dirty`; a modified release also includes its
   commit. The release name comes from an exact numeric `v` tag,

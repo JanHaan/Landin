@@ -22,7 +22,7 @@
 > `D464` names a decision recorded in `spec.md`, and `[1675]` a numbered
 > paragraph of `tour.md` or `spec.md`; `refine explain D464` prints either.
 
-Current with specification 0.2.8. Its own findings V1-V15 are all
+Current with specification 0.2.9. Its own findings V1-V15 are all
 resolved below: V15 while it was written, the rest by D444-D449. The fibres
 exist now, in `core/fibre` and its submodule `core/fibre/stacks`, and the
 runtime fixtures those decisions name pin them. The hosted half is derived

@@ -4,7 +4,7 @@
 > 32 TB*. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
 
-**Status: specification 0.2.8. Landin programs build and run on Linux,
+**Status: specification 0.2.9. Landin programs build and run on Linux,
 macOS and FreeBSD, and firmware builds for Cortex-M, RV32 and windowed Xtensa.**
 
 The language is pre-v1 and still growing. Its compiler, `refine`, runs
@@ -46,9 +46,8 @@ application is at the other. This is what it is like to write:
 beside it. There are three ways to get both: from a release, with nix, or
 from source.
 
-For now, install with nix or from source. No release yet runs
-[the first program](#your-first-program), which needs `refine run` and
-`hosted/blocking`, both newer than 0.2.8.
+Use 0.2.9 or later: [the first program](#your-first-program) needs
+`refine run` and `hosted/blocking`, both newer than 0.2.8.
 
 ### From a release
 

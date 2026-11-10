@@ -1,7 +1,7 @@
 # Landin — orientation
 
 Everything a fresh reader, or a fresh session, needs before touching
-anything. Kept current at specification **0.2.8**. How work is done and
+anything. Kept current at specification **0.2.9**. How work is done and
 checked, the development loop, the multi-host gate and the physical boards
 on the rig, is in [`docs/process.md`](docs/process.md). `D211` names a
 decision recorded in `spec.md`; `refine explain D211` prints its title.
@@ -276,6 +276,7 @@ it:
 | 0.2.6 | FreeBSD x86-64 and arm64, with hosted system identity separate from C transport, D264; Linux RV64 with LP64D and explicit ISA extension sets, D265; conversions that apply the type as written, D266. `refine` gets explicit commands, shared presentation options and build-system dependency files; warnings may also advise without a repair, and command-line policy can enable, suppress or deny them, D251. |
 | 0.2.7 | The compiler identifies its exact release, its development commit and a modified checkout. |
 | 0.2.8 | A standard library in three roots, `core`, `hosted` and `platform`, found beside the compiler and shipped in its archive, D267 to D279; services are handles, D288; a hosted library over a POSIX layer: files, directories, standard input, the environment, processes, time, randomness, sockets, the rest of the file system and dynamic loading; static Linux programs make their system calls in source, D279 and D280. Several labels share a `match` arm, D405; a value call's failure is ignored under a discard with `else none`, D406; byte-packed C records, `offsetof` and flexible members, D410 to D414; only exports reach the C namespace, D415 to D418; a parameter whose type names no generic formal is an ordinary context, D419 and D420; distinct types compare, update and zero as their bases do, a pointer union compares with an atom and `_ (rest):` binds the atoms no arm named, D427 to D436; module values read compiler facts and size arrays, D437 and D438. The tour, the C guide, the examples and the library reference are rewritten for a reader new to Landin. |
+| 0.2.9 | Concurrency: fibres over caller-supplied stacks, started only as a group the caller joins, with concurrency a provider's answer rather than a function's, D444 to D475; a second hosted provider whose waits switch fibres, D476 to D493; threads started as a group, and atomics as a library wrapper, D494 to D522. Microcontrollers: devices described in Landin and learnt from an SVD by `refine svd`, D532 to D562; Thumb-2 levels for Cortex-M33 and Cortex-M7, RV32 and Xtensa firmware, each recorded on its physical board and run in the gate; a freestanding library, and the server's firmware counterpart. `refine run` builds and starts a program; the released compiler ships without its debug information, which is published beside it, D531. The reader-facing pages rewritten for their reader. |
 
 The history before 0.1.0 is kept in a separate archive. The part of it with
 lasting value is at the end of the tour, under WHAT WAS TRIED AND DROPPED.

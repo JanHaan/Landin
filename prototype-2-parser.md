@@ -17,7 +17,7 @@
 > recorded in `spec.md`, and `[1760]` a numbered paragraph of `tour.md` or
 > `spec.md`; `refine explain D225` prints either.
 
-Current with specification 0.2.8. Its own findings Y1-Y7 are resolved
+Current with specification 0.2.9. Its own findings Y1-Y7 are resolved
 below, except Y4, which stays an open watch in the roadmap's register.
 
 The point of this one is the word recoverable. A parser must not stop

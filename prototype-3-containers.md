@@ -18,7 +18,7 @@
 > recorded in `spec.md`, and `[0910]` a numbered paragraph of `tour.md` or
 > `spec.md`; `refine explain D211` prints either.
 
-Current with specification 0.2.8. Its own findings Z1-Z19 are all
+Current with specification 0.2.9. Its own findings Z1-Z19 are all
 resolved below.
 
 This one was chosen because it presses on five things at once:
