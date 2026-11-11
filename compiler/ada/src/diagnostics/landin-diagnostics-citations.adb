@@ -2831,6 +2831,11 @@ package body Landin.Diagnostics.Citations is
                & "et",
             when 273 =>
                "The comparison concepts are a module of their own",
+            when 1316 =>
+               "A library module leaves the device-class nouns to a prog"
+               & "ram's drivers",
+            when 1317 =>
+               "A library documentation comment is at most 79 columns",
             when 274 =>
                "The library says what it does",
             when 1031 =>
@@ -4538,6 +4543,10 @@ package body Landin.Diagnostics.Citations is
             when 272 =>
                "Decisions: The core library and the derived programs",
             when 273 =>
+               "Decisions: The core library and the derived programs",
+            when 1316 =>
+               "Decisions: The core library and the derived programs",
+            when 1317 =>
                "Decisions: The core library and the derived programs",
             when 274 =>
                "Decisions: The core library and the derived programs",
@@ -6814,6 +6823,12 @@ package body Landin.Diagnostics.Citations is
             when 273 =>
                "https://www.701.dev/spec.html#d273-the-comparison-concep"
                & "ts-are-a-module-of-their-own",
+            when 1316 =>
+               "https://www.701.dev/spec.html#d1316-a-library-module-lea"
+               & "ves-the-device-class-nouns-to-a-program-s-drivers",
+            when 1317 =>
+               "https://www.701.dev/spec.html#d1317-a-library-documentat"
+               & "ion-comment-is-at-most-79-columns",
             when 274 =>
                "https://www.701.dev/spec.html#d274-the-library-says-what"
                & "-it-does",

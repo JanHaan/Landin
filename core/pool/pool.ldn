@@ -68,9 +68,10 @@ end slot_stride
 --- slice; its length is the finite bookkeeping capacity, and `slot_count` may
 --- be zero but may not exceed it. The maximum `usize` marks a free slot, so a
 --- pool with slots cannot use that slot size. Such a pool aligns its first
---- slot from the absolute backing address, counts that padding against `extent`,
---- and proves that every later slot and its complete payload fit both the
---- backing extent and the target address space before publishing the provider.
+--- slot from the absolute backing address, counts that padding against
+--- `extent`, and proves that every later slot and its complete payload fit
+--- both the backing extent and the target address space before publishing the
+--- provider.
 public over: (inout state: space, base: ptr mut u8, extent: usize,
               slot_size: usize, slot_count: usize, slot_alignment: usize,
               bookkeeping: []mut slot)

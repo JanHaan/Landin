@@ -355,6 +355,41 @@ class CoreModulePlaces(unittest.TestCase):
             self.assertIn(place, said[0])
 
 
+class LibraryModuleNames(unittest.TestCase):
+    """D1316: a library module leaves the device-class nouns to drivers."""
+
+    def test_a_module_named_for_what_it_holds_passes(self):
+        self.assertEqual(faults(checker.check_library_module_names,
+                                written={"core/line/line.ldn": "x: i32 = 1\n",
+                                         "platform/riscv/l1/l1.ldn":
+                                             "x: i32 = 1\n"}), [])
+
+    def test_a_device_class_noun_is_refused_wherever_it_stands(self):
+        said = reasons(checker.check_library_module_names,
+                       written={"core/serial/serial.ldn": "x: i32 = 1\n",
+                                "platform/cortex_m/timer/timer.ldn":
+                                    "x: i32 = 1\n",
+                                "hosted/gpio/notes.txt": "not a module\n"})
+        self.assertEqual(len(said), 2, said)
+        self.assertIn("core/serial is named by the device-class noun serial",
+                      said[0])
+        self.assertIn("platform/cortex_m/timer", said[1])
+
+class LibraryCommentWidth(unittest.TestCase):
+    """D1317: a library documentation comment is at most 79 columns."""
+
+    def test_seventy_nine_columns_pass_and_eighty_do_not(self):
+        fits = "    --- " + "x" * 71 + "\n"
+        wide = "--- " + "y" * 76 + "\n"
+        said = faults(checker.check_library_comment_width,
+                      written={"core/mem/mem.ldn": fits + wide
+                               + "-- " + "z" * 90 + "\n",
+                               "hosted/heap/heap.ldn": fits,
+                               "docs/notes.ldn": wide})
+        self.assertEqual(len(said), 1, said)
+        self.assertEqual(said[0][:2], ("core/mem/mem.ldn", 2))
+        self.assertIn("is 80 columns", said[0][2])
+
 CONSUMED_MODULE = """\
 --- What a fixture calls.
 public used: () -> (count: usize) =

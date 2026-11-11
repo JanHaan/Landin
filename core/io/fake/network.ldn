@@ -108,23 +108,23 @@ end network_value
 --- In a network made by `network_over`, nothing waits, since in one thread
 --- nothing else could end the wait.  Where a real socket would wait, for a
 --- connection to accept, for bytes to receive or for room to send into, the
---- call fails `timed_out` at once, whether or not a limit was set, after a send
---- has delivered what fits.  In a network made by `network_over_turns`, a call
---- that would wait takes a turn of the scheduler it was given instead, so that
---- the other fibres run, and looks again.  It fails `timed_out` only after a
---- whole round in which nothing moved anywhere in the network, so nothing it
---- waits for arrived, while no fibre sleeps on a clock `clock_over_beside` made
---- beside it, which would move it when it wakes.  A call whose socket was
---- closed, or shut for what the call waits for, while it waited fails
---- `io_failed` (D449, D483, D493).  `accept`, `send`, `receive`,
---- `receive_from`, `read`, `write` and `write_some` are the calls that may wait
---- and so switch; the others never do.  A send to a connection whose peer has
---- closed is `disconnected` at once, where a real one may take one send before
---- it says so.  The network does not model loss on a connection, a peer's
---- reset, partial reads, nor a port held after its socket closed.  It reads no
---- zone: `::1%lo` is its loopback address, and `fe80::1%lo`, as every other
---- address, none of its interfaces.  A connection is made at once or refused,
---- so `connect_within`'s limit is never reached.
+--- call fails `timed_out` at once, whether or not a limit was set, after a
+--- send has delivered what fits.  In a network made by `network_over_turns`, a
+--- call that would wait takes a turn of the scheduler it was given instead, so
+--- that the other fibres run, and looks again.  It fails `timed_out` only
+--- after a whole round in which nothing moved anywhere in the network, so
+--- nothing it waits for arrived, while no fibre sleeps on a clock
+--- `clock_over_beside` made beside it, which would move it when it wakes.  A
+--- call whose socket was closed, or shut for what the call waits for, while it
+--- waited fails `io_failed` (D449, D483, D493).  `accept`, `send`, `receive`,
+--- `receive_from`, `read`, `write` and `write_some` are the calls that may
+--- wait and so switch; the others never do.  A send to a connection whose peer
+--- has closed is `disconnected` at once, where a real one may take one send
+--- before it says so.  The network does not model loss on a connection, a
+--- peer's reset, partial reads, nor a port held after its socket closed.  It
+--- reads no zone: `::1%lo` is its loopback address, and `fe80::1%lo`, as every
+--- other address, none of its interfaces.  A connection is made at once or
+--- refused, so `connect_within`'s limit is never reached.
 public network: type = network_value
 
 --  The scheduler of a network that does not take turns: it runs nothing

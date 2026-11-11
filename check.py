@@ -10931,6 +10931,41 @@ def check_failure_words(full_run):
     return out
 
 
+#  D1316: the device-class nouns a program's own driver module is named
+#  by, which a library module therefore leaves to it.
+DEVICE_CLASS_NOUNS = ("serial", "uart", "usart", "spi", "i2c", "gpio",
+                      "timer", "adc", "dac", "dma", "pwm", "rtc", "usb",
+                      "watchdog")
+
+
+def check_library_module_names(full_run):
+    """A library module is not named by a bare device-class noun (D1316).
+
+    [1850] refuses two imports with one final segment and the library
+    writes no alias, so a library module named as a board port names its
+    driver, `serial`, forces an alias on the firmware that imports both;
+    core/README.md's conventions say so and name `core/line` as the
+    module that kept clear.
+    """
+    if not full_run:
+        return []
+    out = []
+    for top in ("core", "hosted", "platform"):
+        base = os.path.join(ROOT, top)
+        for here, folders, files in os.walk(base):
+            folders.sort()
+            name = os.path.basename(here)
+            if name in DEVICE_CLASS_NOUNS and any(
+                    one.endswith(".ldn") for one in files):
+                module = os.path.relpath(here, ROOT).replace(os.sep, "/")
+                out.append(("core/README.md", 1, (
+                    "%s is named by the device-class noun %s, which a"
+                    " program's own driver module takes; name the library"
+                    " module for what it holds, as core/line is (D1316)"
+                    % (module, name))))
+    return out
+
+
 def check_core_module_places(full_run):
     """A `core` module is known in each place a module has to be known.
 
@@ -11313,6 +11348,41 @@ def check_library_documentation(full_run):
     return []
 
 
+#  D1317: the widest a library `---` documentation comment line may be,
+#  its indentation and marker included.
+LIBRARY_COMMENT_COLUMNS = 79
+
+
+def check_library_comment_width(full_run):
+    """A library documentation comment is at most 79 columns (D1317).
+
+    `refine fmt` breaks no line, so nothing else holds a comment to a
+    width; `---` lines of 100 to 133 columns stood in the library before
+    this did.  Columns are characters, as an editor counts them.
+    """
+    if not full_run:
+        return []
+    out = []
+    for top in ("core", "hosted", "platform"):
+        for here, folders, files in os.walk(os.path.join(ROOT, top)):
+            folders.sort()
+            for name in sorted(files):
+                if not name.endswith(".ldn"):
+                    continue
+                path = os.path.join(here, name)
+                relative = os.path.relpath(path, ROOT).replace(os.sep, "/")
+                text = read_file(path, encoding="utf-8")
+                for number, line in enumerate(text.split("\n"), 1):
+                    if line.lstrip(" ").startswith("---") and \
+                            len(line) > LIBRARY_COMMENT_COLUMNS:
+                        out.append((relative, number, (
+                            "this documentation comment line is %d columns;"
+                            " a library one is at most %d (D1317): rewrap"
+                            " its paragraph" % (len(line),
+                                                LIBRARY_COMMENT_COLUMNS))))
+    return out
+
+
 def write_generated(relative, text):
     """Write one of GENERATED's files when its bytes differ."""
     path = os.path.join(ROOT, relative)
@@ -11585,6 +11655,8 @@ def main(argv):
     extra += check_library_page(full_run)
     extra += check_library_documentation(full_run)
     extra += check_core_module_places(full_run)
+    extra += check_library_module_names(full_run)
+    extra += check_library_comment_width(full_run)
     extra += check_library_consumers(full_run)
     extra += check_failure_words(full_run)
     extra += check_benchmark_game_oracles(full_run)

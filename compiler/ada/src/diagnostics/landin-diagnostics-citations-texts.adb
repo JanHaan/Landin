@@ -31321,6 +31321,27 @@ package body Landin.Diagnostics.Citations.Texts is
                & "imports `core/cmp` and with it every shipped conformance"
                & ", so a re-declaration is still D270's collision. It is a"
                & " shared module with its own consumer on every target.",
+            when 1316 =>
+               "Chosen: a `core`, `hosted` or `platform` module is not n"
+               & "amed by a bare device-class noun, `serial`, `uart`, `usa"
+               & "rt`, `spi`, `i2c`, `gpio`, `timer`, `adc`, `dac`, `dma`,"
+               & " `pwm`, `rtc`, `usb` or `watchdog`, the names a firmware"
+               & " program gives its own drivers and a device description "
+               & "its peripherals, but for what it holds: the line setting"
+               & "s and divisor arithmetic of D955 are `core/line`. `core/"
+               & "README.md`'s interface conventions state the rule, and a"
+               & " full `check.py` refuses a library module directory with"
+               & " one of those names.",
+            when 1317 =>
+               "Chosen: a `---` documentation comment line in `core`, `h"
+               & "osted` or `platform` is at most 79 columns, counted in c"
+               & "haracters with its indentation and its marker, the width"
+               & " the compiler's own Ada sources keep; a full `check.py` "
+               & "refuses a longer one, naming the line, and the twelve we"
+               & "re rewrapped within their paragraphs. `docs/format.md` s"
+               & "ays that the layout itself holds a comment to no width a"
+               & "nd a program's comments are its own. Ordinary `--` comme"
+               & "nts are not documentation and are not held.",
             when 274 =>
                "Chosen: a module is named by a short noun or a conventio"
                & "nal abbreviation. `core/small` is `core/spill`, whose ty"

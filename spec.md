@@ -30220,6 +30220,61 @@ system does not have [1450].
 `negative/core-map-missing-parent-conformance` and the debugger's container
 workload, whose evidence entry now stops in `core/cmp`.
 
+### D1316 — A library module leaves the device-class nouns to a program's drivers
+
+**The tour said** at [1850] that two imports with one final segment are
+refused, and the library's convention writes no alias. Naming the
+serial-line module, the natural `core/serial` was ruled out because every
+board port's driver module is its own `serial`, and `core/uart` because
+the derived driver's is `uart`; nothing written down said how a library
+module's name should keep clear of a program's.
+
+**Chosen:** a `core`, `hosted` or `platform` module is not named by a bare
+device-class noun, `serial`, `uart`, `usart`, `spi`, `i2c`, `gpio`,
+`timer`, `adc`, `dac`, `dma`, `pwm`, `rtc`, `usb` or `watchdog`, the names
+a firmware program gives its own drivers and a device description its
+peripherals, but for what it holds: the line settings and divisor
+arithmetic of D955 are `core/line`. `core/README.md`'s interface
+conventions state the rule, and a full `check.py` refuses a library module
+directory with one of those names.
+
+**The alternatives:** an endorsed alias convention for the collision,
+which puts the cost on exactly the programs that use both modules and
+makes the library's own examples and fixtures write aliases it otherwise
+never writes; and a rule with no list, which leaves the next module's
+author to rediscover which names drivers take.
+
+**Pinned by** `scripts/tests/test_check_controls.py`'s
+`LibraryModuleNames`.
+
+### D1317 — A library documentation comment is at most 79 columns
+
+**The tour said** nothing; `refine fmt` breaks no line and keeps a
+comment's bytes, and `check.py` held a library comment to its adjacency,
+its names and its sides, not its width, so `---` lines of 100 to 133
+columns stood in `hosted/blocking`, `hosted/events`, `core/io` and its
+fake network, and twelve of 80 to 87 columns were left after they were
+rewrapped.
+
+**Chosen:** a `---` documentation comment line in `core`, `hosted` or
+`platform` is at most 79 columns, counted in characters with its
+indentation and its marker, the width the compiler's own Ada sources
+keep; a full `check.py` refuses a longer one, naming the line, and the
+twelve were rewrapped within their paragraphs. `docs/format.md` says
+that the layout itself holds a comment to no width and a program's
+comments are its own. Ordinary `--` comments are not documentation and
+are not held.
+
+**The alternatives:** a width `refine fmt` holds every comment to, which
+would make the formatter break or refuse lines it now keeps byte for
+byte, a change to its one rule that it never changes a comment; 100
+columns, which the long lines met and a side-by-side reading of two
+sources does not; and no width, which `docs/format.md` would then have
+said.
+
+**Pinned by** `scripts/tests/test_check_controls.py`'s
+`LibraryCommentWidth`.
+
 ### D274 — The library says what it does
 
 **The tour said** nothing about the library's names beyond [1270]'s "the
