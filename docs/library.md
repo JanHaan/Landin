@@ -1550,7 +1550,7 @@ checked for both.
 
 Words for a person for every failure atom a `core` module raises: a short English phrase each.
 
-`failure.words(problem)` gives the phrase for any of the 38 atoms in
+`failure.words(problem)` gives the phrase for any of the 39 atoms in
 `failure.reason`, every atom a `core` module fails with. So a call's
 `else (problem)` passes its failure straight on, whatever subset it
 declares.
@@ -2257,11 +2257,30 @@ once it is ready. So a regular file is read at once, and a terminal or a
 pipe a fibre waits for lets the others run.
 
 The provider never makes such a file non-blocking, since other processes
-share its mode. While one that is not a regular file is blocking, a write
-to it is handed at most `PIPE_BUF` bytes at a time: 4096 on Linux and 512
-on Darwin and FreeBSD. A pipe ready to write takes that many without
-waiting. A terminal or a blocking socket can report room for less, and a
-write to one can still hold the thread until the other end reads (D1045).
+share its mode. What a write to one that is still blocking does depends
+on what it is, which the provider asks at each write:
+
+- A regular file never waits for a reader, and is written whole.
+- A pipe is handed at most `PIPE_BUF` bytes at a time: 4096 on Linux and
+  512 on Darwin and FreeBSD. A pipe ready to write takes that many
+  without waiting (D1045).
+- Anything else, a terminal, a socket the program made itself or a
+  device, is refused. It can report room for less than a write hands it,
+  and the write would then hold the thread, and every fibre on it, until
+  the other end reads. `write` and `write_some` fail with `io_failed`
+  before the system is asked, nothing is written, and
+  `events.last_errno` reads EAGAIN, the errno of a call that would wait
+  (D1278).
+
+A program that meets the refusal makes the descriptor non-blocking,
+`posix.set_non_blocking(system.descriptor_of(file), true)`, and the
+provider then waits for it as it does for its own sockets; or it writes
+through `hosted/blocking`, whose writes wait by design. Standard output
+and standard error that are a terminal are such descriptors: a program
+over `hosted/events` that prints for a person sets them non-blocking, or
+prints through a `blocking.host` beside its event provider. Setting a
+terminal non-blocking changes the open file its shell shares, so set it
+back before the program ends.
 
 Closing a file or a socket, or shutting a socket's side, through the
 provider wakes every fibre waiting on it. The woken fibre's call fails
@@ -2359,7 +2378,11 @@ calling `_landin_host_initialize_arguments(argc, argv, envp)` from
 
 - Call it before the first `system.new()` or `blocking.new()`, and before
   starting any thread that may make one. Both trap when they run before
-  it.
+  it. The trap is `unreachable` at a line of
+  `platform/posix/processes.ldn`, and the line before it on standard
+  error names the call: `landin: the host was not initialized: a C main
+  calls _landin_host_initialize_arguments(argc, argv, envp) first`
+  (D1281).
 - Importing `core/io` does not initialize anything. Files, streams and
   the heap work without the call.
 - The first call needs a nonnegative `argc` and a non-null `argv`, and
@@ -2381,6 +2404,11 @@ calling `_landin_host_initialize_arguments(argc, argv, envp)` from
 - A path that names nothing fails with `not_found`, whether a component
   is missing (ENOENT) or one before the last is not a directory
   (ENOTDIR). `same_file` answers false for such an output path.
+- A path that names a directory where a file is opened fails with
+  `is_a_directory`, keeping EISDIR, from `open_read`, `open_write` and
+  `open_file` alike. The system opens a directory to read and fails each
+  read of it, so an open to read alone asks what it opened and closes a
+  directory again (D1276). `failure.words` says "is a directory".
 - A path that holds a NUL fails with `io_failed` and EINVAL, and one
   longer than the system's PATH_MAX fails with `io_failed` and
   ENAMETOOLONG, as `platform/posix` refuses them.
@@ -2695,6 +2723,9 @@ a waiter reads the cell again. It is the futex, `_umtx_op` and
 | `spawn` | Start a program by its path. |
 | `default_in_children` | Give every child a signal's default disposition. |
 | `wait` | `waitpid`, reporting a `child_status`. |
+| `kill` | Send a signal, by its number, to a process: a child `spawn` started, or this one. |
+| `current_process` | This process's own ID, `getpid`. |
+| `signal_hangup`, `signal_interrupt`, `signal_kill`, `signal_terminate`, `signal_user1`, `signal_user2` | The numbers of SIGHUP, SIGINT, SIGKILL, SIGTERM, SIGUSR1 and SIGUSR2 on this system. |
 | `exit` | End the process. |
 | `arguments`, `argument` | The process's arguments. |
 | `environment`, `variable` | The process's environment. |
@@ -2750,6 +2781,37 @@ How signals reach a child:
   ignore included, as a shell's background job and `nohup` expect.
 - `default_in_children` refuses with `einval` a number that is no
   signal, one past 64, or past 31 on Darwin, and SIGKILL and SIGSTOP.
+
+`kill` is how a parent stops a child, and how a process signals itself
+(D1279). It takes a `process_id`: `system.process_of(child)` gives the ID
+of a child `io.spawn` started, and `current_process()` this process's
+own.
+
+- The number zero sends nothing and asks whether the process is there.
+- It fails with `esrch` for a process that is gone, a child already
+  waited for among them, `eperm` for one this process may not signal,
+  and `einval` for a number that is no signal's.
+- A process group, or every process, which C's `kill` takes as a zero or
+  negative ID, is refused with `einval`.
+- It is Linux's `kill` system call and the C library's `kill` on Darwin
+  and FreeBSD, so it needs no `--link=libc`.
+
+A handler for a signal is the C library's to install, with
+`platform/libc`'s `sigaction_handler` (D1280): for an `extern(c)`
+function `on_interrupt: (number: i32) -> none`, the program writes
+`action: libc.handler_action = libc.handling(on_interrupt, 0)` and then
+`libc.sigaction_handler(libc.sigint, addr action, libc.no_address)`,
+which gives 0 when the system took it.
+
+- `libc.signal_handler` is the handler's type, C's `void (*)(int)`, and
+  `libc.handling(handler, flags)` makes the `handler_action` that calls
+  it, with no further signal blocked while it runs.
+- `handler_action` is C's `struct sigaction` with its handler typed as
+  the function; `signal_action` keeps it as the word `sig_dfl` and
+  `sig_ign` are, for a disposition that is no function.
+- A Linux program that installs a handler links the C library,
+  `--link=libc`: a static one has no `sigaction`. `hosted/events`'
+  `signal.watch` reads signals with no handler and no C library.
 
 ### Threads
 
@@ -2976,7 +3038,7 @@ How a call reports a failure:
 | directories | `fdopendir`, `readdir`, `closedir`, `fstatat`, `mkdirat` and `unlinkat`, with each system's `struct dirent` as `directory_record`, its `at_fdcwd`, `o_directory`, `at_symlink_nofollow` and `at_removedir`, and the `d_type` and mode bits |
 | clocks and randomness | `clock_gettime` with a `clock_realtime` or a `clock_monotonic`, `nanosleep` with a `timespec`, and `arc4random_buf` |
 | sockets | `socket`, `socketpair`, `bind`, `listen`, `accept`, `accept4`, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `shutdown`, `setsockopt`, `getsockopt`, `getsockname` and `getpeername`, with each system's `af_inet6`, `sol_socket` and option numbers, `sock_cloexec` and `msg_nosignal` where they exist, `so_nosigpipe`, the address records' sizes and its `time_limit`, C's `struct timeval` |
-| signals | `sigaction` with each system's `signal_action` and `signal_set`, `sigprocmask` with each system's `sig_block`, `sig_unblock` and `sig_setmask`, `getpid` and `kill`, the signals `sighup`, `sigint` and `sigterm` and each system's `sigusr1` and `sigusr2`, `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef`, and `posix_spawnattr_setsigmask` with `posix_spawn_setsigmask` |
+| signals | `sigaction` with each system's `signal_action` and `signal_set`, `sigaction_handler` with each system's `handler_action`, which `handling` makes from a `signal_handler`, `sigprocmask` with each system's `sig_block`, `sig_unblock` and `sig_setmask`, `getpid` and `kill`, the signals `sighup`, `sigint` and `sigterm` and each system's `sigusr1` and `sigusr2`, `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef`, and `posix_spawnattr_setsigmask` with `posix_spawn_setsigmask` |
 | descriptors that do not block | `fcntl`'s `f_getfl` and `f_setfl`, each system's `o_nonblock`, and `sock_nonblock` where it exists |
 | the rest of the file system | `pread`, `pwrite`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat`, `futimens`, `fstat`, `flock` with its `lock_sh`, `lock_ex`, `lock_nb` and `lock_un`, and `fcntl`'s record locks with each system's `f_getlk`, `f_setlk`, `f_setlkw`, lock types and `lock_record`, C's `struct flock` |
 | users and groups | `getuid`, `geteuid`, `getgid` and `getegid` for the process's IDs, and `getpwuid_r`, `getpwnam_r`, `getgrgid_r` and `getgrnam_r` over each system's `account_record`, C's `struct passwd`, and the shared `group_record` |
@@ -3048,7 +3110,7 @@ The typed wrappers are the calls the library makes:
 | files and directories | `getdents64`, `mkdirat`, `unlinkat`, `pread64`, `pwrite64`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat2` (every architecture's rename), `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat` (whose path may be `no_path`), `flock` |
 | descriptors | `ppoll`, `pipe2`, `dup3`, `fcntl`, `close_range`, `ioctl` |
 | events | `epoll_create1`, `epoll_ctl`, `epoll_pwait` (every architecture's epoll wait), `signalfd4` and `rt_sigprocmask` |
-| processes | `fork` (a `clone` with SIGCHLD and nothing shared), `execve`, `wait4`, `rt_sigaction` and the four ID calls |
+| processes | `fork` (a `clone` with SIGCHLD and nothing shared), `execve`, `wait4`, `getpid`, `kill`, `rt_sigaction` and the four ID calls |
 | time and randomness | `clock_gettime`, `clock_nanosleep`, `getrandom` |
 | sockets | the socket calls from `socket` to `getpeername`, with `accept4`, `sendto` and `recvfrom` standing for the calls arm64 and x86-64 lack |
 

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1279: platform/posix's kill signals a process on every hosted system: a parent starts /bin/sh reading a line from a pipe nobody writes, sends it SIGTERM by posix.signal_terminate and waits for a child that signal ended; the number zero finds this process, by current_process, and the running child, and is esrch for the child once it was waited for, a number that is no signal's is einval, and a shell that signals itself by each name posix numbers, HUP, INT, USR1, USR2 and KILL, ends by the signal of that number
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

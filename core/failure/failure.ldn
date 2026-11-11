@@ -21,7 +21,7 @@ public reason: type = mem.out_of_bounds | mem.empty | mem.full | mem.not_empty
     | mem.out_of_memory | map.missing | map.end_of_entries
     | tree.no_such_node | tree.invalid_children
     | tree.too_many_nodes | tree.too_many_leaves
-    | io.not_found | io.no_access | io.io_failed
+    | io.not_found | io.no_access | io.io_failed | io.is_a_directory
     | io.no_argument | io.already_exists | io.no_variable
     | io.line_too_long | io.not_a_terminal
     | net.invalid_address | net.refused | net.unreachable
@@ -55,6 +55,7 @@ public words: (problem: reason) -> (phrase: []u8) =
         io.not_found: "not found"
         io.no_access: "permission denied"
         io.io_failed: "input or output failed"
+        io.is_a_directory: "is a directory"
         io.no_argument: "no such argument"
         io.already_exists: "already exists"
         io.no_variable: "no such variable"

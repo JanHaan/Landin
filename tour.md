@@ -51,7 +51,8 @@ import hosted/blocking
 
 --- How many lines the file named by the first argument has.
 count_file_lines: (host: blocking.host) -> (lines: usize)
-                  ! io.no_argument | io.not_found | io.no_access | io.io_failed
+                  ! io.no_argument | io.not_found | io.no_access
+                  | io.is_a_directory | io.io_failed
                   | io.line_too_long =
     path := try io.argument_at(host, 0)
     source := try io.open_read(host, path)

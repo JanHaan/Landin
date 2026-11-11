@@ -465,33 +465,39 @@ events_read: (self: host, opened: io.file, into: []mut u8)
 end events_read
 
 --  How many of `wanted` bytes one write to `opened` may be handed once
---  it is ready, so that the write cannot wait (D1045): all of them when
---  they are no more than `posix.pipe_atomic`, which a pipe reported ready
---  takes without waiting, or when the descriptor is non-blocking, whose
---  write fails EAGAIN rather than wait, or a regular file, which never
---  waits for a reader; otherwise `posix.pipe_atomic`.  The mode is read
---  here rather than set: it belongs to the open file, which a standard
---  stream shares with other processes.  A terminal or a blocking socket
---  the program hands over may report room for less, and a write there
---  can still hold the thread.
-at_most: (opened: io.file, wanted: usize) -> (most: usize) =
+--  it is ready, so that the write cannot wait (D1045, D1278).  A
+--  non-blocking descriptor's write fails EAGAIN rather than wait, and a
+--  regular file never waits for a reader: either is handed all of them.
+--  A pipe that is still blocking is handed no more than
+--  `posix.pipe_atomic`, which a pipe reported ready takes whole.  Any
+--  other blocking descriptor, a terminal, a socket or a device, may
+--  report room for less than it is then asked to take and hold the
+--  thread until its other end reads, so the write is refused before the
+--  system is asked: `io_failed`, keeping EAGAIN, which says the write
+--  would wait.  The mode is read here rather than set: it belongs to the
+--  open file, which a standard stream shares with other processes, and
+--  it is read at each write because the program may change it between
+--  two.
+write_limit: (self: host, opened: io.file, wanted: usize)
+             -> (most: usize) ! io.io_failed =
     most = wanted
-    return when wanted <= posix.pipe_atomic
-    most = posix.pipe_atomic
     descriptor: posix.descriptor = system.descriptor_of(opened)
     unblocked: bool = posix.non_blocking(descriptor) else (problem)
-        _ = problem
-        return
+        record(self, problem)
+        fail io.io_failed
     end
-    if not unblocked then
-        found: posix.status = posix.status_of(descriptor) else (problem)
-            _ = problem
-            return
-        end
-        return when found.kind <> posix.regular
+    return when unblocked
+    found: posix.status = posix.status_of(descriptor) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+    return when found.kind == posix.regular
+    if found.kind <> posix.fifo then
+        record(self, posix.eagain)
+        fail io.io_failed
     end if
-    most = wanted
-end at_most
+    if most > posix.pipe_atomic then most = posix.pipe_atomic end if
+end write_limit
 
 --  Write some of `bytes`, no more than `most` of them, once `opened` has
 --  room, waiting for it as a fibre does: a positive count no greater than
@@ -515,7 +521,7 @@ end written_some
 
 write_all: (self: host, opened: io.file, bytes: []u8)
            -> none ! io.io_failed =
-    most: usize = at_most(opened, lenof bytes)
+    most: usize = try write_limit(self, opened, lenof bytes)
     mut written: usize = 0
     while written < lenof bytes do
         written += try written_some(self, opened,
@@ -539,21 +545,23 @@ events_write_some: (self: host, opened: io.file, bytes: []u8)
     end if
     mut requested: usize = lenof bytes
     if requested > 65536 then requested = 65536 end if
-    count = try written_some(self, opened, bytes[0..<requested],
-                             at_most(opened, requested))
+    most: usize = try write_limit(self, opened, requested)
+    count = try written_some(self, opened, bytes[0..<requested], most)
 end events_write_some
 
 --  What does not wait is the system's: its files, streams and arguments.
 --  Closing a file wakes every fibre waiting on it first (D449).
 events_open_read: (self: host, path: text.host_string)
                   -> (opened: io.file)
-                  ! io.not_found | io.no_access | io.io_failed =
+                  ! io.not_found | io.no_access | io.is_a_directory
+                  | io.io_failed =
     opened = try io.open_read(services(self), path)
 end events_open_read
 
 events_open_write: (self: host, path: text.host_string)
                    -> (opened: io.file)
-                   ! io.not_found | io.no_access | io.io_failed =
+                   ! io.not_found | io.no_access | io.is_a_directory
+                   | io.io_failed =
     opened = try io.open_write(services(self), path)
 end events_open_write
 

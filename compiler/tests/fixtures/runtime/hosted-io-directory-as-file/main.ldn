@@ -1,0 +1,137 @@
+--  D1276: a directory named where a file is opened is `is_a_directory`.
+--  The system refuses a directory opened to write with EISDIR, 21 on
+--  every hosted system, and opens one to read, failing each read; the
+--  hosted provider answers both at the open and keeps EISDIR.  The root
+--  directory is one on every system, and /dev/null a file that opens.
+import core/cmp
+import core/failure
+import core/io
+import core/io/fake
+import core/mem
+import core/text
+import hosted/blocking
+import hosted/events
+
+directory: []u8 = "/"
+existing: []u8 = "/dev/null"
+missing: []u8 = "/landin-absent-parent/absent"
+
+--  How the open asked for is made: `open_read`, `open_write`, or
+--  `open_file` with the options to read or to update.
+by_read: u8 = 0
+by_write: u8 = 1
+by_file_reading: u8 = 2
+by_file_updating: u8 = 3
+
+reading: io.open_options = (read: true, write: false, append: false,
+                            create: false, exclusive: false,
+                            truncate: false)
+
+opened_by: (provider: type is io.file_system, host: provider, path: []u8,
+            how: u8) -> (opened: io.file) ! failure.reason =
+    named: text.host_string = text.host_over(path)
+    if how == by_read then
+        opened = try io.open_read(host, named)
+    elsif how == by_write then
+        opened = try io.open_write(host, named)
+    elsif how == by_file_reading then
+        opened = try io.open_file(host, named, reading)
+    else
+        opened = try io.open_file(host, named, io.updating)
+    end if
+end opened_by
+
+--  Whether the open fails `wanted`, with the words `phrase`.
+refused: (provider: type is io.file_system, host: provider, path: []u8,
+          how: u8, wanted: failure.reason, phrase: []u8) -> (yes: bool) =
+    yes = false
+    opened: io.file = opened_by(host, path, how) else (problem)
+        yes = problem == wanted
+              and cmp.compare(failure.words(problem), phrase) == cmp.equal
+        return
+    end
+    io.close(host, opened) else none
+end refused
+
+--  Every open of the directory through the blocking provider.
+blocking_refuses: (host: blocking.host) -> (yes: bool) =
+    yes = false
+    for how in by_read..by_file_updating do
+        return when not refused(host, directory, how, io.is_a_directory,
+                                "is a directory")
+        return when blocking.last_errno(host) <> 21
+    end for
+    yes = true
+end blocking_refuses
+
+--  And through the event provider, whose opens are the system's too.
+events_refuses: (host: events.host) -> (yes: bool) =
+    yes = false
+    for how in by_read..by_file_updating do
+        return when not refused(host, directory, how, io.is_a_directory,
+                                "is a directory")
+        return when events.last_errno(host) <> 21
+    end for
+    yes = true
+end events_refuses
+
+mut paths: [2][16]u8 = zeroed
+mut contents: [2][16]u8 = zeroed
+
+--  A node of the memory volume at `path`, of `kind`.
+node_at: (index: usize, path: []u8, kind: io.entry_kind)
+         -> (node: fake.volume_node) ! mem.out_of_bounds =
+    try mem.copy(paths[index][0..<lenof path], path)
+    node = (path: paths[index][0..<16], path_length: lenof path,
+            contents: contents[index][0..<16], length: 0, kind: kind,
+            read_only: false, modified: (seconds: 0, nanoseconds: 0))
+end node_at
+
+--  The memory volume says the same of a directory node.
+volume_refuses: () -> (yes: bool) ! mem.out_of_bounds =
+    yes = false
+    mut nodes: [2]fake.volume_node =
+        [try node_at(0, "docs", io.subdirectory),
+         try node_at(1, "docs/note", io.regular)]
+    mut state: fake.volume_space = zeroed
+    host := fake.volume_over(state, nodes[0..<2], "/volume")
+    for how in by_read..by_file_updating do
+        return when not refused(host, "docs", how, io.is_a_directory,
+                                "is a directory")
+    end for
+    return when refused(host, "docs/note", by_read, io.is_a_directory,
+                        "is a directory")
+    yes = refused(host, "absent", by_read, io.not_found, "not found")
+end volume_refuses
+
+public main: () -> (code: i32) =
+    host: blocking.host = blocking.new()
+    code = 1
+    return when not blocking_refuses(host)
+    code = 2
+    --  A file still opens, and a missing one is still not found.
+    opened: io.file = io.open_read(host, text.host_over(existing))
+        else (problem)
+        _ = problem
+        return
+    end
+    io.close(host, opened) else none
+    code = 3
+    return when not refused(host, missing, by_read, io.not_found,
+                            "not found")
+    code = 4
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    waiting := events.over(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    return when not events_refuses(waiting)
+    code = 5
+    held: bool = volume_refuses() else (problem)
+        _ = problem
+        return
+    end
+    return when not held
+    code = 42
+end main

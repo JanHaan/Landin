@@ -17,7 +17,8 @@ path: []u8 = "f"
 
 acquire: (provider: type is mem.allocator, memory: provider,
           world: any io.world) -> (value: reader)
-         ! io.not_found | io.no_access | io.io_failed | mem.out_of_memory =
+         ! io.not_found | io.no_access | io.is_a_directory | io.io_failed
+         | mem.out_of_memory =
     opened: io.file = try world.open_read(text.host_over(path))
     initial: [2]u8 = zeroed
     buffer: ptr mut [2]u8 = mem.new(memory, initial) else (problem)

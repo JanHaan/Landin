@@ -3040,6 +3040,14 @@ package body Landin.Diagnostics.Citations is
                "SIGPIPE is ignored at start and restored in a child",
             when 1125 =>
                "SIGCHLD ignored at start is given its default back",
+            when 1279 =>
+               "`platform/posix` sends a signal with `kill`",
+            when 1280 =>
+               "A signal handler is installed as a C function value, thr"
+               & "ough a second view of `sigaction`'s record",
+            when 1281 =>
+               "A program that reads the argument root before it exists "
+               & "is told the call it lacks",
             when 323 =>
                "`platform/posix` gives sockets in the system's own recor"
                & "ds",
@@ -3138,6 +3146,9 @@ package body Landin.Diagnostics.Citations is
                "`core/sort` takes a comparison with a context",
             when 388 =>
                "A library failure atom has words for a person",
+            when 1276 =>
+               "A directory named where a file is opened is `is_a_direct"
+               & "ory`",
             when 582 =>
                "An errno has words in `platform/posix`, which passes the"
                & " library's on",
@@ -3209,6 +3220,9 @@ package body Landin.Diagnostics.Citations is
             when 1045 =>
                "A write to a blocking descriptor takes no more than a pi"
                & "pe reported ready takes whole",
+            when 1278 =>
+               "The event provider refuses a blocking descriptor whose w"
+               & "rite could hold the thread",
             when 488 =>
                "The event provider reads every watched signal through on"
                & "e descriptor, and stopping reads what came",
@@ -4690,6 +4704,12 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The core library and the derived programs",
             when 1125 =>
                "Decisions: The core library and the derived programs",
+            when 1279 =>
+               "Decisions: The core library and the derived programs",
+            when 1280 =>
+               "Decisions: The core library and the derived programs",
+            when 1281 =>
+               "Decisions: The core library and the derived programs",
             when 323 =>
                "Decisions: The core library and the derived programs",
             when 580 =>
@@ -4768,6 +4788,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The core library and the derived programs",
             when 388 =>
                "Decisions: The core library and the derived programs",
+            when 1276 =>
+               "Decisions: The core library and the derived programs",
             when 582 =>
                "Decisions: The core library and the derived programs",
             when 955 =>
@@ -4823,6 +4845,8 @@ package body Landin.Diagnostics.Citations is
             when 487 =>
                "Decisions: The core library and the derived programs",
             when 1045 =>
+               "Decisions: The core library and the derived programs",
+            when 1278 =>
                "Decisions: The core library and the derived programs",
             when 488 =>
                "Decisions: The core library and the derived programs",
@@ -7054,6 +7078,17 @@ package body Landin.Diagnostics.Citations is
             when 1125 =>
                "https://www.701.dev/spec.html#d1125-sigchld-ignored-at-s"
                & "tart-is-given-its-default-back",
+            when 1279 =>
+               "https://www.701.dev/spec.html#d1279-platform-posix-sends"
+               & "-a-signal-with-kill",
+            when 1280 =>
+               "https://www.701.dev/spec.html#d1280-a-signal-handler-is-"
+               & "installed-as-a-c-function-value-through-a-second-view-of"
+               & "-sigaction-s-record",
+            when 1281 =>
+               "https://www.701.dev/spec.html#d1281-a-program-that-reads"
+               & "-the-argument-root-before-it-exists-is-told-the-call-it-"
+               & "lacks",
             when 323 =>
                "https://www.701.dev/spec.html#d323-platform-posix-gives-"
                & "sockets-in-the-system-s-own-records",
@@ -7171,6 +7206,9 @@ package body Landin.Diagnostics.Citations is
             when 388 =>
                "https://www.701.dev/spec.html#d388-a-library-failure-ato"
                & "m-has-words-for-a-person",
+            when 1276 =>
+               "https://www.701.dev/spec.html#d1276-a-directory-named-wh"
+               & "ere-a-file-is-opened-is-is-a-directory",
             when 582 =>
                "https://www.701.dev/spec.html#d582-an-errno-has-words-in"
                & "-platform-posix-which-passes-the-library-s-on",
@@ -7260,6 +7298,10 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d1045-a-write-to-a-blockin"
                & "g-descriptor-takes-no-more-than-a-pipe-reported-ready-ta"
                & "kes-whole",
+            when 1278 =>
+               "https://www.701.dev/spec.html#d1278-the-event-provider-r"
+               & "efuses-a-blocking-descriptor-whose-write-could-hold-the-"
+               & "thread",
             when 488 =>
                "https://www.701.dev/spec.html#d488-the-event-provider-re"
                & "ads-every-watched-signal-through-one-descriptor-and-stop"

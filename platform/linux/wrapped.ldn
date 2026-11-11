@@ -16,6 +16,7 @@ fixed if compiler.os == linux then
         pread64_number: i64 = 17
         pwrite64_number: i64 = 18
         mremap_number: i64 = 25
+        getpid_number: i64 = 39
         socket_number: i64 = 41
         connect_number: i64 = 42
         sendto_number: i64 = 44
@@ -32,6 +33,7 @@ fixed if compiler.os == linux then
         execve_number: i64 = 59
         exit_number: i64 = 60
         wait4_number: i64 = 61
+        kill_number: i64 = 62
         fcntl_number: i64 = 72
         flock_number: i64 = 73
         fsync_number: i64 = 74
@@ -107,8 +109,10 @@ fixed if compiler.os == linux then
         futex_number: i64 = 98
         clock_gettime_number: i64 = 113
         clock_nanosleep_number: i64 = 115
+        kill_number: i64 = 129
         rt_sigaction_number: i64 = 134
         rt_sigprocmask_number: i64 = 135
+        getpid_number: i64 = 172
         getuid_number: i64 = 174
         geteuid_number: i64 = 175
         getgid_number: i64 = 176
@@ -173,8 +177,10 @@ fixed if compiler.os == linux then
         futex_number: i64 = 98
         clock_gettime_number: i64 = 113
         clock_nanosleep_number: i64 = 115
+        kill_number: i64 = 129
         rt_sigaction_number: i64 = 134
         rt_sigprocmask_number: i64 = 135
+        getpid_number: i64 = 172
         getuid_number: i64 = 174
         geteuid_number: i64 = 175
         getgid_number: i64 = 176

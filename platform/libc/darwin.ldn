@@ -198,6 +198,23 @@ fixed if compiler.os == darwin then
         flags: i32
     end signal_action
 
+    --- C's `struct sigaction` as Darwin declares it, for an action that
+    --- calls a handler: `signal_action` with its handler a C function
+    --- value, which `sigaction_handler` installs.
+    public handler_action: type = struct
+        handler: signal_handler
+        mask: signal_set
+        flags: i32
+    end handler_action
+
+    --- The action that calls `handler` with `flags`, `sa_flags`, and no
+    --- signal blocked while it runs beyond the one it handles.
+    public handling:
+        (handler: signal_handler, flags: i32) -> (action: handler_action) =
+        none_blocked: signal_set = zeroed
+        action = (handler: handler, mask: none_blocked, flags: flags)
+    end handling
+
     --- `sigprocmask` operation: block the signals given beside those
     --- blocked already, `SIG_BLOCK`, numbered apart by Linux and the BSDs.
     public sig_block: i32 = 1

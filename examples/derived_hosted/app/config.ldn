@@ -177,7 +177,8 @@ end prepare_logged
 public open_output: (provider: type is mem.allocator, memory: provider,
                      world: any io.world, inout value: config)
                     -> none ! bad_argument | mem.out_of_memory
-                            | io.not_found | io.no_access | io.io_failed =
+                            | io.not_found | io.no_access
+                            | io.is_a_directory | io.io_failed =
     path: []u8 = value.output_path
     if lenof path > 0 then
         target: text.host_string = text.host_over(path)
@@ -197,7 +198,8 @@ end open_output
 public build_logged: (provider: type is mem.allocator, memory: provider,
                       world: any io.world, log: any diag.log) -> (value: config)
                      ! bad_argument | mem.out_of_memory
-                     | io.not_found | io.no_access | io.io_failed =
+                     | io.not_found | io.no_access | io.is_a_directory
+                     | io.io_failed =
     value = try prepare_logged(memory, world, log)
     try open_output(memory, world, value)
 end build_logged
@@ -210,7 +212,8 @@ end close_config
 public build: (provider: type is mem.allocator, memory: provider,
                world: any io.world) -> (value: config)
               ! bad_argument | mem.out_of_memory
-              | io.not_found | io.no_access | io.io_failed =
+              | io.not_found | io.no_access | io.is_a_directory
+              | io.io_failed =
     lent := io.writer_of(world)
     writer: any io.writer = any(addr lent)
     mut logger := diag.stream(writer, world.err())

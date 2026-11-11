@@ -1,0 +1,114 @@
+--  D1278: the event provider refuses a write it cannot make without the
+--  risk of holding its thread.  The program makes a pair of connected
+--  sockets and leaves them blocking.  A socket reported ready may have
+--  room for less than a write hands it, and a blocking write then waits
+--  in the system until the other end reads, which a fibre of the same
+--  thread never does.  So the provider refuses: `io_failed`, keeping
+--  EAGAIN, and nothing is sent.  The megabyte here is more than any
+--  system's socket holds; before the refusal the program never ended.
+--  Made non-blocking, the same socket takes its bytes, and a blocking
+--  pipe, which a ready report does promise room in, still takes a short
+--  write (D1045).  The blocking provider waits by design, and writes to
+--  the blocking socket as it always did.
+import core/cmp
+import core/io
+import hosted/blocking
+import hosted/events
+import hosted/system
+import platform/posix
+
+mut large: [1048576]u8 = zeroed
+
+greeting: []u8 = "over the socket"
+
+--  Whether a write of `bytes` to `into` is refused as a write that would
+--  wait, by `io.write` and by `io.write_some`.
+refused: (host: events.host, into: io.file, bytes: []u8) -> (yes: bool) =
+    yes = false
+    would_wait: i32 = posix.number(posix.eagain)
+    mut met: bool = false
+    io.write(host, into, bytes) else (problem)
+        met = problem == io.io_failed
+              and events.last_errno(host) == would_wait
+    end
+    return when not met
+    met = false
+    count: usize = io.write_some(host, into, bytes) else (problem)
+        met = problem == io.io_failed
+              and events.last_errno(host) == would_wait
+        return when not met
+        0
+    end
+    yes = met and count == 0
+end refused
+
+--  Whether `source` holds exactly `wanted`, read without waiting.
+holds: (source: posix.descriptor, wanted: []u8) -> (yes: bool) =
+    yes = false
+    mut room: [64]u8 = zeroed
+    got: usize = posix.read(source, room[0..<64]) else (problem)
+        --  Nothing to read is EAGAIN on a non-blocking descriptor.
+        yes = lenof wanted == 0 and problem == posix.eagain
+        return
+    end
+    yes = cmp.compare(room[0..<got], wanted) == cmp.equal
+end holds
+
+run: (host: events.host) -> (code: i32) ! posix.errno =
+    ends: posix.connected_pair = try posix.socket_pair(posix.stream)
+    code = 3
+    return when try posix.non_blocking(ends.first)
+    writing: io.file = system.file_of(ends.first)
+    sending: io.file = system.socket_of(ends.first)
+    --  A short write and one no socket holds, as a file and as a socket.
+    code = 4
+    return when not refused(host, writing, greeting)
+    code = 5
+    return when not refused(host, sending, greeting)
+    code = 6
+    return when not refused(host, writing, large)
+    --  Nothing was sent: the other end, read without waiting, is empty.
+    code = 7
+    try posix.set_non_blocking(ends.second, true)
+    return when not holds(ends.second, greeting[0..<0])
+    --  The blocking provider writes to the same blocking socket.
+    code = 8
+    plain: blocking.host = blocking.new()
+    io.write(plain, sending, greeting) else (problem)
+        _ = problem
+        return
+    end
+    return when not holds(ends.second, greeting)
+    --  Made non-blocking, as the refusal asks, the socket takes the bytes.
+    code = 9
+    try posix.set_non_blocking(ends.first, true)
+    io.write(host, sending, greeting) else (problem)
+        _ = problem
+        return
+    end
+    return when not holds(ends.second, greeting)
+    --  A blocking pipe is still written (D1045).
+    code = 10
+    pipe: posix.pipe_ends = try posix.pipe()
+    return when try posix.non_blocking(pipe.writing)
+    io.write(host, system.file_of(pipe.writing), greeting) else (problem)
+        _ = problem
+        return
+    end
+    return when not holds(pipe.reading, greeting)
+    code = 42
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [2]usize = zeroed
+    host := events.over(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = run(host) else (problem)
+        _ = problem
+        2
+    end
+end main

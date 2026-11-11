@@ -1,0 +1,96 @@
+--  D1279: platform/posix's `kill` signals a process on every hosted
+--  system, where a program wrote Linux's raw system call and the C
+--  library's `kill` under `fixed if compiler.os` before.  The parent
+--  starts a shell that reads a line from a pipe the parent holds open
+--  and never writes, so the child waits until it is told to stop;
+--  `kill` sends it SIGTERM, and `wait` reports that signal.  The number
+--  zero sends nothing and asks whether the process is there: this
+--  process is, and the child that was waited for is `esrch`.  A number
+--  that is no signal's is `einval`.  The other numbers `posix` names are
+--  held to the system's own: a shell told to signal itself by name ends
+--  by the signal of that number.
+import core/io
+import core/text
+import platform/posix
+
+--  The shell waiting for a line on `input`, its other streams inherited.
+waiting_shell: (input: posix.descriptor)
+               -> (child: posix.process_id) ! posix.errno =
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"),
+          value: text.host_over("/bin:/usr/bin"))]
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over("read line")]
+    child = try posix.spawn(text.host_over("/bin/sh"), arguments[0..<2],
+                            variables[0..<1],
+                            (input: input, output: posix.standard_output,
+                             errors: posix.standard_error))
+end waiting_shell
+
+--  Whether a shell that runs `command`, which signals itself, ends by
+--  the signal numbered `signal`.
+ends_by: (command: []u8, signal: i32) -> (yes: bool) ! posix.errno =
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"),
+          value: text.host_over("/bin:/usr/bin"))]
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(command)]
+    child: posix.process_id =
+        try posix.spawn(text.host_over("/bin/sh"), arguments[0..<2],
+                        variables[0..<1], posix.inherited_streams)
+    ending: posix.child_status = try posix.wait(child)
+    yes = match ending.how
+        posix.exited(given): given < 0
+        posix.signalled(number): number == signal
+    end match
+end ends_by
+
+--  Whether `kill` of `process` with `signal` fails `wanted`.
+refused: (process: posix.process_id, signal: i32, wanted: posix.errno)
+         -> (yes: bool) =
+    yes = false
+    posix.kill(process, signal) else (problem)
+        yes = problem == wanted
+    end
+end refused
+
+run: () -> (code: i32) ! posix.errno =
+    code = 2
+    own: posix.process_id = posix.current_process()
+    --  This process is there, and no signal has the number 4096.
+    try posix.kill(own, 0)
+    return when not refused(own, 4096, posix.einval)
+    code = 3
+    held: posix.pipe_ends = try posix.pipe()
+    child: posix.process_id = try waiting_shell(held.reading)
+    return when child == own
+    try posix.kill(child, 0)
+    code = 4
+    try posix.kill(child, posix.signal_terminate)
+    ending: posix.child_status = try posix.wait(child)
+    match ending.how
+        posix.exited(given): return when given >= 0
+        posix.signalled(number):
+            return when number <> posix.signal_terminate
+    end match
+    code = 5
+    --  A child waited for is gone.
+    return when not refused(child, 0, posix.esrch)
+    return when not refused(child, posix.signal_kill, posix.esrch)
+    try posix.close(held.reading)
+    try posix.close(held.writing)
+    code = 6
+    return when not try ends_by("kill -HUP $$", posix.signal_hangup)
+    return when not try ends_by("kill -INT $$", posix.signal_interrupt)
+    return when not try ends_by("kill -USR1 $$", posix.signal_user1)
+    return when not try ends_by("kill -USR2 $$", posix.signal_user2)
+    return when not try ends_by("kill -KILL $$", posix.signal_kill)
+    code = 42
+end run
+
+public main: () -> (code: i32) =
+    code = run() else (problem)
+        _ = problem
+        1
+    end
+end main

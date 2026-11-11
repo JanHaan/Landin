@@ -18,7 +18,7 @@ system_open_file: (self: host, path: text.host_string,
                    options: io.open_options)
                   -> (opened: io.file)
                   ! io.already_exists | io.not_found | io.no_access
-                  | io.io_failed =
+                  | io.is_a_directory | io.io_failed =
     keep_failure(self, 0)
     opened = file_of(posix.standard_input)
     if not io.valid_options(options) then

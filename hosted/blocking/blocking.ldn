@@ -154,13 +154,15 @@ end blocking_write_some
 --  What does not wait is the system's: its files, streams and arguments.
 blocking_open_read: (self: host, path: text.host_string)
                     -> (opened: io.file)
-                    ! io.not_found | io.no_access | io.io_failed =
+                    ! io.not_found | io.no_access | io.is_a_directory
+                    | io.io_failed =
     opened = try io.open_read(self.services, path)
 end blocking_open_read
 
 blocking_open_write: (self: host, path: text.host_string)
                      -> (opened: io.file)
-                     ! io.not_found | io.no_access | io.io_failed =
+                     ! io.not_found | io.no_access | io.is_a_directory
+                     | io.io_failed =
     opened = try io.open_write(self.services, path)
 end blocking_open_write
 

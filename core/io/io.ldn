@@ -13,6 +13,8 @@ public no_access: atom
 --- An I/O operation failed. Provider-specific diagnostic detail, if offered,
 --- must be read from that provider.
 public io_failed: atom
+--- The path names a directory where a file was to be opened.
+public is_a_directory: atom
 --- The argument index does not identify an available argument.
 public no_argument: atom
 --- The name a file or directory was to be made at is already taken.
@@ -88,12 +90,17 @@ end reader
 --- failure.
 public files: type = concept (provider: type)
     --- Open a path for reading; return a handle owned by this provider.
+    --- A path that names a directory is `is_a_directory`: a directory is
+    --- read through `directories`.
     open_read: (self: provider, path: text.host_string)
-               -> (opened: file) ! not_found | no_access | io_failed
+               -> (opened: file)
+               ! not_found | no_access | is_a_directory | io_failed
     --- Open a path for writing; creation and truncation follow the
-    --- provider contract.
+    --- provider contract.  A path that names a directory is
+    --- `is_a_directory`.
     open_write: (self: provider, path: text.host_string)
-                -> (opened: file) ! not_found | no_access | io_failed
+                -> (opened: file)
+                ! not_found | no_access | is_a_directory | io_failed
     --- Report whether two paths name the same file. The left path is an
     --- existing input: if it names no file the provider can examine, the
     --- call fails with `io_failed`. The right path may be an output not yet
@@ -271,19 +278,23 @@ end lent_write_some
 lent is writer (write: lent_write, write_some: lent_write_some)
 
 --- Open a path for reading through `files` evidence. The caller must close
---- a successful handle using the same provider.
+--- a successful handle using the same provider. A path that names a
+--- directory fails `is_a_directory`.
 public open_read: (provider: type is files, host: provider,
                    path: text.host_string)
-                  -> (opened: file) ! not_found | no_access | io_failed =
+                  -> (opened: file)
+                  ! not_found | no_access | is_a_directory | io_failed =
     opened = try provider.open_read(host, path)
 end open_read
 
 --- Open a path for writing through `files` evidence. Creation and
 --- truncation behavior belongs to the provider; close a successful handle
---- through that provider.
+--- through that provider. A path that names a directory fails
+--- `is_a_directory`.
 public open_write: (provider: type is files, host: provider,
                     path: text.host_string)
-                   -> (opened: file) ! not_found | no_access | io_failed =
+                   -> (opened: file)
+                   ! not_found | no_access | is_a_directory | io_failed =
     opened = try provider.open_write(host, path)
 end open_write
 

@@ -14,9 +14,7 @@ import core/io
 import core/io/signal
 import core/net
 import hosted/events
-import platform/libc
-import platform/linux
-import platform/linux/numbers
+import platform/posix
 
 --  `t` SIGTERM arrived, `x` the server's accept failed, `s` a wait for a
 --  signal failed when watching stopped.
@@ -75,18 +73,13 @@ wait_in_vain: (inout state: waiting) -> none ! failure.reason =
 end wait_in_vain
 
 --  Send SIGTERM to this process.
-fixed if compiler.os == linux then
-    terminate_self: () -> (sent: bool) =
-        process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0,
-                                         0, 0)
-        sent = linux.system_call(numbers.kill_number, process,
-                                 i64(linux.sigterm), 0, 0, 0, 0) == 0
-    end terminate_self
-else
-    terminate_self: () -> (sent: bool) =
-        sent = libc.kill(libc.getpid(), libc.sigterm) == 0
-    end terminate_self
-end if
+terminate_self: () -> (sent: bool) =
+    sent = true
+    posix.kill(posix.current_process(), posix.signal_terminate) else (problem)
+        _ = problem
+        sent = false
+    end
+end terminate_self
 
 mut backing: [2 * 32768]u8 = zeroed
 

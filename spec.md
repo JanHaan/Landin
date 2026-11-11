@@ -33246,6 +33246,111 @@ beside `wait`.
 before the initializer and whose wait fails without the rule. Darwin's and
 FreeBSD's arm of it was written by reading and is run by their lanes.
 
+### D1279 — `platform/posix` sends a signal with `kill`
+
+**The tour said** nothing. `io.programs` has no entry that signals a
+child and `platform/posix` had none, so a parent that stopped its child
+wrote Linux's raw system call by number and the C library's `kill` on
+Darwin and FreeBSD, under `fixed if compiler.os`.
+
+**Chosen:** `posix.kill(process, signal)` sends the signal numbered
+`signal` to a `process_id`, Linux's `kill` system call and the C
+library's `kill` on Darwin and FreeBSD, failing with the errno;
+`posix.current_process()` is `getpid`, for a process that signals itself;
+and `signal_hangup`, `signal_interrupt`, `signal_kill`,
+`signal_terminate`, `signal_user1` and `signal_user2` are those signals'
+numbers on the system at hand. The number zero sends nothing and asks
+whether the process is there. An ID that is zero or negative, which C
+takes for a process group or for every process, is refused `einval`
+before the system is asked: a `process_id` names one process.
+`platform/linux` gains the two wrappers, `kill` and `getpid`.
+`io.programs` is unchanged: a portable provider has no signals.
+
+**The alternatives:** a `signal_child` entry in `io.programs` or in the
+hosted providers' child, which the memory and scripted providers would
+have to fake and which says nothing of a process signalling itself; the
+portable names of `core/io/signal` for the number, which are six signals
+a provider can watch and not the ones a system can send; and passing a
+group's negative ID through, which makes a mistaken zero a signal to
+every process of the group. All were declined.
+
+**Pinned by** `runtime/posix-kill-child`: a shell waiting on a pipe is
+sent SIGTERM and waited for as ended by it, zero finds this process and
+the running child and is `esrch` once the child was waited for, a number
+that is no signal's is `einval`, and a shell that signals itself by each
+name `posix` numbers ends by the signal of that number.
+`runtime/derived-server-two-process`,
+`runtime/events-signal-during-sleep`, `runtime/events-signal-stops-server`,
+`runtime/thread-signal-reaches-events` and `runtime/sleep-signal-sleeps-on`
+send their signals through it. Darwin's and FreeBSD's arm was written by
+reading and is run by their lanes.
+
+### D1280 — A signal handler is installed as a C function value, through a second view of `sigaction`'s record
+
+**The tour said** at [1570] that an `extern(c)` function is a value C can
+call. `platform/libc`'s `signal_action` keeps its handler as a `u64`,
+which is what `sig_dfl` and `sig_ign` are, and nothing turns a function
+into that word: a program that caught a signal stored its handler in a
+binding and read the binding's storage through a `ptr u64`.
+
+**Chosen:** `libc.signal_handler` is the handler's type, `extern(c)
+(number: i32) -> none`. Each system's file declares `handler_action`
+beside its `signal_action`: C's `struct sigaction` again, field for
+field, with the handler member typed `signal_handler`. `libc.handling(
+handler, flags)` makes one with an empty mask, and
+`libc.sigaction_handler(signal, action, previous)` installs it, by
+giving `sigaction` the record's address as a `ptr signal_action`. That
+retyping is the library's and is sound for the reason C's own member is
+a union of a function and a word: both records are one C layout, and an
+`extern(c)` function value in a record C reads is the function's address
+[1975]. `signal_action` and `sigaction` are unchanged, so a disposition
+that is no function, and every read of a previous action, stay words.
+The handler stays `platform/libc`'s: on a static Linux program nothing
+installs one, since x86-64's `rt_sigaction` needs a restorer the library
+cannot write, and `signal.watch` reads signals without any.
+
+**The alternatives:** typing `signal_action.handler` itself as the
+function, which leaves `sig_dfl` and `sig_ign` unsayable and the record
+without a `zeroed` image, which every reader of a previous action
+declares (L0328); a conversion from a function to its address, which
+[0470] does not have and only the compiler could add; a second
+declaration of `sigaction` taking the other record, which is two
+declarations of one link symbol (L0347); and a `posix` entry that
+installs a handler on every system, which a static Linux program cannot
+provide. All were declined.
+
+**Pinned by** `runtime/sleep-signal-sleeps-on`, whose handler is
+installed this way and runs once, on every hosted target. Darwin's and
+FreeBSD's records were written by reading and are run by their lanes.
+
+### D1281 — A program that reads the argument root before it exists is told the call it lacks
+
+**The tour said** nothing. A C `main` that drives Landin exports calls
+`_landin_host_initialize_arguments` itself, and one that forgot it ended
+at `system.new()` or `blocking.new()` with `trap: unreachable` at a line
+of `platform/posix`, which names no call. A trap carries a kind and a
+site and no words.
+
+**Chosen:** before that trap `platform/posix` writes one line to
+standard error: `landin: the host was not initialized: a C main calls
+_landin_host_initialize_arguments(argc, argv, envp) first`. The write is
+the system's own to descriptor 2 and asks nothing of the root; when it
+fails the trap still follows. The trap, its kind and what a panic
+handler sees are unchanged, and the other misuses of the root, a second
+triple or a negative count, stay bare traps.
+
+**The alternatives:** words carried by the trap itself, which the trap
+report has no room for and the compiler would have to add; no call
+needed, the root taken by an `.init_array` constructor the C runtime
+hands the arguments, which the backends do not emit and Darwin passes
+differently; and a failure from `system.new()`, which every program
+would handle for a mistake only a C `main` can make. All were declined.
+
+**Pinned by** `abi/r440-native-startup-uninitialized`, whose C `main`
+omits the call and whose output must hold that line before it traps.
+Darwin's and FreeBSD's arm was written by reading and is run by their
+lanes.
+
 ### D323 — `platform/posix` gives sockets in the system's own records
 
 **The tour said** nothing of sockets beneath the portable concept.
@@ -34506,7 +34611,7 @@ own table from the atoms to messages.
 
 **Chosen:** `core/failure` is a shared freestanding module of one type and
 one routine. `failure.reason` is the union of every atom a `core` module
-fails with, thirty-eight of them from `core/mem`, `core/map`, `core/tree`,
+fails with, thirty-nine of them since D1276 from `core/mem`, `core/map`, `core/tree`,
 `core/io`, `core/net`, `core/text`, `core/cache` and `core/line`, and
 `failure.words(problem)` returns a fixed phrase for each: lower case with
 no final stop, so that it reads
@@ -34534,6 +34639,50 @@ after a colon; and a locale, which the library consults nowhere.
 on every target, Cortex-M0 among them, `runtime/failure-words-report` on
 every hosted target and `runtime/failure-words-own-atom`, a negative
 fixture until D434 gave the `_` arm its binding.
+
+### D1276 — A directory named where a file is opened is `is_a_directory`
+
+**The tour said** nothing. `core/io`'s opens failed `not_found`,
+`no_access` or `io_failed`, and a directory given as a file argument was
+the last, which `failure.words` gives as "input or output failed": a tool
+could tell its user that a file was missing or unreadable, and of a
+directory only that something failed. EISDIR was in `last_errno`, which
+only the hosted providers have.
+
+**Chosen:** `io.is_a_directory` is a failure atom of `core/io`, in
+`failure.reason`, with the words "is a directory". `files`' `open_read`
+and `open_write` and `file_system`'s `open_file` declare it, and so do
+`io.open_read`, `io.open_write` and `io.open_file`: the interface grew,
+and a declared set that passes one of their failures on with `try` names
+the atom, unless it is `failure.reason` or `...`. Every provider that has
+directories answers with it. `hosted/system`, and `hosted/blocking` and
+`hosted/events` over it, map EISDIR, which every hosted system gives an
+open to write. An open to read alone succeeds on a directory on all of
+them and each read then fails, so that open asks the status of what it
+opened, closes a directory again and fails `is_a_directory` keeping
+EISDIR: one `fstat` for each open to read, and the failure at the open,
+where the path is known, rather than at the first read. `core/io/fake`'s
+memory volume fails it for a directory node. The memory world has no
+directories and never fails it, and declares it all the same: an entry
+provides a concept's with the same failure set [1240], so a program's
+own provider of `files` adds the atom to its two opens. `read` keeps its
+one atom.
+
+**The alternatives:** new words for `io_failed`, which is what every
+other input or output failure still is; `is_a_directory` in `read`'s
+set, where the system reports it, which every reader in the library and
+every program's `try io.read` would then carry for a mistake made at the
+open; `not_found`, as the path through a file is (D287), which says the
+opposite of what happened; and leaving the route as `last_errno`, which
+the memory providers and a program written over `io.files` do not have.
+All were declined.
+
+**Pinned by** `runtime/hosted-io-directory-as-file`: the root directory
+opened each of the four ways through `hosted/blocking` and through
+`hosted/events`, each `is_a_directory` with EISDIR kept and the phrase
+"is a directory", a directory node of the memory volume the same, and a
+file and a missing path as before. Darwin's and FreeBSD's arm was written
+by reading and is run by their lanes.
 
 ### D582 — An errno has words in `platform/posix`, which passes the library's on
 
@@ -35665,6 +35814,58 @@ the bytes read with those written; before this decision it never ended.
 each to one such pipe while a third reads it; before a woken fibre asked
 again, the second writer was handed room the first had taken, and the
 program never ended.
+
+### D1278 — The event provider refuses a blocking descriptor whose write could hold the thread
+
+**The tour said** [1675] that a call that waits over `hosted/events` lets
+the other fibres run. D1045 capped a write to a blocking descriptor at
+`PIPE_BUF` once it was ready, which a pipe has room for, and said of the
+rest that a terminal or a blocking socket the program hands the provider
+may report room for less, so that a write to one could still hold the
+thread until its other end read; refusing such a descriptor was declined
+there because it turns standard output away.
+
+**Chosen:** the refusal, for the descriptors the cap does not cover.
+Before each write the provider reads the descriptor's mode, and for a
+blocking one its kind. A non-blocking descriptor and a regular file are
+handed everything, and a blocking pipe at most `PIPE_BUF` bytes a call,
+as D1045 has them. Any other blocking descriptor, a terminal, a socket or
+a device, is refused before the system is asked: `write` and `write_some`
+fail `io_failed`, nothing is written, and the errno kept is EAGAIN, the
+one a call that would wait has, which `events.last_errno` reads. The
+program then makes the descriptor non-blocking with
+`posix.set_non_blocking`, after which the provider waits for it as for
+its own sockets, or writes it through `hosted/blocking`. The provider
+still sets no mode itself (D486). The mode is read at each write, since
+the provider keeps no table of descriptors and the program may change the
+mode between two: one `fcntl` a write, and one `fstat` more for a
+blocking descriptor. This reverses D1045's declined alternative for these
+descriptors: standard output and standard error that are a terminal are
+refused, and so is a blocking device such as `/dev/null`, whose kind
+promises nothing. A descriptor whose mode or kind the system will not
+give fails `io_failed` with that errno. Reads are as they were: a read
+of a ready descriptor returns what is there. Another writer filling a
+pipe between the report and the write remains possible, as D1045 says.
+
+**The alternatives:** leaving the write, which holds every fibre of the
+thread on a reader that may be one of them; setting `O_NONBLOCK` for the
+write and clearing it after, which changes the open file a shell shares,
+if briefly, and loses the mode when the program is killed between the
+two; one byte a write to a terminal reported ready, which no manual
+promises room for either and which output processing can double; a
+failure atom of its own in `writer`'s set, which every writer and every
+`try io.write` would carry for one provider's refusal; and admitting a
+device that is not a terminal, whose writes a driver may block as it
+likes. All were declined.
+
+**Pinned by** `runtime/events-blocking-socket-write-refused`: a write
+and a `write_some` to a blocking socket pair's end, as a file and as a
+socket, fail `io_failed` keeping EAGAIN and send nothing, a megabyte
+among them that before this decision never returned; the same end made
+non-blocking takes its bytes, a blocking pipe still takes a short write,
+and `hosted/blocking` writes to the blocking socket. Darwin's and
+FreeBSD's arm was written by reading and is run by their lanes. No
+fixture gives the provider a terminal.
 
 ### D488 — The event provider reads every watched signal through one descriptor, and stopping reads what came
 

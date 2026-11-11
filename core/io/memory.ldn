@@ -112,12 +112,14 @@ memory_open: (self: memory, path: text.host_string, writing: bool)
 end memory_open
 
 memory_open_read: (self: memory, path: text.host_string)
-                  -> (opened: file) ! not_found | no_access | io_failed =
+                  -> (opened: file)
+                  ! not_found | no_access | is_a_directory | io_failed =
     opened = try memory_open(self, path, false)
 end memory_open_read
 
 memory_open_write: (self: memory, path: text.host_string)
-                   -> (opened: file) ! not_found | no_access | io_failed =
+                   -> (opened: file)
+                   ! not_found | no_access | is_a_directory | io_failed =
     opened = try memory_open(self, path, true)
 end memory_open_write
 
