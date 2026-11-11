@@ -545,14 +545,14 @@ public signal_kill: i32 = 9
 --- SIGTERM's number, the same on every hosted system.
 public signal_terminate: i32 = 15
 fixed if compiler.os == linux then
-    --- SIGUSR1's number, as Linux numbers it.
+    --- SIGUSR1's number, which the hosted systems do not share.
     public signal_user1: i32 = 10
-    --- SIGUSR2's number, as Linux numbers it.
+    --- SIGUSR2's number, which the hosted systems do not share.
     public signal_user2: i32 = 12
 elsif compiler.os == darwin or compiler.os == freebsd then
-    --- SIGUSR1's number, as Darwin and FreeBSD number it.
+    --- SIGUSR1's number, which the hosted systems do not share.
     public signal_user1: i32 = 30
-    --- SIGUSR2's number, as Darwin and FreeBSD number it.
+    --- SIGUSR2's number, which the hosted systems do not share.
     public signal_user2: i32 = 31
 end if
 
