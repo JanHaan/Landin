@@ -170,15 +170,22 @@ missing consumer but never invent one. Its two lists in `check.py` are the
 routines the compiler starts and the generated tables.
 
 `refine explain` prints a paragraph of `tour.md` or `spec.md`, or a
-decision, from Ada that `python3 check.py --generate` writes. So an edit
-to the prose of either document, a reworded sentence included, needs that
-run, which rewrites
-`compiler/ada/src/diagnostics/landin-diagnostics-citations-texts.adb`; a
-changed title also rewrites `landin-diagnostics-citations.adb` beside it
-and `compiler/tests/constructs.matrix`. Until it is run the full
-`python3 check.py` fails with "the citations are stale". The regenerated
-sources are committed with the edit, and the compiler is rebuilt before
-any test of it runs, the tour's layout case among them.
+decision, from `citations.txt`, a data file `python3 check.py --generate`
+writes at the top of the checkout and the compiler reads from its library
+at run time (D1240). So an edit to the prose of either document, a
+reworded sentence included, needs that run, which rewrites the entry's
+line; a changed title also rewrites `compiler/tests/constructs.matrix`.
+Until it is run the full `python3 check.py` fails with "the citations are
+stale". The regenerated file is committed with the edit. No compiler
+source changes, so nothing is rebuilt: the cases that read the file,
+`driver/explain answers citations` and `commands/help and queries`, read
+the new one on their next run. `citations.txt` is never edited or merged
+by hand; `.gitattributes` merges it by union, and the run after a merge
+puts it right.
+
+A diagnostic code's explanation is the other kind: `docs/diagnostics.md`
+is compiled into `refine` as `landin-diagnostics-explanations.adb`, so an
+edit to that page does need `python3 check.py --catalogue` and a rebuild.
 
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 

@@ -12,11 +12,15 @@ version number or a heading, never by its prose, so rewording a document
 reaches none of these and scripts/tests/control_quotes.json lists nothing
 for them.
 """
+import contextlib
+import io
 import re
+import runpy
 import sys
 import unittest
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from check_controls import checker, reasons, tree   # noqa: E402
@@ -261,26 +265,28 @@ class CitationTable(unittest.TestCase):
     """`refine explain`'s constructs and decisions are the documents'."""
 
     INPUTS = ["spec.md", "tour.md", "docs/site", "highlight", "assets",
-              checker.CITATIONS_ADA, checker.CITATION_TEXTS_ADA]
+              checker.CITATIONS_DATA]
 
-    def test_the_real_bodies_are_what_the_documents_generate(self):
+    DECISION = ("\n### D99998 — A decision a stream added\n\n"
+                "**Chosen:** a tab\there, a back\\slash and\n"
+                "a second line.\n\n```\ncode\n```\n")
+
+    def test_the_real_file_is_what_the_documents_generate(self):
         self.assertEqual(checked(checker.check_citation_table,
                                  copied=self.INPUTS), [])
 
-    def test_a_retitled_decision_makes_the_titles_stale(self):
-        with tree(copied=self.INPUTS) as root:
-            edit("spec.md", r"^(### D\d+ — [^\n]+)$", r"\1 retitled")(root)
-            said = checker.check_citation_table(True)
-        self.assertEqual([path for path, _, _ in said],
-                         [checker.CITATIONS_ADA], said)
-        self.assertIn("the citations are stale", said[0][2])
-
-    def test_an_amended_rule_makes_the_texts_stale(self):
-        with tree(copied=self.INPUTS) as root:
-            edit("spec.md", r"^\*\*Chosen:\*\* ", "**Chosen:** amended ")(root)
-            said = checker.check_citation_table(True)
-        self.assertEqual([path for path, _, _ in said],
-                         [checker.CITATION_TEXTS_ADA], said)
+    def test_a_retitled_decision_and_an_amended_rule_make_it_stale(self):
+        for pattern, replacement in (
+                (r"^(### D\d+ — [^\n]+)$", r"\1 retitled"),
+                (r"^\*\*Chosen:\*\* ", "**Chosen:** amended ")):
+            with tree(copied=self.INPUTS) as root:
+                edit("spec.md", pattern, replacement)(root)
+                said = checker.check_citation_table(True)
+            self.assertEqual([path for path, _, _ in said],
+                             [checker.CITATIONS_DATA], said)
+            self.assertIn("the citations are stale", said[0][2])
+            self.assertIn("python3 check.py --generate (or --catalogue),"
+                          " which needs no rebuild", said[0][2])
 
     def test_a_number_recorded_twice_and_a_decision_without_its_rule(self):
         with tree(copied=self.INPUTS) as root:
@@ -297,9 +303,100 @@ class CitationTable(unittest.TestCase):
         self.assertIn("D99999 has no `**Chosen` paragraph for `refine explain"
                       " --full`", said)
 
-    def test_a_missing_body_is_stale(self):
+    def test_a_missing_file_is_stale(self):
         said = checked(checker.check_citation_table, copied=self.INPUTS[:-1])
         self.assertTrue(any("the citations are stale" in why for why in said))
+
+    def test_the_file_is_one_entry_a_line_under_its_format_line(self):
+        #  D1240: the first line is what a compiler reads to know the file,
+        #  the same words as the Ada constant, and every other line is six
+        #  fields with no raw tab or line end inside one.
+        with tree(copied=self.INPUTS) as root:
+            spec = root / "spec.md"
+            spec.write_text(spec.read_text() + self.DECISION)
+            lines = checker.citations_dump().split("\n")
+        self.assertEqual(lines[0], checker.CITATIONS_FORMAT)
+        self.assertEqual(lines[-1], "")
+        reader = (ROOT / "compiler/ada/src/diagnostics"
+                  / "landin-diagnostics-citations.ads").read_text()
+        self.assertIn('Format_Line : constant String := "%s";'
+                      % checker.CITATIONS_FORMAT, reader)
+        self.assertIn('File_Name : constant String := "%s";'
+                      % checker.CITATIONS_DATA, reader)
+        keys = []
+        for line in lines[1:-1]:
+            fields = line.split("\t")
+            self.assertEqual(len(fields), 6, line[:80])
+            self.assertIn(fields[0], ("C", "D"))
+            keys.append((fields[0], int(fields[1])))
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(len(keys), len(set(keys)))
+        added = lines[1:-1][keys.index(("D", 99998))].split("\t")
+        self.assertEqual(added[2], "A decision a stream added")
+        self.assertEqual(added[5], "Chosen: a tab\\there, a back\\\\slash and"
+                                   " a second line.\\n\\n    code")
+
+    def test_a_decision_added_changes_no_input_of_the_build(self):
+        #  D1240, the point of it: a stream adds a decision to spec.md and
+        #  regenerates.  The citations file changes, and nothing the
+        #  compiler is built from does, so its build stays verified: the
+        #  build identity's digest, which covers every source and project
+        #  the build manifest has a row for, is the one it was.
+        identity = runpy.run_path(str(ROOT / "scripts/build_identity.py"))
+        with tree(copied=self.INPUTS + ["compiler/ada", "scripts",
+                                        "environments",
+                                        "docs/diagnostics.md"]) as root:
+            before = identity["identity"](root, "debug")[1]
+            inputs = set(identity["inputs"](root))
+            explained = checker.explanations_dump()
+            self.assertIsNotNone(explained)
+            spec = root / "spec.md"
+            spec.write_text(spec.read_text() + self.DECISION)
+            self.assertEqual(
+                [path for path, _, _ in checker.check_citation_table(True)],
+                [checker.CITATIONS_DATA])
+            with contextlib.redirect_stdout(io.StringIO()):
+                fresh = checker.citations_dump()
+                checker.write_generated(checker.CITATIONS_DATA, fresh)
+            self.assertEqual(checker.check_citation_table(True), [])
+            self.assertIn("\nD\t99998\tA decision a stream added\t",
+                          (root / checker.CITATIONS_DATA).read_text())
+            #  The one generated compiler source left, the explanations of
+            #  the diagnostic codes, does not read the decisions.
+            self.assertEqual(checker.explanations_dump(), explained)
+            self.assertEqual(identity["identity"](root, "debug")[1], before)
+            self.assertNotIn(checker.CITATIONS_DATA, inputs)
+            self.assertIn(checker.EXPLANATIONS_ADA, inputs)
+
+    def test_the_citations_stay_out_of_the_compiler(self):
+        #  The bodies that held the texts before D1240 are refused, and no
+        #  compiler source is among what --catalogue writes for a decision.
+        body = checker.RETIRED_CITATION_BODIES[0]
+        with tree(copied=self.INPUTS, written={body: "-- back\n"}):
+            said = checker.check_citation_table(True)
+        self.assertEqual([path for path, _, _ in said], [body], said)
+        self.assertIn("not compiled in (D1240); remove this file",
+                      said[0][2])
+        catalogue = dict(checker.GENERATED)["--catalogue"]
+        self.assertIn(checker.CITATIONS_DATA, catalogue)
+        self.assertEqual([name for name in catalogue
+                          if name.endswith((".adb", ".ads"))],
+                         [checker.EXPLANATIONS_ADA])
+
+    def test_every_installation_carries_the_file(self):
+        #  D1240: the release archive, the flake's package and Git's merge
+        #  each name the file; one that stopped would ship an `explain`
+        #  that can only say which file it looked for.
+        self.assertEqual(checked(checker.check_citations_shipped, copied=[
+            "scripts/package.sh", "flake.nix", ".gitattributes"]), [])
+        for relative, words in checker.CITATIONS_SHIPPED:
+            said = checked(checker.check_citations_shipped,
+                           edit(relative, re.escape(words), "gone"),
+                           copied=["scripts/package.sh", "flake.nix",
+                                   ".gitattributes"])
+            self.assertEqual(len(said), 1, said)
+            self.assertIn("%s does not say `%s`" % (relative, words),
+                          said[0])
 
 
 class FixtureMetadata(unittest.TestCase):

@@ -7,6 +7,7 @@ with Interfaces;
 with Landin.Byte_Encoding;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
+with Landin.Diagnostics.Citations;
 with Landin.Commands.Catalogue;
 with Landin.Driver;
 with Landin.Driver.Checking;
@@ -7064,7 +7065,20 @@ package body Landin.Tests.Driver_Suite is
    procedure Explain_Answers_Citations
      (Item : in out Landin.Testing.Context)
    is
-      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      --  D1240: the answers are the checkout's generated citations file,
+      --  a deliberate read of the real host, in a library beside refine.
+      function With_Citations return Landin.Testing.Fakes.Fake_Filesystem;
+
+      function With_Citations return Landin.Testing.Fakes.Fake_Filesystem
+      is
+      begin
+         return Made : Landin.Testing.Fakes.Fake_Filesystem do
+            Made.Add_Citations;
+         end return;
+      end With_Citations;
+
+      Host  : constant Landin.Testing.Fakes.Fake_Filesystem :=
+        With_Citations;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
 
       function Run (Words : Landin.Platform.Path_List)
@@ -7155,7 +7169,8 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check
         (Item, Option.Status = Landin.Driver.Status_Misuse
                and then Contains (Refused (Option),
-                                  "explain takes one option, --full: -x"),
+                                  "explain takes --full and --library=DIR:"
+                                  & " -x"),
          "any other option is still refused");
       Landin.Testing.Check
         (Item, Malformed.Status = Landin.Driver.Status_Misuse
@@ -7167,6 +7182,199 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Said (Index), "L0012  error"),
          "--full alone is the index");
    end Explain_Answers_Citations;
+
+   --  D1240: a construct's and a decision's words are read from
+   --  `citations.txt` in the library and not compiled in.  The file is
+   --  found beside refine or where `--library=DIR` says and read only when
+   --  a citation is asked for; one that is missing, unreadable or in
+   --  another format is reported with its path and the document that
+   --  holds what was asked for, and is not misuse.
+   procedure Explain_Reads_Citations_From_The_Library
+     (Item : in out Landin.Testing.Context);
+
+   procedure Explain_Reads_Citations_From_The_Library
+     (Item : in out Landin.Testing.Context)
+   is
+      Tab : constant Character := Character'Val (9);
+      Library : constant String := "/opt/landin/lib/landin";
+      File : constant String := Library & "/citations.txt";
+      Entries : constant String :=
+        "C" & Tab & "40" & Tab & "Declaring a name" & Tab & "tour.md" & Tab
+        & "https://www.701.dev/tour.html#0040" & Tab
+        & "A name\tand a tab.\n\n    a \\ b" & LF
+        & "D" & Tab & "7" & Tab & "A decision" & Tab & "Decisions: Tools"
+        & Tab & "https://www.701.dev/spec.html#d7-a-decision" & Tab
+        & "Chosen: this." & LF
+        & "D" & Tab & "70" & Tab & "Another" & Tab & "Decisions: Tools"
+        & Tab & "https://www.701.dev/spec.html#d70-another" & Tab
+        & "Chosen: that." & LF;
+      Current : constant String :=
+        Landin.Diagnostics.Citations.Format_Line & LF & Entries;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+
+      type Arrangement is
+        (Present, Absent, Unreadable, Other_Format, Empty, No_Library,
+         Elsewhere);
+
+      function Arranged (How : Arrangement)
+        return Landin.Testing.Fakes.Fake_Filesystem;
+
+      function Arranged (How : Arrangement)
+        return Landin.Testing.Fakes.Fake_Filesystem is
+      begin
+         return Made : Landin.Testing.Fakes.Fake_Filesystem do
+            if How /= No_Library then
+               Made.Add_Directory (Library);
+               Made.Add_Directory (Library & "/core");
+               Made.Set_Executable_Directory ("/opt/landin/bin");
+            end if;
+            case How is
+               when Present =>
+                  Made.Add_File (File, Current);
+               when Unreadable =>
+                  Made.Add_Unreadable (File);
+               when Other_Format =>
+                  Made.Add_File (File, "landin-citations 2" & LF & Entries);
+               when Empty =>
+                  Made.Add_File (File, "");
+               when Elsewhere =>
+                  Made.Add_File ("/data/citations.txt", Current);
+               when Absent | No_Library =>
+                  null;
+            end case;
+         end return;
+      end Arranged;
+
+      function Run (How : Arrangement; Words : Landin.Platform.Path_List)
+        return Landin.Driver.Outcome
+        is (Landin.Driver.Execute (Words, Arranged (How), Tools));
+
+      function Said (Answer : Landin.Driver.Outcome) return String
+        is (Unbounded.To_String (Answer.Output));
+
+      function Refused (Answer : Landin.Driver.Outcome) return String
+        is (Unbounded.To_String (Answer.Report));
+
+      Decision : constant Landin.Driver.Outcome :=
+        Run (Present, ["explain", "D7"]);
+      Full : constant Landin.Driver.Outcome :=
+        Run (Present, ["explain", "--full", "[0040]"]);
+      Unknown : constant Landin.Driver.Outcome :=
+        Run (Present, ["explain", "D8"]);
+      Missing : constant Landin.Driver.Outcome :=
+        Run (Absent, ["explain", "D7"]);
+      Missing_Construct : constant Landin.Driver.Outcome :=
+        Run (Absent, ["explain", "[0040]"]);
+      Locked : constant Landin.Driver.Outcome :=
+        Run (Unreadable, ["explain", "D7"]);
+      Stale : constant Landin.Driver.Outcome :=
+        Run (Other_Format, ["explain", "D7"]);
+      Blank : constant Landin.Driver.Outcome :=
+        Run (Empty, ["explain", "D7"]);
+      Alone : constant Landin.Driver.Outcome :=
+        Run (No_Library, ["explain", "D7"]);
+      Named : constant Landin.Driver.Outcome :=
+        Run (Elsewhere, ["explain", "--library=/data", "D7"]);
+      Named_Last : constant Landin.Driver.Outcome :=
+        Run (Elsewhere, ["explain", "D7", "--library=/data"]);
+      Code : constant Landin.Driver.Outcome :=
+        Run (No_Library, ["explain", "L0201"]);
+      Index : constant Landin.Driver.Outcome :=
+        Run (Other_Format, ["explain"]);
+      Index_Named : constant Landin.Driver.Outcome :=
+        Run (Other_Format, ["explain", "--library=/data"]);
+      Both : constant Landin.Driver.Outcome :=
+        Run (Absent, ["explain", "L0201", "D7"]);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Said (Decision),
+         "D7  A decision" & LF
+         & "  spec.md, Decisions: Tools" & LF
+         & "  https://www.701.dev/spec.html#d7-a-decision" & LF,
+         "a decision is answered from the file, and D7 is not D70");
+      Landin.Testing.Check_Equal
+        (Item, Said (Full),
+         "[0040]  Declaring a name" & LF
+         & "  tour.md" & LF
+         & "  https://www.701.dev/tour.html#0040" & LF & LF
+         & "A name" & Tab & "and a tab." & LF & LF & "    a \ b" & LF,
+         "a field's line ends, tabs and backslashes are read back");
+      Landin.Testing.Check
+        (Item, Unknown.Status = Landin.Driver.Status_Misuse
+               and then Contains
+                 (Refused (Unknown),
+                  "no decision is numbered D8 in spec.md's register"),
+         "a number the file does not hold is misuse, as before");
+      Landin.Testing.Check_Equal
+        (Item, Missing.Status, Landin.Driver.Status_Reported,
+         "a missing file is reported and is not misuse");
+      Landin.Testing.Check
+        (Item, Contains (Refused (Missing), "L0003")
+               and then Contains
+                 (Refused (Missing),
+                  "explain reads constructs and decisions from " & File
+                  & ", which is not there; install the citations.txt this"
+                  & " refine came with, or name a library that holds it"
+                  & " with --library=DIR; D7 is a decision in spec.md's"
+                  & " register, https://www.701.dev/spec.html")
+               and then Said (Missing) = "",
+         "a missing file is named with its path, and the decision with"
+         & " its document: " & Refused (Missing));
+      Landin.Testing.Check
+        (Item, Contains
+                 (Refused (Missing_Construct),
+                  "[0040] is a paragraph of tour.md or spec.md,"
+                  & " https://www.701.dev/tour.html and"
+                  & " https://www.701.dev/spec.html"),
+         "a construct is named with both documents");
+      Landin.Testing.Check
+        (Item, Locked.Status = Landin.Driver.Status_Reported
+               and then Contains (Refused (Locked),
+                                  File & ", which cannot be read"),
+         "an unreadable file is said to be unreadable");
+      Landin.Testing.Check
+        (Item, Stale.Status = Landin.Driver.Status_Reported
+               and then Contains
+                 (Refused (Stale),
+                  File & ", which is written for another refine: its"
+                  & " first line is `landin-citations 2` and this refine"
+                  & " reads `landin-citations 1`")
+               and then Contains (Refused (Stale), "D7 is a decision"),
+         "a file in another format is refused whole, with both lines: "
+         & Refused (Stale));
+      Landin.Testing.Check
+        (Item, Blank.Status = Landin.Driver.Status_Reported
+               and then Contains (Refused (Blank),
+                                  "its first line is ``"),
+         "an empty file is another format and raises nothing");
+      Landin.Testing.Check
+        (Item, Alone.Status = Landin.Driver.Status_Reported
+               and then Contains
+                 (Refused (Alone),
+                  "from citations.txt in its library, and no library was"
+                  & " found: refine could not tell which directory it was"
+                  & " started from; name the library's directory with"
+                  & " --library=DIR; D7 is a decision"),
+         "with no library, where refine looked is said: "
+         & Refused (Alone));
+      Landin.Testing.Check
+        (Item, Named.Status = Landin.Driver.Status_Success
+               and then Said (Named) = Said (Decision)
+               and then Said (Named_Last) = Said (Decision),
+         "--library=DIR names the directory, wherever it is written");
+      Landin.Testing.Check
+        (Item, Code.Status = Landin.Driver.Status_Success
+               and then Contains (Said (Code), "For example:")
+               and then Index.Status = Landin.Driver.Status_Success
+               and then Contains (Said (Index), "L0012  error")
+               and then Said (Index_Named) = Said (Index),
+         "a code and the index need no file, and --library alone is still"
+         & " the index");
+      Landin.Testing.Check
+        (Item, Both.Status = Landin.Driver.Status_Reported
+               and then Contains (Refused (Both), "D7 is a decision"),
+         "a code asked beside an unread citation still reports it");
+   end Explain_Reads_Citations_From_The_Library;
 
    --  `refine fmt` is the second subcommand: it rewrites a source that is
    --  out of the layout and leaves one in it alone, refuses one that does
@@ -9757,6 +9965,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "explain answers citations",
          Explain_Answers_Citations'Access);
+      Landin.Testing.Register
+        (Into, "driver", "explain reads citations from the library",
+         Explain_Reads_Citations_From_The_Library'Access);
       Landin.Testing.Register
         (Into, "driver", "fmt is a subcommand",
          Fmt_Is_A_Subcommand'Access);

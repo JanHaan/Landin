@@ -4,8 +4,10 @@
 #
 #    scripts/package.sh [--debug DEBUG_ASSET] BINARY ASSET
 #
-#  The archive holds bin/refine, lib/landin/{core,hosted,platform} and the
-#  licences, which is what a consumer receives.  It is portable across GNU
+#  The archive holds bin/refine, lib/landin/{core,hosted,platform}, the
+#  lib/landin/citations.txt `refine explain` reads a construct or a
+#  decision from (D1240), and the licences, which is what a consumer
+#  receives.  It is portable across GNU
 #  tar and the bsdtar macOS ships, which has no --sort, no --mtime and no
 #  --owner: the members are listed in byte order, every timestamp is fixed
 #  at 1980, late enough that GNU tar does not call it implausibly old,
@@ -108,6 +110,15 @@ chmod 755 "$stage/bin/refine"
 for namespace in core hosted platform; do
     cp -R "$root/$namespace" "$stage/lib/landin/$namespace"
 done
+#  D1240: the citations ship in the library, and an archive without them
+#  is not one to publish: its `refine explain D275` could only say which
+#  file it looked for.
+if [ ! -f "$root/citations.txt" ]; then
+    echo "package: $root/citations.txt is missing;" \
+        "python3 check.py --catalogue writes it" >&2
+    exit 2
+fi
+cp "$root/citations.txt" "$stage/lib/landin/citations.txt"
 cp "$root/LICENSE" "$root/LICENSE-MIT" "$root/LICENSE-APACHE" "$stage/"
 
 if [ -n "$debug_asset" ]; then

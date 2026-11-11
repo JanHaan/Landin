@@ -125,6 +125,12 @@ package Landin.Testing.Fakes is
    --  /opt/landin/lib/landin beside an executable in /opt/landin/bin.
    procedure Add_Firmware_Library (Host : in out Fake_Filesystem);
 
+   --  D1240: the checkout's own `citations.txt`, read from the real host
+   --  deliberately, in a library at /opt/landin/lib/landin beside an
+   --  executable in /opt/landin/bin, so a case holds `refine explain` to
+   --  the file `check.py` generates and not to one written for the case.
+   procedure Add_Citations (Host : in out Fake_Filesystem);
+
    overriding function Executable_Directory
      (Host : Fake_Filesystem) return String;
 

@@ -1,8 +1,10 @@
-with Landin.Diagnostics.Citations.Texts;
-
 package body Landin.Diagnostics.Citations.Answers is
 
    LF : constant Character := Character'Val (10);
+
+   --  The site every page in the table is on, for the one answer that has
+   --  no table to read a page from.
+   Site : constant String := "https://www.701.dev";
 
    --  A run of one to four digits, which is as long as either number is
    --  written; a longer one names nothing either document could hold.
@@ -54,28 +56,23 @@ package body Landin.Diagnostics.Citations.Answers is
             when Decision  =>
                "D" & Image (Number_Of (Asked)));
 
-   function Is_Known (Asked : String) return Boolean
-     is (Holds (Kind_Of (Asked), Number_Of (Asked)));
+   function Is_Known (From : Table; Asked : String) return Boolean
+     is (Holds (From, Kind_Of (Asked), Number_Of (Asked)));
 
-   function Answer (Asked : String; Full : Boolean) return String is
+   function Answer
+     (From : Table; Asked : String; Full : Boolean) return String
+   is
+      Kind   : constant Citation_Kind := Kind_Of (Asked);
       Number : constant Natural := Number_Of (Asked);
       Head   : constant String :=
-        (case Kind_Of (Asked) is
-            when Construct =>
-               Written (Asked) & "  " & Construct_Title (Number) & LF
-               & "  " & Construct_Document (Number) & LF
-               & "  " & Construct_Page (Number) & LF,
-            when Decision =>
-               Written (Asked) & "  " & Decision_Title (Number) & LF
-               & "  spec.md, " & Decision_Section (Number) & LF
-               & "  " & Decision_Page (Number) & LF);
-      Text   : constant String :=
-        (if not Full then ""
-         else (case Kind_Of (Asked) is
-                  when Construct => Texts.Construct_Text (Number),
-                  when Decision  => Texts.Decision_Text (Number)));
+        Written (Asked) & "  " & Title (From, Kind, Number) & LF
+        & "  " & (if Kind = Decision then "spec.md, " else "")
+        & Place (From, Kind, Number) & LF
+        & "  " & Page (From, Kind, Number) & LF;
+      Added  : constant String :=
+        (if Full then Text (From, Kind, Number) else "");
    begin
-      return Head & (if Text = "" then "" else LF & Text & LF);
+      return Head & (if Added = "" then "" else LF & Added & LF);
    end Answer;
 
    function Unknown (Asked : String) return String
@@ -86,5 +83,14 @@ package body Landin.Diagnostics.Citations.Answers is
             when Decision =>
                "no decision is numbered " & Written (Asked)
                & " in spec.md's register");
+
+   function Elsewhere (Asked : String) return String
+     is (case Kind_Of (Asked) is
+            when Construct =>
+               Written (Asked) & " is a paragraph of tour.md or spec.md, "
+               & Site & "/tour.html and " & Site & "/spec.html",
+            when Decision =>
+               Written (Asked) & " is a decision in spec.md's register, "
+               & Site & "/spec.html");
 
 end Landin.Diagnostics.Citations.Answers;

@@ -16,6 +16,9 @@ its fixture's `stdin:` names as its standard input, or an empty one.  The
 first program is also run as `refine run` runs it (D526), and so is one that
 answers with whether it was given the arguments after `--`: each must
 print and end as it does when compiled, and leave no private directory.
+The installation is also asked to explain a decision and a construct
+(D1240): it answers from the `citations.txt` in its own library, which an
+archive that left the file out could not.
 
 With `--stock`, the system is a stock distribution with only its own GCC
 (D364): the first compile's plan must name a driver the distribution
@@ -184,6 +187,26 @@ def run_checks(refine, work, env):
                                                          "main.ldn"]:
         failures.append("refine run wrote beside its source: %s" % ", ".join(
             sorted(one.name for one in project.iterdir())))
+    return failures
+
+
+def explain_checks(refine, work, env):
+    """D1240: an installation explains a construct and a decision from the
+    citations file in its own library, found beside itself with no option,
+    from a directory that is not the checkout."""
+    failures = []
+    for asked, title in (("D275", "D275  The compiler finds its library"
+                                  " beside itself\n"),
+                         ("[1590]", "[1590]  Linking a library\n")):
+        argv = [str(refine), "explain", "--full", asked]
+        ran, report = run(argv, work, env, "refine explain")
+        said = ran.stdout.decode("utf-8", "replace")
+        if ran.returncode != 0 or not said.startswith(title):
+            failures.append("expected %r first\n%s" % (title, report))
+        elif len(said.split("\n")) < 6:
+            failures.append("--full added no text\n%s" % report)
+        else:
+            print("ok   refine explain --full %s" % asked)
     return failures
 
 
@@ -362,6 +385,9 @@ def main():
 
     failures += run_checks(refine, work, env)
     programs += [("refine run",), ("refine run with arguments",)]
+    failures += explain_checks(refine, work, env)
+    programs += [("refine explain a decision",),
+                 ("refine explain a construct",)]
 
     if args.stock:
         failures += stock_checks(refine, work, env)

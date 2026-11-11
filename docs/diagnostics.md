@@ -168,6 +168,13 @@ paths, or supply a standalone assembly input or linker script. Nested text
 inputs are limited to sixteen levels, each input is scanned once, and one
 build names at most 4,096 of them and 64 MiB of their text (D1059).
 
+`refine explain` raises it for a construct or a decision, `[1760]` or
+`D275`, when it cannot read `citations.txt` in the compiler's library
+(D1240). The message names the path it read, or where it looked for a
+library, and the document that holds what was asked for. Install the file
+the compiler came with, or name a library that holds it with
+`--library=DIR`.
+
 In an assembly input the word `.include` or `.incbin` is the directive
 wherever it stands outside a double-quoted string and a `/* */` comment,
 behind a label, a separator or a line comment's marker alike, since no

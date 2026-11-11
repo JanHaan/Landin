@@ -10,18 +10,25 @@ package Landin.Diagnostics.Citations.Answers is
    --  not a document defines it.
    function Is_Citation (Asked : String) return Boolean;
 
-   --  Whether a document defines the construct or decision Asked names.
-   function Is_Known (Asked : String) return Boolean
+   --  Whether From holds the construct or decision Asked names.
+   function Is_Known (From : Table; Asked : String) return Boolean
      with Pre => Is_Citation (Asked);
 
    --  What `refine explain` prints: the citation and its title, the
    --  document and, for a decision, its register section, and its page;
    --  with Full, a blank line and the entry's text.  Every line ends LF.
-   function Answer (Asked : String; Full : Boolean) return String
-     with Pre => Is_Citation (Asked) and then Is_Known (Asked);
+   function Answer
+     (From : Table; Asked : String; Full : Boolean) return String
+     with Pre => Is_Citation (Asked) and then Is_Known (From, Asked);
 
-   --  The refusal for a citation no document defines.
+   --  The refusal for a citation the table does not hold.
    function Unknown (Asked : String) return String
+     with Pre => Is_Citation (Asked);
+
+   --  Where a reader finds Asked when no table could be read (D1240):
+   --  the citation as the documents write it, the document that holds it
+   --  and that document's page, which need no table to name.
+   function Elsewhere (Asked : String) return String
      with Pre => Is_Citation (Asked);
 
 end Landin.Diagnostics.Citations.Answers;

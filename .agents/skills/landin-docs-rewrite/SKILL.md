@@ -258,14 +258,14 @@ error: `spec.md` decides, and resolving it is the maintainer's decision.
    - Each piece of information appears once.
    - Each recorded dependency has a pointer at the place that needs it.
    - After any edit to the prose of `tour.md` or `spec.md`, run
-     `python3 check.py --generate` and rebuild with
-     `./scripts/dev-build.sh`. `refine explain` prints those paragraphs
-     from generated Ada: the run rewrites
-     `compiler/ada/src/diagnostics/landin-diagnostics-citations-texts.adb`,
-     and for a changed title `landin-diagnostics-citations.adb` and the
-     construct matrix too. Deliver the regenerated files with the edit.
-     Until then `python3 check.py` fails with "the citations are stale",
-     and the tour's layout case runs the old compiler.
+     `python3 check.py --generate`. `refine explain` prints those
+     paragraphs from `citations.txt`, a data file the run rewrites and the
+     compiler reads at run time, so no rebuild is needed; a changed title
+     rewrites the construct matrix too. Deliver the regenerated files
+     with the edit. Until then `python3 check.py` fails with "the
+     citations are stale". An edit to `docs/diagnostics.md` is different:
+     its explanations are compiled in, so that one needs the run and a
+     rebuild with `./scripts/dev-build.sh`.
    - Inside `nix develop`, the full `python3 check.py` passes.
    - For the tour, run `./scripts/dev-test.sh --case='formatting/the
      tour is in the layout'`.
