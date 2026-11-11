@@ -3,8 +3,8 @@ error[L0318]: `bool` has no conformance to `atomic.scalar`
   |
 4 |     mut flag: atomic.cell(bool) = zeroed
   |               ^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/generic-literal-after-a-refused-cell/../../../../../core/atomic/atomic.ldn:215:34
-    |
-215 | public cell: type (item: type is scalar) = cell_value(item)
-    |                                  ^^^^^^ the constraint declared here
+  --> ../tests/fixtures/negative/generic-literal-after-a-refused-cell/../../../../../core/atomic/atomic.ldn:*:34
+  |
+* | public cell: type (item: type is scalar) = cell_value(item)
+  |                                  ^^^^^^ the constraint declared here
   = note: D500: an atomic cell holds a u8, u16, u32 or u64

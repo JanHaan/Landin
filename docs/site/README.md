@@ -245,16 +245,16 @@ requires a nonempty attached comment for every public declaration and a
 module overview with an existing example.
 
 A library comment that gains or loses a line moves every line below it
-in its file, and tests record library source lines: the expectations of
-23 negative fixtures quote a diagnostic that points into the library
-with its line, and a debugger session or a board run reads lines from the
-image it is given. So reword within the lines a comment has where that
-says enough. When a comment needs another line, add it, find the
+in its file, and that costs no recording: the expectations of 22 negative
+fixtures quote a diagnostic that points into the library, and each holds
+the line it quotes by its file, column and text, writing `*` for its
+number ([recorded reports](../../compiler/tests/README.md#metadata)). An
+edit that changes the text of a quoted line does change them: find the
 expectations that name the file and re-record them in one run, reading
 each difference as any re-recorded expectation is read:
 
 ```sh
-grep -rlE 'core/vec/vec\.ldn:[0-9]+' compiler/tests/fixtures
+grep -rlE 'core/vec/vec\.ldn:' compiler/tests/fixtures
 ./scripts/dev-test.sh --record=negative/NAME --record=negative/OTHER
 ```
 

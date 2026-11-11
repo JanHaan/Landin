@@ -1,7 +1,7 @@
 error[L0304]: the builtin `arena` type is withdrawn
-  --> ../tests/fixtures/negative/arena-type-not-enabled/program.ldn:1:13
+  --> ../tests/fixtures/negative/arena-type-not-enabled/program.ldn:*:13
   |
-1 | report: (a: arena) -> none =
+* | report: (a: arena) -> none =
   |             ^^^^^
   = note: the tour describes it at [0820]
   = note: this form is withdrawn; pass an ordinary allocator

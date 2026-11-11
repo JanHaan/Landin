@@ -851,6 +851,29 @@ the catalogue, and
 refuses a negative fixture with a program that names none; the parser suite
 scans and parses the program and holds the report to the exact sequence.
 
+A recording is refine's report with one difference. A location in a file
+outside the fixture's own directory, a library source the report cites,
+is recorded with `*` for its line number, in the location and in the
+gutter of the line it quotes, whose width is then the marker's:
+
+```text
+  --> ../../core/text/text.ldn:*:1
+  |
+* | position_value: type = struct
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+```
+
+The file, the column, the quoted line, its carets and every other byte
+stay exact, and a location in the fixture's own files keeps its number. So
+a library edit above the line, which only moves it, leaves every recording
+as it was, and one that changes the line's text, or what its carets mark,
+fails the fixtures that quote it. Both `--record=` forms write this form,
+and the test program (`Landin.Testing.Reports`) and Darwin's diagnostics
+lane (`fixture_meta.recorded_report`) compare it; a full `check.py`
+refuses a recording that still gives a library line its number, and
+`fixture execution/a moved library line keeps its recording` holds the
+rule to the driver's own reports.
+
 `with` is how a fixture is more than one file. [1840] says the module scope
 is "every file compiled together", so a claim about it cannot be made by a
 fixture that can only name one; `program` stays the file the fixture is named

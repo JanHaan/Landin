@@ -3,38 +3,38 @@ error[L0344]: cortex-m0 has no atomic read-modify-write, so a cell has no exchan
    |
 10 |     _ = atomic.add(addr events, 1)
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:270:28
-    |
-270 | public add: (item: type is exchangeable, at: ptr mut cell(item), value: item)
-    |                            ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:*:28
+  |
+* | public add: (item: type is exchangeable, at: ptr mut cell(item), value: item)
+  |                            ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/cortex_m's critical section, disable_interrupts to restore_interrupts
 error[L0344]: cortex-m0 has no atomic read-modify-write, so a cell has no exchange, add or compare_exchange there
   --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/main.ldn:11:9
    |
 11 |     _ = atomic.exchange(addr events, 0)
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:263:33
-    |
-263 | public exchange: (item: type is exchangeable, at: ptr mut cell(item),
-    |                                 ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:*:33
+  |
+* | public exchange: (item: type is exchangeable, at: ptr mut cell(item),
+  |                                 ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/cortex_m's critical section, disable_interrupts to restore_interrupts
 error[L0344]: cortex-m0 has no atomic read-modify-write, so a cell has no exchange, add or compare_exchange there
   --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/main.ldn:12:9
    |
 12 |     _ = atomic.add_relaxed(addr events, 1)
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:278:36
-    |
-278 | public add_relaxed: (item: type is exchangeable, at: ptr mut cell(item),
-    |                                    ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:*:36
+  |
+* | public add_relaxed: (item: type is exchangeable, at: ptr mut cell(item),
+  |                                    ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/cortex_m's critical section, disable_interrupts to restore_interrupts
 error[L0344]: cortex-m0 has no atomic read-modify-write, so a cell has no exchange, add or compare_exchange there
   --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/main.ldn:13:16
    |
 13 |     code = i32(atomic.compare_exchange(addr events, 0, 1))
    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:288:41
-    |
-288 | public compare_exchange: (item: type is exchangeable, at: ptr mut cell(item),
-    |                                         ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-cortex-m0/../../../../../core/atomic/atomic.ldn:*:41
+  |
+* | public compare_exchange: (item: type is exchangeable, at: ptr mut cell(item),
+  |                                         ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/cortex_m's critical section, disable_interrupts to restore_interrupts

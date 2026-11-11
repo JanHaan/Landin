@@ -17,6 +17,7 @@ with Ada.Text_IO;
 
 with Landin.Backend.Toolchain;
 with Landin.Commands.Catalogue;
+with Landin.Driver;
 with Landin.Json;
 with Landin.Optimization;
 with Landin.Platform.Native;
@@ -28,6 +29,7 @@ with Landin.Targets.Selection;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
 with Landin.Testing.Lanes;
+with Landin.Testing.Reports;
 
 --  This suite runs the real `refine` against the real fixture tree through
 --  the real tool adapter.  That is the point of it: everything else in the
@@ -780,6 +782,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Run_With_Stream
         (Case_Item, Label, Runner, Program,
          Lane_Arguments (Invocation (Case_Item)), Outcome, Item);
+      --  The recording holds a library location to its file, column and
+      --  quoted line, not its number (Landin.Testing.Reports).
+      Outcome.Output := Unbounded.To_Unbounded_String
+        (Landin.Testing.Reports.Recorded_Form
+           (Unbounded.To_String (Outcome.Output),
+            Fixture_Root & "/" & Label));
       --  A stale report names the command that re-records it alone.
       Check_Output
         (Case_Item,
@@ -854,7 +862,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
                & Landin.Testing.Failure_Text (Verdict));
             return;
          end if;
-         Host.Write_File (Where, Unbounded.To_String (Outcome.Output), Status);
+         Host.Write_File
+           (Where,
+            Landin.Testing.Reports.Recorded_Form
+              (Unbounded.To_String (Outcome.Output),
+               Fixture_Root & "/" & Path),
+            Status);
          Wrote := Status = Landin.Platform.Write_Ok;
          Said := Unbounded.To_Unbounded_String
            ((if Wrote then "wrote " else "could not write ")
@@ -4754,6 +4767,93 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end loop;
    end Debugger_Session_Frames_Are_Declared;
 
+   --  A recorded report holds a library location to its file, its column
+   --  and the line it quotes, and not to the line's number, which any
+   --  edit above it moves (Landin.Testing.Reports).  The program's own
+   --  locations keep their numbers.  Reports from the real driver over a
+   --  fake tree, with the library's line moved, changed and kept.
+   procedure A_Moved_Library_Line_Keeps_Its_Recording
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Moved_Library_Line_Keeps_Its_Recording
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Program : constant String :=
+        "import lib" & LF & "seen: i32 = lib.hidden" & LF;
+      Declared : constant String := "hidden: i32 = 7" & LF;
+      Moved : constant String := "-- a line" & LF;
+
+      function Recorded (Library, Source : String) return String;
+
+      function Recorded (Library, Source : String) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/lib");
+         Host.Add_File ("entry/main.ldn", Source);
+         Host.Add_File ("root/lib/private.ldn", Library);
+         Args.Append ("--root=root");
+         Args.Append ("entry");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            return Landin.Testing.Reports.Recorded_Form
+              (Unbounded.To_String (Result.Report), "entry");
+         end;
+      end Recorded;
+
+      Original : constant String := Recorded (Declared, Program);
+      Far : constant String :=
+        Recorded (Moved & Moved & Moved & Moved & Moved & Moved & Moved
+                  & Moved & Moved & Moved & Declared, Program);
+   begin
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Original, "  --> root/lib/private.ldn:*:1" & LF & "  |" & LF
+            & "* | hidden: i32 = 7" & LF & "  | ^") > 0,
+         "a library location is recorded with * for its line number");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Original, "  --> entry/main.ldn:2:") > 0,
+         "the program's own location keeps its line number");
+      Landin.Testing.Check_Equal
+        (Item, Far, Original,
+         "a library line moved to line 11 is recorded as it was");
+      Landin.Testing.Check
+        (Item, Recorded ("hidden: i32 = 8" & LF, Program) /= Original,
+         "a changed library line is not");
+      Landin.Testing.Check
+        (Item, Recorded ("hidden:  i32 = 7" & LF, Program) /= Original,
+         "nor is a library line whose spacing changed");
+      Landin.Testing.Check
+        (Item, Recorded (Declared, Moved & Program) /= Original,
+         "nor is a moved program line");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Reports.Recorded_Form (Original, "entry"),
+         Original, "a recorded form is its own recorded form");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Reports.Lexical
+           ("../tests/fixtures/negative/x/../../../../../core/a.ldn"),
+         "../../core/a.ldn",
+         "a rooted fixture's path to the library is read lexically");
+      Landin.Testing.Check
+        (Item, not Landin.Testing.Reports.Is_Below
+           ("../tests/fixtures/negative/x/../../../../../core/a.ldn",
+            "../tests/fixtures/negative/x")
+         and then Landin.Testing.Reports.Is_Below
+           ("../tests/fixtures/negative/x/./first/a.ldn",
+            "../tests/fixtures/negative/x/")
+         and then not Landin.Testing.Reports.Is_Below
+           ("../tests/fixtures/negative/xy/a.ldn",
+            "../tests/fixtures/negative/x"),
+         "a fixture's own files are the ones below its directory");
+   end A_Moved_Library_Line_Keeps_Its_Recording;
+
    procedure Register
      (Into : in out Landin.Testing.Registry;
       Include_Target_Workloads : Boolean := True) is
@@ -4769,6 +4869,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a report is recorded by name",
          A_Report_Is_Recorded_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "a moved library line keeps its recording",
+         A_Moved_Library_Line_Keeps_Its_Recording'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "differing reports are named together",
          Differing_Reports_Are_Named_Together'Access);

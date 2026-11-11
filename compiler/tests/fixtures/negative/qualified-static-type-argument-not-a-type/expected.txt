@@ -3,8 +3,8 @@ error[L0327]: this static type argument is not a type
   |
 5 |     peers := vec.new(item: net.loopback)
   |                      ^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/qualified-static-type-argument-not-a-type/../../../../../core/vec/vec.ldn:15:14
-   |
-15 | public new: (item: type) -> (result: list(item)) =
-   |              ^^^^^^^^^^ the static formal
+  --> ../tests/fixtures/negative/qualified-static-type-argument-not-a-type/../../../../../core/vec/vec.ldn:*:14
+  |
+* | public new: (item: type) -> (result: list(item)) =
+  |              ^^^^^^^^^^ the static formal
   = note: D138: an explicit static call supplies one named compile-time formal

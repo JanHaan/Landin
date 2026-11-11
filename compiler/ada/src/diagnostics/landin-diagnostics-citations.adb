@@ -2640,6 +2640,9 @@ package body Landin.Diagnostics.Citations is
                & "with",
             when 1230 =>
                "A diagnostic's example may be a fixture",
+            when 1306 =>
+               "A recorded report holds a library line by its text, not "
+               & "its number",
             when 542 =>
                "A device description is a module of directives, and its "
                & "generated half has one text",
@@ -4389,6 +4392,8 @@ package body Landin.Diagnostics.Citations is
             when 599 =>
                "Decisions: The toolchain, C and the machine",
             when 1230 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1306 =>
                "Decisions: The toolchain, C and the machine",
             when 542 =>
                "Decisions: The toolchain, C and the machine",
@@ -6568,6 +6573,9 @@ package body Landin.Diagnostics.Citations is
             when 1230 =>
                "https://www.701.dev/spec.html#d1230-a-diagnostic-s-examp"
                & "le-may-be-a-fixture",
+            when 1306 =>
+               "https://www.701.dev/spec.html#d1306-a-recorded-report-ho"
+               & "lds-a-library-line-by-its-text-not-its-number",
             when 542 =>
                "https://www.701.dev/spec.html#d542-a-device-description-"
                & "is-a-module-of-directives-and-its-generated-half-has-one"

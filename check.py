@@ -5474,6 +5474,22 @@ def fixture_sources():
                                     "`%s` names %s, which is not here"
                                     % (key, one)))
 
+            #  A recorded report names a library line by `*`, not by the
+            #  number an unrelated edit above it moves; the harness records
+            #  and compares that form (fixture_meta.recorded_report), so a
+            #  number left there is a recording older than the rule.
+            expect = (fields.get("expect") or "").strip()
+            if expect and os.path.isfile(os.path.join(case, expect)):
+                recorded = read_file(os.path.join(case, expect), "rb")
+                spelled = "../tests/fixtures/%s/%s" % (kind, name)
+                if fixture_meta.recorded_report(recorded,
+                                                spelled) != recorded:
+                    out.append((where, 1,
+                                "`expect` names %s, which cites a library"
+                                " line by its number; ./scripts/dev-test.sh"
+                                " --record=%s/%s records it with `*`"
+                                % (expect, kind, name)))
+
             #  `fixed:` names what the program, or `a -> b` what another
             #  source, becomes once its fixes are applied.  Both files are
             #  the fixture's, and the result is a program the grammar has

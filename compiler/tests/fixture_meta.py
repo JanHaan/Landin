@@ -157,6 +157,74 @@ def is_below_directory(name):
     return all(part not in ("", ".", "..") for part in name.split("/"))
 
 
+#  What a library location's line number is recorded as
+#  (`Landin.Testing.Reports.Library_Line`).
+LIBRARY_LINE = "*"
+
+_LOCATION = re.compile(r"^  --> (.+):([0-9]+):([0-9]+)$")
+
+
+def lexical(path):
+    """PATH with each `.` and each `..` that follows a name removed, a
+    leading `..` kept: `Landin.Testing.Reports.Lexical`."""
+    absolute = path.startswith("/")
+    kept = []
+    for part in path.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if kept and kept[-1] != "..":
+                kept.pop()
+            elif not absolute:
+                kept.append(part)
+            continue
+        kept.append(part)
+    joined = "/".join(kept)
+    return "/" + joined if absolute else (joined or ".")
+
+
+def is_below(path, directory):
+    """Whether PATH, read lexically, names a file below DIRECTORY."""
+    within, base = lexical(path), lexical(directory)
+    if base == ".":
+        return within not in (".", "..") and not within.startswith(
+            ("/", "../"))
+    return within.startswith(base + "/") and len(within) > len(base) + 1
+
+
+def recorded_report(report, directory):
+    """REPORT, refine's report with the fixture's directory spelled
+    DIRECTORY from where it ran, in the form an `expect` file records it:
+    a location outside that directory keeps its file, column, quoted line
+    and carets, and `*` stands for its line number in the location and the
+    gutter (compiler/tests/README.md).  `Landin.Testing.Reports.
+    Recorded_Form` is the same; bytes in, bytes out, and a recorded form
+    is its own."""
+    text = report.decode("utf-8", "surrogateescape")
+    lines = text.split("\n")
+    number, stage = "", 0
+    for index, line in enumerate(lines):
+        width = len(number)
+        blank = " " * width
+        marker = " " * len(LIBRARY_LINE)
+        if stage == 1 and line == blank + " |":
+            lines[index], stage = marker + " |", 2
+            continue
+        if stage == 2 and line.startswith(number + " |"):
+            lines[index], stage = LIBRARY_LINE + line[width:], 3
+            continue
+        if stage == 3 and line.startswith(blank + " |"):
+            lines[index], stage = marker + line[width:], 0
+            continue
+        stage = 0
+        found = _LOCATION.match(line)
+        if found and not is_below(found.group(1), directory):
+            number, stage = found.group(2), 1
+            lines[index] = "  --> %s:%s:%s" % (
+                found.group(1), LIBRARY_LINE, found.group(3))
+    return "\n".join(lines).encode("utf-8", "surrogateescape")
+
+
 def _relative_c_source(name):
     return len(name) >= 3 and name.endswith(".c") and is_below_directory(name)
 

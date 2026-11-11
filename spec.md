@@ -26877,6 +26877,42 @@ without a checkout to files that are not there.
 and `end-to-end/firmware-archive-with-constructor`, each its code's
 example, and the `catalogue` case `every code is explained`.
 
+### D1306 — A recorded report holds a library line by its text, not its number
+
+**The tour said** nothing; a recorded fixture's `expect` file held
+refine's report byte for byte, and a report quotes each source it cites
+under the line's number, so an edit above a library line that a negative
+fixture's report quoted, one import line added to `core/text/text.ldn`,
+failed fixtures the change did not touch, and the cost of a moved library
+line was a re-recording of every report that cited the file.
+
+**Chosen:** the harness records and compares a report in its recorded
+form. A location in a file outside the fixture's own directory, read
+lexically from where refine ran, keeps its file, its column, the line it
+quotes and its carets, and its line number is written `*`, in the
+location and in the quoted line's gutter, whose width becomes the
+marker's; a location in the fixture's own files and every other byte
+stay as refine printed them. A moved library line therefore leaves every
+recording as it was, and a changed one, or a span that moved within its
+line, fails each fixture that quotes it. The test program's two recording
+commands write that form, its recorded cases and Darwin's diagnostics lane
+compare it, and a full `check.py` refuses a recording that still numbers
+a library line. A library is what lies outside the fixture: `core`,
+`hosted`, `platform` and a device description alike.
+
+**The alternatives:** comparing the cited declaration by name, which needs
+a second, structured report the text does not carry; recording the
+numbers and saying which library edit moved them, which keeps every
+re-recording; normalising only the comparison and keeping the numbers in
+the file, which leaves two forms a recording may take and rewrites the
+file on its next re-recording anyway; and replacing the number with an
+offset from the first quoted line, which no report quotes two lines of.
+
+**Pinned by** the `fixture execution` case `a moved library line keeps its
+recording`, `scripts/tests/test_fixture_meta.py`'s `RecordedReports`, and
+the 22 recorded negatives that quote the library, among them
+`negative/core-text-private-position`.
+
 ### D542 — A device description is a module of directives, and its generated half has one text
 
 **The tour said** at [1410] that a module is every `.ldn` file of one

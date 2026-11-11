@@ -87,7 +87,10 @@ def main():
             require(codes == expected_codes, f'{name}: diagnostic codes differ: {codes!r}')
             if 'expect' in meta:
                 expected = (ROOT / 'compiler/tests/fixtures' / name / meta['expect']).read_bytes()
-                require(actual == expected, exact_difference(name, meta['expect'], expected, actual))
+                # The recording holds a library location to its file, column
+                # and quoted line, not its number (compiler/tests/README.md).
+                recorded = fixture_meta.recorded_report(actual, '../tests/fixtures/' + name)
+                require(recorded == expected, exact_difference(name, meta['expect'], expected, recorded))
             if meta.get('stream') == 'output':
                 require(not stderr, f'{name}: unexpected stderr')
             summary['results'].append(dict(case=name, status='passed', exit=status,

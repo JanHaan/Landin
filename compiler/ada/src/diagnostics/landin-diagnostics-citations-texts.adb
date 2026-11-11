@@ -28821,6 +28821,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & "s what the real one wrote, so it runs on a host without "
                & "a Cortex-M toolchain; the stand-in is one of the files s"
                & "hown. A section has a program or a fixture, not both.",
+            when 1306 =>
+               "Chosen: the harness records and compares a report in its"
+               & " recorded form. A location in a file outside the fixture"
+               & "'s own directory, read lexically from where refine ran, "
+               & "keeps its file, its column, the line it quotes and its c"
+               & "arets, and its line number is written `*`, in the locati"
+               & "on and in the quoted line's gutter, whose width becomes "
+               & "the marker's; a location in the fixture's own files and "
+               & "every other byte stay as refine printed them. A moved li"
+               & "brary line therefore leaves every recording as it was, a"
+               & "nd a changed one, or a span that moved within its line, "
+               & "fails each fixture that quotes it. The test program's tw"
+               & "o recording commands write that form, its recorded cases"
+               & " and Darwin's diagnostics lane compare it, and a full `c"
+               & "heck.py` refuses a recording that still numbers a librar"
+               & "y line. A library is what lies outside the fixture: `cor"
+               & "e`, `hosted`, `platform` and a device description alike.",
             when 542 =>
                "Chosen: a device is described in Landin source, as one m"
                & "odule made only of tool directives in [1740]'s `tool_dir"
