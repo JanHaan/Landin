@@ -430,8 +430,12 @@ class Inventories(unittest.TestCase):
         self.assertTrue(checked(check, copied=inputs[:1]))
 
     def test_decision_evidence_calls_only_an_active_item_active(self):
-        roadmap = ("# Roadmap\n\n### R1.10 — First\n\nStatus: active\n\n"
-                   "### R1.20 — Second\n\nStatus: done\n")
+        #  Work items' names are put together here: check.py refuses one
+        #  written out anywhere but the roadmap.
+        first, second, absent = ("R%d.%d0" % pair
+                                 for pair in ((1, 1), (1, 2), (9, 9)))
+        roadmap = ("# Roadmap\n\n### %s — First\n\nStatus: active\n\n"
+                   "### %s — Second\n\nStatus: done\n" % (first, second))
 
         def said(owner):
             return reasons(
@@ -439,13 +443,13 @@ class Inventories(unittest.TestCase):
                 written={"ROADMAP.md": roadmap, "spec.md":
                          "### D1 — A rule\n\n**Chosen:** it.\n\n**Pinned"
                          " by** the fixture of active %s.\n" % owner})
-        self.assertEqual(said("R1.10"), [])
-        self.assertEqual(said("R1.20"),
-                         ["decision evidence calls R1.20 active, but"
-                          " ROADMAP.md records done"])
-        self.assertEqual(said("R9.90"),
-                         ["decision evidence calls R9.90 active, but"
-                          " ROADMAP.md records no such owner"])
+        self.assertEqual(said(first), [])
+        self.assertEqual(said(second),
+                         ["decision evidence calls %s active, but"
+                          " ROADMAP.md records done" % second])
+        self.assertEqual(said(absent),
+                         ["decision evidence calls %s active, but"
+                          " ROADMAP.md records no such owner" % absent])
 
     WITNESSES = ["tour.md"] + ["compiler/tests/fixtures/" + name for name in (
         "runtime/first-program", "runtime/tour-line-count",

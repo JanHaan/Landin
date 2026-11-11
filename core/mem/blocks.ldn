@@ -12,9 +12,9 @@ fixed if compiler.os == freestanding then
     --- writing anything when `into` is shorter than `source`; bytes of `into`
     --- past the copy are untouched.
     ---
-    --- One rule serves every overlap: a destination that begins after its
-    --- source is copied from the last byte down, any other from the first byte
-    --- up, so no byte is read after it has been overwritten.
+    --- A destination that begins inside its source is copied from the last
+    --- byte down, so no byte is read after it has been overwritten; elsewhere
+    --- either direction gives the same bytes, and which is taken is not said.
     public copy: (into: []mut u8, source: []u8) -> none ! out_of_bounds =
         count: usize = lenof source
         fail out_of_bounds when count > lenof into
@@ -76,9 +76,9 @@ else
     --- writing anything when `into` is shorter than `source`; bytes of `into`
     --- past the copy are untouched.
     ---
-    --- A destination that begins after the first byte of its source but
-    --- inside it is copied from the last byte down, and any other from the
-    --- first byte up, so no byte is read after it has been overwritten.
+    --- A destination that begins inside its source is copied from the last
+    --- byte down, so no byte is read after it has been overwritten; elsewhere
+    --- either direction gives the same bytes, and which is taken is not said.
     public copy: (into: []mut u8, source: []u8) -> none ! out_of_bounds =
         count: usize = lenof source
         fail out_of_bounds when count > lenof into

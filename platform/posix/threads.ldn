@@ -57,15 +57,18 @@ fixed if compiler.os == linux and not compiler.c_runtime then
         end for
     end asynchronous
 
-    --- The bytes a thread's start area takes: its thread-local block and
-    --- 2 KiB for the frames that start it.
+    --- The bytes a thread's start area takes.  Without the C library it is
+    --- the thread-local block and 2 KiB for the frames that start the
+    --- thread; with it, the library's least stack, which holds its own
+    --- start frames and, under glibc, the thread's block.
     public thread_start_bytes:
         () -> (bytes: usize) =
         block: usize = linux.thread_block_bytes()
         bytes = area_least + block + (16 - block % 16) % 16
     end thread_start_bytes
 
-    --- The alignment a start area's lowest byte and its length keep.
+    --- The alignment a start area's lowest byte and its length keep:
+    --- Darwin's page, 16 bytes elsewhere.
     public thread_start_alignment:
         () -> (bytes: usize) =
         bytes = 16
@@ -126,9 +129,10 @@ else
         area_alignment: usize = 16
     end if
 
-    --- The bytes a thread's start area takes: the C library's least
-    --- stack, which holds its own start frames and, under glibc, the
-    --- thread's block.
+    --- The bytes a thread's start area takes.  Without the C library it is
+    --- the thread-local block and 2 KiB for the frames that start the
+    --- thread; with it, the library's least stack, which holds its own
+    --- start frames and, under glibc, the thread's block.
     public thread_start_bytes:
         () -> (bytes: usize) =
         bytes = area_least

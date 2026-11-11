@@ -41,8 +41,11 @@ fixed if compiler.os == linux then
         --- `i64(usize(p))`, and nothing checks an argument's type, so
         --- prefer a typed wrapper where there is one.
         ---
-        --- rax names the call and carries its result; rdi, rsi, rdx, r10,
-        --- r8 and r9 carry its arguments; the kernel overwrites rcx and r11.
+        --- On x86-64 rax names the call and carries its result, rdi, rsi,
+        --- rdx, r10, r8 and r9 carry its arguments, and the kernel overwrites
+        --- rcx and r11.  On arm64 x8 names the call, x0 to x5 carry its
+        --- arguments and x0 its result; on RV64 a7 names it, a0 to a5 carry
+        --- them and a0 the result.
         public system_call:
             (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
             -> (result: i64) =
@@ -61,12 +64,16 @@ fixed if compiler.os == linux then
         public o_directory: i32 = 65536
 
         --- The process entry.  The kernel starts a static Linux executable
-        --- here, with argc on top of the stack and no return address.  It
-        --- clears the frame pointer, so a debugger stops at this frame, and
-        --- aligns the stack to sixteen bytes.  It asks `_landin_start_thread`
-        --- for the first thread's storage, makes the thread pointer it
-        --- returns %fs's base with `arch_prctl(ARCH_SET_FS)`, and calls
-        --- `_landin_start_main` with the initial stack's address.
+        --- here, with argc at the top of the stack and no return address.
+        --- The entry clears the frame pointer, and the link register or
+        --- return address where the architecture has one, so a debugger
+        --- stops at this frame, and aligns the stack to sixteen bytes where
+        --- the kernel has not.  It asks `_landin_start_thread` for the first
+        --- thread's storage and makes the thread pointer that routine
+        --- returns the architecture's: %fs's base on x86-64, with
+        --- `arch_prctl(ARCH_SET_FS)`, `tpidr_el0` on arm64 and `tp` on RV64.
+        --- Then it calls `_landin_start_main` with the initial stack's
+        --- address.
         public extern(naked) _landin_start: () -> none =
             assembler.block("xorl %ebp, %ebp\nmovq %rsp, %rbx\nandq $-16, %rsp\nmovq %rbx, %rdi\ncall _landin_start_thread\nmovq %rax, %rsi\nmovl $4098, %edi\nmovl $158, %eax\nsyscall\nmovq %rbx, %rdi\ncall _landin_start_main")
         end _landin_start
@@ -100,8 +107,11 @@ fixed if compiler.os == linux then
         --- `i64(usize(p))`, and nothing checks an argument's type, so
         --- prefer a typed wrapper where there is one.
         ---
-        --- x8 names the call; x0 to x5 carry its arguments and x0 its
-        --- result.
+        --- On x86-64 rax names the call and carries its result, rdi, rsi,
+        --- rdx, r10, r8 and r9 carry its arguments, and the kernel overwrites
+        --- rcx and r11.  On arm64 x8 names the call, x0 to x5 carry its
+        --- arguments and x0 its result; on RV64 a7 names it, a0 to a5 carry
+        --- them and a0 the result.
         public system_call:
             (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
             -> (result: i64) =
@@ -119,12 +129,16 @@ fixed if compiler.os == linux then
         public o_directory: i32 = 16384
 
         --- The process entry.  The kernel starts a static Linux executable
-        --- here, with argc at the sixteen-byte-aligned stack pointer and no
-        --- return address.  The entry clears the frame and link registers,
-        --- so a debugger stops at this frame.  It asks
-        --- `_landin_start_thread` for the first thread's storage and makes
-        --- the thread pointer that routine returns `tpidr_el0`.  Then it
-        --- calls `_landin_start_main` with the initial stack's address.
+        --- here, with argc at the top of the stack and no return address.
+        --- The entry clears the frame pointer, and the link register or
+        --- return address where the architecture has one, so a debugger
+        --- stops at this frame, and aligns the stack to sixteen bytes where
+        --- the kernel has not.  It asks `_landin_start_thread` for the first
+        --- thread's storage and makes the thread pointer that routine
+        --- returns the architecture's: %fs's base on x86-64, with
+        --- `arch_prctl(ARCH_SET_FS)`, `tpidr_el0` on arm64 and `tp` on RV64.
+        --- Then it calls `_landin_start_main` with the initial stack's
+        --- address.
         public extern(naked) _landin_start: () -> none =
             assembler.block("mov x29, #0\nmov x30, #0\nmov x19, sp\nmov x0, sp\nbl _landin_start_thread\nmsr tpidr_el0, x0\nmov x0, x19\nbl _landin_start_main")
         end _landin_start
@@ -157,8 +171,11 @@ fixed if compiler.os == linux then
         --- `i64(usize(p))`, and nothing checks an argument's type, so
         --- prefer a typed wrapper where there is one.
         ---
-        --- a7 names the call; a0 to a5 carry its arguments and a0 its
-        --- result.
+        --- On x86-64 rax names the call and carries its result, rdi, rsi,
+        --- rdx, r10, r8 and r9 carry its arguments, and the kernel overwrites
+        --- rcx and r11.  On arm64 x8 names the call, x0 to x5 carry its
+        --- arguments and x0 its result; on RV64 a7 names it, a0 to a5 carry
+        --- them and a0 the result.
         public system_call:
             (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
             -> (result: i64) =
@@ -176,12 +193,16 @@ fixed if compiler.os == linux then
         public o_directory: i32 = 65536
 
         --- The process entry.  The kernel starts a static Linux executable
-        --- here, with argc on top of the stack and no return address.  The
-        --- entry clears the frame pointer and return address, so a debugger
-        --- stops at this frame, and aligns the stack to sixteen bytes.  It
-        --- asks `_landin_start_thread` for the first thread's storage and
-        --- makes the thread pointer that routine returns `tp`.  Then it
-        --- calls `_landin_start_main` with the initial stack's address.
+        --- here, with argc at the top of the stack and no return address.
+        --- The entry clears the frame pointer, and the link register or
+        --- return address where the architecture has one, so a debugger
+        --- stops at this frame, and aligns the stack to sixteen bytes where
+        --- the kernel has not.  It asks `_landin_start_thread` for the first
+        --- thread's storage and makes the thread pointer that routine
+        --- returns the architecture's: %fs's base on x86-64, with
+        --- `arch_prctl(ARCH_SET_FS)`, `tpidr_el0` on arm64 and `tp` on RV64.
+        --- Then it calls `_landin_start_main` with the initial stack's
+        --- address.
         public extern(naked) _landin_start: () -> none =
             assembler.block("li x8, 0\nli ra, 0\nmv s1, sp\nmv a0, sp\nandi sp, sp, -16\ncall _landin_start_thread\nmv tp, a0\nmv a0, s1\ncall _landin_start_main")
         end _landin_start
@@ -1653,8 +1674,7 @@ fixed if compiler.os == linux then
 
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
-            --- the level is all there: HWCAP_ATOMICS, HWCAP_CRC32 and
-            --- HWCAP_ASIMDRDM.
+            --- the level is all there.
             public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 hwcap: u64 = words.hwcap
@@ -1730,7 +1750,7 @@ fixed if compiler.os == linux then
 
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
-            --- the level is all there: RISCV_HWPROBE_EXT_ZBA.
+            --- the level is all there.
             public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 name = if (words.extensions & 0x8) == 0 then "zba"

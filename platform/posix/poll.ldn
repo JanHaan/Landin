@@ -161,8 +161,14 @@ elsif compiler.os == darwin or compiler.os == freebsd then
 
     non_blocking_flag: i32 = libc.o_nonblock
 
-    --- The most bytes a write to a pipe writes whole, `PIPE_BUF`, as on
-    --- Linux above.
+    --- The most bytes a write to a pipe writes whole, `PIPE_BUF`: 4096 on
+    --- Linux and 512 on Darwin and FreeBSD.  A write of no more waits
+    --- until there is room for all of it, and a pipe `poll` reports ready
+    --- for `poll_output` has that room: Linux reports it when one of the
+    --- pipe's buffers, a page of at least 4096 bytes, is free, and Darwin
+    --- and FreeBSD when at least this many bytes are, as kqueue's write
+    --- filter does.  So such a write to a pipe reported ready does not
+    --- wait, blocking or not, unless another writer fills the room first.
     public pipe_atomic: usize = libc.pipe_buf
 
     system_status_flags: (opened: descriptor) -> (flags: i32) ! errno =

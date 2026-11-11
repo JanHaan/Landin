@@ -317,7 +317,10 @@ Copies of one name's comment are meant to stay parallel: where they differ
 by more than a few target words the page can only set the whole texts side
 by side, and the build prints each such name with its source lines,
 "declared once per target ... comments that differ by more than their
-target words", so a copy edited alone is seen.
+target words", so a copy edited alone is seen. A type whose declarations
+themselves differ between targets, `platform/libc`'s `file_status` laid out
+as each system's C library lays it out, is left out of that: each copy's
+comment describes its own fields, and the page shows them side by side.
 The columns are the conditions most of the repeated names use; a name with
 any other condition keeps its own section. Each column's full condition is
 listed above the table, and the build checks every cell against the
