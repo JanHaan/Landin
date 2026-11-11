@@ -27,6 +27,9 @@ package body Landin.Tests.Xtensa_Backend_Suite is
    function Contains (Text, Part : String) return Boolean
      is (Ada.Strings.Fixed.Index (Text, Part) > 0);
 
+   --  The build report of the source Emitted last wrote.
+   Last_Report : Landin.Build_Reports.Report;
+
    function Emitted
      (Item : in out Landin.Testing.Context; Source : String;
       Options : Landin.Optimization.Options :=
@@ -62,6 +65,7 @@ package body Landin.Tests.Xtensa_Backend_Suite is
          Landin.Stages.Identities (Work).all,
          Landin.Stages.Target (Work),
          Options, Text, Report);
+      Last_Report := Report;
       return U.To_String (Text);
    end Emitted;
 
@@ -366,6 +370,44 @@ package body Landin.Tests.Xtensa_Backend_Suite is
            and then Ada.Strings.Fixed.Index
              (Text (Above_At .. Call_At), HT & "mov a9, a1" & LF) > 0,
          "the stack words are addressed from SP");
+      --  The report's figures count the area: the homes' extent is the
+      --  figure the prologue adds to their base for the frame address.
+      declare
+         use type Landin.Targets.Byte_Count;
+         Homes_At : constant Natural :=
+           (if Above_At = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Text, LF & HT & "add a8, a7, a8" & LF, Above_At));
+         Figure_At : constant Natural :=
+           (if Homes_At = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Text (Above_At .. Homes_At), HT & "movi a8, ",
+               Going => Ada.Strings.Backward));
+         Homes : constant Landin.Targets.Byte_Count :=
+           (if Figure_At = 0 then 0
+            else Landin.Targets.Byte_Count'Value
+              (Text (Figure_At + 10 .. Homes_At - 1)));
+         Counted : Natural := 0;
+      begin
+         for Index in 1 .. Landin.Build_Reports.Routine_Count (Last_Report)
+         loop
+            declare
+               Row : constant Landin.Build_Reports.Routine_Statistics :=
+                 Landin.Build_Reports.Nth_Routine (Last_Report, Index);
+            begin
+               if Row.Frame_Bytes = Homes + 16
+                 and then Row.Stack_Bytes = Homes + 32
+               then
+                  Counted := Counted + 1;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Homes >= 128 and then Counted = 1,
+            "the build report's frame and stack figures of that routine"
+            & " count the sixteen bytes of its area:"
+            & Homes'Image & Counted'Image);
+      end;
    end Outgoing_Area_In_Frame;
 
    --  An interrupt's entry and return leave the firmware's interrupt
