@@ -125,6 +125,7 @@ negative/a-fold-deeper-than-any-limit | linux-x86-64, linux-arm64, darwin-arm64,
 negative/a-forgotten-end-is-not-the-functions | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-missing-conformance-entry-is-one-report | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-nested-mistake-after-a-refused-statement-is-reported | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-non-type-shadows-a-predeclared-type | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-noreturn-call-is-not-a-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-refused-write-still-assigns | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-text-literal-is-not-indexed | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -316,6 +317,7 @@ negative/closing-word-written-twice-is-removed | linux-x86-64, linux-arm64, darw
 negative/compiler-concept-reserved | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/compiler-conformance-reserved | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/compiler-unreachable-argument | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+negative/compiler-unreachable-not-a-caller | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/compiler-unreachable-value | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/composed-conformance-missing-parent | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/compound-assignment-as-expression | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1572,6 +1574,7 @@ negative/unnamed-error-binding-is-removed | linux-x86-64, linux-arm64, darwin-ar
 negative/unnamed-result-names-the-named-form | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/unterminated-raw-literal | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/unterminated-text-literal | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/unused-else-binding | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/unused-pure-local | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/upper-case-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/use-after-sink | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2054,6 +2057,8 @@ runtime/c-library-directories | linux-x86-64, linux-arm64, darwin-arm64, freebsd
 runtime/c-packed-record-fields | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/caller-is-an-ordinary-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/caller-parameters | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/caller-site-trap | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+runtime/caller-site-trap-dispatches | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/calls-return-through-the-abi | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/character-literal-codepoints | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/checked-multiplication-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

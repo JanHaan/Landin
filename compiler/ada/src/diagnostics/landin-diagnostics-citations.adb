@@ -1294,6 +1294,11 @@ package body Landin.Diagnostics.Citations is
             when 381 =>
                "A refusal that reached a hiding local names the local an"
                & "d what it hides",
+            when 1260 =>
+               "A nearer declaration shadows a predeclared type, whateve"
+               & "r it declares",
+            when 1261 =>
+               "An `else` binding its block never reads is warned about",
             when 3 =>
                "Signed integers are two's complement",
             when 4 =>
@@ -2843,6 +2848,9 @@ package body Landin.Diagnostics.Citations is
                "The hosted heap over-allocates in source",
             when 278 =>
                "An explicit trap is a `compiler` builtin",
+            when 1262 =>
+               "A trap given a `caller` parameter is reported at that ca"
+               & "ll",
             when 279 =>
                "Linux's system interface is `platform/linux`, with no C "
                & "library",
@@ -3335,6 +3343,10 @@ package body Landin.Diagnostics.Citations is
             when 254 =>
                "Decisions: Declarations, names and scopes",
             when 381 =>
+               "Decisions: Declarations, names and scopes",
+            when 1260 =>
+               "Decisions: Declarations, names and scopes",
+            when 1261 =>
                "Decisions: Declarations, names and scopes",
             when 3 =>
                "Decisions: Numbers and literals",
@@ -4540,6 +4552,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The core library and the derived programs",
             when 278 =>
                "Decisions: The core library and the derived programs",
+            when 1262 =>
+               "Decisions: The core library and the derived programs",
             when 279 =>
                "Decisions: The core library and the derived programs",
             when 280 =>
@@ -4937,6 +4951,12 @@ package body Landin.Diagnostics.Citations is
             when 381 =>
                "https://www.701.dev/spec.html#d381-a-refusal-that-reache"
                & "d-a-hiding-local-names-the-local-and-what-it-hides",
+            when 1260 =>
+               "https://www.701.dev/spec.html#d1260-a-nearer-declaration"
+               & "-shadows-a-predeclared-type-whatever-it-declares",
+            when 1261 =>
+               "https://www.701.dev/spec.html#d1261-an-else-binding-its-"
+               & "block-never-reads-is-warned-about",
             when 3 =>
                "https://www.701.dev/spec.html#d3-signed-integers-are-two"
                & "-s-complement",
@@ -6812,6 +6832,9 @@ package body Landin.Diagnostics.Citations is
             when 278 =>
                "https://www.701.dev/spec.html#d278-an-explicit-trap-is-a"
                & "-compiler-builtin",
+            when 1262 =>
+               "https://www.701.dev/spec.html#d1262-a-trap-given-a-calle"
+               & "r-parameter-is-reported-at-that-call",
             when 279 =>
                "https://www.701.dev/spec.html#d279-linux-s-system-interf"
                & "ace-is-platform-linux-with-no-c-library",
