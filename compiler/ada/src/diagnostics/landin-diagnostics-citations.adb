@@ -1558,6 +1558,9 @@ package body Landin.Diagnostics.Citations is
                "An array literal may be assigned to a fixed-array field",
             when 1180 =>
                "An array parameter is a copy source for an array field",
+            when 1201 =>
+               "A whole array field is lent to an `inout` array paramete"
+               & "r",
             when 53 =>
                "Repetition may assign a fixed-array field compactly",
             when 54 =>
@@ -1838,6 +1841,9 @@ package body Landin.Diagnostics.Citations is
             when 382 =>
                "An atom outside the error set is named with the `fail` o"
                & "r call that raises it",
+            when 1200 =>
+               "Every atom outside the error set is named, as the file w"
+               & "rites it",
             when 1103 =>
                "An error set names atoms, and a pointer type reached thr"
                & "ough an alias is refused",
@@ -3541,6 +3547,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Structs, variants and nesting",
             when 1180 =>
                "Decisions: Structs, variants and nesting",
+            when 1201 =>
+               "Decisions: Structs, variants and nesting",
             when 53 =>
                "Decisions: Structs, variants and nesting",
             when 54 =>
@@ -3770,6 +3778,8 @@ package body Landin.Diagnostics.Citations is
             when 371 =>
                "Decisions: Functions, calls and returns",
             when 382 =>
+               "Decisions: Functions, calls and returns",
+            when 1200 =>
                "Decisions: Functions, calls and returns",
             when 1103 =>
                "Decisions: Functions, calls and returns",
@@ -5244,6 +5254,9 @@ package body Landin.Diagnostics.Citations is
             when 1180 =>
                "https://www.701.dev/spec.html#d1180-an-array-parameter-i"
                & "s-a-copy-source-for-an-array-field",
+            when 1201 =>
+               "https://www.701.dev/spec.html#d1201-a-whole-array-field-"
+               & "is-lent-to-an-inout-array-parameter",
             when 53 =>
                "https://www.701.dev/spec.html#d53-repetition-may-assign-"
                & "a-fixed-array-field-compactly",
@@ -5592,6 +5605,9 @@ package body Landin.Diagnostics.Citations is
             when 382 =>
                "https://www.701.dev/spec.html#d382-an-atom-outside-the-e"
                & "rror-set-is-named-with-the-fail-or-call-that-raises-it",
+            when 1200 =>
+               "https://www.701.dev/spec.html#d1200-every-atom-outside-t"
+               & "he-error-set-is-named-as-the-file-writes-it",
             when 1103 =>
                "https://www.701.dev/spec.html#d1103-an-error-set-names-a"
                & "toms-and-a-pointer-type-reached-through-an-alias-is-refu"

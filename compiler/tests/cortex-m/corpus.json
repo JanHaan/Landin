@@ -1420,6 +1420,9 @@
     "runtime/array-elements-hold-their-own": {
       "mode": "execute"
     },
+    "runtime/array-field-passed-inout": {
+      "mode": "execute"
+    },
     "runtime/array-lent-to-slice": {
       "mode": "execute"
     },
@@ -3770,6 +3773,9 @@
       "mode": "execute"
     },
     "runtime/qualified-module-binding-is-a-place": {
+      "mode": "execute"
+    },
+    "runtime/qualified-module-binding-is-sunk": {
       "mode": "execute"
     },
     "runtime/qualified-static-type-argument": {
