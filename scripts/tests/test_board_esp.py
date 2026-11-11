@@ -708,6 +708,171 @@ class Paced(unittest.TestCase):
         self.assertIn('the port is left off', str(raised.exception))
 
 
+class StartPower(unittest.TestCase):
+    """D1253: a run switches on a port of its own that its hub lists off."""
+    LOCATION = '7-2.3.4'
+    GUARD = (1, '1366:0105')
+
+    def setUp(self):
+        self.off = HUB.replace(
+            '  Port 3: 0103 power enable connect [303a:1001 Espressif USB JTAG/serial debug unit'
+            ' D0:CF:13:E0:87:F0]\n', '  Port 3: 0000 off\n')
+        self.assertNotEqual(self.off, HUB)
+        self.pace = mock.Mock()
+        self.args = SimpleNamespace(arty_serial=None, cascade=None, pace=self.pace,
+                                    hub_group=None)
+
+    def start(self, status, places=None, switched=None):
+        hub = Recorded(status, switched=switched)
+        hub.status = status
+        with mock.patch.object(COMMON, 'InGroup', return_value=hub), \
+                mock.patch.object(COMMON.time, 'sleep'):
+            try:
+                found = ESP.power_at_start(mock.Mock(), self.args, places or [
+                    (self.LOCATION, 3, self.GUARD)])
+            finally:
+                self.calls = hub.calls
+        return found
+
+    def test_a_listing_says_which_ports_are_off(self):
+        self.assertEqual(COMMON.ports_off(HUB, [1, 2, 3, 4]), [])
+        self.assertEqual(COMMON.ports_off(self.off, [2, 3, 4]), [3])
+        #  A port with power and nothing on it, a USB 3 port off, and a
+        #  port the hub does not have.
+        listing = ('Current status for hub 7-2.3.4 [0bda:0411]\n'
+                   '  Port 1: 0100 power\n  Port 2: 00a0 off\n'
+                   '  Port 3: 02a0 power 5gbps Rx.Detect\n')
+        self.assertEqual(COMMON.ports_off(listing, [1, 2, 3, 9]), [2])
+
+    def test_ports_that_have_power_are_left_alone_and_nothing_is_recorded(self):
+        self.assertIsNone(self.start(HUB))
+        self.assertEqual(self.calls, [('hub-start', ['uhubctl', '-l', self.LOCATION])])
+        self.pace.before.assert_not_called()
+
+    def test_a_port_listed_off_is_switched_on_as_one_paced_action(self):
+        found = self.start(self.off, switched=['New status for hub 7-2.3.4 [0bda:5411]\n'])
+        self.assertEqual(found, dict(
+            switched_on=['hub 7-2.3.4 port 3'],
+            reason='the hub listed the port switched off when the run started'))
+        self.assertEqual(self.calls, [
+            ('hub-start', ['uhubctl', '-l', self.LOCATION]),
+            ('hub-status', ['uhubctl', '-l', self.LOCATION]),
+            ('power-on-at-start', ['uhubctl', '-l', self.LOCATION, '-p', '3', '-a', 'on'])])
+        self.pace.before.assert_called_once_with('power on at start')
+        self.pace.after.assert_called_once_with('power on at start')
+
+    def test_only_the_run_s_own_ports_are_switched_each_on_its_own_hub(self):
+        #  Port 4 is off too and is another board's: it is not in PLACES.
+        status = self.off.replace('  Port 4: 0103 power enable connect [1a86:7523 USB Serial]\n',
+                                  '  Port 4: 0000 off\n')
+        found = self.start(status, places=[(self.LOCATION, 2, self.GUARD),
+                                           (self.LOCATION, 3, self.GUARD)],
+                           switched=['New status for hub 7-2.3.4 [0bda:5411]\n'])
+        self.assertEqual(found['switched_on'], ['hub 7-2.3.4 port 3'])
+        self.assertEqual([argv for name, argv in self.calls if name.startswith('power-')],
+                         [['uhubctl', '-l', self.LOCATION, '-p', '3', '-a', 'on']])
+
+    def test_the_pace_guard_refusing_it_stops_the_run_with_the_port_off(self):
+        self.pace.before.side_effect = COMMON.USBGuardError('USB trouble since the last action')
+        with self.assertRaises(COMMON.USBGuardError) as raised:
+            self.start(self.off)
+        self.assertEqual(raised.exception.outcome, 'usb-stopped')
+        self.assertIn('port 3 of hub 7-2.3.4 was listed switched off', str(raised.exception))
+        self.assertIn('the port is left off', str(raised.exception))
+        self.assertEqual([name for name, _ in self.calls], ['hub-start'])
+
+    def test_nothing_is_switched_while_the_arty_is_on_the_cascade(self):
+        self.args.arty_serial, self.args.cascade = '210319B3E738', '7-2'
+        with mock.patch.object(COMMON, 'device_location', return_value='7-2.3.3.4'), \
+                self.assertRaises(COMMON.Failed) as raised:
+            self.start(self.off)
+        self.assertIn('the port is left off', str(raised.exception))
+        self.assertEqual([name for name, _ in self.calls], ['hub-start'])
+        self.pace.before.assert_not_called()
+
+    def test_a_hub_without_its_guard_is_not_switched(self):
+        with self.assertRaises(COMMON.Unavailable) as raised:
+            self.start(self.off.replace('[1366:0105]', '[]'))
+        self.assertIn('refusing to switch this hub', str(raised.exception))
+        self.assertEqual([name for name, _ in self.calls], ['hub-start', 'hub-status'])
+
+    def test_a_switch_that_never_takes_fails_the_run_and_says_the_port_is_off(self):
+        with self.assertRaises(COMMON.Failed) as raised:
+            self.start(self.off, switched=[''])
+        self.assertIn('uhubctl did not switch port 3 of hub 7-2.3.4 on', str(raised.exception))
+        self.assertIn('the port is left off', str(raised.exception))
+        self.pace.after.assert_called_once_with('power on at start')
+
+    def test_a_hub_that_does_not_list_is_named_and_left_alone(self):
+        self.assertEqual(self.start(''), dict(unread=['hub 7-2.3.4']))
+        self.assertEqual([name for name, _ in self.calls], ['hub-start'])
+        self.pace.before.assert_not_called()
+
+    def run_with(self, directory, start):
+        """A RAM run whose loader fails, after START was found at its
+        start: its result, and the order of what happened under the lock."""
+        elf = directory / 'board.elf'
+        elf.write_bytes(elf32(0x40380000, [(0x40380000, TEXT, False)]))
+        done = []
+        args = SimpleNamespace(output=directory / 'run', mode='ram', probe_rs='probe-rs',
+            probe='probe', nm='nm', seed=1, record=None,
+            prepared_bundle=dict(symbols={}, metadata=dict(instructions={})),
+            pace=COMMON.Pace(state=directory / 'pace', spacing=0, quiet=0,
+                             kernel=lambda _: []))
+        chip = SimpleNamespace(name='esp32c3', probe_chip='ESP32-C3',
+            mtvec=lambda *_: 0x40380101, mtvt=lambda *_: None)
+        lock = SimpleNamespace(file=None)
+        lock.acquire = lambda: done.append('lock')
+        lock.release = lambda: done.append('unlock')
+
+        def started(run, given, places):
+            done.append(('start', places))
+            if isinstance(start, Exception):
+                raise start
+            return start
+
+        def loading(*_):
+            done.append('load')
+            raise COMMON.Failed('the loader control')
+        with mock.patch.object(ESP, 'build', return_value=(elf, None, {})), \
+                mock.patch.object(COMMON, 'validate_ram_image'), \
+                mock.patch.object(COMMON, 'elf_sections', return_value=(b'', {})), \
+                mock.patch.object(COMMON, 'Probe'), \
+                mock.patch.object(COMMON, 'rig_lock', return_value=lock), \
+                mock.patch.object(ESP, 'power_at_start', side_effect=started), \
+                mock.patch.object(COMMON, 'ram_load', side_effect=loading):
+            self.assertEqual(ESP.run_board(
+                chip, args, lambda _: done.append('console') or SimpleNamespace(
+                    received=bytearray(), sent=bytearray(), close=mock.Mock()),
+                mock.Mock(), lambda _: done.append('settle'), ['PLACES']), 1)
+        return COMMON.json.loads((args.output / 'result.json').read_text()), done
+
+    def test_a_run_says_in_its_result_that_it_switched_its_port_on(self):
+        found = dict(switched_on=['hub 7-2.3.4 port 3'],
+                     reason='the hub listed the port switched off when the run started')
+        with tempfile.TemporaryDirectory() as tmp:
+            result, done = self.run_with(Path(tmp), found)
+        self.assertEqual(result['power_at_start'], found)
+        #  Under the lock, before the board is touched, and the board is
+        #  awaited before anything is loaded into it.
+        self.assertEqual(done, ['lock', ('start', ['PLACES']), 'settle', 'console', 'load',
+                                'unlock'])
+
+    def test_a_run_whose_ports_were_on_records_nothing_and_waits_for_nothing(self):
+        for start, recorded in ((None, None), (dict(unread=['hub 7-2.3.4']),) * 2):
+            with self.subTest(start=start), tempfile.TemporaryDirectory() as tmp:
+                result, done = self.run_with(Path(tmp), start)
+            self.assertEqual(result.get('power_at_start'), recorded)
+            self.assertEqual(done, ['lock', ('start', ['PLACES']), 'console', 'load', 'unlock'])
+
+    def test_a_refused_switch_on_ends_the_run_before_the_board_is_touched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result, done = self.run_with(
+                Path(tmp), COMMON.USBGuardError('USB trouble; the port is left off'))
+        self.assertEqual((result['status'], result['outcome']), ('failed', 'usb-stopped'))
+        self.assertEqual(done, ['lock', ('start', ['PLACES']), 'unlock'])
+
+
 class Recover(unittest.TestCase):
     def test_download_mode_is_esptool_s_usb_jtag_serial_sequence(self):
         calls = []

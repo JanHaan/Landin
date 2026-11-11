@@ -140,7 +140,8 @@ def main():
         settle(run)
         return console, None
 
-    return esp.run_board(chip, args, console_for, cycle, settle)
+    return esp.run_board(chip, args, console_for, cycle, settle,
+                         [(args.hub, args.port, (args.guard_port, args.guard_device))])
 
 
 if __name__ == '__main__':

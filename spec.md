@@ -26228,6 +26228,44 @@ reason.
 
 **Pinned by** `scripts/tests/test_board_common.py`'s `Pace`.
 
+### D1253 — An ESP run switches on a port of its own that it finds off
+
+**The tour said** nothing; the ESP ports' power cycle is two switches with
+a wait between them, and one that fails between the two tries the "on"
+once more. Where that fails too, or D725's pace refuses it after USB
+trouble, the port is left off, and no board tool switched a port on when
+it started: every later run of that board ended `unavailable` until
+someone ran `uhubctl -a on` by hand, a command the failure names and a
+newcomer to the rig would not otherwise guess.
+
+**Chosen:** an ESP run, RAM or boot, holding the rig's lock and before it
+touches its board, reads the listing of its own hub and of its console's
+hub where the board has two ports. A port of its own that the listing
+shows `off` it switches on, as one action of D725's pace like any other
+power operation: unacknowledged USB trouble stops it, the Arty must be
+off the cascade, and the hub must show its guarded port. It then waits for
+the board to list and goes on, and its `result.json` says so in
+`power_at_start`, with each hub and port switched and the reason. A run
+that finds its ports on records nothing, and a board's record never
+carries the member. A hub that does not list is named as `unread` and left
+alone. A switch that fails or is refused fails the run, with the port
+still off and the same words about it as a failed cycle's.
+
+**The alternatives:** leaving it to the maintainer, as before. Switching
+the port on outside the pace, on the ground that an "on" disconnects
+nothing: it re-enumerates a device on a cascade that may be the one in
+trouble, and D835 leaves that judgement to a person. Having `gate.py`
+switch every board's ports on before its first step, which gives one tool
+the power of all the ports and a run started by hand nothing. Switching on
+in the observations `--inspect-boot`, `--trace-rom` and
+`--diagnose-reset`, which are there to look at a board as it is.
+
+**Pinned by** `scripts/tests/test_board_esp.py`'s `StartPower`, against
+recorded listings and a fake hub. That a hub lists a switched-off port as
+`off` on the rig's own hubs, and that a board switched on at a run's start
+is ready within the wait a download's reset is given, are the rig's to
+show.
+
 ### D836 — A board tool that opens a tty runs itself in the tty's group
 
 **The tour said** nothing; D646's tools ran `uhubctl` through `sg GROUP -c`

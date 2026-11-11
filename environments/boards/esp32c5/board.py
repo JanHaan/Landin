@@ -213,7 +213,11 @@ def main():
                   lambda: chip_enable_reset(console.fd, args.reset_seconds))
         return console, power_on
 
-    return esp.run_board(C5(), args, console_for, cycle, settle)
+    # The console's port first, as a cycle's "on" switches them.
+    return esp.run_board(C5(), args, console_for, cycle, settle, [
+        (args.console_hub, args.console_port,
+         (args.console_guard_port, args.console_guard_device)),
+        (args.hub, args.port, (args.guard_port, args.guard_device))])
 
 
 # LP_CLKRST_RESET_CAUSE (the C5's TRM v1.1, Register 9.90): the cause in

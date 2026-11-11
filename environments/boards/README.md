@@ -682,9 +682,23 @@ fails of itself between the two, a hub that does not list again, still
 tries the "on" once, through the same pacing and guards, and its failure
 then says the port was switched on again. Where the "on" itself fails its
 tries, or the pace guard refuses it after USB trouble, the port stays
-off, since no tool overrides that guard or switches a port on when it
-starts: the failure says the port is left off, and
-`uhubctl -l HUB -p PORT -a on` by hand switches it. A boot check cancelled before its fixed
+off, since no tool overrides that guard: the failure says the port is left
+off, and `uhubctl -l HUB -p PORT -a on` by hand switches it.
+
+The next ESP run of that board, RAM or boot, switches it on itself
+(D1253). Holding the rig lock and before it touches the board, a run
+reads the listing of its own hub, and of its console's hub where the
+board has two ports. A port of its own listed `off` is switched on as any
+power operation is: one paced action, stopped by unacknowledged USB
+trouble, with the Arty off the cascade and the hub showing its guarded
+port. The run then waits for the board to list, goes on, and says in
+`result.json` what it did, `power_at_start` with `switched_on` naming each
+hub and port and the `reason`; a run that found its ports on records
+nothing. A hub that does not list is named there as `unread` and left
+alone. A switch that fails or is refused fails the run, `usb-stopped` for
+the guard, with the same words about the port left off. No run switches
+another board's port, and `--inspect-boot`, `--trace-rom` and
+`--diagnose-reset`, which are observations, switch nothing. A boot check cancelled before its fixed
 image is restored records the restoration pending instead of starting it:
 GitHub's runner sends SIGTERM 7.5 s after SIGINT and kills the step 2.5 s
 later, too soon for a restoration, and one killed half way leaves the board
