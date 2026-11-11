@@ -21,8 +21,16 @@
 #include <sys/syscall.h>
 #endif
 
+/* Removal opens one descriptor, the retirement slot's.  SPARE holds its
+   place in the descriptor table from before the directory exists, and is
+   closed only to make room for it, so a process at its descriptor limit
+   removes what it created rather than leaving it (a tool's capture, a
+   run's directory) behind with a refusal.  Nothing else in removal takes a
+   descriptor for a directory with no subdirectory: the slot's name comes
+   from the directory's own, the parent is the one already held, and the
+   directory is listed through its retained root. */
 struct landin_owned_directory {
-    int parent, root, finished, retained;
+    int parent, root, spare, finished, retained;
     struct stat identity;
     char path[PATH_MAX], parent_path[PATH_MAX], name[NAME_MAX + 1];
     char reason[PATH_MAX * 2 + 1024];
@@ -52,41 +60,83 @@ static int landin_owned_random(char *name, size_t room, const char *prefix)
         snprintf(name + n + 2 * i, room - n - 2 * i, "%02x", random[i]);
     return 0;
 }
-static int landin_owned_allocate(int parent, const char *parent_path,
-                                  const char *prefix,
-                                  struct landin_owned_directory *owned)
+/* A directory of a fresh name under PARENT.  SUFFIX, when given, is tried
+   as the name's random part before any is drawn, which takes a descriptor.
+   BORROWED keeps PARENT itself as the directory's parent, for a slot whose
+   owner outlives it; otherwise the parent is a copy and a spare is held.
+   Every descriptor is taken before the directory is made, and the root's
+   is opened into a place held for it, so a full descriptor table refuses
+   before anything exists; a directory whose root cannot be opened for
+   another reason is removed again, being new, empty and this call's. */
+static int landin_owned_allocate_named(int parent, const char *parent_path,
+                                        const char *prefix, const char *suffix,
+                                        int borrowed,
+                                        struct landin_owned_directory *owned)
 {
     unsigned attempt;
-    int count;
+    int count, error, made = 0, place = -1;
     memset(owned, 0, sizeof *owned);
-    owned->root = -1;
-    owned->parent = fcntl(parent, F_DUPFD_CLOEXEC, 3);
+    owned->root = owned->spare = -1;
+    owned->parent = borrowed ? parent : fcntl(parent, F_DUPFD_CLOEXEC, 3);
     if (owned->parent < 0) return -1;
+    if (!borrowed) {
+        owned->spare = fcntl(parent, F_DUPFD_CLOEXEC, 3);
+        if (owned->spare < 0) goto fail;
+    }
     if (strlen(parent_path) >= sizeof owned->parent_path) {
         errno = ENAMETOOLONG; goto fail;
     }
     strcpy(owned->parent_path, parent_path);
     for (attempt = 0; attempt < 100; ++attempt) {
-        if (landin_owned_random(owned->name, sizeof owned->name, prefix) != 0)
+        if (suffix && attempt == 0) {
+            count = snprintf(owned->name, sizeof owned->name, "%s%s", prefix,
+                              suffix);
+            if (count < 0 || (size_t)count >= sizeof owned->name) continue;
+        } else if (landin_owned_random(owned->name, sizeof owned->name,
+                                        prefix) != 0)
             goto fail;
         count = snprintf(owned->path, sizeof owned->path, "%s/%s", parent_path,
                           owned->name);
         if (count < 0 || (size_t)count >= sizeof owned->path) {
             errno = ENAMETOOLONG; goto fail;
         }
+        /* The root's place, held across the mkdir and given up to the
+           open that follows it. */
+        if (place < 0) place = fcntl(owned->parent, F_DUPFD_CLOEXEC, 3);
+        if (place < 0) goto fail;
         if (mkdirat(owned->parent, owned->name, 0700) == 0) break;
         if (errno != EEXIST) goto fail;
     }
     if (attempt == 100) { errno = EEXIST; goto fail; }
+    made = 1;
+    close(place); place = -1;
     owned->root = openat(owned->parent, owned->name,
                          O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (owned->root < 0 || fstat(owned->root, &owned->identity) != 0) goto fail;
     return 0;
 fail:
+    error = errno;
+    if (place >= 0) close(place);
     if (owned->root >= 0) close(owned->root);
-    close(owned->parent);
-    owned->root = owned->parent = -1;
+    if (made) unlinkat(owned->parent, owned->name, AT_REMOVEDIR);
+    if (owned->spare >= 0) close(owned->spare);
+    if (!borrowed) close(owned->parent);
+    owned->root = owned->parent = owned->spare = -1;
+    errno = error;
     return -1;
+}
+static int landin_owned_allocate(int parent, const char *parent_path,
+                                  const char *prefix,
+                                  struct landin_owned_directory *owned)
+{
+    return landin_owned_allocate_named(parent, parent_path, prefix, NULL, 0,
+                                        owned);
+}
+/* Give up the place an owned directory holds for its removal. */
+static void landin_owned_release(struct landin_owned_directory *owned)
+{
+    if (owned->spare >= 0) close(owned->spare);
+    owned->spare = -1;
 }
 static int landin_owned_create(const char *prefix,
                                 struct landin_owned_directory *owned)
@@ -200,8 +250,11 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
 {
     struct landin_owned_directory retired;
     struct stat actual;
-    int error, copied, replacement = 0;
+    int error, replacement = 0;
     char original[PATH_MAX + 256], recovery[PATH_MAX + 256];
+    const char *suffix;
+    /* The spare's place is for this call, whichever way it ends. */
+    landin_owned_release(owned);
     landin_owned_describe(owned->parent, owned->parent_path, owned->name,
                            original, sizeof original);
     if (owned->finished) {
@@ -221,8 +274,14 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
                  original);
         return -1;
     }
-    if (landin_owned_allocate(owned->parent, owned->parent_path,
-                               ".refine-cleanup-", &retired) != 0) {
+    /* The slot takes the directory's own random part for its name and
+       the held parent for its parent, and its root opens into the place
+       the spare held: no descriptor this process did not already have. */
+    suffix = strrchr(owned->name, '-');
+    if (landin_owned_allocate_named(owned->parent, owned->parent_path,
+                                     ".refine-cleanup-",
+                                     suffix && suffix[1] ? suffix + 1 : NULL,
+                                     1, &retired) != 0) {
         snprintf(owned->reason, sizeof owned->reason,
                  "cannot create private cleanup recovery for %s; retry cleanup in its original parent",
                  original);
@@ -260,8 +319,11 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
                  recovery, original);
         goto fail_retained;
     }
-    copied = fcntl(owned->root, F_DUPFD_CLOEXEC, 3);
-    if (copied < 0 || landin_owned_empty(copied) != 0
+    /* Listed through the retained root itself, which the listing closes:
+       it is the captured directory, as the identity above established. */
+    error = landin_owned_empty(owned->root);
+    owned->root = -1;
+    if (error != 0
         || unlinkat(retired.root, "entry", AT_REMOVEDIR) != 0) {
         owned->retained = 1;
         snprintf(owned->reason, sizeof owned->reason,
@@ -275,9 +337,7 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
                            recovery, sizeof recovery);
     close(retired.root);
     error = unlinkat(retired.parent, retired.name, AT_REMOVEDIR);
-    close(retired.parent);
     owned->finished = 1;
-    close(owned->root); owned->root = -1;
     if (replacement || error != 0) {
         snprintf(owned->reason, sizeof owned->reason,
                  "owned private directory removed; replacement or cleanup entry preserved at %s or %s; inspect these names",
@@ -288,10 +348,9 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
 fail_empty:
     close(retired.root);
     unlinkat(retired.parent, retired.name, AT_REMOVEDIR);
-    close(retired.parent);
     return -1;
 fail_retained:
-    close(retired.root); close(retired.parent);
+    close(retired.root);
     return -1;
 }
 #endif
