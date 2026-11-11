@@ -36,22 +36,54 @@ package body Landin.Driver.Checking is
 
    procedure Ignore (Name : String; Finished : Boolean) is null;
 
+   function Never return Boolean is (False);
+
    procedure Run
      (Context : in out Landin.Stages.Compilation;
       Panic   : out Landin.Panics.Plan;
       Watch   : not null access procedure
         (Name : String; Finished : Boolean))
    is
+      Stopped : Boolean;
+   begin
+      Run (Context, Panic, Watch, Never'Access, Stopped);
+   end Run;
+
+   procedure Run
+     (Context : in out Landin.Stages.Compilation;
+      Panic   : out Landin.Panics.Plan;
+      Watch   : not null access procedure
+        (Name : String; Finished : Boolean);
+      Stop    : not null access function return Boolean;
+      Stopped : out Boolean)
+   is
       Line    : Landin.Stages.Pipeline;
       Ran     : Natural;
       Problem : Unbounded.Unbounded_String;
+      Asked_To_Stop : Boolean := False;
+
+      --  What Stop answered, kept: a run that ended early is told from
+      --  one that ran every stage by this and not by a count, which a
+      --  refusal shortens too.
+      function Stop_Now return Boolean;
+
+      function Stop_Now return Boolean is
+      begin
+         Asked_To_Stop := Asked_To_Stop or else Stop.all;
+         return Asked_To_Stop;
+      end Stop_Now;
    begin
+      Stopped := False;
       Landin.Stages.Append (Line, Frontend'Access);
       Landin.Stages.Append (Line, Configurer'Access);
       Landin.Stages.Append (Line, Names'Access);
       Landin.Stages.Append (Line, Checker'Access);
       Landin.Stages.Append (Line, Lowerer'Access);
-      Ran := Landin.Stages.Run (Line, Context, Watch);
+      Ran := Landin.Stages.Run (Line, Context, Watch, Stop_Now'Access);
+      if Asked_To_Stop then
+         Stopped := True;
+         return;
+      end if;
 
       --  Each stage runs only when the one before it produced something
       --  worth reading: a stage stops the pipeline on its own failure, so

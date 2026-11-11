@@ -205,6 +205,43 @@ def host_controls(refine, root, env, source, driver):
             return None
         return seen
 
+    def descriptor_limit_link(work):
+        # A link under a descriptor limit runs tools, each with a capture
+        # directory of its own in TMPDIR.  Whether the limit stops the
+        # build or not, removing a capture takes no descriptor the process
+        # did not already hold, so none is left, nor a cleanup slot beside
+        # it, and no refusal is of a capture that could not be released.
+        scratch = work / 'scratch'
+        scratch.mkdir()
+        seen = []
+        for count in range(4, 24):
+            def limit():
+                resource.setrlimit(resource.RLIMIT_NOFILE, (count, count))
+            result = subprocess.run(
+                [str(refine), 'compile', str(source), '--toolchain=' + driver,
+                 '-o', 'linked-%d' % count],
+                cwd=work, env=dict(env, TMPDIR=str(scratch)),
+                capture_output=True, preexec_fn=limit, timeout=60)
+            left = sorted(path.name for path in scratch.iterdir())
+            seen.append(dict(limit=count, exit_status=result.returncode,
+                             stderr=result.stderr.decode(errors='replace'),
+                             left=left, workspaces=workspaces(work)))
+            if (left or not readable(result.stderr)
+                    or b'could not release temporary tool output'
+                    in result.stderr
+                    or (workspaces(work)
+                        and b'publication' not in result.stderr)):
+                return seen
+            for path in workspaces(work):
+                shutil.rmtree(path)
+        # The sweep reached both sides: a limit that stopped the link and
+        # one under which it was written.
+        if (any(row['exit_status'] != 0 for row in seen)
+                and seen[-1]['exit_status'] == 0
+                and (work / ('linked-%d' % (count))).exists()):
+            return None
+        return seen
+
     def closed_pipe_run(work):
         # refine writing its own trace into a pipe nobody reads, while its
         # run directory exists, still removes that directory.
@@ -258,7 +295,7 @@ def host_controls(refine, root, env, source, driver):
 
     def directory_for_a_file(work):
         # A report or depfile option that names a directory is refused when
-        # it is prepared.  The FIFO in it is what reading the tree would
+        # it is prepared, as that option's output.  The FIFO in it is what reading the tree would
         # have met, and refused in the words of a symbolic-link loop.
         target = work / 'target'
         target.mkdir()
@@ -269,7 +306,8 @@ def host_controls(refine, root, env, source, driver):
             result = compile_in(work, str(source), '--emit', 'asm', '-o',
                                 'program.s', option, str(target))
             seen[option] = result.stderr.decode(errors='replace')
-            if (result.returncode == 0 or b'cannot prepare' not in result.stderr
+            named = ('cannot prepare %s output %s: ' % (option, target)).encode()
+            if (result.returncode == 0 or named not in result.stderr
                     or b'is a directory, but the generated artifact is a'
                        b' regular file' not in result.stderr
                     or (work / 'program.s').exists()):
@@ -325,6 +363,7 @@ def host_controls(refine, root, env, source, driver):
     return [('host-' + control.__name__.replace('_', '-'), control)
             for control in (output_modes, unchanged_output_mode,
                             foreign_entries, refusal_reasons, descriptor_limit,
+                            descriptor_limit_link,
                             closed_pipe_run, nul_in_path, tool_litter,
                             directory_for_a_file, removed_working_directory,
                             file_size_signal)]

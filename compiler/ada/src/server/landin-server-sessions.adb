@@ -186,6 +186,22 @@ package body Landin.Server.Sessions is
       Complete : Boolean := True;
    end record;
 
+   --  What a defect's message adds when the defect is the stack or the
+   --  memory running out under one analysis (D1220), and "" otherwise.
+   function Exhaustion
+     (Error : Ada.Exceptions.Exception_Occurrence) return String;
+
+   function Exhaustion
+     (Error : Ada.Exceptions.Exception_Occurrence) return String
+   is
+      use type Ada.Exceptions.Exception_Id;
+   begin
+      return
+        (if Ada.Exceptions.Exception_Identity (Error) = Storage_Error'Identity
+         then ": it exhausted the stack or the memory the server has"
+         else "");
+   end Exhaustion;
+
    procedure Serve
      (Channel : in out Landin.Platform.Channel'Class;
       Host    : not null access constant Landin.Platform.Filesystem'Class;
@@ -471,6 +487,25 @@ package body Landin.Server.Sessions is
            Landin.Server.Documents.Module_Key (Store, URI);
          Before : constant String_Sets.Set := Members (Told, Key);
 
+         --  The text a defect was met in: each open document of the
+         --  module and its version.  A defect is said once for it.
+         function Module_Text return String;
+
+         function Module_Text return String is
+            Text : Unbounded.Unbounded_String;
+         begin
+            for Held of Store.Open loop
+               if Landin.Server.Documents.Module_Key
+                    (Store, Unbounded.To_String (Held.URI)) = Key
+               then
+                  Unbounded.Append (Text, " ");
+                  Unbounded.Append (Text, Held.URI);
+                  Unbounded.Append (Text, Held.Version'Image);
+               end if;
+            end loop;
+            return Unbounded.To_String (Text);
+         end Module_Text;
+
          procedure Visit
            (Context : in out Landin.Stages.Compilation;
             Answer  : Landin.Server.Analysis.Result);
@@ -613,14 +648,30 @@ package body Landin.Server.Sessions is
             With_Analysis (URI, Visit'Access);
          end if;
       exception
-         when Storage_Error =>
-            raise;
+         --  A defect of this document's analysis, an analysis that
+         --  exhausted the stack or the memory among them (D1220): the
+         --  unwinding has given back what it took, and the session goes
+         --  on.  It is said once for the text that met it, as a report
+         --  with no place is, and not at every publication of that text.
          when Error : others =>
             Into.Complete := False;
-            Channel.Log ("refine lsp: internal compiler defect analysing "
-                         & URI & ": "
-                         & Ada.Exceptions.Exception_Message (Error));
-            Tell (1, "refine: internal compiler defect analysing " & URI);
+            declare
+               Text : constant String :=
+                 "refine: internal compiler defect analysing " & URI
+                 & Exhaustion (Error);
+               Mark : constant String :=
+                 Positive'Image (1) & Text & Module_Text;
+            begin
+               Channel.Log ("refine lsp: internal compiler defect analysing "
+                            & URI & ": "
+                            & Ada.Exceptions.Exception_Message (Error));
+               if not Before.Contains (Mark)
+                 and then not Into.Told.Contains (Mark)
+               then
+                  Tell (1, Text);
+               end if;
+               Into.Told.Include (Mark);
+            end;
       end Publish;
 
       --  Replace what the module of Key last reported with what its round
@@ -1339,15 +1390,14 @@ package body Landin.Server.Sessions is
             end if;
          end if;
       exception
-         when Storage_Error =>
-            raise;
          when Error : others =>
             --  As a request's defect is answered and the session goes on,
             --  so a notification's is said and the session goes on.
             Channel.Log ("refine lsp: internal compiler defect handling "
                          & Method & ": "
                          & Ada.Exceptions.Exception_Message (Error));
-            Tell (1, "refine: internal compiler defect handling " & Method);
+            Tell (1, "refine: internal compiler defect handling " & Method
+                     & Exhaustion (Error));
       end Notification;
 
       procedure Request
@@ -1443,14 +1493,12 @@ package body Landin.Server.Sessions is
             end;
          end if;
       exception
-         when Storage_Error =>
-            raise;
          when Error : others =>
             Channel.Log ("refine lsp: internal compiler defect answering "
                          & Method & ": "
                          & Ada.Exceptions.Exception_Message (Error));
             Refuse (Answer_Id, Internal_Error,
-                    "refine: internal compiler defect");
+                    "refine: internal compiler defect" & Exhaustion (Error));
       end Request;
 
       Outcome : Landin.Server.Transport.Status;

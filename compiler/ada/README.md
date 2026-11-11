@@ -231,7 +231,7 @@ different responsibilities.
 | `Landin.Stages.Checking.Flow` | definite assignment, including D156/D157's conservative post-loop assignment boundary and D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, infer a nonliteral condition's value, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "What the four largest packages own" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
-| `Landin.Commands` | public command grammar, help, query dispatch and normalization into the existing driver request | implement a language rule or perform host effects outside `Landin.Platform` |
+| `Landin.Commands` | public command grammar, help, query dispatch and normalization into the existing driver request; `Landin.Commands.Execute` is the entry point that takes a command line, and it alone reads the command-level options, `--depfile`, `--dry-run`, the warning options and the shared `--diagnostics`, `--color`, `--quiet` and `--verbose`, passing the first three on as `Landin.Driver.Execute`'s `Depfile`, `Dry_Run` and `Warnings` parameters; given one as an argument, the driver's entry point says that rather than "unknown option" | implement a language rule or perform host effects outside `Landin.Platform` |
 | `Landin.Commands.Catalogue` | the shared command/option definitions used by parsing, help, reference and shell completion, and what each option needs of its request and the sentences refusing one, which the driver reads too (D565) | assign a release version or decide warning selection outside the invocation policy |
 | `Landin.Commands.Response_Files` | bounded quoted argument expansion through the supplied filesystem | expand environment variables or execute shell text |
 | `Landin.Commands.Presentation` | human, short and structured rendering of the driver's retained diagnostics and positions | reread source files or alter a diagnostic's meaning |
@@ -1344,8 +1344,10 @@ Concurrent writes through another descriptor to that inode and hostile
 same-credential or privileged access to private storage remain outside the
 contract. Public directory-entry changes are handled through the capture
 and no-clobber protocol even when made through a directory descriptor.
-A signal ends the process at once by its default action unless something is
-held that it would leave half done; each adapter that creates such a thing
+A signal ends the process at once unless something is held that it would
+leave half done: the handler writes `refine: cancelled by signal N` and
+exits with 128 plus the number, using `write` and `_exit` alone, and only
+the closed-pipe signal takes its default action. Each adapter that creates such a thing
 calls `landin_cancellation_hold` before it exists and
 `landin_cancellation_release` once it is gone, and an adapter that adds one
 must do the same (D1046). While something is held, cancellation uses
@@ -1353,9 +1355,17 @@ signal-safe notification and ordinary Ada cleanup, forwards to the active
 process group, stops its remaining ordinary members and reaps its direct
 child before recovery; group escape and credential changes are outside
 supervision. The driver asks for the record where one stage hands over to
-the next, and a record left unanswered for ten seconds ends the process.
+the next, the frontend's stages included: `Landin.Stages.Run` takes a
+`Stop` it asks before each stage. A record left unanswered for ten seconds
+ends the process by the signal.
 The file-size signal is ignored for a command and given back to its
 children (D1047).
+Removing a tool's capture or a private directory opens one descriptor, its
+retirement slot's, and `landin_owned_directory.h` holds a spare in the
+table from before the directory exists and gives it up for that: a process
+at its descriptor limit removes what it made, and a directory whose root
+cannot be opened is not left behind. A subdirectory still takes one more
+to list, and a removal refused for it names what it retained.
 Automatic child reaping (`SIGCHLD` ignored or `SA_NOCLDWAIT`) is refused
 before spawning without changing the inherited policy. Native callers must
 not change that policy or let another waiter or handler reap owned children.

@@ -1,0 +1,5 @@
+import lib/shapes
+
+main: () -> (status: i32) =
+    status = shapes.area (2, 3)
+end main

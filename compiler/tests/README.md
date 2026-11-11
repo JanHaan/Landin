@@ -615,8 +615,9 @@ and bytes for a frame that is wrong on purpose, `#` for a comment, and
 `gone: URI` removes a file, or a directory with what it holds, before the
 input resumes. `link: URI | URI`
 makes the first a symbolic link to the second before the session starts,
-with the directories above it; the test program's fake host follows a link
-only at the end of a path, so a session links a file, not a directory. Every message the
+with the directories above it; the link may be a file, a directory or a
+root, and the test program's fake host follows it as a path's last component
+and in the directories above that. Every message the
 server sends must be in the transcript, in order.
 
 The `server` suite's `every session runs as written` case runs each

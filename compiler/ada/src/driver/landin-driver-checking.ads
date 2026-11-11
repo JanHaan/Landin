@@ -22,6 +22,18 @@ package Landin.Driver.Checking is
       Watch   : not null access procedure
         (Name : String; Finished : Boolean));
 
+   --  The same, asking Stop before each stage (D1046): once it answers
+   --  True no further stage runs, Stopped is True, the panic contract is
+   --  not read and Context holds what the stages that ran left, which a
+   --  caller may report and must not emit from.
+   procedure Run
+     (Context : in out Landin.Stages.Compilation;
+      Panic   : out Landin.Panics.Plan;
+      Watch   : not null access procedure
+        (Name : String; Finished : Boolean);
+      Stop    : not null access function return Boolean;
+      Stopped : out Boolean);
+
    --  The same, unwatched, for a caller that measures nothing.
    procedure Run
      (Context : in out Landin.Stages.Compilation;

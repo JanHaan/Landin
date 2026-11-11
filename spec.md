@@ -19195,7 +19195,8 @@ its direct child before cleanup. That unreaped child reserves the identifier
 while signaling is possible. Tools that escape their group or change
 credentials are outside this supervision contract. Filesystem and Ada
 cleanup run in ordinary control flow. Cancellation returns 128 plus the host
-signal number after recovery; inherited ignored signals remain ignored.
+signal number after recovery, and at once when nothing is held (D1046);
+inherited ignored signals remain ignored.
 Spawning refuses before creating a child when `SIGCHLD` is ignored or
 `SA_NOCLDWAIT` would discard its exit status. The refusal asks for a default,
 waitable child-exit policy rather than changing the inherited disposition.
@@ -19374,7 +19375,7 @@ an empty answer; and status 1, which is a program's refusal.
 
 **Pinned by** the fixture execution case `a lost standard output is the
 host's fault`, on the real executable.
-### D1046 — A signal ends a command at once unless it holds something to recover
+### D1046 — A signal ends a command with one report and status, at once unless it holds something to recover
 
 **D907 said** that an interrupt, termination or hangup is recorded by a
 signal-safe notification and answered in ordinary control flow. Only the
@@ -19384,41 +19385,54 @@ process ended, and a stage that did not end left a process that no polite
 signal could stop: `timeout` without `-k` waited for ever. `refine fmt` of a
 directory went on to read, format and report every remaining source.
 
-**Chosen:** the handler ends the process by the signal's default action,
-there and then, whenever the command holds nothing a signal could leave half
-done. Something is held from before it exists until it is gone: an open
-publication and its workspace, a private directory, a tool's capture and
-the unreaped tool, and the rewrite of a source `refine fmt` is replacing;
-reading, parsing, checking and lowering hold nothing. While something is
-held the signal is recorded as before, and the command answers it where one
-stage hands over to the next: after the frontend, when the outputs are
-reserved, after the optimizer and after emission, as well as in the tool
-supervisor and every publication step; `refine fmt` stops before its next
-source. A recorded signal that is not answered within ten seconds ends the
-process by that signal, as `SIGKILL` would, leaving the workspace its
-destination records describe: a stage that never reaches a boundary cannot
-hold the process, and ten seconds is longer than stopping a tool and
-putting the outputs back takes. A caller that started refine with `SIGALRM`
-ignored has no such limit. A command ended by an unrecorded signal ends by
-the signal itself, with no last line; one that answered a recorded signal
-still writes `refine: cancelled by signal N` and exits with 128 plus the
-number.
+**Chosen:** an interrupt, termination or hangup always ends a command the
+same way: its last line is `refine: cancelled by signal N` and its exit
+status is 128 plus the number, whether or not it held anything, so a script
+reads one outcome. When the command holds nothing a signal could leave half
+done, the handler does both itself, there and then, with `write` and
+`_exit` alone: a long `refine check` stops within the moment the signal
+takes to arrive, and says nothing else. Something is held from before it
+exists until it is gone: an open publication and its workspace, a private
+directory, a tool's capture and the unreaped tool, and the rewrite of a
+source `refine fmt` is replacing; reading, parsing, checking and lowering
+hold nothing. While something is held the signal is recorded as before, and
+the command answers it where one stage hands over to the next: between the
+frontend's stages, when the outputs are reserved, after the optimizer and
+after emission, as well as in the tool supervisor and every publication
+step; `refine fmt` stops before its next source. A stage is never
+interrupted, so what is recovered is whole. A recorded signal that is not
+answered within ten seconds ends the process by that signal, as `SIGKILL`
+would, with no last line, leaving the workspace its destination records
+describe: a stage that never reaches a boundary cannot hold the process,
+and ten seconds is longer than stopping a tool and putting the outputs back
+takes. A caller that started refine with `SIGALRM` ignored has no such
+limit. The closed-pipe signal is D1047's and keeps its quiet end.
 
-**The alternatives:** asking for the record inside every stage, which
+**The alternatives:** ending a command that holds nothing by the signal's
+default action, with no last line, which this entry first chose: it costs
+nothing and stops as promptly, and it gives a caller two outcomes to tell
+apart, a status that names the signal after a recovery and a death by the
+signal without one, for what it asked once; the maintainer declined it for
+the one report. Asking for the record inside every stage, which
 reaches each loop of the compiler through an interface the stages do not
-have, for a property the default action gives at no cost wherever nothing is
-held; ending at once whatever is held, which leaves a workspace that
+have, where a handler that writes and exits reaches every instruction at no
+cost; asking only between stages when nothing is held, which costs the rest
+of the running stage and never ends one that does not end; ending at once
+whatever is held, which leaves a workspace that
 refuses the directory's next build after every interrupted link; a second
 signal as the way past an unanswered first, which a `timeout` never sends
 and an impatient second Ctrl-C would turn into that leftover workspace; and
-no limit, which leaves the non-terminating stage unstoppable. The grace
-period's length is a choice: it needs the maintainer's confirmation.
+no limit, which leaves the non-terminating stage unstoppable.
 
 **Pinned by** `compiler/tests/test_tool_cancellation.py`, whose `unheld`
-controls end by each signal at once, whose `grace` control is ended by a
-recorded signal it never answers only after the period, and whose
-`unheld-check` commands end a long `refine check` by each signal, together
-with its controls of a recorded signal while a tool runs.
+controls end at once with the line and the status for each signal, and by
+the closed-pipe signal itself for that one, whose `grace` control is ended
+by a recorded signal it never answers only after the period, whose
+`unheld-check` commands end a long `refine check` so for each signal, and
+whose `held-run` commands remove a run's directory, together with its
+controls of a recorded signal while a tool runs; and by the compiler's
+cases `stages/a pipeline stops where it is asked` and `driver/a recorded
+signal stops the frontend between stages`.
 
 ### D1047 — The file-size and closed-pipe signals reach the recovery written for their errors
 
@@ -19435,7 +19449,7 @@ the same to a run's directory.
 write fails with the error and the recovery written for it runs; a tool and
 the program `refine run` starts are given the inherited disposition back.
 `SIGPIPE` is one of the signals D1046 records: with nothing held it ends the
-process as before, and while a run's directory exists the write fails
+process by its default action, as before and without D1046's line, and while a run's directory exists the write fails
 instead, the directory is removed, and refine exits with 128 plus the
 signal's number.
 
@@ -19778,7 +19792,9 @@ nobody wrote, `/private/tmp` for `/tmp` on macOS. Leaving the match to the
 bytes, which shows an importer checked against a file that is not what is
 on the screen, with nothing to say so.
 
-**Pinned by** the server session `symlinked-import`: an importer is
+**Pinned by** the server sessions `symlinked-import`,
+`symlinked-import-directory` and `symlinked-root`, where the link is the
+source's file, the import's directory and the root: an importer is
 rechecked against the unsaved buffer of a source it reaches through a
 symbolic link, and a definition in that source is answered with the URI the
 editor opened.
@@ -19865,6 +19881,42 @@ holds, which reports the first mistake's consequences as if they were others.
 `negative/arms-of-a-refused-match-head-are-not-reported`, and
 `negative/a-nested-mistake-after-a-refused-statement-is-reported`, whose
 second, independent report the indentation does not quiet.
+
+### D1220 — An analysis that exhausts the server's stack or memory is that document's defect
+
+**The discrepancy:** D253's server answers a defect of the compiler and goes
+on: a request's is its InternalError, a notification's and a publication's
+is said through `window/showMessage`. One defect was left out. The server
+passed `Storage_Error` on from each of those three places, so a document
+whose analysis recursed without bound, or asked for more memory than there
+was, ended `refine lsp` and with it every other document's diagnostics,
+until the editor started it again on the same text. And a publication's
+defect was said at every publication for as long as the text met it, the
+same text published again included.
+
+**Chosen:** `Storage_Error` from an analysis is answered as any other
+defect of it, with the words `it exhausted the stack or the memory the
+server has` after the usual ones, and the session goes on: the unwinding
+has given back the stack, and an analysis keeps nothing once it has ended.
+A publication's defect is said once for a text, the module's open documents
+at their versions, by the rule a report with no place in a source already
+follows; an edit is another text and says it again. Nothing is promised
+where the host ends the process instead of reporting the exhaustion to it.
+
+**The alternatives:** ending the server, as before, on the ground that
+memory may truly be gone: the next allocation then fails too and ends it
+as it would have, and a recursion's stack is not gone at all. Analysing on
+a stack of the server's own with a size it chooses, which makes the bound
+the server's rather than the host's and puts a task under every analysis;
+it stays open, with a bound on the recursions themselves. Saying a
+publication's defect once for as long as it lasts, whatever is typed,
+which leaves a reader who has gone on editing with diagnostics from an
+earlier text and nothing since to say so. Whether those earlier
+diagnostics should be cleared or marked while the defect lasts is not
+decided here.
+
+**Pinned by** the `server` suite's `an exhausted analysis leaves the
+session` and `a publication defect is said once for a text`.
 
 ### D1074 — A program the grammar derives is read by the grammar alone
 
@@ -23966,7 +24018,10 @@ run. L0529 refuses
 what cannot be generated as it is said: overlapping fields, a field outside
 its register, an enumerated value that does not fit or is given twice, a
 property given nowhere it is inherited from, an address that is not a
-word-aligned 32-bit address, and an alternate at another address. D1062
+word-aligned 32-bit address, and an alternate at another address, which
+for an alternate that names an element of a register array is the
+element's own, the array's `addressOffset` and its position's
+`dimIncrement`s. D1062
 adds what an SVD omits, overstates or says twice, and D1063 a name Landin
 reserves.
 

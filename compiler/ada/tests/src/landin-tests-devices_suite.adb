@@ -1848,6 +1848,70 @@ package body Landin.Tests.Devices_Suite is
                         & ")"));
    end A_Large_Svd_Costs_In_Proportion;
 
+   procedure An_Alternate_Of_An_Element_Is_At_Its_Address
+     (Item : in out Landin.Testing.Context);
+
+   --  An alternate that names an element of a register array is held to
+   --  that element's address, the array's first and its position's
+   --  dimIncrements, not to the array's first: PIN5 is the second of
+   --  PIN%s, at 0x14.
+   procedure An_Alternate_Of_An_Element_Is_At_Its_Address
+     (Item : in out Landin.Testing.Context)
+   is
+      function Alternate_At (Offset : String; Text : String := Arrayed_Svd)
+        return String
+      is (Replaced
+            (Text, "        <register><name>PIN%s</name>",
+             "        <register><name>PALT</name><alternateRegister>PIN5"
+             & "</alternateRegister><addressOffset>" & Offset
+             & "</addressOffset><fields><field><name>X</name><bitRange>"
+             & "[0:0]</bitRange><access>read-only</access></field></fields>"
+             & "</register>" & LF
+             & "        <register><name>PIN%s</name>"));
+
+      At_Element : constant String := Alternate_At ("0x14");
+      At_First : constant String := Alternate_At ("0x10");
+      At_Last : constant String := Alternate_At ("0x18");
+      No_Increment : constant String :=
+        Alternate_At
+          ("0x10",
+           Replaced (Arrayed_Svd, "<dimIncrement>0x4</dimIncrement>", ""));
+      Far_Increment : constant String :=
+        Alternate_At
+          ("0x14",
+           Replaced (Arrayed_Svd, "<dimIncrement>0x4</dimIncrement>",
+                     "<dimIncrement>0x100000004</dimIncrement>"));
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+   begin
+      Dev.Projection.Project
+        (At_Element, Selecting (At_Element, "PALT"), Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                            "public palt_offset: usize = 0x14" & LF),
+         "an alternate at its element's address is generated: "
+         & US.To_String (Problem.Message));
+      Expect_Refusal
+        (Item, At_First, Dev.Inconsistent_Device,
+         "UARTA.PALT is an alternate of PIN5, which is at another address",
+         38, Policy => Selecting (At_First, "PALT"));
+      Expect_Refusal
+        (Item, At_Last, Dev.Inconsistent_Device,
+         "UARTA.PALT is an alternate of PIN5, which is at another address",
+         38, Policy => Selecting (At_Last, "PALT"));
+      --  The array's increment is read, so one it lacks is refused, and
+      --  one beyond 32 bits is no address to be at.
+      Expect_Refusal
+        (Item, No_Increment, Dev.Inconsistent_Device,
+         "PIN%s's dimIncrement is missing", 39,
+         Policy => Selecting (No_Increment, "PALT"));
+      Expect_Refusal
+        (Item, Far_Increment, Dev.Inconsistent_Device,
+         "UARTA.PALT is an alternate of PIN5, which is at another address",
+         38, Policy => Selecting (Far_Increment, "PALT"));
+   end An_Alternate_Of_An_Element_Is_At_Its_Address;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1886,6 +1950,9 @@ package body Landin.Tests.Devices_Suite is
       Landin.Testing.Register
         (Into, "devices", "an ambiguous SVD is refused",
          An_Ambiguous_Svd_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "devices", "an alternate of an element is at its address",
+         An_Alternate_Of_An_Element_Is_At_Its_Address'Access);
       Landin.Testing.Register
         (Into, "devices", "a reserved name is refused",
          A_Reserved_Name_Is_Refused'Access);

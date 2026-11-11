@@ -1,3 +1,5 @@
+with Ada.Strings.Fixed;
+
 with Landin.Bindings.Texts;
 
 package body Landin.Bindings.Clang is
@@ -1386,6 +1388,40 @@ package body Landin.Bindings.Clang is
                end if;
             end loop;
          end loop;
+         --  Two forms Clang spells with a parenthesised star and this
+         --  reader does not bind, named for what they are: `int (*)[3]`,
+         --  which a parameter `int m[][3]` decays to, and `int (**)(void)`.
+         --  A function pointer's own `(*)(` and `(*const)(` were matched
+         --  above, so a star after the first is another level of pointer.
+         declare
+            Open : constant Natural := Ada.Strings.Fixed.Index (Rest, "(*");
+            Close : Natural := 0;
+         begin
+            if Open /= 0 then
+               for Index in Open + 2 .. Rest'Last loop
+                  if Rest (Index) in '(' | '[' then
+                     exit;
+                  elsif Rest (Index) = ')' then
+                     Close := Index;
+                     exit;
+                  end if;
+               end loop;
+            end if;
+            if Close /= 0 and then Close < Rest'Last then
+               if Rest (Close + 1) = '[' then
+                  return Make (Within, Unsupported
+                                 (Spelling, "pointer to an array"));
+               elsif Rest (Close + 1) = '('
+                 and then Ada.Strings.Fixed.Index
+                   (Rest (Open + 2 .. Close), "*") /= 0
+               then
+                  return Make
+                    (Within, Unsupported
+                       (Spelling, "pointer to an unnamed function pointer"
+                        & " type, which a typedef would name"));
+               end if;
+            end if;
+         end;
          declare
             Found : Boolean;
             Result_Text, Parameter_Text : US.Unbounded_String;

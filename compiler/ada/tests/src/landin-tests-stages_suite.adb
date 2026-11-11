@@ -231,6 +231,72 @@ package body Landin.Tests.Stages_Suite is
          "only the admitted fixes joined the report");
    end Reports_Hold_Fixes_To_Their_Sources;
 
+   procedure Pipeline_Stops_Where_It_Is_Asked
+     (Item : in out Landin.Testing.Context);
+
+   --  Stop is asked before each stage, and the stage after a True answer
+   --  does not run: the run ends between two stages, never inside one.
+   procedure Pipeline_Stops_Where_It_Is_Asked
+     (Item : in out Landin.Testing.Context)
+   is
+      Order : Landin.Stages.Pipeline;
+      Asked, Began, Ended : Natural := 0;
+      Stop_At : Natural := 0;
+
+      procedure Watch (Name : String; Finished : Boolean);
+
+      procedure Watch (Name : String; Finished : Boolean) is
+         pragma Unreferenced (Name);
+      begin
+         if Finished then
+            Ended := Ended + 1;
+         else
+            Began := Began + 1;
+         end if;
+      end Watch;
+
+      function Stop return Boolean;
+
+      function Stop return Boolean is
+      begin
+         Asked := Asked + 1;
+         return Asked = Stop_At;
+      end Stop;
+   begin
+      Landin.Stages.Append (Order, Counter'Access);
+      Landin.Stages.Append (Order, Counter'Access);
+      Landin.Stages.Append (Order, Counter'Access);
+      for At_Ask in 0 .. 4 loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Ran : Natural;
+            Expected : constant Natural :=
+              (if At_Ask in 1 .. 3 then At_Ask - 1 else 3);
+         begin
+            Asked := 0;
+            Began := 0;
+            Ended := 0;
+            Stop_At := At_Ask;
+            Ran := Landin.Stages.Run
+              (Order, Work, Watch'Access, Stop'Access);
+            Landin.Testing.Check_Equal
+              (Item, Ran, Expected,
+               "the stages before the stop ran, ask" & At_Ask'Image);
+            Landin.Testing.Check
+              (Item, Began = Expected and then Ended = Expected
+                 and then Landin.Stages.Source_Count (Work) = Expected
+                 and then not Landin.Stages.Failed (Work),
+               "each stage that began ended, and none after the stop"
+               & " began, ask" & At_Ask'Image);
+            Landin.Testing.Check_Equal
+              (Item, Asked, Natural'Min (Expected + 1, 3),
+               "Stop is asked once before each stage and not after the"
+               & " last, ask" & At_Ask'Image);
+         end;
+      end loop;
+   end Pipeline_Stops_Where_It_Is_Asked;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -245,6 +311,9 @@ package body Landin.Tests.Stages_Suite is
       Landin.Testing.Register
         (Into, "stages", "reports render against their sources",
          Reports_Render_Against_Their_Sources'Access);
+      Landin.Testing.Register
+        (Into, "stages", "a pipeline stops where it is asked",
+         Pipeline_Stops_Where_It_Is_Asked'Access);
    end Register;
 
 end Landin.Tests.Stages_Suite;

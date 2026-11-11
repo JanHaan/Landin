@@ -3,6 +3,7 @@
 
     python3 bindings/test.py --refine PATH
     LANDIN_REFINE=PATH python3 bindings/test.py
+    python3 bindings/test.py --refine PATH --offline
     python3 bindings/test.py --refine PATH --write
 
 Every case runs the refine named, and the external Clang that $CLANG names
@@ -11,8 +12,11 @@ only a fake host reaches are the compiler's own, in its bindings suite.
 
 `--write` runs no case.  It regenerates every committed binding fixture
 from its pinned inputs, as the cases that compare them do, and writes each
-generated file that differs into the fixture; `--offline` with it refuses
-to fetch a pinned input the cache does not hold.
+generated file that differs into the fixture.
+
+`--offline`, with or without `--write`, fetches no pinned input: a case, or
+a fixture, whose input the cache does not hold fails naming the input and
+where the cache wants it.
 """
 
 from __future__ import annotations
@@ -38,6 +42,8 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 import fetch_inputs  # noqa: E402
 #  The compiler under test: --refine PATH, or $LANDIN_REFINE.
 REFINE = os.environ.get("LANDIN_REFINE")
+#  Whether --offline was given: the cases then use the input cache alone.
+OFFLINE = False
 FIXTURE = (HERE.parent / "compiler" / "tests" / "fixtures" / "abi" /
            "r440-bindings-generated")
 TARGET = "x86_64-pc-linux-gnu"
@@ -160,16 +166,19 @@ def clang_and_resources() -> tuple[pathlib.Path, pathlib.Path]:
 
 def regenerate(name: str, work: pathlib.Path, clang: pathlib.Path,
                resource_include: pathlib.Path, *, fixtures: pathlib.Path | None = None,
-               offline: bool = False
+               offline: bool | None = None
                ) -> tuple[subprocess.CompletedProcess[str], pathlib.Path]:
     """Generate the committed fixture NAME again, into WORK/generated.
 
     The policy and the fixture's own headers are read where they are
     committed, under FIXTURES, and the pinned headers from the input cache,
-    fetched by hash when it lacks one unless OFFLINE.  The cases that hold
+    fetched by hash when it lacks one unless OFFLINE, which is --offline's
+    setting when the caller gives none.  The cases that hold
     the fixtures to their inputs and `--write` both generate through here,
     so what one compares is what the other writes.
     """
+    if offline is None:
+        offline = OFFLINE
     directory = (FIXTURE.parent if fixtures is None else fixtures) / name
     output = work / "generated"
     work.mkdir(parents=True)
@@ -2671,6 +2680,43 @@ int main(void) { return f(36) != 37; }
         self.assertRegex(text, r"names: \(\) -> \(result: ptr mut ptr mut c\.c_char\)")
         self.checked(source, output)
 
+    def test_a_refused_pointer_form_is_named(self) -> None:
+        #  A pointer to an array and a pointer to an unnamed function
+        #  pointer type are not bound, and each refusal says which it is
+        #  rather than that Clang printed something unknown.
+        reference = annotation()
+        array = "unsupported pointer to an array: int (*)[3]"
+        callback = ("unsupported pointer to an unnamed function pointer type,"
+                    " which a typedef would name: int (**)(void)")
+        refused = [
+            ("int f(int (*m)[3]);", {"m": reference}, array),
+            ("int f(int m[][3]);", {"m": reference}, array),
+            ("int f(int m[2][3]);", {"m": reference}, array),
+            ("int f(int (**cb)(void));", {"cb": reference}, callback),
+            ("int f(int (*const *cb)(void));", {"cb": reference},
+             "unsupported pointer to an unnamed function pointer type,"
+             " which a typedef would name: int (*const *)(void)"),
+        ]
+        for header, parameters, message in refused:
+            with self.subTest(header=header):
+                process, _ = self.generate(
+                    self.root / ("form-" + str(len(list(self.root.iterdir())))),
+                    header=header + "\n", expect_success=False,
+                    selected_policy=self.selection(
+                        self.function("f", parameters=parameters)))
+                self.assertIn(process.returncode, REFUSED)
+                self.assertIn(message, process.stderr)
+                self.assertNotIn("unrecognized Clang type", process.stderr)
+        #  Named with a typedef, the same pointer is bound.
+        source = self.root / "named-callback"
+        _, output = self.generate(source, selected_policy=self.selection(
+            {"kind": "callback", "name": "step", "nullable": False,
+             "parameters": {}},
+            self.function("f", parameters={"cb": reference})),
+            header="typedef int (*step)(void);\nint f(step *cb);\n")
+        self.assertIn("f: (cb: ptr mut step) -> (result: c.c_int)",
+                      (output / "bindings.ldn").read_text())
+
     def test_ambient_include_variables_are_excluded_from_every_clang_invocation(self) -> None:
         parent = self.root / "ambient"
         sysroot, includes, output = self.make_tree(parent, header="#include <dep.h>\n",
@@ -3442,7 +3488,8 @@ static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level 
                                      (directory / generated).read_bytes(), generated)
                 convention = json.loads((directory / "bindings.json").read_text())[
                     "abi"]["calling_convention"]
-                pinned_headers = [fetch_inputs.fetch(pinned).parent
+                pinned_headers = [fetch_inputs.fetch(
+                    pinned, offline=OFFLINE).parent
                                   for _, pinned in fixture["headers"] if pinned]
                 for source in [line.split(":", 1)[1] for line in
                                (directory / "fixture.meta").read_text().splitlines()
@@ -3573,11 +3620,12 @@ if __name__ == "__main__":
         at = arguments.index("--refine")
         REFINE = arguments[at + 1]
         del arguments[at:at + 2]
+    if "--offline" in arguments:
+        OFFLINE = True
+        arguments.remove("--offline")
     if "--write" in arguments:
-        if set(arguments) - {"--write", "--offline"}:
+        if set(arguments) - {"--write"}:
             sys.exit("bindings/test.py: --write takes --refine PATH and"
                      " --offline, and runs no case")
-        sys.exit(write_fixtures(offline="--offline" in arguments))
-    if "--offline" in arguments:
-        sys.exit("bindings/test.py: --offline goes with --write")
+        sys.exit(write_fixtures(offline=OFFLINE))
     unittest.main(argv=[sys.argv[0], *arguments], verbosity=2)

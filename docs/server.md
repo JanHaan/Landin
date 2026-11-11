@@ -212,7 +212,13 @@ a late cancellation cannot affect a later request that reuses the ID. A
 notification the server does not know is ignored. A defect of the compiler
 met while a request is answered is the request's InternalError, and one met
 while a notification is handled or a module is published is said through
-`window/showMessage`; the session goes on after each.
+`window/showMessage`; the session goes on after each. A module's defect is
+said when a text first meets it and not again each time that text is
+published, the text being the module's open documents at their versions;
+what the module last reported stays as it was. An analysis that exhausts
+the stack or the memory is such a defect, and its message says so (D1220),
+wherever the host reports the exhaustion to the program rather than ending
+it.
 
 ## Past a syntax error
 

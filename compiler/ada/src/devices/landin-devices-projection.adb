@@ -1266,15 +1266,42 @@ package body Landin.Devices.Projection is
             Alternate := US.To_Unbounded_String
               (Value_Of (Element, "alternateRegister"));
             declare
+               Named : constant String := US.To_String (Alternate);
                Other : constant X.Element :=
-                 Find_Register (Template, US.To_String (Alternate),
-                                Key & "'s alternate");
+                 Find_Register (Template, Named, Key & "'s alternate");
+               Other_Offset : Word := 0;
+               Of_Array : Element_Of_Array;
+               Same : Boolean := Has (Other, "addressOffset");
             begin
-               if not Has (Other, "addressOffset")
-                 or else Child_Number (Other, "addressOffset",
-                                       "an alternate's addressOffset")
-                   /= Offset
+               if Same then
+                  Other_Offset := Child_Number
+                    (Other, "addressOffset", "an alternate's addressOffset");
+               end if;
+               --  The alternate may be an element of an array, which
+               --  Find_Register answers with the array: its address is the
+               --  element's own, the array's first and its position's
+               --  increments, each bounded before the sum as above.
+               if Same
+                 and then Value_Of (Other, "name") /= Named
+                 and then Array_Element (Other, Named, Of_Array)
                then
+                  declare
+                     Increment : constant Word :=
+                       Child_Number
+                         (Other, "dimIncrement",
+                          Value_Of (Other, "name") & "'s dimIncrement");
+                  begin
+                     if Other_Offset > 16#FFFF_FFFF#
+                       or else Increment > 16#FFFF_FFFF#
+                     then
+                        Same := False;
+                     else
+                        Other_Offset := Other_Offset
+                          + Word (Of_Array.Position) * Increment;
+                     end if;
+                  end;
+               end if;
+               if not Same or else Other_Offset /= Offset then
                   Fail (Inconsistent_Device, Key & " is an alternate of "
                         & US.To_String (Alternate) & ", which is at"
                         & " another address",

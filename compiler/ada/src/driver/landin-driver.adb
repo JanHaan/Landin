@@ -1667,6 +1667,31 @@ package body Landin.Driver is
                end if;
                return Stem & " is not used this way";
             end if;
+            --  An option the command line reads and this entry point
+            --  does not: it exists, and saying "unknown" would deny it.
+            if Landin.Commands.Catalogue.Known_Option (Stem)
+              and then Landin.Commands.Catalogue.Name
+                (Landin.Commands.Catalogue.Named_Option (Stem)) = Stem
+            then
+               declare
+                  package C renames Landin.Commands.Catalogue;
+                  Flag : constant C.Option := C.Named_Option (Stem);
+               begin
+                  return Stem & " is an option of the command line, which"
+                    & " Landin.Commands.Execute reads: Landin.Driver.Execute"
+                    & " does not take it as an argument"
+                    & (case Flag is
+                         when C.Depfile =>
+                           ", and takes the path as its Depfile parameter",
+                         when C.Dry_Run =>
+                           ", and takes the request as its Dry_Run"
+                           & " parameter",
+                         when C.Warnings .. C.Deny =>
+                           ", and takes the policy as its Warnings"
+                           & " parameter",
+                         when others => "");
+               end;
+            end if;
             declare
                Near : constant String :=
                  Landin.Commands.Catalogue.Nearest_Option (Stem);
@@ -1895,6 +1920,31 @@ package body Landin.Driver is
             return "cannot prepare " & Kind & " " & Path & ": " & Said;
          end Preparation_Failure;
 
+         --  What a reserved path is called when it cannot be prepared:
+         --  the option that named it, so a report's path refused is not
+         --  read as the program's.  A path no option named, one derived
+         --  from the source's name or written beside the product, is an
+         --  output and nothing more.
+         function Reservation_Kind (Path : String) return String;
+         function Reservation_Kind (Path : String) return String is
+         begin
+            if Path = "" then
+               return "output";
+            elsif Path = Unbounded.To_String (Build_Report_Path) then
+               return "--build-report output";
+            elsif Path = Unbounded.To_String (Stage_Report_Path) then
+               return "--stage-report output";
+            elsif Path = Unbounded.To_String (Stack_Report_Path) then
+               return "--stack-report output";
+            elsif Path = Depfile then
+               return "--depfile output";
+            elsif Output_Seen and then Path = Unbounded.To_String (Output)
+            then
+               return "-o output";
+            end if;
+            return "output";
+         end Reservation_Kind;
+
          --  Whether a signal has asked this command to stop, asked where
          --  one stage hands over to the next.  While an output is reserved
          --  or a private directory exists the host records the signal
@@ -1909,6 +1959,12 @@ package body Landin.Driver is
             end if;
             return Cancelled;
          end Stop_Requested;
+
+         --  The same question for the frontend's pipeline, which asks it
+         --  before each stage.  It only reads the host's record: what the
+         --  stop abandons is decided by the caller, after the pipeline.
+         function Frontend_Stop return Boolean is
+           (Host.Cancellation_Requested);
 
          --  The one artifact that is a directory tree: a Darwin debug
          --  bundle.  Every other output is a file, and a directory found
@@ -1967,7 +2023,8 @@ package body Landin.Driver is
                Publication_Failed := True;
                declare
                   Message : constant String :=
-                    Preparation_Failure ("output", Path, Reason);
+                    Preparation_Failure
+                      (Reservation_Kind (Path), Path, Reason);
                begin
                   if Defer_Preparation_Failure then
                      Pending_Publication_Failure :=
@@ -2593,7 +2650,8 @@ package body Landin.Driver is
                if not Cancelled then
                   Note_Failure
                     (Code_Unwritable,
-                     Preparation_Failure ("stage report", Path, Reason));
+                     Preparation_Failure
+                       (Reservation_Kind (Path), Path, Reason));
                end if;
                return;
             end if;
@@ -6074,15 +6132,25 @@ package body Landin.Driver is
             if Landin.Stages.Source_Count (Context) > 0
               and then not Landin.Stages.Failed (Context)
             then
-               Checking.Run (Context, Panic, Watch_Stage'Access);
                --  `refine run` holds its private directory from before
-               --  the first stage, so a signal during them is recorded.
-               if Host.Cancellation_Requested then
-                  Cancelled := True;
-               end if;
+               --  the first stage, so a signal during them is recorded,
+               --  and it is answered where one stage hands over to the
+               --  next: no later stage runs, and nothing below reads what
+               --  those stages would have made.
+               declare
+                  Stopped : Boolean;
+               begin
+                  Checking.Run
+                    (Context, Panic, Watch_Stage'Access,
+                     Frontend_Stop'Access, Stopped);
+                  if Stopped or else Host.Cancellation_Requested then
+                     Cancelled := True;
+                  end if;
+               end;
                Policy_Denied := Landin.Diagnostics.Warning_Policy.Denied
                  (Warnings, Landin.Stages.Report (Context));
-               if not Landin.Stages.Failed (Context) then
+               if not Cancelled and then not Landin.Stages.Failed (Context)
+               then
                   Check_Directories;
                end if;
 
@@ -6137,6 +6205,7 @@ package body Landin.Driver is
                elsif Emit = Emit_Nothing
                  and then not Policy_Denied
                  and then not Bad_Use
+                 and then not Cancelled
                  and then not Landin.Stages.Failed (Context)
                then
                   Check_Requested;
@@ -6153,6 +6222,7 @@ package body Landin.Driver is
          end if;
          if Depfile /= "" and then not Dry_Run and then not Bad_Use
            and then not Policy_Denied
+           and then not Cancelled
            and then not Landin.Stages.Failed (Context)
          then
             declare
