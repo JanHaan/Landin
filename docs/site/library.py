@@ -369,7 +369,9 @@ def drifting(modules):
     / RV64"; where the copies differ by more it can only set the whole
     texts side by side, which is what the page then shows.  Copies of one
     routine's comment are meant to stay parallel, and nothing else says
-    when one was edited alone.
+    when one was edited alone.  A type whose declarations differ between
+    its targets, a record laid out as each system lays it out, is not
+    among them: its comments describe different fields.
     """
     found = []
     for module, items in modules.items():
@@ -378,6 +380,11 @@ def drifting(modules):
             grouped.setdefault(item.name, []).append(item)
         for name, variants in grouped.items():
             texts = list(dict.fromkeys(' '.join(v.documentation.split()) for v in variants))
+            #  A record whose layout differs between targets differs by
+            #  design, and each copy's comment describes its own fields.
+            layouts = {' '.join(v.signature.split()) for v in variants}
+            if all(v.kind == 'type' for v in variants) and len(layouts) > 1:
+                continue
             if len(texts) > 1 and merged_documentation(texts) == ' / '.join(texts):
                 found.append((module, name,
                               ['%s:%d' % (v.source, v.line) for v in variants]))

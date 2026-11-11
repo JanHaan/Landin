@@ -155,6 +155,13 @@ transcript lists them.  A suite or case nothing is registered under is
 refused before anything runs, with the rule and the three registered names
 nearest it, so a `--case` naming only `core and the examples are formatted`
 is answered with `formatting/core and the examples are formatted`.
+`--cases=SUITE` lists a suite's cases and runs none, one `SUITE/NAME` to a
+line as `--case=` takes it; it repeats, and `--cases` alone lists every
+suite's. With `--host` it lists what a host-only run registers.
+
+```sh
+./scripts/dev-test.sh --cases='fixture execution'
+```
 
 A fixture selector accepts `positive`, `negative`, `runtime`, `abi`, or any
 other discovered class whose fixture has a recorded `expect`. It invokes the
@@ -830,7 +837,10 @@ holds metadata alone and passes while a recorded report is stale.
 `--case='fixture execution/recorded expectations hold'` compares every
 recorded fixture's exact `expect` bytes and status, and
 `--case='parser/reports carry the pinned codes'` every negative's ordered
-`codes`; `--fixture=negative/NAME` runs the first for one fixture. After a
+`codes`; `--fixture=negative/NAME` runs the first for one fixture. The
+first runs every recorded fixture whatever the ones before it did, and
+after their reports it names each fixture that failed together, with the
+one `--record=` command that re-records them. After a
 change that moves a report, run those two. `check.py` holds this paragraph
 to naming them, and every `--suite` or `--case` a document writes to being
 one the test program registers.
@@ -1362,6 +1372,16 @@ evidence its row's `Shown_By` names: a negative program for
 for `Implementation_Limit` — L0111's parser nesting limit and L0325's routine
 and struct size limits — an implementation-side unit owner, because a program
 that meets either is too large to keep in the corpus.
+
+A test program source is an owner of each code it writes in quotes, as
+`"L0100"`. A case that only hands a code about as data, a selector's
+argument or a fake report's code, is not evidence that the diagnostic is
+reported, so it ends the line holding the code with the comment
+`--  not evidence`, and the matrix leaves that line out:
+
+```ada
+Carried : constant String := "L0100";  --  not evidence
+```
 
 `python3 check.py --coverage` writes `guarantees.matrix`,
 `conformances.matrix`, `prototypes.matrix` and `targets.matrix`. Their source

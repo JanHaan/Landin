@@ -1,0 +1,7 @@
+class: end-to-end
+summary: D638: an assembled IMAGE_DEF block that is not the one refine emitted is L0555, read from the object the assembler wrote; a stand-in driver writes the real object with one bit of the block's end marker changed
+constructs: 1990
+targets: cortex-m0
+expect: expected.txt
+args: compile --root=../tests/fixtures/end-to-end/image-block-not-as-emitted/devices --target=cortex-m0 --firmware-entry=start --emit=exe --toolchain=../tests/fixtures/end-to-end/image-block-not-as-emitted/driver -o build/image-block-not-as-emitted.elf ../tests/fixtures/end-to-end/image-block-not-as-emitted/app
+status: 1

@@ -263,6 +263,10 @@ def changed(old, new):
                     ' file the compiler does not build from was edited or'
                     ' restored, which changes only the provenance'
                     ' `refine --version` reports')
+            elif len(was) == 5 and was[4:] == now[4:]:
+                said.append('a release tag at HEAD appeared or went, which'
+                            ' changes only the provenance `refine --version`'
+                            ' reports')
             elif not any(key != 'identity' and before.get(key) != after.get(key)
                          for key in set(before) | set(after)):
                 said.append('a build script changed, which the provenance'

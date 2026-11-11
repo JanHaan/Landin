@@ -34,6 +34,9 @@ import unittest
 from unittest import mock
 import urllib.error
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("gate_inputs", ROOT / "scripts/gate_inputs.py")
 gate_inputs = importlib.util.module_from_spec(spec)
@@ -45,13 +48,8 @@ HANG = 300
 
 
 def git(cwd, *arguments):
-    #  No detached maintenance after a commit: it can outlive the case and
-    #  be at work under .git while the cleanup removes the repository.
-    environment = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
-                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
-                       GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="maintenance.auto",
-                       GIT_CONFIG_VALUE_0="false")
-    return subprocess.run(["git", *arguments], cwd=cwd, env=environment, check=True,
+    #  No detached maintenance after a commit: temporary_git.py says why.
+    return subprocess.run(["git", *arguments], cwd=cwd, env=environment(), check=True,
                           stdout=subprocess.PIPE, text=True).stdout.strip()
 
 

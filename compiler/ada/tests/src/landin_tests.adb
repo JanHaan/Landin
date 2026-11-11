@@ -73,7 +73,7 @@ procedure Landin_Tests is
 
    type Requested_Mode is
      (Run_All, Run_Host, Record_Artefacts, Run_Suite, Run_Case,
-      Run_Fixture, Misuse);
+      Run_Fixture, List_Cases, Misuse);
 
    Mode         : Requested_Mode := Run_All;
    Host_Only    : Boolean := False;
@@ -88,7 +88,10 @@ procedure Landin_Tests is
    --  becomes the --fixture or --record of every recorded fixture whose
    --  report carries the code, once the fixture tree is known to be here.
    Fixture_Codes, Record_Codes : Landin.Platform.Path_List;
-   Of_Shard     : Landin.Testing.Shard := Landin.Testing.Whole;
+   --  The suite each --cases=SUITE names, in the order given, an empty
+   --  one for a bare --cases and so every suite.
+   Listing      : Landin.Platform.Path_List;
+   Of_Shard    : Landin.Testing.Shard := Landin.Testing.Whole;
    --  A fixture run's FILTERED line for each fixture, and the note of each
    --  another lane runs, around the transcript.
    Fixture_Lines, Fixture_Notes : Unbounded.Unbounded_String;
@@ -193,6 +196,16 @@ procedure Landin_Tests is
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       and --record=WHAT repeats, recording each in turn");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       landin_tests [--host] --cases=SUITE ... | --cases");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       --cases=SUITE lists that suite's cases and runs none, one"
+         & " SUITE/NAME to a line as");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       --case= takes it; --cases alone lists every suite's");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       --fixture-code=LNNNN is --fixture, and --record-code=LNNNN"
@@ -325,6 +338,12 @@ procedure Landin_Tests is
               and then Argument'Length > 9
             then
                Recordings.Append (Value (Argument, "--record="));
+            elsif Argument = "--cases" then
+               Listing.Append ("");
+            elsif Starts_With (Argument, "--cases=")
+              and then Argument'Length > 8
+            then
+               Listing.Append (Value (Argument, "--cases="));
             elsif Starts_With (Argument, "--case=")
               and then Argument'Length > 7
             then
@@ -369,6 +388,23 @@ procedure Landin_Tests is
            (Text_IO.Standard_Error,
             "landin_tests: no target describes this host; name --target=");
          Mode := Misuse;
+         return;
+      end if;
+
+      --  Listing runs nothing, so it takes no selection and records
+      --  nothing.  --host may accompany it, since the host scope registers
+      --  other cases of `fixture execution` than a target run does.
+      if not Listing.Is_Empty then
+         if Selecting or else Seen_Shard or else Kept > 1
+           or else not Recordings.Is_Empty or else not Record_Codes.Is_Empty
+           or else (Kept = 1
+                    and then Ada.Command_Line.Argument (Rest (1)) /= "--host")
+         then
+            Mode := Misuse;
+         else
+            Host_Only := Kept = 1;
+            Mode := List_Cases;
+         end if;
          return;
       end if;
 
@@ -681,6 +717,47 @@ begin
         with "a registered suite is absent from the expected inventory";
    end if;
 
+   --  The cases as `--case=` takes them, from the registry itself, so a
+   --  case is named without reading its suite's source.  A suite that is
+   --  not one is refused with the names nearest it, as a selector is.
+   if Mode = List_Cases then
+      declare
+         Refused : Boolean := False;
+      begin
+         for Suite of Listing loop
+            if Suite /= ""
+              and then not Landin.Testing.Has_Suite (Cases, Suite)
+            then
+               Text_IO.Put_Line
+                 (Text_IO.Standard_Error,
+                  "landin_tests: "
+                  & Landin.Testing.Selection_Problem
+                      (Cases,
+                       (Suite => Unbounded.To_Unbounded_String (Suite),
+                        Name  => Unbounded.Null_Unbounded_String)));
+               Refused := True;
+            end if;
+         end loop;
+         if Refused then
+            Ada.Command_Line.Set_Exit_Status (2);
+            return;
+         end if;
+         for Suite of Listing loop
+            declare
+               List : constant String :=
+                 Landin.Testing.Case_List (Cases, Suite);
+            begin
+               --  Put_Line ends the last line itself: Text_IO would add
+               --  a blank one after a Put that ended in a line feed.
+               if List /= "" then
+                  Text_IO.Put_Line (List (List'First .. List'Last - 1));
+               end if;
+            end;
+         end loop;
+         return;
+      end;
+   end if;
+
    --  A selector that names nothing is refused before anything runs, with
    --  the names nearest it, rather than by a run that matched nothing.
    declare
@@ -717,7 +794,7 @@ begin
             Record_Timings =>
               Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
             Progress       => Landin.Testing.Write_Progress'Access);
-      when Record_Artefacts | Misuse =>
+      when Record_Artefacts | List_Cases | Misuse =>
          raise Landin.Compiler_Defect with "test mode reached the runner";
    end case;
 

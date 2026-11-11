@@ -1,0 +1,2 @@
+start: () -> none =
+end start

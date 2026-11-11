@@ -196,6 +196,21 @@ package body Landin.Testing is
 
    package Sorting is new Entry_Vectors.Generic_Sorting ("<" => Precedes);
 
+   function Case_List
+     (In_Registry : Registry; Suite : String := "") return String
+   is
+      Ordered : Entry_Vectors.Vector := In_Registry.Items;
+      Result  : Unbounded.Unbounded_String;
+   begin
+      Sorting.Sort (Ordered);
+      for Item of Ordered loop
+         if Suite = "" or else Unbounded.To_String (Item.Suite) = Suite then
+            Unbounded.Append (Result, Item.Suite & "/" & Item.Name & LF);
+         end if;
+      end loop;
+      return Unbounded.To_String (Result);
+   end Case_List;
+
    procedure Run_Selected
      (In_Registry  : Registry;
       Selected     : Selector_Vectors.Vector;

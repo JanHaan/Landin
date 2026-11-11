@@ -1,0 +1,6 @@
+error[L0518]: this placement needs a device profile, and the program selects none
+  --> ../tests/fixtures/end-to-end/placement-with-no-reference-profile/program.ldn:1:21
+  |
+1 | link(region: "RAM") table: u32 = 1
+  |                     ^^^^^
+  = note: D543: import the device's description; with none, the library's platform/cortex_m/reference applies, and this library holds none: name one that does with --library=DIR

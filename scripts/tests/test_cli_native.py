@@ -12,6 +12,10 @@ import subprocess
 import tempfile
 import time
 import unittest
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
 
 REFINE = os.environ.get('LANDIN_REFINE')
 SOURCE = 'public main: () -> (code: i32) = code = 0 end main\n'
@@ -82,7 +86,8 @@ class NativeCLI(unittest.TestCase):
 
         def command(*args):
             result = subprocess.run(args, cwd=checkout if checkout.exists() else source,
-                                    text=True, capture_output=True, timeout=60)
+                                    text=True, capture_output=True, timeout=60,
+                                    env=environment())
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             return result.stdout
 
@@ -98,9 +103,7 @@ class NativeCLI(unittest.TestCase):
                 copied.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(original, copied, follow_symlinks=False)
         command('git', 'add', '-u')
-        command('git', '-c', 'user.name=Landin version probe',
-                '-c', 'user.email=version-probe@example.invalid',
-                '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty',
+        command('git', 'commit', '--quiet', '--allow-empty',
                 '-m', 'Isolated version probe snapshot')
         revision = command('git', 'rev-parse', 'HEAD').strip()
         identity = runpy.run_path(str(checkout / 'scripts/build_identity.py'))['identity']

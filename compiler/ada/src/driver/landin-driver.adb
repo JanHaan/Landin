@@ -311,6 +311,13 @@ package body Landin.Driver is
                         end loop;
                      end;
                   end if;
+                  --  D1230: a fixture named as the example, built in.
+                  if Landin.Diagnostics.Explanations.Fixture (Name) /= ""
+                  then
+                     Unbounded.Append
+                       (Text,
+                        LF & Landin.Diagnostics.Explanations.Fixture (Name));
+                  end if;
                end;
             end if;
          end;

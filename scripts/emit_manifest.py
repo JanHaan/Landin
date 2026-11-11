@@ -77,6 +77,32 @@ host manifest stays what it is:
                                          `|debug=lines`
     --jobs=N                             compilations at once; every core
                                          by default
+    --library=DIR                        the library every compilation
+                                         uses, the directory that holds
+                                         core/, hosted/ and platform/
+
+The earlier compiler has to find a library, and `refine` looks for one
+beside itself, so a copy of its executable alone answers every entry with
+"no library holding platform/linux was found".  Either keep it where it
+was built, in a worktree of the earlier commit:
+
+    git worktree add ../before BASE
+    (cd ../before && ./scripts/build.sh --compiler-only)
+    emit ../before/compiler/ada/build/TAG/debug/bin/refine ROOT before.json
+
+or copy the executable anywhere and name the library with `--library=DIR`,
+for both runs alike when the change leaves the library as it was.  ROOT is
+the same checkout both times: it supplies the fixtures, not the compiler.
+
+The whole manifest is about 200,000 compilations, seventy minutes on a
+loaded 32-core host, and a comparison needs it twice.  A proof about one
+target, profile or fixture names it and takes seconds:
+
+    emit REFINE ROOT OUT.json linux-x86-64 --profile=none-off --mode=debug
+
+While it runs `emit` writes a line to standard error at most every thirty
+seconds, `emit: 41200 of 199674 entries`, so a long run is told from a
+stuck one.
 
 A manifest is also held to its own expectations: an entry is assembly, or
 a refusal that is expected.  For a positive fixture the expected refusals
@@ -102,6 +128,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -322,6 +349,14 @@ def first_diagnostic(result):
     return " ".join(said)
 
 
+#  `emit --library=DIR`, as an absolute path, since each compilation runs
+#  in its fixture's directory; empty when refine finds its own.
+LIBRARY = []
+
+#  Seconds between two progress lines of `emit`.
+PROGRESS_EVERY = 30.0
+
+
 def compile_one(job):
     """Compile one entry in its own directory, including any sidecars."""
     (key, refine, fixture, sources, target, level, mode, optimize, specialize,
@@ -334,6 +369,7 @@ def compile_one(job):
         + ["--build-mode=" + mode]
         + ["--optimize=" + optimize, "--specialize=" + specialize]
         + (["--debug=" + debug] if debug else [])
+        + (["--library=" + LIBRARY[0]] if LIBRARY else [])
         + ["--emit=asm", "-o", str(asm)] + sources,
         capture_output=True, cwd=fixture)
     if result.returncode != 0 or not asm.exists():
@@ -357,7 +393,9 @@ def debug_information(target):
 
 
 def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",),
-         fixtures=(), profiles=PROFILES, build_modes=MODES, debug_info=False):
+         fixtures=(), profiles=PROFILES, build_modes=MODES, debug_info=False,
+         library=None, clock=time.monotonic):
+    LIBRARY[:] = [str(Path(library).resolve())] if library else []
     #  A rebuild of this build waits until the manifest is written, rather
     #  than replace refine between two of its requests.
     build_lock.reading(refine)
@@ -394,8 +432,13 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
                                              specialize, debug, asm))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             # Preserve inventory order regardless of completion order.
+            said_at = clock()
             for key, value, said in pool.map(compile_one, jobs):
                 manifest[key] = value
+                if clock() - said_at >= PROGRESS_EVERY:
+                    said_at = clock()
+                    print("emit: %d of %d entries" % (len(manifest), len(jobs)),
+                          file=sys.stderr, flush=True)
                 refused += value.startswith("refused:")
                 if said:
                     diagnostics[key] = said
@@ -730,9 +773,17 @@ def main(argv):
         parser.add_argument("--mode", action="append", choices=MODES)
         parser.add_argument("--debug-info", action="store_true")
         parser.add_argument("--jobs", type=jobs)
+        parser.add_argument("--library")
         given = parser.parse_args(argv[2:])
         targets = target_list(given.targets, "emit")
         if targets is None:
+            return 2
+        if given.library and not any(
+                (Path(given.library) / part).is_dir()
+                for part in ("core", "hosted", "platform")):
+            print("emit: --library=%s holds no core, hosted or platform"
+                  " directory; name the directory that holds them, a"
+                  " checkout's root" % given.library, file=sys.stderr)
             return 2
         unknown = sorted(set(given.fixture) - known_names(given.root))
         if unknown:
@@ -749,7 +800,7 @@ def main(argv):
                     fixtures=tuple(given.fixture),
                     profiles=tuple(dict.fromkeys(given.profile or PROFILES)),
                     build_modes=tuple(m for m in MODES if m in (given.mode or MODES)),
-                    debug_info=given.debug_info)
+                    debug_info=given.debug_info, library=given.library)
     if len(argv) >= 2 and argv[1] == "modes":
         parser = argparse.ArgumentParser(prog="emit_manifest.py modes",
                                          allow_abbrev=False)

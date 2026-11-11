@@ -2639,6 +2639,8 @@ package body Landin.Diagnostics.Citations is
             when 599 =>
                "A diagnostic's example names the options it is compiled "
                & "with",
+            when 1230 =>
+               "A diagnostic's example may be a fixture",
             when 542 =>
                "A device description is a module of directives, and its "
                & "generated half has one text",
@@ -4386,6 +4388,8 @@ package body Landin.Diagnostics.Citations is
             when 530 =>
                "Decisions: The toolchain, C and the machine",
             when 599 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1230 =>
                "Decisions: The toolchain, C and the machine",
             when 542 =>
                "Decisions: The toolchain, C and the machine",
@@ -6563,6 +6567,9 @@ package body Landin.Diagnostics.Citations is
             when 599 =>
                "https://www.701.dev/spec.html#d599-a-diagnostic-s-exampl"
                & "e-names-the-options-it-is-compiled-with",
+            when 1230 =>
+               "https://www.701.dev/spec.html#d1230-a-diagnostic-s-examp"
+               & "le-may-be-a-fixture",
             when 542 =>
                "https://www.701.dev/spec.html#d542-a-device-description-"
                & "is-a-module-of-directives-and-its-generated-half-has-one"

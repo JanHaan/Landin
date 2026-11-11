@@ -25,4 +25,11 @@ package Landin.Diagnostics.Explanations is
    --  begin with the code.
    function Example (Of_Code : Catalogue.Code_Name) return String;
 
+   --  For a code whose example needs more than one file, the fixture the
+   --  page names instead (D1230), as a terminal shows it: its name, each
+   --  text file, the name and size of each binary one, the command and
+   --  the report; "" for every other code.  It is the fixture as it was
+   --  when the body was generated, so `refine explain` reads no file.
+   function Fixture (Of_Code : Catalogue.Code_Name) return String;
+
 end Landin.Diagnostics.Explanations;

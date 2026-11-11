@@ -678,10 +678,13 @@ download under way finishes first, because one cut short leaves a port off
 or a chip halted in its boot ROM. The ESP ports' cycle is two switches with
 a wait between them, and the whole of it is the action that finishes: a
 signal while the port is off waits until it is on again. A cycle that
-fails of itself between the two, a hub that does not list again or a
-switch that fails its tries, still leaves the port off, and no tool
-switches a port on when it starts; `uhubctl -l HUB -p PORT -a on` by hand
-does. A boot check cancelled before its fixed
+fails of itself between the two, a hub that does not list again, still
+tries the "on" once, through the same pacing and guards, and its failure
+then says the port was switched on again. Where the "on" itself fails its
+tries, or the pace guard refuses it after USB trouble, the port stays
+off, since no tool overrides that guard or switches a port on when it
+starts: the failure says the port is left off, and
+`uhubctl -l HUB -p PORT -a on` by hand switches it. A boot check cancelled before its fixed
 image is restored records the restoration pending instead of starting it:
 GitHub's runner sends SIGTERM 7.5 s after SIGINT and kills the step 2.5 s
 later, too soon for a restoration, and one killed half way leaves the board

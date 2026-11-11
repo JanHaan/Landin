@@ -956,6 +956,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Paths : Landin.Platform.Path_List;
       Problem : Unbounded.Unbounded_String;
 
+      --  Codes this case hands about as data.  check.py reads a quoted
+      --  code in a test's text as that file's evidence for the code,
+      --  which this case is not, and leaves out a line marked as these.
+      Carried : constant String := "L0100";  --  not evidence
+      Unknown : constant String := "L0999";  --  not evidence
+
       procedure Add (Class_Name, Name, Report : String);
 
       procedure Add (Class_Name, Name, Report : String) is
@@ -993,9 +999,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Add ("positive", "warned", "warning[L0100]: one" & ASCII.LF);
       Add ("positive", "unrecorded", "");
 
-      --  Spelled in two parts: a whole code in a test's text is read by
-      --  check.py as evidence for that code, which this case is not.
-      Fixtures_Reporting_With ("L" & "0100", Host, Paths, Problem);
+      Fixtures_Reporting_With (Carried, Host, Paths, Problem);
       Landin.Testing.Check
         (Item, Unbounded.Length (Problem) = 0
            and then Natural (Paths.Length) = 3
@@ -1005,7 +1009,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          "every recorded report carrying the code is selected, in run"
          & " order, and no other: " & Unbounded.To_String (Problem));
 
-      Fixtures_Reporting_With ("L" & "0999", Host, Paths, Problem);
+      Fixtures_Reporting_With (Unknown, Host, Paths, Problem);
       Landin.Testing.Check
         (Item, Paths.Is_Empty
            and then Unbounded.To_String (Problem)
@@ -1266,6 +1270,65 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Check_Compiler_Outcome (Case_Item, Outcome, Item);
    end Run_Negative;
 
+   --  What `recorded expectations hold` says once after every failure:
+   --  each fixture a check failed for, and the one run that re-records
+   --  them.  A rule change that moved several reports was otherwise read
+   --  out of a transcript holding each whole report twice.
+   function Differing_Summary
+     (Labels : Landin.Platform.Path_List) return String;
+
+   function Differing_Summary
+     (Labels : Landin.Platform.Path_List) return String
+   is
+      Count  : constant String := Natural'Image (Natural (Labels.Length));
+      Names  : Unbounded.Unbounded_String;
+      Record_All : Unbounded.Unbounded_String;
+   begin
+      for Label of Labels loop
+         Unbounded.Append (Names, ASCII.LF & "          " & Label);
+         Unbounded.Append (Record_All, " --record=" & Label);
+      end loop;
+      return Count (Count'First + 1 .. Count'Last)
+        & (if Natural (Labels.Length) = 1
+           then " recorded fixture failed a check above:"
+           else " recorded fixtures failed a check above:")
+        & Unbounded.To_String (Names) & ASCII.LF
+        & "        once the differences are read, one run re-records"
+        & " every report among them that changed:" & ASCII.LF
+        & "          ./scripts/dev-test.sh"
+        & Unbounded.To_String (Record_All);
+   end Differing_Summary;
+
+   procedure Differing_Reports_Are_Named_Together
+     (Item : in out Landin.Testing.Context);
+
+   procedure Differing_Reports_Are_Named_Together
+     (Item : in out Landin.Testing.Context)
+   is
+      Labels : Landin.Platform.Path_List;
+   begin
+      Labels.Append ("negative/first");
+      Landin.Testing.Check_Equal
+        (Item, Differing_Summary (Labels),
+         "1 recorded fixture failed a check above:" & ASCII.LF
+         & "          negative/first" & ASCII.LF
+         & "        once the differences are read, one run re-records"
+         & " every report among them that changed:" & ASCII.LF
+         & "          ./scripts/dev-test.sh --record=negative/first",
+         "one differing fixture is named with its command");
+      Labels.Append ("end-to-end/second");
+      Landin.Testing.Check_Equal
+        (Item, Differing_Summary (Labels),
+         "2 recorded fixtures failed a check above:" & ASCII.LF
+         & "          negative/first" & ASCII.LF
+         & "          end-to-end/second" & ASCII.LF
+         & "        once the differences are read, one run re-records"
+         & " every report among them that changed:" & ASCII.LF
+         & "          ./scripts/dev-test.sh --record=negative/first"
+         & " --record=end-to-end/second",
+         "every differing fixture is named, in run order, in one command");
+   end Differing_Reports_Are_Named_Together;
+
    procedure Recorded_Expectations_Hold
      (Item : in out Landin.Testing.Context);
 
@@ -1279,6 +1342,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Pinned  : Natural := 0;
       Negative_Ran : Boolean := False;
       End_To_End_Ran : Boolean := False;
+      --  Every fixture a check of this case failed for, in run order.
+      Differing : Landin.Platform.Path_List;
    begin
       if not Host.Exists (Program) then
          Landin.Testing.Fail
@@ -1303,7 +1368,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
          begin
             if Expect (Case_Item) /= "" and then Recorded_In_Lane (Case_Item)
             then
-               Run_Recorded (Case_Item, Host, Program, Item);
+               declare
+                  Before : constant Natural := Landin.Testing.Failures (Item);
+               begin
+                  Run_Recorded (Case_Item, Host, Program, Item);
+                  if Landin.Testing.Failures (Item) /= Before then
+                     Differing.Append (Label_Of (Case_Item));
+                  end if;
+               end;
                Ran := Ran + 1;
                Negative_Ran := Negative_Ran
                  or else Class (Case_Item) = Negative_Program;
@@ -1315,6 +1387,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end if;
          end;
       end loop;
+
+      --  Every fixture ran whatever the ones before it did, and each
+      --  failure above carries its whole report.  The names together come
+      --  last, where a long transcript is read first.
+      if not Differing.Is_Empty then
+         Landin.Testing.Fail (Item, Differing_Summary (Differing));
+      end if;
 
       Landin.Testing.Check_Equal
         (Item, Ran, Recorded_Lane_Count (Found),
@@ -4690,6 +4769,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a report is recorded by name",
          A_Report_Is_Recorded_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution", "differing reports are named together",
+         Differing_Reports_Are_Named_Together'Access);
       Landin.Testing.Register
         (Into, "fixture execution",
          "a code selects the reports carrying it",

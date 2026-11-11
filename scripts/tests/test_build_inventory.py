@@ -11,6 +11,10 @@ import tempfile
 import shutil
 import shlex
 import unittest
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -85,7 +89,7 @@ class BuildInventory(unittest.TestCase):
                 ["sh", "-eu", "-c", DECISION], text=True, capture_output=True,
                 env={**env, "Manifest": str(manifest),
                      "Attempt": str(attempt), "State": str(state),
-                     "LANDIN_BUILD_DIR": str(build),
+                     "LANDIN_BUILD_DIR": str(build), "LANDIN_ROOT": str(ROOT),
                      "LANDIN_BUILD_TAG": "test", "LANDIN_BUILD_MODE": "debug",
                      "Current": "\n".join(sorted(new)),
                      "Incremental": incremental, "Prior_Build": "yes"},
@@ -115,7 +119,43 @@ class BuildInventory(unittest.TestCase):
             with self.subTest(extension=extension):
                 exists, text = self.decision(old, new)
                 self.assertTrue(exists)
-                self.assertIn("using checksum recompilation", text)
+                self.assertIn("source content changed; using checksum"
+                              " recompilation:\nlandin:   compiler/ada/src/"
+                              f"member.{extension} changed\n", text)
+
+    def test_a_change_of_checkout_state_alone_is_not_called_source(self):
+        #  Commits that changed no file the compiler is built from were
+        #  announced as "source content changed", and what had changed
+        #  could not be found.
+        def with_identity(row):
+            return [row if entry.startswith("identity ") else entry
+                    for entry in BASE]
+        old = with_identity("identity 6 0123abc clean d1")
+        for row, said in (
+                ("identity 7 4567def clean d1",
+                 "HEAD moved from 0123abc to 4567def"),
+                ("identity 8 0123abc dirty d1",
+                 "the checkout went from clean to dirty")):
+            with self.subTest(row=row):
+                exists, text = self.decision(old, with_identity(row))
+                self.assertTrue(exists)
+                self.assertNotIn("source content changed", text)
+                self.assertIn("in nothing the compiler is built from; using"
+                              " checksum recompilation for the provenance"
+                              " unit alone:\nlandin:   " + said, text)
+        #  A build script's edit moves the digest, and is not that.
+        exists, text = self.decision(
+            old, with_identity("identity 9 0123abc clean d2"))
+        self.assertIn("source content changed; using checksum recompilation:"
+                      "\nlandin:   a build script changed", text)
+
+    def test_a_long_list_of_changed_sources_is_cut(self):
+        rows = [f"source 1 compiler/ada/src/m{n:02}.adb" for n in range(20)]
+        _, text = self.decision(BASE + rows,
+                                BASE + [changed(row) for row in rows])
+        self.assertIn("landin:   compiler/ada/src/m11.adb changed\n"
+                      "landin:   and 8 more\n", text)
+        self.assertNotIn("m12.adb", text)
 
     def test_fixed_identity_changes_are_clean(self):
         for row in FIXED:
@@ -675,19 +715,13 @@ path.write_text("-- generated at " + str(path) + "\\n"
         (self.root / "README.md").write_text("a document\n")
         (self.root / ".gitignore").write_text("compiler/ada/build/\ncalls\n"
                                               "compiler/ada/.build-locks/\n")
-        #  No detached maintenance after a commit: it can be at work
-        #  under .git while the cleanup removes the repository.
-        identity = ["-c", "user.name=t", "-c", "user.email=t@t",
-                    "-c", "maintenance.auto=false"]
+        #  No detached maintenance after a commit, in this test's own
+        #  commits or the fake builder's: temporary_git.py says why.
+        self.env = environment(self.env)
         for arguments in (["init", "-q"], ["add", "-A"],
-                          [*identity, "commit", "-q", "-m", "base"]):
+                          ["commit", "-q", "-m", "base"]):
             subprocess.run(["git", "-C", str(self.root), *arguments],
-                           check=True, timeout=HANG)
-        self.env.update(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
-                        GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
-                        GIT_CONFIG_COUNT="1",
-                        GIT_CONFIG_KEY_0="maintenance.auto",
-                        GIT_CONFIG_VALUE_0="false")
+                           check=True, timeout=HANG, env=self.env)
 
     def test_a_document_edit_during_the_build_leaves_it_verified(self):
         #  A README edited beside a build turns the checkout dirty, and a
@@ -959,6 +993,10 @@ class DeveloperScripts(unittest.TestCase):
                                  "'analysis agrees",
                                  "'refused sources are served'",
                                  "LANDIN_TEST_TIMINGS=1 adds",
+                                 name + " [--host] --cases=SUITE ... |"
+                                 " --cases",
+                                 "--cases=SUITE lists that suite's cases"
+                                 " and runs none",
                                  "--fixture-code=LNNNN is --fixture, and"
                                  " --record-code=LNNNN --record"):
                         self.assertIn(said, result.stdout)

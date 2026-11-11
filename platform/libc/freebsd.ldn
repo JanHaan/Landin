@@ -95,8 +95,8 @@ fixed if compiler.os == freebsd then
     public extern(c) mkdirat: (directory: i32, path: ptr u8, mode: u16)
                               -> (status: i32)
 
-    --- `open` and `pipe2` flag: the new descriptor is closed when the
-    --- process executes a program, set with it.
+    --- `open` flag, and `pipe2`'s where a system has that call: the new
+    --- descriptor is closed when the process executes a program, set with it.
     public o_cloexec: i32 = 1048576
     --- `fcntl` command: duplicate a descriptor onto the lowest free number
     --- at or above the argument, closed on exec.
@@ -206,7 +206,7 @@ fixed if compiler.os == freebsd then
     end signal_action
 
     --- `sigprocmask` operation: block the signals given beside those
-    --- blocked already, `SIG_BLOCK`.  Darwin and FreeBSD share the BSD numbers.
+    --- blocked already, `SIG_BLOCK`, numbered apart by Linux and the BSDs.
     public sig_block: i32 = 1
     --- `sigprocmask` operation: unblock the signals given, `SIG_UNBLOCK`.
     public sig_unblock: i32 = 2

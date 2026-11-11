@@ -338,6 +338,26 @@ public real: atom
         self.assertIn('for line in drift_report(modules):\n        print(line, file=sys.stderr)',
                       source)
 
+    def test_a_record_laid_out_per_target_may_describe_its_own_fields(self):
+        def records(*fields):
+            comments = ('Darwin lays it out with a count first, as its C library does.',
+                        'The kernel packs it to twelve bytes for its compatibility layer.')
+            return self.items('core/mem', ''.join(
+                'fixed if target.arch == .a%d then\n    --- %s\n'
+                '    public record: type = struct\n        %s\n    end record\nend if\n'
+                % (index, comments[index], field) for index, field in enumerate(fields)))
+        #  Layouts that differ are different records, and are not reported;
+        #  one layout with two comments is a copy edited alone.
+        self.assertEqual(library.drifting(
+            {'core/mem': records('count: u32', 'count: u64')}), [])
+        ((_, name, _),) = library.drifting(
+            {'core/mem': records('count: u32', 'count: u32')})
+        self.assertEqual(name, 'record')
+
+    def test_the_live_library_s_per_target_comments_are_parallel(self):
+        modules, _ = library.collect(ROOT)
+        self.assertEqual(library.drift_report(modules), [])
+
     def test_all_live_exports_have_documentation_and_an_overview(self):
         modules, sources = library.collect(ROOT)
         _, descriptions = library.overviews(ROOT, modules)

@@ -6,6 +6,10 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('build_identity', ROOT / 'scripts/build_identity.py')
@@ -32,12 +36,12 @@ class BuildIdentity(unittest.TestCase):
             'end Landin_Tests;\n')
         self.git('init', '-q')
         self.git('add', '.')
-        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
-                 'commit', '-qm', 'fixture')
+        self.git('commit', '-qm', 'fixture')
 
     def git(self, *args):
         return subprocess.run(['git', '-C', str(self.root), *args], check=True,
-                              capture_output=True, text=True).stdout.strip()
+                              capture_output=True, text=True,
+                              env=environment()).stdout.strip()
 
     def test_revision_and_relative_digest(self):
         before = IDENTITY.identity(self.root, 'debug')
@@ -287,6 +291,16 @@ class BuildIdentity(unittest.TestCase):
                           ' `refine --version` reports covers'])
         self.assertEqual(said(base + ['source 5 compiler/ada/src/b.adb']),
                          ['compiler/ada/src/b.adb appeared'])
+        #  With the inputs' digest in the row, as build.sh writes it, the
+        #  same revision, state and digest leave only the tag.
+        self.assertEqual(
+            IDENTITY.changed('identity 3 abc clean d1', 'identity 4 abc clean d1'),
+            ['a release tag at HEAD appeared or went, which changes only'
+             ' the provenance `refine --version` reports'])
+        self.assertEqual(
+            IDENTITY.changed('identity 3 abc clean d1', 'identity 4 abc clean d2'),
+            ['a build script changed, which the provenance'
+             ' `refine --version` reports covers'])
 
 
 class CheckoutInputs(unittest.TestCase):

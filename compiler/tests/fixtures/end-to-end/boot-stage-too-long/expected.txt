@@ -1,0 +1,1 @@
+error[L0538]: the second stage and its literals are 258 bytes, and its slot holds 252 before the checksum: make the stage shorter (D588)

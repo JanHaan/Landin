@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D924: a firmware image whose C archive brought a constructor holds an .init_array that compiler-owned startup never runs, and is L0587; libsensor.a is sensor.c built for the core, and a stand-in driver writes the image the real one linked with it
+program: main.ldn
+constructs: 1590, 1650
+targets: cortex-m0
+expect: expected.txt
+args: compile --target=cortex-m0 --firmware-entry=start --emit=exe --toolchain=../tests/fixtures/end-to-end/firmware-archive-with-constructor/driver -L ../tests/fixtures/end-to-end/firmware-archive-with-constructor -o build/firmware-archive-with-constructor.elf ../tests/fixtures/end-to-end/firmware-archive-with-constructor/main.ldn
+status: 1
