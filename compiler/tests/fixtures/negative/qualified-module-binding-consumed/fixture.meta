@@ -1,0 +1,9 @@
+class: negative
+summary: a module binding consumed by `sink` under its qualified or its plain spelling is consumed under the other, and a computed index is no `sink` path of either
+program: main.ldn
+root: root
+codes: L0302, L0302, L0302, L0337, L0302
+constructs: 0910, 1420, 1810
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+status: 1

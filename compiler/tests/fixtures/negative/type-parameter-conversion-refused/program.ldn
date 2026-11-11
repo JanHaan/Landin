@@ -1,0 +1,37 @@
+--  D1100: `t(x)` is the conversion each instance's actual type has, so an
+--  instance whose type has none from the value is refused in the body,
+--  and a type parameter constructs nothing.
+pair: type = struct
+    a: i32
+    b: i32
+end pair
+
+metres: type = distinct u32
+
+narrow: (t: type, value: i64) -> (out: t) =
+    out = t(value) -- error: `pair` has none; `metres` wants its base
+end narrow
+
+known: (t: type, seed: t) -> (out: t) =
+    out = t(300) + seed -- error: 300 does not fit the `u8` instance
+end known
+
+built: (t: type, seed: t) -> (out: t) =
+    out = t(a: 1) -- error: a construction
+end built
+
+twice: (t: type, seed: t) -> (out: t) =
+    out = t(1, 2) -- error: two values
+end twice
+
+public main: () -> (code: i32) =
+    a: pair = narrow(t: pair, value: 1)
+    b: metres = narrow(t: metres, value: 1)
+    c: i32 = narrow(t: i32, value: 1)
+    small: u8 = 7
+    d: u8 = known(small)
+    e: i32 = known(7)
+    f: i32 = built(1)
+    g: i32 = twice(1)
+    code = a.a + i32(u32(b)) + c + i32(d) + e + f + g
+end main

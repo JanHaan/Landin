@@ -1,0 +1,31 @@
+--  D1200: every atom outside the declared set is named at once, each as
+--  this file writes it, in one report for each `fail` or call they come
+--  through.
+import trouble
+
+late: atom
+
+--  Three atoms through one call: one report.
+one_call: (which: u8) -> none ! late =
+    try trouble.open(which) -- error
+end one_call
+
+--  One of the call's atoms is declared; the `fail` is a second way in.
+two_ways: (which: u8) -> none ! trouble.busy =
+    try trouble.open(which) -- error: two more
+    fail late -- error: `late`
+end two_ways
+
+--  The recovered binding holds the call's whole set.
+rebound: (which: u8) -> none ! late =
+    trouble.open(which) else (problem)
+        fail problem -- error
+    end
+end rebound
+
+public main: () -> (code: i32) =
+    one_call(1) else none
+    two_ways(2) else none
+    rebound(3) else none
+    code = 0
+end main

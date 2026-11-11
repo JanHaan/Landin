@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1100 a type parameter's conversion traps on a value outside its instance's actual type, and another instance of the same routine accepts the value
+program: main.ldn
+traps: yes
+constructs: 0310, 0700, 1290
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

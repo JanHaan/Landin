@@ -1,0 +1,44 @@
+--  D1201: an array field lent `inout` is held to what every `inout` place
+--  is: one place once (D149), no view of the binding in use ([0830],
+--  D1084), a writable root [1900] and a live place [0910].
+holder: type = struct
+    round: [4]u32
+    other: [4]u32
+end holder
+
+reset: (inout round: [4]u32) -> none =
+    round[0] = 7
+end reset
+
+two: (inout left: [4]u32, inout right: [4]u32) -> none =
+    left[0] = right[0]
+end two
+
+beside: (view: []u32, inout round: [4]u32) -> (k: u32) =
+    round[0] = 7
+    k = view[0]
+end beside
+
+consume: (sink round: [4]u32) -> none = end consume
+
+public main: () -> (code: i32) =
+    mut held: holder = zeroed
+    frozen: holder = zeroed
+    two(held.round, held.round) -- error: one place twice
+    two(held.round, held.other)
+    xs := held.round[0..<2]
+    reset(held.round) -- error: `xs` views it
+    code = i32(xs[0])
+    for x in held.round do
+        reset(held.round) -- error: the loop walks it
+        code += i32(x)
+    end for
+    code += i32(beside(held.round[0..<2], held.round)) -- error
+    code += i32(beside(held.other[0..<2], held.round))
+    reset(frozen.round) -- error: `frozen` is not `mut`
+    p := addr held.round[1]
+    reset(held.round) -- error: `p` views it
+    p.val = 1
+    consume(held.round)
+    reset(held.round) -- error: consumed
+end main

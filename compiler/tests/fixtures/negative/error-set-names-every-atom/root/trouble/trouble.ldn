@@ -1,0 +1,9 @@
+public no_access: atom
+public busy: atom
+public closed: atom
+
+public open: (which: u8) -> none ! no_access | busy | closed =
+    fail no_access when which == 1
+    fail busy when which == 2
+    fail closed when which == 3
+end open

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1100 a type parameter applied to one value converts to each instance's actual type by that type's rule: integers, floats, a distinct type and its base, text to bytes, a literal, and in `unchecked`
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0310, 0650, 0700, 1120, 1290, 1300
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

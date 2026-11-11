@@ -1415,6 +1415,9 @@ literal fixed-array indexes. Pointer dereferences and slice indexes cross a
 reference boundary and are refused, including a literal slice index. A slice
 binding, field or fixed-array element still names its own descriptor storage
 and may be consumed as a whole. D220 makes this place-form boundary explicit.
+A module binding named through its module, `store.state`, is the binding its
+own name is [1420]: it roots a `sink` path, and a place consumed under one
+spelling is consumed under the other.
 Callee and arguments evaluate left to right before any place is consumed by
 that call. Each by-value argument captures its value when evaluated, including
 an aggregate passed by `sink`; a later argument may read or assign its original
@@ -8570,6 +8573,33 @@ one.
 
 **Pinned by** `runtime/array-parameter-into-array-field`.
 
+### D1201 — A whole array field is lent to an `inout` array parameter
+
+**The tour said** at [0900] that `inout` takes a writable place, and at
+[0520] that an array is passed whole. D48-D51 reached a fixed-array field
+as a place for indexing and for each end of a copy, and a local array, an
+element that is itself an array, `grid[0]`, and a struct field were all
+lent `inout`. `reset(held.round)` alone was L0334, "this selects a whole
+array field, and this position does not take one", with a note saying an
+array is passed whole.
+
+**Chosen:** a fixed-array field at any depth of selection is an `inout`
+argument for an array parameter of its length and element type, under the
+rules every other `inout` place has: the root is writable [1900], D149
+refuses the same place given twice, [0830] and D1084 refuse the call while
+a view of the binding is in use, and a consumed field is assigned again
+first. Lowering passes the field's address, as it passes an element's.
+Nothing new is checked or stored: the gate was the one that typed the
+argument before its place was asked about.
+
+**The alternative** was to keep the refusal and have it say to copy the
+field through a `mut` local and back. It was declined for D1180's reason:
+the copy reads and writes the same bytes, and an array element and a struct
+field in the same position are already lent.
+
+**Pinned by** `runtime/array-field-passed-inout` and
+`negative/array-field-inout-beside-its-view`.
+
 ### D53 — Repetition may assign a fixed-array field compactly
 
 **The tour said** that full repetition evaluates one scalar pattern [0560],
@@ -13990,6 +14020,8 @@ its value an atom or a recovered error binding; "this call can fail with
 `denied`" for a `try`; and "this traversal's providers can fail with
 `denied`" for a `try for`. The note says to add the atom or recover the
 failure where it is raised. Which programs are accepted does not change.
+D1200 has since made the report name every atom that entered there, each
+with its module.
 
 **The alternatives:** one report for every atom outside the set, which
 repeats one mistake as often as a callee's set is wide; pointing the primary
@@ -14000,6 +14032,34 @@ already shows how to find.
 **Pinned by** `negative/error-outside-set-names-its-raise`,
 `negative/fail-outside-declared-set` and
 `negative/for-fallible-undeclared-error`.
+
+### D1200 — Every atom outside the error set is named, as the file writes it
+
+**The tour said** at [0940] that every failing path belongs to the
+function's `!` set. D382 made L0329 name the first atom outside the set and
+the `fail` or call it entered the body through, and declined one report for
+every atom because that repeats one mistake as often as a callee's set is
+wide. Writing an error set over a library call then took one run for each
+atom, and the atom was named bare, `no_access`, where the signature has to
+write `io.no_access`.
+
+**Chosen:** one report for each `fail` or call that brings atoms outside
+the set into the body, naming every atom that first entered there: "this
+body can fail with `io.no_access`, `io.busy` and `net.refused`, which are
+outside its declared error set". Each atom is spelled as the file holding
+the signature writes it, with the name its import of the atom's module
+binds (D201) and bare for an atom of the file's own module. The label and
+the note list the same atoms; the report stays on the signature. A call
+whose set is wide is still one mistake and one report. Which programs are
+accepted does not change.
+
+**The alternatives:** D382's first atom alone, which hides the rest until
+the next run; one report naming every atom of the body whatever brought
+it, which labels only one of the places a reader has to look at; and the
+bare name, which is not what the signature can write.
+
+**Pinned by** `negative/error-set-names-every-atom`, with D382's fixtures
+for a single atom.
 
 ### D1103 — An error set names atoms, and a pointer type reached through an alias is refused
 
@@ -15621,33 +15681,58 @@ facts`, the lowering case `generic routines lower once per key`,
 verifier case uses a generic-instance item to pin that only the finalized
 concrete signature and ordinary failure opcode reach neutral IR.
 
-### D1100 — A type parameter is not applied to a value
+### D1100 — A type parameter applied to a value converts to the instance's type
 
-**The tour said** that a conversion and a construction are a type applied
-to arguments [0700], and that a generic routine takes its type as an
-ordinary parameter [1290]. It did not say whether the parameter may stand
-where [0700] applies a type: `t(0)` or `t(x)` in a routine whose `t` is a
-type parameter. The checker asked the formal's declaration for a value it
-does not have, and an instantiated routine that wrote the form ended in an
+**The tour said** that a conversion is a type applied to a value [0310],
+[0700], and that a generic routine takes its type as an ordinary parameter
+[1290]. It did not say whether the parameter may stand where a conversion
+names its type: `t(0)` or `t(x)` in a routine whose `t` is a type
+parameter. The checker asked the formal's declaration for a value it does
+not have, and an instantiated routine that wrote the form ended in an
 internal compiler defect.
 
-**Chosen:** a type parameter names a type in a type position only. Applied
-to a value, positionally or with labels, it is refused with L0301 where the
-routine is instantiated, the report naming the parameter and the
-application. A value takes the parameter's type through a typed binding,
-`zero: t = 0`, or through an entry of a concept that constrains the
-parameter.
+**Chosen:** in a generic routine, a type parameter applied to exactly one
+value is a conversion to the actual type of the instance being checked,
+and means what that type written in its place means. D266 already lets a
+conversion's head be a type as written; the parameter is that head, and
+the instance supplies what it writes. Every rule is therefore the actual
+type's own: which source types it converts from, the range check and its
+trap, a known value folded and refused when it does not fit, a distinct
+type converting only from its base and its base only from it, text to its
+bytes with the origin kept, and `unchecked` wrapping where it wraps a
+written conversion. A body is checked for each instance (D771), so an
+instance whose actual type has no conversion from the value is refused
+there, in the body, as every other instance-time refusal of a generic
+routine is; where no other refusal names it, the report says which type
+the parameter is in that instance. An instance that never converts what
+its type cannot is not refused for another instance's sake.
 
-**The alternative** was to read `t(x)` as [0700]'s conversion to the actual
-type of each instance. It was declined for now, because a conversion's rule
-is chosen by its two types: integer to integer checks a range, float to
-integer truncates, and a distinct type converts only from its base. One
-spelling would then be accepted for some actuals and
-refused for others with nothing in the signature saying which, which is
-what a concept exists to state. This is the conservative choice of the two
-and may be revisited with a program that needs the conversion.
+A type parameter still constructs nothing: applied with labels,
+`t(a: 1)`, or to another count of values where its actual type is no
+scalar, it is L0301, "`t` is a type parameter, which converts one value
+and constructs nothing". A struct is built where its type is known.
 
-**Pinned by** `negative/type-parameter-applied-to-a-value`.
+A generic routine is always checked and lowered as an instance with its
+actuals known, so there is no path on which the conversion's type is
+unknown where it is lowered; an `any C` value dispatches entries and has
+no type parameter to apply. A range subtype is no type argument [0660],
+so a parameter's conversion never carries bounds of its own.
+
+**The alternative** was to refuse the form, which D1100 first chose: a
+type parameter names a type in a type position only, and a value takes its
+type through a typed binding, `zero: t = 0`, or a concept entry. Its
+reason was that one spelling is accepted for some actuals and refused for
+others with nothing in the signature saying which. It was declined by the
+maintainer: that is already true of every operator and every written
+conversion in a generic body, `value + value` and `i64(value)` among
+them, since the body is checked per instance, and the refusal left numeric
+generic code no way to convert except through a concept written for it.
+Admitting construction, `t(a: 1)`, as well was declined because a
+construction names its fields, which no two actuals share.
+
+**Pinned by** `runtime/type-parameter-converts-a-value`,
+`runtime/type-parameter-conversion-traps` and
+`negative/type-parameter-conversion-refused`.
 
 ### D1101 — A generic signature's array bound is D136's, validated at the signature
 

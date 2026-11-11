@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1201 a whole array field of a local, of a nested struct, of module state, of an array element and behind a pointer is lent to an `inout` array parameter and written in place
+program: main.ldn
+status: 42
+constructs: 0520, 0900, 1900
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

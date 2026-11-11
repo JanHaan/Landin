@@ -1,4 +1,11 @@
+with Ada.Unchecked_Deallocation;
+
 package body Landin.Tokens.Text is
+
+   --  Where decoded bytes go when they may be as long as a literal: on
+   --  the heap, since a literal may carry megabytes and a frame may not.
+   type Byte_Buffer is access String;
+   procedure Free is new Ada.Unchecked_Deallocation (String, Byte_Buffer);
 
    function Hex_Value (Item : Character) return Integer
      is (case Item is
@@ -534,13 +541,15 @@ package body Landin.Tokens.Text is
 
       if Raw then
          declare
-            Bytes : String (1 .. Lexeme'Length);
+            Held : Byte_Buffer := new String (1 .. Lexeme'Length);
+            Bytes : String renames Held.all;
             Byte_Length : Natural;
             At_Byte : Positive := 1;
          begin
             Decode_Raw
               (Lexeme, Bytes, Byte_Length, Fault, Fault_First, Fault_Last);
             if Fault /= Well_Formed then
+               Free (Held);
                return;
             end if;
 
@@ -564,6 +573,7 @@ package body Landin.Tokens.Text is
                   At_Byte := At_Byte + Count;
                end;
             end loop;
+            Free (Held);
             return;
          end;
       end if;
@@ -690,5 +700,20 @@ package body Landin.Tokens.Text is
          end loop;
       end;
    end Decode_View;
+
+   function Decoded_Bytes
+     (Lexeme : String; Fault : out Problem) return String
+   is
+      Held : Byte_Buffer := new String (1 .. Lexeme'Length);
+      Length, Fault_First, Fault_Last : Natural;
+   begin
+      Decode (Lexeme, Held.all, Length, Fault, Fault_First, Fault_Last);
+      if Fault /= Well_Formed then
+         Length := 0;
+      end if;
+      return Result : constant String := Held (1 .. Length) do
+         Free (Held);
+      end return;
+   end Decoded_Bytes;
 
 end Landin.Tokens.Text;

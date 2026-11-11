@@ -713,14 +713,32 @@ package body Landin.Stages.Checking is
       function Is_Type_Call
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
+      --  D1100: a generic routine's type formal named where a conversion
+      --  names its type, `t(x)`.
+      function Names_Type_Formal
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+            and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+              = Res.Bound
+            and then Res.Sort_Of
+              (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                = Res.Type_Parameter);
+
+      --  What a conversion applies as written rather than by a declared
+      --  name's own facts: D266's type expression, and D1100's formal,
+      --  which is the type each instance's actual writes.
+      function Is_Written_Head
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind
+            or else Names_Type_Formal (Of_Tree, Callee));
+
       function Is_Type_Call
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
         is (Node /= Syn.No_Node
             and then Syn.Kind (Of_Tree, Node) = Syn.Call
             and then Syn.Argument_Count (Of_Tree, Node) = 1
-            and then (Syn.Kind
+            and then (Is_Written_Head
               (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-                in Syn.Type_Reference_Kind
               or else (Res.Verdict_Of
               (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
                 = Res.Bound
@@ -8039,6 +8057,105 @@ package body Landin.Stages.Checking is
          end;
       end Current_Actuals;
 
+      --  D138/D144: the actual type the active routine instance gives the
+      --  type formal Means, published on Node in that instance's overlay
+      --  as a written type's facts are, or Undecided when no instance is
+      --  active or Means is no type formal of its template.  A type
+      --  position that names the formal asks this, and so does D1100's
+      --  conversion, whose head is the formal's name.
+      function Noted_Formal_Actual
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Means   : Res.Declaration_Id) return Ty.Type_Kind;
+
+      function Noted_Formal_Actual
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Means   : Res.Declaration_Id) return Ty.Type_Kind
+      is
+         Current : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Current_Routine_View (Types.all);
+         Position : Natural := 0;
+      begin
+         if Current = Landin.Checking.No_Routine_Instance then
+            return Ty.Undecided;
+         end if;
+         declare
+            Template : constant Res.Declaration_Id :=
+              Landin.Checking.Routine_Template_Of (Types.all, Current);
+            Template_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Template));
+            Function_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Template);
+         begin
+            for Index in 1 .. Syn.Generic_Formal_Count
+              (Template_Tree.all, Function_Node)
+            loop
+               if Declaration_At
+                 (Syn.Source_Of (Template_Tree.all),
+                  Syn.Nth_Generic_Formal
+                    (Template_Tree.all, Function_Node, Index)) = Means
+               then
+                  Position := Index;
+                  exit;
+               end if;
+            end loop;
+         end;
+         if Position = 0 then
+            return Ty.Undecided;
+         end if;
+         declare
+            Actual : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Routine_Actual
+                (Types.all, Current, Positive (Position));
+         begin
+            if Landin.Checking.Actual_Kind_Of (Actual)
+                 /= Landin.Checking.Type_Actual_Kind
+            then
+               return Ty.Undecided;
+            end if;
+            declare
+               Descriptor : constant Type_Descriptor :=
+                 Descriptor_For (Actual);
+            begin
+               Landin.Checking.Note
+                 (Types.all, Of_Tree, Node, Descriptor.Kind);
+               case Descriptor.Kind is
+                  when Ty.Atom_Value =>
+                     Landin.Checking.Note_Atom_Set
+                       (Types.all, Of_Tree, Node, Descriptor.Atoms);
+                  when Ty.Fixed_Array =>
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Node, Descriptor.Length,
+                        Descriptor.Element,
+                        Shape => Descriptor.Element_Shape);
+                     if Descriptor.Element_Nominal
+                       /= Landin.Checking.No_Nominal_Type
+                     then
+                        Landin.Checking.Note_Array_Element_Nominal
+                          (Types.all, Of_Tree, Node,
+                           Descriptor.Element_Nominal);
+                     end if;
+                  when Ty.Aggregate =>
+                     Landin.Checking.Note_Nominal
+                       (Types.all, Of_Tree, Node, Descriptor.Nominal);
+                  when Ty.Function_Value =>
+                     Landin.Checking.Note_Signature
+                       (Types.all, Of_Tree, Node, Descriptor.Signature);
+                  when Ty.Pointer_Value | Ty.Slice_Value =>
+                     Landin.Checking.Note_Reference
+                       (Types.all, Of_Tree, Node, Descriptor.Reference);
+                  when Ty.Any_Value =>
+                     Landin.Checking.Note_Any_Concept
+                       (Types.all, Of_Tree, Node, Descriptor.Concept);
+                  when others =>
+                     null;
+               end case;
+               return Descriptor.Kind;
+            end;
+         end;
+      end Noted_Formal_Actual;
+
       --  D74: a struct body that could not be laid out has already said why
       --  at its own declaration, or at the field that stopped it.  A later
       --  body holding it as a field adds no cascade of its own.
@@ -9609,97 +9726,11 @@ package body Landin.Stages.Checking is
                --  then use the ordinary checked-type queries without
                --  changing the shared template syntax facts.
                declare
-                  Current : constant Landin.Checking.Routine_Instance_Id :=
-                    Landin.Checking.Current_Routine_View (Types.all);
-                  Position : Natural := 0;
+                  Held : constant Ty.Type_Kind :=
+                    Noted_Formal_Actual (Of_Tree, Written, Means);
                begin
-                  if Current /= Landin.Checking.No_Routine_Instance then
-                     declare
-                        Template : constant Res.Declaration_Id :=
-                          Landin.Checking.Routine_Template_Of
-                            (Types.all, Current);
-                        Template_Tree : constant
-                          not null access constant Syn.Tree :=
-                            Tree_For (Res.Source_Of (Meanings.all, Template));
-                        Function_Node : constant Syn.Node_Id :=
-                          Res.Node_Of (Meanings.all, Template);
-                     begin
-                        for Index in 1 .. Syn.Generic_Formal_Count
-                          (Template_Tree.all, Function_Node)
-                        loop
-                           if Declaration_At
-                             (Syn.Source_Of (Template_Tree.all),
-                              Syn.Nth_Generic_Formal
-                                (Template_Tree.all, Function_Node, Index))
-                                = Means
-                           then
-                              Position := Index;
-                              exit;
-                           end if;
-                        end loop;
-
-                        if Position /= 0 then
-                           declare
-                              Actual : constant Landin.Checking.Actual_Key :=
-                                Landin.Checking.Nth_Routine_Actual
-                                  (Types.all, Current, Positive (Position));
-                           begin
-                              if Landin.Checking.Actual_Kind_Of (Actual)
-                                   = Landin.Checking.Type_Actual_Kind
-                              then
-                                 declare
-                                    Descriptor : constant Type_Descriptor :=
-                                      Descriptor_For (Actual);
-                                 begin
-                                    Landin.Checking.Note
-                                      (Types.all, Of_Tree, Written,
-                                       Descriptor.Kind);
-                                    case Descriptor.Kind is
-                                       when Ty.Atom_Value =>
-                                          Landin.Checking.Note_Atom_Set
-                                            (Types.all, Of_Tree, Written,
-                                             Descriptor.Atoms);
-                                       when Ty.Fixed_Array =>
-                                          Landin.Checking.Note_Array
-                                            (Types.all, Of_Tree, Written,
-                                             Descriptor.Length,
-                                             Descriptor.Element,
-                                             Shape =>
-                                               Descriptor.Element_Shape);
-                                          if Descriptor.Element_Nominal
-                                            /= Landin.Checking.No_Nominal_Type
-                                          then
-                                             Landin.Checking
-                                               .Note_Array_Element_Nominal
-                                                 (Types.all, Of_Tree, Written,
-                                                  Descriptor.Element_Nominal);
-                                          end if;
-                                       when Ty.Aggregate =>
-                                          Landin.Checking.Note_Nominal
-                                            (Types.all, Of_Tree, Written,
-                                             Descriptor.Nominal);
-                                       when Ty.Function_Value =>
-                                          Landin.Checking.Note_Signature
-                                            (Types.all, Of_Tree, Written,
-                                             Descriptor.Signature);
-                                       when Ty.Pointer_Value
-                                          | Ty.Slice_Value =>
-                                          Landin.Checking.Note_Reference
-                                            (Types.all, Of_Tree, Written,
-                                             Descriptor.Reference);
-                                       when Ty.Any_Value =>
-                                          Landin.Checking.Note_Any_Concept
-                                            (Types.all, Of_Tree, Written,
-                                             Descriptor.Concept);
-                                       when others =>
-                                          null;
-                                    end case;
-                                    return Descriptor.Kind;
-                                 end;
-                              end if;
-                           end;
-                        end if;
-                     end;
+                  if Held /= Ty.Undecided then
+                     return Held;
                   end if;
                end;
 
@@ -14655,12 +14686,23 @@ package body Landin.Stages.Checking is
       is
          Held : Ty.Type_Kind;
       begin
-         if Syn.Kind (Of_Tree, Callee) not in Syn.Type_Reference_Kind then
+         if not Is_Written_Head (Of_Tree, Callee) then
             return (Kind => Ty.Ill_Typed, others => <>);
          end if;
          Held := Landin.Checking.Type_Of (Types.all, Of_Tree, Callee);
          if Held = Ty.Undecided then
-            Held := Type_At (Of_Tree, Callee);
+            if Names_Type_Formal (Of_Tree, Callee) then
+               --  D1100: the instance's actual, published on the name as
+               --  it is on a type position that names the formal.
+               Held := Noted_Formal_Actual
+                 (Of_Tree, Callee,
+                  Res.Bound_To (Meanings.all, Of_Tree, Callee));
+               if Held = Ty.Undecided then
+                  Held := Ty.Ill_Typed;
+               end if;
+            else
+               Held := Type_At (Of_Tree, Callee);
+            end if;
             if Held = Ty.Ill_Typed then
                Landin.Checking.Refuse (Types.all, Of_Tree, Callee);
             end if;
@@ -14674,7 +14716,7 @@ package body Landin.Stages.Checking is
       function Scalar_Conversion_Type
         (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Ty.Type_Kind is
       begin
-         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+         if Is_Written_Head (Of_Tree, Callee) then
             declare
                Held : constant Ty.Type_Kind :=
                  Written_Conversion_Type (Of_Tree, Callee).Kind;
@@ -14737,7 +14779,7 @@ package body Landin.Stages.Checking is
          function Invalid return Type_Descriptor
            is ((Kind => Ty.Ill_Typed, others => <>));
       begin
-         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+         if Is_Written_Head (Of_Tree, Callee) then
             declare
                Target : constant Type_Descriptor :=
                  Written_Conversion_Type (Of_Tree, Callee);
@@ -16527,6 +16569,17 @@ package body Landin.Stages.Checking is
                         Landin.Checking.Refuse
                           (Types.all, Of_Tree, Argument);
                      else
+                        --  D1201: a whole array field is lent as a local
+                        --  array is.  The field is admitted before the
+                        --  place is asked about, since a selection of one
+                        --  is otherwise a value this position refuses.
+                        if Wants = Ty.Fixed_Array
+                          and then Syn.Kind (Of_Tree, Argument)
+                            = Syn.Member_Selection
+                          and then Admit_Array_Field (Of_Tree, Argument)
+                        then
+                           null;
+                        end if;
                         Check_Place
                           (Of_Tree, Argument, Stepping => False);
                         if Packed_Place (Of_Tree, Argument) then
@@ -17361,7 +17414,7 @@ package body Landin.Stages.Checking is
            Landin.Checking.Routine_Target_Of (Types.all, Of_Tree, Call);
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Call);
       begin
-         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+         if Is_Written_Head (Of_Tree, Callee) then
             --  A callable destination is a type, not an executed callee.
             return Landin.Checking.No_Signature;
          end if;
@@ -23766,8 +23819,11 @@ package body Landin.Stages.Checking is
       is
          Where : Syn.Node_Id := Node;
       begin
+         --  [1420]: `module.name` is the binding it names, so the walk
+         --  ends there as it does at the plain name.
          while Syn.Kind (Of_Tree, Where)
            in Syn.Member_Selection | Syn.Element_Index
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) /= Res.Bound
          loop
             --  Even a literal slice index follows referenced backing rather
             --  than naming a part of the binding's own descriptor storage.
@@ -23789,7 +23845,8 @@ package body Landin.Stages.Checking is
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
 
-         if Syn.Kind (Of_Tree, Where) /= Syn.Name_Reference
+         if Syn.Kind (Of_Tree, Where)
+              not in Syn.Name_Reference | Syn.Member_Selection
            or else Res.Verdict_Of (Meanings.all, Of_Tree, Where) /= Res.Bound
          then
             return False;
@@ -26847,20 +26904,14 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                   return Kept (Ty.Ill_Typed);
                end if;
-               --  D1100: a type formal stands for a type in a type
-               --  position only.  Applied, it would be a conversion or a
-               --  construction whose rule changes with the actual, and it
-               --  has no declaration with a value to ask for one.
-               if Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-                    = Syn.Name_Reference
-                 and then Res.Verdict_Of
-                   (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-                     = Res.Bound
-                 and then Res.Sort_Of
-                   (Meanings.all,
-                    Res.Bound_To
-                      (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                     = Res.Type_Parameter
+               --  D1100: a type formal applied to one value converts to
+               --  the instance's actual type, below.  It is no
+               --  construction: a labelled application or another count
+               --  of values has no reading every actual shares.
+               if Names_Type_Formal (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                 and then
+                   (Syn.Kind (Of_Tree, Node) /= Syn.Call
+                    or else Syn.Argument_Count (Of_Tree, Node) /= 1)
                then
                   Bad.Report
                     (Item    => Bad.Type_Mismatch,
@@ -26871,13 +26922,16 @@ package body Landin.Stages.Checking is
                                 & Spelled
                                   (Syn.Name
                                      (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                                & "` is a type parameter, which is not"
-                                & " applied to a value",
-                     Note    => "D1100: a conversion or construction names"
-                                & " a declared type; give a value the"
-                                & " parameter's type through a typed"
-                                & " binding, `zero: t = 0`, or a concept"
-                                & " entry",
+                                & "` is a type parameter, which converts"
+                                & " one value and constructs nothing",
+                     Note    => "D1100: `"
+                                & Spelled
+                                  (Syn.Name
+                                     (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
+                                & "(value)` converts to each instance's"
+                                & " type; a struct is built where its type"
+                                & " is known, by the caller or through a"
+                                & " concept entry",
                      Related => Syn.Origin (Of_Tree, Node),
                      Because => "this application",
                      Into    => Found);
@@ -26887,7 +26941,7 @@ package body Landin.Stages.Checking is
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
                   Written : constant Boolean :=
-                    Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind;
+                    Is_Written_Head (Of_Tree, Callee);
                   Destination : constant Type_Descriptor :=
                     (if Written
                      then Written_Conversion_Type (Of_Tree, Callee)
@@ -27652,7 +27706,28 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
 
-                  if Written then
+                  if Names_Type_Formal (Of_Tree, Callee) then
+                     --  D1100: the instance's type is nowhere in the
+                     --  routine's text, so the refusal spells it.
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Node),
+                        Message => "`"
+                                   & Spelled (Syn.Name (Of_Tree, Callee))
+                                   & "` is `"
+                                   & Type_Spelling
+                                     (Destination, Syn.Source_Of (Of_Tree))
+                                   & "` in this instance, which has no"
+                                   & " conversion from the supplied value",
+                        Note => "D1100: a type parameter applied to a"
+                                & " value is the conversion its actual"
+                                & " type has, and every instance's actual"
+                                & " needs one from this value",
+                        Related => Syn.Origin (Of_Tree, Callee),
+                        Because => "the type parameter", Into => Found);
+                     return Kept (Ty.Ill_Typed);
+                  elsif Written then
                      Bad.Report
                        (Item => Bad.Type_Mismatch,
                         Source => Syn.Source_Of (Of_Tree),
@@ -41833,50 +41908,110 @@ package body Landin.Stages.Checking is
 
          for Signature in 1 .. Signature_Total loop
             if Owns_Body (Signature) then
-               for Atom of Required (Signature) loop
-                  if not Effects (Signature).Contains (Atom) then
-                     --  D382: the atom by name, and the `fail` or call it
-                     --  first entered this body through.
-                     declare
-                        Named : constant String :=
-                          "`" & Spelled
-                            (Res.Name_Of
-                               (Meanings.all, Res.Declaration_Id (Atom)))
-                          & "`";
-                        Site : Raise_Site;
-                     begin
-                        if Atom_Sites.Contains ((Signature, Atom)) then
-                           Site := Atom_Sites.Element ((Signature, Atom));
-                        else
-                           for Callee of Edges (Signature) loop
-                              if Effects (Callee).Contains (Atom)
-                                and then Edge_Sites.Contains
-                                  ((Signature, Callee))
-                              then
-                                 Site := Edge_Sites.Element
-                                   ((Signature, Callee));
+               --  D382/D1200: every atom outside the set, spelled as this
+               --  source writes it, in one report for each `fail` or call
+               --  they first entered this body through.
+               declare
+                  package US renames Ada.Strings.Unbounded;
+                  type Group is record
+                     Site : Raise_Site;
+                     Named : US.Unbounded_String;
+                     Count : Natural := 0;
+                     Last : US.Unbounded_String;
+                  end record;
+                  package Group_Lists is new Ada.Containers.Vectors
+                    (Positive, Group);
+                  Groups : Group_Lists.Vector;
+                  Declared : constant Landin.Provenance.Origin :=
+                    Landin.Checking.Signature_Origin
+                      (Types.all, Landin.Checking.Signature_Id (Signature));
+
+                  function Site_Of (Atom : Positive) return Raise_Site;
+                  function Site_Of (Atom : Positive) return Raise_Site is
+                  begin
+                     if Atom_Sites.Contains ((Signature, Atom)) then
+                        return Atom_Sites.Element ((Signature, Atom));
+                     end if;
+                     for Callee of Edges (Signature) loop
+                        if Effects (Callee).Contains (Atom)
+                          and then Edge_Sites.Contains ((Signature, Callee))
+                        then
+                           return Edge_Sites.Element ((Signature, Callee));
+                        end if;
+                     end loop;
+                     return (others => <>);
+                  end Site_Of;
+
+                  --  D201: the name with what this source writes before
+                  --  it, `io.no_access` for an atom of an imported module.
+                  function Spelled_Here (Atom : Positive) return String;
+                  function Spelled_Here (Atom : Positive) return String is
+                     Id : constant Res.Declaration_Id :=
+                       Res.Declaration_Id (Atom);
+                     Qualifier : constant String := Res.Qualifier_From
+                       (Meanings.all, Spellings.all, Id, Declared.Source);
+                  begin
+                     return "`"
+                       & (if Qualifier = "" then "" else Qualifier & ".")
+                       & Spelled (Res.Name_Of (Meanings.all, Id)) & "`";
+                  end Spelled_Here;
+               begin
+                  for Atom of Required (Signature) loop
+                     if not Effects (Signature).Contains (Atom) then
+                        declare
+                           Site : constant Raise_Site := Site_Of (Atom);
+                           Name : constant String := Spelled_Here (Atom);
+                           Found_At : Natural := 0;
+                        begin
+                           for Index in 1 .. Natural (Groups.Length) loop
+                              if Groups (Index).Site = Site then
+                                 Found_At := Index;
                                  exit;
                               end if;
                            end loop;
-                        end if;
+                           if Found_At = 0 then
+                              Groups.Append
+                                (Group'(Site => Site, others => <>));
+                              Found_At := Natural (Groups.Length);
+                           end if;
+                           declare
+                              Item : Group renames Groups (Found_At);
+                           begin
+                              --  `a`, `b` and `c`: the last is held back
+                              --  until it is known to be the last.
+                              if Item.Count >= 2 then
+                                 US.Append (Item.Named, ", ");
+                              end if;
+                              US.Append (Item.Named, Item.Last);
+                              Item.Last := US.To_Unbounded_String (Name);
+                              Item.Count := Item.Count + 1;
+                           end;
+                        end;
+                     end if;
+                  end loop;
+
+                  for Item of Groups loop
+                     declare
+                        Named : constant String :=
+                          US.To_String (Item.Named)
+                          & (if Item.Count > 1 then " and " else "")
+                          & US.To_String (Item.Last);
+                        Site : constant Raise_Site := Item.Site;
+                     begin
                         Bad.Report
                           (Item    => Bad.Error_Contract_Violated,
-                           Source  => Landin.Checking.Signature_Origin
-                             (Types.all,
-                              Landin.Checking.Signature_Id (Signature))
-                               .Source,
-                           Where   => Landin.Checking.Signature_Origin
-                             (Types.all,
-                              Landin.Checking.Signature_Id (Signature))
-                               .Where,
+                           Source  => Declared.Source,
+                           Where   => Declared.Where,
                            Message =>
                              (if Signature = Hosted_Main
                               then "`main` can fail with " & Named
                                    & ", and the hosted entry declares no"
                                    & " error set"
                               else "this body can fail with " & Named
-                                   & ", which is outside its declared"
-                                   & " error set"),
+                                   & ", which "
+                                   & (if Item.Count = 1 then "is"
+                                      else "are")
+                                   & " outside its declared error set"),
                            Note    =>
                              (if Signature = Hosted_Main
                               then "[1970]: `main` takes no `!` set, so"
@@ -41892,9 +42027,7 @@ package body Landin.Stages.Checking is
                                    & " failure where it is raised"),
                            Related =>
                              (if Site.Node = Syn.No_Node
-                              then Landin.Checking.Signature_Origin
-                                (Types.all,
-                                 Landin.Checking.Signature_Id (Signature))
+                              then Declared
                               else Syn.Origin
                                 (Tree_For (Site.Source).all, Site.Node)),
                            Because =>
@@ -41911,9 +42044,8 @@ package body Landin.Stages.Checking is
                                        & " fail with " & Named)),
                            Into    => Found);
                      end;
-                     exit;
-                  end if;
-               end loop;
+                  end loop;
+               end;
             end if;
          end loop;
 
@@ -42252,14 +42384,12 @@ package body Landin.Stages.Checking is
             declare
                Lexeme : constant String := Landin.Source.Slice
                  (Source (Context, Syn.Source_Of (Of_Tree)), Explicit);
-               Bytes : String (1 .. Lexeme'Length);
-               Length, Fault_First, Fault_Last : Natural;
                Fault : Landin.Tokens.Text.Problem;
+               Bytes : constant String :=
+                 Landin.Tokens.Text.Decoded_Bytes (Lexeme, Fault);
             begin
-               Landin.Tokens.Text.Decode
-                 (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
                return Fault = Landin.Tokens.Text.Well_Formed
-                 and then Bytes (1 .. Length) = "main";
+                 and then Bytes = "main";
             end;
          end Retains_Main;
       begin
@@ -42375,12 +42505,11 @@ package body Landin.Stages.Checking is
             declare
                Lexeme : constant String := Landin.Source.Slice
                  (Source (Context, Syn.Source_Of (Of_Tree)), Explicit);
-               Bytes : String (1 .. Lexeme'Length);
-               Length, Fault_First, Fault_Last : Natural;
                Fault : Landin.Tokens.Text.Problem;
+               Bytes : constant String :=
+                 Landin.Tokens.Text.Decoded_Bytes (Lexeme, Fault);
+               Length : constant Natural := Bytes'Length;
             begin
-               Landin.Tokens.Text.Decode
-                 (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
                if Fault /= Landin.Tokens.Text.Well_Formed or else Length = 0
                  or else Bytes (1) not in 'A' .. 'Z' | 'a' .. 'z'
                                          | '_' | '.' | '$'

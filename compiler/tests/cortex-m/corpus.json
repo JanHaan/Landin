@@ -1420,6 +1420,9 @@
     "runtime/array-elements-hold-their-own": {
       "mode": "execute"
     },
+    "runtime/array-field-passed-inout": {
+      "mode": "execute"
+    },
     "runtime/array-lent-to-slice": {
       "mode": "execute"
     },
@@ -3772,6 +3775,9 @@
     "runtime/qualified-module-binding-is-a-place": {
       "mode": "execute"
     },
+    "runtime/qualified-module-binding-is-sunk": {
+      "mode": "execute"
+    },
     "runtime/qualified-static-type-argument": {
       "mode": "execute"
     },
@@ -5046,6 +5052,12 @@
       "mode": "execute"
     },
     "runtime/try-nominal-inference": {
+      "mode": "execute"
+    },
+    "runtime/type-parameter-conversion-traps": {
+      "mode": "execute"
+    },
+    "runtime/type-parameter-converts-a-value": {
       "mode": "execute"
     },
     "runtime/unary-and-bitwise-exit-with-their-results": {

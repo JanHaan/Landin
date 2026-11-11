@@ -3603,6 +3603,11 @@ The fine print:
   no type could make valid. An error that depends on what `t` turns out
   to be, such as a view held across a call that may move its source, is
   reported once a call picks `t`.
+- In the body, `t(value)` converts one value to whatever type `t` turns
+  out to be, by that type's own conversion ([0310]): `t(0)` starts a sum
+  in any numeric type. An instance whose type has no conversion from the
+  value is an error once a call picks it. A type parameter converts and
+  does not construct: `t(a: 1)` is an error.
 
 ### [1300] Calling a generic function
 

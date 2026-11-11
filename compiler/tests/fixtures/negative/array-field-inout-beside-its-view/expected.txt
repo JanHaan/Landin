@@ -1,0 +1,71 @@
+error[L0337]: this place is already passed as an `inout` argument
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:27:21
+   |
+27 |     two(held.round, held.round) -- error: one place twice
+   |                     ^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:27:9
+   |
+27 |     two(held.round, held.round) -- error: one place twice
+   |         ^^^^^^^^^^ the first `inout` use
+  = note: [0900]: a provably identical place is not exclusive
+error[L0315]: this argument is passed `inout`, so the call may change its storage while `xs` still views it
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:30:11
+   |
+30 |     reset(held.round) -- error: `xs` views it
+   |           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:29:5
+   |
+29 |     xs := held.round[0..<2]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: the `inout` parameter `round` locks its argument whether or not the routine writes it; finish with `xs` before the call and take it again after, or, if the routine only reads it, declare `round` without `inout`; the argument is a part of `held`, and a view held in a binding holds all of `held`: its fields are not tracked apart
+error[L0315]: this argument is passed `inout`, so the call may change its storage while the `for` loop around it is still walking a view of it
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:33:15
+   |
+33 |         reset(held.round) -- error: the loop walks it
+   |               ^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:32:14
+   |
+32 |     for x in held.round do
+   |              ^^^^^^^^^^ the view the loop walks
+  = note: [0800]/[0830]: the `inout` parameter `round` locks its argument whether or not the routine writes it; make the call after the loop, leave the loop straight after the call, or loop over an index and read each element as it is needed, or, if the routine only reads it, declare `round` without `inout`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while another argument of the same call still views it
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:36:43
+   |
+36 |     code += i32(beside(held.round[0..<2], held.round)) -- error
+   |                                           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:36:24
+   |
+36 |     code += i32(beside(held.round[0..<2], held.round)) -- error
+   |                        ^^^^^^^^^^^^^^^^^ the argument that views it
+  = note: [0800]/[0830]: the `inout` parameter `round` locks its argument whether or not the routine writes it; copy what the other argument views into storage of its own before the call, or, if the routine only reads it, declare `round` without `inout`
+error[L0303]: `frozen` is not mutable, so it may not be written
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:38:11
+   |
+38 |     reset(frozen.round) -- error: `frozen` is not `mut`
+   |           ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:26:5
+   |
+26 |     frozen: holder = zeroed
+   |     ^^^^^^ declared here
+  = note: [1900]: mutable bindings, named returns and `inout` parameters may be written
+  = help (guess): declare `frozen` with `mut`
+error[L0315]: this argument is passed `inout`, so the call may change its storage while `p` still views it
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:40:11
+   |
+40 |     reset(held.round) -- error: `p` views it
+   |           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:39:5
+   |
+39 |     p := addr held.round[1]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: the `inout` parameter `round` locks its argument whether or not the routine writes it; finish with `p` before the call and take it again after, or, if the routine only reads it, declare `round` without `inout`; the argument is a part of `held`, and a view held in a binding holds all of `held`: its fields are not tracked apart
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:43:11
+   |
+43 |     reset(held.round) -- error: consumed
+   |           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn:42:5
+   |
+42 |     consume(held.round)
+   |     ^^^^^^^^^^^^^^^^^^^ consumed here
+  = note: [0910]: a sunk place is dead until assignment

@@ -69,6 +69,16 @@ package Landin.Tokens.Text is
                   and then Bytes'Length >= Lexeme'Length,
           Post => Length <= Lexeme'Length;
 
+   --  The same decoding for a caller that wants the content itself: the
+   --  bytes of a well-formed token, and "" with Fault saying why for any
+   --  other.  The result is built where a returned String lives, which
+   --  grows on the heap; a buffer the length of the lexeme in the caller's
+   --  frame has to fit the primary stack, and a literal may not.
+   function Decoded_Bytes
+     (Lexeme : String; Fault : out Problem) return String
+     with Pre  => Lexeme'Length >= 2,
+          Post => Decoded_Bytes'Result'Length <= Lexeme'Length;
+
    --  Decode [0250]'s whole single-quoted token.  Value is the one Unicode
    --  scalar value it spells.  Character literals admit [0270]'s simple
    --  escapes and `\u{...}`, but not the byte-only `\xNN` form.  Fault

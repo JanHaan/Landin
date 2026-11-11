@@ -1709,6 +1709,20 @@ package body Landin.Stages.Lowering is
          Error   : IR.Value_Id;
          Site    : Landin.Provenance.Origin);
 
+      --  D266/D1100: a conversion's head whose type the checker published
+      --  on the head itself: a written type, or a generic routine's type
+      --  formal, which is the type the instance being lowered gave it.
+      function Is_Written_Head
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind
+            or else
+              (Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+               and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+                 = Res.Bound
+               and then Res.Sort_Of
+                 (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                   = Res.Type_Parameter));
+
       --  D15/D188: which scalar type a one-argument call applies, whether
       --  it is written with [1790]'s own name, an alias of one, or [0660]'s
       --  range subtype.  Ill_Typed means this is an ordinary call.  The
@@ -1719,8 +1733,7 @@ package body Landin.Stages.Lowering is
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.Call
            and then Syn.Argument_Count (Of_Tree, Node) = 1
-           and then Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-             in Syn.Type_Reference_Kind
+           and then Is_Written_Head (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
          then
             declare
                Target : constant Ty.Type_Kind := Landin.Checking.Type_Of
@@ -1789,7 +1802,7 @@ package body Landin.Stages.Lowering is
             return False;
          end if;
          Callee := Syn.Callee_Of (Of_Tree, Node);
-         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+         if Is_Written_Head (Of_Tree, Callee) then
             return True;
          end if;
          return Syn.Kind (Of_Tree, Callee)
