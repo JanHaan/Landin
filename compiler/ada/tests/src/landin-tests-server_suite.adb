@@ -7,6 +7,7 @@
 --  reproducers, which is their deliberate exception to the fake host.
 
 with Ada.Directories;
+with Ada.Exceptions;
 with Ada.Environment_Variables;
 with Ada.Strings.Fixed;
 
@@ -1427,6 +1428,148 @@ package body Landin.Tests.Server_Suite is
       end;
    end A_Report_With_No_Place_Is_Shown_Once;
 
+   --  One scripted session over a module whose second source raises
+   --  Reason whenever it is read, so every analysis of the module ends in
+   --  it: the document is opened, the module is published again with the
+   --  same text when a file it watches is said to have changed, the
+   --  document is edited, a hover is asked of it, and a document of another
+   --  module is opened.
+   function Session_With_A_Lasting_Defect
+     (Reason : Ada.Exceptions.Exception_Id;
+      Status : out Landin.Server.Sessions.Exit_Status;
+      Publications : out Natural) return String;
+
+   function Session_With_A_Lasting_Defect
+     (Reason : Ada.Exceptions.Exception_Id;
+      Status : out Landin.Server.Sessions.Exit_Status;
+      Publications : out Natural) return String
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Channel : Landin.Testing.Fakes.Fake_Channel;
+      Script : Unbounded.Unbounded_String;
+      URI : constant String := "file:///workspace/app/main.ldn";
+
+      procedure Send (Message : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+   begin
+      Host.Add_Directory ("/workspace");
+      Host.Add_Directory ("/workspace/app");
+      Host.Add_Directory ("/workspace/else");
+      Host.Add_File ("/workspace/app/main.ldn", "aa: u8 = 1" & LF);
+      Host.Add_File ("/workspace/app/other.ldn", "bb: u8 = 1" & LF);
+      Host.Raise_On_Reads_Of ("/workspace/app/other.ldn", Reason);
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},""initializationOptions"":"
+            & "{""roots"":[""file:///workspace""]}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (URI)
+            & ",""version"":1,""text"":""aa: u8 = 1\n""}}}");
+      Channel.Pause_At (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""method"":"
+            & """workspace/didChangeWatchedFiles"",""params"":{""changes"":"
+            & "[{""uri"":""file:///workspace/app/other.ldn"",""type"":2}]}}");
+      Channel.Pause_At (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didChange"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (URI) & ",""version"":2},"
+            & """contentChanges"":[{""text"":""aa: u8 = 2\n""}]}}");
+      Channel.Pause_At (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":"
+            & """textDocument/hover"",""params"":{""textDocument"":"
+            & "{""uri"":" & Landin.Json.Quoted (URI) & "},""position"":"
+            & "{""line"":0,""character"":0}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & """file:///workspace/else/sound.ldn"",""version"":1,""text"":"
+            & """cc: u8 = 3\n""}}}");
+      Channel.Pause_At (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""id"":3,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+      --  Each publication that met the defect is in the server's log,
+      --  whether or not it was shown.
+      Publications := Ada.Strings.Fixed.Count
+        (Landin.Testing.Fakes.Logged (Channel),
+         "internal compiler defect analysing");
+      return Landin.Testing.Fakes.Output (Channel);
+   end Session_With_A_Lasting_Defect;
+
+   procedure A_Publication_Defect_Is_Said_Once_For_A_Text
+     (Item : in out Landin.Testing.Context);
+
+   --  A defect met while a module is published is said when a text first
+   --  meets it, and not again when that text is published again; an edit
+   --  is another text.
+   procedure A_Publication_Defect_Is_Said_Once_For_A_Text
+     (Item : in out Landin.Testing.Context)
+   is
+      Status : Landin.Server.Sessions.Exit_Status;
+      Publications : Natural;
+      Output : constant String :=
+        Session_With_A_Lasting_Defect
+          (Compiler_Defect'Identity, Status, Publications);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Publications, 3,
+         "the module is published three times, twice with one text");
+      Landin.Testing.Check
+        (Item, Status = 0
+         and then Ada.Strings.Fixed.Count
+           (Output, "refine: internal compiler defect analysing"
+                    & " file:///workspace/app/main.ldn""") = 2
+         and then Ada.Strings.Fixed.Count
+           (Output, """method"":""window/showMessage""") = 2
+         and then Ada.Strings.Fixed.Index
+           (Output, """id"":2,""error"":{""code"":-32603,""message"":"
+                    & """refine: internal compiler defect""") > 0
+         and then Ada.Strings.Fixed.Index
+           (Output, """uri"":""file:///workspace/else/sound.ldn"","
+                    & """version"":1,""diagnostics"":[]") > 0
+         and then Ada.Strings.Fixed.Index
+           (Output, """id"":3,""result"":null") > 0,
+         "three publications of two texts say the defect twice: " & Output);
+   end A_Publication_Defect_Is_Said_Once_For_A_Text;
+
+   procedure An_Exhausted_Analysis_Leaves_The_Session
+     (Item : in out Landin.Testing.Context);
+
+   --  D1220: an analysis that ends in Storage_Error is that document's
+   --  defect, said as one and answered as one, and the session goes on to
+   --  serve the other documents and to end as it was asked to.
+   procedure An_Exhausted_Analysis_Leaves_The_Session
+     (Item : in out Landin.Testing.Context)
+   is
+      Status : Landin.Server.Sessions.Exit_Status;
+      Publications : Natural;
+      Output : constant String :=
+        Session_With_A_Lasting_Defect
+          (Storage_Error'Identity, Status, Publications);
+      Words : constant String :=
+        ": it exhausted the stack or the memory the server has""";
+   begin
+      Landin.Testing.Check
+        (Item, Status = 0
+         and then Ada.Strings.Fixed.Count
+           (Output, "refine: internal compiler defect analysing"
+                    & " file:///workspace/app/main.ldn" & Words) = 2
+         and then Ada.Strings.Fixed.Index
+           (Output, """id"":2,""error"":{""code"":-32603,""message"":"
+                    & """refine: internal compiler defect" & Words) > 0
+         and then Ada.Strings.Fixed.Index
+           (Output, """uri"":""file:///workspace/else/sound.ldn"","
+                    & """version"":1,""diagnostics"":[]") > 0
+         and then Ada.Strings.Fixed.Index
+           (Output, """id"":3,""result"":null") > 0,
+         "an exhausted analysis is the document's defect and the session"
+         & " goes on: " & Output);
+   end An_Exhausted_Analysis_Leaves_The_Session;
+
    procedure Root_URIs_Accept_Trailing_Slashes
      (Item : in out Landin.Testing.Context);
 
@@ -2525,6 +2668,12 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "a notification defect leaves the session",
          A_Notification_Defect_Leaves_The_Session'Access);
+      Landin.Testing.Register
+        (Into, "server", "a publication defect is said once for a text",
+         A_Publication_Defect_Is_Said_Once_For_A_Text'Access);
+      Landin.Testing.Register
+        (Into, "server", "an exhausted analysis leaves the session",
+         An_Exhausted_Analysis_Leaves_The_Session'Access);
       Landin.Testing.Register
         (Into, "server", "root URIs accept trailing slashes",
          Root_URIs_Accept_Trailing_Slashes'Access);

@@ -1,0 +1,1 @@
+public area: (w: i32, h: i32) -> (r: i32) = w * h end area
