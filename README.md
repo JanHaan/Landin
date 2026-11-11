@@ -230,7 +230,8 @@ it names.
 | `refine compile --debug=full ...` | include source debugging for GDB or LLDB |
 | `refine compile --target=linux-arm64 ...` | compile for another target; `refine targets` lists them |
 | `refine fmt main.ldn` | rewrite a source in the one layout; `--check` only reports |
-| `refine explain L0301` | explain a diagnostic code and what to change. It also explains a numbered paragraph of the tour or `spec.md`, `[1760]`, or a decision recorded in `spec.md`, `D275` |
+| `refine explain L0301` | explain a diagnostic code and what to change. It also explains a numbered paragraph of the tour or `spec.md`, `[1760]`, or a decision recorded in `spec.md`, `D275`, which it reads from the `citations.txt` installed with the library |
+| `refine site prog SITE` | name the source line and the failed check of the panic site a program's handler received, from the table `--panic-map` writes beside it |
 | `refine lsp` | the language server an editor starts |
 | `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD (System View Description); see [devices](devices/README.md) |
 | `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
@@ -293,7 +294,8 @@ run records and what the gate checks for each target.
   [The Benchmark Game, measured](docs/benchmarks.md) compares five ports
   with seven other languages.
 - **Tooling:** source debugging on every target, a formatter, a language
-  server, explained diagnostics with fixes, and stack-depth reports.
+  server, explained diagnostics with fixes, stack-depth reports, and
+  `refine site`, which turns a panic site into its source line.
 
 ## The roadmap
 

@@ -4819,15 +4819,15 @@ generated functions spell. A `volatile` qualifier would be a second
 permission on every reference beside `mut`, which [0440]'s relaxation, `addr`,
 field projection and generic identity would all have to carry, while D227
 already says what each access orders. `set(X)` is a type-level generator,
-which D3 and [1540] place in generator programs, and general SVD generation
-is the companion tool's.
+which retained position RP3 and [1540] place in generator programs, and
+general SVD generation is the companion tool's.
 
 **The alternatives:** a pointer qualifier with volatile `.val` accesses and
 field projection was declined as a second permission axis for a surface no
 executed program needed. A builtin `register(t, ...)` type whose field
 accesses call D228's operations was declined because the explicit
 read/update/write it would hide is what D228 requires to stay visible. A
-builtin `set(X)` former was declined for D3's reason. Keeping the three
+builtin `set(X)` former was declined for RP3's reason. Keeping the three
 pending for a successor was declined because an executed driver is the
 evidence a successor would have waited for.
 
@@ -6855,7 +6855,7 @@ refusal a range selection already gets; give the `usize` byte index a `u8`
 result, so that `utf8` indexes like `[]u8`; or return a one-codepoint `utf8`.
 The first repairs the defect and leaves the two scalar types. The second
 counts bytes where [0610] counts codepoints, and would drop the ordinal
-indexing retained position D1 keeps. The third makes a codepoint text,
+indexing retained position RP1 keeps. The third makes a codepoint text,
 so it compares with `text.eq` rather than with a character literal. All were
 declined.
 
@@ -30636,7 +30636,7 @@ without a narrowing conversion; byte slices and `utf8` use 64-bit FNV-1a, and
 `utf8` orders byte-wise, which for valid UTF-8 is scalar order. Floats are
 excluded: IEEE equality is not reflexive for NaN, and hashing raw bits would
 give different hashes to equal signed zeros. There is one
-register and no override (retained position D2), so a program that re-declares `u32 is
+register and no override (retained position RP2), so a program that re-declares `u32 is
 cmp.hashable` is refused as a collision, and another reading of a shipped key
 goes on a `distinct` wrapper with its own evidence, which is what the
 colliding-hash fixture now does. D1031 ships the evidence of `core/time`'s
@@ -30644,7 +30644,7 @@ and `core/net`'s key types in those modules.
 
 **The alternatives:** leaving scalar evidence to each program kept the
 smallest map use at forty lines. A weak library conformance that a program
-could override is retained position D2's rejected shape. Deriving evidence in
+could override is retained position RP2's rejected shape. Deriving evidence in
 the compiler is a language change the roadmap does not schedule.
 
 **Pinned by** `runtime/library-builtin-keys`, `runtime/library-builtin-evidence`,

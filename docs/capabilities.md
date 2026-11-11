@@ -67,8 +67,9 @@ paragraph of `tour.md` or `spec.md`; `refine explain D542` prints either.
   A flash image keeps `text` and `rodata` where reset need not put them:
   a description that places either in RAM nothing loads is refused with
   L0514 (D1116). The link asserts the stack's reservation against whatever
-  shares its region (D1114), and nothing a program declares is placed at
-  address zero (D1115).
+  shares its region (D1114), the build report's `flash_remaining` leaves
+  out a stack reserved in text's region, and nothing a program declares is
+  placed at address zero (D1115).
   Cortex-M, RV32 and Xtensa also derive an in-place SRAM layout with
   `--firmware-layout=ram` (D900), checking the linked vectors, sections and
   stack, retaining BSS clearing and omitting ROM packaging.
@@ -85,7 +86,9 @@ paragraph of `tour.md` or `spec.md`; `refine explain D542` prints either.
   backend is RV64's at XLEN 32 (D671): eight-byte integers are register
   pairs, f32 and f64 are libgcc's soft float, and 64-bit division is
   libgcc's, with the language's checks unchanged. An image begins with its
-  entry word and its trap table, a `j` per mcause code: vectored mtvec on
+  entry word and its trap table, a `j` per mcause code, which reaches a
+  routine beyond its 1 MiB through a stub near the table (D1290):
+  vectored mtvec on
   the E31 and the ESP32-C3, a common CLIC entry on the ESP32-C5, beside
   mtvt's table of stubs for an interrupt the program vectors (D830), and
   Hazard3's meinext dispatch, with a stub that saves the caller-saved
@@ -165,7 +168,8 @@ paragraph of `tour.md` or `spec.md`; `refine explain D542` prints either.
   vendor's SVD, fetched by its hash, and a reviewed selection policy, and
   writes the register modules and the generated half of the device's
   description, its interrupts (D555-D559). It reads peripheral derivation,
-  device-level property inheritance, alternate registers, elements of
+  device-level property inheritance, alternate registers, an alternate of
+  an array element held to that element's own address, elements of
   register arrays and fields with or without enumerations, and refuses
   clusters, field and peripheral arrays and derived registers by name
   (D703). What an SVD omits, overstates or says twice is refused at its
@@ -254,7 +258,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   back. A build cancelled while it holds outputs reports no output fault;
   refine's last line names the signal. A preparation refused for a resource
   limit, such as the file-size limit, removes the workspace it made when it
-  captured nothing; refine ignores SIGXFSZ, so that limit is a refusal and
+  captured nothing, and removing a tool's capture takes no further
+  descriptor; refine ignores SIGXFSZ, so that limit is a refusal and
   never the signal's end (D1047).
   An earlier retained publication is diagnosed before retrying; only a
   directory the invoking user owns is read as one, and another user's is
@@ -266,7 +271,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   filesystem, and one holding `~` or `:` only where refine recognises the
   filesystem (D1052). `-o` names
   the file to write: an existing directory there is refused before anything
-  is compiled, with a file under it as the example. The group is not an atomic
+  is compiled, with a file under it as the example. A path that cannot be
+  prepared is refused naming the option that gave it, `-o`,
+  `--build-report`, `--stage-report`, `--stack-report` or `--depfile`.
+  The group is not an atomic
   snapshot for readers, and ordinary recovery is not power-loss durability.
   Protected inputs include the source closure, response files, policies,
   selected tools, supplied tool inputs and known resolved libraries; bindings
@@ -281,17 +289,18 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   A relative Clang dependency that escapes its private workspace is also
   refused; use an absolute include path or a declared `--include-dir`.
 - **Cancelling a build.** An interrupt, termination or hangup ends a
-  command that holds nothing to recover at once, by the signal's default
-  action. While it holds something, a tool, staged outputs or a run
-  directory, refine records the signal and answers it at the next stage
-  boundary (D1046): it forwards cancellation to its
-  active tool's process group, allows bounded shutdown, stops remaining
-  ordinary group members and reaps its direct child before recovering outputs.
+  command with `refine: cancelled by signal N` and status 128 plus the
+  number: at once when it holds nothing to recover, and at the next stage
+  boundary, the frontend's stages included, while it holds a tool, staged
+  outputs or a run directory (D1046). Holding something, it forwards
+  cancellation to its active tool's process group, allows bounded
+  shutdown, stops remaining ordinary group members and reaps its direct
+  child before recovering outputs.
   Tools that escape their group or change credentials are outside that
-  supervision contract. Cancellation exits with 128 plus the host signal
-  number; a signal unanswered for ten seconds ends refine by that signal,
-  leaving its workspace as SIGKILL would. Inherited ignored signals stay
-  ignored.
+  supervision contract. A signal unanswered for ten seconds ends refine by
+  that signal, leaving its workspace as SIGKILL would. `refine lsp` begins
+  no such command, and a signal ends it by the signal's default action.
+  Inherited ignored signals stay ignored.
   Tools are refused before spawning if ignored `SIGCHLD` or `SA_NOCLDWAIT`
   would discard their exit status. Start refine with `SIGCHLD` at its default
   disposition and `SA_NOCLDWAIT` clear; refine preserves the inherited policy.
@@ -372,13 +381,31 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   is the file it names through a symbolic link and in a directory not yet on
   disk (D1069, D1070); watched-file changes cover a directory's removal, an
   import directory that was empty and an earlier root; and a document may
-  be as large as a message carries. The packages under `highlight/`
+  be as large as a message carries. While a module's publication ends in a
+  compiler defect, each of its open documents shows that one report at its
+  first line until a publication completes (D1250), and an analysis that
+  exhausts the server's stack or memory is that document's defect, with the
+  session kept (D1220). The packages under `highlight/`
   start it.
 - `refine explain CODE` prints [what a diagnostic code means](diagnostics.md)
-  and what to change. It answers the citations a note carries as well:
+  and what to change, from text the compiler carries; where an explanation's
+  example is a fixture, it shows the fixture's files and report (D1230). It
+  answers the citations a note carries as well:
   `refine explain [1760]` or `D275` names the construct's or decision's title,
   its document and its page on the site, and `--full` adds the construct's
-  text or the decision's chosen rule, from a copy the compiler carries.
+  text or the decision's chosen rule. These it reads from `citations.txt` in
+  the library, or under `--library=DIR`; without a readable file it names
+  the path it read and what to install (L0003, D1240).
+- `refine site PROGRAM SITE` names the source line of a panic site a
+  `panic_handler` received, and the check that failed, and
+  `refine site PROGRAM FILE LINE COLUMN` the source position of a caller's
+  three coordinates. PROGRAM is what the compilation wrote, an executable,
+  a firmware image or the assembly of `--emit=asm`; the table is the
+  `PROGRAM.sources.json` that `--panic-map` writes beside it, or
+  `--map=FILE`. The table answers only for the build it was written with,
+  whose identity the command reads from the program itself, a stripped
+  executable's included, and `--dsym=FILE` holds a Darwin dSYM to the
+  executable's UUID (D1292).
 
 ### Help, options and completion
 
@@ -467,8 +494,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - Every current warning is recommended, L0016 among them, which says a
   `--root` holds a module the library supplies instead, and L0628, which
   marks a bidirectional control character in a comment or a literal and
-  shows it escaped (D1077), so `default` and
-  `all` currently select the same warnings.
+  shows it escaped (D1077), and L0684, which marks an `else (name)` whose
+  block never reads `name` and names the forms that bind nothing (D1261),
+  so `default` and `all` currently select the same warnings.
 - Unnecessary local declarations produce advisories even when comments or
   layout prevent a safe automatic repair; unused signed numeric literals are
   also covered. A warning can report an observation without an edit; exact
@@ -504,7 +532,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   union may be written in place as a binding's, parameter's, return's or
   field's type. A distinct type compares wherever its base does, updates
   flags in place with `|=`, `&=` and `^=`, and has its base's zero image; a
-  pointer union compares with one of its own atoms.
+  pointer union compares with one of its own atoms. A nearer declaration of
+  a predeclared type's name, `u8` or `utf8`, shadows it in type positions as
+  any declaration shadows a name (D1260).
 - **Measuring.** `lenof` measures a field or element path or a call's
   result, `offsetof t.field` measures where a field begins, and
   `compiler.assert` measures a declared type's size, alignment and field
@@ -513,14 +543,20 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - **Failures.** `else (problem)` recovers a call in an `if` arm as anywhere
   else, and `else none` ignores the failure of a call that returns none.
   A callee selected through a type parameter's entry or a function-valued
-  field keeps its error set, so `try` and `else` work there (D1091).
+  field keeps its error set, so `try` and `else` work there (D1091). A
+  failure outside a declared error set is refused naming every atom that
+  enters there, each with its module (D1200). `compiler.unreachable(where)`
+  given its routine's `caller` parameter traps at the call that filled it,
+  through any forwarding wrappers, in the hosted report, a selected
+  handler and firmware alike (D1262).
 - **Matching and places.** A match's `_ (rest):` arm binds the atoms no
   other arm named, and `ptr (sink p):` consumes the matched place.
   Destructured results are local places, and an assignment on every edge
   leaving a loop holds after it. An `inout` payload binding needs a
   writable matched value (D1085), and a loop may replace a variant beside
   the match that reads its payload (D1112). A whole array parameter or
-  named array return is assigned to an array field (D1180).
+  named array return is assigned to an array field (D1180), and a whole
+  array field is passed as an `inout` array argument (D1201).
 - **Module values.** Module arrays hold variant-bearing struct images, a
   module array or an array field of a module struct takes a call's array
   result, and a module struct may hold an array field before a slice
@@ -539,7 +575,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   substitution, an untyped literal argument takes its parameter's type, and
   a fixed array is lent to a generic slice parameter. A generic
   signature's array bound may use an immutable module integer (D1101), and
-  a type parameter is not applied to a value (D1100). Concepts carry a
+  `t(x)` with `t` a type parameter converts to each instance's actual type,
+  with that conversion's checks (D1100). Concepts carry a
   whole-program record of their conformances. Generic calls pass only the evidence
   their checked bodies use; direct and `any C` dispatch share table storage
   only when their layouts and entries match, and an `any C` call no
@@ -556,7 +593,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   modules may reuse the spelling in the ordinary namespace. Static Linux
   checking includes an available implicit startup module before configuration.
   A `public mut` binding named `module.name` is assigned, updated,
-  addressed and matched as its plain name is, and `offsetof` measures a
+  addressed, matched and given to a `sink` as its plain name is, and
+  `offsetof` measures a
   qualified struct's field.
   Your own modules are
   found under the roots given with `--root` [1480]; an import whose first
@@ -590,7 +628,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   selected handler that does not fit that margin, or whose calls the
   compiler cannot measure, is refused when the program is compiled (D474).
   A frame larger than the stack pointer's value is past the limit
-  (D1111). A program that prepares no stack has no check. The limit is the running
+  (D1111). On Xtensa a routine's outgoing argument area is part of its
+  frame, so the stack pointer moves only in the prologue and the check, the
+  build report and the stack report count the area (D1110), and a double
+  exception records its PC from DEPC. A program that prepares no stack has
+  no check. The limit is the running
   thread's own: ELF thread storage on Linux and FreeBSD, a pthread key's
   slot read directly on Darwin (D497, D506). Off Linux the default report
   claims a latch before it uses the one report stack, so two threads
@@ -720,7 +762,7 @@ providers are `core/io/fake`'s, each named for what it fakes.
 | clocks, in `core/time` | a monotonic clock with sleeping and a wall clock, with time in nanoseconds in a `u64` and no floating point; on Linux the clock is read through the vDSO the auxiliary vector names, falling back to the system call | `fake.clock`, a manual clock |
 | entropy | the system's entropy | `fake.entropy`, scripted entropy |
 | network, in `core/net` | TCP and UDP over IPv4 and IPv6 that listen, accept, connect, send and receive, blocking the thread over `hosted/blocking` and letting other fibres run over `hosted/events`; address values read from and written to their text, an IPv6 address's zone among it, `fe80::1%eth0`, which the hosted providers turn into the interface's number and back (D581); time limits whose passing is an atom, a connection's own among them (D580); a connection read and written as a file, a line reader and a buffered writer among them | `fake.network`, loopback addresses in the caller's buffers, whose calls take turns where they would wait when it is given a `fibre.turns`, beside a `fake.clock` whose sleepers it waits for (D483, D493) |
-| file system | opening with options, appending and exclusive creation among them; renaming that replaces a taken name in one step; a status of size, kind, modification time and a read-only flag; read-only files, synchronizing, truncation, reading and writing at an offset; temporary files created exclusively under names drawn from entropy; the working directory's path | `fake.volume`, over the caller's nodes |
+| file system | opening with options, appending and exclusive creation among them, and a directory opened as a file refused as `io.is_a_directory`; renaming that replaces a taken name in one step; a status of size, kind, modification time and a read-only flag; read-only files, synchronizing, truncation, reading and writing at an offset; temporary files created exclusively under names drawn from entropy; the working directory's path | `fake.volume`, over the caller's nodes |
 | terminals | whether a stream is one, and its size | `fake.terminals` |
 | signals, in `core/io/signal` | the signals a server cares about, delivered as events: `signals` refines `fibre.turns`, so only a provider whose fibres take turns delivers them, and a fibre waits for the next one as for a receive (D477, D482) | `fake.signals`, those a test raises, on Cortex-M0 too |
 
@@ -747,10 +789,12 @@ process ignores SIGPIPE and gives its children the default back.
   and receive, a child's pipes and end, a sleep and a signal each submit a
   record on the waiting fibre's own stack and are answered by the loop;
   closing or shutting a socket wakes its waiters with `io_failed`, and a
-  child's end is a pidfd or kqueue's process filter (D485--D488). A file
-  left blocking, standard output among them, is written at most
-  `PIPE_BUF` bytes a call unless it is a regular file, so a pipe read by
-  another fibre of the same thread does not hold it (D1045).
+  child's end is a pidfd or kqueue's process filter (D485--D488). A pipe
+  left blocking is written at most `PIPE_BUF` bytes a call, so another
+  fibre of the same thread reading it does not hold it (D1045). A write to
+  any other blocking descriptor except a regular file, such as a terminal,
+  a socket or `/dev/null`, is refused with `io_failed`, since it could hold
+  the thread (D1278).
 - `hosted/thread` starts threads as a group a routine joins, made over a
   `hosted/system` handle, a backing the caller lends and a count, as
   `core/fibre` starts fibres: each task's stack is prepared and checked,
@@ -776,8 +820,12 @@ process ignores SIGPIPE and gives its children the default back.
   errno atoms that keep their numbers and have words for a person,
   `posix.words`, which passes the core library's failures to
   `failure.words` (D582). `duplicate_above` duplicates a descriptor at
-  or above a number, clear of the standard streams with 3. It sits over `platform/libc` on
-  Darwin and FreeBSD and `platform/linux` on Linux.
+  or above a number, clear of the standard streams with 3. `kill` sends a
+  signal to a process it names, beside `current_process` and the signal
+  numbers (D1279). It sits over `platform/libc` on
+  Darwin and FreeBSD and `platform/linux` on Linux. `platform/libc`
+  installs a signal handler as a C function value through `handler_action`,
+  which a static Linux program cannot use (D1280).
 - A hosted program started with SIGCHLD ignored gets the signal's default
   back at start, so it can wait for its children (D1125).
 - A path, a process argument and a directory entry's name are host strings,
@@ -832,9 +880,12 @@ process ignores SIGPIPE and gives its children the default back.
   Linux x86-64, Linux arm64 and macOS arm64 and for Cortex-M's ILP32
   AAPCS32 in both procedure call standards; two committed Cortex-M bindings come from pinned CMSIS headers
   (D939). It binds a pointer to a pointer, a tag declared again after its
-  definition, and plainly declared C library builtins such as `strlen`,
-  `malloc` and `printf`, passing over the attributes Clang itself adds to
-  them (D1065); a C name that is a Landin scalar's is written `c_NAME`
+  definition, and the functions of the system's own `<string.h>`,
+  `<stdlib.h>` and `<stdio.h>`, `strlen`, `malloc` and `printf` among
+  them, passing over the attributes Clang itself adds and fifteen written
+  kinds that say nothing of the call, and a function that does not return
+  binds as `-> noreturn` (D1065, D1252); a C name that is a Landin
+  scalar's is written `c_NAME`
   (D1066), and a record is laid out in the target's bytes, past 2 GiB where
   the target has room (D1067). Unsupported C forms are refused by name.
 - A hosted entry may spell the linkage it has, `link(symbol: "main")`
@@ -895,7 +946,9 @@ Add `--target=darwin-arm64` for native macOS output, then open
 - **Per target.** DWARF and GDB on Linux; native LLDB in both FreeBSD VMs
   for source-line stops, frames, local values and unwinding; LLDB with dSYM
   and exact Mach-O identity on Darwin; and line and function debugging on
-  Cortex-M0. FreeBSD's LLDB sessions also run against Linux images with the
+  Cortex-M0. Under `--debug=lines` a firmware image also names its module
+  bindings with their types, so GDB prints one as it is (D1291). FreeBSD's
+  LLDB sessions also run against Linux images with the
   development shell's LLDB, `compiler/tests/debugging/lldb_linux.py`, as
   feedback before the VM lanes run them.
 - **Optimized code.** At speed a local held in a register is described past
@@ -971,3 +1024,12 @@ lane, a firmware case or an evidence control, each marked `FILTERED`; a
 stack that overruns its reservation is named with its routine. On NixOS
 they run under steam-run, and refuse otherwise naming that route
 ([the lane's guide](../environments/cortex-m/README.md#on-nixos)).
+
+The test program lists a suite's cases as selectors with
+`./scripts/dev-test.sh --cases=SUITE`, and its fixture comparison names
+every differing fixture at once with the one `--record=` command. A
+recorded report holds a library line by its text, so a moved library line
+re-records nothing (D1306), and a runtime fixture may name the targets that
+do not emit it yet with `not_yet_emitted`, which fails once one does
+(D1308). The scripts, and every lane that takes `--refine`, warn when that
+compiler was not built from the checkout's compiler sources (D1307).
