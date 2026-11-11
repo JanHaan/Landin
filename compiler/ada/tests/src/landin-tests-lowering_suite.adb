@@ -13874,8 +13874,11 @@ package body Landin.Tests.Lowering_Suite is
          end;
       end Reject;
    begin
+      --  Each member of the cycle is reported, and once: the folds that
+      --  reach it again say the same thing at the same place, which the
+      --  checker publishes a single time.
       Reject ("first: i32 = second + second "
-              & "second: i32 = first + first", "L0305", 16);
+              & "second: i32 = first + first", "L0305", 2);
       Reject ("seed: u8 = 255 first: u8 = seed + seed "
               & "second: u8 = first + first", "L0300", 2);
       Reject ("make: () -> (r: i32) = 1 end make "
@@ -13956,8 +13959,8 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check_Equal
            (Item, Ran, 4, "a cycle beside a chain stops before lowering");
          Landin.Testing.Check_Equal
-           (Item, Landin.Diagnostics.Count (Landin.Stages.Report (Work)), 3,
-            "the cycle is reported exactly as the per-query folder did");
+           (Item, Landin.Diagnostics.Count (Landin.Stages.Report (Work)), 2,
+            "the cycle is reported once at each of its two members");
       end;
    end Long_Module_Chains_Fold;
 
