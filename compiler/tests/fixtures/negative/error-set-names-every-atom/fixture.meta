@@ -1,0 +1,9 @@
+class: negative
+summary: D1200 every atom outside a declared error set is named in one run, with its module as the file writes it, one report for each `fail` or call they enter through
+program: main.ldn
+root: root
+codes: L0329, L0329, L0329, L0329
+constructs: 0940, 0960, 1030, 1420
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+status: 1

@@ -1,0 +1,31 @@
+import store
+import store (state)
+
+consume: (sink value: u32) -> (got: u32) =
+    got = value
+end consume
+
+consume_pair: (sink value: store.pair) -> (got: u32) =
+    got = value.a + value.b
+end consume_pair
+
+public main: () -> (code: i32) =
+    -- [1420]: `store.state` is the binding `state`, so it roots a `sink`
+    -- path as its plain name does: whole, by a field, by a known index.
+    code = 1
+    whole := consume(store.state)
+    -- Assigned under one spelling, the place is live under the other.
+    state = 9
+    again := consume(store.state)
+    store.state = 30
+    field := consume(store.both.b)
+    store.both.b = 5
+    element := consume(store.cells[1])
+    record := consume_pair(store.both)
+    store.both = (a: 20, b: 2)
+    if whole == 4 and again == 9 and field == 2 and element == 2
+      and record == 6 and store.cells[0] == 1 and store.cells[2] == 3
+    then
+        code = i32(store.state + store.both.a) - 8
+    end if
+end main

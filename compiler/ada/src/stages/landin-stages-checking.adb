@@ -16527,6 +16527,17 @@ package body Landin.Stages.Checking is
                         Landin.Checking.Refuse
                           (Types.all, Of_Tree, Argument);
                      else
+                        --  D1201: a whole array field is lent as a local
+                        --  array is.  The field is admitted before the
+                        --  place is asked about, since a selection of one
+                        --  is otherwise a value this position refuses.
+                        if Wants = Ty.Fixed_Array
+                          and then Syn.Kind (Of_Tree, Argument)
+                            = Syn.Member_Selection
+                          and then Admit_Array_Field (Of_Tree, Argument)
+                        then
+                           null;
+                        end if;
                         Check_Place
                           (Of_Tree, Argument, Stepping => False);
                         if Packed_Place (Of_Tree, Argument) then
@@ -23766,8 +23777,11 @@ package body Landin.Stages.Checking is
       is
          Where : Syn.Node_Id := Node;
       begin
+         --  [1420]: `module.name` is the binding it names, so the walk
+         --  ends there as it does at the plain name.
          while Syn.Kind (Of_Tree, Where)
            in Syn.Member_Selection | Syn.Element_Index
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) /= Res.Bound
          loop
             --  Even a literal slice index follows referenced backing rather
             --  than naming a part of the binding's own descriptor storage.
@@ -23789,7 +23803,8 @@ package body Landin.Stages.Checking is
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
 
-         if Syn.Kind (Of_Tree, Where) /= Syn.Name_Reference
+         if Syn.Kind (Of_Tree, Where)
+              not in Syn.Name_Reference | Syn.Member_Selection
            or else Res.Verdict_Of (Meanings.all, Of_Tree, Where) /= Res.Bound
          then
             return False;
@@ -41833,50 +41848,110 @@ package body Landin.Stages.Checking is
 
          for Signature in 1 .. Signature_Total loop
             if Owns_Body (Signature) then
-               for Atom of Required (Signature) loop
-                  if not Effects (Signature).Contains (Atom) then
-                     --  D382: the atom by name, and the `fail` or call it
-                     --  first entered this body through.
-                     declare
-                        Named : constant String :=
-                          "`" & Spelled
-                            (Res.Name_Of
-                               (Meanings.all, Res.Declaration_Id (Atom)))
-                          & "`";
-                        Site : Raise_Site;
-                     begin
-                        if Atom_Sites.Contains ((Signature, Atom)) then
-                           Site := Atom_Sites.Element ((Signature, Atom));
-                        else
-                           for Callee of Edges (Signature) loop
-                              if Effects (Callee).Contains (Atom)
-                                and then Edge_Sites.Contains
-                                  ((Signature, Callee))
-                              then
-                                 Site := Edge_Sites.Element
-                                   ((Signature, Callee));
+               --  D382/D1200: every atom outside the set, spelled as this
+               --  source writes it, in one report for each `fail` or call
+               --  they first entered this body through.
+               declare
+                  package US renames Ada.Strings.Unbounded;
+                  type Group is record
+                     Site : Raise_Site;
+                     Named : US.Unbounded_String;
+                     Count : Natural := 0;
+                     Last : US.Unbounded_String;
+                  end record;
+                  package Group_Lists is new Ada.Containers.Vectors
+                    (Positive, Group);
+                  Groups : Group_Lists.Vector;
+                  Declared : constant Landin.Provenance.Origin :=
+                    Landin.Checking.Signature_Origin
+                      (Types.all, Landin.Checking.Signature_Id (Signature));
+
+                  function Site_Of (Atom : Positive) return Raise_Site;
+                  function Site_Of (Atom : Positive) return Raise_Site is
+                  begin
+                     if Atom_Sites.Contains ((Signature, Atom)) then
+                        return Atom_Sites.Element ((Signature, Atom));
+                     end if;
+                     for Callee of Edges (Signature) loop
+                        if Effects (Callee).Contains (Atom)
+                          and then Edge_Sites.Contains ((Signature, Callee))
+                        then
+                           return Edge_Sites.Element ((Signature, Callee));
+                        end if;
+                     end loop;
+                     return (others => <>);
+                  end Site_Of;
+
+                  --  D201: the name with what this source writes before
+                  --  it, `io.no_access` for an atom of an imported module.
+                  function Spelled_Here (Atom : Positive) return String;
+                  function Spelled_Here (Atom : Positive) return String is
+                     Id : constant Res.Declaration_Id :=
+                       Res.Declaration_Id (Atom);
+                     Qualifier : constant String := Res.Qualifier_From
+                       (Meanings.all, Spellings.all, Id, Declared.Source);
+                  begin
+                     return "`"
+                       & (if Qualifier = "" then "" else Qualifier & ".")
+                       & Spelled (Res.Name_Of (Meanings.all, Id)) & "`";
+                  end Spelled_Here;
+               begin
+                  for Atom of Required (Signature) loop
+                     if not Effects (Signature).Contains (Atom) then
+                        declare
+                           Site : constant Raise_Site := Site_Of (Atom);
+                           Name : constant String := Spelled_Here (Atom);
+                           Found_At : Natural := 0;
+                        begin
+                           for Index in 1 .. Natural (Groups.Length) loop
+                              if Groups (Index).Site = Site then
+                                 Found_At := Index;
                                  exit;
                               end if;
                            end loop;
-                        end if;
+                           if Found_At = 0 then
+                              Groups.Append
+                                (Group'(Site => Site, others => <>));
+                              Found_At := Natural (Groups.Length);
+                           end if;
+                           declare
+                              Item : Group renames Groups (Found_At);
+                           begin
+                              --  `a`, `b` and `c`: the last is held back
+                              --  until it is known to be the last.
+                              if Item.Count >= 2 then
+                                 US.Append (Item.Named, ", ");
+                              end if;
+                              US.Append (Item.Named, Item.Last);
+                              Item.Last := US.To_Unbounded_String (Name);
+                              Item.Count := Item.Count + 1;
+                           end;
+                        end;
+                     end if;
+                  end loop;
+
+                  for Item of Groups loop
+                     declare
+                        Named : constant String :=
+                          US.To_String (Item.Named)
+                          & (if Item.Count > 1 then " and " else "")
+                          & US.To_String (Item.Last);
+                        Site : constant Raise_Site := Item.Site;
+                     begin
                         Bad.Report
                           (Item    => Bad.Error_Contract_Violated,
-                           Source  => Landin.Checking.Signature_Origin
-                             (Types.all,
-                              Landin.Checking.Signature_Id (Signature))
-                               .Source,
-                           Where   => Landin.Checking.Signature_Origin
-                             (Types.all,
-                              Landin.Checking.Signature_Id (Signature))
-                               .Where,
+                           Source  => Declared.Source,
+                           Where   => Declared.Where,
                            Message =>
                              (if Signature = Hosted_Main
                               then "`main` can fail with " & Named
                                    & ", and the hosted entry declares no"
                                    & " error set"
                               else "this body can fail with " & Named
-                                   & ", which is outside its declared"
-                                   & " error set"),
+                                   & ", which "
+                                   & (if Item.Count = 1 then "is"
+                                      else "are")
+                                   & " outside its declared error set"),
                            Note    =>
                              (if Signature = Hosted_Main
                               then "[1970]: `main` takes no `!` set, so"
@@ -41892,9 +41967,7 @@ package body Landin.Stages.Checking is
                                    & " failure where it is raised"),
                            Related =>
                              (if Site.Node = Syn.No_Node
-                              then Landin.Checking.Signature_Origin
-                                (Types.all,
-                                 Landin.Checking.Signature_Id (Signature))
+                              then Declared
                               else Syn.Origin
                                 (Tree_For (Site.Source).all, Site.Node)),
                            Because =>
@@ -41911,9 +41984,8 @@ package body Landin.Stages.Checking is
                                        & " fail with " & Named)),
                            Into    => Found);
                      end;
-                     exit;
-                  end if;
-               end loop;
+                  end loop;
+               end;
             end if;
          end loop;
 
@@ -42252,14 +42324,12 @@ package body Landin.Stages.Checking is
             declare
                Lexeme : constant String := Landin.Source.Slice
                  (Source (Context, Syn.Source_Of (Of_Tree)), Explicit);
-               Bytes : String (1 .. Lexeme'Length);
-               Length, Fault_First, Fault_Last : Natural;
                Fault : Landin.Tokens.Text.Problem;
+               Bytes : constant String :=
+                 Landin.Tokens.Text.Decoded_Bytes (Lexeme, Fault);
             begin
-               Landin.Tokens.Text.Decode
-                 (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
                return Fault = Landin.Tokens.Text.Well_Formed
-                 and then Bytes (1 .. Length) = "main";
+                 and then Bytes = "main";
             end;
          end Retains_Main;
       begin
@@ -42375,12 +42445,11 @@ package body Landin.Stages.Checking is
             declare
                Lexeme : constant String := Landin.Source.Slice
                  (Source (Context, Syn.Source_Of (Of_Tree)), Explicit);
-               Bytes : String (1 .. Lexeme'Length);
-               Length, Fault_First, Fault_Last : Natural;
                Fault : Landin.Tokens.Text.Problem;
+               Bytes : constant String :=
+                 Landin.Tokens.Text.Decoded_Bytes (Lexeme, Fault);
+               Length : constant Natural := Bytes'Length;
             begin
-               Landin.Tokens.Text.Decode
-                 (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
                if Fault /= Landin.Tokens.Text.Well_Formed or else Length = 0
                  or else Bytes (1) not in 'A' .. 'Z' | 'a' .. 'z'
                                          | '_' | '.' | '$'

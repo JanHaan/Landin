@@ -1415,6 +1415,9 @@ literal fixed-array indexes. Pointer dereferences and slice indexes cross a
 reference boundary and are refused, including a literal slice index. A slice
 binding, field or fixed-array element still names its own descriptor storage
 and may be consumed as a whole. D220 makes this place-form boundary explicit.
+A module binding named through its module, `store.state`, is the binding its
+own name is [1420]: it roots a `sink` path, and a place consumed under one
+spelling is consumed under the other.
 Callee and arguments evaluate left to right before any place is consumed by
 that call. Each by-value argument captures its value when evaluated, including
 an aggregate passed by `sink`; a later argument may read or assign its original
@@ -8570,6 +8573,33 @@ one.
 
 **Pinned by** `runtime/array-parameter-into-array-field`.
 
+### D1201 — A whole array field is lent to an `inout` array parameter
+
+**The tour said** at [0900] that `inout` takes a writable place, and at
+[0520] that an array is passed whole. D48-D51 reached a fixed-array field
+as a place for indexing and for each end of a copy, and a local array, an
+element that is itself an array, `grid[0]`, and a struct field were all
+lent `inout`. `reset(held.round)` alone was L0334, "this selects a whole
+array field, and this position does not take one", with a note saying an
+array is passed whole.
+
+**Chosen:** a fixed-array field at any depth of selection is an `inout`
+argument for an array parameter of its length and element type, under the
+rules every other `inout` place has: the root is writable [1900], D149
+refuses the same place given twice, [0830] and D1084 refuse the call while
+a view of the binding is in use, and a consumed field is assigned again
+first. Lowering passes the field's address, as it passes an element's.
+Nothing new is checked or stored: the gate was the one that typed the
+argument before its place was asked about.
+
+**The alternative** was to keep the refusal and have it say to copy the
+field through a `mut` local and back. It was declined for D1180's reason:
+the copy reads and writes the same bytes, and an array element and a struct
+field in the same position are already lent.
+
+**Pinned by** `runtime/array-field-passed-inout` and
+`negative/array-field-inout-beside-its-view`.
+
 ### D53 — Repetition may assign a fixed-array field compactly
 
 **The tour said** that full repetition evaluates one scalar pattern [0560],
@@ -13990,6 +14020,8 @@ its value an atom or a recovered error binding; "this call can fail with
 `denied`" for a `try`; and "this traversal's providers can fail with
 `denied`" for a `try for`. The note says to add the atom or recover the
 failure where it is raised. Which programs are accepted does not change.
+D1200 has since made the report name every atom that entered there, each
+with its module.
 
 **The alternatives:** one report for every atom outside the set, which
 repeats one mistake as often as a callee's set is wide; pointing the primary
@@ -14000,6 +14032,34 @@ already shows how to find.
 **Pinned by** `negative/error-outside-set-names-its-raise`,
 `negative/fail-outside-declared-set` and
 `negative/for-fallible-undeclared-error`.
+
+### D1200 — Every atom outside the error set is named, as the file writes it
+
+**The tour said** at [0940] that every failing path belongs to the
+function's `!` set. D382 made L0329 name the first atom outside the set and
+the `fail` or call it entered the body through, and declined one report for
+every atom because that repeats one mistake as often as a callee's set is
+wide. Writing an error set over a library call then took one run for each
+atom, and the atom was named bare, `no_access`, where the signature has to
+write `io.no_access`.
+
+**Chosen:** one report for each `fail` or call that brings atoms outside
+the set into the body, naming every atom that first entered there: "this
+body can fail with `io.no_access`, `io.busy` and `net.refused`, which are
+outside its declared error set". Each atom is spelled as the file holding
+the signature writes it, with the name its import of the atom's module
+binds (D201) and bare for an atom of the file's own module. The label and
+the note list the same atoms; the report stays on the signature. A call
+whose set is wide is still one mistake and one report. Which programs are
+accepted does not change.
+
+**The alternatives:** D382's first atom alone, which hides the rest until
+the next run; one report naming every atom of the body whatever brought
+it, which labels only one of the places a reader has to look at; and the
+bare name, which is not what the signature can write.
+
+**Pinned by** `negative/error-set-names-every-atom`, with D382's fixtures
+for a single atom.
 
 ### D1103 — An error set names atoms, and a pointer type reached through an alias is refused
 

@@ -1,3 +1,5 @@
+with Ada.Unchecked_Deallocation;
+
 with Landin.Tokens.Text;
 
 package body Landin.Configuration is
@@ -88,7 +90,13 @@ package body Landin.Configuration is
    is
       Lexeme : constant String := Landin.Source.Slice
         (Snapshot, Landin.Syntax.Anchor (Of_Tree, Node));
-      Units : Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
+      --  On the heap, and the answer built where it is returned: a text
+      --  may be longer than a frame can hold.
+      type Unit_Buffer is access Landin.Tokens.Text.Code_Unit_Array;
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Landin.Tokens.Text.Code_Unit_Array, Unit_Buffer);
+      Units : Unit_Buffer :=
+        new Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
       Count, First, Last : Natural;
       Fault : Landin.Tokens.Text.Problem;
       use type Landin.Tokens.Text.Problem;
@@ -96,18 +104,16 @@ package body Landin.Configuration is
       Landin.Tokens.Text.Decode_View
         (Lexeme,
          Landin.Syntax.Kind (Of_Tree, Node) = Landin.Syntax.Raw_Literal,
-         Landin.Tokens.Text.Byte_Units, Units, Count, Fault, First, Last);
+         Landin.Tokens.Text.Byte_Units, Units.all, Count, Fault, First, Last);
       if Fault /= Landin.Tokens.Text.Well_Formed then
-         return "";
+         Count := 0;
       end if;
-      declare
-         Result : String (1 .. Count);
-      begin
+      return Result : String (1 .. Count) do
          for Index in Result'Range loop
             Result (Index) := Character'Val (Units (Index));
          end loop;
-         return Result;
-      end;
+         Free (Units);
+      end return;
    end Fixed_Text;
 
    function Placement_Of

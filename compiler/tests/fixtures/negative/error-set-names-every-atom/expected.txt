@@ -1,0 +1,40 @@
+error[L0329]: this body can fail with `trouble.no_access`, `trouble.busy` and `trouble.closed`, which are outside its declared error set
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:9:1
+  |
+9 | one_call: (which: u8) -> none ! late =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:10:5
+   |
+10 |     try trouble.open(which) -- error
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ this call can fail with `trouble.no_access`, `trouble.busy` and `trouble.closed`
+  = note: [0940]: every failing path belongs to the function's `!` set; add `trouble.no_access`, `trouble.busy` and `trouble.closed` to it, or recover the failure where it is raised
+error[L0329]: this body can fail with `late`, which is outside its declared error set
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:14:1
+   |
+14 | two_ways: (which: u8) -> none ! trouble.busy =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:16:5
+   |
+16 |     fail late -- error: `late`
+   |     ^^^^^^^^^ this `fail` raises `late`
+  = note: [0940]: every failing path belongs to the function's `!` set; add `late` to it, or recover the failure where it is raised
+error[L0329]: this body can fail with `trouble.no_access` and `trouble.closed`, which are outside its declared error set
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:14:1
+   |
+14 | two_ways: (which: u8) -> none ! trouble.busy =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:15:5
+   |
+15 |     try trouble.open(which) -- error: two more
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ this call can fail with `trouble.no_access` and `trouble.closed`
+  = note: [0940]: every failing path belongs to the function's `!` set; add `trouble.no_access` and `trouble.closed` to it, or recover the failure where it is raised
+error[L0329]: this body can fail with `trouble.no_access`, `trouble.busy` and `trouble.closed`, which are outside its declared error set
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:20:1
+   |
+20 | rebound: (which: u8) -> none ! late =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/error-set-names-every-atom/main.ldn:22:9
+   |
+22 |         fail problem -- error
+   |         ^^^^^^^^^^^^ this `fail` raises `trouble.no_access`, `trouble.busy` and `trouble.closed`
+  = note: [0940]: every failing path belongs to the function's `!` set; add `trouble.no_access`, `trouble.busy` and `trouble.closed` to it, or recover the failure where it is raised

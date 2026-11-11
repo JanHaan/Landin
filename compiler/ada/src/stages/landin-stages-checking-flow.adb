@@ -849,7 +849,11 @@ package body Landin.Stages.Checking.Flow is
          Id := Res.No_Declaration;
          Path := No_Path;
 
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+         --  [1420]: `module.name` is the binding it names, so the chain
+         --  starts there and its facts are the plain name's.
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) /= Res.Bound
+         loop
             declare
                Which : constant Natural :=
                  Landin.Checking.Field_Index (Types.all, Of_Tree, Where);
@@ -862,7 +866,8 @@ package body Landin.Stages.Checking.Flow is
             end;
          end loop;
 
-         if Syn.Kind (Of_Tree, Where) /= Syn.Name_Reference
+         if Syn.Kind (Of_Tree, Where)
+              not in Syn.Name_Reference | Syn.Member_Selection
            or else Res.Verdict_Of (Meanings.all, Of_Tree, Where) /= Res.Bound
          then
             return;
@@ -2195,8 +2200,11 @@ package body Landin.Stages.Checking.Flow is
                Which : constant Natural :=
                  Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
             begin
+               --  [1420]: `module.name` is a name here as it is in
+               --  Chain_Base, so its field is read and not the whole.
                if Which in 1 .. Tracked_Field'Last
-                 and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+                 and then Syn.Kind (Of_Tree, From)
+                   in Syn.Name_Reference | Syn.Member_Selection
                  and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
                           = Res.Bound
                then

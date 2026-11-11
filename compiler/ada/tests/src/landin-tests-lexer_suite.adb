@@ -599,6 +599,90 @@ package body Landin.Tests.Lexer_Suite is
          "a module holding 768 KiB in one text literal is accepted");
    end A_Long_Literal_Is_Checked;
 
+   --  What a text spells is decoded where a frame cannot overflow at
+   --  every reader, not at the scanner and a literal's value alone: a
+   --  link symbol, a `linker.library` name, a device identity and a raw
+   --  literal read as `utf16` each had a buffer the length of the lexeme
+   --  on the frame of the stage that read it.  Four mebibytes of lexeme
+   --  are checked here on a stack of two.
+   procedure Long_Texts_Are_Decoded_Off_The_Stack
+     (Item : in out Landin.Testing.Context);
+
+   procedure Long_Texts_Are_Decoded_Off_The_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+      Size : constant := 4 * 2 ** 20;
+      Main : constant String :=
+        "public main: () -> (code: i32) =" & ASCII.LF
+        & "    code = 0" & ASCII.LF & "end main" & ASCII.LF;
+
+      procedure Check
+        (Name, Before, After : String; Quotes : Positive;
+         Accepted : Boolean);
+
+      procedure Check
+        (Name, Before, After : String; Quotes : Positive;
+         Accepted : Boolean)
+      is
+         Text : Unbounded.Unbounded_String;
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Arguments : Landin.Platform.Path_List;
+         Ran : Landin.Driver.Outcome;
+         Overflowed : Boolean := False;
+         Failed : Boolean := False;
+      begin
+         Unbounded.Append (Text, Before);
+         Unbounded.Append (Text, Unbounded."*" (Quotes, '"'));
+         Unbounded.Append (Text, Unbounded."*" (Size, 'a'));
+         Unbounded.Append (Text, Unbounded."*" (Quotes, '"'));
+         Unbounded.Append (Text, After);
+         Host.Add_File ("long.ldn", Unbounded.To_String (Text));
+         Arguments.Append ("long.ldn");
+         declare
+            task Bounded with Storage_Size => 2 * 2 ** 20;
+
+            task body Bounded is
+            begin
+               Ran := Landin.Driver.Execute (Arguments, Host, Tools);
+            exception
+               when Storage_Error =>
+                  Overflowed := True;
+               when others =>
+                  Failed := True;
+            end Bounded;
+         begin
+            null;
+         end;
+         Landin.Testing.Check
+           (Item, not Overflowed and then not Failed,
+            Name & " of four mebibytes is read on a stack of two");
+         Landin.Testing.Check
+           (Item, not Overflowed and then not Failed
+              and then Ran.Status =
+                (if Accepted then Landin.Driver.Status_Success
+                 else Landin.Driver.Status_Reported),
+            Name & " is " & (if Accepted then "accepted" else "refused")
+            & ", and the host is not reported exhausted");
+      end Check;
+   begin
+      Check
+        ("a link symbol", "extern(c) link(symbol: ",
+         ") far: () -> none" & ASCII.LF & Main, 1, Accepted => True);
+      Check
+        ("the entry's link symbol", "link(symbol: ",
+         ") " & Main, 1, Accepted => False);
+      Check
+        ("a library name", "linker.library(", ")" & ASCII.LF & Main, 1,
+         Accepted => False);
+      Check
+        ("a device identity", "compiler.device(", ")" & ASCII.LF, 1,
+         Accepted => False);
+      Check
+        ("a raw literal read as utf16", "wide: utf16 = ",
+         ASCII.LF & Main, 3, Accepted => True);
+   end Long_Texts_Are_Decoded_Off_The_Stack;
+
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context);
 
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context) is
@@ -1785,6 +1869,9 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "a long literal is checked",
          A_Long_Literal_Is_Checked'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "long texts are decoded off the stack",
+         Long_Texts_Are_Decoded_Off_The_Stack'Access);
       Landin.Testing.Register
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);

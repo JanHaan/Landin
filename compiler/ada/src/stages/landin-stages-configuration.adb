@@ -1777,16 +1777,10 @@ package body Landin.Stages.Configuration is
             Text : constant String := Landin.Source.Slice
               (Source (Context, Syn.Source_Of (Of_Tree)),
                Syn.Where (Of_Tree, Node));
-            Bytes : String (1 .. Text'Length);
-            Length, Fault_First, Fault_Last : Natural;
             Fault : Landin.Tokens.Text.Problem;
          begin
-            Landin.Tokens.Text.Decode
-              (Text, Bytes, Length, Fault, Fault_First, Fault_Last);
-            if Fault /= Landin.Tokens.Text.Well_Formed then
-               return "";
-            end if;
-            return Bytes (1 .. Length);
+            --  "" for a malformed one, as Decoded_Bytes gives it.
+            return Landin.Tokens.Text.Decoded_Bytes (Text, Fault);
          end;
       end Text_Argument;
 
@@ -2885,12 +2879,11 @@ package body Landin.Stages.Configuration is
                   Text : constant String := Landin.Source.Slice
                     (Source (Context, Syn.Source_Of (Of_Tree)),
                      Syn.Where (Of_Tree, Argument));
-                  Bytes : String (1 .. Text'Length);
-                  Length, Fault_First, Fault_Last : Natural;
                   Fault : Landin.Tokens.Text.Problem;
+                  Bytes : constant String :=
+                    Landin.Tokens.Text.Decoded_Bytes (Text, Fault);
+                  Length : constant Natural := Bytes'Length;
                begin
-                  Landin.Tokens.Text.Decode
-                    (Text, Bytes, Length, Fault, Fault_First, Fault_Last);
                   if Fault /= Landin.Tokens.Text.Well_Formed
                     or else Length = 0
                     or else (for some Index in 1 .. Length =>
@@ -2915,14 +2908,13 @@ package body Landin.Stages.Configuration is
                   Text : constant String := Landin.Source.Slice
                     (Source (Context, Syn.Source_Of (Of_Tree)),
                      Syn.Where (Of_Tree, Argument));
-                  Bytes : String (1 .. Text'Length);
-                  Length, Fault_First, Fault_Last : Natural;
                   Fault : Landin.Tokens.Text.Problem;
+                  Bytes : constant String :=
+                    Landin.Tokens.Text.Decoded_Bytes (Text, Fault);
+                  Length : constant Natural := Bytes'Length;
                   Valid : Boolean;
                   Has_Name : Boolean := False;
                begin
-                  Landin.Tokens.Text.Decode
-                    (Text, Bytes, Length, Fault, Fault_First, Fault_Last);
                   Valid := Fault = Landin.Tokens.Text.Well_Formed
                     and then Length > 0 and then Bytes (1) /= '-';
                   for Index in 1 .. Length loop

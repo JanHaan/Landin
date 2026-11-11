@@ -1,0 +1,9 @@
+class: negative
+summary: D1201 an array field passed `inout` is refused twice in one call, beside a named view, a loop's source or another argument's view of it, under an immutable root and once consumed
+constructs: 0520, 0830, 0900, 0910, 1900
+program: program.ldn
+codes: L0337, L0315, L0315, L0315, L0303, L0315, L0302
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/array-field-inout-beside-its-view/program.ldn
+status: 1

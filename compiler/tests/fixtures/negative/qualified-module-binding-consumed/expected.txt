@@ -1,0 +1,50 @@
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:13:10
+   |
+13 |     b := state -- error: consumed as `store.state`
+   |          ^^^^^
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:12:10
+   |
+12 |     a := consume(store.state)
+   |          ^^^^^^^^^^^^^^^^^^^^ consumed here
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:16:10
+   |
+16 |     d := store.state -- error: consumed as `state`
+   |          ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:15:10
+   |
+15 |     c := consume(state)
+   |          ^^^^^^^^^^^^^^ consumed here
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:18:10
+   |
+18 |     f := both.b -- error: consumed as `store.both.b`
+   |          ^^^^^^
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:17:10
+   |
+17 |     e := consume(store.both.b)
+   |          ^^^^^^^^^^^^^^^^^^^^^ consumed here
+  = note: [0910]: a sunk place is dead until assignment
+error[L0337]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:21:18
+   |
+21 |     k := consume(store.cells[index]) -- error: a computed index
+   |                  ^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:7:11
+  |
+7 | consume: (sink value: u32) -> (got: u32) =
+  |           ^^^^^^^^^^^^^^^ this `sink` parameter
+  = note: [0910]: this is the boundary at which one consumed place remains provable; copy the value into a local binding first and pass that
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:23:10
+   |
+23 |     i := store.cells[1] -- error: this element was consumed
+   |          ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/qualified-module-binding-consumed/main.ldn:22:10
+   |
+22 |     h := consume(store.cells[1])
+   |          ^^^^^^^^^^^^^^^^^^^^^^^ consumed here
+  = note: [0910]: a sunk place is dead until assignment

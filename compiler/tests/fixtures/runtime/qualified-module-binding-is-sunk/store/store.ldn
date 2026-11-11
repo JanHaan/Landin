@@ -1,0 +1,8 @@
+public pair: type = struct
+    a: u32
+    b: u32
+end pair
+
+public mut state: u32 = 4
+public mut both: pair = (a: 1, b: 2)
+public mut cells: [3]u32 = [1, 2, 3]
