@@ -104,6 +104,49 @@ class AddFixtureTest(unittest.TestCase):
                                    None, None, [])
         self.assertIn("--stops=", str(raised.exception))
 
+    def test_a_frame_past_the_reference_stack_is_a_recorded_limit(self):
+        #  Cortex-M0 compiles it without an entry, and under one L0507
+        #  refuses it, which no refuse row can hold: the lanes compile a
+        #  refusal without an entry.
+        hosted = meta("runtime/new", targets="linux-x86-64")
+        self.assertEqual(add_fixture.corpus_row(
+            hosted, None, "a 16 MiB frame", [], None, 16777272, 4096),
+            {"mode": "execute", "profile_limit": "selected-image",
+             "reason": "a 16 MiB frame"})
+        self.assertEqual(add_fixture.corpus_row(
+            hosted, None, None, [], None, 4096, 4096), {"mode": "execute"})
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.corpus_row(hosted, None, None, [], None, 4100, 4096)
+        self.assertIn("4100 bytes of stack", str(raised.exception))
+        self.assertIn("--reason=TEXT", str(raised.exception))
+        self.assertNotIn("drop cortex-m0", str(raised.exception))
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.corpus_row(meta("runtime/new", targets="cortex-m0"),
+                                   None, "large", [], None, 4100, 4096)
+        self.assertIn("drop cortex-m0 from its targets:",
+                      str(raised.exception))
+
+    def test_the_stack_is_read_from_the_build_report(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            fake = Path(directory) / "refine"
+            new = meta("runtime/new", program="main.ldn")
+            fake.write_text(
+                "#!/bin/sh\nfor a in \"$@\"; do case $a in"
+                " --build-report=*) printf '%s'"
+                " '{\"build\":{\"routines\":[{\"stack_bytes\":24},"
+                "{\"stack_bytes\":4104}]}}' > \"${a#--build-report=}\";;"
+                " esac; done\n")
+            os.chmod(fake, 0o755)
+            self.assertEqual(add_fixture.cortex_stack(new, directory, fake),
+                             4104)
+            fake.write_text("#!/bin/sh\necho broken\nexit 70\n")
+            with self.assertRaises(SystemExit) as raised:
+                add_fixture.cortex_stack(new, directory, fake)
+            self.assertIn("ended with 70", str(raised.exception))
+        self.assertEqual(add_fixture.reference_stack(), 4096)
+
     def test_a_restriction_names_what_stops_it_and_why(self):
         #  D986: the corpus holds the fixture's build to its stop.
         self.assertEqual(add_fixture.corpus_row(
@@ -263,6 +306,8 @@ class AddFixtureTest(unittest.TestCase):
                     mock.patch.object(add_fixture, "GENERATED", ()), \
                     mock.patch.object(add_fixture, "cortex_codes",
                                       lambda *a: []), \
+                    mock.patch.object(add_fixture, "cortex_stack",
+                                      lambda *a: self.deepest), \
                     mock.patch.object(add_fixture, "format_sources",
                                       lambda *a: []), \
                     contextlib.redirect_stdout(out), \
@@ -274,6 +319,29 @@ class AddFixtureTest(unittest.TestCase):
                     status = refusal
             return (status, out.getvalue(), err.getvalue(),
                     json.loads(corpus.read_text())["fixtures"])
+
+    #  What run_main's refine measures as the fixture's deepest routine.
+    deepest = 0
+
+    def test_a_recorded_limit_is_said_and_is_no_unmeasured_execution(self):
+        hosted = self.RUNTIME.replace(", cortex-m0", "")
+        self.deepest = 16777272
+        try:
+            status, out, _, rows = self.run_main(
+                ["runtime/first", "--reason=a 16 MiB frame"],
+                {"runtime/first": hosted})
+            self.assertEqual((status, rows), (0, {"runtime/first": {
+                "mode": "execute", "profile_limit": "selected-image",
+                "reason": "a 16 MiB frame"}}))
+            self.assertIn("runtime/first: a routine takes 16777272 bytes of"
+                          " stack, past the 4096", out)
+            self.assertNotIn("not measured", out)
+            status, _, _, rows = self.run_main(
+                ["runtime/first"], {"runtime/first": hosted})
+            self.assertNotEqual(status, 0)
+            self.assertEqual(rows, {})
+        finally:
+            self.deepest = 0
 
     RUNTIME = ("class: runtime\nprofiles: standard\nsummary: s\n"
                "targets: linux-x86-64, linux-arm64, cortex-m0\n"

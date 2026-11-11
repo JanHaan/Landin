@@ -1,0 +1,8 @@
+class: runtime
+summary: D471 a frame larger than the stack pointer's own value traps stack_exhausted: the fibre's stack is module storage, a few megabytes above address zero in a static executable, and the frame is sixteen; the difference the check forms wraps past zero and must not read as room
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 0890, 1620, 1670, 1995
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

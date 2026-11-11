@@ -197,10 +197,38 @@ def capacity_only(log):
     return capacity
 
 
+FRAME_BOUNDARY = "a single routine's frame exceeds the stack reservation"
+
+
+def selected_frame_limit(run, row, error, chip, memory_profile):
+    """A recorded limit that refine itself met: under the lane's firmware
+    entry a routine whose frame the selected stack cannot hold is L0507,
+    and that code alone, with no assembly written.  The Cortex-M lanes
+    record the same frame from the build report, and no `refuse` row can
+    hold it: a refusal is compiled without an entry, where L0507 is not
+    given."""
+    log = Path(error.log).read_text()
+    codes = sorted(set(re.findall(r'error\[(L\d+)\]', log)))
+    if codes != ['L0507'] or (run.out / 'program.s').exists():
+        return None
+    said = next(line.strip() for line in log.splitlines()
+                if line.startswith('error[L0507]'))
+    result = {'verdict': 'selected-image-limit', 'boundary': FRAME_BOUNDARY,
+              'reason': row.get('reason', ''), 'codes': codes, 'diagnostic': said,
+              'stack_bytes': configuration(chip, memory_profile)['stack_bytes'],
+              'execution': 'not attempted: refine refuses the firmware build'}
+    (run.out / 'selected-image-limit.json').write_text(json.dumps(result, indent=2) + '\n')
+    return result
+
+
 def selected_image_limit(run, row, error, chip, memory_profile):
-    """Only a recorded limit plus actual independent link/section evidence."""
-    if (row.get('profile_limit') != 'selected-image'
-            or not isinstance(error, CommandFailed) or error.name != 'link'):
+    """Only a recorded limit plus actual independent link/section evidence,
+    or refine's own refusal of a frame the stack cannot hold."""
+    if row.get('profile_limit') != 'selected-image' or not isinstance(error, CommandFailed):
+        return None
+    if error.name == 'compile':
+        return selected_frame_limit(run, row, error, chip, memory_profile)
+    if error.name != 'link':
         return None
     log = Path(error.log).read_text()
     if not capacity_only(log):
@@ -279,6 +307,13 @@ def compile_advice(text):
         return ('; refine failed with an internal compiler defect, "%s": that is a'
                 ' compiler fault to fix, not this fixture\'s verdict on Xtensa' % said)
     codes = sorted(set(re.findall(r'error\[(L\d+)\]', text)))
+    if codes == ['L0507']:
+        #  L0507 is given only under a firmware entry, and a refusal is
+        #  compiled without one, so a refuse row with it never holds.
+        return ('; a routine\'s frame does not fit this profile\'s stack (L0507), which'
+                ' is a limit of the selected profile and no source refusal: give its row'
+                ' "profile_limit": "selected-image" with a "reason", as'
+                ' environments/cortex-m/README.md says')
     return ('; Xtensa refuses it with %s: if that is its verdict here,'
             ' give its row "targets": {"xtensa": {"mode": "refuse",'
             ' "codes": %s, "reason": ...}}'

@@ -26,10 +26,16 @@ fixture.  This then
    but one whose only code is L0015, takes the `--reason` it is given; the
    corpus reads an L0015 refusal's modules from the refusal itself, so its
    reason says only why, if anything.  `--refuse` still names the codes by
-   hand, held to refine's own.  An `execute` row says only that
-   Cortex-M0 compiles the fixture: nothing here links the image or
-   measures it against the map, and a closing line says so and names the
-   lane that does;
+   hand, held to refine's own.  A fixture Cortex-M0 compiles whose build
+   report holds a routine with more stack than the constrained
+   reference's reservation gets `execute` with `"profile_limit":
+   "selected-image"` and the `--reason` it is given: the firmware lanes
+   record that frame as a limit and execute nothing, the Cortex-M and
+   RV32 ones from the build report and Xtensa's from L0507, which refine
+   gives only under a firmware entry and so no `refuse` row can hold.
+   Any other `execute` row says only that Cortex-M0 compiles the
+   fixture: nothing here links the image or measures it against the map,
+   and a closing line says so and names the lane that does;
 3. puts a positive, runtime or ABI fixture's sources in the layout
    `refine fmt` gives, which `formatting/the corpus is formatted` holds
    them to, unless the fixture says `layout: evidence` or names [1750]
@@ -139,6 +145,36 @@ def format_sources(meta, directory, refine):
     return [path for path in sources if path.read_bytes() != before[path]]
 
 
+def cortex_stack(meta, directory, refine):
+    """The most stack one routine of the fixture takes on Cortex-M0, as
+    the build report of a compilation without a firmware entry counts it,
+    which is how the corpus lane measures it; 0 without a routine."""
+    with tempfile.TemporaryDirectory() as scratch:
+        report = Path(scratch) / "build.json"
+        ran = subprocess.run(
+            [str(refine), *meta.module_arguments(str(directory)),
+             "--target=cortex-m0", "--emit=asm", "-o",
+             str(Path(scratch) / "measured.s"),
+             "--build-report=" + str(report)],
+            capture_output=True, text=True, timeout=900)
+        if ran.returncode != 0 or not report.is_file():
+            raise SystemExit("%s: refine ended with %d writing its Cortex-M0"
+                             " build report:\n%s"
+                             % (meta.label, ran.returncode,
+                                ran.stdout + ran.stderr))
+        routines = json.loads(report.read_text())["build"]["routines"]
+    return max((routine["stack_bytes"] for routine in routines), default=0)
+
+
+def reference_stack():
+    """The constrained reference's stack reservation, which the corpus
+    lane holds every routine's stack to (environments/cortex-m)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]
+                           / "environments/cortex-m"))
+    import backend
+    return backend.recorded()["stack_reserved"]
+
+
 def unmeasured(labels):
     """The closing line for the `execute` rows this run wrote: what was
     not checked, and the lane that checks it."""
@@ -237,13 +273,18 @@ def restriction_stops():
     return backend_corpus.STOPS
 
 
-def corpus_row(meta, refuse, reason, refused=None, stops=None):
+def corpus_row(meta, refuse, reason, refused=None, stops=None,
+               deepest=0, reserved=0):
     """The Cortex-M corpus row a new runtime or ABI fixture starts with.
 
     REFUSED is the codes Cortex-M0 compilation refused it with, [] when it
     compiled, or None when it was not compiled; REFUSE the codes written
     by hand instead, which must be refine's.  STOPS names what stops a
-    restriction (D986), which the corpus holds its build to.
+    restriction (D986), which the corpus holds its build to.  DEEPEST is
+    the most stack one routine of a compiled fixture takes and RESERVED
+    the reference's stack reservation: a routine past it is a limit of
+    the selected profile, which every firmware lane records and none
+    executes.
     """
     if stops:
         known = restriction_stops()
@@ -290,6 +331,22 @@ def corpus_row(meta, refuse, reason, refused=None, stops=None):
             " compiles it; give it a status oracle, or make it a restriction"
             " with --stops=oracle and --reason=TEXT"
             % (meta.label, " and ".join(hosted)))
+    if deepest > reserved:
+        if meta.applies_to("cortex-m0") or not reason:
+            raise SystemExit(
+                "%s: a routine takes %d bytes of stack on Cortex-M0, past the"
+                " %d the constrained reference reserves, so no firmware lane"
+                " executes it: the Cortex-M and RV32 lanes stop at that"
+                " figure and refine refuses the Xtensa lane's firmware entry"
+                " with L0507.  Its row is `execute` with \"profile_limit\":"
+                " \"selected-image\": say why the frame is that large with"
+                " --reason=TEXT%s"
+                % (meta.label, deepest, reserved,
+                   ", and drop cortex-m0 from its targets:, since a frame"
+                   " that does not fit is no execution"
+                   if meta.applies_to("cortex-m0") else ""))
+        return {"mode": "execute", "profile_limit": "selected-image",
+                "reason": reason}
     return {"mode": "execute"}
 
 
@@ -327,15 +384,25 @@ def add_one(fixture, args, refine, executing):
                         " --compiler-only, or pass --refine=PATH"
                         % meta.label)
                 refused = cortex_codes(meta, directory, refine)
+            deepest, reserved = 0, 0
+            if refused == [] and not args.refuse:
+                deepest = cortex_stack(meta, directory, refine)
+                reserved = reference_stack()
             record["fixtures"][meta.label] = corpus_row(
-                meta, args.refuse, args.reason, refused, args.stops)
+                meta, args.refuse, args.reason, refused, args.stops,
+                deepest, reserved)
             record["fixtures"] = dict(sorted(record["fixtures"].items()))
             CORPUS.write_text(json.dumps(record, indent=2) + "\n",
                               encoding="utf-8")
             mode = record["fixtures"][meta.label]["mode"]
             print("added %s to %s as %s" % (
                 meta.label, CORPUS.relative_to(ROOT), mode), flush=True)
-            if mode == "execute":
+            if "profile_limit" in record["fixtures"][meta.label]:
+                print("%s: a routine takes %d bytes of stack, past the %d"
+                      " the constrained reference reserves; its row records"
+                      " the limit and no firmware lane executes it"
+                      % (meta.label, deepest, reserved), flush=True)
+            elif mode == "execute":
                 executing.append(meta.label)
 
     if held_to_layout(meta):
@@ -356,7 +423,9 @@ def main(argv=None):
     parser.add_argument("--refuse", metavar="CODES",
                         help="the codes Cortex-M0 refuses a runtime fixture"
                              " with, comma separated, held to refine's own")
-    parser.add_argument("--reason", help="why Cortex-M0 does not run it")
+    parser.add_argument("--reason",
+                        help="why Cortex-M0 does not run it, or why a"
+                             " routine's frame is past the reference's stack")
     parser.add_argument("--stops", metavar="WHAT",
                         help="what stops a restriction on Cortex-M0, which the"
                              " corpus holds its build to (D986)")
