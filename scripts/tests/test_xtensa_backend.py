@@ -34,6 +34,32 @@ class EntrySources(unittest.TestCase):
         refused = compile_advice('error[L0346]: no C ABI\nerror[L0015]: outside\n')
         self.assertIn('"codes": ["L0015", "L0346"]', refused)
 
+    def test_a_frame_past_the_stack_is_a_recorded_limit_and_no_refusal(self):
+        said = ('error[L0507]: the frame of `large` does not fit the stack\n'
+                '  --> main.ldn:1:1\n')
+        advice = compile_advice(said)
+        self.assertIn('"profile_limit": "selected-image"', advice)
+        self.assertNotIn('"mode": "refuse"', advice)
+        with tempfile.TemporaryDirectory() as directory:
+            run = SimpleNamespace(out=Path(directory))
+            log = run.out / 'compile.log'
+            log.write_text(said)
+            failed = CommandFailed('compile', log, 'exited 1')
+            limited = {'profile_limit': 'selected-image', 'reason': 'a 16 MiB frame'}
+            result = selected_image_limit(run, limited, failed, 'esp32', 'sim')
+            self.assertEqual((result['verdict'], result['codes'], result['stack_bytes']),
+                             ('selected-image-limit', ['L0507'], 8 * 1024 * 1024))
+            self.assertIn('frame exceeds the stack reservation', result['boundary'])
+            self.assertTrue((run.out / 'selected-image-limit.json').is_file())
+            #  Without the recorded limit, with another code beside it, or
+            #  with assembly written, it stays a failure.
+            self.assertIsNone(selected_image_limit(run, {}, failed, 'esp32', 'sim'))
+            log.write_text(said + 'error[L0346]: no C ABI\n')
+            self.assertIsNone(selected_image_limit(run, limited, failed, 'esp32', 'sim'))
+            log.write_text(said)
+            (run.out / 'program.s').write_text('')
+            self.assertIsNone(selected_image_limit(run, limited, failed, 'esp32', 'sim'))
+
     def test_capacity_does_not_hide_assembler_or_undefined_symbol_failures(self):
         with tempfile.TemporaryDirectory() as directory:
             run = SimpleNamespace(out=Path(directory))

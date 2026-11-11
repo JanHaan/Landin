@@ -630,21 +630,40 @@ package body Landin.Backend.RiscV is
 
       --  Each routine's one frame, which emission and debug output both
       --  read; a build without debug output keeps none past its routine.
+      --  The table is on the heap: in this frame it grows with the
+      --  program until its stack is spent.
       type Frame_Array is array (Positive range <>) of Debug_Frame_Access;
+      type Frame_Array_Access is access Frame_Array;
       procedure Free_Frame is new Ada.Unchecked_Deallocation
         (Frame, Debug_Frame_Access);
+      procedure Free_Frames is new Ada.Unchecked_Deallocation
+        (Frame_Array, Frame_Array_Access);
       type Retained_Frames (Last : Natural) is
         new Ada.Finalization.Limited_Controlled with record
-         Frames : Frame_Array (1 .. Last) := [others => null];
+         Frames : Frame_Array_Access;
       end record;
+      overriding procedure Initialize (Owned : in out Retained_Frames);
       overriding procedure Finalize (Owned : in out Retained_Frames);
+      overriding procedure Initialize (Owned : in out Retained_Frames) is
+      begin
+         Owned.Frames := new Frame_Array (1 .. Owned.Last);
+         --  In a loop, so that no aggregate the table's size is built in
+         --  this frame on its way to the heap.
+         for Held of Owned.Frames.all loop
+            Held := null;
+         end loop;
+      end Initialize;
       overriding procedure Finalize (Owned : in out Retained_Frames) is
       begin
+         if Owned.Frames = null then
+            return;
+         end if;
          for Index in Owned.Frames'Range loop
             if Owned.Frames (Index) /= null then
                Free_Frame (Owned.Frames (Index));
             end if;
          end loop;
+         Free_Frames (Owned.Frames);
       end Finalize;
       Saved : Retained_Frames (Landin.IR.Item_Count (Of_Unit));
       function Cached_Frame (Item : Landin.IR.Item_Id)
@@ -655,7 +674,9 @@ package body Landin.Backend.RiscV is
       --  frame record's half are moved at.
       Width : constant RiscV_Instructions.Machine_Width := XLEN (Facts);
       Pairs : constant Boolean := Width = 32;
-      Word : constant Positive := Natural (Width) / 8;
+      --  A register's bytes, counted as every target byte figure is.
+      Word : constant Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count (Width) / 8;
       Load_Word : constant String := (if Pairs then "lw" else "ld");
       Store_Word : constant String := (if Pairs then "sw" else "sd");
       Word_Directive : constant String :=
@@ -1198,9 +1219,17 @@ package body Landin.Backend.RiscV is
         (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
          else Landin.Backend.Entry_Point.Argument_Initializer
            (Of_Unit, Names));
-      Allocated_Symbols : array
-        (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
-          Unbounded.Unbounded_String;
+      --  On the heap, as every table with an entry for each item is: in
+      --  this frame they grow with the program until its stack is spent,
+      --  which ends the build as the host exhausted.
+      type Symbol_Texts is array (Positive range <>) of
+        Unbounded.Unbounded_String;
+      package Symbol_Buffers is new Landin.Backend.Work_Arrays
+        (Unbounded.Unbounded_String, Symbol_Texts,
+         Unbounded.Null_Unbounded_String);
+      Symbol_Data : Symbol_Buffers.Buffer
+        (Positive'Max (1, Landin.IR.Item_Count (Of_Unit)));
+      Allocated_Symbols : Symbol_Texts renames Symbol_Data.Data.all;
 
       --  D676: firmware's placements.  A later item may retain a section
       --  an earlier item selected.
@@ -1424,7 +1453,7 @@ package body Landin.Backend.RiscV is
 
       function Stack_Save_Offset
         (Index : Positive) return Landin.Targets.Byte_Count
-        is (Stack_Frame_Bytes - Landin.Targets.Byte_Count (Word * Index));
+        is (Stack_Frame_Bytes - Word * Landin.Targets.Byte_Count (Index));
 
       --  The Nth saved register's number within its bank, whether it is a
       --  float register, and its DWARF register number.
@@ -2305,12 +2334,13 @@ package body Landin.Backend.RiscV is
             --  released.  Nothing is read below sp at any instruction, so
             --  an interrupt or a signal taken between them, which stacks
             --  its own frame at sp, overwrites nothing still to be read.
-            Emit (Load_Word & " ra, -" & Image (Word) & "(x8)");
+            Emit (Load_Word & " ra, -" & Byte_Image (Word) & "(x8)");
             Emit ("addi sp, x8, -16");
             if Debug /= null then
                Emit (".cfi_def_cfa sp, 16");
             end if;
-            Emit (Load_Word & " x8, " & Image (16 - 2 * Word) & "(sp)");
+            Emit (Load_Word & " x8, " & Byte_Image (16 - 2 * Word)
+                  & "(sp)");
             if Debug /= null then
                Emit (".cfi_restore x8");
             end if;
@@ -2851,9 +2881,9 @@ package body Landin.Backend.RiscV is
                      Emit ("sext.w x19, x19");
                   elsif Part.Scalar in Landin.Types.I8 | Landin.Types.I16 then
                      Emit ("slli x19, x19, "
-                       & Image (64 - Natural (Part.Bytes) * 8));
+                       & Byte_Image (64 - Part.Bytes * 8));
                      Emit ("srai x19, x19, "
-                       & Image (64 - Natural (Part.Bytes) * 8));
+                       & Byte_Image (64 - Part.Bytes * 8));
                   end if;
                end if;
                if Home.Register = 0 then
@@ -4275,10 +4305,10 @@ package body Landin.Backend.RiscV is
                         Emit ("addi x5, x5, -"
                               & Byte_Image (Stack_Frame_Bytes));
                         for Index in
-                          1 .. Natural (Stack_Frame_Bytes) / Word - 1
+                          1 .. Stack_Frame_Bytes / Word - 1
                         loop
-                           Emit (Store_Word & " zero, " & Image (Word * Index)
-                                 & "(x5)");
+                           Emit (Store_Word & " zero, "
+                                 & Byte_Image (Word * Index) & "(x5)");
                         end loop;
                         --  The base is the frame's top less the aligned
                         --  length.
@@ -4330,7 +4360,9 @@ package body Landin.Backend.RiscV is
                         --  RV32 and no read-modify-write at a level without
                         --  A, so one that reaches here is a defect.  An
                         --  eight-byte volatile access is its two words.
-                        if Pairs and then ((Bytes > Word and then M not in
+                        if Pairs
+                          and then ((Landin.Targets.Byte_Count (Bytes) > Word
+                            and then M not in
                             Volatile_Load | Volatile_Store)
                           or else (not Atomics and then M not in
                             Atomic_Load | Volatile_Load | Atomic_Store
@@ -5434,12 +5466,13 @@ package body Landin.Backend.RiscV is
          --  address in the two words just below the CFA, in a sixteen-byte
          --  header that keeps the stack's alignment at either XLEN.
          Emit ("addi sp, sp, -16");
-         Emit (Store_Word & " x8, " & Image (16 - 2 * Word) & "(sp)");
-         Emit (Store_Word & " ra, " & Image (16 - Word) & "(sp)");
+         Emit (Store_Word & " x8, " & Byte_Image (16 - 2 * Word)
+               & "(sp)");
+         Emit (Store_Word & " ra, " & Byte_Image (16 - Word) & "(sp)");
          if Debug /= null then
             Emit (".cfi_def_cfa_offset 16");
-            Emit (".cfi_offset x8, -" & Image (2 * Word));
-            Emit (".cfi_offset x1, -" & Image (Word));
+            Emit (".cfi_offset x8, -" & Byte_Image (2 * Word));
+            Emit (".cfi_offset x1, -" & Byte_Image (Word));
          end if;
          Emit ("addi x8, sp, 16");
          if Debug /= null then
@@ -5798,10 +5831,18 @@ package body Landin.Backend.RiscV is
       --  defect rather than something to fold.
       type Fold_State is (Unseen, Running, Settled);
 
-      Fold_Of : array (1 .. Landin.IR.Item_Count (Of_Unit))
-                  of Landin.Types.Folded := [others => 0];
-      Fold_At : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Fold_State :=
-        [others => Unseen];
+      type Item_Folds is array (Positive range <>) of Landin.Types.Folded;
+      package Item_Fold_Buffers is new Landin.Backend.Work_Arrays
+        (Landin.Types.Folded, Item_Folds, 0);
+      type Fold_States is array (Positive range <>) of Fold_State;
+      package Fold_State_Buffers is new Landin.Backend.Work_Arrays
+        (Fold_State, Fold_States, Unseen);
+      Fold_Data : Item_Fold_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_State_Data : Fold_State_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_Of : Item_Folds renames Fold_Data.Data.all;
+      Fold_At : Fold_States renames Fold_State_Data.Data.all;
 
       function Evaluate (Item : Landin.IR.Item_Id)
         return Landin.Types.Folded
@@ -7352,7 +7393,7 @@ package body Landin.Backend.RiscV is
                      Field_Extent
                        (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
                         Facts, Bytes, Alignment);
-                     Emit (".balign " & Image (Word));
+                     Emit (".balign " & Byte_Image (Word));
                      Put (Evidence_Symbol (Id) & ":");
                      if Alias_Next then
                         Put (Evidence_Symbol
@@ -7425,7 +7466,8 @@ package body Landin.Backend.RiscV is
                   & Byte_Image (Stack_Save_Offset (Index)) & "(sp)");
             if Debug /= null then
                Emit (".cfi_offset " & Image (Stack_Dwarf (Index)) & ", -"
-                     & Image (Word * Index));
+                     & Byte_Image
+                         (Word * Landin.Targets.Byte_Count (Index)));
             end if;
          end loop;
          Limit_Base ("x5");
@@ -7498,9 +7540,9 @@ package body Landin.Backend.RiscV is
          else
             Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
          end if;
-         Emit (".balign " & Image (Word));
+         Emit (".balign " & Byte_Image (Word));
          Put (Stack_Limit & ":");
-         Emit (".zero " & Image (Word));
+         Emit (".zero " & Byte_Image (Word));
          Emit (".popsection");
       end if;
       --  D361's writer: Linux's write system call to descriptor 2, with the

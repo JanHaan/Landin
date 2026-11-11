@@ -2188,8 +2188,7 @@ package body Landin.Diagnostics.Citations is
                "Xtensa levels share the windowed ABI and retain distinct"
                & " instruction configurations",
             when 1110 =>
-               "On Xtensa a caller's base save moves with the stack poin"
-               & "ter around an outgoing area",
+               "On Xtensa a routine's outgoing area is part of its frame",
             when 661 =>
                "An rv32 program that reaches no description is given the"
                & " RISC-V reference",
@@ -6027,9 +6026,8 @@ package body Landin.Diagnostics.Citations is
                & "he-windowed-abi-and-retain-distinct-instruction-configur"
                & "ations",
             when 1110 =>
-               "https://www.701.dev/spec.html#d1110-on-xtensa-a-caller-s"
-               & "-base-save-moves-with-the-stack-pointer-around-an-outgoi"
-               & "ng-area",
+               "https://www.701.dev/spec.html#d1110-on-xtensa-a-routine-"
+               & "s-outgoing-area-is-part-of-its-frame",
             when 661 =>
                "https://www.701.dev/spec.html#d661-an-rv32-program-that-"
                & "reaches-no-description-is-given-the-risc-v-reference",

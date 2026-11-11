@@ -1016,9 +1016,17 @@ package body Landin.Backend.Cortex_M is
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean;
 
-      Allocated_Symbols : array
-        (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
-          Unbounded.Unbounded_String;
+      --  On the heap, as every table with an entry for each item is: in
+      --  this frame they grow with the program until its stack is spent,
+      --  which ends the build as the host exhausted.
+      type Symbol_Texts is array (Positive range <>) of
+        Unbounded.Unbounded_String;
+      package Symbol_Buffers is new Landin.Backend.Work_Arrays
+        (Unbounded.Unbounded_String, Symbol_Texts,
+         Unbounded.Null_Unbounded_String);
+      Symbol_Data : Symbol_Buffers.Buffer
+        (Positive'Max (1, Landin.IR.Item_Count (Of_Unit)));
+      Allocated_Symbols : Symbol_Texts renames Symbol_Data.Data.all;
 
       package Section_Sets is new Ada.Containers.Hashed_Sets
         (Element_Type        => Landin.Source.Names.Name_Id,
@@ -3083,7 +3091,7 @@ package body Landin.Backend.Cortex_M is
          procedure C_Record_Registers
            (Store : Boolean; Held : Arm32_ABI.Location; Base : String)
          is
-            Size : constant Natural := Natural (Held.Shape.Size);
+            Size : constant Landin.Targets.Byte_Count := Held.Shape.Size;
             Op : constant String := (if Store then "str" else "ldr");
          begin
             if Held.VFP_Count > 0 then
@@ -3102,20 +3110,23 @@ package body Landin.Backend.Cortex_M is
             elsif Size = 1 then
                Emit (Op & "b r0, [" & Base & "]");
             elsif Store then
-               for Index in 0 .. Size - 1 loop
+               for Index in 1 .. Size loop
                   Emit ("strb r0, [" & Base & ", #"
-                    & Trimmed (Index'Image) & "]");
-                  if Index < Size - 1 then
+                    & Trimmed (Landin.Targets.Byte_Count'Image (Index - 1))
+                    & "]");
+                  if Index < Size then
                      Emit ("lsrs r0, r0, #8");
                   end if;
                end loop;
             else
                Emit ("ldrb r0, [" & Base & ", #"
-                 & Trimmed (Natural'Image (Size - 1)) & "]");
-               for Index in reverse 0 .. Size - 2 loop
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Size - 1))
+                 & "]");
+               for Index in reverse 1 .. Size - 1 loop
                   Emit ("lsls r0, r0, #8");
                   Emit ("ldrb r4, [" & Base & ", #"
-                    & Trimmed (Index'Image) & "]");
+                    & Trimmed (Landin.Targets.Byte_Count'Image (Index - 1))
+                    & "]");
                   Emit ("orrs r0, r4");
                end loop;
             end if;
@@ -5680,10 +5691,18 @@ package body Landin.Backend.Cortex_M is
       --  defect rather than something to fold.
       type Fold_State is (Unseen, Running, Settled);
 
-      Fold_Of : array (1 .. Landin.IR.Item_Count (Of_Unit))
-                  of Landin.Types.Folded := [others => 0];
-      Fold_At : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Fold_State :=
-        [others => Unseen];
+      type Item_Folds is array (Positive range <>) of Landin.Types.Folded;
+      package Item_Fold_Buffers is new Landin.Backend.Work_Arrays
+        (Landin.Types.Folded, Item_Folds, 0);
+      type Fold_States is array (Positive range <>) of Fold_State;
+      package Fold_State_Buffers is new Landin.Backend.Work_Arrays
+        (Fold_State, Fold_States, Unseen);
+      Fold_Data : Item_Fold_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_State_Data : Fold_State_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_Of : Item_Folds renames Fold_Data.Data.all;
+      Fold_At : Fold_States renames Fold_State_Data.Data.all;
 
       function Folded (Item : Landin.IR.Item_Id) return Landin.Types.Folded is
          Answer : Landin.Types.Folded := 0;

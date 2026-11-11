@@ -2,6 +2,7 @@ with Ada.Strings.Unbounded;
 with Ada.Containers.Vectors;
 with Ada.Containers.Ordered_Maps;
 with Ada.Strings.Fixed;
+with Landin.Backend.Work_Arrays;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets.Capabilities;
@@ -703,8 +704,13 @@ package body Landin.Backend.Dwarf is
         (Prefix & "debug_abstract_" & N (Natural (Callee))
          & (if Kind = "" then "" else "_" & Kind & "_" & N (Index)));
 
-      Abstract_Wanted : array (1 .. Item_Count (Of_Unit)) of Boolean :=
-        [others => False];
+      --  On the heap: a table with an entry for each item grows with the
+      --  program, and this frame is on the emitter's stack.
+      type Item_Flags is array (Positive range <>) of Boolean;
+      package Item_Flag_Buffers is new Landin.Backend.Work_Arrays
+        (Boolean, Item_Flags, False);
+      Abstract_Data : Item_Flag_Buffers.Buffer (Item_Count (Of_Unit));
+      Abstract_Wanted : Item_Flags renames Abstract_Data.Data.all;
 
       function Has_Inlined_Copies return Boolean is
         (for some Index in 1 .. Item_Count (Of_Unit) =>

@@ -1234,13 +1234,15 @@ package body Landin.Backend.Firmware is
       Line ("s32i a1, a0, 16");
       Line ("j _landin_firmware_stopped");
       --  A fault while an exception is being entered cannot safely save
-      --  another register window or touch the floating-point bank. Keep
-      --  the original exception PC and stop using only integer registers.
+      --  another register window or touch the floating-point bank. Stop
+      --  using only integer registers. A double exception leaves its PC
+      --  in DEPC and writes no EPC1, which still holds whatever the
+      --  exception before it left there.
       Line ("_landin_firmware_double_exception:");
       Line ("movi a0, " & Trap_Cell (Trap_Cause));
       Line ("rsr a2, EXCCAUSE");
       Line ("s32i a2, a0, 0");
-      Line ("rsr a2, EPC1");
+      Line ("rsr a2, DEPC");
       Line ("s32i a2, a0, 4");
       Line ("rsr a2, EXCVADDR");
       Line ("s32i a2, a0, 8");

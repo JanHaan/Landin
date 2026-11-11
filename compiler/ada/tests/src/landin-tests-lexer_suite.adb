@@ -568,15 +568,16 @@ package body Landin.Tests.Lexer_Suite is
 
    --  The same literal through a whole check: the checker judges its
    --  spelling against its context and lowering registers its bytes, and
-   --  each once held the decoded units on its frame.  768 KiB of data is
-   --  past where the check ended with status 71.
+   --  each once held the decoded units on its frame, as the IR verifier
+   --  held a table with an entry for every unit: 4 MiB of data is past
+   --  where each ended the check with status 71.
    procedure A_Long_Literal_Is_Checked
      (Item : in out Landin.Testing.Context);
 
    procedure A_Long_Literal_Is_Checked
      (Item : in out Landin.Testing.Context)
    is
-      Size : constant := 768 * 2 ** 10;
+      Size : constant := 4 * 2 ** 20;
       Text : Ada.Strings.Unbounded.Unbounded_String;
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -596,7 +597,7 @@ package body Landin.Tests.Lexer_Suite is
       Ran := Landin.Driver.Execute (Arguments, Host, Tools);
       Landin.Testing.Check_Equal
         (Item, Ran.Status, Landin.Driver.Status_Success,
-         "a module holding 768 KiB in one text literal is accepted");
+         "a module holding 4 MiB in one text literal is accepted");
    end A_Long_Literal_Is_Checked;
 
    --  What a text spells is decoded where a frame cannot overflow at

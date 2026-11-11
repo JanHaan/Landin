@@ -1,0 +1,9 @@
+--  An exception taken while PS.EXCM is set is a double exception: the core
+--  vectors to its DoubleExceptionVector and writes the PC to DEPC, leaving
+--  EPC1 as the exception before it left it. The firmware's handler
+--  records the cause and that PC in the trap cells and stops; the runner
+--  holds the recorded PC to the emitted ILL below.
+main: () -> (status: i32) =
+    assembler.block("rsr a8, ps\nmovi a9, 16\nor a8, a8, a9\nwsr a8, ps\nrsync\nill", out _ at a8, out _ at a9)
+    status = 0
+end main

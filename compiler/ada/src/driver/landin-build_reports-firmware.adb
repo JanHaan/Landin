@@ -120,6 +120,29 @@ package body Landin.Build_Reports.Firmware is
       Flash_End : Landin.Targets.Byte_Count := Flash.Origin;
       RAM_End : Landin.Targets.Byte_Count := RAM.Origin;
 
+      --  What of text's region is left past the image: less the stack
+      --  where the description reserves it in that region, and from the
+      --  end of static RAM where data shares the region and ends higher.
+      --  The link refuses an image that reaches the stack (D1114), so the
+      --  figure is never asked for one; it stops at zero all the same.
+      function Flash_Remaining return Landin.Targets.Byte_Count;
+      function Flash_Remaining return Landin.Targets.Byte_Count is
+         Used : constant Landin.Targets.Byte_Count :=
+           (if Profile.Placed (Firmware.Data)
+              = Profile.Placed (Firmware.Text)
+            then Landin.Targets.Byte_Count'Max (Flash_End, RAM_End)
+            else Flash_End) - Flash.Origin;
+         Reserved : constant Landin.Targets.Byte_Count :=
+           (if Profile.Placed (Firmware.Stack)
+              = Profile.Placed (Firmware.Text)
+            then Profile.Stack_Size else 0);
+      begin
+         if Used > Flash.Length or else Reserved > Flash.Length - Used then
+            return 0;
+         end if;
+         return Flash.Length - Used - Reserved;
+      end Flash_Remaining;
+
       --  Whether [FIRST, FIRST + SIZE) lies in a region of the profile,
       --  and which: a region placement (D547) is outside the two the
       --  capacity figures describe and is still the image's.
@@ -455,7 +478,7 @@ package body Landin.Build_Reports.Firmware is
                  else Flash.Length)
         & ",""flash_remaining"":"
         & Image (if Profile.Layout = Firmware.RAM_Layout then 0
-                 else Flash.Origin + Flash.Length - Flash_End)
+                 else Flash_Remaining)
         & ",""code_used"":" & Image (Flash_End - Flash.Origin)
         & ",""ram_layout_used"":" & Image (RAM_Used)
         & ",""load_segments"":[" & US.To_String (Load_Segments) & "]"

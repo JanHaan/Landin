@@ -832,6 +832,7 @@ jobs:
             --control=status-control --control=trap-control --control=scalars \
             --control=software-float --control=assembly-operands \
             --control=window-depth --control=window-switch --control=window-arguments \
+            --control=double-exception-control \
             --control=feature-level \
             --control=break-control --control=early-stop-control --control=premature-stop-control
           python3 environments/xtensa/boundaries.py --tools "$RUNNER_TEMP/embedded" \

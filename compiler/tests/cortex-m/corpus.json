@@ -4830,6 +4830,11 @@
     "runtime/stack-exhausted-reaches-the-handler": {
       "mode": "execute"
     },
+    "runtime/stack-frame-past-address-zero-traps": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The fixture's routine has a sixteen-megabyte frame, larger than the stack pointer's own value where a hosted static executable keeps module storage, which is what it executes; no firmware profile's stack reservation holds that frame. runtime/stack-frame-past-limit-traps and runtime/stack-exhausted-reaches-the-handler trap stack_exhausted in a prologue within the firmware maps; this limit is not runtime evidence."
+    },
     "runtime/stack-frame-past-limit-traps": {
       "mode": "execute"
     },

@@ -1579,28 +1579,53 @@ package body Landin.Backend.Arm64 is
       --  its routine.  Each routine's statistics wait for the final text,
       --  where branch shortening has decided its instructions: they are
       --  counted over the lines from First to Last.
+      --  Everything kept for each item is on the heap: in this frame the
+      --  tables grow with the program until its stack is spent, which
+      --  ends the build as the host exhausted.
       type Plan_Array is array (Positive range <>) of Debug_Plan_Access;
       type Frame_Array is array (Positive range <>) of Debug_Frame_Access;
+      type Plan_Array_Access is access Plan_Array;
+      type Frame_Array_Access is access Frame_Array;
       procedure Free_Plan is new Ada.Unchecked_Deallocation
         (Allocation_Plan, Debug_Plan_Access);
       procedure Free_Frame is new Ada.Unchecked_Deallocation
         (Frame, Debug_Frame_Access);
+      procedure Free_Plans is new Ada.Unchecked_Deallocation
+        (Plan_Array, Plan_Array_Access);
+      procedure Free_Frames is new Ada.Unchecked_Deallocation
+        (Frame_Array, Frame_Array_Access);
       type Retained_Facts (Last : Natural) is
         new Ada.Finalization.Limited_Controlled with record
-         Plans : Plan_Array (1 .. Last) := [others => null];
-         Frames : Frame_Array (1 .. Last) := [others => null];
+         Plans : Plan_Array_Access;
+         Frames : Frame_Array_Access;
       end record;
+      overriding procedure Initialize (Owned : in out Retained_Facts);
       overriding procedure Finalize (Owned : in out Retained_Facts);
+      overriding procedure Initialize (Owned : in out Retained_Facts) is
+      begin
+         Owned.Plans := new Plan_Array (1 .. Owned.Last);
+         Owned.Frames := new Frame_Array (1 .. Owned.Last);
+         --  In a loop, so that no aggregate a table's size is built in
+         --  this frame on its way to the heap.
+         for Index in 1 .. Owned.Last loop
+            Owned.Plans (Index) := null;
+            Owned.Frames (Index) := null;
+         end loop;
+      end Initialize;
       overriding procedure Finalize (Owned : in out Retained_Facts) is
       begin
-         for Index in Owned.Plans'Range loop
-            if Owned.Frames (Index) /= null then
-               Free_Frame (Owned.Frames (Index));
-            end if;
-            if Owned.Plans (Index) /= null then
-               Free_Plan (Owned.Plans (Index));
-            end if;
-         end loop;
+         if Owned.Plans /= null and then Owned.Frames /= null then
+            for Index in Owned.Plans'Range loop
+               if Owned.Frames (Index) /= null then
+                  Free_Frame (Owned.Frames (Index));
+               end if;
+               if Owned.Plans (Index) /= null then
+                  Free_Plan (Owned.Plans (Index));
+               end if;
+            end loop;
+         end if;
+         Free_Frames (Owned.Frames);
+         Free_Plans (Owned.Plans);
       end Finalize;
       Saved : Retained_Facts (Landin.IR.Item_Count (Of_Unit));
       function Cached_Plan (Item : Landin.IR.Item_Id)
@@ -1611,10 +1636,19 @@ package body Landin.Backend.Arm64 is
          First : Positive := 1;
          Last : Natural := 0;
       end record;
-      Statistics : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
+      type Statistics_Array is array (Positive range <>) of
         Landin.Build_Reports.Routine_Statistics;
-      Routine_Text : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
-        Routine_Lines;
+      package Statistics_Buffers is new Landin.Backend.Work_Arrays
+        (Landin.Build_Reports.Routine_Statistics, Statistics_Array,
+         (others => <>));
+      type Lines_Array is array (Positive range <>) of Routine_Lines;
+      package Lines_Buffers is new Landin.Backend.Work_Arrays
+        (Routine_Lines, Lines_Array, (others => <>));
+      Statistics_Data : Statistics_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Lines_Data : Lines_Buffers.Buffer (Landin.IR.Item_Count (Of_Unit));
+      Statistics : Statistics_Array renames Statistics_Data.Data.all;
+      Routine_Text : Lines_Array renames Lines_Data.Data.all;
 
       procedure Put (Line : String; Known : Boolean := False);
       procedure Emit (Instruction : String);
@@ -2158,9 +2192,17 @@ package body Landin.Backend.Arm64 is
         (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
          else Landin.Backend.Entry_Point.Argument_Initializer
            (Of_Unit, Names));
-      Allocated_Symbols : array
-        (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
-          Unbounded.Unbounded_String;
+      --  On the heap, as every table with an entry for each item is: in
+      --  this frame they grow with the program until its stack is spent,
+      --  which ends the build as the host exhausted.
+      type Symbol_Texts is array (Positive range <>) of
+        Unbounded.Unbounded_String;
+      package Symbol_Buffers is new Landin.Backend.Work_Arrays
+        (Unbounded.Unbounded_String, Symbol_Texts,
+         Unbounded.Null_Unbounded_String);
+      Symbol_Data : Symbol_Buffers.Buffer
+        (Positive'Max (1, Landin.IR.Item_Count (Of_Unit)));
+      Allocated_Symbols : Symbol_Texts renames Symbol_Data.Data.all;
 
       function Is_C_Item (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
@@ -7062,10 +7104,18 @@ package body Landin.Backend.Arm64 is
       --  defect rather than something to fold.
       type Fold_State is (Unseen, Running, Settled);
 
-      Fold_Of : array (1 .. Landin.IR.Item_Count (Of_Unit))
-                  of Landin.Types.Folded := [others => 0];
-      Fold_At : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Fold_State :=
-        [others => Unseen];
+      type Item_Folds is array (Positive range <>) of Landin.Types.Folded;
+      package Item_Fold_Buffers is new Landin.Backend.Work_Arrays
+        (Landin.Types.Folded, Item_Folds, 0);
+      type Fold_States is array (Positive range <>) of Fold_State;
+      package Fold_State_Buffers is new Landin.Backend.Work_Arrays
+        (Fold_State, Fold_States, Unseen);
+      Fold_Data : Item_Fold_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_State_Data : Fold_State_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_Of : Item_Folds renames Fold_Data.Data.all;
+      Fold_At : Fold_States renames Fold_State_Data.Data.all;
 
       function Evaluate (Item : Landin.IR.Item_Id)
         return Landin.Types.Folded

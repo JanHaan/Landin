@@ -106,14 +106,24 @@ package body Landin.Backend is
       type Item_List is array (Positive range <>) of IR.Item_Id;
       type Table_List is array (Positive range <>) of Positive;
 
-      Live : Flag_Array (1 .. Natural'Max (1, Items)) := [others => True];
-      Pending : Item_List (1 .. Natural'Max (1, Items));
+      --  On the heap: a table with an entry for each item or evidence
+      --  table grows with the program.
+      package Flag_Buffers is new Work_Arrays (Boolean, Flag_Array, True);
+      package Item_Buffers is new Work_Arrays
+        (IR.Item_Id, Item_List, IR.No_Item);
+      package Table_Buffers is new Work_Arrays (Positive, Table_List, 1);
+      Live_Data : Flag_Buffers.Buffer (Natural'Max (1, Items));
+      Pending_Data : Item_Buffers.Buffer (Natural'Max (1, Items));
+      Live : Flag_Array renames Live_Data.Data.all;
+      Pending : Item_List renames Pending_Data.Data.all;
       Waiting : Natural := 0;
 
       --  Tables in family order, ties in table order, so that the tables
       --  sharing one family are a run; Run_Of (T) is where T's run starts.
-      Order : Table_List (1 .. Natural'Max (1, Tables)) := [others => 1];
-      Run_Of : Table_List (1 .. Natural'Max (1, Tables)) := [others => 1];
+      Order_Data : Table_Buffers.Buffer (Natural'Max (1, Tables));
+      Run_Data : Table_Buffers.Buffer (Natural'Max (1, Tables));
+      Order : Table_List renames Order_Data.Data.all;
+      Run_Of : Table_List renames Run_Data.Data.all;
 
       function Key (Table : Positive) return Natural
         is (if IR.Evidence_Family (Of_Unit, IR.Evidence_Id (Table)) = 0
@@ -1687,9 +1697,10 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.RV32_ELF =>
             return 768;
          when Landin.Targets.Capabilities.Xtensa_ELF =>
-            --  Every ordinary native frame is checked. Before a failed
-            --  check, at most the unchecked outgoing area (256), ENTRY
-            --  (32) and its spill words (16) use the reserve. The retained
+            --  Every ordinary native frame is checked, its outgoing area
+            --  with it (D1110). Before a failed check, ENTRY (32) and its
+            --  spill words (16) use the reserve; the figure still counts
+            --  the 256-byte area that was once unchecked. The retained
             --  Handler_Entry_Bytes bound is 416; the selected handlers'
             --  measured trap depth is at most 544, including the complete
             --  336-byte window context. Reserve 1_024 for that 960-byte

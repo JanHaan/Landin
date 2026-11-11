@@ -1,7 +1,7 @@
--- D1110. `report` passes eight argument words, so it lowers SP for the
--- call and raises it afterwards; `l5`, six frames further down, takes
--- the window of `report`'s caller while SP is low. `main` returns
--- through the a0 that was stored then.
+-- D1110. `report` passes eight argument words, two of them in the
+-- outgoing area of its frame; `l5`, six frames further down, takes the
+-- window of `report`'s caller, whose a0 is stored below `report`'s SP.
+-- `main` returns through that a0, which is read from below the same SP.
 mut drain: u32 = 0
 l6: (x: u32) -> (r: u32) =
     drain +%= x

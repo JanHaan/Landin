@@ -1,3 +1,4 @@
+with Landin.Backend.Work_Arrays;
 with Landin.Hosted;
 with Landin.Machine;
 with Landin.Types;
@@ -185,10 +186,18 @@ package body Landin.Backend.Entry_Point is
       end Defined;
 
       Count : constant Natural := Landin.IR.Item_Count (Of_Unit);
-      Reached : array (1 .. Natural'Max (1, Count)) of Boolean :=
-        [others => False];
-      Pending : array (1 .. Natural'Max (1, Count)) of Landin.IR.Item_Id :=
-        [others => Landin.IR.No_Item];
+      --  On the heap: a table with an entry for each item grows with the
+      --  program.
+      type Item_Flags is array (Positive range <>) of Boolean;
+      package Item_Flag_Buffers is new Landin.Backend.Work_Arrays
+        (Boolean, Item_Flags, False);
+      type Item_Ids is array (Positive range <>) of Landin.IR.Item_Id;
+      package Item_Id_Buffers is new Landin.Backend.Work_Arrays
+        (Landin.IR.Item_Id, Item_Ids, Landin.IR.No_Item);
+      Reached_Data : Item_Flag_Buffers.Buffer (Natural'Max (1, Count));
+      Pending_Data : Item_Id_Buffers.Buffer (Natural'Max (1, Count));
+      Reached : Item_Flags renames Reached_Data.Data.all;
+      Pending : Item_Ids renames Pending_Data.Data.all;
       Waiting : Natural := 0;
 
       procedure Reach (Target : Landin.IR.Item_Id);

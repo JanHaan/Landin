@@ -1953,6 +1953,26 @@ package body Landin.Tests.Cortex_Suite is
          & """code_limit"":32768,""ram_layout_limit"":12288}",
          "occupied extents include gaps and archive members are sorted");
 
+      --  A description may reserve the stack in text's region; what is
+      --  left for the image is then less by it.
+      declare
+         Shared : Landin.Targets.Firmware.Profile := Reference;
+      begin
+         Shared.Placed (Landin.Targets.Firmware.Stack) := 1;
+         Landin.Build_Reports.Firmware.Measure
+           (Host, "p.elf", "p.elf.map", Shared, Stage => "",
+            Valid => Valid, Result => Result);
+         Landin.Testing.Check
+           (Item, Valid
+            and then Ada.Strings.Fixed.Index
+              (U.To_String (Result),
+               """flash_remaining"":27888,""code_used"":784,") > 0
+            and then Ada.Strings.Fixed.Index
+              (U.To_String (Result), """static_ram_remaining"":16344,") > 0,
+            "the stack reserved in text's region is not left for the"
+            & " image: " & U.To_String (Result));
+      end;
+
       Host.Add_Firmware_Library;
       Host.Add_File ("p.ldn", "start: () -> none = end start");
       Args.Append ("--target=cortex-m0");

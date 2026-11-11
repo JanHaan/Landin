@@ -20874,7 +20874,7 @@ superset; or selecting a generic assembler with neither exact configuration.
 `backend/Xtensa verifier refuses invalid registers` and
 `xtensa backend/windowed routines carry paired scalars`.
 
-### D1110 — On Xtensa a caller's base save moves with the stack pointer around an outgoing area
+### D1110 — On Xtensa a routine's outgoing area is part of its frame
 
 **From** D903 and D472.
 
@@ -20885,39 +20885,43 @@ its prologue left it. The window handlers keep a caller's `a0` to `a3` in
 the sixteen bytes below the callee's stack pointer: the overflow handler
 stores them there when the caller's window is taken, and the underflow
 handler reads them from there at the callee's `retw`. A call whose
-arguments need more than six words lowers the stack pointer for its
-outgoing area and raises it afterwards, and each move rewrote only the
+arguments need more than six words lowered the stack pointer for its
+outgoing area and raised it afterwards, and each move rewrote only the
 caller's stack-pointer word. A caller whose window was taken while the
 area was reserved, which happens once the call nests six frames deep on
 the 64-register cores, was restored from sixteen bytes that had never been
 written, and returned through whatever `a0` they held.
 
-**Chosen:** the backend carries the other three words with the stack
-pointer. After lowering it copies them from below the frame's stack pointer
-to below the lowered one, and before raising it copies them back, so the
-words the underflow handler reads at `retw` are the caller's whether its
-window was taken before the area was reserved, while it was, or never, when
-the copy moves bytes nobody reads. Both copies are made while the stack
-pointer is the lower of the two: a compiler-owned interrupt saves every
-physical register in its own context and starts its handler's stack 32
-bytes below the interrupted stack pointer, so it takes no window of the
-interrupted stack and writes above neither copy. The stack pointer word is
-the frame's canonical frame address, which every stack-pointer write
-already stores.
+**Chosen:** the stack pointer does not move after the prologue. A routine's
+outgoing area, the largest any of its calls takes, sixteen-byte aligned, is
+the lowest bytes of its frame: the prologue reserves it with the word homes
+and the source homes, sets the base of the homes above it, and checks the
+whole against the stack's limit where a program prepares stacks (D471), so
+a call's area has no check of its own. A call stores its stack words at the
+stack pointer, where the callee's frame address is and where D673 has it
+read them, and a routine none of whose calls takes a stack word has the
+frame it had. The sixteen bytes below the stack pointer are therefore one
+place from the prologue to `retw`, whenever the caller's window is taken,
+and a compiler-owned interrupt, which starts its handler's stack 32 bytes
+below the interrupted stack pointer, is below the area as it is below the
+homes. The build report's frame and stack figures count the area, and
+L0507 holds it to a firmware stack with the rest of the frame.
 
-**The alternatives:** reserving the routine's largest outgoing area in its
-frame, so that the stack pointer never moves after the prologue, which is
-what the vendor compiler does and costs no instructions at a call, but the
-backend lays a frame out before it has lowered the calls that say how large
-the area is, and its stack carriers are addressed from the moving stack
-pointer as its RISC-V origin's are; and `movsp`, which raises an exception
-the compiler-owned vectors would have to handle by the same copy. Both were
-declined for now; the first remains the better code.
+**The alternatives:** carrying the caller's three other words with the
+stack pointer, copying them from below the frame's stack pointer to below
+the lowered one after each move down and back before each move up, which
+was the first answer and held under the same control, but costs twelve
+instructions at every call with more than six argument words and leaves
+the stack pointer moving, which each later use of the area would have had
+to reason about again; and `movsp`, which raises an exception the
+compiler-owned vectors would have to handle by the same copy. Both were
+declined; the maintainer chose the frame layout over the copy.
 
-**Pinned by** `xtensa backend/an outgoing area carries the base save`, the
-copies and their order in the emitted text, and the `window-arguments`
-control of `environments/xtensa/backend.py`, a caller six frames above a
-routine that passes eight argument words, executed on both chips' machines.
+**Pinned by** `xtensa backend/an outgoing area is part of the frame`, the
+area in the one prologue that needs it and no write of the stack pointer
+after any prologue, and the `window-arguments` control of
+`environments/xtensa/backend.py`, a caller six frames above a routine that
+passes eight argument words, executed on both chips' machines.
 
 ### D661 — An rv32 program that reaches no description is given the RISC-V reference
 
@@ -22749,9 +22753,10 @@ first stored zeros through the module data below the stack.
 target and for a call's argument area as for a frame. x86-64 subtracts in
 a register and branches on the carry before it compares, where `lea` set
 no flag; arm64 subtracts with flags and makes the comparison conditional
-on no borrow, reading as below otherwise; RISC-V and the Xtensa routines
-derived from it branch when the difference is above the stack pointer it
-was taken from, as Xtensa's own windowed prologue does; and Cortex-M
+on no borrow, reading as below otherwise; RISC-V branches when the
+difference is above the stack pointer it was taken from, as Xtensa's
+windowed prologue does, whose frame holds the argument area (D1110); and
+Cortex-M
 branches on the carry of the subtraction it already made. That is no
 instruction more on arm64, one on RISC-V, Xtensa and Cortex-M and two on
 x86-64. A program that prepares no stack still has no check, and its code
@@ -22772,10 +22777,13 @@ immediate holds and one it does not, and `xtensa backend/the stack switch
 masks before its context`, the same in Xtensa's prologue. The review's
 programs, D471's own fixture with a frame larger than its static stack's
 address, end with the handler's status on Linux x86-64, arm64 and RV64 and
-with the trap on Cortex-M3 and RV32 under QEMU. No fixture executes it:
-the firmware corpus has no disposition for a runtime fixture whose frame
-L0507 refuses under a firmware entry, and the frame that wraps on a hosted
-target is larger than any firmware stack.
+with the trap on Cortex-M3 and RV32 under QEMU.
+`runtime/stack-frame-past-address-zero-traps` executes it on the hosted
+targets: a fibre's stack in module storage and a sixteen-megabyte frame,
+which ends with the handler's status and ended by a segmentation fault
+before. The frame that wraps on a hosted target is larger than any
+firmware stack, so its corpus row records the selected profile's limit and
+no firmware lane executes it.
 
 ### D472 — A saved context carries its limit, a margin above its stack's base
 
@@ -22802,13 +22810,13 @@ save; and a failed check's call of the handler or the default report, and
 the handler's own depth; on Cortex-M0 also D461's thirty-six bytes, which an
 interrupt may stack at any instruction. The worst before a handler's own
 frames is two unchecked figures, a frame record and the call, except on
-Xtensa: it checks every ordinary frame, including call-free routines. Its
-unchecked outgoing area is at most 256 bytes; the failed callee's 32-byte
-ENTRY and a 16-byte ABI spill cushion bring that to 304 bytes, below its
-conservative 416-byte allowance. Window exceptions use the existing ABI
-spill areas and recorded backchains without reserving another frame; D1110
-keeps a caller's spill area with the stack pointer when an outgoing area
-moves it.
+Xtensa: it checks every ordinary frame, including call-free routines, and
+a frame holds its routine's outgoing area (D1110), so no area is unchecked.
+The failed callee's 32-byte ENTRY and a 16-byte ABI spill cushion are 48
+bytes, well below its conservative 416-byte allowance, which still counts
+a 256-byte area. Window exceptions use the existing ABI spill areas and
+recorded backchains without reserving another frame, and the stack pointer
+they are found from stays where the prologue left it.
 
 | Target | Margin | Unchecked | Switch frame | Before the handler | Left for the handler |
 |---|---|---|---|---|---|

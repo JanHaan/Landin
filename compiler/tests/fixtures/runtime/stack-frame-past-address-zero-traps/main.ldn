@@ -1,0 +1,70 @@
+--  D471: the check compares the stack pointer less the frame with the
+--  stack's limit, and a frame larger than the stack pointer's own value
+--  leaves a difference that wrapped past zero and is above every limit.
+--  The default Linux executable is static and not position independent,
+--  so module storage, and with it this fibre's stack, lies a few
+--  megabytes above address zero, 86 KiB above it on RV64; the frame of
+--  `large` is sixteen megabytes.  The selected handler records the kind
+--  and resumes main's context, which finds the paint beside the stack
+--  whole and ends with 42 (D462).  Where the image is loaded higher the
+--  same frame is past the limit without wrapping, and the result is the
+--  same.
+import core/panic
+
+mut canary: [65536]u8 = zeroed
+mut memory: [8192]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut seen: i32 = 6
+mut entered: u32 = 0
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    seen = match kind
+        panic.stack_exhausted: if site <> 0 then 42 else 5 end if
+        panic.out_of_range: 1
+        panic.overflow: 2
+        panic.bad_conversion: 3
+        panic.unreachable: 4
+    end match
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end panic_handler
+
+large: (seed: u8) -> (sum: u32) =
+    mut table: [16777216]u8 = zeroed
+    table[usize(seed)] = seed
+    sum = u32(table[0]) + u32(table[16777215]) + u32(table[usize(seed)])
+end large
+
+--  `large` is called through a function value, so no optimization copies
+--  its frame into this one's (D339).
+fibre: (argument: usize) -> noreturn =
+    entered = 1
+    grow := large
+    seen = i32(grow(u8(argument)))
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end fibre
+
+public main: () -> (code: i32) =
+    mut index: usize = 0
+    while index < 65536 do
+        canary[index] = 90
+        inc index
+    end while
+    fibre_saved = compiler.stack_prepare(memory[256..<8192], fibre, 7)
+    compiler.stack_switch(addr main_saved, fibre_saved)
+    code = seen
+    index = 0
+    while index < 65536 do
+        if canary[index] <> 90 then
+            code = 9
+        end if
+        inc index
+    end while
+    if entered <> 1 then
+        code = 8
+    end if
+end main

@@ -6,6 +6,7 @@ with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
+with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
@@ -149,22 +150,80 @@ package body Landin.Stages.Lowering is
       Activity : constant not null access Landin.Configuration.Table :=
         Configurations (Context);
 
+      --  A table with an entry for every declaration, syntax node,
+      --  signature, instance or conformance of the program is on the
+      --  heap: in this frame such tables took the eight megabytes a
+      --  process's stack is given at some forty thousand routines, and
+      --  the compilation ended as the host exhausted.  Filled in a loop,
+      --  so that no aggregate a table's size passes through the frame on
+      --  its way there.
+      generic
+         type Index is range <>;
+         type Element is private;
+         type Elements is array (Index range <>) of Element;
+         Default : Element;
+      package Program_Tables is
+         type Elements_Access is access Elements;
+         type Table (Last : Index) is
+           new Ada.Finalization.Limited_Controlled with record
+            Data : Elements_Access;
+         end record;
+         overriding procedure Initialize (Object : in out Table);
+         overriding procedure Finalize (Object : in out Table);
+      end Program_Tables;
+
+      package body Program_Tables is
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Elements, Elements_Access);
+
+         overriding procedure Initialize (Object : in out Table) is
+         begin
+            Object.Data := new Elements (1 .. Object.Last);
+            for Part of Object.Data.all loop
+               Part := Default;
+            end loop;
+         end Initialize;
+
+         overriding procedure Finalize (Object : in out Table) is
+         begin
+            Free (Object.Data);
+         end Finalize;
+      end Program_Tables;
+
       --  Scalar module expressions containing an opaque representation
       --  conversion are folded with the shared guarded image folder before
       --  the datum block is emitted. They never create runtime frame storage.
       subtype Module_Image_Index is Res.Declaration_Id range
         1 .. Res.Declaration_Id
           (Natural'Max (1, Res.Declaration_Count (Meanings.all)));
-      Distinct_Image : array (Module_Image_Index) of Ty.Folded :=
-        [others => 0];
-      Has_Distinct_Image : array (Module_Image_Index) of Boolean :=
-        [others => False];
+      type Declaration_Folds is
+        array (Res.Declaration_Id range <>) of Ty.Folded;
+      package Declaration_Fold_Tables is new Program_Tables
+        (Res.Declaration_Id, Ty.Folded, Declaration_Folds, 0);
+      type Declaration_Flags is
+        array (Res.Declaration_Id range <>) of Boolean;
+      package Declaration_Flag_Tables is new Program_Tables
+        (Res.Declaration_Id, Boolean, Declaration_Flags, False);
+      type Position_Flags is array (Positive range <>) of Boolean;
+      package Position_Flag_Tables is new Program_Tables
+        (Positive, Boolean, Position_Flags, False);
+
+      Held_Distinct_Image : Declaration_Fold_Tables.Table
+        (Module_Image_Index'Last);
+      Distinct_Image : Declaration_Folds renames
+        Held_Distinct_Image.Data.all;
+      Held_Has_Distinct_Image : Declaration_Flag_Tables.Table
+        (Module_Image_Index'Last);
+      Has_Distinct_Image : Declaration_Flags renames
+        Held_Has_Distinct_Image.Data.all;
 
       --  A module routine or binding the program cannot reach is neither
       --  lowered nor emitted, whatever module declares it.  It is still
       --  checked: a module's errors are errors whether or not a program
       --  uses it.  Filled before pass one; see Retain_Reachable.
-      Retained : array (Module_Image_Index) of Boolean := [others => False];
+      Held_Retained : Declaration_Flag_Tables.Table
+        (Module_Image_Index'Last);
+      Retained : Declaration_Flags renames Held_Retained.Data.all;
 
       --  Whether module routine or binding ID becomes an item of this
       --  program.  A generic template is retained when its body is, which
@@ -257,11 +316,16 @@ package body Landin.Stages.Lowering is
       subtype Declared is Positive range
         1 .. Positive'Max (1, Res.Declaration_Count (Meanings.all));
 
-      type Slot_Map is array (Declared) of IR.Slot_Id;
+      type Slot_Map is array (Positive range <>) of IR.Slot_Id;
+      package Slot_Tables is new Program_Tables
+        (Positive, IR.Slot_Id, Slot_Map, IR.No_Slot);
 
-      No_Slots : constant Slot_Map := [others => IR.No_Slot];
+      --  Never written: what Slots is cleared from for each item.
+      Blank_Slots : Slot_Tables.Table (Declared'Last);
+      No_Slots : Slot_Map renames Blank_Slots.Data.all;
 
-      Slots : Slot_Map := No_Slots;
+      Held_Slots : Slot_Tables.Table (Declared'Last);
+      Slots : Slot_Map renames Held_Slots.Data.all;
 
       function Total_Syntax_Nodes return Natural;
 
@@ -281,9 +345,16 @@ package body Landin.Stages.Lowering is
          Item   : IR.Item_Id              := IR.No_Item;
       end record;
 
-      Anonymous_Routines : array
-        (1 .. Positive'Max (1, Total_Syntax_Nodes)) of Anonymous_Entry :=
-          [others => (others => <>)];
+      Syntax_Nodes : constant Positive :=
+        Positive'Max (1, Total_Syntax_Nodes);
+
+      type Anonymous_Entries is
+        array (Positive range <>) of Anonymous_Entry;
+      package Anonymous_Tables is new Program_Tables
+        (Positive, Anonymous_Entry, Anonymous_Entries, (others => <>));
+      Held_Anonymous : Anonymous_Tables.Table (Syntax_Nodes);
+      Anonymous_Routines : Anonymous_Entries renames
+        Held_Anonymous.Data.all;
       Anonymous_Count : Natural := 0;
 
       --  Where each source's nodes start in one run over every tree, so a
@@ -319,8 +390,8 @@ package body Landin.Stages.Lowering is
       --  neither.  Lowering visits no other node.  Filled before pass one;
       --  see Retain_Reachable.  A compilation that keeps everything
       --  leaves it empty and says so in Keep_Everything.
-      Live : array (1 .. Positive'Max (1, Total_Syntax_Nodes)) of Boolean :=
-        [others => False];
+      Held_Live : Position_Flag_Tables.Table (Syntax_Nodes);
+      Live : Position_Flags renames Held_Live.Data.all;
       Keep_Everything : Boolean := True;
 
       function Live_Position
@@ -433,57 +504,84 @@ package body Landin.Stages.Lowering is
         1 .. Positive'Max
                (1, Landin.Checking.Signature_Count (Types.all));
       type Signature_Map is
-        array (Source_Signature) of IR.Signature_Id;
-      Signatures : Signature_Map := [others => IR.No_Signature];
+        array (Positive range <>) of IR.Signature_Id;
+      package Signature_Tables is new Program_Tables
+        (Positive, IR.Signature_Id, Signature_Map, IR.No_Signature);
+      Held_Signatures : Signature_Tables.Table (Source_Signature'Last);
+      Signatures : Signature_Map renames Held_Signatures.Data.all;
       --  [0670]: a struct may take itself `inout` in its own function
       --  field.  The parameter's pointee is the struct's body, whose field
       --  is the signature being built, so a build that meets itself names
       --  the struct by identity there, as a pointer's pointee does, and
       --  its answer is the signature's one answer.
-      Signature_Underway : array (Source_Signature) of Boolean :=
-        [others => False];
+      Held_Signature_Underway : Position_Flag_Tables.Table
+        (Source_Signature'Last);
+      Signature_Underway : Position_Flags renames
+        Held_Signature_Underway.Data.all;
 
       subtype Source_Evidence is Positive range
         1 .. Positive'Max
                (1, Landin.Checking.Conformance_Count (Types.all));
-      type Evidence_Map is array (Source_Evidence) of IR.Evidence_Id;
+      type Evidence_Map is array (Positive range <>) of IR.Evidence_Id;
+      package Evidence_Tables is new Program_Tables
+        (Positive, IR.Evidence_Id, Evidence_Map, IR.No_Evidence);
       package Evidence_Slot_Vectors is new Ada.Containers.Vectors
         (Index_Type => Positive, Element_Type => IR.Slot_Id);
-      Evidence : Evidence_Map := [others => IR.No_Evidence];
-      Any_Evidence : Evidence_Map := [others => IR.No_Evidence];
+      Held_Evidence : Evidence_Tables.Table (Source_Evidence'Last);
+      Evidence : Evidence_Map renames Held_Evidence.Data.all;
+      Held_Any_Evidence : Evidence_Tables.Table (Source_Evidence'Last);
+      Any_Evidence : Evidence_Map renames Held_Any_Evidence.Data.all;
       Evidence_Slots : Evidence_Slot_Vectors.Vector;
 
       subtype Source_Routine_Instance is Positive range
         1 .. Positive'Max
                (1, Landin.Checking.Routine_Instance_Count (Types.all));
-      type Generic_Signature_Map is
-        array (Source_Routine_Instance) of IR.Signature_Id;
-      Generic_Signatures : Generic_Signature_Map :=
-        [others => IR.No_Signature];
+      Held_Generic_Signatures : Signature_Tables.Table
+        (Source_Routine_Instance'Last);
+      Generic_Signatures : Signature_Map renames
+        Held_Generic_Signatures.Data.all;
 
       package Evidence_Position_Sets is new Ada.Containers.Ordered_Sets
         (Element_Type => Positive);
-      Evidence_Uses : array (Source_Routine_Instance)
-        of Evidence_Position_Sets.Set;
-      Evidence_Use_Count : array (Source_Routine_Instance) of Natural :=
-        [others => 0];
+      type Position_Sets is
+        array (Positive range <>) of Evidence_Position_Sets.Set;
+      package Position_Set_Tables is new Program_Tables
+        (Positive, Evidence_Position_Sets.Set, Position_Sets,
+         Evidence_Position_Sets.Empty_Set);
+      type Position_Counts is array (Positive range <>) of Natural;
+      package Position_Count_Tables is new Program_Tables
+        (Positive, Natural, Position_Counts, 0);
+      Held_Evidence_Uses : Position_Set_Tables.Table
+        (Source_Routine_Instance'Last);
+      Evidence_Uses : Position_Sets renames Held_Evidence_Uses.Data.all;
+      Held_Evidence_Use_Count : Position_Count_Tables.Table
+        (Source_Routine_Instance'Last);
+      Evidence_Use_Count : Position_Counts renames
+        Held_Evidence_Use_Count.Data.all;
 
       --  Which ready generic instances and which conformances' tables this
       --  program can reach, by checker interning position, beside Retained.
-      Instance_Retained : array (Source_Routine_Instance) of Boolean :=
-        [others => False];
-      Evidence_Retained : array (Source_Evidence) of Boolean :=
-        [others => False];
+      Held_Instance_Retained : Position_Flag_Tables.Table
+        (Source_Routine_Instance'Last);
+      Instance_Retained : Position_Flags renames
+        Held_Instance_Retained.Data.all;
+      Held_Evidence_Retained : Position_Flag_Tables.Table
+        (Source_Evidence'Last);
+      Evidence_Retained : Position_Flags renames
+        Held_Evidence_Retained.Data.all;
 
       --  D484: which entries of a retained conformance's table the program
       --  can project, and so whose providers are lowered.  A table every
       --  entry of which is needed, as an erased one is, says so in
       --  Every_Entry_Reached; otherwise Entries_Reached holds the entry
       --  positions a reached selection names, and the rest are absent.
-      Every_Entry_Reached : array (Source_Evidence) of Boolean :=
-        [others => False];
-      Entries_Reached : array (Source_Evidence)
-        of Evidence_Position_Sets.Set;
+      Held_Every_Entry_Reached : Position_Flag_Tables.Table
+        (Source_Evidence'Last);
+      Every_Entry_Reached : Position_Flags renames
+        Held_Every_Entry_Reached.Data.all;
+      Held_Entries_Reached : Position_Set_Tables.Table
+        (Source_Evidence'Last);
+      Entries_Reached : Position_Sets renames Held_Entries_Reached.Data.all;
 
       function Entry_Reached (Position : Positive; Which : Positive)
         return Boolean
@@ -729,8 +827,11 @@ package body Landin.Stages.Lowering is
          Payload_Field : Natural := 0;
       end record;
 
-      type Alias_Map is array (Declared) of Payload_Alias;
-      Aliases : Alias_Map := [others => (others => <>)];
+      type Alias_Map is array (Positive range <>) of Payload_Alias;
+      package Alias_Tables is new Program_Tables
+        (Positive, Payload_Alias, Alias_Map, (others => <>));
+      Held_Aliases : Alias_Tables.Table (Declared'Last);
+      Aliases : Alias_Map renames Held_Aliases.Data.all;
 
       --  D161/D181: every text literal is one read-only datum holding its
       --  contextual code units and [0260]'s trailing NUL.  The key includes
@@ -16655,7 +16756,8 @@ package body Landin.Stages.Lowering is
          Pending : Walk_Vectors.Vector;
 
          --  Which reached conformances have had D145's parents reached.
-         Closed : array (Source_Evidence) of Boolean := [others => False];
+         Held_Closed : Position_Flag_Tables.Table (Source_Evidence'Last);
+         Closed : Position_Flags renames Held_Closed.Data.all;
 
          --  What Reach_Conformance's Which may say besides one entry: that
          --  every entry is reached, or only that the table exists.
@@ -16676,8 +16778,9 @@ package body Landin.Stages.Lowering is
          package Declaration_Vectors is new Ada.Containers.Vectors
            (Index_Type => Positive, Element_Type => Res.Declaration_Id);
          Naked_Definitions : Declaration_Vectors.Vector;
-         Viewed : array (Module_Image_Index) of Boolean :=
-           [others => False];
+         Held_Viewed : Declaration_Flag_Tables.Table
+           (Module_Image_Index'Last);
+         Viewed : Declaration_Flags renames Held_Viewed.Data.all;
 
          function Linked_Function
            (Id : Res.Declaration_Id; Naked : Boolean) return Boolean;
@@ -16999,7 +17102,9 @@ package body Landin.Stages.Lowering is
          end loop;
 
          if not Rooted then
-            Retained := [others => True];
+            for Kept of Retained loop
+               Kept := True;
+            end loop;
             for Position in
               1 .. Landin.Checking.Routine_Instance_Count (Types.all)
             loop
@@ -17025,7 +17130,9 @@ package body Landin.Stages.Lowering is
                          (Types.all, Position)),
                     Landin.Checking.Compiler_Erased_Conformance);
             end loop;
-            Every_Entry_Reached := [others => True];
+            for Reached of Every_Entry_Reached loop
+               Reached := True;
+            end loop;
          else
             Keep_Everything := False;
 
@@ -18083,8 +18190,14 @@ package body Landin.Stages.Lowering is
 
          type Image_State is (Unseen, Visiting, Resolved);
 
-         Where : array (Numbered) of Image_State := [others => Unseen];
-         Made  : array (Numbered) of Boolean := [others => False];
+         type Image_States is
+           array (Res.Declaration_Id range <>) of Image_State;
+         package Image_State_Tables is new Program_Tables
+           (Res.Declaration_Id, Image_State, Image_States, Unseen);
+         Held_Where : Image_State_Tables.Table (Numbered'Last);
+         Where : Image_States renames Held_Where.Data.all;
+         Held_Made : Declaration_Flag_Tables.Table (Numbered'Last);
+         Made  : Declaration_Flags renames Held_Made.Data.all;
 
          package Descriptor_Vectors is new Ada.Containers.Vectors
            (Index_Type   => Positive,
@@ -18228,7 +18341,8 @@ package body Landin.Stages.Lowering is
          --  distinct set from Where above, because Fold_Scalar_Datum can
          --  reach a module binding that also owns an array image and the
          --  two questions travel through the same table.
-         Folding : array (Numbered) of Boolean := [others => False];
+         Held_Folding : Declaration_Flag_Tables.Table (Numbered'Last);
+         Folding : Declaration_Flags renames Held_Folding.Data.all;
 
          procedure Fold_Scalar_Datum
            (Id    : Res.Declaration_Id;
