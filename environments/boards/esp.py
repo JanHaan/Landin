@@ -539,12 +539,35 @@ def power_cycle(args, off, on, wait=lambda: None):
     waits for its end.  Each switch alone already was; the port was off
     between them, and a SIGINT or SIGTERM arriving then, or deferred by
     the first switch and raised as it ended, stopped the tool with the
-    port off, where no later run switches it on."""
+    port off, where no later run switches it on.
+
+    A cycle that fails of itself, the off half done, the hub not listing
+    again, is not left there either: ON is still tried, once, through the
+    same pacing and guards, and the failure is raised as it was.  Where
+    ON itself fails, or the pace guard refuses it after USB trouble, the
+    port is off and nothing here may force it, so the failure says so and
+    how it is switched on by hand."""
     with common.uninterrupted():
-        paced(args, 'power off', off)
-        time.sleep(args.off_seconds)
-        wait()
-        paced(args, 'power on', on)
+        try:
+            paced(args, 'power off', off)
+            time.sleep(args.off_seconds)
+            wait()
+        except common.Failed as error:
+            try:
+                paced(args, 'power on', on)
+            except (common.Failed, OSError, subprocess.TimeoutExpired) as second:
+                raise type(error)('%s; %s: %s' % (error, LEFT_OFF, second)) from error
+            raise type(error)('%s; the port was switched on again' % error) from error
+        try:
+            paced(args, 'power on', on)
+        except common.Failed as error:
+            raise type(error)('%s; %s' % (error, LEFT_OFF)) from error
+
+
+#  What a failed power cycle says when it could not switch the port on.
+LEFT_OFF = ('the port is left off, and later runs end `unavailable` until it'
+            ' is on: once the hub lists again, `uhubctl -l HUB -p PORT -a on`'
+            " with the run's --hub and --port")
 
 
 def restore_fixed(run, args, chip, probe, console_for, cycle, settle):

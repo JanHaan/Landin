@@ -660,6 +660,53 @@ class Paced(unittest.TestCase):
         with self.assertRaises(COMMON.Unavailable):
             ESP.power_cycle(args, lambda: None, lambda: None, absent)
 
+    def test_a_cycle_that_fails_of_itself_still_switches_the_port_on(self):
+        args = SimpleNamespace(arty_serial=None, cascade=None, pace=mock.Mock(), off_seconds=0)
+        done = []
+
+        def absent():
+            raise COMMON.Unavailable('the hub did not list')
+
+        def half_off():
+            done.append('off')
+            raise COMMON.Failed('uhubctl did not switch port 2 off')
+        # The hub not listing between the switches, and an off that failed
+        # half way: the on is tried, and the failure is the first one.
+        for off, wait, kind in ((lambda: done.append('off'), absent, COMMON.Unavailable),
+                                (half_off, lambda: None, COMMON.Failed)):
+            del done[:]
+            with self.assertRaises(kind) as raised:
+                ESP.power_cycle(args, off, lambda: done.append('on'), wait)
+            self.assertIs(type(raised.exception), kind)
+            self.assertEqual(done, ['off', 'on'])
+            self.assertIn('; the port was switched on again', str(raised.exception))
+            self.assertNotIn('left off', str(raised.exception))
+
+        # An on that fails, after a good off or as the second try, leaves
+        # the port off and says so with the command; it is tried once.
+        def no_on():
+            done.append('on')
+            raise COMMON.Failed('uhubctl did not switch port 2 on')
+        for wait, first in ((lambda: None, 'uhubctl did not switch port 2 on'),
+                            (absent, 'the hub did not list')):
+            del done[:]
+            with self.assertRaises(COMMON.Failed) as raised:
+                ESP.power_cycle(args, lambda: done.append('off'), no_on, wait)
+            self.assertEqual(done, ['off', 'on'])
+            said = str(raised.exception)
+            self.assertTrue(said.startswith(first), said)
+            self.assertIn('the port is left off', said)
+            self.assertIn('`uhubctl -l HUB -p PORT -a on`', said)
+        # The pace guard refusing the on after USB trouble is not overridden:
+        # the outcome stays the stop's own.
+        args.pace.before.side_effect = [None, COMMON.USBGuardError('USB trouble since')]
+        del done[:]
+        with self.assertRaises(COMMON.USBGuardError) as raised:
+            ESP.power_cycle(args, lambda: done.append('off'), lambda: done.append('on'))
+        self.assertEqual(done, ['off'])
+        self.assertEqual(raised.exception.outcome, 'usb-stopped')
+        self.assertIn('the port is left off', str(raised.exception))
+
 
 class Recover(unittest.TestCase):
     def test_download_mode_is_esptool_s_usb_jtag_serial_sequence(self):
