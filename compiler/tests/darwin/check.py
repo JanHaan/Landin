@@ -249,6 +249,9 @@ def main(argv=None):
     parser.add_argument("--profile", choices=["none", "size", "speed"], help="development only")
     parser.add_argument("--parity", action="store_true", help="complete shared hosted corpus")
     args = parser.parse_args(argv)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     require(platform.system() == "Darwin" and platform.machine() == "arm64", "native Darwin arm64 required")
     require(subprocess.check_output(["sysctl", "-n", "sysctl.proc_translated"]).strip() == b"0",
             "translated execution is not Darwin acceptance")

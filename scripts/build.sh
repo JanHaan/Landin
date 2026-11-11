@@ -210,6 +210,18 @@ EOF
 
 Current="$(landin_manifest)" || exit
 Incremental="${LANDIN_BUILD_INCREMENTAL:-no}"
+
+#  Name what was built.  A developer build also asks the refine there what
+#  it was built from and says when that is not this checkout's compiler
+#  sources (scripts/refine_revision.py), which only a binary put there by
+#  something other than this script can be; the answer never fails a build.
+landin_built() {
+    echo "built: $LANDIN_BUILD_DIR/bin/refine"
+    if [ "$Incremental" = "yes" ]; then
+        python3 "$LANDIN_ROOT/scripts/refine_revision.py" \
+            --refine "$LANDIN_BUILD_DIR/bin/refine" || true
+    fi
+}
 Reuse="${LANDIN_BUILD_REUSE:-no}"
 
 case "$Incremental" in
@@ -267,7 +279,7 @@ if [ "$Reuse" = "yes" ]; then
         fi
     fi
     echo "landin: imported build matches source and toolchain"
-    echo "built: $LANDIN_BUILD_DIR/bin/refine"
+    landin_built
     exit 0
 fi
 
@@ -372,7 +384,7 @@ if [ "$Incremental" = "yes" ] \
                   "$LANDIN_BUILD_DIR" "$Tests_Manifest" landin_tests; }; }
 then
     echo "landin: checksum manifest unchanged; developer build is current"
-    echo "built: $LANDIN_BUILD_DIR/bin/refine"
+    landin_built
     exit 0
 fi
 
@@ -507,4 +519,4 @@ printf '%s\n%s\n' "$Current" "$Linked_Refine" > "$Manifest.tmp"
 mv -f "$Manifest.tmp" "$Manifest"
 rm -f "$State" "$Attempt"
 
-echo "built: $LANDIN_BUILD_DIR/bin/refine"
+landin_built

@@ -1,4 +1,5 @@
 """Independent ABI/frame and D227 controls over actual emitted M0 code."""
+import sys
 import argparse
 import json
 from pathlib import Path
@@ -88,6 +89,9 @@ def main():
     parser.add_argument('--optimize', default='none')
     parser.add_argument('--specialize', default='off')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     supported_host(args.output)
     args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()

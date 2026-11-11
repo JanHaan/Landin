@@ -178,4 +178,7 @@ if __name__ == '__main__':
     parser.add_argument('--toolchain')
     parser.add_argument('--profile', choices=tuple(a+'-'+b for a,b in PROFILES))
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     measure(**vars(args))

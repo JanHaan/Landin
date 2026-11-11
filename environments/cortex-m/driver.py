@@ -575,6 +575,9 @@ def main():
     p.add_argument('--case',action='append')
     p.add_argument('--profile', choices=[o+'-'+s for o,s in PROFILES])
     a=p.parse_args();supported_host(a.output);a.tools=installed_tools(a.tools);before=inventory(a.tools)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(a.refine)  # is it this checkout's?
     require(a.case is None or set(a.case) <= {'app','protocol','layout'},'unknown driver case')
     a.output.mkdir(parents=True,exist_ok=False)
     record={'status':'failed','tools':before,'scope':'development; not acceptance'}

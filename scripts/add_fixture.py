@@ -434,6 +434,8 @@ def main(argv=None):
                              " fixture for Cortex-M0; the newest this checkout"
                              " built by default")
     args = parser.parse_args(argv)
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     if len(args.fixtures) > 1 and (args.refuse or args.reason or args.stops):
         raise SystemExit("--refuse, --reason and --stops describe one"
                          " fixture's row; add %s in a run of its own each"

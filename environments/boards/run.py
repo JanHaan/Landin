@@ -228,6 +228,9 @@ def main(argv=None):
     parser.add_argument('--host', default='jan@10.42.0.60')
     parser.add_argument('--identity', type=Path, default=Path('~/.ssh/epycmicro-2026-09-17'))
     args = parser.parse_args(arguments)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return execute(args, board_args)
     except (OSError, bundle.Invalid, common.Failed, subprocess.TimeoutExpired) as error:

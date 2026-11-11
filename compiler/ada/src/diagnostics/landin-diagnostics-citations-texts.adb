@@ -28838,6 +28838,25 @@ package body Landin.Diagnostics.Citations.Texts is
                & "heck.py` refuses a recording that still numbers a librar"
                & "y line. A library is what lies outside the fixture: `cor"
                & "e`, `hosted`, `platform` and a device description alike.",
+            when 1307 =>
+               "Chosen: `scripts/refine_revision.py` asks a binary `refi"
+               & "ne version --json` and compares its source digest, the d"
+               & "igest of the compiler sources it was built from, with th"
+               & "e checkout's (`scripts/build_identity.py`). The digest d"
+               & "ecides: equal is current, whatever the revision or dirti"
+               & "ness say, so a build made before a commit of documents i"
+               & "s not stale. Otherwise one warning line says how it part"
+               & "s, by its revision: older, an ancestor of HEAD, with the"
+               & " commits between counted, or HEAD itself built from a cl"
+               & "ean tree that has uncommitted edits to compiler sources "
+               & "since; HEAD built from a dirty tree, whose edits are not"
+               & " the tree's now; newer, a descendant of HEAD; another li"
+               & "ne of history, a commit neither contains, or one the che"
+               & "ckout lacks; and a build outside git. A program that doe"
+               & "s not answer as refine does is not judged. `dev-build.sh"
+               & "` and `dev-test.sh` ask after their build and every lane"
+               & " that takes `--refine` asks after reading its arguments;"
+               & " the warning never changes a status.",
             when 542 =>
                "Chosen: a device is described in Landin source, as one m"
                & "odule made only of tool directives in [1740]'s `tool_dir"

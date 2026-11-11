@@ -455,6 +455,9 @@ def main():
     parser.add_argument("--reduce", default="",
                         help="reduce this hit instead of fuzzing")
     arguments = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(arguments.refine)  # is it this checkout's?
     refine = os.path.abspath(arguments.refine)
     out = Path(arguments.out or ("/tmp/landin-fuzz-%d" % arguments.seed))
     out.mkdir(parents=True, exist_ok=True)

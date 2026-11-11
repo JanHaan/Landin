@@ -376,6 +376,9 @@ def main():
     parser.add_argument('--case', action='append', default=[],
                         help='select an exact control; repeat for a union')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     refine = args.refine.resolve(strict=True)
     root = (args.output.absolute() if args.output else
             Path(tempfile.mkdtemp(prefix='landin-compile-publication-')))

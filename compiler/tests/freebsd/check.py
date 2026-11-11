@@ -763,6 +763,9 @@ def main():
     parser.add_argument('--shard', type=shard, metavar='I/N',
                         help='fixtures I, I+N, ... of the selection; all N together are the lane')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))

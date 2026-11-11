@@ -258,6 +258,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--shape", action="append", choices=sorted(shapes(1)),
                         help="one shape, which repeats; every shape by default")
     options = parser.parse_args(argv)
+    import refine_revision
+    refine_revision.warn(options.refine)  # is it this checkout's?
     driver = shutil.which(options.toolchain) or options.toolchain
     if not os.access(driver, os.X_OK):
         print("image_bounds: no driver %s; name the target's with --toolchain"

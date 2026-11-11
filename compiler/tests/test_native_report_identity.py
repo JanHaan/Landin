@@ -5,6 +5,7 @@ Deliberate real-host exception: these fixtures exercise Platform.Native's
 filesystem identity, using only files owned by each TemporaryDirectory.
 --directory can select a case-sensitive or case-insensitive mounted volume.
 """
+import sys
 import argparse
 import errno
 import json
@@ -254,6 +255,9 @@ if __name__ == "__main__":
     parser.add_argument("--refine", type=Path, required=True)
     parser.add_argument("--directory", type=Path)
     args, tests = parser.parse_known_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     REFINE = args.refine.resolve(strict=True)
     DIRECTORY = args.directory
     unittest.main(argv=[__file__, *tests])

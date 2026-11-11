@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compiler-host checks of the complete driver's manual lifetime boundary."""
+import sys
 import argparse
 import json
 from pathlib import Path
@@ -19,6 +20,9 @@ def main():
  p.add_argument('--refine',type=Path,required=True)
  p.add_argument('--output',type=Path,required=True)
  a=p.parse_args();a.output.mkdir(parents=True,exist_ok=False)
+ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+ import refine_revision
+ refine_revision.warn(a.refine)  # is it this checkout's?
  records=[]
  for name,(body,expected) in CASES.items():
   d=a.output/name;d.mkdir();source=d/'main.ldn'

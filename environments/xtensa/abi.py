@@ -114,6 +114,9 @@ def main():
     parser.add_argument('--tools', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     tools = Tools(args.tools)
     args.output.mkdir(parents=True, exist_ok=False)
     try:

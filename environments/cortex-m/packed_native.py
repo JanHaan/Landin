@@ -5,6 +5,7 @@ each line it writes is one device access, which the encoding model performs
 and answers.  There is no CPU model behind it.  This lane runs Linux
 instructions and is distinct from the M0 C control.
 """
+import sys
 import argparse
 import json
 from pathlib import Path
@@ -129,6 +130,9 @@ def main():
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     supported_host(args.output)
     args.tools = installed_tools(args.tools)
     out = args.output.resolve()

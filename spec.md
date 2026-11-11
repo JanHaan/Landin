@@ -26913,6 +26913,39 @@ recording`, `scripts/tests/test_fixture_meta.py`'s `RecordedReports`, and
 the 22 recorded negatives that quote the library, among them
 `negative/core-text-private-position`.
 
+### D1307 — The scripts say when a refine is not its checkout's
+
+**The tour said** nothing; `refine version` named the revision a binary was
+built from, and nothing compared it with the checkout beside it, so a
+two-week-old release compiler's refusals were taken for the current
+compiler's defects, and a stale binary refused an empty program over a
+library file it predated.
+
+**Chosen:** `scripts/refine_revision.py` asks a binary `refine version
+--json` and compares its source digest, the digest of the compiler sources
+it was built from, with the checkout's (`scripts/build_identity.py`). The
+digest decides: equal is current, whatever the revision or dirtiness say,
+so a build made before a commit of documents is not stale. Otherwise one
+warning line says how it parts, by its revision: older, an ancestor of
+HEAD, with the commits between counted, or HEAD itself built from a clean
+tree that has uncommitted edits to compiler sources since; HEAD built from
+a dirty tree, whose edits are not the tree's now; newer, a descendant of
+HEAD; another line of history, a commit neither contains, or one the
+checkout lacks; and a build outside git. A program that does not answer as
+refine does is not judged. `dev-build.sh` and `dev-test.sh` ask after
+their build and every lane that takes `--refine` asks after reading its
+arguments; the warning never changes a status.
+
+**The alternatives:** `refine` comparing itself with the checkout it finds,
+which makes a compiler read git; comparing revisions alone, which calls a
+binary stale after every commit of documents; refusing to run a stale
+binary, which stops the comparisons that run an older compiler on purpose;
+and warning only in the two developer scripts, which leaves the lanes
+handed a binary by path, where the stale one was met.
+
+**Pinned by** `scripts/tests/test_refine_revision.py`, whose `Callers`
+holds every lane that takes `--refine` and the developer build to asking.
+
 ### D542 — A device description is a module of directives, and its generated half has one text
 
 **The tour said** at [1410] that a module is every `.ldn` file of one

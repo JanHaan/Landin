@@ -33,6 +33,9 @@ def main():
     parser.add_argument('--parity', action='store_true')
     parser.add_argument('--workload', choices=linux.WORKLOADS, help='development only')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'native arm64 Mac required'
     import panic
     output = panic.fresh(args.output)

@@ -264,6 +264,9 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True,
                         help="directory for retained measurement evidence")
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     require(platform.system() == "Linux" and platform.machine() == "x86_64",
             "object quality requires Linux x86-64; no skip is a pass")
     refine = args.refine.resolve(strict=True)

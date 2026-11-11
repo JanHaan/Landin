@@ -969,6 +969,9 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     supported_host(args.output)
     args.tools = installed_tools(args.tools)
     before = inventory(args.tools)

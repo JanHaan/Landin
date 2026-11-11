@@ -397,6 +397,9 @@ def main():
     parser.add_argument("--output", type=Path,
                         help="new directory for retained binaries/logs/results")
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     if args.native_only == bool(args.refine):
         parser.error('give --native-only or --refine PATH')
     repo = Path(__file__).resolve().parents[2]

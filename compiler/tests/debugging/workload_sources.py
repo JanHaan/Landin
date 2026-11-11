@@ -72,6 +72,9 @@ def main() -> int:
     parser.add_argument("--write", action="store_true",
                         help="rewrite workload-sources.json with the computed closures")
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     refine = args.refine.resolve(strict=True)
     recorded = json.loads(RECORD.read_text())
     with tempfile.TemporaryDirectory(prefix="workload-sources-") as directory:
