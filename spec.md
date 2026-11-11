@@ -26910,6 +26910,39 @@ without a checkout to files that are not there.
 and `end-to-end/firmware-archive-with-constructor`, each its code's
 example, and the `catalogue` case `every code is explained`.
 
+### D1251 — A related label on the report's own span is a defect only in the test program
+
+**The discrepancy:** a checker report that names a second place was refused
+as a compiler defect when that place was the report's own span, on the
+ground that a check which knows nothing of its context should name the
+construct it was written in. The refusal was made where the report was
+built, in the compiler anyone runs, and some 350 call sites rely on never
+passing such a place without one of them proving it. Three did. Each
+turned a true diagnostic about the user's program into `internal compiler
+defect` and no diagnostic at all.
+
+**Chosen:** `refine` reports the diagnostic. The label that repeats the
+report's span is left out where the code's row lets a report go without
+one. Where the row promises exactly one label, as L0313's and L0340's do
+with thirty-two others, the label is kept and the row stays true of every
+occurrence: the report then shows its span once, with the label's words
+under it, as it already did for a label that explains the primary span.
+The test program asks for the refusal before it runs anything, through
+`Landin.Diagnostics.Checking.Refuse_Repeated_Places`, so a check that
+passes its own span still fails the case or fixture that reaches it. The
+switch is the program's and not the build mode's: a debug build of
+`refine` reports as a release build does.
+
+**The alternatives:** raising in every program, as before. Raising by
+build mode, which makes the development build a user or a maintainer runs
+by hand the one that hides the diagnostic. Leaving the label out of every
+report and loosening the thirty-four rows to admit none, which makes the
+catalogue describe a state only a defect produces. Auditing every call
+site instead, which holds until the next one is written.
+
+**Pinned by** the `diagnostics` cases `a checker report names a second
+place` and `a repeated place is left out when not refused`.
+
 ### D542 — A device description is a module of directives, and its generated half has one text
 
 **The tour said** at [1410] that a module is every `.ldn` file of one

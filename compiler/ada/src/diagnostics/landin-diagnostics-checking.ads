@@ -180,6 +180,16 @@ package Landin.Diagnostics.Checking is
             when Float_16      => Narrow_Float_Type,
             when Arena_Handle  => Arena_Region);
 
+   --  D1251: whether Report raises Compiler_Defect for a related label
+   --  on the report's own span.  It does not unless asked, in either build
+   --  mode: the label is left out, or kept where the code's row promises
+   --  one, and the diagnostic is reported.  The test program asks before
+   --  it runs a case, so a check that passes its own span fails the suite
+   --  that reaches it.  It is set once, before any report is made.
+   procedure Refuse_Repeated_Places (Strict : Boolean);
+
+   function Refuses_Repeated_Places return Boolean;
+
    procedure Report
      (Item    : Failure;
       Source  : Landin.Source.Source_Id;

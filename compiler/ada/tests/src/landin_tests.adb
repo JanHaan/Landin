@@ -12,6 +12,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
+with Landin.Diagnostics.Checking;
 with Landin.Platform;
 with Landin.Testing;
 with Landin.Testing.Lanes;
@@ -449,6 +450,9 @@ procedure Landin_Tests is
    end Read_Arguments;
 
 begin
+   --  D1251: a checker report whose related place is its own span is a
+   --  defect in this program and nowhere else, in either build mode.
+   Landin.Diagnostics.Checking.Refuse_Repeated_Places (True);
    Read_Arguments;
 
    if Mode = Misuse then
