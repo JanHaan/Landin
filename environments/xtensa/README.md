@@ -29,6 +29,7 @@ python3 environments/xtensa/backend.py \
   --refine "$REFINE" --tools "$TOOLS" --output "$OUT/controls" \
   --chip esp32 --control status-control --control trap-control \
   --control window-depth --control window-switch --control window-arguments \
+  --control double-exception-control \
   --control scalars \
   --control software-float --control assembly-operands --control feature-level \
   --control break-control --control early-stop-control --control premature-stop-control
@@ -44,8 +45,10 @@ a premature firmware stop; the latter two cannot count as completion even
 with zero status and no recorded trap. Trap controls also check the recorded
 PC against the emitted instruction. The window controls exercise overflow and
 underflow, round trips between two stacks with live recursive frames, and a
-caller whose window is taken while its callee's SP is lowered for stack
-arguments.
+caller whose window is taken beneath a callee that passes stack arguments.
+A double exception control raises an illegal instruction with `PS.EXCM`
+set and checks that the recorded PC is that instruction's, which only
+`DEPC` holds.
 
 The corpus adapter reads the sole shared
 [inventory](../../compiler/tests/cortex-m/corpus.json) and its retained
@@ -103,7 +106,12 @@ selects the ELF entry; the runner independently verifies the initial PC
 against that entry before continuing. The unchanged two-GiB static-array
 fixture exceeds this virtual map too. Its existing selected-image limit
 requires an actual capacity-only link failure corroborated by the retained
-link map and object sections, and makes no execution claim.
+link map and object sections, and makes no execution claim. A row with
+that limit is also met by a routine whose frame the selected stack cannot
+hold: the lane builds with a firmware entry, where refine refuses such a
+frame with L0507, and it records the limit when L0507 is the only code and
+no assembly was written. That is no `refuse` row: a refusal is compiled
+without an entry, where L0507 is not given.
 
 Configuration and compatibility controls run separately:
 

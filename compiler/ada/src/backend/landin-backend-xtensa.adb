@@ -468,6 +468,118 @@ package body Landin.Backend.Xtensa is
       Debug_Plan, Debug_Frame, Debug_Slot, 8, False,
       Single_LEB_Operand => True);
 
+   --  D673: the language convention's carrier of each argument of a
+   --  call or parameter of a routine.  In order, each takes the next
+   --  of a0-a7, or at XLEN 32 an eight-byte value the next two, low
+   --  word first; the first that does not fit, and every one after
+   --  it, takes an eight-byte word of the area at the callee's CFA.
+   --  At XLEN 64 that is the Nth in a(N-1) and the ninth on at sp.
+   type Carrier is record
+      --  a0's ordinal from one, or zero for a stack word.
+      Register : Natural := 0;
+      Stack_At : Landin.Targets.Byte_Count := 0;
+      Pair : Boolean := False;
+   end record;
+   type Carrier_Array is array (Positive range <>) of Carrier;
+   type Pair_Flags is array (Positive range <>) of Boolean;
+
+   function Carriers (Wide : Pair_Flags) return Carrier_Array;
+
+   function Carriers (Wide : Pair_Flags) return Carrier_Array is
+      Result : Carrier_Array (Wide'Range);
+      Next : Natural := 0;
+      Spilled : Boolean := False;
+      Words : Natural := 0;
+   begin
+      for Index in Wide'Range loop
+         Result (Index).Pair := Wide (Index);
+         if Wide (Index) then
+            Next := (Next + 1) / 2 * 2;
+         end if;
+         if not Spilled
+           and then Next + (if Wide (Index) then 2 else 1) <= 6
+         then
+            Result (Index).Register := Next + 1;
+            Next := Next + (if Wide (Index) then 2 else 1);
+         else
+            Spilled := True;
+            if Wide (Index) then
+               Words := (Words + 1) / 2 * 2;
+            end if;
+            Result (Index).Stack_At :=
+              Landin.Targets.Byte_Count (Words) * 4;
+            Words := Words + (if Wide (Index) then 2 else 1);
+         end if;
+      end loop;
+      return Result;
+   end Carriers;
+
+   --  The area a call's stack carriers take, aligned to sixteen.
+   function Carrier_Bytes (Places : Carrier_Array)
+     return Landin.Targets.Byte_Count;
+
+   function Carrier_Bytes (Places : Carrier_Array)
+     return Landin.Targets.Byte_Count
+   is
+      Bytes : Landin.Targets.Byte_Count := 0;
+   begin
+      for Place of Places loop
+         if Place.Register = 0 then
+            Bytes := Landin.Targets.Byte_Count'Max
+              (Bytes, Place.Stack_At + (if Place.Pair then 8 else 4));
+         end if;
+      end loop;
+      return Stack_Align (Bytes, 16, 16#7fff_ffff#);
+   end Carrier_Bytes;
+
+   --  D1110: the outgoing area of a routine's frame, the largest any of
+   --  its calls takes.  It is the frame's lowest bytes, so a callee finds
+   --  its stack words at its CFA and SP stays where the prologue left it:
+   --  the window handlers keep a caller's a0 to a3 in the sixteen bytes
+   --  below this routine's SP, wherever SP is when the caller's window is
+   --  taken and wherever it is at RETW, and those must be one place.
+   function Outgoing_Area
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count;
+
+   function Outgoing_Area
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count
+   is
+      Area : Landin.Targets.Byte_Count := 0;
+   begin
+      for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+         declare
+            Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id (Index);
+            Op : constant Landin.IR.Opcode :=
+              Landin.IR.Op_Of (Of_Unit, Item, Value);
+         begin
+            if Op in Landin.IR.Call | Landin.IR.Indirect_Call then
+               declare
+                  Offset : constant Natural :=
+                    (if Op = Landin.IR.Indirect_Call then 1 else 0);
+                  Count : constant Natural :=
+                    Landin.IR.Operand_Count (Of_Unit, Item, Value) - Offset;
+               begin
+                  Area := Landin.Targets.Byte_Count'Max
+                    (Area, Carrier_Bytes (Carriers
+                       ([for Operand in 1 .. Count =>
+                           Size_Of
+                             (Landin.IR.Result_Of
+                                (Of_Unit, Item, Landin.IR.Nth_Operand
+                                   (Of_Unit, Item, Value, Operand + Offset)),
+                              Facts) = Landin.Targets.Byte_8])));
+               end;
+            end if;
+         end;
+      end loop;
+      return Area;
+   end Outgoing_Area;
+
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
       Item : Landin.IR.Item_Id;
@@ -547,9 +659,11 @@ package body Landin.Backend.Xtensa is
       --  The frame the emitter lays out at the reference options, which
       --  give every value its own home and so bound every other's.
       return Stack >= 256
+        and then Outgoing_Area (Of_Unit, Item, Facts) <= Stack - 256
         and then Extent (Routine_Frame
           (Of_Unit, Item, Facts, Landin.Optimization.Reference_Options,
-           16#7fff_ffff#)) <= Stack - 256;
+           16#7fff_ffff#))
+          <= Stack - 256 - Outgoing_Area (Of_Unit, Item, Facts);
    exception
       when Stack_Limit_Exceeded => return False;
    end Frame_Fits_Firmware_Stack;
@@ -640,7 +754,6 @@ package body Landin.Backend.Xtensa is
       procedure Immediate (Register : String; Value : Pattern);
       procedure Add_Offset
         (Register : String; Offset : Landin.Targets.Byte_Count);
-      procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count);
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String);
@@ -651,7 +764,6 @@ package body Landin.Backend.Xtensa is
          Offset : Landin.Targets.Byte_Count);
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x9");
-      procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       function High (Register : String) return String;
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
@@ -725,37 +837,6 @@ package body Landin.Backend.Xtensa is
             end if;
          end if;
       end Add_Offset;
-
-      --  D1110: the window handlers keep the caller's a0 to a3 in the
-      --  sixteen bytes below this routine's SP, wherever SP is when the
-      --  caller's window is taken and wherever it is at RETW.  A call's
-      --  outgoing area moves SP between the two, so the three words the
-      --  selected SP write does not form go with it: down after SP has
-      --  moved and up before it moves back, which keeps both copies above
-      --  the SP an interrupt's handler stack starts 32 bytes below.  a7
-      --  is the frame's SP, the only one an area is reserved from.
-      procedure Move_Base_Save (From, To : String);
-
-      procedure Move_Base_Save (From, To : String) is
-      begin
-         for Offset in 1 .. 4 loop
-            --  The a1 word, at -12, is the CFA every SP write stores.
-            if Offset /= 2 then
-               Put (Character'Val (9) & "l32e a8, " & From & ", -"
-                    & Image (20 - Offset * 4));
-               Put (Character'Val (9) & "s32e a8, " & To & ", -"
-                    & Image (20 - Offset * 4));
-            end if;
-         end loop;
-      end Move_Base_Save;
-
-      procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count) is
-      begin
-         if Bytes > 0 then
-            Move_Base_Save (From => "a1", To => "a7");
-         end if;
-         Add_Offset ("sp", Bytes);
-      end Restore_Stack;
 
       procedure Address (Register, Name : String; Imported : Boolean := False)
       is
@@ -879,20 +960,6 @@ package body Landin.Backend.Xtensa is
                     (if Register = "x9" then "x18" else "x9"));
          end if;
       end Frame_Memory;
-
-      procedure Reserve (Bytes : Landin.Targets.Byte_Count) is
-      begin
-         if Bytes > 0 then
-            if Bytes <= 2048 then
-               Emit ("addi sp, sp, -"
-                 & Trimmed (Landin.Targets.Byte_Count'Image (Bytes)));
-            else
-               Immediate ("x5", Pattern (Bytes));
-               Emit ("sub sp, sp, x5");
-            end if;
-            Move_Base_Save (From => "a7", To => "a1");
-         end if;
-      end Reserve;
 
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
@@ -1300,30 +1367,9 @@ package body Landin.Backend.Xtensa is
       --  and restores it.
       Stack_Used : Boolean := False;
       Prepares : constant Boolean := Landin.Backend.Prepares_Stacks (Of_Unit);
-      Unchecked_Bytes : constant Landin.Targets.Byte_Count :=
-        Landin.Backend.Unchecked_Stack_Bytes (Facts);
       Limit_Margin : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Stack_Limit_Margin (Facts);
       Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
-
-      --  D497: the cell is the running thread's, a word of ELF thread
-      --  storage reached from `tp` in the local-exec model; a target with
-      --  no threads keeps one cell in module storage.  Limit_Base forms
-      --  the base the cell is at Limit_Offset from.
-      Limit_Offset : constant String :=
-        (if Landin.Backend.Has_Threads (Facts)
-         then "%tprel_lo(" & Stack_Limit & ")" else "0");
-      procedure Limit_Base (Register : String);
-      procedure Limit_Base (Register : String) is
-      begin
-         if Landin.Backend.Has_Threads (Facts) then
-            Emit ("lui " & Register & ", %tprel_hi(" & Stack_Limit & ")");
-            Emit ("add " & Register & ", " & Register & ", tp, %tprel_add("
-                  & Stack_Limit & ")");
-         else
-            Emit ("lla " & Register & ", " & Stack_Limit);
-         end if;
-      end Limit_Base;
 
       --  D496: a datum's address.  A thread's instance is at its offset
       --  from `tp`, in the local-exec model's three instructions.
@@ -1677,14 +1723,11 @@ package body Landin.Backend.Xtensa is
          package Edge_Vectors is new Ada.Containers.Vectors
            (Positive, Panic_Edge);
          Edges : Edge_Vectors.Vector;
-         --  D467: the largest area the body reserves below its frame.
-         Deepest_Area : Landin.Targets.Byte_Count := 0;
+         --  D1110: the frame's outgoing area, below the word homes.
+         Outgoing : constant Landin.Targets.Byte_Count :=
+           Outgoing_Area (Of_Unit, Item, Facts);
          --  D672: the libgcc helpers the body calls at XLEN 32.
          Helpers_Called : Natural := 0;
-         --  D471: whether a stack limit check branches to this routine's
-         --  own stack_exhausted trap, laid out after the others.
-         Limit_Trapped : Boolean := False;
-         Limit_Trap : constant String := Label (Item, 1) & "_stack_limit";
 
          --  Where this routine's text begins in the output.
          Routine_Start : constant Natural := Unbounded.Length (Output);
@@ -1746,44 +1789,6 @@ package body Landin.Backend.Xtensa is
             end loop;
             return False;
          end Calls_Helper;
-
-         --  D471: go to the limit trap when the stack pointer less Bytes is
-         --  below the current stack's limit, before anything is written
-         --  there.  x5 to x7 are free wherever a frame or an area is
-         --  reserved.  The far jump goes through x7 rather than through the
-         --  private x26 a long branch uses, because a prologue's check
-         --  comes before x26 is saved.
-         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count);
-
-         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
-            Fits : constant String := Fresh;
-            Wrapped : constant String := Fresh;
-         begin
-            if Bytes = 0 then
-               Emit ("mv x5, sp");
-            elsif Bytes <= 2048 then
-               Emit ("addi x5, sp, -"
-                     & Trimmed (Landin.Targets.Byte_Count'Image (Bytes)));
-            else
-               Immediate ("x5", Pattern (Bytes));
-               Emit ("sub x5, sp, x5");
-            end if;
-            Limit_Base ("x6");
-            Emit (Load_Word & " x6, " & Limit_Offset & "(x6)");
-            --  A frame larger than the stack pointer's own value leaves a
-            --  difference that wrapped past zero and is above every limit.
-            if Bytes > 0 then
-               Emit ("bltu sp, x5, " & Wrapped);
-            end if;
-            Emit ("bgeu x5, x6, " & Fits);
-            if Bytes > 0 then
-               Put (Wrapped & ":");
-            end if;
-            Emit ("lla x7, " & Limit_Trap);
-            Emit ("jr x7");
-            Put (Fits & ":");
-            Limit_Trapped := True;
-         end Check_Limit;
 
          function Trap (Reason : Landin.Panics.Kind) return String;
          function Trap return String;
@@ -1947,74 +1952,6 @@ package body Landin.Backend.Xtensa is
             end if;
          end Check_Fit;
 
-         --  D673: the language convention's carrier of each argument of a
-         --  call or parameter of a routine.  In order, each takes the next
-         --  of a0-a7, or at XLEN 32 an eight-byte value the next two, low
-         --  word first; the first that does not fit, and every one after
-         --  it, takes an eight-byte word of the area at the callee's CFA.
-         --  At XLEN 64 that is the Nth in a(N-1) and the ninth on at sp.
-         type Carrier is record
-            --  a0's ordinal from one, or zero for a stack word.
-            Register : Natural := 0;
-            Stack_At : Landin.Targets.Byte_Count := 0;
-            Pair : Boolean := False;
-         end record;
-         type Carrier_Array is array (Positive range <>) of Carrier;
-         type Pair_Flags is array (Positive range <>) of Boolean;
-
-         function Carriers (Wide : Pair_Flags) return Carrier_Array;
-
-         function Carriers (Wide : Pair_Flags) return Carrier_Array is
-            Result : Carrier_Array (Wide'Range);
-            Next : Natural := 0;
-            Spilled : Boolean := False;
-            Words : Natural := 0;
-         begin
-            for Index in Wide'Range loop
-               Result (Index).Pair := Wide (Index);
-               if Wide (Index) then
-                  Next := (Next + 1) / 2 * 2;
-               end if;
-               if not Spilled
-                 and then Next + (if Wide (Index) then 2 else 1) <= 6
-               then
-                  Result (Index).Register := Next + 1;
-                  Next := Next + (if Wide (Index) then 2 else 1);
-               else
-                  Spilled := True;
-                  if Wide (Index) then
-                     Words := (Words + 1) / 2 * 2;
-                  end if;
-                  Result (Index).Stack_At :=
-                    Landin.Targets.Byte_Count (Words) * 4;
-                  Words := Words + (if Wide (Index) then 2 else 1);
-               end if;
-            end loop;
-            return Result;
-         end Carriers;
-
-         --  The area a call's stack carriers take, aligned to sixteen.
-         function Carrier_Bytes (Places : Carrier_Array)
-           return Landin.Targets.Byte_Count;
-
-         function Carrier_Bytes (Places : Carrier_Array)
-           return Landin.Targets.Byte_Count
-         is
-            Bytes : Landin.Targets.Byte_Count := 0;
-         begin
-            for Place of Places loop
-               if Place.Register = 0 then
-                  Bytes := Landin.Targets.Byte_Count'Max
-                    (Bytes, Place.Stack_At + (if Place.Pair then 8 else 4));
-               end if;
-            end loop;
-            --  The current window's base save area may already hold
-            --  spilled ancestor registers. Keep outgoing arguments below
-            --  that 32-byte area when moving SP.
-            return (if Bytes = 0 then 0 else
-              Stack_Align (Bytes, 16, 16#7fff_ffff#) + 32);
-         end Carrier_Bytes;
-
          function Argument_Register (Ordinal : Positive) return String
            is ("x" & Image (Ordinal + 9));
 
@@ -2041,7 +1978,8 @@ package body Landin.Backend.Xtensa is
             end loop;
             Put (Character'Val (9) & "l32i a6, a7, "
                  & Native_Word_Offset (31));
-            Put (Character'Val (9) & "mov a1, a7");
+            --  SP is where the prologue left it, which RETW's underflow
+            --  handler reads the caller's base save below.
             Put (Character'Val (9) & "retw");
          end Epilogue;
 
@@ -4597,12 +4535,13 @@ package body Landin.Backend.Xtensa is
                         C_Call (Value);
                         return;
                      end if;
-                     if Checks and then Bytes > Unchecked_Bytes then
-                        Check_Limit (Bytes);
+                     --  The stack words go to the frame's outgoing area,
+                     --  at SP, which the prologue's check covered.
+                     if Bytes > Outgoing then
+                        raise Compiler_Defect with
+                          "an Xtensa call's stack words exceed its frame's"
+                          & " outgoing area";
                      end if;
-                     Reserve (Bytes);
-                     Deepest_Area :=
-                       Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
                      for Index in 1 .. Count loop
                         if Places (Index).Pair
                           and then Places (Index).Register /= 0
@@ -4657,7 +4596,6 @@ package body Landin.Backend.Xtensa is
                      then
                         Store_Value (Value, "x10");
                      end if;
-                     Restore_Stack (Bytes);
                   end;
                when Landin.IR.Jump =>
                   Emit ("j " & Label (Item, Landin.IR.Target_Of (Of_Unit,
@@ -4807,6 +4745,8 @@ package body Landin.Backend.Xtensa is
          --  Source assembly retains all 128 logical bytes plus its
          --  64-byte snapshot bank at 128 + physical register number * 4.
          --  Source homes lie between the banks and the spill area.
+         --  D1110: the outgoing area is below all of it, at SP, and a7,
+         --  the base of the word homes, stands above it.
          declare
             Total : constant Landin.Targets.Byte_Count :=
               Stack_Align
@@ -4826,7 +4766,7 @@ package body Landin.Backend.Xtensa is
                begin
                   Put (Character'Val (9) & "movi a8, "
                        & Trimmed (Landin.Targets.Byte_Count'Image
-                           (Total - 16)));
+                           (Total + Outgoing - 16)));
                   Put (Character'Val (9) & "sub a8, a1, a8");
                   Put (Character'Val (9) & "movi a9, " & Stack_Limit);
                   Put (Character'Val (9) & "l32i a9, a9, 0");
@@ -4859,11 +4799,23 @@ package body Landin.Backend.Xtensa is
                Put (Character'Val (9) & "s32i a9, a8, 0");
             end if;
             Put (Character'Val (9) & "movi a8, "
-                 & Trimmed (Landin.Targets.Byte_Count'Image (Total - 32)));
+                 & Trimmed (Landin.Targets.Byte_Count'Image
+                     (Total + Outgoing - 32)));
             Put (Character'Val (9) & "sub a1, a1, a8");
-            Put (Character'Val (9) & "s32i a7, a1, "
-                 & Native_Word_Offset (15));
-            Put (Character'Val (9) & "mov a7, a1");
+            if Outgoing = 0 then
+               Put (Character'Val (9) & "s32i a7, a1, "
+                    & Native_Word_Offset (15));
+               Put (Character'Val (9) & "mov a7, a1");
+            else
+               --  The incoming a7 is homed through a8 before a7 becomes
+               --  the base of the homes.
+               Put (Character'Val (9) & "movi a8, "
+                    & Trimmed (Landin.Targets.Byte_Count'Image (Outgoing)));
+               Put (Character'Val (9) & "add a8, a1, a8");
+               Put (Character'Val (9) & "s32i a7, a8, "
+                    & Native_Word_Offset (15));
+               Put (Character'Val (9) & "mov a7, a8");
+            end if;
             for Index in 0 .. 4 loop
                Put (Character'Val (9) & "s32i a" & Image (Index + 2)
                     & ", a7, " & Native_Word_Offset (Index + 10));
@@ -5105,40 +5057,6 @@ package body Landin.Backend.Xtensa is
             end if;
             Emit ("unimp");
          end loop;
-         --  D471: a frame or an area that does not fit traps at the
-         --  routine's own site, from the frame record: nothing below it
-         --  was reserved for what did not fit, or what was is given back.
-         if Limit_Trapped then
-            Put (Limit_Trap & ":");
-            if Debug /= null then
-               Put (Dwarf.Source_Line
-                 (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
-            end if;
-            Put (Character'Val (9) & "mov a1, a7");
-            if Panic = null or else not Landin.Panics.Calls_Out (Panic.all)
-            then
-               null;
-            elsif Landin.Panics.Handler (Panic.all) /= Landin.IR.No_Item
-            then
-               Immediate ("x10", Pattern (Landin.Panics.Code
-                 (Panic.all, Landin.Panics.Stack_Exhausted)));
-               Immediate ("x11", Pattern (Landin.Panics.Site
-                 (Panic.all, Landin.IR.Origin_Of (Of_Unit, Item),
-                  Landin.Panics.Stack_Exhausted)));
-               Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
-            else
-               declare
-                  Line : constant String := Landin.Panics.Report
-                    (Panic.all, Landin.IR.Origin_Of (Of_Unit, Item),
-                     Landin.Panics.Stack_Exhausted);
-               begin
-                  Emit ("lla x10, " & Report_Label (Reports.Index_Of (Line)));
-                  Immediate ("x11", Pattern (Line'Length));
-                  Emit ("call " & Reporter);
-               end;
-            end if;
-            Emit ("unimp");
-         end if;
          Put (Hard_Trap & ":");
          Emit ("unimp");
          if Debug /= null then
@@ -5156,15 +5074,13 @@ package body Landin.Backend.Xtensa is
          --  No value or slot is held in a register: every one has its
          --  home, and the saved registers are selection's fixed scratch.
          Append_Statistics
-           ((Item => Item, Frame_Bytes => Native_Frame_Bytes,
+           ((Item => Item, Frame_Bytes => Native_Frame_Bytes + Outgoing,
              Spill_Bytes => Spill_Bytes (Layout),
              Save_Bytes => Save_Bytes (Layout),
              Register_Count => 0,
              Spill_Count => Plan.Homes,
-             Stack_Bytes => Native_Frame_Bytes + 16 + Deepest_Area,
-             Calls_Panic => not Edges.Is_Empty
-               or else (Limit_Trapped and then Panic /= null
-                        and then Landin.Panics.Calls_Out (Panic.all)),
+             Stack_Bytes => Native_Frame_Bytes + Outgoing + 16,
+             Calls_Panic => not Edges.Is_Empty,
              Helper_Calls => Helpers_Called,
              others => <>));
          Native_Frame_Bytes := 0;

@@ -308,10 +308,11 @@ package body Landin.Tests.Xtensa_Backend_Suite is
 
    --  D1110.  The window handlers store a caller's a0 to a3 below the
    --  callee's SP when the caller's window is taken and read them from
-   --  below it at RETW, so the words go with SP around an outgoing area.
+   --  below it at RETW, so SP stays where the prologue left it: a
+   --  routine's largest outgoing area is the lowest bytes of its frame.
    --  Execution is the window-arguments control of both chips' lanes.
-   procedure Outgoing_Area_Base_Save (Item : in out Landin.Testing.Context);
-   procedure Outgoing_Area_Base_Save (Item : in out Landin.Testing.Context)
+   procedure Outgoing_Area_In_Frame (Item : in out Landin.Testing.Context);
+   procedure Outgoing_Area_In_Frame (Item : in out Landin.Testing.Context)
    is
       HT : constant Character := ASCII.HT;
       Text : constant String := Emitted
@@ -325,41 +326,47 @@ package body Landin.Tests.Xtensa_Backend_Suite is
          & "report: (seed: u64) -> (r: u64) =" & LF
          & "    r = sum4(seed, 2, 3, 4) + sum3(seed, 2, 3)" & LF
          & "end report" & LF);
-      function Moved (From, To : String) return String is
-        (HT & "l32e a8, " & From & ", -16" & LF
-         & HT & "s32e a8, " & To & ", -16" & LF
-         & HT & "l32e a8, " & From & ", -8" & LF
-         & HT & "s32e a8, " & To & ", -8" & LF
-         & HT & "l32e a8, " & From & ", -4" & LF
-         & HT & "s32e a8, " & To & ", -4" & LF);
-      Down : constant String := Moved ("a7", "a1");
-      Up : constant String := Moved ("a1", "a7");
-      Down_At : constant Natural := Ada.Strings.Fixed.Index (Text, Down);
+      Report_At : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, LF & "report:" & LF);
+      --  The fourth u64 is the one stack word pair: sixteen bytes at SP,
+      --  with the base of the word homes above them.
+      Above : constant String :=
+        HT & "sub a1, a1, a8" & LF
+        & HT & "movi a8, 16" & LF
+        & HT & "add a8, a1, a8" & LF
+        & HT & "s32i a7, a8, ";
+      Based : constant String := HT & "mov a7, a8" & LF;
+      Above_At : constant Natural :=
+        (if Report_At = 0 then 0
+         else Ada.Strings.Fixed.Index (Text, Above, Report_At));
       Call_At : constant Natural :=
         Ada.Strings.Fixed.Index (Text, "call8 sum4");
-      Up_At : constant Natural := Ada.Strings.Fixed.Index (Text, Up);
-      Raised_At : constant Natural :=
-        (if Up_At = 0 then 0
-         else Ada.Strings.Fixed.Index
-           (Text, HT & "mov a1, ", Up_At + Up'Length));
    begin
       Landin.Testing.Check
-        (Item, Down_At > 0 and then Call_At > Down_At
-           and then Up_At > Call_At and then Raised_At > Up_At
+        (Item, Report_At > 0 and then Above_At > Report_At
+           and then Call_At > Above_At
+           and then Ada.Strings.Fixed.Count (Text, Above) = 1
+           and then Ada.Strings.Fixed.Count (Text, Based) = 1,
+         "the routine whose call takes stack words lays their area below"
+         & " its word homes, and no other routine has one" & LF & Text);
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Count (Text, HT & "sub a1, a1, a8" & LF) = 3
+           and then Ada.Strings.Fixed.Count (Text, HT & "mov a1, ") = 0
+           and then Ada.Strings.Fixed.Count (Text, HT & "addi a1, ") = 0
+           and then Ada.Strings.Fixed.Count (Text, HT & "add a1, ") = 0
+           and then Ada.Strings.Fixed.Count (Text, HT & "movsp ") = 0,
+         "SP is written by each prologue once and by nothing after it");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Count (Text, HT & "s32e ") = 3
+           and then Ada.Strings.Fixed.Count (Text, HT & "l32e ") = 0,
+         "no base save is copied: only each prologue's backchain word is"
+         & " written below SP");
+      Landin.Testing.Check
+        (Item, Call_At > 0
            and then Ada.Strings.Fixed.Index
-             (Text (Call_At .. Up_At), HT & "mov a1, ") = 0,
-         "the caller's base save goes down after SP and up before it"
-         & LF & Text);
-      Landin.Testing.Check
-        (Item, Down_At > 0
-           and then Text (Down_At - 18 .. Down_At - 1)
-             = "s32e a11, a1, -12" & LF,
-         "the copy down follows the lowered SP's own backchain word");
-      Landin.Testing.Check
-        (Item, Ada.Strings.Fixed.Count (Text, Down) = 1
-           and then Ada.Strings.Fixed.Count (Text, Up) = 1,
-         "a call whose arguments fit the registers moves nothing");
-   end Outgoing_Area_Base_Save;
+             (Text (Above_At .. Call_At), HT & "mov a9, a1" & LF) > 0,
+         "the stack words are addressed from SP");
+   end Outgoing_Area_In_Frame;
 
    --  An interrupt's entry and return leave the firmware's interrupt
    --  context in EXCSAVE1, so the switch masks before it names its own.
@@ -410,8 +417,8 @@ package body Landin.Tests.Xtensa_Backend_Suite is
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
-        (Into, "xtensa backend", "an outgoing area carries the base save",
-         Outgoing_Area_Base_Save'Access);
+        (Into, "xtensa backend", "an outgoing area is part of the frame",
+         Outgoing_Area_In_Frame'Access);
       Landin.Testing.Register
         (Into, "xtensa backend", "the stack switch masks before its context",
          Switch_Masks_First'Access);

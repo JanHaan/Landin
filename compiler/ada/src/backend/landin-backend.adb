@@ -1697,9 +1697,10 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.RV32_ELF =>
             return 768;
          when Landin.Targets.Capabilities.Xtensa_ELF =>
-            --  Every ordinary native frame is checked. Before a failed
-            --  check, at most the unchecked outgoing area (256), ENTRY
-            --  (32) and its spill words (16) use the reserve. The retained
+            --  Every ordinary native frame is checked, its outgoing area
+            --  with it (D1110). Before a failed check, ENTRY (32) and its
+            --  spill words (16) use the reserve; the figure still counts
+            --  the 256-byte area that was once unchecked. The retained
             --  Handler_Entry_Bytes bound is 416; the selected handlers'
             --  measured trap depth is at most 544, including the complete
             --  336-byte window context. Reserve 1_024 for that 960-byte
