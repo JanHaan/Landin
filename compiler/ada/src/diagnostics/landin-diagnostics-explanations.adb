@@ -3305,9 +3305,9 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Region_Placement =>
                "",
             when Catalogue.No_Description =>
-               "For example, the fixture negative/placement-with-no-refe"
-               & "rence-profile of the repository, in compiler/tests/fixtu"
-               & "res:"
+               "For example, the fixture end-to-end/placement-with-no-re"
+               & "ference-profile of the repository, in compiler/tests/fix"
+               & "tures:"
                & LF
                & LF
                & "library/core/README:"
@@ -3325,16 +3325,16 @@ package body Landin.Diagnostics.Explanations is
                & "Run from compiler/ada, it is refused:"
                & LF
                & LF
-               & "    $ refine --target=cortex-m0 --library=../tests/fixtu"
-               & "res/negative/placement-with-no-reference-profile/library"
-               & " ../tests/fixtures/negative/placement-with-no-reference-"
-               & "profile/program.ldn"
+               & "    $ refine compile --target=cortex-m0 --library=../tes"
+               & "ts/fixtures/end-to-end/placement-with-no-reference-profi"
+               & "le/library ../tests/fixtures/end-to-end/placement-with-n"
+               & "o-reference-profile/program.ldn"
                & LF
                & "    error[L0518]: this placement needs a device profile,"
                & " and the program selects none"
                & LF
-               & "      --> ../tests/fixtures/negative/placement-with-no-r"
-               & "eference-profile/program.ldn:1:21"
+               & "      --> ../tests/fixtures/end-to-end/placement-with-no"
+               & "-reference-profile/program.ldn:1:21"
                & LF
                & "      |"
                & LF

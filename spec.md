@@ -26723,7 +26723,7 @@ the text files and neither binary one, so L0538 and L0587 would still show
 nothing; and a reference alone, which sends a reader of `refine explain`
 without a checkout to files that are not there.
 
-**Pinned by** `negative/placement-with-no-reference-profile`,
+**Pinned by** `end-to-end/placement-with-no-reference-profile`,
 `end-to-end/firmware-linker-script-breaks-contract`,
 `end-to-end/boot-stage-too-long`, `end-to-end/image-block-not-as-emitted`
 and `end-to-end/firmware-archive-with-constructor`, each its code's

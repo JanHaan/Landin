@@ -2065,7 +2065,7 @@ description, and the library refine found holds no
 description, or name a library that holds the reference with
 `--library=DIR`.
 
-Example fixture: `negative/placement-with-no-reference-profile`
+Example fixture: `end-to-end/placement-with-no-reference-profile`
 
 `library/core/README`:
 
@@ -2082,9 +2082,9 @@ link(region: "RAM") table: u32 = 1
 Run from `compiler/ada`, it is refused:
 
 ```text
-$ refine --target=cortex-m0 --library=../tests/fixtures/negative/placement-with-no-reference-profile/library ../tests/fixtures/negative/placement-with-no-reference-profile/program.ldn
+$ refine compile --target=cortex-m0 --library=../tests/fixtures/end-to-end/placement-with-no-reference-profile/library ../tests/fixtures/end-to-end/placement-with-no-reference-profile/program.ldn
 error[L0518]: this placement needs a device profile, and the program selects none
-  --> ../tests/fixtures/negative/placement-with-no-reference-profile/program.ldn:1:21
+  --> ../tests/fixtures/end-to-end/placement-with-no-reference-profile/program.ldn:1:21
   |
 1 | link(region: "RAM") table: u32 = 1
   |                     ^^^^^

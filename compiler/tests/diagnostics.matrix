@@ -95,7 +95,7 @@ L0514  Live     error   no-fix   true  nonempty    0..0 1     stages            
 L0515  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-core-mismatch,test:landin-tests-cortex_suite.adb
 L0516  Retired  error   no-fix   false empty-ok    0..0 0     -                                   -
 L0517  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/region-placement-unknown,test:landin-tests-cortex_suite.adb
-L0518  Live     error   no-fix   false empty-ok    0..0 1     driver,stages                       negative/placement-with-no-reference-profile,test:landin-tests-cortex_suite.adb
+L0518  Live     error   no-fix   false empty-ok    0..0 1     driver,stages                       test:landin-tests-cortex_suite.adb
 L0533  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/boot-stage-not-naked,test:landin-tests-cortex_suite.adb
 L0534  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/boot-stage-outside-description,test:landin-tests-cortex_suite.adb
 L0535  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/boot-stage-unwanted,test:landin-tests-cortex_suite.adb

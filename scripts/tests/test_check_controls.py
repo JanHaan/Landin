@@ -32,7 +32,7 @@ ORACLES = list(checker.BENCHMARK_GAME_ORACLES)
 #  The fixtures docs/diagnostics.md names as examples (D1230), and what a
 #  control of the explanations copies: the page, the compiler's sources
 #  and those fixtures.
-EXAMPLE_FIXTURES = ["negative/placement-with-no-reference-profile",
+EXAMPLE_FIXTURES = ["end-to-end/placement-with-no-reference-profile",
                     "end-to-end/firmware-linker-script-breaks-contract",
                     "end-to-end/boot-stage-too-long",
                     "end-to-end/image-block-not-as-emitted",

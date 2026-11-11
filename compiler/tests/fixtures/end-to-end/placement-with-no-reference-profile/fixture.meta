@@ -1,9 +1,8 @@
-class: negative
+class: end-to-end
 summary: D543: a region placement in a program that imports no description needs the library's reference profile, and a library that holds none is L0518, naming --library
 program: program.ldn
 constructs: 1640
 targets: cortex-m0
-codes: L0518
-args: --target=cortex-m0 --library=../tests/fixtures/negative/placement-with-no-reference-profile/library ../tests/fixtures/negative/placement-with-no-reference-profile/program.ldn
+args: compile --target=cortex-m0 --library=../tests/fixtures/end-to-end/placement-with-no-reference-profile/library ../tests/fixtures/end-to-end/placement-with-no-reference-profile/program.ldn
 expect: expected.txt
 status: 1

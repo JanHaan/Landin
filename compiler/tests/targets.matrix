@@ -112,6 +112,7 @@ end-to-end/link-static-needs-linux | darwin-arm64
 end-to-end/link-static-unprojected-evidence-entry | linux-x86-64
 end-to-end/link-static-unreached-c-import | linux-x86-64
 end-to-end/link-static-unsatisfied-c-import | linux-x86-64
+end-to-end/placement-with-no-reference-profile | cortex-m0
 end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, darwin-arm64, linux-rv64
@@ -969,7 +970,6 @@ negative/parenthesised-name-after-a-call-else-is-its-recovery | linux-x86-64, li
 negative/payload-alias-outlives-a-loop-match | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/placement-of-a-generic-routine | cortex-m0
 negative/placement-on-a-hosted-target | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-negative/placement-with-no-reference-profile | cortex-m0
 negative/pointer-case-arm-is-not-an-atom | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-comparison-referent-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-to-cstring-conversion | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
