@@ -20003,6 +20003,39 @@ decided here.
 **Pinned by** the `server` suite's `an exhausted analysis leaves the
 session` and `a publication defect is said once for a text`.
 
+### D1250 — A publication's defect replaces what the module had shown
+
+**The discrepancy:** D1220 said a publication's defect once for a text and
+left open what became of the diagnostics the module had published before
+it. They stayed: the server did not know what the failed analysis would
+have read, so it dropped nothing, and a reader who went on typing saw the
+findings of an earlier text, positions and all, with nothing but a message
+since dismissed to say they were no longer the compiler's.
+
+**Chosen:** while a module's publication ends in a defect, each of its
+open documents is published, at its version, with one diagnostic, the
+defect's report as `window/showMessage` words it, an error from `refine`
+with no code at the document's first position; every other source the
+module had reported on is cleared, or refreshed by another open module
+that reports on it too. The same holds each time the text is published
+again, while D1220's message is still shown once for a text. The first
+publication that completes publishes the module's findings as it always
+does, and so they return. What the module watched on disk is kept through
+the defect, so that a change there analyses it again.
+
+**The alternatives:** leaving the earlier diagnostics, as before. Marking
+them stale, each republished with words or a tag saying it is from an
+earlier text: the protocol has no such state, positions in a text since
+edited are wrong whatever the words say, and the sources of the module
+that are not open would have to be read again to place them. Clearing
+with no diagnostic in the document, which leaves a document with a defect
+looking exactly like a sound one once the message is dismissed.
+
+**Pinned by** the `server` suite's `a publication defect replaces what
+was shown`; a scripted session cannot hold it, since a session runs
+through the executable too and nothing a transcript writes makes the
+compiler fail.
+
 ### D1074 — A program the grammar derives is read by the grammar alone
 
 **The discrepancy:** D260 found a function's closer by indentation before

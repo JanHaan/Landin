@@ -181,9 +181,14 @@ package body Landin.Server.Sessions is
       Watched  : String_Sets.Set;
       --  Each report with no place in a source, as it is shown.
       Told     : String_Sets.Set;
+      --  Every URI a publication was sent to.
+      URIs     : String_Sets.Set;
       --  False once a publication ended in a defect: what it would have
-      --  read is unknown, so nothing the module reported before is dropped.
+      --  read is unknown, and what the module reported before is not
+      --  known to hold of this text, so it is not left on screen (D1250).
       Complete : Boolean := True;
+      --  The first such defect, as it is shown.
+      Defect   : Unbounded.Unbounded_String;
    end record;
 
    --  What a defect's message adds when the defect is the stack or the
@@ -245,6 +250,9 @@ package body Landin.Server.Sessions is
       --  The reports with no place in a source that each module's last
       --  publication showed, so the next one does not show them again.
       Told      : Set_Maps.Map;
+      --  The URIs each module's last publication gave its defect's report
+      --  to instead of diagnostics (D1250).
+      Defective : Set_Maps.Map;
       --  Configured options already said to be unused by some module.
       Said_Unused : String_Sets.Set;
       Cached    : Analysis_Cache;
@@ -600,6 +608,7 @@ package body Landin.Server.Sessions is
                   Watch_Path (Into.Watched, Key, Path);
                   if not Implicit then
                      Into.Paths.Include (Path);
+                     Into.URIs.Include (URI);
                      Send (Landin.Server.Answers.Diagnostics
                        (URI      => URI,
                         Version  => Version,
@@ -671,6 +680,9 @@ package body Landin.Server.Sessions is
                   Tell (1, Text);
                end if;
                Into.Told.Include (Mark);
+               if Unbounded.Length (Into.Defect) = 0 then
+                  Into.Defect := Unbounded.To_Unbounded_String (Text);
+               end if;
             end;
       end Publish;
 
@@ -689,8 +701,50 @@ package body Landin.Server.Sessions is
          Now_Watch : String_Sets.Set := Found.Watched;
          Now_Told  : String_Sets.Set := Found.Told;
       begin
-         if not Found.Complete then
-            Now.Union (Was);
+         if Found.Complete then
+            --  A document that showed a defect's report and is not
+            --  reported on now has nothing to show.
+            for URI of Members (Defective, Key) loop
+               if not Found.URIs.Contains (URI) then
+                  Send (Landin.Server.Answers.Cleared (URI));
+               end if;
+            end loop;
+            Defective.Exclude (Key);
+         else
+            --  D1250: while the defect lasts, each open document of the
+            --  module shows its report and nothing else, and every other
+            --  path the module reported on is cleared below.  What was
+            --  found in an earlier text is not shown as this one's; it
+            --  returns with the publication that completes.
+            declare
+               Shown : String_Sets.Set;
+            begin
+               for Held of Store.Open loop
+                  declare
+                     URI : constant String := Unbounded.To_String (Held.URI);
+                  begin
+                     if Landin.Server.Documents.Module_Key (Store, URI) = Key
+                     then
+                        Send (Landin.Server.Answers.Defect
+                          (URI     => URI,
+                           Version => Held.Version,
+                           Message => Unbounded.To_String (Found.Defect)));
+                        Shown.Include (URI);
+                     end if;
+                  end;
+               end loop;
+               Now.Clear;
+               for Path of Was.Union (Found.Paths) loop
+                  if Shown.Contains
+                       (Landin.Server.Documents.URI_For (Store, Path))
+                  then
+                     Now.Include (Path);
+                  elsif not Was.Contains (Path) then
+                     Clear_Unless_Shared (Key, Path);
+                  end if;
+               end loop;
+               Defective.Include (Key, Shown);
+            end;
             Now_Watch.Union (Was_Watch);
             Now_Told.Union (Members (Told, Key));
          end if;
@@ -752,6 +806,7 @@ package body Landin.Server.Sessions is
          Published.Exclude (Key);
          Watched.Exclude (Key);
          Told.Exclude (Key);
+         Defective.Exclude (Key);
       end Forget;
 
       --  Publish every stale module, each through one of its documents.
@@ -1380,6 +1435,7 @@ package body Landin.Server.Sessions is
                   end loop;
                   if Others_Open then
                      Send (Landin.Server.Answers.Cleared (URI));
+                     Remove (Defective, Key, URI);
                      Stale.Include (Key);
                   else
                      --  Nothing of the module is open: clear what it said.

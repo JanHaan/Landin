@@ -1521,8 +1521,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check
         (Item, Status = 0
          and then Ada.Strings.Fixed.Count
-           (Output, "refine: internal compiler defect analysing"
-                    & " file:///workspace/app/main.ldn""") = 2
+           (Output, """type"":1,""message"":""refine: internal compiler"
+                    & " defect analysing file:///workspace/app/main.ldn""")
+           = 2
          and then Ada.Strings.Fixed.Count
            (Output, """method"":""window/showMessage""") = 2
          and then Ada.Strings.Fixed.Index
@@ -1535,6 +1536,125 @@ package body Landin.Tests.Server_Suite is
            (Output, """id"":3,""result"":null") > 0,
          "three publications of two texts say the defect twice: " & Output);
    end A_Publication_Defect_Is_Said_Once_For_A_Text;
+
+   procedure A_Publication_Defect_Replaces_What_Was_Shown
+     (Item : in out Landin.Testing.Context);
+
+   --  D1250: while a module's publication ends in a defect, its open
+   --  document shows the defect's report alone and the other sources it
+   --  reported on are cleared; the same text published again shows the
+   --  same, and the findings return when a text no longer meets it.
+   procedure A_Publication_Defect_Replaces_What_Was_Shown
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Channel : Landin.Testing.Fakes.Fake_Channel;
+      Script : Unbounded.Unbounded_String;
+      Status : Landin.Server.Sessions.Exit_Status;
+      URI : constant String := "file:///workspace/app/main.ldn";
+      Other : constant String := "file:///workspace/app/other.ldn";
+
+      procedure Send (Message : String);
+      procedure Change (Version : Positive; Text : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+
+      procedure Change (Version : Positive; Text : String) is
+      begin
+         Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didChange"","
+               & """params"":{""textDocument"":{""uri"":"
+               & Landin.Json.Quoted (URI) & ",""version"":"
+               & Ada.Strings.Fixed.Trim (Version'Image, Ada.Strings.Left)
+               & "},""contentChanges"":[{""text"":"
+               & Landin.Json.Quoted (Text) & "}]}}");
+         Channel.Pause_At (Unbounded.Length (Script));
+      end Change;
+
+      Sound : constant String := "aa: u8 = nope" & LF;
+      Met   : constant String := "import bad" & LF & Sound;
+   begin
+      Host.Add_Directory ("/workspace");
+      Host.Add_Directory ("/workspace/app");
+      Host.Add_Directory ("/workspace/bad");
+      Host.Add_File ("/workspace/app/main.ldn", Sound);
+      Host.Add_File ("/workspace/app/other.ldn", "bb: u8 = gone" & LF);
+      Host.Add_File ("/workspace/bad/bad.ldn", "cc: u8 = 1" & LF);
+      Host.Raise_On_Reads_Of ("/workspace/bad/bad.ldn");
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},""initializationOptions"":"
+            & "{""roots"":[""file:///workspace""]}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (URI) & ",""version"":1,""text"":"
+            & Landin.Json.Quoted (Sound) & "}}}");
+      Channel.Pause_At (Unbounded.Length (Script));
+      Change (2, Met);
+      Send ("{""jsonrpc"":""2.0"",""method"":"
+            & """workspace/didChangeWatchedFiles"",""params"":{""changes"":"
+            & "[{""uri"":" & Landin.Json.Quoted (Other) & ",""type"":2}]}}");
+      Channel.Pause_At (Unbounded.Length (Script));
+      Change (3, Sound);
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+      declare
+         Output : constant String := Landin.Testing.Fakes.Output (Channel);
+         Words : constant String :=
+           "refine: internal compiler defect analysing " & URI;
+         Report : constant String :=
+           """diagnostics"":[{""range"":{""start"":{""line"":0,"
+           & """character"":0},""end"":{""line"":0,""character"":0}},"
+           & """severity"":1,""source"":""refine"",""message"":"""
+           & Words & """}]}}";
+
+         --  Where the Nth publication to a document starts, and what
+         --  follows its URI.
+         function Published
+           (To : String; Nth : Positive; Rest : String) return Boolean;
+
+         function Published
+           (To : String; Nth : Positive; Rest : String) return Boolean
+         is
+            Head : constant String :=
+              """method"":""textDocument/publishDiagnostics"","
+              & """params"":{""uri"":""" & To & """,";
+            From : Natural := Output'First;
+            At_Index : Natural := 0;
+         begin
+            for Count in 1 .. Nth loop
+               At_Index := Ada.Strings.Fixed.Index (Output, Head, From);
+               if At_Index = 0 then
+                  return False;
+               end if;
+               From := At_Index + Head'Length;
+            end loop;
+            return From + Rest'Length - 1 <= Output'Last
+              and then Ada.Strings.Fixed.Index
+                (Output (From .. Output'Last), Rest) = From;
+         end Published;
+      begin
+         Landin.Testing.Check
+           (Item, Status = 0
+            and then Published (URI, 1, """version"":1,""diagnostics"":[{")
+            and then Published (Other, 1, """diagnostics"":[{")
+            and then Published (URI, 2, """version"":2," & Report)
+            and then Published (Other, 2, """diagnostics"":[]}}")
+            and then Published (URI, 3, """version"":2," & Report)
+            and then Published (URI, 4, """version"":3,""diagnostics"":[{")
+            and then Published (Other, 3, """diagnostics"":[{")
+            and then not Published (URI, 5, "")
+            and then not Published (Other, 4, "")
+            and then Ada.Strings.Fixed.Count (Output, "L0201") = 4
+            and then Ada.Strings.Fixed.Count
+              (Output, """method"":""window/showMessage""") = 1,
+            "a defect's report replaces the module's diagnostics while it"
+            & " lasts: " & Output);
+      end;
+   end A_Publication_Defect_Replaces_What_Was_Shown;
 
    procedure An_Exhausted_Analysis_Leaves_The_Session
      (Item : in out Landin.Testing.Context);
@@ -1556,8 +1676,13 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check
         (Item, Status = 0
          and then Ada.Strings.Fixed.Count
-           (Output, "refine: internal compiler defect analysing"
-                    & " file:///workspace/app/main.ldn" & Words) = 2
+           (Output, """type"":1,""message"":""refine: internal compiler"
+                    & " defect analysing file:///workspace/app/main.ldn"
+                    & Words) = 2
+         and then Ada.Strings.Fixed.Count
+           (Output, """source"":""refine"",""message"":""refine: internal"
+                    & " compiler defect analysing"
+                    & " file:///workspace/app/main.ldn" & Words) = 3
          and then Ada.Strings.Fixed.Index
            (Output, """id"":2,""error"":{""code"":-32603,""message"":"
                     & """refine: internal compiler defect" & Words) > 0
@@ -2671,6 +2796,10 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "a publication defect is said once for a text",
          A_Publication_Defect_Is_Said_Once_For_A_Text'Access);
+      Landin.Testing.Register
+        (Into, "server",
+         "a publication defect replaces what was shown",
+         A_Publication_Defect_Replaces_What_Was_Shown'Access);
       Landin.Testing.Register
         (Into, "server", "an exhausted analysis leaves the session",
          An_Exhausted_Analysis_Leaves_The_Session'Access);

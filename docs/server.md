@@ -214,8 +214,13 @@ met while a request is answered is the request's InternalError, and one met
 while a notification is handled or a module is published is said through
 `window/showMessage`; the session goes on after each. A module's defect is
 said when a text first meets it and not again each time that text is
-published, the text being the module's open documents at their versions;
-what the module last reported stays as it was. An analysis that exhausts
+published, the text being the module's open documents at their versions.
+While it lasts, each open document of the module shows that one report, at
+its first position, in place of its diagnostics, and every other source the
+module had reported on is cleared unless another open module reports on it
+too: what an earlier text found is not shown as this one's. The findings
+return with the first publication that completes (D1250). An analysis that
+exhausts
 the stack or the memory is such a defect, and its message says so (D1220),
 wherever the host reports the exhaustion to the program rather than ending
 it.
