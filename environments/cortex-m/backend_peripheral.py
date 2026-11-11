@@ -1,4 +1,5 @@
 """Actual compiler-generated ARMv6-M instructions driving synthetic devices."""
+import sys
 import argparse
 import json
 from pathlib import Path
@@ -105,6 +106,9 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--all-profiles', action='store_true')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     supported_host(args.output)
     args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()

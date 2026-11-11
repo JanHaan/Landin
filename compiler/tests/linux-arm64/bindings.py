@@ -11,6 +11,7 @@ peer against it at every standard profile -- natively, on an arm64 Linux
 host, which is the only place the result is evidence.  It is the
 counterpart compiler/tests/linux-arm64/parity.json names for that fixture.
 """
+import sys
 import argparse
 import hashlib
 import json
@@ -57,6 +58,9 @@ def main():
                         help="the aarch64 sysroot Clang reads headers from")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     require((platform.system(), platform.machine()) == ("Linux", "aarch64"),
             "native Linux arm64 required; no skip is a pass")
     output = args.output.resolve()

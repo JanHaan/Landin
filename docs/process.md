@@ -204,6 +204,22 @@ chosen for each one. When several related commands are necessary, enter
 `nix develop` once and run them inside it. Use `sh -eu -c` for dependent
 commands, so an earlier failure stops the sequence.
 
+A `refine` from a sibling checkout or an older build is easy to pick up,
+and its refusals look like the current compiler's. After a developer
+build, `dev-build.sh` and `dev-test.sh` ask the binary what it was built
+from, and so does every lane that takes `--refine`;
+`python3 scripts/refine_revision.py --refine PATH` asks for any other.
+`refine version --json` names the revision, whether that tree was dirty
+and the digest of the compiler sources the binary was built from, and the
+digest decides: a binary built from the checkout's compiler sources is
+current, whatever its revision says. Any other gets one `landin:
+warning:` line on standard error saying how it parts from the checkout:
+older, when it was built from an ancestor of HEAD, or from HEAD with the
+tree's uncommitted edits made since; newer, from a descendant of HEAD;
+and from another line of history, or from a revision the checkout lacks,
+which is neither (D1307). The warning changes no status, and `refine`
+itself never reads git.
+
 The test program's workers are another matter, and a brief names them.
 `LANDIN_TEST_JOBS` is one by default and reaches only the two corpus-wide
 cases of `fixture execution`; a run that selects that suite, or runs the

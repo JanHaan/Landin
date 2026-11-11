@@ -5,6 +5,7 @@ End-to-end fixtures are verdicts about `refine` itself rather than about a
 program, and they are run here too: a Darwin claim in one is otherwise a
 claim nothing on Darwin checks.
 """
+import sys
 import argparse
 import hashlib
 import json
@@ -45,6 +46,9 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case', help='exact fixture; development only')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     run = Run(output)
@@ -87,7 +91,10 @@ def main():
             require(codes == expected_codes, f'{name}: diagnostic codes differ: {codes!r}')
             if 'expect' in meta:
                 expected = (ROOT / 'compiler/tests/fixtures' / name / meta['expect']).read_bytes()
-                require(actual == expected, exact_difference(name, meta['expect'], expected, actual))
+                # The recording holds a library location to its file, column
+                # and quoted line, not its number (compiler/tests/README.md).
+                recorded = fixture_meta.recorded_report(actual, '../tests/fixtures/' + name)
+                require(recorded == expected, exact_difference(name, meta['expect'], expected, recorded))
             if meta.get('stream') == 'output':
                 require(not stderr, f'{name}: unexpected stderr')
             summary['results'].append(dict(case=name, status='passed', exit=status,

@@ -27181,6 +27181,114 @@ site instead, which holds until the next one is written.
 **Pinned by** the `diagnostics` cases `a checker report names a second
 place` and `a repeated place is left out when not refused`.
 
+### D1306 — A recorded report holds a library line by its text, not its number
+
+**The tour said** nothing; a recorded fixture's `expect` file held
+refine's report byte for byte, and a report quotes each source it cites
+under the line's number, so an edit above a library line that a negative
+fixture's report quoted, one import line added to `core/text/text.ldn`,
+failed fixtures the change did not touch, and the cost of a moved library
+line was a re-recording of every report that cited the file.
+
+**Chosen:** the harness records and compares a report in its recorded
+form. A location in a file outside the fixture's own directory, read
+lexically from where refine ran, keeps its file, its column, the line it
+quotes and its carets, and its line number is written `*`, in the
+location and in the quoted line's gutter, whose width becomes the
+marker's; a location in the fixture's own files and every other byte
+stay as refine printed them. A moved library line therefore leaves every
+recording as it was, and a changed one, or a span that moved within its
+line, fails each fixture that quotes it. The test program's two recording
+commands write that form, its recorded cases and Darwin's diagnostics lane
+compare it, and a full `check.py` refuses a recording that still numbers
+a library line. A library is what lies outside the fixture: `core`,
+`hosted`, `platform` and a device description alike.
+
+**The alternatives:** comparing the cited declaration by name, which needs
+a second, structured report the text does not carry; recording the
+numbers and saying which library edit moved them, which keeps every
+re-recording; normalising only the comparison and keeping the numbers in
+the file, which leaves two forms a recording may take and rewrites the
+file on its next re-recording anyway; and replacing the number with an
+offset from the first quoted line, which no report quotes two lines of.
+
+**Pinned by** the `fixture execution` case `a moved library line keeps its
+recording`, `scripts/tests/test_fixture_meta.py`'s `RecordedReports`, and
+the 22 recorded negatives that quote the library, among them
+`negative/core-text-private-position`.
+
+### D1307 — The scripts say when a refine is not its checkout's
+
+**The tour said** nothing; `refine version` named the revision a binary was
+built from, and nothing compared it with the checkout beside it, so a
+two-week-old release compiler's refusals were taken for the current
+compiler's defects, and a stale binary refused an empty program over a
+library file it predated.
+
+**Chosen:** `scripts/refine_revision.py` asks a binary `refine version
+--json` and compares its source digest, the digest of the compiler sources
+it was built from, with the checkout's (`scripts/build_identity.py`). The
+digest decides: equal is current, whatever the revision or dirtiness say,
+so a build made before a commit of documents is not stale. Otherwise one
+warning line says how it parts, by its revision: older, an ancestor of
+HEAD, with the commits between counted, or HEAD itself built from a clean
+tree that has uncommitted edits to compiler sources since; HEAD built from
+a dirty tree, whose edits are not the tree's now; newer, a descendant of
+HEAD; another line of history, a commit neither contains, or one the
+checkout lacks; and a build outside git. A program that does not answer as
+refine does is not judged. `dev-build.sh` and `dev-test.sh` ask after
+their build and every lane that takes `--refine` asks after reading its
+arguments; the warning never changes a status.
+
+**The alternatives:** `refine` comparing itself with the checkout it finds,
+which makes a compiler read git; comparing revisions alone, which calls a
+binary stale after every commit of documents; refusing to run a stale
+binary, which stops the comparisons that run an older compiler on purpose;
+and warning only in the two developer scripts, which leaves the lanes
+handed a binary by path, where the stale one was met.
+
+**Pinned by** `scripts/tests/test_refine_revision.py`, whose `Callers`
+holds every lane that takes `--refine` and the developer build to asking.
+
+### D1308 — A runtime fixture may name the targets that do not emit it yet
+
+**The tour said** nothing; a runtime fixture for a feature that lands on
+one backend before another could stay off Linux arm64 only through a
+`linux-arm64/parity.json` record naming the counterpart that runs there
+instead, and while arm64 did not emit the feature there was none, so a
+negative fixture pinning arm64's refusal was written to stand as the
+counterpart of four runtime fixtures, and nothing retired it when arm64
+landed.
+
+**Chosen:** a runtime fixture's `not_yet_emitted:` names, as
+`TARGET=CODE`, each target the compiler describes that does not emit the
+program yet, which its `targets:` leaves out, and the code that target
+refuses it with. Both metadata readers hold each entry's shape, a target
+named once and a code of L and four digits; `check.py` holds the code to
+the catalogue. The test program compiles the program to assembly for
+each named target, from any host, and requires a refusal whose codes are
+that one code and no other: an entry whose target compiles the program
+fails, naming the entry to remove and the target to name in `targets:`,
+so the disposition cannot outlive the gap. An entry for Linux arm64
+stands for the parity record, and a fixture with both is refused;
+`targets.matrix` lists the entries after the targets, and
+`scripts/add_fixture.py` offers the entry beside the record.
+
+**The alternatives:** the negative stand-in, which pins arm64's refusal
+but is evidence about nothing the runtime fixtures run and must be
+retired by hand; a parity record with a refusal in place of a
+counterpart, which keeps the gap in a file the test program does not
+read and so nothing lapses; and an entry checked only on the named
+target's own lane, which lapses only where that lane runs.
+
+**Pinned by** the `fixture execution` cases `targets not emitting yet
+still refuse` and `a target not emitting yet lapses when it emits`,
+`compiler/tests/fixture-meta.cases`' three `not_yet_emitted` cases,
+`scripts/tests/test_construct_inventory.py`'s
+`test_linux_arm64_leaves_the_x86_corpus_only_by_record` and
+`scripts/tests/test_add_fixture.py`'s
+`test_arm64_not_emitting_yet_stands_for_a_parity_record`.
+
 ### D542 — A device description is a module of directives, and its generated half has one text
 
 **The tour said** at [1410] that a module is every `.ldn` file of one
@@ -28746,6 +28854,38 @@ Cortex-M family and would claim Arm evidence for a RISC-V target.
 **Pinned by** `scripts/tests/test_construct_inventory.py`'s
 `test_an_rv32_claim_must_be_a_run_that_is_made` and
 `scripts/tests/test_check_controls.py`'s `TargetLists`.
+
+### D1315 — Xtensa is no product target of the construct inventory, and prototype 3 applies to it
+
+**The tour said** nothing; `check.py`'s `PRODUCT_TARGETS` left `xtensa`
+out as it left `rv32`, and no decision said why. The only reason given,
+in a `check.py` comment and `compiler/tests/registers.md`, was that no
+prototype applies to Xtensa, so no row of the target applicability table
+lists it and no fixture may name it; but prototype 3's row listed `rv32`,
+and Xtensa's lane executes the same firmware corpus, prototype 3's
+container derivations among its 718 executed rows.
+
+**Chosen:** Xtensa stays out of the product targets, for D840's reason
+and one of its own. The seven constructs whose Cortex-M evidence comes
+only from Cortex-M's own records would be gaps on it as on RV32, and its
+lane runs the firmware corpus through the rows of
+`compiler/tests/cortex-m/corpus.json`, where 17 rows Cortex-M executes are
+Xtensa refusals; counting it opens gaps no live item owns. Prototype 3,
+whose containers are target-independent, applies to it as to RV32, so its
+applicability row lists `xtensa`, and a fixture may name it on the terms
+D840 sets for `rv32`: a compile-time one exactly when its `args` select
+`--target=xtensa`, a runtime or ABI one only with a corpus row whose
+Xtensa disposition executes it.
+
+**The alternatives:** Xtensa as a product target, the step for an item
+that owns its parity with Cortex-M and the 17 refusals; and keeping it
+out of prototype 3's row, which would keep the table saying no prototype
+applies to a target that runs that prototype's derivations.
+
+**Pinned by** `scripts/tests/test_construct_inventory.py`'s
+`test_an_xtensa_claim_must_be_a_run_that_is_made` and
+`scripts/tests/test_check_controls.py`'s
+`test_a_target_no_applicability_row_lists_names_the_register`.
 
 ### D841 — The host manifest selects what it compiles, and its debug entries compare on one checkout
 
@@ -30383,6 +30523,61 @@ system does not have [1450].
 `negative/library-evidence-collision`,
 `negative/core-map-missing-parent-conformance` and the debugger's container
 workload, whose evidence entry now stops in `core/cmp`.
+
+### D1316 — A library module leaves the device-class nouns to a program's drivers
+
+**The tour said** at [1850] that two imports with one final segment are
+refused, and the library's convention writes no alias. Naming the
+serial-line module, the natural `core/serial` was ruled out because every
+board port's driver module is its own `serial`, and `core/uart` because
+the derived driver's is `uart`; nothing written down said how a library
+module's name should keep clear of a program's.
+
+**Chosen:** a `core`, `hosted` or `platform` module is not named by a bare
+device-class noun, `serial`, `uart`, `usart`, `spi`, `i2c`, `gpio`,
+`timer`, `adc`, `dac`, `dma`, `pwm`, `rtc`, `usb` or `watchdog`, the names
+a firmware program gives its own drivers and a device description its
+peripherals, but for what it holds: the line settings and divisor
+arithmetic of D955 are `core/line`. the core library's own README states the
+rule in its interface conventions, and a full `check.py` refuses a library module
+directory with one of those names.
+
+**The alternatives:** an endorsed alias convention for the collision,
+which puts the cost on exactly the programs that use both modules and
+makes the library's own examples and fixtures write aliases it otherwise
+never writes; and a rule with no list, which leaves the next module's
+author to rediscover which names drivers take.
+
+**Pinned by** `scripts/tests/test_check_controls.py`'s
+`LibraryModuleNames`.
+
+### D1317 — A library documentation comment is at most 79 columns
+
+**The tour said** nothing; `refine fmt` breaks no line and keeps a
+comment's bytes, and `check.py` held a library comment to its adjacency,
+its names and its sides, not its width, so `---` lines of 100 to 133
+columns stood in `hosted/blocking`, `hosted/events`, `core/io` and its
+fake network, and twelve of 80 to 87 columns were left after they were
+rewrapped.
+
+**Chosen:** a `---` documentation comment line in `core`, `hosted` or
+`platform` is at most 79 columns, counted in characters with its
+indentation and its marker, the width the compiler's own Ada sources
+keep; a full `check.py` refuses a longer one, naming the line, and the
+twelve were rewrapped within their paragraphs. `docs/format.md` says
+that the layout itself holds a comment to no width and a program's
+comments are its own. Ordinary `--` comments are not documentation and
+are not held.
+
+**The alternatives:** a width `refine fmt` holds every comment to, which
+would make the formatter break or refuse lines it now keeps byte for
+byte, a change to its one rule that it never changes a comment; 100
+columns, which the long lines met and a side-by-side reading of two
+sources does not; and no width, which `docs/format.md` would then have
+said.
+
+**Pinned by** `scripts/tests/test_check_controls.py`'s
+`LibraryCommentWidth`.
 
 ### D274 — The library says what it does
 

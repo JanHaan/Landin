@@ -42,9 +42,9 @@ fixed if compiler.os == darwin then
         --- `sizeof (struct stat)` in the native C headers.
         public file_status_size: usize = 144
         --- C's `struct stat`, as `stat` fills it on this system. C declares
-        --- `dev_t` as `int32_t` here, but a device number is a bit pattern, not
-        --- a quantity, and devfs's may have the sign bit set, so both device
-        --- fields are unsigned and widening them never traps.
+        --- `dev_t` as `int32_t` here, but a device number is a bit pattern,
+        --- not a quantity, and devfs's may have the sign bit set, so both
+        --- device fields are unsigned and widening them never traps.
         public file_status: type = struct
             device: u32
             mode: u16

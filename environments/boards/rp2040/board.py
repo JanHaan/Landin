@@ -356,6 +356,9 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here, as record.json is")
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     common.board_preflight(args, 'rp2040')
     common.place_hubs(args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')

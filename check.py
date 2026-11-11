@@ -5474,6 +5474,22 @@ def fixture_sources():
                                     "`%s` names %s, which is not here"
                                     % (key, one)))
 
+            #  A recorded report names a library line by `*`, not by the
+            #  number an unrelated edit above it moves; the harness records
+            #  and compares that form (fixture_meta.recorded_report), so a
+            #  number left there is a recording older than the rule.
+            expect = (fields.get("expect") or "").strip()
+            if expect and os.path.isfile(os.path.join(case, expect)):
+                recorded = read_file(os.path.join(case, expect), "rb")
+                spelled = "../tests/fixtures/%s/%s" % (kind, name)
+                if fixture_meta.recorded_report(recorded,
+                                                spelled) != recorded:
+                    out.append((where, 1,
+                                "`expect` names %s, which cites a library"
+                                " line by its number; ./scripts/dev-test.sh"
+                                " --record=%s/%s records it with `*`"
+                                % (expect, kind, name)))
+
             #  `fixed:` names what the program, or `a -> b` what another
             #  source, becomes once its fixes are applied.  Both files are
             #  the fixture's, and the result is a program the grammar has
@@ -5744,11 +5760,20 @@ def arm64_linux_problems():
         if ARM64_LINUX_TARGET_FLAG in args and "linux-arm64" not in named:
             out.append((relative, 1, "%s selects %s and does not name"
                         " linux-arm64" % (name, ARM64_LINUX_TARGET_FLAG)))
+        pending = [one.partition("=")[0].strip() for one in
+                   (fields.get("not_yet_emitted") or "").split(",")]
         if kind in ("runtime", "abi") and "linux-x86-64" in named \
-                and "linux-arm64" not in named and name not in records:
+                and "linux-arm64" not in named and name not in records \
+                and "linux-arm64" not in pending:
             out.append((relative, 1, "%s runs on linux-x86-64 and neither"
-                        " names linux-arm64 nor has a record in %s"
+                        " names linux-arm64 nor has a record in %s, nor"
+                        " says linux-arm64 does not emit it yet"
                         % (name, ARM64_LINUX_PARITY)))
+        if name in records and "linux-arm64" in pending:
+            out.append((relative, 1, "%s says linux-arm64 does not emit it"
+                        " yet and has a record in %s: the record is for a"
+                        " fixture that cannot run there, and the entry for"
+                        " one that will" % (name, ARM64_LINUX_PARITY)))
     for name, record in sorted(records.items()):
         if name not in fixtures:
             out.append((ARM64_LINUX_PARITY, 1, "%s names no fixture" % name))
@@ -5770,6 +5795,28 @@ def arm64_linux_problems():
                 fixtures[counterpart][1]):
             out.append((ARM64_LINUX_PARITY, 1, "%s's counterpart %s is not a"
                         " fixture linux-arm64 runs" % (name, counterpart)))
+    return out
+
+
+def not_yet_emitted_problems():
+    """D1308: a target that does not emit a fixture yet names a real code.
+
+    The readers hold each entry's shape, its target and that the fixture
+    leaves the target out; the harness holds the target to refusing with
+    the code.  What neither can hold is that the code is a diagnostic at
+    all, so a fixture's pending refusal cannot name one the catalogue
+    retired.
+    """
+    known = {row["code"] for row in catalogue_rows() or []}
+    out = []
+    for name, (meta, fields) in sorted(fixture_records().items()):
+        for one in (fields.get("not_yet_emitted") or "").split(","):
+            target, _, code = one.partition("=")
+            if code.strip() and known and code.strip() not in known:
+                out.append((os.path.relpath(meta, ROOT), 1,
+                            "%s says %s refuses it with %s, which the"
+                            " catalogue has no row for"
+                            % (name, target.strip(), code.strip())))
     return out
 
 
@@ -5863,6 +5910,55 @@ def rv32_target_problems():
             problems.append((path, 0, (
                 "%s selects %s and does not name rv32 among its targets"
                 % (name, RV32_TARGET_FLAG))))
+    return problems
+
+
+XTENSA_TARGET_FLAG = "--target=xtensa"
+
+
+def xtensa_target_problems():
+    """A fixture that names xtensa is one a run makes there (D1315).
+
+    Prototype 3 applies to Xtensa as it does to RV32, so a fixture may name
+    it, and like rv32 it is no product target of the construct inventory,
+    so no column is filled from it and only a run backs the name.  A
+    compile-time fixture names xtensa exactly when its own `args` select
+    it; a runtime or ABI one names it only with a firmware corpus row whose
+    Xtensa disposition executes it, since environments/xtensa/corpus.py is
+    the only run of a program there.
+    """
+    corpus_path = os.path.join(ROOT, CORTEX_CORPUS)
+    if not os.path.exists(corpus_path):
+        return []
+    with io.open(corpus_path, encoding="utf-8") as stream:
+        corpus = json.load(stream)["fixtures"]
+    problems = []
+    for name, (path, fields) in sorted(fixture_records().items()):
+        named = "xtensa" in [
+            one.strip() for one in fields.get("targets", "").split(",")]
+        kind = name.split("/")[0]
+        if kind in ("runtime", "abi"):
+            row = corpus.get(name, {})
+            own = dict(row, **row.get("targets", {}).get("xtensa", {}))
+            if named and (own.get("mode") != "execute"
+                          or "profile_limit" in own):
+                problems.append((path, 0, (
+                    "%s names xtensa, and only the firmware corpus's Xtensa"
+                    " lane runs a program there; give it a row in %s whose"
+                    " xtensa disposition is \"execute\", or drop xtensa from"
+                    " its targets: (environments/xtensa/README.md)"
+                    % (name, CORTEX_CORPUS))))
+            continue
+        if kind not in ("positive", "negative", "end-to-end"):
+            continue
+        selected = XTENSA_TARGET_FLAG in (fields.get("args", "") or "").split()
+        if named and not selected:
+            problems.append((path, 0, "%s names xtensa and no argument"
+                             " selects %s" % (name, XTENSA_TARGET_FLAG)))
+        elif selected and not named:
+            problems.append((path, 0, (
+                "%s selects %s and does not name xtensa among its targets"
+                % (name, XTENSA_TARGET_FLAG))))
     return problems
 
 
@@ -6501,7 +6597,9 @@ def check_matrix(full_run):
         (REGISTERS, 1, "the construct inventory's inputs cannot be read")]
     out += cortex_target_problems()
     out += rv32_target_problems()
+    out += xtensa_target_problems()
     out += arm64_linux_problems()
+    out += not_yet_emitted_problems()
     out += unplaced_target_problems()
     out += cortex_probe_problems(construct_titles() or ())
     recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
@@ -7031,7 +7129,12 @@ def coverage_dumps():
         t_lines.append("%s | %s" %
                        (row["Scope"].strip("`"), row["Targets"]))
     for name, (_, fields) in sorted(fixture_records().items()):
-        t_lines.append("%s | %s" % (name, fields.get("targets", "-")))
+        #  D1308: the targets that do not emit the fixture yet, beside
+        #  those that run it.
+        pending = fields.get("not_yet_emitted")
+        t_lines.append("%s | %s%s" % (name, fields.get("targets", "-"),
+                                      " | not yet emitted: " + pending
+                                      if pending else ""))
 
     return {"guarantees.matrix": "\n".join(g_lines) + "\n",
             "conformances.matrix": "\n".join(c_lines) + "\n",
@@ -7358,8 +7461,8 @@ def check_coverage_registers(full_run):
                             "every fixture must name its targets"))
                 continue
             #  A fixture may name only a target some applicability row
-            #  lists, so a described target no prototype applies to, such
-            #  as xtensa, is refused too, and the refusal names the table.
+            #  lists, so a described target no prototype applies to is
+            #  refused too, and the refusal names the table.
             for target in (one.strip() for one in targets.split(",")):
                 if target in allowed:
                     continue
@@ -10870,6 +10973,41 @@ def check_failure_words(full_run):
     return out
 
 
+#  D1316: the device-class nouns a program's own driver module is named
+#  by, which a library module therefore leaves to it.
+DEVICE_CLASS_NOUNS = ("serial", "uart", "usart", "spi", "i2c", "gpio",
+                      "timer", "adc", "dac", "dma", "pwm", "rtc", "usb",
+                      "watchdog")
+
+
+def check_library_module_names(full_run):
+    """A library module is not named by a bare device-class noun (D1316).
+
+    [1850] refuses two imports with one final segment and the library
+    writes no alias, so a library module named as a board port names its
+    driver, `serial`, forces an alias on the firmware that imports both;
+    core/README.md's conventions say so and name `core/line` as the
+    module that kept clear.
+    """
+    if not full_run:
+        return []
+    out = []
+    for top in ("core", "hosted", "platform"):
+        base = os.path.join(ROOT, top)
+        for here, folders, files in os.walk(base):
+            folders.sort()
+            name = os.path.basename(here)
+            if name in DEVICE_CLASS_NOUNS and any(
+                    one.endswith(".ldn") for one in files):
+                module = os.path.relpath(here, ROOT).replace(os.sep, "/")
+                out.append(("core/README.md", 1, (
+                    "%s is named by the device-class noun %s, which a"
+                    " program's own driver module takes; name the library"
+                    " module for what it holds, as core/line is (D1316)"
+                    % (module, name))))
+    return out
+
+
 def check_core_module_places(full_run):
     """A `core` module is known in each place a module has to be known.
 
@@ -11252,6 +11390,41 @@ def check_library_documentation(full_run):
     return []
 
 
+#  D1317: the widest a library `---` documentation comment line may be,
+#  its indentation and marker included.
+LIBRARY_COMMENT_COLUMNS = 79
+
+
+def check_library_comment_width(full_run):
+    """A library documentation comment is at most 79 columns (D1317).
+
+    `refine fmt` breaks no line, so nothing else holds a comment to a
+    width; `---` lines of 100 to 133 columns stood in the library before
+    this did.  Columns are characters, as an editor counts them.
+    """
+    if not full_run:
+        return []
+    out = []
+    for top in ("core", "hosted", "platform"):
+        for here, folders, files in os.walk(os.path.join(ROOT, top)):
+            folders.sort()
+            for name in sorted(files):
+                if not name.endswith(".ldn"):
+                    continue
+                path = os.path.join(here, name)
+                relative = os.path.relpath(path, ROOT).replace(os.sep, "/")
+                text = read_file(path, encoding="utf-8")
+                for number, line in enumerate(text.split("\n"), 1):
+                    if line.lstrip(" ").startswith("---") and \
+                            len(line) > LIBRARY_COMMENT_COLUMNS:
+                        out.append((relative, number, (
+                            "this documentation comment line is %d columns;"
+                            " a library one is at most %d (D1317): rewrap"
+                            " its paragraph" % (len(line),
+                                                LIBRARY_COMMENT_COLUMNS))))
+    return out
+
+
 def write_generated(relative, text):
     """Write one of GENERATED's files when its bytes differ."""
     path = os.path.join(ROOT, relative)
@@ -11522,6 +11695,8 @@ def main(argv):
     extra += check_library_page(full_run)
     extra += check_library_documentation(full_run)
     extra += check_core_module_places(full_run)
+    extra += check_library_module_names(full_run)
+    extra += check_library_comment_width(full_run)
     extra += check_library_consumers(full_run)
     extra += check_failure_words(full_run)
     extra += check_benchmark_game_oracles(full_run)

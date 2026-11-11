@@ -3,48 +3,48 @@ error[L0344]: rv32 has no atomic access of eight bytes, so it has no u64 cell
   |
 8 | mut uptime: atomic.cell(u64) = zeroed
   |             ^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:215:34
-    |
-215 | public cell: type (item: type is scalar) = cell_value(item)
-    |                                  ^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:*:34
+  |
+* | public cell: type (item: type is scalar) = cell_value(item)
+  |                                  ^^^^^^ the cell's constraint
   = note: D500: keep the value in a cell of four bytes or fewer, or keep it in plain storage that every writer and reader reaches inside platform/riscv's critical section, disable_interrupts to restore_interrupts
 error[L0344]: rv32 at rv32imc has no atomic read-modify-write, so a cell has no exchange, add or compare_exchange there
   --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/main.ldn:12:9
    |
 12 |     _ = atomic.add(addr events, 1)
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:270:28
-    |
-270 | public add: (item: type is exchangeable, at: ptr mut cell(item), value: item)
-    |                            ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:*:28
+  |
+* | public add: (item: type is exchangeable, at: ptr mut cell(item), value: item)
+  |                            ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/riscv's critical section, disable_interrupts to restore_interrupts; D690: a build at rv32imac has them
 error[L0344]: rv32 at rv32imc has no atomic read-modify-write, so a cell has no exchange, add or compare_exchange there
   --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/main.ldn:13:9
    |
 13 |     _ = atomic.exchange(addr events, 0)
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:263:33
-    |
-263 | public exchange: (item: type is exchangeable, at: ptr mut cell(item),
-    |                                 ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:*:33
+  |
+* | public exchange: (item: type is exchangeable, at: ptr mut cell(item),
+  |                                 ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/riscv's critical section, disable_interrupts to restore_interrupts; D690: a build at rv32imac has them
 error[L0344]: rv32 at rv32imc has no atomic read-modify-write, so a cell has no exchange, add or compare_exchange there
   --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/main.ldn:14:9
    |
 14 |     _ = atomic.add_relaxed(addr events, 1)
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:278:36
-    |
-278 | public add_relaxed: (item: type is exchangeable, at: ptr mut cell(item),
-    |                                    ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:*:36
+  |
+* | public add_relaxed: (item: type is exchangeable, at: ptr mut cell(item),
+  |                                    ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/riscv's critical section, disable_interrupts to restore_interrupts; D690: a build at rv32imac has them
 error[L0344]: rv32 at rv32imc has no atomic read-modify-write, so a cell has no exchange, add or compare_exchange there
   --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/main.ldn:15:16
    |
 15 |     code = i32(atomic.compare_exchange(addr events, 0, 1))
    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:288:41
-    |
-288 | public compare_exchange: (item: type is exchangeable, at: ptr mut cell(item),
-    |                                         ^^^^^^^^^^^^ the cell's constraint
+  --> ../tests/fixtures/negative/atomic-read-modify-write-rv32imc/../../../../../core/atomic/atomic.ldn:*:41
+  |
+* | public compare_exchange: (item: type is exchangeable, at: ptr mut cell(item),
+  |                                         ^^^^^^^^^^^^ the cell's constraint
   = note: D500: while one context alone writes the cell, atomic.sole_add is a relaxed load and a release store; where several write it, update plain storage inside platform/riscv's critical section, disable_interrupts to restore_interrupts; D690: a build at rv32imac has them

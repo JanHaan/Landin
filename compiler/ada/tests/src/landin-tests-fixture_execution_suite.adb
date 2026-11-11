@@ -17,6 +17,7 @@ with Ada.Text_IO;
 
 with Landin.Backend.Toolchain;
 with Landin.Commands.Catalogue;
+with Landin.Driver;
 with Landin.Json;
 with Landin.Optimization;
 with Landin.Platform.Native;
@@ -28,6 +29,7 @@ with Landin.Targets.Selection;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
 with Landin.Testing.Lanes;
+with Landin.Testing.Reports;
 
 --  This suite runs the real `refine` against the real fixture tree through
 --  the real tool adapter.  That is the point of it: everything else in the
@@ -780,6 +782,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Run_With_Stream
         (Case_Item, Label, Runner, Program,
          Lane_Arguments (Invocation (Case_Item)), Outcome, Item);
+      --  The recording holds a library location to its file, column and
+      --  quoted line, not its number (Landin.Testing.Reports).
+      Outcome.Output := Unbounded.To_Unbounded_String
+        (Landin.Testing.Reports.Recorded_Form
+           (Unbounded.To_String (Outcome.Output),
+            Fixture_Root & "/" & Label));
       --  A stale report names the command that re-records it alone.
       Check_Output
         (Case_Item,
@@ -854,7 +862,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
                & Landin.Testing.Failure_Text (Verdict));
             return;
          end if;
-         Host.Write_File (Where, Unbounded.To_String (Outcome.Output), Status);
+         Host.Write_File
+           (Where,
+            Landin.Testing.Reports.Recorded_Form
+              (Unbounded.To_String (Outcome.Output),
+               Fixture_Root & "/" & Path),
+            Status);
          Wrote := Status = Landin.Platform.Write_Ok;
          Said := Unbounded.To_Unbounded_String
            ((if Wrote then "wrote " else "could not write ")
@@ -4754,6 +4767,241 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end loop;
    end Debugger_Session_Frames_Are_Declared;
 
+   --  D1308: a runtime fixture's `not_yet_emitted:` entries, each held to
+   --  its target's refusal.  The program, compiled to assembly for TARGET
+   --  from this host, must be refused, and with CODE alone.  An entry whose
+   --  target compiles the program has lapsed, and fails, naming the change
+   --  that ends it; one refused for another reason fails too.
+   procedure Check_Not_Yet_Emitted
+     (Case_Item : Fixture;
+      Program   : String;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Check_Not_Yet_Emitted
+     (Case_Item : Fixture;
+      Program   : String;
+      Item      : in out Landin.Testing.Context)
+   is
+      Label  : constant String := Label_Of (Case_Item);
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+   begin
+      for One of Entries (Not_Yet_Emitted (Case_Item)) loop
+         declare
+            Equals : constant Natural := Ada.Strings.Fixed.Index (One, "=");
+            Target : constant String := Ada.Strings.Fixed.Trim
+              (One (One'First .. Equals - 1), Ada.Strings.Both);
+            Code : constant String := Ada.Strings.Fixed.Trim
+              (One (Equals + 1 .. One'Last), Ada.Strings.Both);
+            Args : Landin.Platform.Path_List;
+            Outcome : Landin.Platform.Tool_Result;
+            Ended : Boolean;
+         begin
+            Args.Append ("--target=" & Target);
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append
+              (Output_Directory & "not-yet-" & Name (Case_Item) & "-"
+               & Target & ".s");
+            for Argument of Source_Arguments (Case_Item, Fixture_Root) loop
+               Args.Append (Argument);
+            end loop;
+            Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
+            Ended := Outcome.Ended = Landin.Platform.Exited;
+            declare
+               Found : constant Landin.Platform.Path_List :=
+                 Entries (Codes_In (Unbounded.To_String (Outcome.Output)));
+               Said : constant String :=
+                 Codes_In (Unbounded.To_String (Outcome.Output));
+            begin
+               if Ended and then Outcome.Exit_Code = 0 then
+                  Landin.Testing.Fail
+                    (Item, Label & ": " & Target & " now emits it, so its"
+                     & " not_yet_emitted entry " & One & " has lapsed:"
+                     & " remove the entry and name " & Target
+                     & " in its targets");
+               else
+                  Landin.Testing.Check
+                    (Item, Ended and then not Found.Is_Empty
+                     and then (for all Each of Found => Each = Code),
+                     Label & ": " & Target & " refuses it with " & Code
+                     & " alone, as its not_yet_emitted entry says"
+                     & (if Said = "" then ", and its report carries no code"
+                        else "; its report carries " & Said));
+               end if;
+            end;
+         end;
+      end loop;
+   end Check_Not_Yet_Emitted;
+
+   --  Every fixture's targets that do not emit it yet still refuse it.
+   procedure Targets_Not_Emitting_Yet_Still_Refuse
+     (Item : in out Landin.Testing.Context);
+
+   procedure Targets_Not_Emitting_Yet_Still_Refuse
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Platform.Native.Native_Filesystem;
+      Found : Catalogue;
+   begin
+      Discover (Found, Fixture_Root, Host);
+      Landin.Testing.Check_Equal
+        (Item, Problem_Count (Found), 0,
+         "the fixture tree parses before anything is run");
+      for Index in 1 .. Count (Found) loop
+         if Not_Yet_Emitted (Nth (Found, Index)) /= "" then
+            Check_Not_Yet_Emitted (Nth (Found, Index), Refine_Path, Item);
+         end if;
+      end loop;
+   end Targets_Not_Emitting_Yet_Still_Refuse;
+
+   --  The disposition over a real program that imports platform/linux:
+   --  Darwin refuses it, naming a declaration only another target has,
+   --  and Linux arm64 emits it, so an entry for Darwin with that code
+   --  holds, one with another code does not, and one for Linux arm64 has
+   --  lapsed.  The codes are data here, not evidence of the diagnostic.
+   procedure A_Target_Not_Emitting_Yet_Lapses_When_It_Emits
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Target_Not_Emitting_Yet_Lapses_When_It_Emits
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Refused : constant String := "L0201";  --  not evidence
+      Another : constant String := "L0202";  --  not evidence
+
+      --  What the check says of the fixture with these entries, or "".
+      function Verdict (Pending : String) return String;
+
+      function Verdict (Pending : String) return String is
+         Read : Fixture;
+         Problems : Landin.Platform.Path_List;
+         Said : Landin.Testing.Context;
+      begin
+         Read_Text
+           ("class: runtime" & LF & "summary: a pending emission" & LF
+            & "profiles: standard" & LF & "program: main.ldn" & LF
+            & "root: ../../../../.." & LF
+            & "not_yet_emitted: " & Pending & LF
+            & "constructs: 1630" & LF & "targets: linux-x86-64" & LF,
+            Runtime, "linux-process-entry", Read, Problems);
+         if not Problems.Is_Empty then
+            return "unread: " & Problems.First_Element;
+         end if;
+         Check_Not_Yet_Emitted (Read, Refine_Path, Said);
+         return Landin.Testing.Failure_Text (Said);
+      end Verdict;
+
+      Held : constant String := Verdict ("darwin-arm64=" & Refused);
+      Other : constant String := Verdict ("darwin-arm64=" & Another);
+      Lapsed : constant String := Verdict
+        ("freebsd-x86-64=" & Refused & ", linux-arm64=" & Refused);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Held, "", "a target that refuses with its code holds");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Other, "darwin-arm64 refuses it with " & Another & " alone") > 0
+         and then Ada.Strings.Fixed.Index
+           (Other, "its report carries " & Refused) > 0,
+         "a target refusing with another code fails, saying which: "
+         & Other);
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Lapsed, "linux-arm64 now emits it") > 0
+         and then Ada.Strings.Fixed.Index
+           (Lapsed, "name linux-arm64 in its targets") > 0
+         and then Ada.Strings.Fixed.Index (Lapsed, "freebsd") = 0,
+         "a target that emits the program has lapsed, and only it: "
+         & Lapsed);
+   end A_Target_Not_Emitting_Yet_Lapses_When_It_Emits;
+
+   --  A recorded report holds a library location to its file, its column
+   --  and the line it quotes, and not to the line's number, which any
+   --  edit above it moves (Landin.Testing.Reports).  The program's own
+   --  locations keep their numbers.  Reports from the real driver over a
+   --  fake tree, with the library's line moved, changed and kept.
+   procedure A_Moved_Library_Line_Keeps_Its_Recording
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Moved_Library_Line_Keeps_Its_Recording
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Program : constant String :=
+        "import lib" & LF & "seen: i32 = lib.hidden" & LF;
+      Declared : constant String := "hidden: i32 = 7" & LF;
+      Moved : constant String := "-- a line" & LF;
+
+      function Recorded (Library, Source : String) return String;
+
+      function Recorded (Library, Source : String) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/lib");
+         Host.Add_File ("entry/main.ldn", Source);
+         Host.Add_File ("root/lib/private.ldn", Library);
+         Args.Append ("--root=root");
+         Args.Append ("entry");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            return Landin.Testing.Reports.Recorded_Form
+              (Unbounded.To_String (Result.Report), "entry");
+         end;
+      end Recorded;
+
+      Original : constant String := Recorded (Declared, Program);
+      Far : constant String :=
+        Recorded (Moved & Moved & Moved & Moved & Moved & Moved & Moved
+                  & Moved & Moved & Moved & Declared, Program);
+   begin
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Original, "  --> root/lib/private.ldn:*:1" & LF & "  |" & LF
+            & "* | hidden: i32 = 7" & LF & "  | ^") > 0,
+         "a library location is recorded with * for its line number");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Original, "  --> entry/main.ldn:2:") > 0,
+         "the program's own location keeps its line number");
+      Landin.Testing.Check_Equal
+        (Item, Far, Original,
+         "a library line moved to line 11 is recorded as it was");
+      Landin.Testing.Check
+        (Item, Recorded ("hidden: i32 = 8" & LF, Program) /= Original,
+         "a changed library line is not");
+      Landin.Testing.Check
+        (Item, Recorded ("hidden:  i32 = 7" & LF, Program) /= Original,
+         "nor is a library line whose spacing changed");
+      Landin.Testing.Check
+        (Item, Recorded (Declared, Moved & Program) /= Original,
+         "nor is a moved program line");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Reports.Recorded_Form (Original, "entry"),
+         Original, "a recorded form is its own recorded form");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Reports.Lexical
+           ("../tests/fixtures/negative/x/../../../../../core/a.ldn"),
+         "../../core/a.ldn",
+         "a rooted fixture's path to the library is read lexically");
+      Landin.Testing.Check
+        (Item, not Landin.Testing.Reports.Is_Below
+           ("../tests/fixtures/negative/x/../../../../../core/a.ldn",
+            "../tests/fixtures/negative/x")
+         and then Landin.Testing.Reports.Is_Below
+           ("../tests/fixtures/negative/x/./first/a.ldn",
+            "../tests/fixtures/negative/x/")
+         and then not Landin.Testing.Reports.Is_Below
+           ("../tests/fixtures/negative/xy/a.ldn",
+            "../tests/fixtures/negative/x"),
+         "a fixture's own files are the ones below its directory");
+   end A_Moved_Library_Line_Keeps_Its_Recording;
+
    procedure Register
      (Into : in out Landin.Testing.Registry;
       Include_Target_Workloads : Boolean := True) is
@@ -4769,6 +5017,18 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a report is recorded by name",
          A_Report_Is_Recorded_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "targets not emitting yet still refuse",
+         Targets_Not_Emitting_Yet_Still_Refuse'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "a target not emitting yet lapses when it emits",
+         A_Target_Not_Emitting_Yet_Lapses_When_It_Emits'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "a moved library line keeps its recording",
+         A_Moved_Library_Line_Keeps_Its_Recording'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "differing reports are named together",
          Differing_Reports_Are_Named_Together'Access);

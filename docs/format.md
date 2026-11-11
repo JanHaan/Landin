@@ -424,6 +424,12 @@ code, or of the block's body when that line closes the block. A comment
 after code on the same line stands one space after it. Nothing inside a
 comment changes, and it stays between the same two tokens.
 
+The layout holds a comment to no width, since it never breaks a line. The
+library holds its own `---` documentation comments to 79 columns, the
+indentation and the marker included, and a full `python3 check.py`
+refuses a longer line in `core`, `hosted` or `platform` (D1317); a
+program's comments are its own.
+
 ```landin
 f: () -> none =
 -- first

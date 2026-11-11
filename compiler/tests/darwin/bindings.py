@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Regenerate the binding differential corpus for the pinned Apple target."""
+import sys
 import argparse
 import json
 from pathlib import Path
@@ -16,6 +17,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--parity", action="store_true")
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     require(platform.system() == "Darwin" and platform.machine() == "arm64",
             "native Darwin arm64 required")
     output = args.output.resolve()

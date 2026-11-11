@@ -160,5 +160,70 @@ class FixtureMetaTest(unittest.TestCase):
                                 in fixture_meta.FAMILIES.values() if levels))
 
 
+#  A report as refine writes it for a rooted fixture whose root is the
+#  repository: its own location, then one in the library (D1306).
+FIXTURE = "../tests/fixtures/negative/probe"
+
+
+def report(library_line, quoted="hidden: i32 = 7", own_line=2):
+    width = len(str(library_line))
+    return ("error[L0202]: this name is private to its module\n"
+            "  --> %s/main.ldn:%d:13\n"
+            "  |\n"
+            "%d | seen: i32 = lib.hidden\n"
+            "  |             ^^^^^^^^^^\n"
+            "  --> %s/../../../../../core/lib/private.ldn:%d:1\n"
+            "%s |\n"
+            "%d | %s\n"
+            "%s | ^^^^^^ declared without `public` here\n"
+            "  = note: D150: a private member is its module's\n"
+            % (FIXTURE, own_line, own_line, FIXTURE, library_line,
+               " " * width, library_line, quoted, " " * width)).encode()
+
+
+class RecordedReports(unittest.TestCase):
+    """fixture_meta.recorded_report, beside the test program's
+    `fixture execution/a moved library line keeps its recording`."""
+
+    def recorded(self, text):
+        return fixture_meta.recorded_report(text, FIXTURE)
+
+    def test_a_library_line_is_recorded_without_its_number(self):
+        self.assertIn(b"core/lib/private.ldn:*:1\n  |\n* | hidden: i32 = 7\n"
+                      b"  | ^^^^^^ declared", self.recorded(report(7)))
+
+    def test_the_programs_own_line_keeps_its_number(self):
+        self.assertIn(b"/main.ldn:2:13\n  |\n2 | seen",
+                      self.recorded(report(7)))
+
+    def test_a_moved_library_line_records_the_same(self):
+        self.assertEqual(self.recorded(report(7)), self.recorded(report(1234)))
+
+    def test_a_changed_library_line_does_not(self):
+        self.assertNotEqual(self.recorded(report(7)),
+                            self.recorded(report(7, "hidden: i32 = 8")))
+
+    def test_a_moved_program_line_does_not(self):
+        self.assertNotEqual(self.recorded(report(7)),
+                            self.recorded(report(7, own_line=3)))
+
+    def test_a_recorded_form_is_its_own(self):
+        once = self.recorded(report(215))
+        self.assertEqual(self.recorded(once), once)
+
+    def test_paths_are_read_lexically(self):
+        self.assertEqual(fixture_meta.lexical(
+            FIXTURE + "/../../../../../core/a.ldn"), "../../core/a.ldn")
+        self.assertTrue(fixture_meta.is_below(FIXTURE + "/./first/a.ldn",
+                                              FIXTURE + "/"))
+        self.assertFalse(fixture_meta.is_below(FIXTURE + "s/a.ldn", FIXTURE))
+
+    def test_the_marker_is_the_test_programs(self):
+        spec = (ROOT / "compiler/ada/tests/src/landin-testing-reports.ads"
+                ).read_text(encoding="utf-8")
+        self.assertIn('Library_Line : constant String := "%s";'
+                      % fixture_meta.LIBRARY_LINE, spec)
+
+
 if __name__ == "__main__":
     unittest.main()

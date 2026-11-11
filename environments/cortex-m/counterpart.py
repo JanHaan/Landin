@@ -461,6 +461,9 @@ def main():
     p.add_argument('--scenario', action='append', choices=list(SCENARIOS))
     p.add_argument('--control', action='append', choices=list(CONTROLS))
     a = p.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(a.refine)  # is it this checkout's?
     supported_host(a.output)
     a.tools = installed_tools(a.tools)
     before = inventory(a.tools)

@@ -1889,6 +1889,9 @@ def main() -> None:
     parser.add_argument("--workload", choices=(*WORKLOADS, "switch"),
                         help="exact developer workload; FILTERED, not acceptance")
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     global LANE
     require(platform.system() == "Linux",
             "source debugging requires Linux; no skip is a pass")

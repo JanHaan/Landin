@@ -141,6 +141,20 @@ provider's counters are plural nouns: `pool.allocations`, `pool.frees`,
 abbreviation: `mem`, `vec`, `cmp`, `io`, `diag`, `map`, `sort`, `arena`, `pool`,
 `spill`, `fault`, `failure` (D274).
 
+A library module's name also keeps clear of the names programs give
+their own modules. [1850] refuses two imports with one final segment, and
+the library writes no alias, so a library module called `serial` would
+force one on exactly the firmware that needs it: every board port's
+driver is its own `serial`, the derived driver's is `uart`, and device
+descriptions name their peripherals `gpio`, `timer` and `uart0`. So a
+`core`, `hosted` or `platform` module is not named by a bare device-class
+noun, `serial`, `uart`, `usart`, `spi`, `i2c`, `gpio`, `timer`, `adc`,
+`dac`, `dma`, `pwm`, `rtc`, `usb` or `watchdog`, but for what it holds:
+the serial-line settings and the divisor arithmetic every UART driver
+shares are `core/line`, beside the board's own `serial`. A full
+`python3 check.py` refuses a library module with one of those names
+(D1316).
+
 Two atoms serve every core container: `mem.out_of_bounds` for an index past
 the initialized prefix and `mem.empty` for taking from nothing. Key lookups
 keep their own, `map.missing` and `tree.no_such_node`, because a missing key

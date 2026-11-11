@@ -422,6 +422,9 @@ def main():
     parser.add_argument('--profile', action='append', default=[])
     parser.add_argument('--all', action='store_true')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     if not args.all and not args.fixture:
         parser.error('select exact --fixture names or request --all')
     if args.all and not args.fixture and not args.profile and args.tools is None:

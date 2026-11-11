@@ -1453,6 +1453,8 @@ package body Landin.Tests.Fixture_Suite is
             return Link_Mode (Fixture);
          elsif Key = "levels" then
             return Levels (Fixture);
+         elsif Key = "not_yet_emitted" then
+            return Not_Yet_Emitted (Fixture);
          elsif Key = "summary" then
             return Summary (Fixture);
          end if;

@@ -787,6 +787,7 @@ emits assembly text.
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order, errors and warnings alike; on a positive, runtime or ABI fixture, the warnings its accepted program reports |
 | `constructs` | yes for a fixture with a program | the `[NNNN]` ids, without brackets, this fixture is evidence about |
 | `targets` | yes | comma-separated targets the fixture applies to |
+| `not_yet_emitted` | no, and runtime only | comma-separated `TARGET=CODE` entries, each a target the compiler describes that does not emit what the program needs yet, which `targets` therefore leaves out, and the code it refuses the program with; the second paragraph after this table says how it lapses |
 | `fixed` | no | for a negative with a program and codes: golden results after the first fix of every diagnostic that offers one is applied; a bare name is the program's result and `source -> result` another source's |
 
 A lane runs the `levels` of its own family: Linux x86-64 the x86-64 ones,
@@ -801,6 +802,23 @@ its LSE instructions and to no exclusive-monitor loop, and the default's
 image of the same fixture to no LSE instruction; on Linux RV64, which has
 none either, it is held to its `Tag_RISCV_arch` attribute naming each of
 the level's extensions, and the processor's `isa` line to naming them too.
+
+A feature that lands one backend at a time leaves a runtime fixture off
+the targets that do not emit it yet, and `not_yet_emitted` says so
+instead of standing a counterpart in: `not_yet_emitted:
+linux-arm64=L0500` on a fixture whose `targets` name Linux x86-64 and not
+arm64 says arm64 refuses the program with L0500 (D1308). `fixture
+execution/targets not emitting yet still refuse` compiles every such
+program for each target it names, to assembly from whatever host runs
+it, and requires a refusal carrying that code and no other, so the entry
+fails the day the target emits the program, naming the change that ends
+it: remove the entry and name the target in `targets`. Linux arm64's
+parity rule takes an entry for it in place of a `linux-arm64/parity.json`
+record, and refuses both at once; `targets.matrix` gives the entries
+after the targets; `check.py` holds each code to the catalogue; and
+`fixture execution/a target not emitting yet lapses when it emits` holds
+the check to holding, to a wrong code and to a target that emits. No
+fixture needs one today.
 
 `codes` also says which stage refused the fixture, and that is what decides
 whether the grammar must derive its program. The frontend refuses what the
@@ -850,6 +868,29 @@ derive it. `check.py` holds every name in `codes` to
 the catalogue, and
 refuses a negative fixture with a program that names none; the parser suite
 scans and parses the program and holds the report to the exact sequence.
+
+A recording is refine's report with one difference. A location in a file
+outside the fixture's own directory, a library source the report cites,
+is recorded with `*` for its line number, in the location and in the
+gutter of the line it quotes, whose width is then the marker's:
+
+```text
+  --> ../../core/text/text.ldn:*:1
+  |
+* | position_value: type = struct
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+```
+
+The file, the column, the quoted line, its carets and every other byte
+stay exact, and a location in the fixture's own files keeps its number. So
+a library edit above the line, which only moves it, leaves every recording
+as it was, and one that changes the line's text, or what its carets mark,
+fails the fixtures that quote it. Both `--record=` forms write this form,
+and the test program (`Landin.Testing.Reports`) and Darwin's diagnostics
+lane (`fixture_meta.recorded_report`) compare it; a full `check.py`
+refuses a recording that still gives a library line its number, and
+`fixture execution/a moved library line keeps its recording` holds the
+rule to the driver's own reports.
 
 `with` is how a fixture is more than one file. [1840] says the module scope
 is "every file compiled together", so a claim about it cannot be made by a

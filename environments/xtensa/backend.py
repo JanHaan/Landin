@@ -209,6 +209,9 @@ def main():
     parser.add_argument('--memory-profile', choices=('chip', 'sim'), default='chip')
     parser.add_argument('--control', action='append', default=[])
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     known = {p.stem: p for p in CONTROLS.glob('*.ldn')}
     if not args.control or set(args.control) - known.keys():
         parser.error('select exact --control names: ' + ', '.join(sorted(known)))

@@ -248,6 +248,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--refine", required=True)
     arguments = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(arguments.refine)  # is it this checkout's?
     refine = os.path.abspath(arguments.refine)
     names, missing = inventory(HERE)
     for name in missing:

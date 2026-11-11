@@ -505,6 +505,9 @@ def main():
                                  '%s is %s' % (name, ', '.join(lanes))
                                  for name, lanes in PARTS.items()))
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))

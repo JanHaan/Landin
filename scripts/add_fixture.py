@@ -46,8 +46,10 @@ fixture.  This then
    the coverage, the matrices, the diagnostic catalogue's owners and the
    tokens among them;
 5. says what is left that only a person can decide: a Linux x86-64
-   runtime or ABI fixture that does not name `linux-arm64` needs a record
-   in compiler/tests/linux-arm64/parity.json saying why and what runs on
+   runtime or ABI fixture that does not name `linux-arm64` needs a
+   `not_yet_emitted: linux-arm64=CODE` entry while arm64 does not emit
+   what it needs, which lapses when it does (D1308), or a record in
+   compiler/tests/linux-arm64/parity.json saying why and what runs on
    arm64 instead;
 6. names, for the fixture's class, every step left, in order.  The
    recordings come first: `--record=lowering` for a positive fixture,
@@ -434,6 +436,8 @@ def main(argv=None):
                              " fixture for Cortex-M0; the newest this checkout"
                              " built by default")
     args = parser.parse_args(argv)
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     if len(args.fixtures) > 1 and (args.refuse or args.reason or args.stops):
         raise SystemExit("--refuse, --reason and --stops describe one"
                          " fixture's row; add %s in a run of its own each"
@@ -471,14 +475,19 @@ def main(argv=None):
     left = []
     parity = json.loads(ARM64_PARITY.read_text(encoding="utf-8"))
     for directory, meta in added:
+        pending = [target for target, _ in meta.not_yet_emitted]
         if (meta.cls in ("runtime", "abi")
                 and meta.applies_to("linux-x86-64")
                 and not meta.applies_to("linux-arm64")
-                and meta.label not in parity["differences"]):
+                and meta.label not in parity["differences"]
+                and "linux-arm64" not in pending):
             left.append(
-                "%s: name linux-arm64 in its targets, or give it a record in"
-                " %s with the reason it cannot run there and the counterpart"
-                " that does" % (meta.label, ARM64_PARITY.relative_to(ROOT)))
+                "%s: name linux-arm64 in its targets; or, while arm64 does"
+                " not emit what it needs yet, say `not_yet_emitted:"
+                " linux-arm64=CODE` with the code arm64 refuses it with; or"
+                " give it a record in %s with the reason it cannot run there"
+                " and the counterpart that does"
+                % (meta.label, ARM64_PARITY.relative_to(ROOT)))
     for one in left:
         print("left to do: " + one)
     steps = []

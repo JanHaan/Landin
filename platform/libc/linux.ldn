@@ -5,8 +5,9 @@
 --  declares alike is in libc.ldn.
 
 fixed if compiler.os == linux then
-    --- The calling thread's errno cell, `__errno_location`.  Read it immediately after
-    --- the failing call, before any other call that may set it.
+    --- The calling thread's errno cell, `__errno_location`.  Read it
+    --- immediately after the failing call, before any other call that may set
+    --- it.
     public extern(c) link(symbol: "__errno_location") errno_cell:
         () -> (cell: ptr mut i32)
 

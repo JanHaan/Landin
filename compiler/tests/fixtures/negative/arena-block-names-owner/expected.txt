@@ -1,7 +1,7 @@
 error[L0010]: the lexical `arena` block is withdrawn
-  --> ../tests/fixtures/negative/arena-block-not-enabled/program.ldn:2:5
+  --> ../tests/fixtures/negative/arena-block-not-enabled/program.ldn:*:5
   |
-2 |     arena scratch do
+* |     arena scratch do
   |     ^^^^^
   = note: the tour describes it at [0820]
   = note: this form is withdrawn; pass an ordinary allocator

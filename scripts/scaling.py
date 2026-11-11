@@ -526,6 +526,8 @@ def main(argv: list[str]) -> int:
                         help="how many times a doubling over its limit is"
                              " measured again before it fails (default: 2)")
     arguments = parser.parse_args(argv)
+    import refine_revision
+    refine_revision.warn(arguments.refine)  # is it this checkout's?
 
     refine = os.path.abspath(arguments.refine or default_refine())
     if not os.access(refine, os.X_OK):

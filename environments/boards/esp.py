@@ -831,6 +831,9 @@ def arguments(parser, chip):
 
 
 def required_tools(args):
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     args.pace = common.Pace(args.spacing, args.quiet)
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.bundle or args.nm, 'no riscv64-elf-nm or riscv64-unknown-elf-nm on PATH: name one with --nm')

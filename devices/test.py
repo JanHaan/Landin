@@ -2873,6 +2873,9 @@ def main():
     parser.add_argument('--offline', action='store_true',
                         help='use the input cache alone; fetch nothing')
     args, rest = parser.parse_known_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     REFINE = Path(args.refine).resolve() if args.refine else None
     REQUIRE = args.require_inputs
     OFFLINE = args.offline

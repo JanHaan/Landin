@@ -81,6 +81,9 @@ def main():
     parser.add_argument("--refine", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     if sys.platform != "linux":
         parser.error("the allocator and VmHWM probe requires Linux/glibc")
     with tempfile.TemporaryDirectory(prefix="landin-server-memory-") as temp:

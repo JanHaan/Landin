@@ -82,6 +82,9 @@ def main(argv=None):
     parser.add_argument("--objdump", default="llvm-objdump-19")
     parser.add_argument("--nm", default="llvm-nm-19")
     args = parser.parse_args(argv)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     host = HOST_TARGET.get(platform.machine())
     if platform.system() != "Linux" or host is None:
         parser.error("LLDB runs these images natively, so this needs a Linux"

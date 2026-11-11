@@ -355,6 +355,41 @@ class CoreModulePlaces(unittest.TestCase):
             self.assertIn(place, said[0])
 
 
+class LibraryModuleNames(unittest.TestCase):
+    """D1316: a library module leaves the device-class nouns to drivers."""
+
+    def test_a_module_named_for_what_it_holds_passes(self):
+        self.assertEqual(faults(checker.check_library_module_names,
+                                written={"core/line/line.ldn": "x: i32 = 1\n",
+                                         "platform/riscv/l1/l1.ldn":
+                                             "x: i32 = 1\n"}), [])
+
+    def test_a_device_class_noun_is_refused_wherever_it_stands(self):
+        said = reasons(checker.check_library_module_names,
+                       written={"core/serial/serial.ldn": "x: i32 = 1\n",
+                                "platform/cortex_m/timer/timer.ldn":
+                                    "x: i32 = 1\n",
+                                "hosted/gpio/notes.txt": "not a module\n"})
+        self.assertEqual(len(said), 2, said)
+        self.assertIn("core/serial is named by the device-class noun serial",
+                      said[0])
+        self.assertIn("platform/cortex_m/timer", said[1])
+
+class LibraryCommentWidth(unittest.TestCase):
+    """D1317: a library documentation comment is at most 79 columns."""
+
+    def test_seventy_nine_columns_pass_and_eighty_do_not(self):
+        fits = "    --- " + "x" * 71 + "\n"
+        wide = "--- " + "y" * 76 + "\n"
+        said = faults(checker.check_library_comment_width,
+                      written={"core/mem/mem.ldn": fits + wide
+                               + "-- " + "z" * 90 + "\n",
+                               "hosted/heap/heap.ldn": fits,
+                               "docs/notes.ldn": wide})
+        self.assertEqual(len(said), 1, said)
+        self.assertEqual(said[0][:2], ("core/mem/mem.ldn", 2))
+        self.assertIn("is 80 columns", said[0][2])
+
 CONSUMED_MODULE = """\
 --- What a fixture calls.
 public used: () -> (count: usize) =
@@ -1872,6 +1907,25 @@ class Transcriptions(unittest.TestCase):
             said = [why for _, _, why in checker.fixture_sources()]
         self.assertIn("`fixed` names absent.fixed, which is not here", said)
 
+    def test_a_recording_numbering_a_library_line_is_reported(self):
+        #  D1306: a recorded report writes `*` for a library line.
+        from check_controls import tree
+        with tree(copied=["compiler/tests/fixtures"]) as root:
+            case = root / ("compiler/tests/fixtures/negative/"
+                           "core-text-private-position")
+            self.assertFalse([why for _, _, why in checker.fixture_sources()
+                              if "library line" in why])
+            report = case / "expected.txt"
+            report.write_text(report.read_text().replace(
+                "text.ldn:*:1\n  |\n* |", "text.ldn:10:1\n   |\n10 |"))
+            said = [why for _, _, why in checker.fixture_sources()
+                    if "library line" in why]
+        self.assertEqual(said, [
+            "`expect` names expected.txt, which cites a library line by its"
+            " number; ./scripts/dev-test.sh"
+            " --record=negative/core-text-private-position records it with"
+            " `*`"])
+
     def test_every_code_is_explained_and_retirement_is_said(self):
         from check_controls import tree
         inputs = EXPLAINED
@@ -2552,12 +2606,19 @@ class Registers(unittest.TestCase):
         self.assertTrue(said)
 
     def test_a_target_no_applicability_row_lists_names_the_register(self):
-        #  xtensa is a described target no prototype applies to,
-        #  and the refusal used to call it unknown without saying where
-        #  the targets a fixture may name come from.
+        #  xtensa, with prototype 3's row made to leave it out, is a
+        #  described target no prototype applies to, and the refusal used
+        #  to call it unknown without saying where the targets a fixture
+        #  may name come from.
         from check_controls import tree
         meta = "compiler/tests/fixtures/positive/any-slice-dispatch/fixture.meta"
         with tree(copied=REGISTERS) as root:
+            table = root / "compiler/tests/registers.md"
+            rows = table.read_text()
+            row = quote("compiler/tests/registers.md",
+                        "rv32, xtensa, synthetic-32 |")
+            self.assertIn(row, rows)
+            table.write_text(rows.replace(row, "rv32, synthetic-32 |", 1))
             target = root / meta
             text = target.read_text()
             self.assertIn("targets: ", text)

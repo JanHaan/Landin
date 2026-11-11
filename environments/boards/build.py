@@ -231,6 +231,9 @@ def main(argv=None):
     parser.add_argument('--mode', choices=('boot', 'ram', 'both'), default='boot')
     parser.add_argument('--records', choices=('strict', 'report'), default='strict')
     args = parser.parse_args(argv)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return build_all(args.board or BOARDS, ('boot', 'ram') if args.mode == 'both' else (args.mode,),
                          args.refine, args.output, args.records)

@@ -428,6 +428,9 @@ def main():
                         help='a profile to run at; repeat for more, and the first without one')
     parser.add_argument('--all-profiles',action='store_true')
     args=parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     if not args.program and not args.control:
         parser.error('name a --program or a --control; run.py --lane evidence runs them all')
     supported_host(args.output)

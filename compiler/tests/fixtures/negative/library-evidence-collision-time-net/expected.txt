@@ -1,18 +1,18 @@
 error[L0317]: this conformance has the same whole-program key as another
-  --> ../../core/net/net.ldn:266:1
-    |
-266 | address is cmp.hashable (hash: hash_address)
-    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../../core/net/net.ldn:*:1
+  |
+* | address is cmp.hashable (hash: hash_address)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/library-evidence-collision-time-net/main.ldn:18:1
    |
 18 | net.address is cmp.hashable (hash: port_only)
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the conformance that keeps the key
   = note: [1280]: conformances have no precedence or override
 error[L0317]: this conformance has the same whole-program key as another
-  --> ../../core/time/time.ldn:137:1
-    |
-137 | duration is cmp.ordered (less: less_duration)
-    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../../core/time/time.ldn:*:1
+  |
+* | duration is cmp.ordered (less: less_duration)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/library-evidence-collision-time-net/main.ldn:17:1
    |
 17 | time.duration is cmp.ordered (less: longer_first)

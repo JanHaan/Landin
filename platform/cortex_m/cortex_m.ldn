@@ -16,8 +16,8 @@ fixed if compiler.arch == cortex_m0 then
                                    out mask: u32 at general)
     end disable_interrupts
 
-    --- Restore a saved PRIMASK value. Only bit zero is implemented; use the value
-    --- returned by `disable_interrupts` to preserve nesting.
+    --- Restore a saved PRIMASK value. Only bit zero is implemented; use the
+    --- value returned by `disable_interrupts` to preserve nesting.
     public restore_interrupts: (previous: u32) -> none =
         assembler.block("msr primask, {mask}\nisb sy",
                         in mask: u32 at general = previous)
@@ -42,8 +42,8 @@ fixed if compiler.arch == cortex_m0 then
         compiler.device_barrier()
     end device_barrier
 
-    --- Issue a data synchronization barrier (DSB) to wait for preceding explicit
-    --- memory accesses to complete.
+    --- Issue a data synchronization barrier (DSB) to wait for preceding
+    --- explicit memory accesses to complete.
     public completion_barrier: () -> none =
         compiler.completion_barrier()
     end completion_barrier

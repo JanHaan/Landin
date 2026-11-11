@@ -3,8 +3,8 @@ error[L0202]: this type's representation is module-internal
   |
 8 |     local: vec.list(u8) = (values: storage)
   |                           ^^^^^^^^^^^^^^^^^
-  --> ../../core/vec/vec.ldn:3:1
+  --> ../../core/vec/vec.ldn:*:1
   |
-3 | list_value: type (item: type) = struct
+* | list_value: type (item: type) = struct
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
   = note: D150: a private identity may cross a public signature without exposing its fields

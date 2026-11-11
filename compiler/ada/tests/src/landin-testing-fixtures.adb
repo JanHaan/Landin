@@ -71,6 +71,9 @@ package body Landin.Testing.Fixtures is
    function Levels (Item : Fixture) return String
      is (Unbounded.To_String (Item.Levels));
 
+   function Not_Yet_Emitted (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Not_Yet_Emitted));
+
    function Status_At (Item : Fixture; Level : String) return Integer is
       Text : constant String := Unbounded.To_String (Item.Level_Status);
       Start : Positive := Text'First;
@@ -582,6 +585,14 @@ package body Landin.Testing.Fixtures is
         "; regenerate it with python3 check.py --coverage, or for a new"
         & " fixture python3 scripts/add_fixture.py CLASS/NAME";
 
+      --  A fixture's row: its identity and targets, and the targets that
+      --  do not emit it yet, when it names any (D1308).
+      function Row_Of (Item : Fixture) return String
+        is (Class_Directory (Class (Item)) & "/" & Name (Item)
+            & " | " & Targets (Item)
+            & (if Not_Yet_Emitted (Item) = "" then ""
+               else " | not yet emitted: " & Not_Yet_Emitted (Item)));
+
       --  The discovered row for IDENTITY, or "".
       function Discovered (Identity : String) return String;
 
@@ -590,7 +601,7 @@ package body Landin.Testing.Fixtures is
          for Item of In_Catalogue.Items loop
             if Class_Directory (Class (Item)) & "/" & Name (Item) = Identity
             then
-               return Identity & " | " & Targets (Item);
+               return Row_Of (Item);
             end if;
          end loop;
          return "";
@@ -640,9 +651,7 @@ package body Landin.Testing.Fixtures is
          return "the fixture metadata has problems, which come first";
       end if;
       for Item of In_Catalogue.Items loop
-         Remaining.Insert
-           (Class_Directory (Class (Item)) & "/" & Name (Item)
-            & " | " & Targets (Item));
+         Remaining.Insert (Row_Of (Item));
       end loop;
       for Index in Text'First .. Text'Last + 1 loop
          if Index > Text'Last or else Text (Index) = ASCII.LF then
@@ -782,6 +791,7 @@ package body Landin.Testing.Fixtures is
       Seen_Profiles : Boolean := False;
       Seen_Levels : Boolean := False;
       Seen_Level_Status : Boolean := False;
+      Seen_Not_Yet_Emitted : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
       Line_Number  : Natural := 0;
@@ -1111,6 +1121,16 @@ package body Landin.Testing.Fixtures is
                      end;
                   end loop;
                end;
+
+            elsif Key = "not_yet_emitted" then
+               if Seen_Not_Yet_Emitted then
+                  Complain ("duplicate key: not_yet_emitted");
+                  return;
+               end if;
+               Seen_Not_Yet_Emitted := True;
+               --  Its entries are read below, once the class and targets
+               --  they are about are known.
+               Item.Not_Yet_Emitted := Unbounded.To_Unbounded_String (Value);
 
             elsif Key = "stream" then
                if Seen_Stream then
@@ -1618,7 +1638,8 @@ package body Landin.Testing.Fixtures is
                Layout_Evidence => False,
                Profiles => Standard,
                Levels  => Unbounded.Null_Unbounded_String,
-               Level_Status => Unbounded.Null_Unbounded_String);
+               Level_Status => Unbounded.Null_Unbounded_String,
+               Not_Yet_Emitted => Unbounded.Null_Unbounded_String);
 
       for Index in Content'Range loop
          if Content (Index) = Character'Val (10) then
@@ -1748,6 +1769,64 @@ package body Landin.Testing.Fixtures is
                      then
                         Complain ("level_status names a level levels does"
                                   & " not: " & Level);
+                     end if;
+                  end;
+                  First := Index + 1;
+               end if;
+            end loop;
+         end;
+      end if;
+
+      --  Each entry a described target the fixture does not run on, named
+      --  once, and the code it refuses the program with.
+      if Seen_Not_Yet_Emitted and then Expected /= Runtime then
+         Complain ("not_yet_emitted belongs only to a runtime fixture");
+      elsif Seen_Not_Yet_Emitted then
+         declare
+            Value : constant String :=
+              Unbounded.To_String (Item.Not_Yet_Emitted);
+            Seen : Landin.Platform.Path_List;
+            First : Integer := Value'First;
+         begin
+            for Index in Value'First .. Value'Last + 1 loop
+               if Index > Value'Last or else Value (Index) = ',' then
+                  declare
+                     One : constant String :=
+                       Trimmed (Value (First .. Index - 1));
+                     Equals : constant Natural :=
+                       Ada.Strings.Fixed.Index (One, "=");
+                     Target : constant String :=
+                       (if Equals = 0 then ""
+                        else Trimmed (One (One'First .. Equals - 1)));
+                     Code : constant String :=
+                       (if Equals = 0 then ""
+                        else Trimmed (One (Equals + 1 .. One'Last)));
+                  begin
+                     if Equals = 0 then
+                        Complain ("not_yet_emitted entry is not TARGET=CODE: "
+                                  & One);
+                     elsif not Is_Named_Target (Target) then
+                        Complain ("not_yet_emitted names no target the"
+                                  & " compiler describes: " & Target);
+                     elsif Names_Label
+                       (Unbounded.To_String (Item.Targets), Target)
+                     then
+                        Complain ("not_yet_emitted names a target the"
+                                  & " fixture runs on: " & Target);
+                     elsif Seen.Contains (Target) then
+                        Complain ("not_yet_emitted names a target twice: "
+                                  & Target);
+                     elsif Code'Length /= 5
+                       or else Code (Code'First) /= 'L'
+                       or else (for some C of
+                                  Code (Code'First + 1 .. Code'Last) =>
+                                  C not in '0' .. '9')
+                     then
+                        Complain ("not_yet_emitted gives " & Target
+                                  & " no code, L and four digits: " & Code);
+                     end if;
+                     if Equals /= 0 then
+                        Seen.Append (Target);
                      end if;
                   end;
                   First := Index + 1;

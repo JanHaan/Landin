@@ -1146,6 +1146,9 @@ def main():
                              ' every row runs at armv6-m and each execute row at the levels'
                              ' its fixture\'s levels: names')
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))

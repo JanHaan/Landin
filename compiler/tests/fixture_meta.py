@@ -157,6 +157,74 @@ def is_below_directory(name):
     return all(part not in ("", ".", "..") for part in name.split("/"))
 
 
+#  What a library location's line number is recorded as
+#  (`Landin.Testing.Reports.Library_Line`).
+LIBRARY_LINE = "*"
+
+_LOCATION = re.compile(r"^  --> (.+):([0-9]+):([0-9]+)$")
+
+
+def lexical(path):
+    """PATH with each `.` and each `..` that follows a name removed, a
+    leading `..` kept: `Landin.Testing.Reports.Lexical`."""
+    absolute = path.startswith("/")
+    kept = []
+    for part in path.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if kept and kept[-1] != "..":
+                kept.pop()
+            elif not absolute:
+                kept.append(part)
+            continue
+        kept.append(part)
+    joined = "/".join(kept)
+    return "/" + joined if absolute else (joined or ".")
+
+
+def is_below(path, directory):
+    """Whether PATH, read lexically, names a file below DIRECTORY."""
+    within, base = lexical(path), lexical(directory)
+    if base == ".":
+        return within not in (".", "..") and not within.startswith(
+            ("/", "../"))
+    return within.startswith(base + "/") and len(within) > len(base) + 1
+
+
+def recorded_report(report, directory):
+    """REPORT, refine's report with the fixture's directory spelled
+    DIRECTORY from where it ran, in the form an `expect` file records it:
+    a location outside that directory keeps its file, column, quoted line
+    and carets, and `*` stands for its line number in the location and the
+    gutter (compiler/tests/README.md).  `Landin.Testing.Reports.
+    Recorded_Form` is the same; bytes in, bytes out, and a recorded form
+    is its own."""
+    text = report.decode("utf-8", "surrogateescape")
+    lines = text.split("\n")
+    number, stage = "", 0
+    for index, line in enumerate(lines):
+        width = len(number)
+        blank = " " * width
+        marker = " " * len(LIBRARY_LINE)
+        if stage == 1 and line == blank + " |":
+            lines[index], stage = marker + " |", 2
+            continue
+        if stage == 2 and line.startswith(number + " |"):
+            lines[index], stage = LIBRARY_LINE + line[width:], 3
+            continue
+        if stage == 3 and line.startswith(blank + " |"):
+            lines[index], stage = marker + line[width:], 0
+            continue
+        stage = 0
+        found = _LOCATION.match(line)
+        if found and not is_below(found.group(1), directory):
+            number, stage = found.group(2), 1
+            lines[index] = "  --> %s:%s:%s" % (
+                found.group(1), LIBRARY_LINE, found.group(3))
+    return "\n".join(lines).encode("utf-8", "surrogateescape")
+
+
 def _relative_c_source(name):
     return len(name) >= 3 and name.endswith(".c") and is_below_directory(name)
 
@@ -295,6 +363,17 @@ class Metadata(dict):
     @property
     def levels(self):
         return self._list("levels")
+
+    @property
+    def not_yet_emitted(self):
+        """`not_yet_emitted:` as (target, code) pairs in order: each a
+        target that does not emit the program yet and the code it refuses
+        it with, which the harness holds it to."""
+        pairs = []
+        for one in self._list("not_yet_emitted"):
+            target, _, code = one.partition("=")
+            pairs.append((_trimmed(target), _trimmed(code)))
+        return pairs
 
     def levels_for(self, target):
         """The levels `levels:` names that are TARGET's family's: the ones
@@ -650,6 +729,7 @@ KEYS = {
     "profiles": _profiles,
     "levels": _nothing,
     "level_status": _level_status,
+    "not_yet_emitted": _nothing,
     "stream": _stream,
     "with": _nonempty("with names no file"),
     "root": _nonempty("root names no directory"),
@@ -703,6 +783,29 @@ def _whole(meta, cls, complain):
             if "," + level + "," not in listed:
                 complain("level_status names a level levels does not: "
                          + level)
+    if has("not_yet_emitted") and cls != "runtime":
+        complain("not_yet_emitted belongs only to a runtime fixture")
+    elif has("not_yet_emitted"):
+        seen = []
+        running = _items(meta.get("targets", ""))
+        for one in _items(meta["not_yet_emitted"]):
+            target, equals, code = one.partition("=")
+            target, code = _trimmed(target), _trimmed(code)
+            if not equals:
+                complain("not_yet_emitted entry is not TARGET=CODE: " + one)
+            elif target not in TARGETS:
+                complain("not_yet_emitted names no target the compiler"
+                         " describes: " + target)
+            elif target in running:
+                complain("not_yet_emitted names a target the fixture runs"
+                         " on: " + target)
+            elif target in seen:
+                complain("not_yet_emitted names a target twice: " + target)
+            elif not re.fullmatch(r"L[0-9]{4}", code):
+                complain("not_yet_emitted gives %s no code, L and four"
+                         " digits: %s" % (target, code))
+            if equals:
+                seen.append(target)
     hosted = has("class") and cls in ("runtime", "abi")
     if cls in ("runtime", "abi"):
         if not has("profiles"):

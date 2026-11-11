@@ -360,6 +360,9 @@ def main():
     parser.add_argument('--seed', type=int, default=1230)
     parser.add_argument('--record', type=Path, help="also write a passed run's record here")
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
     require(args.mode == 'ram', 'the cached profile runs from SRAM alone; the boot check is the'
             ' cacheless port\'s, environments/boards/stm32h753/board.py --mode=boot')
     common.board_preflight(args, BOARD)
