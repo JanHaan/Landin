@@ -28207,6 +28207,71 @@ profile, unchanged on `rv32` and `cortex-m0`; and
 timer and leaves UART0 to the common entry, and whose oracle holds mtvt,
 the table's words and both CLICINT words to the image and the TRM.
 
+### D1290 — An RV32 slot whose routine is out of a jump's reach enters it through a stub
+
+**The discrepancy:** D680 and D686 make every table slot one `j`, which
+reaches 1 MiB either way, and D678 holds the regions of a profile to that
+size so that a jump inside one is short. Nothing held two regions to it.
+A routine a slot enters itself, a naked one the hardware enters or one the
+core's dispatch calls, may be linked in another region than the text: in
+`.ramtext`, which D688 links in RAM, or in a region its `link(region:)`
+names. With the table in flash at 0x1000_0000 and RAM at 0x2000_0000, an
+RP2350's own addresses, the image did not link, and the report was the
+linker's `relocation truncated to fit: R_RISCV_JAL`.
+
+**Chosen:** such a slot is `j _landin_firmware_far_N`, a stub in
+`.text.landin_firmware_trap` beside the table, and the stub reaches
+anywhere with `auipc` and `jr`. Which slots get one is read from the
+profile and not from the link: slot N is far when its routine's region is
+not the text's and some byte of that region lies more than 1 MiB from the
+table. A routine in the text, and one in a region wholly in reach, is
+jumped to as before, so an image none of whose routines is far is byte for
+byte the image it was.
+
+The pair needs a register for the address, and what it may take depends on
+who enters the slot:
+
+- A slot the core's dispatch calls (`clic`'s common entry, `xh3irq`'s
+  external entry) is called with t0 holding the slot's own address, after
+  the entry saved the interrupted registers, and a call may change t0. Its
+  stub is `auipc t0` and `jr` to the routine, eight bytes.
+- A slot the hardware enters has every register the interrupted code's,
+  and a naked routine there is promised them. Its stub lowers sp by 16,
+  stores t0 at 0(sp), and jumps with `auipc t0` and `jr` to a landing,
+  `_landin_firmware_far_N_landing`, linked in the routine's own section
+  family and so beside it; the landing reloads t0, raises sp by 16 and is
+  one `j` to the routine. The routine is entered with all thirty-one
+  registers and mepc as the hardware left them. Sixteen bytes below the
+  interrupted sp are written, as an interrupt routine's own stub writes
+  the bytes below it (D680), and a naked routine that may not assume the
+  interrupted stack, which no RISC-V core without a separate interrupt
+  stack lets it avoid, has none of its own to use either.
+
+An interrupt routine in a hardware-entered slot is entered by its stub
+`_landin_firmware_slot_N`, which is in the text, takes the routine's
+address with `auipc` and `addi` after saving t0 and calls it through a
+register; it was never the slot's jump and is unchanged. The entry word jumps to reset or to the stage, both
+in the text, and is unchanged. With debugging information both the stub
+and the landing carry unwind rules that return to mepc and find t0 in its
+slot.
+
+**The alternatives:** widening every slot to an `auipc` and `jr` pair,
+which needs a register in a slot the hardware enters, where there is none,
+doubles every table and changes every image; an indirect jump through a
+table of addresses read with `mtvt`-like loads, which the vectored model
+has no register for either; and refusing the placement with the distance
+named, which leaves an RP2350's RAM handlers, the reason `.ramtext` exists
+there, unlinkable. The maintainer chose the stub.
+
+**Pinned by** `rv32 firmware/far handlers are entered through stubs`: the
+slots, both stubs, the landing's section, and that the same program with
+RAM 256 KiB from the table holds no stub. Under Espressif's QEMU
+`sifive_e`, whose flash is at 0x2040_0000 and RAM at 0x8000_0000, a
+software interrupt entered a naked `.ramtext` routine through the stub
+with all thirty-one registers and mepc equal at the stub's first
+instruction and the routine's, and returned; that session is not a lane.
+No board has run a far handler.
+
 ### D570 — The depth report closes a call through a table or a function value
 
 **The tour said** nothing. D468 opened a call graph at every call through

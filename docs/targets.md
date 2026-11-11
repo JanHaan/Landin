@@ -1269,6 +1269,16 @@ to is the core's interrupt model's (D662, D680):
 | `clic` | `esp-rv32imac-clic` | `_landin_firmware_trap`, mode 3 | called from that common entry by mcause's low twelve bits; with the interrupt's `shv` set, which the program writes, entered by the CLIC through word N of `_landin_firmware_vector_addresses`, which mtvt names: the slot's stub, or the unhandled entry (D830) |
 | `xh3irq` | `hazard3` | the table, mode 1 | 11 is `_landin_firmware_external`, which calls slot 16 + IRQ while meinext names one |
 
+A `j` reaches 1 MiB. A routine a slot would jump to itself that is linked
+in another region than the text, some byte of which is farther from the
+table than that (`.ramtext` at 0x2000_0000 under a table at 0x1000_0000),
+is entered through `_landin_firmware_far_N`, a stub beside the table that
+reaches it with `auipc` and `jr` (D1290). A naked routine the hardware
+enters still finds every register as the hardware left it: the stub keeps
+t0 in 16 bytes below the interrupted sp and a landing linked beside the
+routine restores both. An image with no such routine has no stub and is
+unchanged.
+
 A stub saves ra, t0-t6 and a0-a7 below the interrupted sp, 64 bytes or,
 with a stack limit cell, 80, calls the routine, an ordinary frame,
 restores and returns with `mret`; its unwind rules return to mepc. A slot
