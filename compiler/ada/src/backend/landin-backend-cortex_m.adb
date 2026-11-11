@@ -3091,7 +3091,7 @@ package body Landin.Backend.Cortex_M is
          procedure C_Record_Registers
            (Store : Boolean; Held : Arm32_ABI.Location; Base : String)
          is
-            Size : constant Natural := Natural (Held.Shape.Size);
+            Size : constant Landin.Targets.Byte_Count := Held.Shape.Size;
             Op : constant String := (if Store then "str" else "ldr");
          begin
             if Held.VFP_Count > 0 then
@@ -3110,20 +3110,23 @@ package body Landin.Backend.Cortex_M is
             elsif Size = 1 then
                Emit (Op & "b r0, [" & Base & "]");
             elsif Store then
-               for Index in 0 .. Size - 1 loop
+               for Index in 1 .. Size loop
                   Emit ("strb r0, [" & Base & ", #"
-                    & Trimmed (Index'Image) & "]");
-                  if Index < Size - 1 then
+                    & Trimmed (Landin.Targets.Byte_Count'Image (Index - 1))
+                    & "]");
+                  if Index < Size then
                      Emit ("lsrs r0, r0, #8");
                   end if;
                end loop;
             else
                Emit ("ldrb r0, [" & Base & ", #"
-                 & Trimmed (Natural'Image (Size - 1)) & "]");
-               for Index in reverse 0 .. Size - 2 loop
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Size - 1))
+                 & "]");
+               for Index in reverse 1 .. Size - 1 loop
                   Emit ("lsls r0, r0, #8");
                   Emit ("ldrb r4, [" & Base & ", #"
-                    & Trimmed (Index'Image) & "]");
+                    & Trimmed (Landin.Targets.Byte_Count'Image (Index - 1))
+                    & "]");
                   Emit ("orrs r0, r4");
                end loop;
             end if;

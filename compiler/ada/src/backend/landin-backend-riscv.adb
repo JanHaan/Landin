@@ -674,7 +674,9 @@ package body Landin.Backend.RiscV is
       --  frame record's half are moved at.
       Width : constant RiscV_Instructions.Machine_Width := XLEN (Facts);
       Pairs : constant Boolean := Width = 32;
-      Word : constant Positive := Natural (Width) / 8;
+      --  A register's bytes, counted as every target byte figure is.
+      Word : constant Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count (Width) / 8;
       Load_Word : constant String := (if Pairs then "lw" else "ld");
       Store_Word : constant String := (if Pairs then "sw" else "sd");
       Word_Directive : constant String :=
@@ -1451,7 +1453,7 @@ package body Landin.Backend.RiscV is
 
       function Stack_Save_Offset
         (Index : Positive) return Landin.Targets.Byte_Count
-        is (Stack_Frame_Bytes - Landin.Targets.Byte_Count (Word * Index));
+        is (Stack_Frame_Bytes - Word * Landin.Targets.Byte_Count (Index));
 
       --  The Nth saved register's number within its bank, whether it is a
       --  float register, and its DWARF register number.
@@ -2332,12 +2334,13 @@ package body Landin.Backend.RiscV is
             --  released.  Nothing is read below sp at any instruction, so
             --  an interrupt or a signal taken between them, which stacks
             --  its own frame at sp, overwrites nothing still to be read.
-            Emit (Load_Word & " ra, -" & Image (Word) & "(x8)");
+            Emit (Load_Word & " ra, -" & Byte_Image (Word) & "(x8)");
             Emit ("addi sp, x8, -16");
             if Debug /= null then
                Emit (".cfi_def_cfa sp, 16");
             end if;
-            Emit (Load_Word & " x8, " & Image (16 - 2 * Word) & "(sp)");
+            Emit (Load_Word & " x8, " & Byte_Image (16 - 2 * Word)
+                  & "(sp)");
             if Debug /= null then
                Emit (".cfi_restore x8");
             end if;
@@ -2878,9 +2881,9 @@ package body Landin.Backend.RiscV is
                      Emit ("sext.w x19, x19");
                   elsif Part.Scalar in Landin.Types.I8 | Landin.Types.I16 then
                      Emit ("slli x19, x19, "
-                       & Image (64 - Natural (Part.Bytes) * 8));
+                       & Byte_Image (64 - Part.Bytes * 8));
                      Emit ("srai x19, x19, "
-                       & Image (64 - Natural (Part.Bytes) * 8));
+                       & Byte_Image (64 - Part.Bytes * 8));
                   end if;
                end if;
                if Home.Register = 0 then
@@ -4302,10 +4305,10 @@ package body Landin.Backend.RiscV is
                         Emit ("addi x5, x5, -"
                               & Byte_Image (Stack_Frame_Bytes));
                         for Index in
-                          1 .. Natural (Stack_Frame_Bytes) / Word - 1
+                          1 .. Stack_Frame_Bytes / Word - 1
                         loop
-                           Emit (Store_Word & " zero, " & Image (Word * Index)
-                                 & "(x5)");
+                           Emit (Store_Word & " zero, "
+                                 & Byte_Image (Word * Index) & "(x5)");
                         end loop;
                         --  The base is the frame's top less the aligned
                         --  length.
@@ -4357,7 +4360,9 @@ package body Landin.Backend.RiscV is
                         --  RV32 and no read-modify-write at a level without
                         --  A, so one that reaches here is a defect.  An
                         --  eight-byte volatile access is its two words.
-                        if Pairs and then ((Bytes > Word and then M not in
+                        if Pairs
+                          and then ((Landin.Targets.Byte_Count (Bytes) > Word
+                            and then M not in
                             Volatile_Load | Volatile_Store)
                           or else (not Atomics and then M not in
                             Atomic_Load | Volatile_Load | Atomic_Store
@@ -5461,12 +5466,13 @@ package body Landin.Backend.RiscV is
          --  address in the two words just below the CFA, in a sixteen-byte
          --  header that keeps the stack's alignment at either XLEN.
          Emit ("addi sp, sp, -16");
-         Emit (Store_Word & " x8, " & Image (16 - 2 * Word) & "(sp)");
-         Emit (Store_Word & " ra, " & Image (16 - Word) & "(sp)");
+         Emit (Store_Word & " x8, " & Byte_Image (16 - 2 * Word)
+               & "(sp)");
+         Emit (Store_Word & " ra, " & Byte_Image (16 - Word) & "(sp)");
          if Debug /= null then
             Emit (".cfi_def_cfa_offset 16");
-            Emit (".cfi_offset x8, -" & Image (2 * Word));
-            Emit (".cfi_offset x1, -" & Image (Word));
+            Emit (".cfi_offset x8, -" & Byte_Image (2 * Word));
+            Emit (".cfi_offset x1, -" & Byte_Image (Word));
          end if;
          Emit ("addi x8, sp, 16");
          if Debug /= null then
@@ -7387,7 +7393,7 @@ package body Landin.Backend.RiscV is
                      Field_Extent
                        (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
                         Facts, Bytes, Alignment);
-                     Emit (".balign " & Image (Word));
+                     Emit (".balign " & Byte_Image (Word));
                      Put (Evidence_Symbol (Id) & ":");
                      if Alias_Next then
                         Put (Evidence_Symbol
@@ -7460,7 +7466,8 @@ package body Landin.Backend.RiscV is
                   & Byte_Image (Stack_Save_Offset (Index)) & "(sp)");
             if Debug /= null then
                Emit (".cfi_offset " & Image (Stack_Dwarf (Index)) & ", -"
-                     & Image (Word * Index));
+                     & Byte_Image
+                         (Word * Landin.Targets.Byte_Count (Index)));
             end if;
          end loop;
          Limit_Base ("x5");
@@ -7533,9 +7540,9 @@ package body Landin.Backend.RiscV is
          else
             Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
          end if;
-         Emit (".balign " & Image (Word));
+         Emit (".balign " & Byte_Image (Word));
          Put (Stack_Limit & ":");
-         Emit (".zero " & Image (Word));
+         Emit (".zero " & Byte_Image (Word));
          Emit (".popsection");
       end if;
       --  D361's writer: Linux's write system call to descriptor 2, with the

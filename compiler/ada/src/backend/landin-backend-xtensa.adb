@@ -622,7 +622,9 @@ package body Landin.Backend.Xtensa is
       --  frame record's half are moved at.
       Width : constant RiscV_Instructions.Machine_Width := XLEN (Facts);
       Pairs : constant Boolean := Width = 32;
-      Word : constant Positive := Natural (Width) / 8;
+      --  A register's bytes, counted as every target byte figure is.
+      Word : constant Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count (Width) / 8;
       Load_Word : constant String := (if Pairs then "lw" else "ld");
       Store_Word : constant String := (if Pairs then "sw" else "sd");
       Word_Directive : constant String :=
@@ -3690,7 +3692,9 @@ package body Landin.Backend.Xtensa is
                         --  RV32 and no read-modify-write at a level without
                         --  A, so one that reaches here is a defect.  An
                         --  eight-byte volatile access is its two words.
-                        if Pairs and then ((Bytes > Word and then M not in
+                        if Pairs
+                          and then ((Landin.Targets.Byte_Count (Bytes) > Word
+                            and then M not in
                             Volatile_Load | Volatile_Store)
                           or else (not Atomics and then M not in
                             Atomic_Load | Volatile_Load | Atomic_Store
@@ -6738,7 +6742,7 @@ package body Landin.Backend.Xtensa is
                      Field_Extent
                        (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
                         Facts, Bytes, Alignment);
-                     Emit (".balign " & Image (Word));
+                     Emit (".balign " & Byte_Image (Word));
                      Put (Evidence_Symbol (Id) & ":");
                      if Alias_Next then
                         Put (Evidence_Symbol
