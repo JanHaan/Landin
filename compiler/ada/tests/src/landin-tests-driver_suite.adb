@@ -6264,12 +6264,12 @@ package body Landin.Tests.Driver_Suite is
            ("f: (v: []u8) -> (r: utf8 from v) = r = utf8(v, v) end f",
             "L0327", 1, Executable);
          Check
-           ("u8: (v: u8) -> (r: u8) = r = v end u8 "
-            & "image: u8 = u8(1)",
+           ("u8: (v: i32) -> (r: i32) = r = v end u8 "
+            & "image: i32 = u8(1)",
             "L0305", 1, Executable);
          Check
-           ("utf8: (v: i32) -> (r: utf8) = r = ""ok"" end utf8 "
-            & "image: utf8 = utf8(1)",
+           ("utf8: (v: i32) -> (r: i32) = r = v end utf8 "
+            & "image: i32 = utf8(1)",
             "L0305", 1, Executable);
          Check
            ("equatable: type = concept (t: type) "
