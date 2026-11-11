@@ -1572,7 +1572,7 @@ class LoopTable(unittest.TestCase):
              "| loop | `./scripts/dev-test.sh` with `--suite` | feedback |\n"
              "| cross | `./scripts/dev-test.sh --target=linux-arm64"
              " --runner=qemu-aarch64%s` | a cross lane |\n"
-             "| boards | `gh workflow run gate.yml --ref BRANCH` | boards |\n"
+             "| boards | `gh workflow run WORKFLOW --ref BRANCH` | boards |\n"
              "\n## Next\n\n`./scripts/x.sh --toolchain=DRIVER` is prose.\n")
 
     def said(self, extra):
