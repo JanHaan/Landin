@@ -24450,6 +24450,62 @@ and is a wider change than the defect.
 **Pinned by** `bindings/test.py`'s
 `test_attributes_clang_adds_to_its_builtins_are_not_the_headers`.
 
+D1252 amends this: the kinds are passed over where a header writes them
+too, and a function that does not return is bound.
+
+### D1252 — An attribute that says nothing of the call is passed over, and `noreturn` is bound
+
+**The discrepancy:** D820 refused every attribute on a selected function
+and D1065 passed over six kinds only where Clang had added them. A C
+library writes them: glibc declares `strlen` with `__THROW`,
+`__attribute_pure__` and `__nonnull`, so the system's own `<string.h>`
+could not be bound and the README sent its reader to declare the function
+again in a header of their own. `exit` and `abort`, declared with no
+attribute, were refused for a `noreturn` the header had not written,
+because Clang puts what it knows of those builtins in the type.
+
+**Chosen:** fifteen attribute kinds, by Clang's names, are passed over on
+a selected function and on its parameters, wherever they stand and whoever
+wrote them: `NoThrowAttr`, `LeafAttr`, `PureAttr`, `ConstAttr`,
+`NonNullAttr`, `ReturnsNonNullAttr`, `WarnUnusedResultAttr`, `FormatAttr`,
+`FormatArgAttr`, `SentinelAttr`, `RestrictAttr` (C's `malloc`),
+`AllocSizeAttr`, `AllocAlignAttr`, `ColdAttr` and `DeprecatedAttr`. Each
+says what a call may assume or what a C compiler should warn of; none says
+how the function is called, what symbol it has, how it is linked or how a
+type is laid out. The list is closed and is the kinds that have been read:
+every other kind is refused by name as before, among them `AsmLabelAttr`,
+`VisibilityAttr`, `WeakAttr`, `AliasAttr`, `AlwaysInlineAttr`,
+`GNUInlineAttr`, `OverloadableAttr`, `PassObjectSizeAttr`,
+`ReturnsTwiceAttr` and `UnavailableAttr`, and so is any attribute Clang
+writes into the function's type, a calling convention above all.
+`BuiltinAttr` stays D1065's, passed over only where Clang added it. Nothing
+of a passed-over attribute reaches the binding.
+
+A function C says does not return, by `noreturn` in its type, by
+`_Noreturn` or by `[[noreturn]]`, is declared `-> noreturn` ([0890]) and
+its metadata entry says `"noreturn": true`; no other entry gains the
+member, so every binding made before generates byte for byte. It is bound
+with a `void` result, as a direct import. One with a result type, an
+export, an `incoming_varargs` handler and a form that needs an adapter
+are refused, each in words that say so.
+
+**The alternatives:** refusing every written attribute, as before, with
+the function declared again by hand, which makes the reader the one who
+decides the attribute is harmless and leaves no record that they did. A
+policy member naming the attributes a selection admits, which asks each
+user to make the same fifteen judgements. Passing over every attribute
+that is not known to change a call, which guesses at each kind Clang gains.
+Binding a `noreturn` function as one returning `none`, which is sound to
+call and makes every caller write a path after the call that cannot run.
+Giving the symbol an `AsmLabelAttr` names to the binding, so that glibc's
+`scanf` would link `__isoc99_scanf`, stays open.
+
+**Pinned by** `bindings/test.py`'s
+`test_written_attributes_that_say_nothing_of_the_call_are_passed_over`,
+which also holds that the pinned Clang reports each of the fifteen kinds,
+`test_attributes_that_change_a_call_stay_refused` and
+`test_a_function_that_does_not_return_is_noreturn`.
+
 ### D1066 — A C name that is one of Landin's scalar names takes `c_`
 
 **The tour said** at [1790] that the scalar names are predeclared and are

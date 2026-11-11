@@ -523,6 +523,47 @@ package body Landin.Bindings.Generation is
       end case;
    end Ensure_Supported;
 
+   --  D1252: how Clang ends the type of a function it knows not to
+   --  return, one whose header says `__attribute__((noreturn))` or one of
+   --  its own builtins, exit or abort, declared plainly.
+   No_Return_Suffix : constant String := " __attribute__((noreturn))";
+
+   --  A function's type as Clang spells it, without that ending.
+   function Function_Text (S : Handle; Node : J.Value) return String;
+
+   function Function_Text (S : Handle; Node : J.Value) return String is
+      Text : constant String :=
+        C.Text (S, C.Field (S, Node, "type"), "qualType");
+   begin
+      return
+        (if T.Ends_With (Text, No_Return_Suffix)
+         then Text (Text'First .. Text'Last - No_Return_Suffix'Length)
+         else Text);
+   end Function_Text;
+
+   --  D1252: whether C says the function does not return: in its type, as
+   --  above, or by C11's `_Noreturn` or C23's `[[noreturn]]`, which Clang
+   --  keeps as an attribute of the declaration and not in the type.
+   function Does_Not_Return (S : Handle; Node : J.Value) return Boolean;
+
+   function Does_Not_Return (S : Handle; Node : J.Value) return Boolean is
+   begin
+      if T.Ends_With
+           (C.Text (S, C.Field (S, Node, "type"), "qualType"),
+            No_Return_Suffix)
+      then
+         return True;
+      end if;
+      for Item of C.Inner (S, Node) loop
+         if C.Text (S, Item, "kind")
+              in "C11NoReturnAttr" | "CXX11NoReturnAttr"
+         then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Does_Not_Return;
+
    function Function_Result
      (S : Handle; Node : J.Value; Context : String) return Type_Id;
 
@@ -538,7 +579,7 @@ package body Landin.Bindings.Generation is
          Fail (S, Context & ": Clang function type is missing");
       end if;
       C.Split_Function
-        (C.Text (S, Info, "qualType"), Found, Result_Text, Parameter_Text);
+        (Function_Text (S, Node), Found, Result_Text, Parameter_Text);
       if not Found then
          Fail (S, Context & ": unsupported nested function return declarator "
                & T.Repr (C.Text (S, Info, "qualType"))
@@ -575,8 +616,7 @@ package body Landin.Bindings.Generation is
       Params : out Value_Vectors.Vector; Result : out Type_Id)
    is
       Where : constant String := Context (S, Choice);
-      Text : constant String :=
-        C.Text (S, C.Field (S, Node, "type"), "qualType");
+      Text : constant String := Function_Text (S, Node);
       Names : String_Sets.Set;
 
       --  Whether any declaration of the function writes an attribute of
@@ -602,26 +642,56 @@ package body Landin.Bindings.Generation is
          return False;
       end Written;
 
-      --  D1065: an attribute Clang added itself.  For a declaration whose
-      --  name and type are one of its library builtins, strlen or printf,
-      --  Clang records what it knows of the function as attributes marked
-      --  implicit, on a declaration of its own that the header's then
-      --  inherits them from.  These six kinds say what the function does
-      --  and nothing of how it is called, and no header wrote them, so
-      --  they are passed over.  The same kind written in a header, on any
-      --  declaration of the function, is still the header's attribute, and
-      --  any other kind Clang adds is refused as before: returns_twice,
-      --  which Clang knows of setjmp and vfork, is a way of returning that
-      --  no Landin call can keep.
+      --  D1065: BuiltinAttr is Clang's mark on a declaration whose name
+      --  and type are one of its library builtins, strlen or printf, put
+      --  on a declaration of its own that the header's then inherits it
+      --  from.  No header writes it and it says nothing of the call.
       function Added_By_Clang
         (Value : J.Value; Value_Kind : String; Direct : Boolean)
          return Boolean
-      is (Value_Kind in "BuiltinAttr" | "NoThrowAttr" | "ConstAttr"
-              | "PureAttr" | "FormatAttr" | "AllocSizeAttr"
+      is (Value_Kind = "BuiltinAttr"
           and then (C.Truthy (S, Value, "implicit")
                     or else (Direct
                              and then C.Truthy (S, Value, "inherited")
                              and then not Written (Value_Kind))));
+
+      --  D1252: the attribute kinds that are passed over wherever they
+      --  stand, written by the header or added by Clang, on the function
+      --  or on a parameter.  Each says what a call may assume, or what a
+      --  compiler of C should warn of, and none says how the function is
+      --  called, what its symbol is, how it is linked or how anything is
+      --  laid out.  The list is closed: a kind that is not here is
+      --  refused by name, whatever it means, so one that Clang gains, or
+      --  one nobody has read, is never guessed at.
+      --
+      --    NoThrowAttr            nothrow, glibc's __THROW
+      --    LeafAttr               leaf, the other half of __THROW
+      --    PureAttr, ConstAttr    pure, const
+      --    NonNullAttr            nonnull, on a function or a parameter
+      --    ReturnsNonNullAttr     returns_nonnull
+      --    WarnUnusedResultAttr   warn_unused_result, __wur, [[nodiscard]]
+      --    FormatAttr             format
+      --    FormatArgAttr          format_arg
+      --    SentinelAttr           sentinel
+      --    RestrictAttr           malloc: the result aliases nothing
+      --    AllocSizeAttr          alloc_size
+      --    AllocAlignAttr         alloc_align
+      --    ColdAttr               cold, as glibc writes on abort and exit
+      --    DeprecatedAttr         deprecated
+      --
+      --  Not here, and so refused, are among others AsmLabelAttr, which
+      --  names another symbol; VisibilityAttr, WeakAttr, AliasAttr and
+      --  IFuncAttr, which change what is linked; AlwaysInlineAttr,
+      --  GNUInlineAttr and ArtificialAttr, which make a definition the
+      --  header's own; OverloadableAttr and PassObjectSizeAttr, which
+      --  change the symbol and the arguments; ReturnsTwiceAttr; and every
+      --  calling convention, which Clang writes into the type.
+      function Says_Nothing_Of_The_Call (Value_Kind : String) return Boolean
+      is (Value_Kind in "NoThrowAttr" | "LeafAttr" | "PureAttr"
+              | "ConstAttr" | "NonNullAttr" | "ReturnsNonNullAttr"
+              | "WarnUnusedResultAttr" | "FormatAttr" | "FormatArgAttr"
+              | "SentinelAttr" | "RestrictAttr" | "AllocSizeAttr"
+              | "AllocAlignAttr" | "ColdAttr" | "DeprecatedAttr");
 
       procedure Validate_Attributes (Value : J.Value; Direct : Boolean);
 
@@ -632,7 +702,11 @@ package body Landin.Bindings.Generation is
             return;
          end if;
          if T.Ends_With (Value_Kind, "Attr")
+           and then not Says_Nothing_Of_The_Call (Value_Kind)
            and then not Added_By_Clang (Value, Value_Kind, Direct)
+           and then not
+             (Direct
+              and then Value_Kind in "C11NoReturnAttr" | "CXX11NoReturnAttr")
          then
             Fail (S, Where & ": unsupported calling convention or"
                   & " parameter/function attribute " & Value_Kind);
@@ -3853,6 +3927,7 @@ package body Landin.Bindings.Generation is
       Validate_Site_Annotations (S, Choice, Params, Result, Notes,
                                  Result_Note);
       declare
+         No_Return : constant Boolean := Does_Not_Return (S, Node);
          Variadic : constant Boolean := C.Truthy (S, Node, "variadic");
          Has_Statement : constant Boolean := Has_Body (S, Node);
          Storage : constant String := C.Text (S, Node, "storageClass");
@@ -3903,6 +3978,23 @@ package body Landin.Bindings.Generation is
          then
             Check_Nullable_Cell (S, Result, Where & " result");
             Reasons.Append ("nullable-callback-result");
+         end if;
+         --  D1252: a function C says does not return is Landin's
+         --  `noreturn`, where the declaration is the C function's own.
+         if No_Return then
+            if not Is_Void (S, Resolve (S, Result)) then
+               Fail (S, Where & ": a function that does not return is"
+                     & " bound only with a void result");
+            end if;
+            if P.Text (S, Raw (S, Choice), "direction") = "export" then
+               Fail (S, Where & ": export of a function that does not"
+                     & " return is unsupported");
+            end if;
+            if not Reasons.Is_Empty then
+               Fail (S, Where & ": a function that does not return is"
+                     & " bound only directly; adapter-required form "
+                     & Reasons.First_Element & " is unsupported");
+            end if;
          end if;
          if P.Text (S, Raw (S, Choice), "direction") = "export" then
             if Storage = "static" or else Inline or else Has_Statement then
@@ -4097,6 +4189,8 @@ package body Landin.Bindings.Generation is
                        (S, US.To_String (C_Result), US.To_String (Adapter),
                         C_Decls, Body_Lines);
                   end;
+               elsif No_Return then
+                  Ldn_Result := US.To_Unbounded_String ("noreturn");
                else
                   Ldn_Result := US.To_Unbounded_String
                     (Landin_Return (S, Result, Result_Note,
@@ -4117,6 +4211,11 @@ package body Landin.Bindings.Generation is
                   Put_Text (S, Object, "landin_name", L_Name);
                   Put_Text (S, Object, "direction", "import");
                   Put_Flag (S, Object, "variadic", Variadic);
+                  --  Only where it is so: every binding made before the
+                  --  rule keeps its metadata byte for byte.
+                  if No_Return then
+                     Put_Flag (S, Object, "noreturn", True);
+                  end if;
                   if US.Length (Adapter) = 0 then
                      T.Put (S, Object, "adapter", T.Null_Meta (S));
                   else
@@ -4156,6 +4255,10 @@ package body Landin.Bindings.Generation is
       Names : String_Vectors.Vector;
    begin
       Validate_Function_Shape (S, Choice, Node, Params, Result);
+      if Does_Not_Return (S, Node) then
+         Fail (S, Where & ": incoming_varargs of a function that does not"
+               & " return is unsupported");
+      end if;
       if not C.Truthy (S, Node, "variadic") then
          Fail (S, Where & ": incoming_varargs must name a variadic header"
                & " declaration");

@@ -2533,27 +2533,161 @@ int main(void) { return f(36) != 37; }
         self.assertIn('link(symbol: "memcpy") memcpy: (d: ptr mut u8, s: ptr u8,'
                       ' n: c.c_ulong) -> ', text)
         self.checked(source, output)
-        #  The same kinds written in the header are the header's, on
-        #  whichever declaration; and what Clang adds that changes how a
-        #  call returns is still refused.
+        #  What Clang adds that changes how a call returns is still refused.
+        self.assert_generation_error(
+            self.selection(self.function("setjmp", parameters={"env": reference})),
+            "unsupported calling convention or parameter/function attribute"
+            " ReturnsTwiceAttr",
+            header=("typedef struct { long words[8]; } jmp_buf[1];\n"
+                    "int setjmp(jmp_buf env);\n"))
+
+    def test_written_attributes_that_say_nothing_of_the_call_are_passed_over(self) -> None:
+        #  D1252: the declarations are glibc's, as its macros expand under
+        #  Clang, and two of our own for the kinds glibc's do not reach.
+        reference = annotation()
+        optional = annotation(ownership="caller_owned", nullability="nullable")
+        source = self.root / "written"
+        _, output = self.generate(source, selected_policy=self.selection(
+            self.function("strlen", parameters={"s": reference}),
+            self.function("abs"),
+            self.function("malloc", result=optional),
+            self.function("aligned_alloc", result=optional),
+            self.function("memcpy", parameters={"d": reference, "s": reference},
+                          result=annotation(sources=["d"])),
+            self.function("printf", parameters={"f": reference}),
+            self.function("translated", parameters={"f": reference},
+                          result=annotation(sources=["f"])),
+            self.function("joined", parameters={"first": reference}),
+            self.function("old", parameters={"x": reference})),
+            header=(
+                "extern unsigned long strlen(const char *s)"
+                " __attribute__((__nothrow__, __leaf__)) __attribute__((__pure__))"
+                " __attribute__((__nonnull__(1)));\n"
+                "extern int abs(int x) __attribute__((__nothrow__, __leaf__))"
+                " __attribute__((__const__)) __attribute__((__warn_unused_result__));\n"
+                "extern void *malloc(unsigned long n) __attribute__((__nothrow__, __leaf__))"
+                " __attribute__((__malloc__)) __attribute__((__alloc_size__(1)))"
+                " __attribute__((__warn_unused_result__));\n"
+                "extern void *aligned_alloc(unsigned long a, unsigned long n)"
+                " __attribute__((__nothrow__)) __attribute__((__malloc__))"
+                " __attribute__((__alloc_align__(1))) __attribute__((__alloc_size__(2)));\n"
+                "extern void *memcpy(void *restrict d, const void *restrict s,"
+                " unsigned long n) __attribute__((__nothrow__))"
+                " __attribute__((__nonnull__(1, 2)));\n"
+                "extern int printf(const char *restrict f, ...)"
+                " __attribute__((__format__(__printf__, 1, 2)));\n"
+                "extern const char *translated(const char *f)"
+                " __attribute__((__format_arg__(1))) __attribute__((__returns_nonnull__));\n"
+                "extern int joined(const char *first, ...) __attribute__((__sentinel__));\n"
+                "extern int old(const char *x __attribute__((__nonnull__)))"
+                " __attribute__((__deprecated__)) __attribute__((__cold__));\n"))
+        text = (output / "bindings.ldn").read_text()
+        for line in (
+                'link(symbol: "strlen") strlen: (s: ptr c.c_char) -> (result: c.c_ulong)',
+                'link(symbol: "abs") abs: (x: c.c_int) -> (result: c.c_int)',
+                'link(symbol: "printf") printf: (f: ptr c.c_char, ...) -> (result: c.c_int)',
+                'link(symbol: "joined") joined: (first: ptr c.c_char, ...) -> (result: c.c_int)',
+                'link(symbol: "old") old: (x: ptr c.c_char) -> (result: c.c_int)'):
+            self.assertIn(line, text)
+        for start in ('link(symbol: "malloc") malloc: (n: c.c_ulong) -> ',
+                      'link(symbol: "aligned_alloc") aligned_alloc: (a: c.c_ulong,'
+                      ' n: c.c_ulong) -> ',
+                      'link(symbol: "memcpy") memcpy: (d: ptr mut u8, s: ptr u8,'
+                      ' n: c.c_ulong) -> ',
+                      'link(symbol: "translated") translated: (f: ptr c.c_char) -> '):
+            self.assertIn(start, text)
+        self.assertNotIn("noreturn", (output / "bindings.json").read_text())
+        self.checked(source, output)
+        #  Every kind the rule names reached the generator: a kind Clang
+        #  dropped or renamed would make the case pass without holding it.
+        ast = subprocess.run(
+            [str(self.clang), "--target=" + TARGET, "-x", "c", "-fsyntax-only",
+             "-Xclang", "-ast-dump=json", str(source / "api.h")],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True).stdout
+        for kind in ("NoThrowAttr", "LeafAttr", "PureAttr", "ConstAttr", "NonNullAttr",
+                     "ReturnsNonNullAttr", "WarnUnusedResultAttr", "FormatAttr",
+                     "FormatArgAttr", "SentinelAttr", "RestrictAttr", "AllocSizeAttr",
+                     "AllocAlignAttr", "ColdAttr", "DeprecatedAttr"):
+            self.assertIn('"kind": "%s"' % kind, ast)
+
+    def test_attributes_that_change_a_call_stay_refused(self) -> None:
+        #  D1252's list is closed: what names another symbol, changes what
+        #  is linked or how the call is made is refused by its kind.
+        attribute = "unsupported calling convention or parameter/function attribute "
         refused = [
-            ("__attribute__((pure)) unsigned long strlen(const char *s);",
-             self.function("strlen", parameters={"s": reference}), "PureAttr"),
-            ("__attribute__((const)) int abs(int x);", self.function("abs"), "ConstAttr"),
-            ("__attribute__((format(printf, 1, 2))) int printf(const char *f, ...);\n"
-             "int printf(const char *f, ...);",
-             self.function("printf", parameters={"f": reference}), "FormatAttr"),
-            ("__attribute__((nothrow)) int mine(int x);\nint mine(int x);",
-             self.function("mine"), "NoThrowAttr"),
-            ("typedef struct { long words[8]; } jmp_buf[1];\nint setjmp(jmp_buf env);",
-             self.function("setjmp", parameters={"env": reference}), "ReturnsTwiceAttr"),
+            ('int f(int x) __asm__("other");', attribute + "AsmLabelAttr"),
+            ('__attribute__((visibility("hidden"))) int f(int x);',
+             attribute + "VisibilityAttr"),
+            ("__attribute__((weak)) int f(int x);", attribute + "WeakAttr"),
+            ("__attribute__((returns_twice)) int f(int x);",
+             attribute + "ReturnsTwiceAttr"),
+            ("__attribute__((unavailable)) int f(int x);", attribute + "UnavailableAttr"),
+            ("__attribute__((overloadable)) int f(int x);",
+             attribute + "OverloadableAttr"),
+            ("__attribute__((always_inline)) static inline int f(int x) { return x; }",
+             attribute + "AlwaysInlineAttr"),
+            ("__attribute__((no_caller_saved_registers)) int f(int x);",
+             "unsupported calling convention or function type attribute"),
+            ("__attribute__((regcall)) int f(int x);",
+             "unsupported calling convention or function type attribute"),
+            ("__attribute__((ms_abi, noreturn)) void f(int x);",
+             "unsupported calling convention or function type attribute"),
+            ("int f(int x __attribute__((unused)));", attribute + "UnusedAttr"),
         ]
-        for header, entry, kind in refused:
-            with self.subTest(kind=kind):
+        for header, message in refused:
+            with self.subTest(header=header):
                 self.assert_generation_error(
-                    self.selection(entry),
-                    "unsupported calling convention or parameter/function attribute " + kind,
-                    header=header + "\n")
+                    self.selection(self.function("f")), message, header=header + "\n")
+
+    def test_a_function_that_does_not_return_is_noreturn(self) -> None:
+        #  D1252: said in the type by the header or by Clang of its own
+        #  builtins, or by C11's and C23's declaration specifiers.
+        reference = annotation()
+        source = self.root / "noreturn"
+        _, output = self.generate(source, selected_policy=self.selection(
+            self.function("exit"), self.function("abort"), self.function("quit"),
+            self.function("leave"),
+            self.function("fatal", parameters={"message": reference}),
+            self.function("stays")),
+            header=("void exit(int status);\n"
+                    "extern void abort(void) __attribute__((__nothrow__))"
+                    " __attribute__((__noreturn__)) __attribute__((__cold__));\n"
+                    "_Noreturn void quit(int status);\nvoid quit(int status);\n"
+                    "[[noreturn]] void leave(void);\n"
+                    "void fatal(const char *message, ...)"
+                    " __attribute__((noreturn, format(printf, 1, 2)));\n"
+                    "void stays(int status);\n"))
+        text = (output / "bindings.ldn").read_text()
+        for line in (
+                'public extern(c) link(symbol: "exit") exit: (status: c.c_int) -> noreturn',
+                'public extern(c) link(symbol: "abort") abort: () -> noreturn',
+                'public extern(c) link(symbol: "quit") quit: (status: c.c_int) -> noreturn',
+                'public extern(c) link(symbol: "leave") leave: () -> noreturn',
+                'public extern(c) link(symbol: "fatal") fatal: (message: ptr c.c_char, ...)'
+                ' -> noreturn',
+                'public extern(c) link(symbol: "stays") stays: (status: c.c_int) -> none'):
+            self.assertIn(line + "\n", text)
+        metadata = json.loads((output / "bindings.json").read_text())
+        marked = {item["c_name"]: item.get("noreturn") for item in metadata["declarations"]
+                  if item["kind"] == "function"}
+        self.assertEqual(marked, {"exit": True, "abort": True, "quit": True, "leave": True,
+                                  "fatal": True, "stays": None})
+        self.checked(source, output)
+        refused = [
+            ("__attribute__((noreturn)) int f(int x);", self.function("f"),
+             "a function that does not return is bound only with a void result"),
+            ("__attribute__((noreturn)) void f(int x);",
+             {"kind": "function", "name": "f", "direction": "export", "parameters": {}},
+             "export of a function that does not return is unsupported"),
+            ("__attribute__((noreturn)) static inline void f(int x) { for (;;) { } }",
+             self.function("f"),
+             "a function that does not return is bound only directly;"
+             " adapter-required form internal-or-inline is unsupported"),
+        ]
+        for header, entry, message in refused:
+            with self.subTest(header=header):
+                self.assert_generation_error(self.selection(entry), message,
+                                             header=header + "\n")
 
     def test_a_types_words_are_read_whole(self) -> None:
         #  A tag or typedef whose name contains complex, volatile, va_list,
