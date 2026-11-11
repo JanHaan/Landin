@@ -4,6 +4,15 @@ package body Landin.Diagnostics.Checking is
 
    use type Landin.Source.Byte_Offset;
 
+   Strict_Places : Boolean := False with Atomic;
+
+   procedure Refuse_Repeated_Places (Strict : Boolean) is
+   begin
+      Strict_Places := Strict;
+   end Refuse_Repeated_Places;
+
+   function Refuses_Repeated_Places return Boolean is (Strict_Places);
+
    procedure Report
      (Item    : Failure;
       Source  : Landin.Source.Source_Id;
@@ -66,18 +75,30 @@ package body Landin.Diagnostics.Checking is
          end if;
          --  A second place is a second place: a check that knows nothing of
          --  its context names the construct it was written in, never the
-         --  refused span again.
+         --  refused span again.  That is a defect of the check, and the
+         --  test program is held to it; a compiler someone runs still has
+         --  a true diagnostic to give, so it gives it without the label
+         --  that says nothing (D1251).  A row that promises a label keeps
+         --  it even so: the row is what `refine explain` and the catalogue
+         --  say of every occurrence.
          if Landin.Source."=" (Related.Source, Source)
            and then Landin.Source."=" (Related.Where, Where)
          then
-            raise Compiler_Defect
-              with Text & " was given a secondary on its own span: "
-                   & Because;
+            if Strict_Places then
+               raise Compiler_Defect
+                 with Text & " was given a secondary on its own span: "
+                      & Because;
+            end if;
+            if Rows.Minimum_Secondaries (Named) > 0 then
+               Add_Label
+                 (Built,
+                  Make_Label (Related.Source, Related.Where, Because));
+            end if;
+         else
+            Add_Label
+              (Built,
+               Make_Label (Related.Source, Related.Where, Because));
          end if;
-
-         Add_Label
-           (Built,
-            Make_Label (Related.Source, Related.Where, Because));
       end if;
 
       for One of Fixes loop

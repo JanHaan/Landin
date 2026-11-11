@@ -667,4 +667,7 @@ def main(chip_class, description):
     def cycle(run, open_console, probe, names):
         return cycle_boot(chip, args, run, open_console, probe, names, settle)
 
-    return esp.run_board(chip, args, console_for, cycle, settle)
+    # The console's port first, as a cycle's "on" switches them.
+    places = ([(args.console_hub, args.console_port, console_guard)] if dual else []) + [
+        (args.hub, args.port, guard)]
+    return esp.run_board(chip, args, console_for, cycle, settle, places)

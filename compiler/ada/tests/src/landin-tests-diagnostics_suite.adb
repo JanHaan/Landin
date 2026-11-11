@@ -3,6 +3,7 @@ with Landin.Driver;
 with Ada.Strings.Unbounded;
 with Ada.Strings.Fixed;
 
+with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Text;
 with Landin.Source.Sets;
@@ -978,10 +979,85 @@ package body Landin.Tests.Diagnostics_Suite is
             Refused := True;
       end;
       Landin.Testing.Check
-        (Item, Refused, "a report beside its own span is a defect");
+        (Item, Bad.Refuses_Repeated_Places and then Refused,
+         "a report beside its own span is a defect in the test program");
       Landin.Testing.Check_Equal
         (Item, Count (Found), 1, "and nothing is added for it");
    end A_Checker_Report_Names_A_Second_Place;
+
+   --  D1251: outside the test program the same report is made, without
+   --  the label that names its own span again where the code's row lets a
+   --  report go without one, and with it where the row promises one.
+   procedure A_Repeated_Place_Is_Left_Out_When_Not_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Repeated_Place_Is_Left_Out_When_Not_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      package Lenient renames Landin.Diagnostics.Checking;
+      package Rows renames Landin.Diagnostics.Catalogue;
+      Found : Diagnostic_List;
+      Raised : Boolean := False;
+   begin
+      Lenient.Refuse_Repeated_Places (False);
+      begin
+         Lenient.Report
+           (Item    => Lenient.Literal_Out_Of_Range,
+            Source  => 1,
+            Where   => (4, 9),
+            Message => "300 does not fit u8",
+            Note    => "[0240]: a literal fits its type",
+            Related => (Source => 1, Where => (4, 9)),
+            Because => "written here",
+            Into    => Found);
+         Lenient.Report
+           (Item    => Lenient.Literal_Out_Of_Range,
+            Source  => 1,
+            Where   => (4, 9),
+            Message => "300 does not fit u8",
+            Note    => "[0240]: a literal fits its type",
+            Related => (Source => 1, Where => (0, 12)),
+            Because => "the declaration it is written in",
+            Into    => Found);
+         for Named in Rows.Code_Name loop
+            if Rows.Minimum_Secondaries (Named) > 0
+              and then Rows.Code (Named) in "L0313" | "L0340"
+            then
+               Lenient.Report
+                 (Item    => Lenient.Failure (Named),
+                  Source  => 1,
+                  Where   => (4, 9),
+                  Message => "a code whose row promises a label",
+                  Note    => "its note",
+                  Related => (Source => 1, Where => (4, 9)),
+                  Because => "written here",
+                  Into    => Found);
+            end if;
+         end loop;
+      exception
+         when Landin.Compiler_Defect =>
+            Raised := True;
+      end;
+      Lenient.Refuse_Repeated_Places (True);
+      Landin.Testing.Check
+        (Item, not Raised and then Count (Found) = 4,
+         "each report is made where repeated places are not refused");
+      if Count (Found) = 4 then
+         Landin.Testing.Check
+           (Item, Label_Count (Found.Get (1)) = 0
+            and then Note_Count (Found.Get (1)) = 1,
+            "the label on the report's own span is left out");
+         Landin.Testing.Check_Equal
+           (Item, Label_Count (Found.Get (2)), 1,
+            "a label on another place is kept");
+         Landin.Testing.Check
+           (Item, Code (Found.Get (3)) = "L0313"
+            and then Label_Count (Found.Get (3)) = 1
+            and then Code (Found.Get (4)) = "L0340"
+            and then Label_Count (Found.Get (4)) = 1,
+            "L0313 and L0340 keep the one label their rows promise");
+      end if;
+   end A_Repeated_Place_Is_Left_Out_When_Not_Refused;
 
    --  An unsupported use carries [1830]'s two notes out of the checker's
    --  tables, so a note given beside them has no place in the report and
@@ -1158,6 +1234,10 @@ package body Landin.Tests.Diagnostics_Suite is
       Landin.Testing.Register
         (Into, "diagnostics", "a checker report names a second place",
          A_Checker_Report_Names_A_Second_Place'Access);
+      Landin.Testing.Register
+        (Into, "diagnostics",
+         "a repeated place is left out when not refused",
+         A_Repeated_Place_Is_Left_Out_When_Not_Refused'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "fixes keep their edits in order",
          Fixes_Keep_Their_Edits_In_Order'Access);

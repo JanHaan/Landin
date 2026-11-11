@@ -45,6 +45,14 @@ package Landin.Server.Answers is
       Store   : Landin.Server.Documents.Store;
       Unit    : Positions.Encoding) return String;
 
+   --  D1250: a publishDiagnostics for URI whose one diagnostic is Message,
+   --  a defect of the compiler met while the document's module was
+   --  analysed, at the document's start: the defect has no place in it.
+   function Defect
+     (URI     : String;
+      Version : Long_Long_Integer;
+      Message : String) return String;
+
    --  An empty publishDiagnostics for URI.
    function Cleared (URI : String) return String;
 

@@ -407,6 +407,60 @@ package body Landin.Server.Answers is
       return J.Result (Written);
    end Diagnostics;
 
+   function Defect
+     (URI     : String;
+      Version : Long_Long_Integer;
+      Message : String) return String
+   is
+      Written : J.Builder;
+
+      procedure Write_Start (Name : String);
+
+      procedure Write_Start (Name : String) is
+      begin
+         J.Name (Written, Name);
+         J.Begin_Object (Written);
+         J.Name (Written, "line");
+         J.Write_Integer (Written, 0);
+         J.Name (Written, "character");
+         J.Write_Integer (Written, 0);
+         J.End_Object (Written);
+      end Write_Start;
+   begin
+      J.Begin_Object (Written);
+      J.Name (Written, "jsonrpc");
+      J.Write_String (Written, "2.0");
+      J.Name (Written, "method");
+      J.Write_String (Written, "textDocument/publishDiagnostics");
+      J.Name (Written, "params");
+      J.Begin_Object (Written);
+      J.Name (Written, "uri");
+      J.Write_String (Written, URI);
+      if Version >= 0 then
+         J.Name (Written, "version");
+         J.Write_Integer (Written, Version);
+      end if;
+      J.Name (Written, "diagnostics");
+      J.Begin_Array (Written);
+      J.Begin_Object (Written);
+      J.Name (Written, "range");
+      J.Begin_Object (Written);
+      Write_Start ("start");
+      Write_Start ("end");
+      J.End_Object (Written);
+      J.Name (Written, "severity");
+      J.Write_Integer (Written, 1);
+      J.Name (Written, "source");
+      J.Write_String (Written, "refine");
+      J.Name (Written, "message");
+      J.Write_String (Written, Message);
+      J.End_Object (Written);
+      J.End_Array (Written);
+      J.End_Object (Written);
+      J.End_Object (Written);
+      return J.Result (Written);
+   end Defect;
+
    function Cleared (URI : String) return String
      is ("{""jsonrpc"":""2.0"",""method"":""textDocument/publishDiagnostics"","
          & """params"":{""uri"":" & J.Quoted (URI) & ",""diagnostics"":[]}}");

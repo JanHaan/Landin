@@ -1609,6 +1609,16 @@ class InGroup:
         return self.run.command(name, as_group(argv, self.group, self.sg), **kw)
 
 
+def ports_off(status, ports):
+    """The ports of PORTS that uhubctl's listing STATUS shows switched off:
+    `Port 3: 0000 off`, where a port with power and nothing on it reads
+    `0100 power`.  A port the listing does not have is not one of them."""
+    found = hub_ports(status)
+    return [port for port in ports
+            if port in found and 'off' in found[port].split()
+            and 'power' not in found[port].split()]
+
+
 def port_device(status, port):
     """The USB device uhubctl lists on PORT, `[VID:PID ...]`, or None when
     the port holds none, as a board running firmware without USB does."""

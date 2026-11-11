@@ -20003,6 +20003,39 @@ decided here.
 **Pinned by** the `server` suite's `an exhausted analysis leaves the
 session` and `a publication defect is said once for a text`.
 
+### D1250 — A publication's defect replaces what the module had shown
+
+**The discrepancy:** D1220 said a publication's defect once for a text and
+left open what became of the diagnostics the module had published before
+it. They stayed: the server did not know what the failed analysis would
+have read, so it dropped nothing, and a reader who went on typing saw the
+findings of an earlier text, positions and all, with nothing but a message
+since dismissed to say they were no longer the compiler's.
+
+**Chosen:** while a module's publication ends in a defect, each of its
+open documents is published, at its version, with one diagnostic, the
+defect's report as `window/showMessage` words it, an error from `refine`
+with no code at the document's first position; every other source the
+module had reported on is cleared, or refreshed by another open module
+that reports on it too. The same holds each time the text is published
+again, while D1220's message is still shown once for a text. The first
+publication that completes publishes the module's findings as it always
+does, and so they return. What the module watched on disk is kept through
+the defect, so that a change there analyses it again.
+
+**The alternatives:** leaving the earlier diagnostics, as before. Marking
+them stale, each republished with words or a tag saying it is from an
+earlier text: the protocol has no such state, positions in a text since
+edited are wrong whatever the words say, and the sources of the module
+that are not open would have to be read again to place them. Clearing
+with no diagnostic in the document, which leaves a document with a defect
+looking exactly like a sound one once the message is dismissed.
+
+**Pinned by** the `server` suite's `a publication defect replaces what
+was shown`; a scripted session cannot hold it, since a session runs
+through the executable too and nothing a transcript writes makes the
+compiler fail.
+
 ### D1074 — A program the grammar derives is read by the grammar alone
 
 **The discrepancy:** D260 found a function's closer by indentation before
@@ -24417,6 +24450,62 @@ and is a wider change than the defect.
 **Pinned by** `bindings/test.py`'s
 `test_attributes_clang_adds_to_its_builtins_are_not_the_headers`.
 
+D1252 amends this: the kinds are passed over where a header writes them
+too, and a function that does not return is bound.
+
+### D1252 — An attribute that says nothing of the call is passed over, and `noreturn` is bound
+
+**The discrepancy:** D820 refused every attribute on a selected function
+and D1065 passed over six kinds only where Clang had added them. A C
+library writes them: glibc declares `strlen` with `__THROW`,
+`__attribute_pure__` and `__nonnull`, so the system's own `<string.h>`
+could not be bound and the README sent its reader to declare the function
+again in a header of their own. `exit` and `abort`, declared with no
+attribute, were refused for a `noreturn` the header had not written,
+because Clang puts what it knows of those builtins in the type.
+
+**Chosen:** fifteen attribute kinds, by Clang's names, are passed over on
+a selected function and on its parameters, wherever they stand and whoever
+wrote them: `NoThrowAttr`, `LeafAttr`, `PureAttr`, `ConstAttr`,
+`NonNullAttr`, `ReturnsNonNullAttr`, `WarnUnusedResultAttr`, `FormatAttr`,
+`FormatArgAttr`, `SentinelAttr`, `RestrictAttr` (C's `malloc`),
+`AllocSizeAttr`, `AllocAlignAttr`, `ColdAttr` and `DeprecatedAttr`. Each
+says what a call may assume or what a C compiler should warn of; none says
+how the function is called, what symbol it has, how it is linked or how a
+type is laid out. The list is closed and is the kinds that have been read:
+every other kind is refused by name as before, among them `AsmLabelAttr`,
+`VisibilityAttr`, `WeakAttr`, `AliasAttr`, `AlwaysInlineAttr`,
+`GNUInlineAttr`, `OverloadableAttr`, `PassObjectSizeAttr`,
+`ReturnsTwiceAttr` and `UnavailableAttr`, and so is any attribute Clang
+writes into the function's type, a calling convention above all.
+`BuiltinAttr` stays D1065's, passed over only where Clang added it. Nothing
+of a passed-over attribute reaches the binding.
+
+A function C says does not return, by `noreturn` in its type, by
+`_Noreturn` or by `[[noreturn]]`, is declared `-> noreturn` ([0890]) and
+its metadata entry says `"noreturn": true`; no other entry gains the
+member, so every binding made before generates byte for byte. It is bound
+with a `void` result, as a direct import. One with a result type, an
+export, an `incoming_varargs` handler and a form that needs an adapter
+are refused, each in words that say so.
+
+**The alternatives:** refusing every written attribute, as before, with
+the function declared again by hand, which makes the reader the one who
+decides the attribute is harmless and leaves no record that they did. A
+policy member naming the attributes a selection admits, which asks each
+user to make the same fifteen judgements. Passing over every attribute
+that is not known to change a call, which guesses at each kind Clang gains.
+Binding a `noreturn` function as one returning `none`, which is sound to
+call and makes every caller write a path after the call that cannot run.
+Giving the symbol an `AsmLabelAttr` names to the binding, so that glibc's
+`scanf` would link `__isoc99_scanf`, stays open.
+
+**Pinned by** `bindings/test.py`'s
+`test_written_attributes_that_say_nothing_of_the_call_are_passed_over`,
+which also holds that the pinned Clang reports each of the fifteen kinds,
+`test_attributes_that_change_a_call_stay_refused` and
+`test_a_function_that_does_not_return_is_noreturn`.
+
 ### D1066 — A C name that is one of Landin's scalar names takes `c_`
 
 **The tour said** at [1790] that the scalar names are predeclared and are
@@ -26139,6 +26228,44 @@ reason.
 
 **Pinned by** `scripts/tests/test_board_common.py`'s `Pace`.
 
+### D1253 — An ESP run switches on a port of its own that it finds off
+
+**The tour said** nothing; the ESP ports' power cycle is two switches with
+a wait between them, and one that fails between the two tries the "on"
+once more. Where that fails too, or D725's pace refuses it after USB
+trouble, the port is left off, and no board tool switched a port on when
+it started: every later run of that board ended `unavailable` until
+someone ran `uhubctl -a on` by hand, a command the failure names and a
+newcomer to the rig would not otherwise guess.
+
+**Chosen:** an ESP run, RAM or boot, holding the rig's lock and before it
+touches its board, reads the listing of its own hub and of its console's
+hub where the board has two ports. A port of its own that the listing
+shows `off` it switches on, as one action of D725's pace like any other
+power operation: unacknowledged USB trouble stops it, the Arty must be
+off the cascade, and the hub must show its guarded port. It then waits for
+the board to list and goes on, and its `result.json` says so in
+`power_at_start`, with each hub and port switched and the reason. A run
+that finds its ports on records nothing, and a board's record never
+carries the member. A hub that does not list is named as `unread` and left
+alone. A switch that fails or is refused fails the run, with the port
+still off and the same words about it as a failed cycle's.
+
+**The alternatives:** leaving it to the maintainer, as before. Switching
+the port on outside the pace, on the ground that an "on" disconnects
+nothing: it re-enumerates a device on a cascade that may be the one in
+trouble, and D835 leaves that judgement to a person. Having `gate.py`
+switch every board's ports on before its first step, which gives one tool
+the power of all the ports and a run started by hand nothing. Switching on
+in the observations `--inspect-boot`, `--trace-rom` and
+`--diagnose-reset`, which are there to look at a board as it is.
+
+**Pinned by** `scripts/tests/test_board_esp.py`'s `StartPower`, against
+recorded listings and a fake hub. That a hub lists a switched-off port as
+`off` on the rig's own hubs, and that a board switched on at a run's start
+is ready within the wait a download's reset is given, are the rig's to
+show.
+
 ### D836 — A board tool that opens a tty runs itself in the tty's group
 
 **The tour said** nothing; D646's tools ran `uhubctl` through `sg GROUP -c`
@@ -26942,6 +27069,39 @@ without a checkout to files that are not there.
 `end-to-end/boot-stage-too-long`, `end-to-end/image-block-not-as-emitted`
 and `end-to-end/firmware-archive-with-constructor`, each its code's
 example, and the `catalogue` case `every code is explained`.
+
+### D1251 — A related label on the report's own span is a defect only in the test program
+
+**The discrepancy:** a checker report that names a second place was refused
+as a compiler defect when that place was the report's own span, on the
+ground that a check which knows nothing of its context should name the
+construct it was written in. The refusal was made where the report was
+built, in the compiler anyone runs, and some 350 call sites rely on never
+passing such a place without one of them proving it. Three did. Each
+turned a true diagnostic about the user's program into `internal compiler
+defect` and no diagnostic at all.
+
+**Chosen:** `refine` reports the diagnostic. The label that repeats the
+report's span is left out where the code's row lets a report go without
+one. Where the row promises exactly one label, as L0313's and L0340's do
+and most rows that take a label, the label is kept and the row stays true
+of every occurrence: the report then shows its span once, with the label's words
+under it, as it already did for a label that explains the primary span.
+The test program asks for the refusal before it runs anything, through
+`Landin.Diagnostics.Checking.Refuse_Repeated_Places`, so a check that
+passes its own span still fails the case or fixture that reaches it. The
+switch is the program's and not the build mode's: a debug build of
+`refine` reports as a release build does.
+
+**The alternatives:** raising in every program, as before. Raising by
+build mode, which makes the development build a user or a maintainer runs
+by hand the one that hides the diagnostic. Leaving the label out of every
+report and loosening every row that promises one to admit none, which makes the
+catalogue describe a state only a defect produces. Auditing every call
+site instead, which holds until the next one is written.
+
+**Pinned by** the `diagnostics` cases `a checker report names a second
+place` and `a repeated place is left out when not refused`.
 
 ### D542 — A device description is a module of directives, and its generated half has one text
 

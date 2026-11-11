@@ -473,15 +473,40 @@ type are refused, each by its form, `unsupported pointer to an array` and
 `unsupported pointer to an unnamed function pointer type`; name the
 function pointer with a typedef.
 
-An attribute a header writes on a selected function is refused, whatever
-it is. An attribute Clang adds itself to a declaration of one of its
-library builtins is not the header's (D1065): `strlen`, `malloc`, `abs`,
-`sqrt`, `memcpy` and `printf` declared plainly are bound. A C library that
-writes attributes on its declarations, as glibc's `__THROW` and
-`__nonnull` do, is refused for those; bind such a function from a header of
-your own that declares it without them. `setjmp` and `vfork` stay refused,
-because Clang knows they return twice, and `exit` and `abort` because it
-knows they do not return. `direction: import` emits a direct external declaration when the
+An attribute on a selected function or one of its parameters is passed over
+when it says nothing of how the function is called, linked or named
+(D1252), whether the header wrote it or Clang added it to one of its
+library builtins (D1065). The kinds are a closed list, by Clang's names:
+
+| Clang's kind | written as |
+|---|---|
+| `NoThrowAttr`, `LeafAttr` | `nothrow`, `leaf`; glibc's `__THROW` |
+| `PureAttr`, `ConstAttr` | `pure`, `const` |
+| `NonNullAttr`, `ReturnsNonNullAttr` | `nonnull`, `returns_nonnull` |
+| `WarnUnusedResultAttr` | `warn_unused_result`, glibc's `__wur`, `[[nodiscard]]` |
+| `FormatAttr`, `FormatArgAttr`, `SentinelAttr` | `format`, `format_arg`, `sentinel` |
+| `RestrictAttr`, `AllocSizeAttr`, `AllocAlignAttr` | `malloc`, `alloc_size`, `alloc_align` |
+| `ColdAttr`, `DeprecatedAttr` | `cold`, `deprecated` |
+
+Nothing of them reaches the binding: a `nonnull` parameter is as nullable
+as the policy says, and a `deprecated` function is bound without a word.
+Every other kind is refused by its name, because the list is what has been
+read and not what is thought harmless: `AsmLabelAttr`, which gives the
+function another symbol, as glibc's `scanf` family has; `VisibilityAttr`,
+`WeakAttr` and `AliasAttr`, which change what is linked;
+`AlwaysInlineAttr`, `GNUInlineAttr` and `OverloadableAttr`;
+`ReturnsTwiceAttr`, which Clang knows of `setjmp` and `vfork`; and a
+calling convention, which is refused as a `function type attribute`. So
+`strlen`, `malloc`, `memcpy`, `printf` and `fopen` are bound from the
+system's own `<string.h>`, `<stdlib.h>` and `<stdio.h>`.
+
+A function C says does not return is a Landin `noreturn` function, and its
+entry in `bindings.json` has `"noreturn": true`, a member no other entry
+has: `__attribute__((noreturn))`, C11's `_Noreturn`, C23's `[[noreturn]]`,
+and `exit` and `abort` declared plainly, which Clang knows of itself. Such
+a function is bound with a `void` result, as an import and directly: a
+result type, `direction: export`, `incoming_varargs` and any form that
+needs an adapter are each refused. `direction: import` emits a direct external declaration when the
 native C subset can carry it, and a generated wrapper for opaque by-value
 records, nullable callbacks, or internal inline definitions. Direct variadic
 imports remain variadic Landin declarations; a form that would need a wrapper
@@ -686,7 +711,8 @@ a mixed register/stack-sized incoming-varargs schema. Regression inputs also pin
 recursive retention and callback policy, unequal nested array extents, true enum
 compatible types, declaration identity, reserved names, a tag declared again
 after its definition, records past 2 GiB, the attributes Clang adds to its
-builtins, type words read whole, typedefs named as Landin's scalars,
+builtins, the written attributes that are passed over and those that are
+not, functions that do not return, type words read whole, typedefs named as Landin's scalars,
 pointers to pointers, ambient-environment
 exclusion, repeated anonymous-enum ordering, transitive path macros and a
 dependency chain deep enough to need each record classified once.

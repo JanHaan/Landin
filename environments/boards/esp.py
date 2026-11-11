@@ -564,6 +564,48 @@ def power_cycle(args, off, on, wait=lambda: None):
             raise type(error)('%s; %s' % (error, LEFT_OFF)) from error
 
 
+def power_at_start(run, args, places):
+    """Switch on each port of this run's own board that its hub lists
+    switched off, as a power cycle that failed between its two switches
+    leaves it (D1253), and return what was done for the run's result: None
+    when every port had power, the usual case, in which nothing is
+    switched and nothing recorded.
+
+    PLACES is (hub location, port, keeps) in the order the ports are
+    switched on, KEEPS the hub's guarded port as `switch_ports` takes it.
+    Reading a listing disconnects nothing and is not paced.  A switch is
+    one action through `paced`, as any other: the pace guard stops it
+    after USB trouble, the Arty must be off the cascade, the hub must show
+    its guard, and the caller holds the rig's lock.  A hub that does not
+    list is named and left alone, the run going on to find its board or
+    not; a switch that fails or is refused fails the run and says the
+    port is still off."""
+    hub = common.InGroup(run, args.hub_group)
+    switched, unread = [], []
+    for location, port, keeps in places:
+        status = hub.command('hub-start', ['uhubctl', '-l', location], check=False)
+        if 'Current status for hub %s ' % location not in status:
+            unread.append('hub %s' % location)
+            continue
+        if not common.ports_off(status, [port]):
+            continue
+        try:
+            paced(args, 'power on at start', lambda: common.switch_ports(
+                hub, location, [port], 'on', keeps=keeps, name='power-on-at-start'))
+        except common.Failed as error:
+            raise type(error)('port %d of hub %s was listed switched off when the run'
+                              ' started and could not be switched on: %s; %s'
+                              % (port, location, error, LEFT_OFF)) from error
+        switched.append('hub %s port %d' % (location, port))
+    found = {}
+    if switched:
+        found.update(switched_on=switched,
+                     reason='the hub listed the port switched off when the run started')
+    if unread:
+        found['unread'] = unread
+    return found or None
+
+
 #  What a failed power cycle says when it could not switch the port on.
 LEFT_OFF = ('the port is left off, and later runs end `unavailable` until it'
             ' is on: once the hub lists again, `uhubctl -l HUB -p PORT -a on`'
@@ -592,9 +634,11 @@ def restore_fixed(run, args, chip, probe, console_for, cycle, settle):
         restored.close()
 
 
-def run_board(chip, args, console_for, cycle, settle):
+def run_board(chip, args, console_for, cycle, settle, places=()):
     """The whole run: SETTLE(run) waits for the hub to list the board again
-    after a download resets the chip; CONSOLE_FOR(run) opens the console,
+    after a download resets the chip, or after PLACES, the board's own
+    ports as `power_at_start` takes them, had one switched on as the run
+    started; CONSOLE_FOR(run) opens the console,
     before the power
     is cut where the console survives it; CYCLE(run, open_console, probe,
     names) cuts and restores the power and returns the console, which has
@@ -647,6 +691,13 @@ def run_board(chip, args, console_for, cycle, settle):
         lock.acquire()
         # A borrowed parent lock is held without owning a file here.
         lock_held = True
+        if places:
+            # A port an earlier run's failed cycle left off (D1253).
+            start = power_at_start(run, args, places)
+            if start:
+                result['power_at_start'] = start
+                if 'switched_on' in start:
+                    settle(run)
         if ram:
             console = console_for(run)
             result['warm_load'] = common.ram_load(run, args, chip.name, elf)
