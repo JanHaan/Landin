@@ -31328,10 +31328,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & " `pwm`, `rtc`, `usb` or `watchdog`, the names a firmware"
                & " program gives its own drivers and a device description "
                & "its peripherals, but for what it holds: the line setting"
-               & "s and divisor arithmetic of D955 are `core/line`. `core/"
-               & "README.md`'s interface conventions state the rule, and a"
-               & " full `check.py` refuses a library module directory with"
-               & " one of those names.",
+               & "s and divisor arithmetic of D955 are `core/line`. the co"
+               & "re library's own README states the rule in its interface"
+               & " conventions, and a full `check.py` refuses a library mo"
+               & "dule directory with one of those names.",
             when 1317 =>
                "Chosen: a `---` documentation comment line in `core`, `h"
                & "osted` or `platform` is at most 79 columns, counted in c"

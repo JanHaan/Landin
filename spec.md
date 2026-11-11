@@ -30234,8 +30234,8 @@ device-class noun, `serial`, `uart`, `usart`, `spi`, `i2c`, `gpio`,
 `timer`, `adc`, `dac`, `dma`, `pwm`, `rtc`, `usb` or `watchdog`, the names
 a firmware program gives its own drivers and a device description its
 peripherals, but for what it holds: the line settings and divisor
-arithmetic of D955 are `core/line`. `core/README.md`'s interface
-conventions state the rule, and a full `check.py` refuses a library module
+arithmetic of D955 are `core/line`. the core library's own README states the
+rule in its interface conventions, and a full `check.py` refuses a library module
 directory with one of those names.
 
 **The alternatives:** an endorsed alias convention for the collision,
