@@ -237,6 +237,7 @@ different responsibilities.
 | `Landin.Commands.Presentation` | human, short and structured rendering of the driver's retained diagnostics and positions | reread source files or alter a diagnostic's meaning |
 | `Landin.Commands.Tracing` | native argument-vector tracing through the supplied tool runner | execute a command outside that capability |
 | `Landin.Commands.Bindings` | `refine bindings` (D820): checking the request, reading the headers and policy and running the named Clang through `Landin.Platform` in an environment of its own (D821), from a private directory it removes, and selection of the four outputs for D907's shared `Landin.Platform.Publication` group through adapter compilation and verification | generate a binding, parse C, or replace a file outside the output directory |
+| `Landin.Commands.Sites` | `refine site` (D1292): reading the build and its source table through `Landin.Platform`, holding the table to the build's identity (an ELF's `.landin_id` or GNU build ID, a Mach-O's `__TEXT,__landin_id` and its dSYM's UUID, assembly's SHA-256), and decoding a panic site or a caller's coordinates | write a file, run a tool, read DWARF, or answer for a build the table was not written with |
 | `Landin.Commands.Devices` | `refine svd`: reading the SVD and policy through `Landin.Platform`, reporting a projection's fault at its place, and selection of generated and manifest-listed stale outputs for D907's shared `Landin.Platform.Publication` group | project an SVD, or replace a file outside the output directory |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection, protected input registration and artifact verification through `Landin.Platform.Publication`, and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, an import of `core`, `hosted` or `platform` from the library root alone, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
@@ -541,21 +542,26 @@ labelled positions; neither constructs source sites. No per-site datum or
 filename enters the emitted runtime data.
 
 A caller-using `--emit=exe -o app` also writes `app.sources.json`. Keep that
-file with the build artifacts; it need not ship on the target. Read the
-Linux executable's build ID with `readelf -n app`, then resolve recorded coordinates:
+file with the build artifacts; it need not ship on the target. `refine site`
+resolves recorded coordinates, or a panic site, against the executable and
+the table beside it (D1292):
 
 ```sh
-python3 scripts/source-location.py app.sources.json 1 42 9 --build-id HEX_ID
+refine site app 1 42 9
+refine site app 4194
 ```
 
-The resolver writes the original filesystem path bytes followed by ASCII
-`:line:column` and a newline. It does not decode the path through the terminal
-encoding; non-UTF-8 paths therefore survive even with strict UTF-8 stdout.
+It reads the executable's own build identity, which a stripped copy keeps,
+and writes the original filesystem path bytes followed by ASCII
+`:line:column` and a newline, with ` (overflow)` or another check's name
+after a site. It does not decode the path through the terminal encoding;
+non-UTF-8 paths therefore survive even with strict UTF-8 stdout.
 
-For `--emit=asm -o app.s`, use `app.s.sources.json` and `--assembly app.s`
-instead. The assembly identity includes a comment binding its file map, even
-when a source edit leaves the instructions unchanged. The decoder rejects a
-missing or mismatched build identity and preserves arbitrary filesystem bytes.
+For `--emit=asm -o app.s`, name `app.s` in the executable's place; its table
+is `app.s.sources.json`. The assembly identity includes a comment binding
+its file map, even when a source edit leaves the instructions unchanged.
+The command rejects a missing or mismatched build identity (L0689) and
+preserves arbitrary filesystem bytes.
 
 Public specifications stay narrow, and a representation is private wherever a
 caller could otherwise assemble a value the package would not have produced:

@@ -204,7 +204,7 @@ def nonreturning(run, elf):
 
 
 
-def panic(run, elf):
+def panic(run, elf, refine):
     program = (run.out / 'source/app/main.ldn').read_bytes()
     names = json.loads((run.out / 'closure.json').read_text())['symbols']
     latches = [name for name in names if name.endswith('landin_panic_active')]
@@ -255,10 +255,9 @@ def panic(run, elf):
             'print("R670_STACK_OBSERVED", 4096-next(i for i,b in enumerate(paint) if b != 0xa5))',
             'print("R670_PANIC_PASS")', 'end'], 'R670_PANIC_PASS')
         if site:
-            import sys
-            output = run.command('site-'+str(mode), [sys.executable,
-                ROOT / 'scripts/source-location.py', str(elf)+'.sources.json',
-                '--panic-site', str(site), '--assembly', str(elf)+'.s'])
+            #  D1292: the image names its build in `.landin_id`.
+            output = run.command('site-'+str(mode), [refine, 'site', elf,
+                                                     str(site)])
             offset = (site-kind)//5
             line = program[:offset].count(b'\n')+1
             column = offset-program.rfind(b'\n', 0, offset)
@@ -362,10 +361,12 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
             out.mkdir()
             run = Run(out, parent.tools)
             elf = build(run, refine, program, optimize, specialize)
-            (cpu if name == 'cpu' else dma_execute if name == 'dma' else
-             nonreturning if name == 'noreturn' else
-             panic if name == 'panic' else
-             panic_default if name == 'panic-default' else memory)(run, elf)
+            if name == 'panic':
+                panic(run, elf, refine)
+            else:
+                (cpu if name == 'cpu' else dma_execute if name == 'dma' else
+                 nonreturning if name == 'noreturn' else
+                 panic_default if name == 'panic-default' else memory)(run, elf)
             fresh = out / 'fresh'
             fresh.mkdir()
             build(Run(fresh, parent.tools), refine, program, optimize, specialize)

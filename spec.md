@@ -13747,7 +13747,7 @@ records the assembly digest and a SHA-256 build identity over the file entries
 and assembly. An assembly comment carries that identity before the final
 assembly digest is computed, so source changes that preserve code cannot share
 an assembly mapping identity. Executable emission supplies the ELF build ID.
-`scripts/source-location.py` requires the matching assembly or build ID before
+`refine site` (D1292) requires the matching assembly or build identity before
 resolving a triple. A manually linked assembly can use the assembly check.
 Neither the filename map nor a lookup routine enters the running program;
 without the map a diagnostic can still print all three coordinates. This is
@@ -13784,6 +13784,62 @@ checks in their reports; selecting a handler leaves them out.
 `driver/caller files are separate`, and the `functions.caller` guarantee row.
 The runtime case retains coordinates after returns, verifies 12-byte size,
 and covers direct, forwarded, omitted, indirect, generic and multi-file calls.
+
+### D1292 — `refine site` resolves a site, or a caller's coordinates, against its build
+
+**The discrepancy:** D192 and D232 keep file names out of a program: a
+caller's coordinates are three numbers and a `panic_handler`'s site is one,
+and the table that turns them into a path and a line is written beside the
+build. The only reader of that table was a Python script in the source
+repository, so a user of an installed `refine` held a number and nothing
+to resolve it with. A hosted trap with no handler prints
+its own line (D361); a handler's site and a firmware trap did not.
+
+**Chosen:** `refine site [--map=FILE] [--dsym=FILE] PROGRAM SITE` and
+`refine site ... PROGRAM FILE LINE COLUMN`. PROGRAM is what the compilation
+wrote: an executable, a firmware image, or the assembly of `--emit=asm`.
+The table is `PROGRAM.sources.json` unless `--map` names it. SITE is a
+`u32` in decimal or after `0x`. The answer on standard output is the
+recorded path's bytes, `:LINE:COLUMN`, and for a site the check that
+failed in parentheses, as the script wrote them, and the status is 0.
+
+The table answers only for the build it was written with, and the command
+reads that build's identity itself rather than being told it: an ELF's
+`.landin_id` section, which every firmware image carries, or else its GNU
+build ID, which a hosted link is given and `strip` keeps; a thin arm64
+Mach-O's `__TEXT,__landin_id` section, and with `--dsym` the dSYM's DWARF
+file must share the executable's UUID; anything else is read as assembly,
+whose SHA-256 must be the table's `assembly_sha256`. A table that is not
+one is L0688, a build that is not the table's L0689, and a site, a file
+number or an operand the table does not hold L0690, each with status 1; a
+file that cannot be read is L0003. Site 0 is the compiler's own guard and
+is refused by name. Every file is read through `Landin.Platform`, nothing
+is written and no tool is run.
+
+"The built program's debug information" is this table and not DWARF: a
+site is defined by D232 as a source byte and a check family, the table is
+the one artifact that records it on every target, firmware and a stripped
+executable included, and DWARF line tables name instructions, not sites.
+The script is removed; the debugger lanes and the Cortex-M panic control
+call the command.
+
+**The alternatives:** the trap report carrying the line, which D361 does
+where there is a process to write it and which firmware and a selected
+handler cannot do without the file names D192 keeps out; a command told
+the identity (`--build-id HEX`), as the script was, which makes the user
+run `readelf` first and lets a wrong one be typed; and keeping the script
+beside the command, two decoders of one table. The maintainer chose the
+command.
+
+**Pinned by** `commands/site is a subcommand`, on the fake filesystem: the
+five check families at one source byte, hexadecimal, a path holding a
+colon, a quote and a non-UTF-8 byte, each kind of build matched and
+mismatched, a truncated ELF, a dSYM of another UUID, and every refusal.
+`compiler/tests/debugging/check.py` and `panic.py` resolve a stripped
+executable's and an assembly's coordinates through it, and
+`environments/cortex-m/freestanding.py` a firmware image's site. The
+Mach-O reader has run only on that case's synthetic files; Darwin's lane
+has not run it.
 
 ### D231 — Nonreturning calls and signature identity
 
@@ -18691,8 +18747,8 @@ body sharing. Kept data and selected handler references remain reachable.
 
 `--panic-map` adds optional fields to `<output>.sources.json`: source-byte
 ranges and line-start offsets alongside D192's exact path bytes, source hashes
-and assembly/build identity. It requires emission. `scripts/source-location.py
---panic-site NUMBER` resolves a nonzero site only with matching assembly,
+and assembly/build identity. It requires emission. `refine site PROGRAM
+NUMBER` (D1292) resolves a nonzero site only with matching assembly,
 ELF build identity or Mach-O identity. Zero is explicitly synthetic, not a
 filename guess. Stripping source/debug tables does not change the scalar site;
 constrained builds need no map, filenames, formatting, heap or reporting storage.
@@ -22416,7 +22472,7 @@ starts share its site; and number `stack_exhausted` sites from a separate
 range, which makes the map two spaces for one rule. Both were declined.
 
 **Pinned by** `abi/r670-panic`, whose peer pins sites from source byte
-positions, `scripts/tests/test_panic_locations.py` for the map's decoder, and
+positions, `commands/site is a subcommand` for the map's decoder, and
 the Cortex-M panic controls in `environments/cortex-m/freestanding.py`.
 
 ### D453 — The stack builtins' refusals, and a backend that does not emit them yet

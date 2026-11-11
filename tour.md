@@ -5466,9 +5466,8 @@ It gets two scalars and no strings:
 
 File and line live in an optional table outside the target, so a small
 firmware image carries no file names. `refine --panic-map` writes that
-table. `scripts/source-location.py --panic-site`, a script in Landin's
-source repository rather than part of `refine`, resolves a site against
-the build that made it, and only that build.
+table. `refine site PROGRAM SITE` resolves a site against the build that
+made it, and only that build.
 
 Fine print:
 

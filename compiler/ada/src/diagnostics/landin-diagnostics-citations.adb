@@ -1824,6 +1824,9 @@ package body Landin.Diagnostics.Citations is
             when 192 =>
                "Caller coordinates are three u32 fields; filenames are o"
                & "ptional metadata",
+            when 1292 =>
+               "`refine site` resolves a site, or a caller's coordinates"
+               & ", against its build",
             when 231 =>
                "Nonreturning calls and signature identity",
             when 263 =>
@@ -2276,6 +2279,8 @@ package body Landin.Diagnostics.Citations is
             when 417 =>
                "Two items of one spelling: the one that is not an export"
                & " takes its module's path",
+            when 1291 =>
+               "`--debug=lines` names each module binding, with its type",
             when 421 =>
                "A generic instance is a symbol named after its routine",
             when 422 =>
@@ -2735,6 +2740,9 @@ package body Landin.Diagnostics.Citations is
             when 830 =>
                "Under the CLIC mtvt names a table of handler addresses, "
                & "and a program vectors an interrupt by its shv",
+            when 1290 =>
+               "An RV32 slot whose routine is out of a jump's reach ente"
+               & "rs it through a stub",
             when 570 =>
                "The depth report closes a call through a table or a func"
                & "tion value",
@@ -3770,6 +3778,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Functions, calls and returns",
             when 192 =>
                "Decisions: Functions, calls and returns",
+            when 1292 =>
+               "Decisions: Functions, calls and returns",
             when 231 =>
                "Decisions: Functions, calls and returns",
             when 263 =>
@@ -4118,6 +4128,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 417 =>
                "Decisions: The toolchain, C and the machine",
+            when 1291 =>
+               "Decisions: The toolchain, C and the machine",
             when 421 =>
                "Decisions: The toolchain, C and the machine",
             when 422 =>
@@ -4457,6 +4469,8 @@ package body Landin.Diagnostics.Citations is
             when 688 =>
                "Decisions: The toolchain, C and the machine",
             when 830 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1290 =>
                "Decisions: The toolchain, C and the machine",
             when 570 =>
                "Decisions: The toolchain, C and the machine",
@@ -5593,6 +5607,9 @@ package body Landin.Diagnostics.Citations is
             when 192 =>
                "https://www.701.dev/spec.html#d192-caller-coordinates-ar"
                & "e-three-u32-fields-filenames-are-optional-metadata",
+            when 1292 =>
+               "https://www.701.dev/spec.html#d1292-refine-site-resolves"
+               & "-a-site-or-a-caller-s-coordinates-against-its-build",
             when 231 =>
                "https://www.701.dev/spec.html#d231-nonreturning-calls-an"
                & "d-signature-identity",
@@ -6131,6 +6148,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d417-two-items-of-one-spel"
                & "ling-the-one-that-is-not-an-export-takes-its-module-s-pa"
                & "th",
+            when 1291 =>
+               "https://www.701.dev/spec.html#d1291-debug-lines-names-ea"
+               & "ch-module-binding-with-its-type",
             when 421 =>
                "https://www.701.dev/spec.html#d421-a-generic-instance-is"
                & "-a-symbol-named-after-its-routine",
@@ -6678,6 +6698,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d830-under-the-clic-mtvt-n"
                & "ames-a-table-of-handler-addresses-and-a-program-vectors-"
                & "an-interrupt-by-its-shv",
+            when 1290 =>
+               "https://www.701.dev/spec.html#d1290-an-rv32-slot-whose-r"
+               & "outine-is-out-of-a-jump-s-reach-enters-it-through-a-stub",
             when 570 =>
                "https://www.701.dev/spec.html#d570-the-depth-report-clos"
                & "es-a-call-through-a-table-or-a-function-value",

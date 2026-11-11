@@ -142,3 +142,6 @@ L0580  Live     D820: a Clang that cannot be run as asked, fails, or describes a
 L0581  Live     D820: a selected C declaration, or its policy, that cannot be bound
 L0582  Live     D820: outputs refine bindings will not replace
 L0587  Live     D924: a firmware image whose C archives bring constructors, thread-local storage or a dynamic linkage
+L0688  Live     D1292: a source table refine site cannot read
+L0689  Live     D1292: a build that is not the one its source table was written with
+L0690  Live     D1292: a site or a caller's file the table does not hold

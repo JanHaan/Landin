@@ -423,14 +423,21 @@ Landin digest matches that executable to its caller/source table. The
 original caller sidecars alone did not provide this Mach-O binding.
 
 ```sh
-python3 scripts/source-location.py program.sources.json 2 11 12 \
-    --macho program --dsym program.dSYM/Contents/Resources/DWARF/program
+refine site --dsym=program.dSYM/Contents/Resources/DWARF/program program 2 11 12
 ```
 
-Lookup refuses a mismatched digest or dSYM UUID. The native reader supports
-the implemented thin arm64 Mach-O target and validates load-command bounds;
-universal binaries are outside this target contract. `--assembly` remains
-available, and Linux retains `--build-id` with the full GNU build ID.
+`refine site` reads the table beside the program, `program.sources.json`,
+or the one `--map=FILE` names, and answers with the source path, line and
+column (D1292). It refuses a mismatched digest (L0689) or dSYM UUID. Its
+reader supports the implemented thin arm64 Mach-O target and validates
+load-command bounds; universal binaries are outside this target contract.
+On Linux and FreeBSD the program is held to the table by its full GNU build
+ID, which a stripped copy keeps, a firmware image by its `.landin_id`
+section, and the assembly of `--emit=asm`, named in the program's place, by
+its SHA-256. `refine site PROGRAM SITE` resolves the `site` a
+`panic_handler` received the same way, from a table written with
+`--panic-map`, and adds the check that failed:
+`source/app/main.ldn:12:9 (overflow)`.
 These identities match builds; they are not signatures or tamper-proof
 attestations against a modified executable.
 

@@ -1,5 +1,6 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with GNAT.SHA256;
 with Landin.Build_Identity;
 with Landin.Commands;
 with Landin.Commands.Catalogue;
@@ -16,6 +17,249 @@ package body Landin.Tests.Commands_Suite is
      "public main: () -> (code: i32) = code = 0 end main";
    function Contains (Text, Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) /= 0);
+
+   --  D1292: `refine site` resolves a panic site or a caller's three
+   --  coordinates against the build its table was written with, and no
+   --  other: assembly by its SHA-256, an ELF by `.landin_id` or its GNU
+   --  build ID, a Mach-O by `__TEXT,__landin_id` and its dSYM by UUID.
+   --  Every file is the fake filesystem's.
+   procedure Site_Is_A_Subcommand
+     (Item : in out Landin.Testing.Context);
+
+   procedure Site_Is_A_Subcommand
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      LF : constant Character := Character'Val (10);
+      NUL : constant Character := Character'Val (0);
+      Build : constant String (1 .. 64) := [others => 'a'];
+      Other : constant String (1 .. 64) := [others => 'b'];
+      Assembly : constant String := "assembly" & LF;
+      --  Filesystem bytes: a colon, a quote and a byte that is no UTF-8.
+      Path : constant String :=
+        "folder:with""quotes/" & Character'Val (16#FF#) & ".ldn";
+      Path_Hex : constant String :=
+        "666f6c6465723a776974682271756f7465732fff2e6c646e";
+
+      function Table (Id : String) return String is
+        ("{""build_id"":""" & Id & """,""assembly_sha256"":"""
+         & GNAT.SHA256.Digest (Assembly) & """,""files"":["
+         & "{""file_id"":2,""path_hex"":""" & Path_Hex & ""","
+         & """panic_base"":101,""byte_length"":19,"
+         & """line_offsets"":[0,5,12]}]}");
+
+      --  VALUE in COUNT little-endian bytes.
+      function LE (Value : Natural; Count : Positive) return String;
+      function LE (Value : Natural; Count : Positive) return String is
+         Result : String (1 .. Count);
+         Rest : Natural := Value;
+      begin
+         for Byte of Result loop
+            Byte := Character'Val (Rest mod 256);
+            Rest := Rest / 256;
+         end loop;
+         return Result;
+      end LE;
+
+      function Padded (Text : String; Count : Positive) return String is
+        (Text & [1 .. Count - Text'Length => NUL]);
+
+      --  A little-endian ELF of one section, NAME holding CONTENT, and
+      --  its section names.
+      function ELF (Wide : Boolean; Name, Content : String) return String;
+      function ELF (Wide : Boolean; Name, Content : String) return String
+      is
+         Header : constant Natural := (if Wide then 64 else 52);
+         Entry_Size : constant Natural := (if Wide then 64 else 40);
+         Names : constant String := NUL & Name & NUL & ".shstrtab" & NUL;
+         Content_At : constant Natural := Header;
+         Names_At : constant Natural := Content_At + Content'Length;
+         Table_At : constant Natural := Names_At + Names'Length;
+
+         function Section (Name_At, Offset, Size : Natural) return String is
+           (if Wide
+            then LE (Name_At, 4) & LE (1, 4) & LE (0, 8) & LE (0, 8)
+              & LE (Offset, 8) & LE (Size, 8) & LE (0, 24)
+            else LE (Name_At, 4) & LE (1, 4) & LE (0, 4) & LE (0, 4)
+              & LE (Offset, 4) & LE (Size, 4) & LE (0, 16));
+      begin
+         return Character'Val (16#7F#) & "ELF"
+           & Character'Val (if Wide then 2 else 1) & Character'Val (1)
+           & Character'Val (1) & LE (0, 9)
+           & LE (2, 2) & LE (0, 2) & LE (1, 4)
+           & (if Wide
+              then LE (0, 8) & LE (0, 8) & LE (Table_At, 8)
+              else LE (0, 4) & LE (0, 4) & LE (Table_At, 4))
+           & LE (0, 4) & LE (Header, 2) & LE (0, 2) & LE (0, 2)
+           & LE (Entry_Size, 2) & LE (3, 2) & LE (2, 2)
+           & Content & Names
+           & Section (0, 0, 0)
+           & Section (1, Content_At, Content'Length)
+           & Section (Name'Length + 2, Names_At, Names'Length);
+      end ELF;
+
+      --  The 32 bytes a build ID's 64 digits spell, all 16#aa#.
+      Note : constant String :=
+        LE (4, 4) & LE (32, 4) & LE (3, 4) & "GNU" & NUL
+        & [1 .. 32 => Character'Val (16#AA#)];
+
+      --  A thin arm64 Mach-O: an executable (2) with `__landin_id`
+      --  holding ID, or a dSYM's DWARF file (10), and its UUID.
+      function Mach_O (Kind : Natural; UUID : Character; Id : String)
+        return String;
+      function Mach_O (Kind : Natural; UUID : Character; Id : String)
+        return String
+      is
+         Segment : constant String :=
+           LE (16#19#, 4) & LE (152, 4) & Padded ("__TEXT", 16)
+           & LE (0, 8) & LE (0, 8) & LE (0, 8) & LE (0, 8)
+           & LE (0, 4) & LE (0, 4) & LE (1, 4) & LE (0, 4)
+           & Padded ("__landin_id", 16) & Padded ("__TEXT", 16)
+           & LE (0, 8) & LE (Id'Length, 8) & LE (32 + 24 + 152, 4)
+           & LE (0, 28);
+         Commands : constant String :=
+           LE (16#1B#, 4) & LE (24, 4) & [1 .. 16 => UUID]
+           & (if Kind = 2 then Segment else "");
+      begin
+         return Character'Val (16#CF#) & Character'Val (16#FA#)
+           & Character'Val (16#ED#) & Character'Val (16#FE#)
+           & LE (16#0100000C#, 4) & LE (0, 4) & LE (Kind, 4)
+           & LE ((if Kind = 2 then 2 else 1), 4)
+           & LE (Commands'Length, 4) & LE (0, 4) & LE (0, 4)
+           & Commands & (if Kind = 2 then Id else "");
+      end Mach_O;
+
+      function Run (Words : Landin.Platform.Path_List)
+        return Landin.Driver.Outcome
+        is (Landin.Commands.Execute (Words, Host, Tools, Meter));
+
+      procedure Answers (Words : Landin.Platform.Path_List; Line : String);
+      procedure Answers (Words : Landin.Platform.Path_List; Line : String)
+      is
+         Got : constant Landin.Driver.Outcome := Run (Words);
+      begin
+         Landin.Testing.Check
+           (Item, Got.Status = Landin.Driver.Status_Success
+              and then US.To_String (Got.Output) = Line & LF,
+            Line & " is answered: " & US.To_String (Got.Output)
+            & US.To_String (Got.Report));
+      end Answers;
+
+      procedure Refuses
+        (Words : Landin.Platform.Path_List; Code, Part : String);
+      procedure Refuses
+        (Words : Landin.Platform.Path_List; Code, Part : String)
+      is
+         Got : constant Landin.Driver.Outcome := Run (Words);
+         Said : constant String := US.To_String (Got.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Got.Status = Landin.Driver.Status_Reported
+              and then US.Length (Got.Output) = 0
+              and then Contains (Said, "error[" & Code & "]")
+              and then Contains (Said, Part),
+            Code & " " & Part & " is reported: " & Said);
+      end Refuses;
+
+      function Kind_Name (Kind : Natural) return String is
+        (case Kind is
+            when 0 => "out_of_range", when 1 => "overflow",
+            when 2 => "bad_conversion", when 3 => "unreachable",
+            when others => "stack_exhausted");
+
+      procedure Misused (Words : Landin.Platform.Path_List);
+      procedure Misused (Words : Landin.Platform.Path_List) is
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Run (Words).Status, Landin.Driver.Status_Misuse,
+            "one site or three coordinates are asked for");
+      end Misused;
+   begin
+      Host.Add_File ("p.s", Assembly);
+      Host.Add_File ("p.s.sources.json", Table (Build));
+      Host.Add_File ("other.s", "another assembly" & LF);
+      Host.Add_File ("other.json", Table (Other));
+      Host.Add_File ("broken.json", "{""build_id"":");
+      Host.Add_File ("bare.json", "{""files"":[]}");
+      Host.Add_File ("fw.elf", ELF (False, ".landin_id", Build));
+      Host.Add_File
+        ("hosted", ELF (True, ".note.gnu.build-id", Note));
+      Host.Add_File ("stripped", ELF (True, ".text", "code"));
+      Host.Add_File ("cut.elf", ELF (False, ".landin_id", Build) (1 .. 60));
+      Host.Add_File ("app", Mach_O (2, 'u', Build));
+      Host.Add_File ("app.dwarf", Mach_O (10, 'u', ""));
+      Host.Add_File ("wrong.dwarf", Mach_O (10, 'v', ""));
+      --  A site is five check families at each source byte.
+      for Kind in 0 .. 4 loop
+         Answers (["site", "p.s",
+                   Ada.Strings.Fixed.Trim
+                     (Natural'Image (101 + 5 * 14 + Kind),
+                      Ada.Strings.Both)],
+                  Path & ":3:3 (" & Kind_Name (Kind) & ")");
+      end loop;
+      Answers (["site", "p.s", "0xAC"], Path & ":3:3 (overflow)");
+      Answers (["site", "p.s", "101"], Path & ":1:1 (out_of_range)");
+      Answers (["site", "p.s", "200"], Path & ":3:8 (stack_exhausted)");
+      --  A caller's coordinates name the file and are printed as given.
+      Answers (["site", "p.s", "2", "42", "9"], Path & ":42:9");
+      --  Each kind of build is held to the table's identity.
+      Answers (["site", "--map=p.s.sources.json", "fw.elf", "172"],
+               Path & ":3:3 (overflow)");
+      Answers (["site", "hosted", "--map", "p.s.sources.json", "172"],
+               Path & ":3:3 (overflow)");
+      Answers (["site", "--map=p.s.sources.json", "app", "2", "1", "1"],
+               Path & ":1:1");
+      Answers (["site", "--map=p.s.sources.json", "--dsym=app.dwarf",
+                "app", "172"], Path & ":3:3 (overflow)");
+      Refuses (["site", "--map=p.s.sources.json", "other.s", "172"],
+               "L0689", "other.s is not the build p.s.sources.json was"
+               & " written with");
+      Refuses (["site", "--map=other.json", "fw.elf", "172"], "L0689",
+               "fw.elf is build " & Build & ", and other.json was written"
+               & " with build " & Other);
+      Refuses (["site", "--map=other.json", "hosted", "172"], "L0689",
+               "hosted is build " & Build);
+      Refuses (["site", "--map=other.json", "app", "172"], "L0689",
+               "app is build " & Build);
+      Refuses (["site", "--map=p.s.sources.json", "stripped", "172"],
+               "L0689", "stripped carries no build identity");
+      Refuses (["site", "--map=p.s.sources.json", "cut.elf", "172"],
+               "L0689", "cut.elf is not a complete");
+      Refuses (["site", "--map=p.s.sources.json", "--dsym=wrong.dwarf",
+                "app", "172"], "L0689", "wrong.dwarf is not the dSYM of app");
+      Refuses (["site", "--map=p.s.sources.json", "--dsym=app.dwarf",
+                "fw.elf", "172"], "L0689", "app.dwarf is not the dSYM of");
+      Refuses (["site", "--map=p.s.sources.json", "app.dwarf", "172"],
+               "L0689", "name the executable");
+      --  What the table does not hold.
+      Refuses (["site", "p.s", "0"], "L0690", "site 0 is the compiler's");
+      Refuses (["site", "p.s", "100"], "L0690", "site 100 is in no file");
+      Refuses (["site", "p.s", "201"], "L0690", "site 201 is in no file");
+      Refuses (["site", "p.s", "4294967296"], "L0690", "is not a site");
+      Refuses (["site", "p.s", "12x"], "L0690", "`12x` is not a site");
+      Refuses (["site", "p.s", "8", "42", "9"], "L0690",
+               "file 8 is not one file of p.s.sources.json");
+      Refuses (["site", "p.s", "2", "0", "9"], "L0690",
+               "three positive numbers");
+      --  A table that is none, and one that is not there.
+      Refuses (["site", "--map=broken.json", "p.s", "172"], "L0688",
+               "broken.json is not a source table refine wrote");
+      Refuses (["site", "--map=bare.json", "p.s", "172"], "L0688",
+               "it needs build_id, assembly_sha256 and files");
+      Refuses (["site", "fw.elf", "172"], "L0003",
+               "cannot read the source table fw.elf.sources.json: it does"
+               & " not exist; refine compile --panic-map writes it");
+      Refuses (["site", "absent", "172"], "L0003",
+               "cannot read the build absent: it does not exist");
+      Misused (["site"]);
+      Misused (["site", "p.s"]);
+      Misused (["site", "p.s", "2", "42"]);
+      Misused (["site", "p.s", "2", "42", "9", "1"]);
+      Landin.Testing.Check
+        (Item, Tools.Run_Count = 0, "no tool is run to resolve a site");
+   end Site_Is_A_Subcommand;
 
    procedure Help_And_Queries (Item : in out Landin.Testing.Context);
    procedure Help_And_Queries (Item : in out Landin.Testing.Context) is
@@ -1670,6 +1914,9 @@ package body Landin.Tests.Commands_Suite is
       Landin.Testing.Register
         (Into, "commands", "actionable command guidance",
          Actionable_Command_Guidance'Access);
+      Landin.Testing.Register
+        (Into, "commands", "site is a subcommand",
+         Site_Is_A_Subcommand'Access);
       Landin.Testing.Register
         (Into, "commands", "options before their command",
          Options_Before_Their_Command'Access);

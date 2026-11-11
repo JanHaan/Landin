@@ -10191,56 +10191,6 @@ def check_binding_generator(full_run):
     return out
 
 
-def check_source_locations(full_run):
-    """The offline decoder requires build matching and preserves path bytes."""
-    if not full_run:
-        return []
-    import hashlib
-    import json
-    import subprocess
-    import tempfile
-    from pathlib import Path
-
-    script = "scripts/source-location.py"
-    if absent([script]):
-        return absent([script])
-    out = []
-    with tempfile.TemporaryDirectory() as directory:
-        assembly = Path(directory) / "program.s"
-        assembly.write_bytes(b"test assembly\n")
-        table = Path(directory) / "program.sources.json"
-        path = b'dir:with"quotes/\xff.ldn'
-        table.write_text(json.dumps({
-            "build_id": "abc123",
-            "assembly_sha256": hashlib.sha256(assembly.read_bytes()).hexdigest(),
-            "files": [{"file_id": 7, "path_hex": path.hex()}],
-        }), encoding="ascii")
-        base = [sys.executable, script, str(table), "7", "42", "9"]
-        for encoding in ("utf-8:strict", "ascii:strict"):
-            env = dict(os.environ, PYTHONIOENCODING=encoding)
-            for identity in (["--build-id", "abc123"],
-                             ["--assembly", str(assembly)]):
-                result = subprocess.run(base + identity, capture_output=True,
-                                        env=env, timeout=10)
-                if (result.returncode or result.stderr or
-                        result.stdout != path + b":42:9\n"):
-                    out.append((script, 1, "matching lookup loses source path "
-                                "bytes under " + encoding))
-        assembly.write_bytes(b"different assembly\n")
-        for identity in ([], ["--build-id", "def456"],
-                         ["--assembly", str(assembly)]):
-            result = subprocess.run(base + identity, capture_output=True,
-                                    env=env, timeout=10)
-            if result.returncode != 2 or result.stdout:
-                out.append((script, 1, "lookup accepts an absent or wrong build"))
-        base[3] = "8"
-        result = subprocess.run(base + ["--build-id", "abc123"],
-                                capture_output=True, env=env, timeout=10)
-        if result.returncode != 2 or result.stdout:
-            out.append((script, 1, "lookup accepts an unknown file ID"))
-    return out
-
-
 def quality_workload_problems(quality):
     """Keep every complete hosted prototype in the repeated-build schedule."""
     path = "compiler/tests/quality/check.py"
@@ -10576,7 +10526,6 @@ OWNED_TESTS = (
     "scripts/tests/test_prototype_coverage.py",
     "environments/cortex-m/test.py",
     "devices/test.py",
-    "scripts/tests/test_panic_locations.py",
     "scripts/tests/test_darwin_assembly.py",
 )
 
@@ -11462,7 +11411,6 @@ def main(argv):
     extra += check_developer_loops(full_run)
     extra += check_loop_commands(full_run)
     extra += check_harness_selectors(full_run)
-    extra += check_source_locations(full_run)
     extra += check_optimization_contract(full_run)
     extra += check_array_prose(full_run)
     extra += check_control_quotes(full_run)

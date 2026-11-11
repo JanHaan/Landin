@@ -663,33 +663,6 @@ class CrossLanes(unittest.TestCase):
         checker._fixture_records.cache_clear()
 
 
-class SourceLocations(unittest.TestCase):
-    """The offline decoder requires build matching and preserves path bytes."""
-
-    def test_the_real_decoder_passes(self):
-        self.assertEqual(
-            faults(checker.check_source_locations,
-                   copied=["scripts/source-location.py"]), [])
-
-    def test_a_missing_decoder_is_reported_rather_than_skipped(self):
-        said = reasons(checker.check_source_locations,
-                       written={"README.md": "# Root\n"})
-        self.assertTrue(said)
-        self.assertIn("needed by a check", said[0])
-
-    def test_a_decoder_that_stops_checking_is_reported(self):
-        #  The check drives the real script with a mismatched build id and
-        #  a path holding a quote and a non-UTF-8 byte. A decoder that
-        #  accepted anything would pass a check that only ran it.
-        from check_controls import tree
-        with tree(copied=["scripts/source-location.py"]) as root:
-            script = root / "scripts/source-location.py"
-            script.write_text("#!/usr/bin/env python3\nimport sys\n"
-                              "sys.exit(0)\n")
-            said = [why for _, _, why in checker.check_source_locations(True)]
-        self.assertTrue(said)
-
-
 class Citations(unittest.TestCase):
     """Every construct citation resolves, and no id is defined twice."""
 

@@ -314,7 +314,12 @@ package Landin.Diagnostics.Catalogue is
       Bindings_Output_Refused,
       --  D924: a firmware image linked with C archives that holds what
       --  compiler-owned startup cannot honour, read after the link.
-      Firmware_Foreign_Section);
+      Firmware_Foreign_Section,
+      --  D1292: `refine site`, which resolves a site against the build
+      --  that made it.  No program is refused for any of them.
+      Site_Table_Invalid,
+      Site_Build_Mismatch,
+      Site_Unresolved);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retired when the
@@ -1424,7 +1429,26 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D924: a firmware image whose C archives bring"
                    & " constructors, thread-local storage or a dynamic"
-                   & " linkage"))];
+                   & " linkage")),
+      Site_Table_Invalid =>
+        (Code => "L0688", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"D1292: a source table refine site cannot read"),
+      Site_Build_Mismatch =>
+        (Code => "L0689", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D1292: a build that is not the one its source table"
+                   & " was written with")),
+      Site_Unresolved =>
+        (Code => "L0690", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"D1292: a site or a caller's file the table does not hold")];
 
    ------------------------------------------------------------------
    --  The columns, read out of the table

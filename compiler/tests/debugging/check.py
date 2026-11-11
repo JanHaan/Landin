@@ -1688,7 +1688,9 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
                           cwd=debugger_cwd, expected_status=42)
     require(stripped_output == expected_output,
             "stripped executable output differs from its fixture oracle")
-    resolver = str(ROOT / "scripts/source-location.py")
+    #  D1292: `refine site` reads the build's identity out of the stripped
+    #  executable, or hashes the assembly.
+    resolver = [str(refine), "site", "--map=" + str(map_path)]
     caller_id, caller_line, caller_column = 2, CALLER_LINE, CALLER_COLUMN
     if workload:
         entry_source = fixture / "main.ldn"
@@ -1698,32 +1700,32 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         caller_line = source_line(entry_source, entry_call)
         caller_column = (entry_source.read_text().splitlines()[caller_line - 1]
                          .index(entry_call) + 1)
-    coordinate_args = [str(map_path), str(caller_id), str(caller_line),
-                       str(caller_column)]
-    resolved = run([sys.executable, resolver, *coordinate_args,
-                    "--build-id", stripped_id], cwd=debugger_cwd).strip()
+    coordinate_args = [str(caller_id), str(caller_line), str(caller_column)]
+    resolved = run([*resolver, str(stripped), *coordinate_args],
+                   cwd=debugger_cwd).strip()
     expected_location = (f"{recorded_path(source_args[caller_id - 1])}:"
                          f"{caller_line}:{caller_column}")
     require(resolved == expected_location,
             "D192 source-map decoding failed for the stripped build")
-    resolved_assembly = run([sys.executable, resolver, *coordinate_args,
-                             "--assembly", str(assembly)],
+    resolved_assembly = run([*resolver, str(assembly), *coordinate_args],
                             cwd=debugger_cwd).strip()
     require(resolved_assembly == expected_location,
             "D192 source-map decoding failed for the exact assembly")
     wrong_build_id = (("0" if stripped_id[0] != "0" else "1") +
                       stripped_id[1:])
-    refusal = run([sys.executable, resolver, *coordinate_args,
-                   "--build-id", wrong_build_id], cwd=debugger_cwd,
-                  expected_status=2)
-    require("build ID does not match" in refusal,
+    wrong_map = scratch / f"debug-{key}-wrong.sources.json"
+    wrong_map.write_text(json.dumps(
+        dict(json.loads(map_path.read_text()), build_id=wrong_build_id)))
+    refusal = run([str(refine), "site", "--map=" + str(wrong_map),
+                   str(stripped), *coordinate_args], cwd=debugger_cwd,
+                  expected_status=1)
+    require("error[L0689]" in refusal and stripped_id in refusal,
             "D192 resolver accepted or misreported a wrong build ID")
     wrong_assembly = scratch / f"debug-{key}-wrong.s"
     wrong_assembly.write_bytes(assembly.read_bytes() + b"\n")
-    refusal = run([sys.executable, resolver, *coordinate_args,
-                   "--assembly", str(wrong_assembly)], cwd=debugger_cwd,
-                  expected_status=2)
-    require("assembly does not match" in refusal,
+    refusal = run([*resolver, str(wrong_assembly), *coordinate_args],
+                  cwd=debugger_cwd, expected_status=1)
+    require("error[L0689]" in refusal,
             "D192 resolver accepted or misreported wrong assembly bytes")
     return {
         "profile": {"optimize": optimize, "specialize": specialize},
