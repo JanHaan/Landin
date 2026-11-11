@@ -172,14 +172,16 @@ def main():
         #  D361: names only in trap reports, and only logical ones.
         deployed = linux.deployed_source_names(stripped.read_bytes(), linux.SOURCES)
         assert not deployed, deployed
-        lookup = [sys.executable, ROOT / 'scripts/source-location.py', table_path,
-                  '2', str(linux.CALLER_LINE), str(linux.CALLER_COLUMN), '--macho', stripped, '--dsym', dsym]
+        #  D1292: `refine site` holds the stripped executable to the table
+        #  by `__TEXT,__landin_id` and its dSYM to it by UUID.
+        lookup = [args.refine.resolve(), 'site', '--map=' + str(table_path), '--dsym=' + str(dsym),
+                  stripped, '2', str(linux.CALLER_LINE), str(linux.CALLER_COLUMN)]
         resolved = run(key + '-lookup', lookup)
         assert resolved == str(linux.ODD_SOURCE.relative_to(ROOT)) + f':{linux.CALLER_LINE}:{linux.CALLER_COLUMN}\n'
         wrong = dict(table, build_id='0' * 64)
         mismatch = output / (key + '-wrong.sources.json')
         mismatch.write_text(json.dumps(wrong))
-        run(key + '-mismatch', [*lookup[:2], mismatch, *lookup[3:]], 2)
+        run(key + '-mismatch', [*lookup[:2], '--map=' + str(mismatch), *lookup[3:]], 1)
         results.append({'optimize': opt, 'specialize': spec, 'status': 'passed',
                         'identity': identity, 'checks': len(session['checks'])})
         scalar_exe = output / (key + '-scalars')

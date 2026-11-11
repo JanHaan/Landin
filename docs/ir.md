@@ -985,9 +985,12 @@ flash limit, with independent ELF load-header and poisoned-reset assertions.
 The Cortex line/function debugger consumes the existing source origins and
 generic-template identities. It introduces no target register, DWARF record or
 debugger artifact into the IR. `Backend.Dwarf.Line_Sections` emits the bounded
-ELF32 function/line contract; `Backend.Cortex_M` describes its own physical CFI,
+ELF32 function/line contract, and each module datum a declaration names
+with its type at its symbol, written by the encoder the hosted description
+uses; `Backend.Cortex_M` describes its own physical CFI,
 including explicit unwind termination for interrupt/naked routines. No Cortex
-variable location plan is advertised or inferred from storage homes. Existing
+variable location plan is advertised or inferred from storage homes: a
+routine's slots are not described. Existing
 optimization, volatile transaction and private call-status effects remain
 unchanged; executable LOAD-image comparisons verify that adding debug metadata
 does not change firmware execution or initialization. See the

@@ -1341,6 +1341,19 @@ and fails `traps: yes`. Merely changing the divisor in cleanup would not expose
 cleanup reached after the fault. A fake-outcome control pins the distinction;
 the fixture still cannot identify which instruction generated a signal.
 
+A selected `panic_handler` that ends the program has no status to give
+either: firmware has no exit, and `platform/posix.exit` is hosted only. So a
+fixture that pins what its handler received reports it the way that runs on
+every target with a native backend, firmware included (D462, D1293): `main`
+runs the computation whose check fails on a prepared stack, the handler
+records its verdict in a module value and resumes the context `main` saved
+when it switched there, and `main` returns the verdict as its `status`.
+`runtime/compiler-unreachable-dispatches` returns 42 only for the kind and
+site it expects, and a distinct code for anything else; a missing dispatch
+reaches the terminal default trap, which fails the status where `traps: yes`
+would have held. A check that fails on `main`'s own stack, before it has
+switched, cannot report this way, and a fixture of one keeps `traps: yes`.
+
 ## The grammar corpus
 
 A `.ldn` file under `positive/` must be derivable from the enabled grammar in

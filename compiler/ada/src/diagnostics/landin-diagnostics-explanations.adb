@@ -2032,7 +2032,40 @@ package body Landin.Diagnostics.Explanations is
                & "y without constructors and call its initialisation from "
                & "the firmware entry; declare a thread-local variable as o"
                & "rdinary static data; and link the library's static archi"
-               & "ve built for the firmware's core.");
+               & "ve built for the firmware's core.",
+            when Catalogue.Site_Table_Invalid =>
+               "`refine site` could not use the source table (D1292): th"
+               & "e file is not JSON, or it lacks the `build_id`, `assembl"
+               & "y_sha256` and `files` that `refine compile` writes into "
+               & "`<output>.sources.json`, or a file's entry is damaged. T"
+               & "he message says which. Name the table the compilation wr"
+               & "ote beside its output, with `--map=FILE` when it has bee"
+               & "n moved; a table is written whenever the program uses a "
+               & "caller's coordinates, and `--panic-map` or `--debug=full"
+               & "` writes one for every program.",
+            when Catalogue.Site_Build_Mismatch =>
+               "`refine site` was given a build that is not the one its "
+               & "source table was written with (D1292, D192). A table res"
+               & "olves nothing for another build, since a site number mea"
+               & "ns a different line in each. An ELF program is matched b"
+               & "y its `.landin_id` section, which firmware carries, or i"
+               & "ts GNU build ID; a Mach-O program by its `__TEXT,__landi"
+               & "n_id` section, and with `--dsym` its dSYM must share its"
+               & " UUID; anything else is read as the assembly of `--emit="
+               & "asm`, whose SHA-256 must be the table's. The message nam"
+               & "es the identity found. Name the program and the table of"
+               & " one compilation: a rebuilt program needs the table writ"
+               & "ten with it.",
+            when Catalogue.Site_Unresolved =>
+               "`refine site` found the build and its table, and the tab"
+               & "le does not hold what was asked (D1292): the site number"
+               & " lies in no file's range, the table records no sites bec"
+               & "ause the program was not compiled with `--panic-map`, th"
+               & "e caller's file number names no file, or the operand is "
+               & "no number. Site 0 is the compiler's own guard and has no"
+               & " source line. Pass the `site` a `panic_handler` received"
+               & ", or the three numbers of a caller's coordinates, as the"
+               & " running program reported them.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -3158,6 +3191,12 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Bindings_Output_Refused =>
                "",
             when Catalogue.Firmware_Foreign_Section =>
+               "",
+            when Catalogue.Site_Table_Invalid =>
+               "",
+            when Catalogue.Site_Build_Mismatch =>
+               "",
+            when Catalogue.Site_Unresolved =>
                "");
 
    function Fixture (Of_Code : Catalogue.Code_Name) return String
@@ -4010,6 +4049,12 @@ package body Landin.Diagnostics.Explanations is
                & "      = note: D924: build the library without `__attribu"
                & "te__((constructor))` or static constructors, and call it"
                & "s initialisation from the firmware entry"
-               & LF);
+               & LF,
+            when Catalogue.Site_Table_Invalid =>
+               "",
+            when Catalogue.Site_Build_Mismatch =>
+               "",
+            when Catalogue.Site_Unresolved =>
+               "");
 
 end Landin.Diagnostics.Explanations;

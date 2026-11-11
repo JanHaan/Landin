@@ -300,7 +300,7 @@ package body Landin.Backend.Firmware is
           (RV32_Trap_Frame (Keeps_Limit)));
       Handlers : array (0 .. Profiles.Slot_Capacity - 1)
         of Landin.IR.Item_Id := [others => Landin.IR.No_Item];
-      Result, Stubs : US.Unbounded_String;
+      Result, Stubs, Landings : US.Unbounded_String;
       --  Whether any slot enters the shared stub tail.
       Stubbed : Boolean := False;
 
@@ -438,6 +438,80 @@ package body Landin.Backend.Firmware is
       function Stub_Name (Slot : Natural) return String is
         ("_landin_firmware_slot_" & Number (Landin.Targets.Byte_Count (Slot)));
 
+      function Far_Name (Slot : Natural) return String is
+        ("_landin_firmware_far_" & Number (Landin.Targets.Byte_Count (Slot)));
+
+      --  Whether slot SLOT jumps to its routine itself: a naked routine
+      --  the hardware enters, or a routine the core's dispatch calls.
+      function Enters_Routine (Slot : Natural) return Boolean is
+        (not (Model = Profiles.Xh3irq and then Slot = 11)
+         and then Profiles.Admits (Profile, Slot)
+         and then Handlers (Slot) /= Landin.IR.No_Item
+         and then (Naked (Handlers (Slot))
+                   or else Profiles.Dispatched_Slot (Profile.Core, Slot)));
+
+      --  The region ITEM's code is linked in: the one its placement
+      --  names, RAM code's for a `.ramtext.` section (D688), and the
+      --  text's otherwise.
+      function Code_Region (Item : Landin.IR.Item_Id)
+         return Profiles.Region_Count;
+      function Code_Region (Item : Landin.IR.Item_Id)
+         return Profiles.Region_Count
+      is
+         use type Landin.Source.Names.Name_Id;
+         Attr : constant Landin.Machine.Placement :=
+           Landin.IR.Placement_Of (Of_Unit, Item);
+      begin
+         if Attr.Region /= Landin.Source.Names.No_Name then
+            return Profiles.Region_Named
+              (Profile, Landin.Source.Names.Spelling (Names, Attr.Region));
+         elsif Attr.Section /= Landin.Source.Names.No_Name
+           and then Ada.Strings.Fixed.Head
+             (Landin.Source.Names.Spelling (Names, Attr.Section), 9)
+             = ".ramtext."
+           and then Profiles.RAM_Code_Region (Profile) /= 0
+         then
+            return Profiles.RAM_Code_Region (Profile);
+         else
+            return Profile.Placed (Profiles.Text);
+         end if;
+      end Code_Region;
+
+      --  D1290: whether slot SLOT's routine is linked in another region
+      --  than the image's text, some byte of which a slot's `j`, which
+      --  reaches 1 MiB either way, cannot reach from the table.
+      function Far (Slot : Natural) return Boolean;
+      function Far (Slot : Natural) return Boolean is
+         Reach : constant Landin.Targets.Byte_Count := 2 ** 20;
+      begin
+         if not Enters_Routine (Slot) then
+            return False;
+         end if;
+         declare
+            Index : constant Profiles.Region_Count :=
+              Code_Region (Handlers (Slot));
+            Table : constant Landin.Targets.Byte_Count :=
+              Profiles.Vector_Address (Profile);
+            Last_Slot : constant Landin.Targets.Byte_Count :=
+              Table + Profiles.Vector_Bytes (Profile);
+         begin
+            if Index = 0 or else Index = Profile.Placed (Profiles.Text) then
+               return False;
+            end if;
+            declare
+               First : constant Landin.Targets.Byte_Count :=
+                 Profile.Regions (Index).Origin;
+               Last : constant Landin.Targets.Byte_Count :=
+                 First + Profile.Regions (Index).Length;
+            begin
+               --  The last slot to the region's first byte, backwards,
+               --  and the first slot to its end, forwards.
+               return (First < Last_Slot and then Last_Slot - First > Reach)
+                 or else (Last > Table and then Last - Table >= Reach);
+            end;
+         end;
+      end Far;
+
       --  What slot SLOT of the table jumps to.
       function Slot_Target (Slot : Natural) return String is
         (if Model = Profiles.Xh3irq and then Slot = 11
@@ -445,10 +519,32 @@ package body Landin.Backend.Firmware is
          elsif not Profiles.Admits (Profile, Slot)
            or else Handlers (Slot) = Landin.IR.No_Item
          then "_landin_firmware_unhandled"
+         elsif Far (Slot) then Far_Name (Slot)
          elsif Naked (Handlers (Slot))
            or else Profiles.Dispatched_Slot (Profile.Core, Slot)
          then Symbol (Handlers (Slot))
          else Stub_Name (Slot));
+
+      --  The section a far routine's landing is linked in, with the
+      --  routine: its region's, spelled as the backend spells an item's,
+      --  or RAM code's.
+      function Landing_Section (Slot : Natural) return String;
+      function Landing_Section (Slot : Natural) return String is
+         use type Landin.Source.Names.Name_Id;
+         Attr : constant Landin.Machine.Placement :=
+           Landin.IR.Placement_Of (Of_Unit, Handlers (Slot));
+         Name : constant String := "landin_far_"
+           & Number (Landin.Targets.Byte_Count (Slot));
+      begin
+         if Attr.Region = Landin.Source.Names.No_Name then
+            return ".ramtext." & Name;
+         end if;
+         return ".landin_region."
+           & Landin.Source.Names.Spelling (Names, Attr.Region) & "."
+           & (if Profiles.Writable
+                (Profile.Regions (Code_Region (Handlers (Slot))).Mode)
+              then "data" else "text") & "." & Name;
+      end Landing_Section;
 
       --  Whether the hardware may enter slot SLOT itself, so that a stub
       --  of its own saves the frame: a slot the core's dispatch does not
@@ -609,6 +705,65 @@ package body Landin.Backend.Firmware is
             Trap_End (Stubs, Stub_Name (Slot));
          end if;
       end loop;
+      --  D1290: the stubs of the slots whose routines a `j` cannot
+      --  reach.  One the core's dispatch calls is called with t0 the
+      --  slot's own address, which the call may change, so its stub
+      --  takes the routine's there.  One the hardware enters has every
+      --  register the interrupted code's and no register to take an
+      --  address in: its stub keeps t0 below the interrupted sp, as an
+      --  interrupt routine's does, and enters a landing linked with the
+      --  routine, which restores t0 and sp and jumps to it, so the
+      --  routine finds what a slot's own jump would have left it.
+      for Slot in 0 .. Profile.Vector_Count - 1 loop
+         if Far (Slot)
+           and then Profiles.Dispatched_Slot (Profile.Core, Slot)
+         then
+            Line (Stubs, ".balign 4");
+            Line (Stubs, ".type " & Far_Name (Slot) & ", @function");
+            Line (Stubs, Far_Name (Slot) & ":");
+            if Debug then
+               Line (Stubs, ".cfi_startproc");
+            end if;
+            Line (Stubs, "1:");
+            Line (Stubs, "auipc t0, %pcrel_hi("
+              & Symbol (Handlers (Slot)) & ")");
+            Line (Stubs, "jr %pcrel_lo(1b)(t0)");
+            Trap_End (Stubs, Far_Name (Slot));
+         elsif Far (Slot) then
+            Trap_Entry (Stubs, Far_Name (Slot));
+            Line (Stubs, "addi sp, sp, -16");
+            if Debug then
+               Line (Stubs, ".cfi_def_cfa_offset 16");
+            end if;
+            Line (Stubs, "sw t0, 0(sp)");
+            if Debug then
+               Line (Stubs, ".cfi_offset t0, -16");
+            end if;
+            Line (Stubs, "1:");
+            Line (Stubs, "auipc t0, %pcrel_hi(" & Far_Name (Slot)
+              & "_landing)");
+            Line (Stubs, "jr %pcrel_lo(1b)(t0)");
+            Trap_End (Stubs, Far_Name (Slot));
+            Line (Landings, ".section " & Landing_Section (Slot)
+              & ",""ax"",@progbits");
+            Trap_Entry (Landings, Far_Name (Slot) & "_landing");
+            if Debug then
+               Line (Landings, ".cfi_def_cfa_offset 16");
+               Line (Landings, ".cfi_offset t0, -16");
+            end if;
+            Line (Landings, "lw t0, 0(sp)");
+            if Debug then
+               Line (Landings, ".cfi_restore t0");
+            end if;
+            Line (Landings, "addi sp, sp, 16");
+            if Debug then
+               Line (Landings, ".cfi_def_cfa_offset 0");
+            end if;
+            Line (Landings, "j " & Symbol (Handlers (Slot)));
+            Trap_End (Landings, Far_Name (Slot) & "_landing");
+         end if;
+      end loop;
+      US.Append (Result, US.To_String (Landings));
       Line (Result, ".section .text.landin_firmware_trap,""ax"",@progbits");
       US.Append (Result, US.To_String (Stubs));
       if Stubbed then

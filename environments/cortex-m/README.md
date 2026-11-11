@@ -299,11 +299,14 @@ the first leaving an internal breakpoint and watchpoint, and requires each
 later session to see none.
 
 A session reads a program's module binding by its symbol,
-`v("*(unsigned*)&refused")`. A binding whose name an imported routine
-also has is linked under its module-qualified spelling, `main.geometry`
-beside `l1.geometry`, and the bare name is then the routine's or no
-symbol at all; the [target guide](../../docs/targets.md#cortex-source-debugging)
-says how GDB answers that and how to find and read the binding's spelling.
+`v("*(unsigned*)&refused")`, which needs no debugging information. A
+binding whose name an imported routine also has is linked under its
+module-qualified spelling, `main.geometry` beside `l1.geometry`. An image
+compiled with `--debug=lines` names the binding by its source name with
+its type, so `print geometry` reads it (D1291); without debugging
+information the bare name is no symbol at all, and the
+[target guide](../../docs/targets.md#cortex-source-debugging) says how to
+find and read the binding's spelling.
 
 ### On NixOS
 

@@ -155,9 +155,11 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
             assert re.search(r'^#5\s+.*\b_landin_start_main\b', stack, re.M), stack
             assert re.search(r'^#6\s+.*\b_landin_start\b', stack, re.M), stack
             assert not re.search(r'^#7\b', stack, re.M), stack
-        mapped = run(key+'-map', ['python3', ROOT / 'scripts/source-location.py',
-            str(executable)+'.sources.json', '--panic-site', site,
-            '--assembly', str(executable)+'.s'])
+        #  D1292: the assembly names its build on every host; the table
+        #  is the executable's.
+        mapped = run(key+'-map', [refine, 'site',
+            '--map='+str(executable)+'.sources.json',
+            str(executable)+'.s', site])
         assert f'main.ldn:{operation_line}:5 (overflow)' in mapped
         results.append({'profile': key, 'status': 'passed', 'site': site})
         print('native panic debugger: '+target+'/'+key+' passed', flush=True)

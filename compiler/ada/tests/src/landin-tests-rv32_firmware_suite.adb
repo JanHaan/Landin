@@ -978,6 +978,89 @@ package body Landin.Tests.RV32_Firmware_Suite is
         & ".globl _landin_firmware_vectors" & LF);
    end Traps_Follow_The_Model;
 
+   --  D1290: a routine linked in a region a slot's jump cannot reach is
+   --  entered through a stub beside the table, and an image whose
+   --  routines are all in reach is the one it was.
+   procedure Far_Handlers (Item : in out Landin.Testing.Context);
+   procedure Far_Handlers (Item : in out Landin.Testing.Context) is
+      function Two_Regions (RAM : String) return String is
+        ("compiler.device(""dev"")" & LF
+         & "compiler.core(""hazard3"")" & LF
+         & "compiler.vectors(68)" & LF
+         & "compiler.boot(""vector-table"")" & LF
+         & "compiler.interrupt(""TIMER0"", 0)" & LF
+         & "linker.region(""FLASH"", 0x1000_0000, 256 * 1024, ""rx"")" & LF
+         & "linker.region(""RAM"", " & RAM & ", 256 * 1024, ""rwx"")" & LF
+         & "linker.place(""vectors"", ""FLASH"")" & LF
+         & "linker.place(""text"", ""FLASH"")" & LF
+         & "linker.place(""rodata"", ""FLASH"")" & LF
+         & "linker.place(""data"", ""RAM"")" & LF
+         & "linker.place(""bss"", ""RAM"")" & LF
+         & "linker.place(""stack"", ""RAM"", 16 * 1024)" & LF);
+      Program : constant String :=
+        "link(vector: 7, section: "".ramtext.tick"") extern(naked) tick:"
+        & " () -> none =" & LF
+        & "    assembler.block(""mret"")" & LF & "end tick" & LF
+        & "link(vector: 16, region: ""RAM"") extern(interrupt) irq:"
+        & " () -> none = end irq" & LF
+        & "link(vector: 3) extern(naked) soft: () -> none =" & LF
+        & "    assembler.block(""mret"")" & LF & "end soft" & LF;
+      Far, Near, Said : U.Unbounded_String;
+
+      procedure Holds (Name, Part : String);
+      procedure Holds (Name, Part : String) is
+      begin
+         Landin.Testing.Check
+           (Item, Contains (U.To_String (Far), Part),
+            Name & " holds " & Part & ": " & U.To_String (Said)
+            & U.To_String (Far));
+      end Holds;
+   begin
+      Assembly_Of (Two_Regions ("0x2000_0000"), Program, Far, Said);
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Far), 7), "j _landin_firmware_far_7",
+         "a naked routine in far RAM is entered through its stub");
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Far), 16), "j _landin_firmware_far_16",
+         "a dispatched routine in far RAM is entered through its stub");
+      Landin.Testing.Check
+        (Item, not Contains (Slot_Of (U.To_String (Far), 3),
+                             "_landin_firmware"),
+         "a naked routine in the text is jumped to: "
+         & Slot_Of (U.To_String (Far), 3));
+      --  The hardware's entry keeps t0 below the interrupted sp and its
+      --  landing, linked with the routine, gives both back.
+      Holds ("the hardware's stub", "_landin_firmware_far_7:" & LF
+        & ".cfi_startproc simple" & LF & ".cfi_return_column mepc" & LF
+        & ".cfi_def_cfa sp, 0" & LF & ".cfi_same_value mepc" & LF
+        & "addi sp, sp, -16" & LF & ".cfi_def_cfa_offset 16" & LF
+        & "sw t0, 0(sp)" & LF & ".cfi_offset t0, -16" & LF & "1:" & LF
+        & "auipc t0, %pcrel_hi(_landin_firmware_far_7_landing)" & LF
+        & "jr %pcrel_lo(1b)(t0)" & LF);
+      Holds ("the landing's section",
+        ".section .ramtext.landin_far_7,""ax"",@progbits" & LF);
+      Holds ("the landing", "lw t0, 0(sp)" & LF & ".cfi_restore t0" & LF
+        & "addi sp, sp, 16" & LF & ".cfi_def_cfa_offset 0" & LF & "j ");
+      --  The dispatch called the slot with t0, which a call may change.
+      Holds ("the dispatch's stub", "_landin_firmware_far_16:" & LF
+        & ".cfi_startproc" & LF & "1:" & LF & "auipc t0, %pcrel_hi(");
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Far),
+                             "_landin_firmware_far_16_landing"),
+         "a called routine needs no landing");
+      Assembly_Of (Two_Regions ("0x1004_0000"), Program, Near, Said);
+      Landin.Testing.Check
+        (Item, U.Length (Near) > 0
+           and then not Contains (U.To_String (Near), "_landin_firmware_far")
+           and then not Contains (Slot_Of (U.To_String (Near), 7),
+                                  "_landin_firmware")
+           and then not Contains (Slot_Of (U.To_String (Near), 16),
+                                  "_landin_firmware"),
+         "routines in reach are jumped to as they were: "
+         & Slot_Of (U.To_String (Near), 7) & " "
+         & Slot_Of (U.To_String (Near), 16) & U.To_String (Said));
+   end Far_Handlers;
+
    procedure RAM_Layout (Item : in out Landin.Testing.Context);
    procedure RAM_Layout (Item : in out Landin.Testing.Context) is
       Block_Profile : constant Written := Script_Of
@@ -1142,6 +1225,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Landin.Testing.Register
         (Into, "rv32 firmware", "traps follow the interrupt model",
          Traps_Follow_The_Model'Access);
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "far handlers are entered through stubs",
+         Far_Handlers'Access);
       Landin.Testing.Register
         (Into, "rv32 firmware", "a naked handler is refused in a dispatched"
          & " slot", Dispatched_Naked'Access);

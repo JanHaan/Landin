@@ -56,19 +56,6 @@ class MachOIdentityTests(unittest.TestCase):
             with self.subTest(offset=offset), self.assertRaises(ValueError):
                 macho_identity.identity(self.exe)
 
-    def test_cli_matching_and_mismatch(self):
-        table = self.root / 'map.json'
-        table.write_text(json.dumps(self.table))
-        args = [sys.executable, ROOT / 'scripts/source-location.py', table, '2', '11', '12',
-                '--macho', self.exe, '--dsym', self.dsym]
-        result = subprocess.run(args, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'odd"\\path.ldn:11:12\n')
-        self.dsym.write_bytes(binary(kind=10, uuid=b'v' * 16))
-        result = subprocess.run(args, capture_output=True)
-        self.assertEqual(result.returncode, 2)
-        self.assertIn(b'UUID does not match', result.stderr)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -12,7 +12,8 @@ package body Landin.Commands.Catalogue is
          when Compile => "compile", when Run => "run",
          when Format => "fmt", when Svd => "svd",
          when Bindings => "bindings",
-         when Explain => "explain", when Server => "lsp",
+         when Explain => "explain", when Site => "site",
+         when Server => "lsp",
          when Version => "version", when Targets => "targets",
          when Completion => "completion", when Help => "help");
 
@@ -32,6 +33,8 @@ package body Landin.Commands.Catalogue is
            "Generate Landin bindings and C adapters for C headers",
          when Explain =>
            "Explain diagnostic codes, and the rules and decisions notes cite",
+         when Site =>
+           "Resolve a panic site or a caller's coordinates to a source line",
          when Server => "Serve the language server protocol over stdio",
          when Version => "Identify this compiler build",
          when Targets => "List described targets and their CPU feature levels",
@@ -80,7 +83,8 @@ package body Landin.Commands.Catalogue is
          when Clang => "--clang", when Sysroot => "--sysroot",
          when Include_Dir => "--include-dir",
          when System_Include_Dir => "--system-include-dir",
-         when Define => "--define");
+         when Define => "--define", when Map => "--map",
+         when Dsym => "--dsym");
 
    function Description (Flag : Option) return String is
      (case Flag is
@@ -152,7 +156,11 @@ package body Landin.Commands.Catalogue is
          when System_Include_Dir =>
            "Search DIR for system headers (repeatable)",
          when Define =>
-           "Define NAME, or NAME=VALUE, for Clang (repeatable)");
+           "Define NAME, or NAME=VALUE, for Clang (repeatable)",
+         when Map =>
+           "The build's source table; default PROGRAM.sources.json",
+         when Dsym =>
+           "A Mach-O program's dSYM DWARF file, held to its UUID");
 
    function Values (Flag : Option) return String is
      (case Flag is
@@ -200,6 +208,7 @@ package body Landin.Commands.Catalogue is
             Flag in Target | Policy | Out_Dir | Clang .. Define,
           --  D1240: where the citations file is, as a compilation's.
           when Explain => Flag in Explain_Full | Library,
+          when Site => Flag in Map | Dsym,
           when Server => Flag = Stdio,
           when Version => Flag in JSON | Library,
           when Targets => Flag = JSON,
@@ -454,6 +463,8 @@ package body Landin.Commands.Catalogue is
               " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
               & " --out-dir=DIR [LOGICAL=]HEADER.h ...",
             when Explain => " [options] [CODE|[NNNN]|DNNN ...]",
+            when Site =>
+              " [options] PROGRAM SITE | PROGRAM FILE LINE COLUMN",
             when Completion => " [options] bash|zsh|fish",
             when Help => " [COMMAND|reference]",
             when others => " [options]");
@@ -604,6 +615,21 @@ package body Landin.Commands.Catalogue is
               & LF & "is replaced, and a failure puts back what was replaced."
               & LF & "scripts/fetch_inputs.py fetches a pinned SVD by its"
               & " hash."
+              & LF);
+         when Site =>
+            US.Append (Text, LF
+              & "Example: refine site firmware.elf 4194" & LF
+              & "PROGRAM is what the compilation wrote: an executable, a"
+              & LF & "firmware image, or the assembly of --emit=asm. SITE is"
+              & LF & "the number a panic_handler receives, in decimal or"
+              & LF & "after 0x; compile with --panic-map to record sites."
+              & LF & "FILE LINE COLUMN are a caller's three coordinates."
+              & LF & "The answer is the source path, line and column, and"
+              & LF & "for a site the check that failed. The table beside the"
+              & LF & "program, PROGRAM.sources.json, answers only for the"
+              & LF & "build it was written with: the program's build"
+              & LF & "identity, or the assembly's SHA-256, must be the"
+              & LF & "table's. A stripped program keeps its identity."
               & LF);
          when Bindings =>
             US.Append (Text, LF

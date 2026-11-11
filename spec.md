@@ -13822,7 +13822,7 @@ records the assembly digest and a SHA-256 build identity over the file entries
 and assembly. An assembly comment carries that identity before the final
 assembly digest is computed, so source changes that preserve code cannot share
 an assembly mapping identity. Executable emission supplies the ELF build ID.
-`scripts/source-location.py` requires the matching assembly or build ID before
+`refine site` (D1292) requires the matching assembly or build identity before
 resolving a triple. A manually linked assembly can use the assembly check.
 Neither the filename map nor a lookup routine enters the running program;
 without the map a diagnostic can still print all three coordinates. This is
@@ -13859,6 +13859,62 @@ checks in their reports; selecting a handler leaves them out.
 `driver/caller files are separate`, and the `functions.caller` guarantee row.
 The runtime case retains coordinates after returns, verifies 12-byte size,
 and covers direct, forwarded, omitted, indirect, generic and multi-file calls.
+
+### D1292 — `refine site` resolves a site, or a caller's coordinates, against its build
+
+**The discrepancy:** D192 and D232 keep file names out of a program: a
+caller's coordinates are three numbers and a `panic_handler`'s site is one,
+and the table that turns them into a path and a line is written beside the
+build. The only reader of that table was a Python script in the source
+repository, so a user of an installed `refine` held a number and nothing
+to resolve it with. A hosted trap with no handler prints
+its own line (D361); a handler's site and a firmware trap did not.
+
+**Chosen:** `refine site [--map=FILE] [--dsym=FILE] PROGRAM SITE` and
+`refine site ... PROGRAM FILE LINE COLUMN`. PROGRAM is what the compilation
+wrote: an executable, a firmware image, or the assembly of `--emit=asm`.
+The table is `PROGRAM.sources.json` unless `--map` names it. SITE is a
+`u32` in decimal or after `0x`. The answer on standard output is the
+recorded path's bytes, `:LINE:COLUMN`, and for a site the check that
+failed in parentheses, as the script wrote them, and the status is 0.
+
+The table answers only for the build it was written with, and the command
+reads that build's identity itself rather than being told it: an ELF's
+`.landin_id` section, which every firmware image carries, or else its GNU
+build ID, which a hosted link is given and `strip` keeps; a thin arm64
+Mach-O's `__TEXT,__landin_id` section, and with `--dsym` the dSYM's DWARF
+file must share the executable's UUID; anything else is read as assembly,
+whose SHA-256 must be the table's `assembly_sha256`. A table that is not
+one is L0688, a build that is not the table's L0689, and a site, a file
+number or an operand the table does not hold L0690, each with status 1; a
+file that cannot be read is L0003. Site 0 is the compiler's own guard and
+is refused by name. Every file is read through `Landin.Platform`, nothing
+is written and no tool is run.
+
+"The built program's debug information" is this table and not DWARF: a
+site is defined by D232 as a source byte and a check family, the table is
+the one artifact that records it on every target, firmware and a stripped
+executable included, and DWARF line tables name instructions, not sites.
+The script is removed; the debugger lanes and the Cortex-M panic control
+call the command.
+
+**The alternatives:** the trap report carrying the line, which D361 does
+where there is a process to write it and which firmware and a selected
+handler cannot do without the file names D192 keeps out; a command told
+the identity (`--build-id HEX`), as the script was, which makes the user
+run `readelf` first and lets a wrong one be typed; and keeping the script
+beside the command, two decoders of one table. The maintainer chose the
+command.
+
+**Pinned by** `commands/site is a subcommand`, on the fake filesystem: the
+five check families at one source byte, hexadecimal, a path holding a
+colon, a quote and a non-UTF-8 byte, each kind of build matched and
+mismatched, a truncated ELF, a dSYM of another UUID, and every refusal.
+`compiler/tests/debugging/check.py` and `panic.py` resolve a stripped
+executable's and an assembly's coordinates through it, and
+`environments/cortex-m/freestanding.py` a firmware image's site. The
+Mach-O reader has run only on that case's synthetic files; Darwin's lane
+has not run it.
 
 ### D231 — Nonreturning calls and signature identity
 
@@ -18767,8 +18823,8 @@ body sharing. Kept data and selected handler references remain reachable.
 
 `--panic-map` adds optional fields to `<output>.sources.json`: source-byte
 ranges and line-start offsets alongside D192's exact path bytes, source hashes
-and assembly/build identity. It requires emission. `scripts/source-location.py
---panic-site NUMBER` resolves a nonzero site only with matching assembly,
+and assembly/build identity. It requires emission. `refine site PROGRAM
+NUMBER` (D1292) resolves a nonzero site only with matching assembly,
 ELF build identity or Mach-O identity. Zero is explicitly synthetic, not a
 filename guess. Stripping source/debug tables does not change the scalar site;
 constrained builds need no map, filenames, formatting, heap or reporting storage.
@@ -22060,6 +22116,50 @@ library routine named `start` turned an entry `start` into `main.start`.
 They reserve both now, and the driver suite's `the firmware entry keeps its
 symbol` pins all three.
 
+### D1291 — `--debug=lines` names each module binding, with its type
+
+**The discrepancy:** D417 links a module binding that shares its spelling
+with another module's routine under its module's path, `main.geometry`
+beside `l1.geometry`, and firmware's `--debug=lines` described routines
+and nothing else. So the only `geometry` a debugger knew by a source name
+was the routine: GDB's `*(unsigned*)&geometry` read the routine's code and
+printed `$1 = 2961355840` without a word. And a binding no routine
+shadowed was a symbol with no type: `print NAME` answered "'NAME' has
+unknown type; cast it to its declared type".
+
+**Chosen:** `--debug=lines` describes each module datum a declaration
+names, as a variable of the compilation unit: its source name, its
+declaration's file, line and column, its type, and the one address
+expression `DW_OP_addr SYMBOL`, the symbol being whatever D415 and D417
+linked it as. Its type is described as `--debug=full` describes one, by
+the same encoder: scalars, pointers, structs with their fields, arrays,
+and D423's enumeration for an atom-set value. A debugger resolves a bare
+name in an expression to the variable before a routine of that name, so
+`print geometry` is the binding's value, `ptype geometry` its type and
+`&geometry` its address, and `break geometry` is still the routine. No
+link name changes, and nothing is added to a loaded segment.
+
+`lines` still describes no routine's parameters, locals or slots and emits
+no location list: those need the placement plan `--debug=full` reads, which
+no firmware backend offers. A unit with no module binding has the debugging
+sections it had, byte for byte. Hosted targets refuse `lines` and already
+describe module data under `full`; they are unchanged.
+
+**The alternative:** a D417 that preferred the entry module's items, so
+the binding kept its bare spelling and the routine alone was qualified.
+That changes link names an image's C objects and scripts may already use,
+only moves the collision to whichever item loses, and leaves `print NAME`
+without a type. The maintainer chose the debugging entry.
+
+**Pinned by** `debugging/lines name module bindings`: a scalar, a struct
+and an array binding with their types and four-byte addresses on
+`cortex-m0`, and a unit with no binding unchanged. Under QEMU, GDB 16.3
+read `geometry` beside an imported `l1.geometry` as `u32` 2961355841 after
+the program wrote it, a struct as `{x = -8, y = 9}`, a `[4]u8`, a `bool`
+and a `u64`, on `cortex-m0` (`microbit`) and on `rv32` (`sifive_e`); those
+sessions are not a lane. Xtensa takes the same description, and no
+debugger has read it there.
+
 ### D421 — A generic instance is a symbol named after its routine
 
 **The discrepancy:** D417 said how the second instance of one generic
@@ -22129,8 +22229,8 @@ module datum or a parameter, is an enumeration over the set's atoms with
 the code this program gives each, its carrier the type it refers to, on
 every target whose debug information describes types: Linux x86-64, Linux
 arm64, Linux RV64, FreeBSD and Darwin, which share one encoder. Cortex-M0's
-`--debug=lines` describes no types, as `docs/targets.md` says, and is
-unchanged. The set has no name in the IR, so the enumeration has none
+`--debug=lines` described no types then, and is unchanged for every
+routine; since D1291 it describes a module binding's. The set has no name in the IR, so the enumeration has none
 either; GDB and LLDB print a
 value as its atom's name. The derived parser's token kind is now an atom
 set, and its sessions read `number` and `newline`.
@@ -22483,7 +22583,7 @@ starts share its site; and number `stack_exhausted` sites from a separate
 range, which makes the map two spaces for one rule. Both were declined.
 
 **Pinned by** `abi/r670-panic`, whose peer pins sites from source byte
-positions, `scripts/tests/test_panic_locations.py` for the map's decoder, and
+positions, `commands/site is a subcommand` for the map's decoder, and
 the Cortex-M panic controls in `environments/cortex-m/freestanding.py`.
 
 ### D453 — The stack builtins' refusals, and a backend that does not emit them yet
@@ -22655,6 +22755,46 @@ execution. Both were declined.
 
 **Pinned by** the two fixtures, on the x86-64 targets they name and in
 the Cortex-M corpus.
+
+### D1293 — A handler reports its verdict by resuming `main`
+
+**The discrepancy:** a fixture that pins what a selected `panic_handler`
+received has to observe the handler, and a handler cannot return (D232).
+`runtime/compiler-unreachable-dispatches` entered itself again on the kind
+and site it expected, which stopped at the terminal default trap, and spun
+otherwise, which `traps: yes` refuses as a timeout; but a program that never
+dispatched to the handler stopped at that same trap and passed. D462's resume
+was the exact form, and was thought to need the stack builtins on targets
+whose backends did not yet emit them.
+
+**Chosen:** D462's resume is the portable report and no mechanism is added.
+D450 admits the stack builtins on every target with a native backend and
+every backend now emits them, RV32 and Xtensa included, so the one source
+runs on every hosted lane and every firmware corpus. A fixture that pins a
+handler runs the computation whose check fails on a prepared stack; the
+handler stores its verdict in a module value and resumes the context `main`
+saved when it switched there, and `main` returns the verdict as its
+`status`, which a hosted lane reads as the process's and a firmware harness
+as the value `main` returned. The verdict is 42 for exactly the expected
+kind and site and a distinct code otherwise, so a missing dispatch, another
+kind, another site and a call that returned each fail the status. The
+handler does not return, so D232's rule for a returning handler is not
+engaged, and its latch stays claimed as D462 says. A check that fails on
+`main`'s own stack, before any switch, has no saved context to resume; a
+fixture of one keeps `traps: yes`.
+
+**The alternatives:** a `core/panic` routine that ends the program with a
+status, which firmware cannot give without a harness of its own and which
+would be a library contract made for fixtures; a harness key reading a
+module value at the terminal trap through a debugger, which the firmware
+lanes have and the hosted lanes, run without one, do not; a provider per
+target, `platform/posix.exit` hosted and something else on firmware, which
+is two sources of one fixture; and a builtin that reports, which is a
+language feature for a test's sake. All were declined.
+
+**Pinned by** `runtime/compiler-unreachable-dispatches`, which returns 42
+for `unreachable` at its call's site on every target it names, and in the
+Cortex-M corpus on each of its lanes, the two RV32 machines included.
 
 ### D467 — The depth report covers every emitted routine, from its caller's stack pointer
 
@@ -28618,6 +28758,71 @@ profile, unchanged on `rv32` and `cortex-m0`; and
 `environments/boards/esp32c5/board.py`, whose port vectors the system
 timer and leaves UART0 to the common entry, and whose oracle holds mtvt,
 the table's words and both CLICINT words to the image and the TRM.
+
+### D1290 — An RV32 slot whose routine is out of a jump's reach enters it through a stub
+
+**The discrepancy:** D680 and D686 make every table slot one `j`, which
+reaches 1 MiB either way, and D678 holds the regions of a profile to that
+size so that a jump inside one is short. Nothing held two regions to it.
+A routine a slot enters itself, a naked one the hardware enters or one the
+core's dispatch calls, may be linked in another region than the text: in
+`.ramtext`, which D688 links in RAM, or in a region its `link(region:)`
+names. With the table in flash at 0x1000_0000 and RAM at 0x2000_0000, an
+RP2350's own addresses, the image did not link, and the report was the
+linker's `relocation truncated to fit: R_RISCV_JAL`.
+
+**Chosen:** such a slot is `j _landin_firmware_far_N`, a stub in
+`.text.landin_firmware_trap` beside the table, and the stub reaches
+anywhere with `auipc` and `jr`. Which slots get one is read from the
+profile and not from the link: slot N is far when its routine's region is
+not the text's and some byte of that region lies more than 1 MiB from the
+table. A routine in the text, and one in a region wholly in reach, is
+jumped to as before, so an image none of whose routines is far is byte for
+byte the image it was.
+
+The pair needs a register for the address, and what it may take depends on
+who enters the slot:
+
+- A slot the core's dispatch calls (`clic`'s common entry, `xh3irq`'s
+  external entry) is called with t0 holding the slot's own address, after
+  the entry saved the interrupted registers, and a call may change t0. Its
+  stub is `auipc t0` and `jr` to the routine, eight bytes.
+- A slot the hardware enters has every register the interrupted code's,
+  and a naked routine there is promised them. Its stub lowers sp by 16,
+  stores t0 at 0(sp), and jumps with `auipc t0` and `jr` to a landing,
+  `_landin_firmware_far_N_landing`, linked in the routine's own section
+  family and so beside it; the landing reloads t0, raises sp by 16 and is
+  one `j` to the routine. The routine is entered with all thirty-one
+  registers and mepc as the hardware left them. Sixteen bytes below the
+  interrupted sp are written, as an interrupt routine's own stub writes
+  the bytes below it (D680), and a naked routine that may not assume the
+  interrupted stack, which no RISC-V core without a separate interrupt
+  stack lets it avoid, has none of its own to use either.
+
+An interrupt routine in a hardware-entered slot is entered by its stub
+`_landin_firmware_slot_N`, which is in the text, takes the routine's
+address with `auipc` and `addi` after saving t0 and calls it through a
+register; it was never the slot's jump and is unchanged. The entry word jumps to reset or to the stage, both
+in the text, and is unchanged. With debugging information both the stub
+and the landing carry unwind rules that return to mepc and find t0 in its
+slot.
+
+**The alternatives:** widening every slot to an `auipc` and `jr` pair,
+which needs a register in a slot the hardware enters, where there is none,
+doubles every table and changes every image; an indirect jump through a
+table of addresses read with `mtvt`-like loads, which the vectored model
+has no register for either; and refusing the placement with the distance
+named, which leaves an RP2350's RAM handlers, the reason `.ramtext` exists
+there, unlinkable. The maintainer chose the stub.
+
+**Pinned by** `rv32 firmware/far handlers are entered through stubs`: the
+slots, both stubs, the landing's section, and that the same program with
+RAM 256 KiB from the table holds no stub. Under Espressif's QEMU
+`sifive_e`, whose flash is at 0x2040_0000 and RAM at 0x8000_0000, a
+software interrupt entered a naked `.ramtext` routine through the stub
+with all thirty-one registers and mepc equal at the stub's first
+instruction and the routine's, and returned; that session is not a lane.
+No board has run a far handler.
 
 ### D570 — The depth report closes a call through a table or a function value
 

@@ -8,6 +8,7 @@ with Landin.Commands.Catalogue;
 with Landin.Commands.Devices;
 with Landin.Commands.Presentation;
 with Landin.Commands.Response_Files;
+with Landin.Commands.Sites;
 with Landin.Commands.Tracing;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
@@ -422,6 +423,14 @@ package body Landin.Commands is
                  & " policy and where to write: refine bindings"
                  & " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
                  & " --out-dir=DIR [LOGICAL=]HEADER.h ...");
+            end if;
+         when C.Site =>
+            if not Result.Wants_Help
+              and then Natural (Result.Operands.Length) not in 2 | 4
+            then
+               Refuse ("site resolves a site number, or a file number, a"
+                 & " line and a column, against a build: refine site"
+                 & " PROGRAM SITE");
             end if;
          when C.Run =>
             if Result.Operands.Is_Empty and then not Result.Wants_Help then
@@ -869,6 +878,17 @@ package body Landin.Commands is
                   Protected_Inputs =>
                                 Asked.Consumed_Response_Files,
                   Protected_Identities => Asked.Consumed_Response_Identities);
+            when C.Site =>
+               declare
+                  After : Landin.Platform.Path_List := Asked.Operands;
+               begin
+                  After.Delete_First;
+                  Landin.Commands.Sites.Resolve
+                    (Artifact => Asked.Operands.First_Element,
+                     Map_Path => Effective (C.Map, ""),
+                     Dsym_Path => Effective (C.Dsym, ""),
+                     Operands => After, Host => Host, Result => Result);
+               end;
             when C.Bindings =>
                declare
                   Request : Landin.Commands.Bindings.Request;

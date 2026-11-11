@@ -21,8 +21,9 @@ package Landin.Backend.Dwarf is
    function Preamble
      (Info : Landin.Debugging.Information; Prefix : String;
       Mach_O : Boolean := False; Arm : Boolean := False) return String;
-   --  Lines and subprogram identity only: no variable, type, or location
-   --  promise. Frame instructions remain the concrete emitter's authority.
+   --  Lines, subprogram identity and, D1291, each module binding with
+   --  its type at its symbol: no local, parameter or location list.
+   --  Frame instructions remain the concrete emitter's authority.
    function Line_Sections
      (Of_Unit : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
@@ -51,6 +52,9 @@ package Landin.Backend.Dwarf is
       Mach_O : Boolean;
       --  Older GNU RISC-V assemblers accept one ULEB operand per directive.
       Single_LEB_Operand : Boolean := False;
+      --  D1291: Line_Sections' description, which this writes for it so
+      --  that both describe a module binding and its type one way.
+      Lines : Boolean := False;
       --  A backend whose slot holds its location over only part of the
       --  routine clears the rest from the slot's availability.  It may
       --  name, as Overwriter, the one value it clears that writes over

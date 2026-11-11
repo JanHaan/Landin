@@ -138,14 +138,15 @@ def measure(refine, output, capture, tools, selected=None, profile=None):
                 '-o', 'breakpoint set --file main.ldn --line 1', '-o', 'breakpoint list', '-o', 'quit'])
             assert 'no locations (pending)' in stripped_session
             first = table['files'][0]
-            lookup = [sys.executable, shared.ROOT / 'scripts/source-location.py', table_path,
-                      str(first['file_id']), '1', '1', '--macho', stripped, '--dsym', dsym]
+            #  D1292: as darwin.py's lookup.
+            lookup = [refine.resolve(), 'site', '--map=' + str(table_path), '--dsym=' + str(dsym),
+                      stripped, str(first['file_id']), '1', '1']
             resolved = run(key + '-lookup', lookup)
             assert os.fsdecode(bytes.fromhex(first['path_hex'])) in resolved
             wrong = {**table, 'build_id': '0' * 64}
             mismatch = output / (key + '-wrong.sources.json')
             mismatch.write_text(json.dumps(wrong) + '\n')
-            run(key + '-mismatch', [*lookup[:2], mismatch, *lookup[3:]], 2)
+            run(key + '-mismatch', [*lookup[:2], '--map=' + str(mismatch), *lookup[3:]], 1)
             assert list(deployment.iterdir()) == [stripped]
             results.append(dict(workload=workload, optimize=opt, specialize=spec, status='passed',
                                 identity=identity, checks=len(session['checks']), sources=table['files'],

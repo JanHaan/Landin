@@ -3018,3 +3018,35 @@ linker.place("data", "RAM")
 linker.place("bss", "RAM")
 linker.place("stack", "RAM", 4 * 1024)
 ```
+
+### L0688
+
+`refine site` could not use the source table (D1292): the file is not JSON,
+or it lacks the `build_id`, `assembly_sha256` and `files` that
+`refine compile` writes into `<output>.sources.json`, or a file's entry is
+damaged. The message says which. Name the table the compilation wrote beside
+its output, with `--map=FILE` when it has been moved; a table is written
+whenever the program uses a caller's coordinates, and `--panic-map` or
+`--debug=full` writes one for every program.
+
+### L0689
+
+`refine site` was given a build that is not the one its source table was
+written with (D1292, D192). A table resolves nothing for another build,
+since a site number means a different line in each. An ELF program is
+matched by its `.landin_id` section, which firmware carries, or its GNU
+build ID; a Mach-O program by its `__TEXT,__landin_id` section, and with
+`--dsym` its dSYM must share its UUID; anything else is read as the assembly
+of `--emit=asm`, whose SHA-256 must be the table's. The message names the
+identity found. Name the program and the table of one compilation: a rebuilt
+program needs the table written with it.
+
+### L0690
+
+`refine site` found the build and its table, and the table does not hold
+what was asked (D1292): the site number lies in no file's range, the table
+records no sites because the program was not compiled with `--panic-map`,
+the caller's file number names no file, or the operand is no number. Site 0
+is the compiler's own guard and has no source line. Pass the `site` a
+`panic_handler` received, or the three numbers of a caller's coordinates,
+as the running program reported them.
