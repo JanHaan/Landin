@@ -23,36 +23,36 @@ large: type = layout(c) struct
     c: u64
 end large
 
-extern(c) c_narrow: (i0: i8, i1: i8, i2: i8, i3: i8, i4: i8, i5: i8, i6: i8, i7: i8, i8: i8, i9: i8, tail: i16) -> (r: i32)
+extern(c) c_narrow: (n0: i8, n1: i8, n2: i8, n3: i8, n4: i8, n5: i8, n6: i8, n7: i8, n8: i8, n9: i8, tail: i16) -> (r: i32)
 
-public extern(c) l_narrow: (i0: i8, i1: i8, i2: i8, i3: i8, i4: i8, i5: i8, i6: i8, i7: i8, i8: i8, i9: i8, tail: i16) -> (r: i32) =
+public extern(c) l_narrow: (n0: i8, n1: i8, n2: i8, n3: i8, n4: i8, n5: i8, n6: i8, n7: i8, n8: i8, n9: i8, tail: i16) -> (r: i32) =
     r = 1
-    if i0 == -1 and
-       i1 == -2 and
-       i2 == -3 and
-       i3 == -4 and
-       i4 == -5 and
-       i5 == -6 and
-       i6 == -7 and
-       i7 == -8 and
-       i8 == -9 and
-       i9 == -10 and
+    if n0 == -1 and
+       n1 == -2 and
+       n2 == -3 and
+       n3 == -4 and
+       n4 == -5 and
+       n5 == -6 and
+       n6 == -7 and
+       n7 == -8 and
+       n8 == -9 and
+       n9 == -10 and
        tail == -1234 then
         r = 42
     end if
 end l_narrow
 
-extern(c) c_gp: (i0: u64, i1: u64, i2: u64, i3: u64, i4: u64, i5: u64, i6: u64, p: pair, tail: i8) -> (r: i32)
+extern(c) c_gp: (n0: u64, n1: u64, n2: u64, n3: u64, n4: u64, n5: u64, n6: u64, p: pair, tail: i8) -> (r: i32)
 
-public extern(c) l_gp: (i0: u64, i1: u64, i2: u64, i3: u64, i4: u64, i5: u64, i6: u64, p: pair, tail: i8) -> (r: i32) =
+public extern(c) l_gp: (n0: u64, n1: u64, n2: u64, n3: u64, n4: u64, n5: u64, n6: u64, p: pair, tail: i8) -> (r: i32) =
     r = 1
-    if i0 == 1 and
-       i1 == 2 and
-       i2 == 3 and
-       i3 == 4 and
-       i4 == 5 and
-       i5 == 6 and
-       i6 == 7 and
+    if n0 == 1 and
+       n1 == 2 and
+       n2 == 3 and
+       n3 == 4 and
+       n4 == 5 and
+       n5 == 6 and
+       n6 == 7 and
        p.a == 20 and
        p.b == 21 and
        tail == -12 then

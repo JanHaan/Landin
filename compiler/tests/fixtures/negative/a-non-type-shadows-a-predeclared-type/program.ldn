@@ -1,0 +1,27 @@
+--- A function named as a predeclared type shadows the type wherever its
+--- name reaches, and its own signature is one such place.
+u8: (v: u8) -> (r: i32) =
+    r = 1
+end u8
+
+narrow: (v: i32) -> (r: u8) =
+    r = 0
+end narrow
+
+--- A local shadows it from its declaration to the end of its block.
+count: () -> (total: i64) =
+    before: i64 = 2
+    i64 := before
+    after: i64 = 3
+    total = i64 + after
+end count
+
+--- A parameter shadows it in the rest of the signature and in the body.
+scale: (usize: i32, by: usize) -> (r: i32) =
+    r = usize
+end scale
+
+--- Calling the function is still an ordinary call.
+call: (v: i32) -> (r: i32) =
+    r = u8(v)
+end call

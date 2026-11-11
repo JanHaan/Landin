@@ -310,16 +310,18 @@ grammar spells these out because a program need not declare them itself.
 They are in no scope of [1840] and [1760] does not reserve them, so a program
 may declare the same spelling. A type position that spells one is looked up
 lexically like any name, and the nearest visible declaration of that spelling
-decides: a type declaration or a type formal is what the position names, and
-any other declaration, such as a function, binding or parameter, leaves the
-position naming the predeclared type without the lookup continuing outward.
-Finding no declaration leaves it so too. That fallback is a type position's
-alone. A call or value use of the spelling resolves by ordinary lookup: a
-visible function named `u8` is what `u8(v)` calls, and `u8(v)` converts to the
-predeclared `u8` [0700] only when nothing visible declares `u8`. A non-type
-declaration therefore leaves the predeclared type in every type position it
-could reach, its own signature included, where [0140] would have an inner
-name hide an outer one.
+is what the position names, whatever it declares (D1260): a type declaration
+or a type formal gives the position its type, and a function, binding,
+parameter or any other declaration is no type, so the position is refused
+with L0338 as any name that is not a type is. The lookup does not continue
+outward past it, as [0140] has an inner name hide an outer one. Only when
+nothing visible declares the spelling does the position name the predeclared
+type. A call or value use of the spelling resolves the same way: a visible
+function named `u8` is what `u8(v)` calls, and `u8(v)` converts to the
+predeclared `u8` [0700] only when nothing visible declares `u8`. A function
+named `u8` therefore cannot write `u8` in its own signature, and no type
+position its name reaches can; a module that wants both gives the function
+another name.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
@@ -995,8 +997,7 @@ visible; a selected declaration shadows the module declaration for ordinary
 unqualified lookup too. Imports do not enter sibling files and are not
 re-exported. Lookup ends at the module: [1790]'s predeclared type names are
 not a further scope but what a type position names when lookup finds no
-declaration, or finds one nearest that is neither a type declaration nor a
-type formal.
+declaration (D1260).
 
 ### [1850] One scope gives one name to one thing
 
@@ -3034,6 +3035,45 @@ in a note, which leaves the reader to find which local hid it.
 
 **Pinned by** `negative/local-hides-an-import` and
 `negative/parameter-hides-a-concept`.
+
+### D1260 — A nearer declaration shadows a predeclared type, whatever it declares
+
+**The tour said** at [1790] that the scalar and text-view names are
+predeclared and are not keywords, and at [0140] that an inner name hides an
+outer one. A type position that spelled one was looked up lexically, but
+only a type declaration or a type formal found there replaced the
+predeclared type: a nearer function, binding or parameter of the spelling
+left the position naming the predeclared type, so `x: u8` beside a function
+named `u8` meant the scalar while `u8(v)` called the function. One spelling
+had two meanings in one scope, chosen by where it stood.
+
+**Chosen:** ordinary lexical shadowing. The nearest visible declaration of
+the spelling is what a type position names, whatever it declares, and one
+that is no type is refused there with L0338, whose note says that the
+predeclared type is named only where nothing declares the spelling and that
+the declaration wants another name. The predeclared type is what the
+position names only when lookup finds nothing. A function named `u8` can
+therefore not write `u8` in its own signature, a local named `i64` ends the
+type's use for the rest of its block, and a parameter named `usize` ends it
+for the rest of the signature and the body. Calls and value uses are as
+they were: they already resolved by ordinary lookup. The library and the
+examples declared no non-type under one of the sixteen spellings. Besides
+the two controls that had pinned the asymmetry, one test program did:
+`compiler/tests/darwin/transport.ldn` numbered parameters `i0` to `i9`, so
+`i9: i8` followed a parameter named `i8`, and they are now `n0` to `n9`.
+
+**The alternatives:** keeping the asymmetry as the rule, with a type
+position falling back to the predeclared type past any non-type, which
+lets `u8: (v: u8) -> (r: u8)` be written and leaves a reader of `x: u8` to
+find out that the nearest `u8` is not what it names; continuing the lookup
+outward past a non-type, which no other name does; and reserving the
+sixteen spellings, which [1760] declines and D1066 works around for C
+names.
+
+**Pinned by** `negative/a-non-type-shadows-a-predeclared-type`, whose
+report is recorded, `resolution/predeclared types use lexical lookup` and
+`lowering/calls respect resolved declarations`, whose functions named as a
+scalar now write their signatures in other types.
 
 ## DECISIONS: NUMBERS AND LITERALS
 

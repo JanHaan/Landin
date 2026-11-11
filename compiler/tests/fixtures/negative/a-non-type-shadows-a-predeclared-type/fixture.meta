@@ -1,0 +1,9 @@
+class: negative
+summary: D1260 a function, a local or a parameter spelled as a predeclared type is what a type position in its reach names, its own signature included, and the position is refused; calling the function is unchanged
+program: program.ldn
+codes: L0338, L0338, L0338, L0338
+constructs: 0140, 1790, 1795, 1840
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/a-non-type-shadows-a-predeclared-type/program.ldn
+expect: expected.txt
+status: 1

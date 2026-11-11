@@ -9800,8 +9800,25 @@ package body Landin.Stages.Checking is
                   Message => "`"
                              & Spelled (Syn.Name (Of_Tree, Written))
                              & "` names something that is not a type",
-                  Note    => "[1795]: a type position names one of the"
-                             & " scalar types or a `type` declaration",
+                  Note    =>
+                    --  D1260: the predeclared type of this spelling is
+                    --  named only where nothing declares it [1790], so
+                    --  this declaration is what the position names.
+                    (if (for some Scalar in Ty.Scalar_Name =>
+                           Spelled (Syn.Name (Of_Tree, Written))
+                             = Ty.Spelling (Scalar))
+                       or else
+                         (for some View in Ty.Text_View =>
+                            Spelled (Syn.Name (Of_Tree, Written))
+                              = Ty.Spelling (View))
+                     then "[1790]: the nearest declaration of `"
+                          & Spelled (Syn.Name (Of_Tree, Written))
+                          & "` is what a type position names, and the"
+                          & " predeclared type only where nothing"
+                          & " declares the spelling; give this"
+                          & " declaration another name"
+                     else "[1795]: a type position names one of the"
+                          & " scalar types or a `type` declaration"),
                   Related => Syn.Origin
                     (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
                      Res.Node_Of (Meanings.all, Means)),
