@@ -16,7 +16,7 @@ they cost. `D586` names a decision recorded in `spec.md`, and
 |---|---|---|
 | edit/test loop | `./scripts/dev-test.sh` with the affected exact `--suite`, `--case` and `--fixture` selectors in one invocation | checksum-safe feedback; the transcript says `FILTERED` |
 | Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
-| another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 --toolchain=DRIVER` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's |
+| another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64` with the affected selectors, inside `nix develop` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's. The development shell has the cross driver under the name `refine` asks for; elsewhere `--toolchain=` names it, as [the lanes](../compiler/tests/README.md#lanes) say |
 | before pushing a candidate | affected exact developer cases/suites and script controls; `python3 check.py` after documentation changes | focused feedback; the complete matrix runs once in CI |
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
@@ -204,6 +204,18 @@ chosen for each one. When several related commands are necessary, enter
 `nix develop` once and run them inside it. Use `sh -eu -c` for dependent
 commands, so an earlier failure stops the sequence.
 
+The test program's workers are another matter, and a brief names them.
+`LANDIN_TEST_JOBS` is one by default and reaches only the two corpus-wide
+cases of `fixture execution`; a run that selects that suite, or runs the
+complete one, sets `LANDIN_TEST_JOBS=8`. Beside nine other builds on a
+32-core host the suite took thirteen minutes at eight workers and did not
+finish in two hours at one. The example above selects two suites it does
+not reach, so the count there changes nothing.
+
+`./scripts/dev-test.sh --cases=SUITE` lists a suite's cases as `--case=`
+takes them, so a brief's exact selectors are read from the test program
+and not from a suite's source.
+
 An agent harness runs every command in a fresh shell, and `nix develop -c`
 evaluates the flake before each one, about two seconds a command.
 `scripts/agent_env.sh` evaluates it once per `flake.nix`, `flake.lock` and
@@ -265,6 +277,42 @@ does, makes the wait exit 1 and say so, and the first line it prints is
 loops over the log, nor with `pgrep -f`, whose pattern also matches the
 waiting shell's own command line, so the wait never ends. A live progress
 inspection is appropriate when diagnosing a stall, rather than as a timer.
+
+A harness limits how long a background command may run, two hours in
+Claude Code, and stops it there. One run is known to pass that on a loaded
+host: `./scripts/parallel-equivalence.sh --suite='fixture execution'` runs
+the suite twice, the first time on one worker, which took 7,082 seconds
+beside nine other builds. Start such a run in a session of its own, so
+that it outlives the command that started it, and wait on its directory:
+
+```sh
+setsid nohup python3 scripts/run_logged.py \
+    --output "$feedback_parent/equivalence" -- \
+    ./scripts/parallel-equivalence.sh --suite='fixture execution' \
+    > /dev/null 2>&1 &
+python3 scripts/run_logged.py --wait "$feedback_parent/equivalence"
+```
+
+The wait is the repeated call above. A detached run sends no completion
+notification, so a turn that needs its result stays open on the wait.
+
+Independent work beside a running build may edit and commit any tracked
+file the compiler is not built from: a document, a fixture, a library
+module, a script that is not the build's own. The build then ends
+verified as of the tree it began from, saying `the checkout changed while
+this build ran, in nothing the compiler is built from`. An edit to what
+the build reads fails it at its end, exit 1, with `sources changed while
+this build ran` and the files it found changed: a source or project file
+under `compiler/ada`, or one of the build scripts `scripts/build_identity.py`
+lists as `BUILD_SCRIPTS`. Running it again recompiles only what changed,
+so such an edit either waits for the build or accepts the rerun.
+
+A commit or a document edit also changes the next build's manifest, since
+`refine --version` reports the revision and whether the checkout is clean.
+That build says `the checkout changed since the last build, in nothing
+the compiler is built from`, names what moved, and recompiles the
+provenance unit alone; `source content changed` now means a file the
+compiler is built from, and is followed by its name.
 
 `scripts/run_logged.py` requires a new output directory and writes complete
 combined stdout/stderr to `command.log`. It prints paths, elapsed time, CPU
@@ -346,6 +394,18 @@ ask for it again at every handoff. A stream can finish with a local commit
 when its integrator owns publication. Merge each stream's branch with Git,
 as the closing recipe describes, so staged additions and removals survive.
 Reconcile semantics and fixtures as well as textual conflicts.
+
+A generated file is never merged by hand. `python3 check.py --help` lists
+them, and two are compiler sources every stream that adds a decision to
+`spec.md` rewrites, `landin-diagnostics-citations.adb` and its `-texts`
+body, so two such streams always conflict there. Each stream regenerates
+in its own worktree, since its own `check.py` and build need the files
+current. The integrator alone regenerates for the merged tree: resolve
+the documents, then run `python3 check.py --generate`, which writes every
+generated file from them whatever state a conflict left it in, and add
+the result. The compiler is then rebuilt, because the citation bodies are
+built into `refine explain`, and `--suite=catalogue --suite=diagnostics
+--suite=commands` are the suites that read them.
 
 The integrator owns the candidate and its gate watcher. Push once the
 affected checks pass; further local lanes run beside that gate. A stream
