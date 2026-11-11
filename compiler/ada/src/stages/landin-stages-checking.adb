@@ -9800,8 +9800,25 @@ package body Landin.Stages.Checking is
                   Message => "`"
                              & Spelled (Syn.Name (Of_Tree, Written))
                              & "` names something that is not a type",
-                  Note    => "[1795]: a type position names one of the"
-                             & " scalar types or a `type` declaration",
+                  Note    =>
+                    --  D1260: the predeclared type of this spelling is
+                    --  named only where nothing declares it [1790], so
+                    --  this declaration is what the position names.
+                    (if (for some Scalar in Ty.Scalar_Name =>
+                           Spelled (Syn.Name (Of_Tree, Written))
+                             = Ty.Spelling (Scalar))
+                       or else
+                         (for some View in Ty.Text_View =>
+                            Spelled (Syn.Name (Of_Tree, Written))
+                              = Ty.Spelling (View))
+                     then "[1790]: the nearest declaration of `"
+                          & Spelled (Syn.Name (Of_Tree, Written))
+                          & "` is what a type position names, and the"
+                          & " predeclared type only where nothing"
+                          & " declares the spelling; give this"
+                          & " declaration another name"
+                     else "[1795]: a type position names one of the"
+                          & " scalar types or a `type` declaration"),
                   Related => Syn.Origin
                     (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
                      Res.Node_Of (Meanings.all, Means)),
@@ -13822,6 +13839,14 @@ package body Landin.Stages.Checking is
                   if Record_Target then
                      Landin.Checking.Note_Routine_Target
                        (Types.all, Caller_Tree, Call, Instance);
+                     if Landin.Checking.Routine_Signature_Of
+                       (Types.all, Instance) /= Landin.Checking.No_Signature
+                     then
+                        Landin.Checking.Note_Caller_Fills
+                          (Types.all, Caller_Tree, Call,
+                           Landin.Checking.Routine_Signature_Of
+                             (Types.all, Instance));
+                     end if;
                   end if;
                   return Landin.Checking.Routine_Signature_Of
                     (Types.all, Instance);
@@ -14170,6 +14195,8 @@ package body Landin.Stages.Checking is
                      if Record_Target then
                         Landin.Checking.Note_Routine_Target
                           (Types.all, Caller_Tree, Call, Instance);
+                        Landin.Checking.Note_Caller_Fills
+                          (Types.all, Caller_Tree, Call, Signature);
                      end if;
                      return Signature;
                   end if;
@@ -16203,6 +16230,9 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                   return False;
                end if;
+               --  D1262: a positional call forwards no `caller` position.
+               Landin.Checking.Note_Caller_Fills
+                 (Types.all, Of_Tree, Node, Signature);
                return True;
             end if;
 
@@ -16408,6 +16438,14 @@ package body Landin.Stages.Checking is
                   end;
                end if;
             end loop;
+
+            --  D1262: lowering fills each `caller` position this call
+            --  left, and a trap that names such a parameter compares it
+            --  with every call that did.
+            if Valid then
+               Landin.Checking.Note_Caller_Fills
+                 (Types.all, Of_Tree, Node, Signature);
+            end if;
 
             Landin.Checking.Finish_Call_Match
               (Types.all, Meanings.all, Of_Tree, Node, Accepted => Valid);
@@ -26197,7 +26235,52 @@ package body Landin.Stages.Checking is
                if Landin.Configuration.Unreachable_Call
                  (Spellings.all, Of_Tree, Node)
                then
-                  if Syn.Argument_Count (Of_Tree, Node) /= 0 then
+                  --  D1262: the one argument the trap takes is a `caller`
+                  --  parameter of the routine it is written in, by its
+                  --  name alone as D192 has a forward be, and the trap is
+                  --  then reported at the call that filled it.
+                  if Syn.Argument_Count (Of_Tree, Node) = 1
+                    and then Syn.Kind (Of_Tree, Node) = Syn.Call
+                    and then Syn.Kind
+                      (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1))
+                        = Syn.Name_Reference
+                    and then Res.Verdict_Of
+                      (Meanings.all, Of_Tree,
+                       Syn.Nth_Argument (Of_Tree, Node, 1)) = Res.Bound
+                    and then Res.Sort_Of
+                      (Meanings.all,
+                       Res.Bound_To
+                         (Meanings.all, Of_Tree,
+                          Syn.Nth_Argument (Of_Tree, Node, 1)))
+                        = Res.Parameter
+                    and then Syn.Is_Caller
+                      (Tree_For
+                         (Res.Source_Of
+                            (Meanings.all,
+                             Res.Bound_To
+                               (Meanings.all, Of_Tree,
+                                Syn.Nth_Argument (Of_Tree, Node, 1)))).all,
+                       Res.Node_Of
+                         (Meanings.all,
+                          Res.Bound_To
+                            (Meanings.all, Of_Tree,
+                             Syn.Nth_Argument (Of_Tree, Node, 1))))
+                  then
+                     --  The argument is a place, read where the trap is
+                     --  lowered, and has the parameter's struct type.
+                     declare
+                        Given : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Of_Tree, Node, 1);
+                     begin
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Given, Ty.Aggregate);
+                        Landin.Checking.Note_Nominal
+                          (Types.all, Of_Tree, Given,
+                           Landin.Checking.Nominal_Of
+                             (Types.all,
+                              Res.Bound_To (Meanings.all, Of_Tree, Given)));
+                     end;
+                  elsif Syn.Argument_Count (Of_Tree, Node) /= 0 then
                      Bad.Report
                        (Item    => Bad.Call_Argument_Match,
                         Source  => Syn.Source_Of (Of_Tree),
@@ -26205,9 +26288,14 @@ package body Landin.Stages.Checking is
                         Message => "this call gives "
                                    & Counted (Syn.Argument_Count
                                                 (Of_Tree, Node), "argument")
-                                   & " and compiler.unreachable takes none",
-                        Note    => "[1560]: compiler.unreachable() takes no"
-                                   & " arguments and never returns",
+                                   & " and compiler.unreachable takes none,"
+                                   & " or one `caller` parameter of this"
+                                   & " routine",
+                        Note    => "[1560]: compiler.unreachable() traps"
+                                   & " at its own site, and"
+                                   & " compiler.unreachable(where) at the"
+                                   & " call that filled the `caller`"
+                                   & " parameter `where`",
                         Related => Syn.Origin
                           (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
                         Because => "this builtin trap",
@@ -44769,6 +44857,46 @@ package body Landin.Stages.Checking is
                                        else Landin.Diagnostics.No_Fixes),
                                     Into    => Found);
                            end;
+                        end if;
+                     end;
+                  elsif Syn.Kind (Of_Tree.all, Node) = Syn.Recovery_Clause
+                    and then Syn.Name (Of_Tree.all, Node)
+                               /= Landin.Source.Names.No_Name
+                    and then not Syn.Binding_Keeps_Recovery
+                                   (Of_Tree.all, Node)
+                  then
+                     --  D1261: `else (problem)` whose block never reads
+                     --  `problem`.  Where leaving the name out would give
+                     --  the `else` to an enclosing `if` [1820] the name is
+                     --  what keeps the recovery, and nothing is said.
+                     declare
+                        Means : constant Res.Declaration_Id :=
+                          Res.Declaration_At (Meanings.all, Id, Node);
+                     begin
+                        if Means /= Res.No_Declaration
+                          and then not Referenced.Contains (Means)
+                          and then Landin.Configuration.Is_Active
+                            (Configurations (Context).all, Id, Node)
+                          and then
+                            (for some Checked of Checked_Bodies =>
+                               Checked.Source = Id
+                               and then Landin.Source.Contains
+                                 (Checked.Where,
+                                  Syn.Where (Of_Tree.all, Node)))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Unused_Else_Binding,
+                              Source  => Id,
+                              Where   => Syn.Anchor (Of_Tree.all, Node),
+                              Message => "this `else` binds the error as `"
+                                & Spelled (Syn.Name (Of_Tree.all, Node))
+                                & "`, and its block never reads it",
+                              Note    => "[1030]: a recovery that does"
+                                & " not read the error leaves the name"
+                                & " out: `else begin ... end` runs a"
+                                & " block, and `else value` stands in for"
+                                & " the result",
+                              Into    => Found);
                         end if;
                      end;
                   end if;

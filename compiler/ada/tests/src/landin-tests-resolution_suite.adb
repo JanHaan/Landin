@@ -1471,19 +1471,34 @@ package body Landin.Tests.Resolution_Suite is
            (Name & ": type = i8" & LF & "value: " & Name & " = 200", False);
       end loop;
       Check ("utf8: type = u8" & LF & "value: utf8 = 200", True);
-      --  Preserve the historical predeclared type meaning beside value
-      --  names; extending ordinary shadowing to these cases is deferred.
+      --  D1260: a nearer declaration that is no type shadows the
+      --  predeclared one too, so the position names a non-type and is
+      --  refused: a local, a function in its own signature, a parameter.
       Check ("f: () -> none = i32 := 1" & LF
-             & "value: i32 = 2 end f", True);
+             & "value: i32 = 2 end f", False);
+      Check ("f: () -> none = value: i32 = 2" & LF
+             & "i32 := value end f", True);
       Check ("u32: type = u8" & LF
              & "f: () -> none = u32 := 1" & LF
-             & "value: u32 = 300 end f", True);
+             & "value: u32 = 300 end f", False);
       Check ("i32: (v: i32) -> (r: i32) = r = v + 1 end i32" & LF
-             & "f: (v: i32) -> (r: i32) = i32(v) end f", True);
+             & "f: (v: i32) -> (r: i32) = i32(v) end f", False);
       Check ("u8: (v: u8) -> (r: u8) = r = v +% 1 end u8" & LF
-             & "f: () -> (r: u8) = u8(1) end f", True);
+             & "f: () -> (r: u8) = u8(1) end f", False);
       Check ("utf8: (v: utf8) -> (r: utf8 from v) = v end utf8" & LF
-             & "f: (v: utf8) -> (r: utf8 from v) = utf8(v) end f", True);
+             & "f: (v: utf8) -> (r: utf8 from v) = utf8(v) end f", False);
+      Check ("f: (u8: (v: u8) -> (r: i32), v: i32) -> (r: i32) ="
+             & " r = u8(v) end f", False);
+      --  A function of a predeclared spelling whose signature is written
+      --  in other types is still declared and called by its name.
+      Check ("u8: (v: i32) -> (r: i32) = r = v + 1 end u8" & LF
+             & "f: (v: i32) -> (r: i32) = r = u8(v) end f", True);
+      Check ("word: type = i32" & LF
+             & "u8: (v: word) -> (r: word) = r = v + 1 end u8" & LF
+             & "f: (v: word) -> (r: word) = r = u8(v) end f", True);
+      Check ("word: type = i32" & LF
+             & "utf8: (v: word) -> (r: word) = r = v + 1 end utf8" & LF
+             & "text: utf8 = ""hello""", False);
       Check ("echo: (u32: type, value: u32) -> (r: u32) = value end echo"
              & LF & "public main: () -> (code: i32) ="
              & " code = i32(echo(u32: u8, value: 200)) end main", True);

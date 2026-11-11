@@ -10455,10 +10455,12 @@ package body Landin.Tests.Lowering_Suite is
          "u8: (v: i32) -> (r: i32) = r = v + 1 end u8" & LF
          & "f: (v: i32) -> (r: i32) = r = u8(v) end f" & LF,
          "u8", 1, 0, 0, Landin.Types.I32);
+      --  D1260: a function of a predeclared spelling shadows that type
+      --  in its module, so its own signature is written in another.
       Check_Source
         ("i32 function",
-         "i32: (v: i32) -> (r: i32) = r = v + 1 end i32" & LF
-         & "f: (v: i32) -> (r: i32) = r = i32(v) end f" & LF,
+         "i32: (v: i64) -> (r: i64) = r = v + 1 end i32" & LF
+         & "f: (v: i64) -> (r: i64) = r = i32(v) end f" & LF,
          "i32", 1, 0, 0, Landin.Types.I32);
       Check_Source
         ("bool function",
@@ -10492,7 +10494,7 @@ package body Landin.Tests.Lowering_Suite is
          "cstring", 1, 0, 0, Landin.Types.I32);
       Check_Source
         ("same width shadow",
-         "u8: (v: u8) -> (r: u8) = r = v +% 100 end u8" & LF
+         "u8: (v: u16) -> (r: u16) = r = v +% 100 end u8" & LF
          & "f: () -> (r: i32) = r = i32(u8(41)) end f" & LF,
          "u8", 1, 0, 1, Landin.Types.I32);
       Check_Source

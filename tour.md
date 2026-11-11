@@ -1065,6 +1065,16 @@ Leave out `where:` there and the report points at the wrapper's own call
 instead. Only a `caller` parameter can fill a `caller` position: a copied or
 constructed `site` cannot.
 
+A check that stops the program gives its `caller` parameter to
+`compiler.unreachable` ([1560]). The stop is then reported at the call,
+through any wrappers that passed the parameter on, and not at the check:
+
+```landin
+require: (cond: bool, caller where: site) -> none =
+    if not cond then compiler.unreachable(where) end if
+end require
+```
+
 This `site` is not the `site` that a panic handler receives at [1670]. That
 one is a single `u32` number, which the compiler gives a failing check.
 
@@ -1736,8 +1746,9 @@ it does not assign the binding being initialized.
 - `else (e)` binds the atom. `e` has the call's whole error set and exists
   only inside the block. A `match` on it must cover every atom, or end
   with one `_` arm for the rest ([1210]).
-- The name may go unused. To run statements without naming the atom at
-  all, give `else` a bare block as its value: `else begin ... end`.
+- A name the block never reads draws a warning. To run statements
+  without naming the atom at all, give `else` a bare block as its value:
+  `else begin ... end`.
   The compiler refuses `else (_)`; leave the parentheses out instead.
 - A call that returns nothing has no value to supply. Its block only
   handles the error, and the statement after the call runs next.
@@ -4448,7 +4459,9 @@ without an import, which is why nobody else can use their bare names.
 Two of those calls:
 
 - `compiler.unreachable()` is a call that never returns. It stops the
-  program as a failed check does ([1670]).
+  program as a failed check does ([1670]). Given a `caller` parameter of
+  the function it is written in, `compiler.unreachable(where)`, it
+  reports the stop at the call that filled the parameter ([1040]).
 - `compiler.utf8_unvalidated(bytes)` is text of bytes known to be UTF-8,
   made without reading them and only inside `unchecked` ([0600]).
 

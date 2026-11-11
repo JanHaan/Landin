@@ -67,14 +67,14 @@ public main: () -> (code: i32) =
     mut buffer: [64]u8 = zeroed
     mut line := text.over(buffer)
     for one in items do
-        write_row(line, one) else (problem)
+        write_row(line, one) else begin
             return
         end
-        io.put(out, text.used(line)) else (problem)
+        io.put(out, text.used(line)) else begin
             return
         end
     end for
-    io.flush(out) else (problem)
+    io.flush(out) else begin
         return
     end
     code = 0

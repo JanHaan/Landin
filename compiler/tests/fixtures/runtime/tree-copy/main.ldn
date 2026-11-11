@@ -706,7 +706,7 @@ edge_cases: (host: blocking.host) -> none ! ... =
     --  as well, and the system says why, EBADF.
     reading: io.file = try io.open_read(host, locked)
     mut refused: bool = false
-    io.write(host, reading, "overwritten\n") else (problem)
+    io.write(host, reading, "overwritten\n") else begin
         refused = blocking.last_errno(host) == posix.number(posix.ebadf)
     end
     try io.close(host, reading)

@@ -38,7 +38,7 @@ end complain
 public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
-    path := io.argument_at(host, 0) else (problem)
+    path := io.argument_at(host, 0) else begin
         io.write(host, io.err(host), "usage: count FILE\n") else none
         return
     end

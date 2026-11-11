@@ -272,6 +272,8 @@ package Landin.Diagnostics.Catalogue is
       Unvalidated_Text_Checked,
       --  D1077: a bidirectional control in a comment or a literal.
       Bidirectional_Control,
+      --  D1261: a call-site `else` binds an error its block never reads.
+      Unused_Else_Binding,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -1219,6 +1221,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D1077: a bidirectional control character in a comment"
                    & " or a literal")),
+      Unused_Else_Binding =>
+        (Code => "L0684", Level => Warning, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D1261: a call-site `else` that binds an error its"
+                   & " block never reads")),
       --  The backend's reports need not have a source. A missing entry uses an
       --  entry-module anchor when available, but permits a point in an empty
       --  file or a source-free fallback. L0500 is the one diagnostic here a

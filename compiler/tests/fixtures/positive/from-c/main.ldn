@@ -8,7 +8,7 @@ public main: () -> (code: i32) =
         io.write(host, io.err(host), "usage: tool FILE...\n") else none
         return
     end if
-    print_arguments(host) else (problem)
+    print_arguments(host) else begin
         code = 1
         return
     end

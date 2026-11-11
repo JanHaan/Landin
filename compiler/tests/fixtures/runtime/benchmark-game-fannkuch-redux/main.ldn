@@ -104,14 +104,14 @@ end report
 public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
-    n := order_size(host) else (problem)
+    n := order_size(host) else begin
         io.write(host, io.err(host),
                  "usage: fannkuch-redux N, where N is 1 to 16\n") else none
         return
     end
 
     value: score = fannkuch(n)
-    report(host, n, value) else (problem)
+    report(host, n, value) else begin
         return
     end
     code = 0

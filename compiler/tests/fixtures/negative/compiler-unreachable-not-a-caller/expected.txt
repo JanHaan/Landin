@@ -1,0 +1,30 @@
+error[L0327]: this call gives 1 argument and compiler.unreachable takes none, or one `caller` parameter of this routine
+  --> ../tests/fixtures/negative/compiler-unreachable-not-a-caller/program.ldn:9:5
+  |
+9 |     compiler.unreachable(where)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/compiler-unreachable-not-a-caller/program.ldn:9:5
+  |
+9 |     compiler.unreachable(where)
+  |     ^^^^^^^^^^^^^^^^^^^^ this builtin trap
+  = note: [1560]: compiler.unreachable() traps at its own site, and compiler.unreachable(where) at the call that filled the `caller` parameter `where`
+error[L0327]: this call gives 1 argument and compiler.unreachable takes none, or one `caller` parameter of this routine
+  --> ../tests/fixtures/negative/compiler-unreachable-not-a-caller/program.ldn:15:5
+   |
+15 |     compiler.unreachable(copy)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/compiler-unreachable-not-a-caller/program.ldn:15:5
+   |
+15 |     compiler.unreachable(copy)
+   |     ^^^^^^^^^^^^^^^^^^^^ this builtin trap
+  = note: [1560]: compiler.unreachable() traps at its own site, and compiler.unreachable(where) at the call that filled the `caller` parameter `where`
+error[L0327]: this call gives 1 argument and compiler.unreachable takes none, or one `caller` parameter of this routine
+  --> ../tests/fixtures/negative/compiler-unreachable-not-a-caller/program.ldn:20:5
+   |
+20 |     compiler.unreachable(where: where)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/compiler-unreachable-not-a-caller/program.ldn:20:5
+   |
+20 |     compiler.unreachable(where: where)
+   |     ^^^^^^^^^^^^^^^^^^^^ this builtin trap
+  = note: [1560]: compiler.unreachable() traps at its own site, and compiler.unreachable(where) at the call that filled the `caller` parameter `where`

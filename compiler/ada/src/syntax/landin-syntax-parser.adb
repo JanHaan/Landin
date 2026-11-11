@@ -13092,27 +13092,29 @@ package body Landin.Syntax.Parser is
                         then
                            --  D370: a bare `else` takes the value that
                            --  stands in for the call's result, and a block
-                           --  of statements under it was meant as the bound
-                           --  recovery.  Said once at the `else`, and the
-                           --  block is read as that recovery to its `end`.
+                           --  of statements under it was meant as the
+                           --  recovery's block.  Said once at the `else`,
+                           --  and the block is read as that recovery to its
+                           --  `end`.  D1261: the repair writes `begin`, the
+                           --  block that names no error, because the
+                           --  statements written name none.
                            Complain
                              (Item    => Syn.Name_Expected,
                               Where   => At_Else,
                               Message => "a recovery that runs statements"
-                                         & " names the error after `else`:"
-                                         & " write `else (problem)`",
+                                         & " opens a block after `else`:"
+                                         & " write `else begin`",
                               Note    => "[1030]: `else value` stands in for"
-                                         & " the call's result; `else"
-                                         & " (problem)` opens a block that"
-                                         & " closes with `end`, and `_ ="
-                                         & " problem` discards an error the"
-                                         & " block does not use",
+                                         & " the call's result; `else begin`"
+                                         & " opens a block that closes with"
+                                         & " `end`, and `else (problem)`"
+                                         & " opens one that names the error",
                               Fixes   =>
                                 [1 => Landin.Diagnostics.Fixes.Insert_Token
                                         (Origin_Of,
                                          (First => At_Else.Last,
                                           Last  => At_Else.Last),
-                                         " (problem)", "(problem)",
+                                         " begin", "begin",
                                          Landin.Diagnostics.Likely,
                                          Neighbour => "else")]);
                            Push ((Kind => End_Closer, others => <>));
@@ -13187,7 +13189,8 @@ package body Landin.Syntax.Parser is
                            Extent   => Join (At_Else, After_Previous),
                            Children => [Recovery_Body],
                            Named    => Error_Name,
-                           Fills    => Ignores);
+                           Fills    => Ignores,
+                           Propagates => Saved_Arm);
                         Else_Closes_Arm := Saved_Arm;
                      end;
                   elsif Allow_Recovery and then Peek = Tok.Kw_Else then

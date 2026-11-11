@@ -304,7 +304,7 @@ public main: () -> (code: i32) =
         io.write(host, io.err(host), "usage: tool FILE...\n") else none
         return
     end if
-    print_arguments(host) else (problem)
+    print_arguments(host) else begin
         code = 1
         return
     end
@@ -547,7 +547,7 @@ import hosted/blocking
 --- Write each argument on a line of its own.
 print_arguments: (host: blocking.host) -> none ! io.io_failed =
     for index in usize(0)..<io.argument_count(host) do
-        argument := io.argument_at(host, index) else (problem)
+        argument := io.argument_at(host, index) else begin
             return
         end
         try io.write(host, io.out(host), text.host_bytes(argument))
@@ -714,9 +714,16 @@ assert(len % 4 == 0);
 ```
 
 ```landin
+--- Where a call was written; the compiler fills one in.
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
 --- C's `assert`: stop the program when `holds` is false.
-expect: (holds: bool) -> none =
-    if not holds then compiler.unreachable() end if
+expect: (holds: bool, caller where: site) -> none =
+    if not holds then compiler.unreachable(where) end if
 end expect
 
 --- How many whole 32-bit words a block holds; it must hold nothing else.
@@ -727,12 +734,13 @@ end words_in
 ```
 
 There is no `assert` macro; a function does its work.
-`compiler.unreachable()` never returns. It stops the program as a failed
+`compiler.unreachable` never returns. It stops the program as a failed
 check does, and a hosted program first prints where it stopped [1560].
 
-That place is the line of `compiler.unreachable()`. To report the caller's
-line instead, give `expect` a `caller` parameter, which the compiler fills
-with the call's place [1040].
+That place is the line that called `expect`, as C's `assert` names the line
+it is written on. The compiler fills a `caller` parameter with the call's
+place [1040], and `compiler.unreachable(where)` reports it. Written with no
+argument, `compiler.unreachable()` reports its own line.
 
 Nothing turns the check off as `NDEBUG` does. Many of C's assertions need
 no function at all: indexing, conversions and overflow are checked already
@@ -995,7 +1003,7 @@ import hosted/blocking
 
 --- The home directory, or `/` when the environment names none.
 home_directory: (host: blocking.host) -> (home: text.host_string from host) =
-    home = io.variable_named(host, text.host_over("HOME")) else (problem)
+    home = io.variable_named(host, text.host_over("HOME")) else begin
         text.host_over("/")
     end
 end home_directory

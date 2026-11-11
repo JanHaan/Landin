@@ -1159,6 +1159,31 @@ package Landin.Checking is
                  and then Index <= Signature_Parameter_Count
                                      (Of_Table, Signature);
 
+   --  D1262: a call that leaves a `caller` position for the compiler to
+   --  fill, kept so that a trap naming a `caller` parameter can be lowered
+   --  knowing every value the parameter can hold.  One call may be noted
+   --  more than once, for each view of a generic routine it is checked in.
+   type Caller_Fill is record
+      Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Nominal : Nominal_Type_Id;
+   end record;
+
+   --  Notes Call for each `caller` parameter of Signature that none of
+   --  its arguments names: only a named argument forwards one (D192).
+   procedure Note_Caller_Fills
+     (Into : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Call : Landin.Syntax.Node_Id;
+      Signature : Signature_Id)
+     with Pre => Holds (Into, Signature);
+
+   function Caller_Fill_Count (Of_Table : Table) return Natural;
+
+   function Nth_Caller_Fill
+     (Of_Table : Table; Index : Positive) return Caller_Fill
+     with Pre => Index <= Caller_Fill_Count (Of_Table);
+
    function Signature_Result_Count
      (Of_Table : Table; Signature : Signature_Id) return Natural
      with Pre => Holds (Of_Table, Signature);
@@ -2959,7 +2984,11 @@ private
    --  controlled finalization defers abort and looks up the current
    --  exception on every read; Element is a plain copy, which the
    --  optimizer reduces to the component the query names.
+   package Caller_Fill_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Caller_Fill);
+
    type Table is tagged limited record
+      Caller_Fills : Caller_Fill_Vectors.Vector;
       --  Which table a key was made by; see Landin.Serials.
       Serial       : Landin.Serials.Serial := Landin.Serials.Next;
       Ready        : Boolean := False;

@@ -310,16 +310,18 @@ grammar spells these out because a program need not declare them itself.
 They are in no scope of [1840] and [1760] does not reserve them, so a program
 may declare the same spelling. A type position that spells one is looked up
 lexically like any name, and the nearest visible declaration of that spelling
-decides: a type declaration or a type formal is what the position names, and
-any other declaration, such as a function, binding or parameter, leaves the
-position naming the predeclared type without the lookup continuing outward.
-Finding no declaration leaves it so too. That fallback is a type position's
-alone. A call or value use of the spelling resolves by ordinary lookup: a
-visible function named `u8` is what `u8(v)` calls, and `u8(v)` converts to the
-predeclared `u8` [0700] only when nothing visible declares `u8`. A non-type
-declaration therefore leaves the predeclared type in every type position it
-could reach, its own signature included, where [0140] would have an inner
-name hide an outer one.
+is what the position names, whatever it declares (D1260): a type declaration
+or a type formal gives the position its type, and a function, binding,
+parameter or any other declaration is no type, so the position is refused
+with L0338 as any name that is not a type is. The lookup does not continue
+outward past it, as [0140] has an inner name hide an outer one. Only when
+nothing visible declares the spelling does the position name the predeclared
+type. A call or value use of the spelling resolves the same way: a visible
+function named `u8` is what `u8(v)` calls, and `u8(v)` converts to the
+predeclared `u8` [0700] only when nothing visible declares `u8`. A function
+named `u8` therefore cannot write `u8` in its own signature, and no type
+position its name reaches can; a module that wants both gives the function
+another name.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
@@ -995,8 +997,7 @@ visible; a selected declaration shadows the module declaration for ordinary
 unqualified lookup too. Imports do not enter sibling files and are not
 re-exported. Lookup ends at the module: [1790]'s predeclared type names are
 not a further scope but what a type position names when lookup finds no
-declaration, or finds one nearest that is neither a type declaration nor a
-type formal.
+declaration (D1260).
 
 ### [1850] One scope gives one name to one thing
 
@@ -3034,6 +3035,80 @@ in a note, which leaves the reader to find which local hid it.
 
 **Pinned by** `negative/local-hides-an-import` and
 `negative/parameter-hides-a-concept`.
+
+### D1260 — A nearer declaration shadows a predeclared type, whatever it declares
+
+**The tour said** at [1790] that the scalar and text-view names are
+predeclared and are not keywords, and at [0140] that an inner name hides an
+outer one. A type position that spelled one was looked up lexically, but
+only a type declaration or a type formal found there replaced the
+predeclared type: a nearer function, binding or parameter of the spelling
+left the position naming the predeclared type, so `x: u8` beside a function
+named `u8` meant the scalar while `u8(v)` called the function. One spelling
+had two meanings in one scope, chosen by where it stood.
+
+**Chosen:** ordinary lexical shadowing. The nearest visible declaration of
+the spelling is what a type position names, whatever it declares, and one
+that is no type is refused there with L0338, whose note says that the
+predeclared type is named only where nothing declares the spelling and that
+the declaration wants another name. The predeclared type is what the
+position names only when lookup finds nothing. A function named `u8` can
+therefore not write `u8` in its own signature, a local named `i64` ends the
+type's use for the rest of its block, and a parameter named `usize` ends it
+for the rest of the signature and the body. Calls and value uses are as
+they were: they already resolved by ordinary lookup. The library and the
+examples declared no non-type under one of the sixteen spellings. Besides
+the two controls that had pinned the asymmetry, one test program did:
+`compiler/tests/darwin/transport.ldn` numbered parameters `i0` to `i9`, so
+`i9: i8` followed a parameter named `i8`, and they are now `n0` to `n9`.
+
+**The alternatives:** keeping the asymmetry as the rule, with a type
+position falling back to the predeclared type past any non-type, which
+lets `u8: (v: u8) -> (r: u8)` be written and leaves a reader of `x: u8` to
+find out that the nearest `u8` is not what it names; continuing the lookup
+outward past a non-type, which no other name does; and reserving the
+sixteen spellings, which [1760] declines and D1066 works around for C
+names.
+
+**Pinned by** `negative/a-non-type-shadows-a-predeclared-type`, whose
+report is recorded, `resolution/predeclared types use lexical lookup` and
+`lowering/calls respect resolved declarations`, whose functions named as a
+scalar now write their signatures in other types.
+
+### D1261 — An `else` binding its block never reads is warned about
+
+**The discrepancy:** [1030] has two blocks for a call-site recovery,
+`else (e) ... end`, which binds the error, and `else begin ... end`, the
+bare block as the value, which binds nothing. A reader who knew only the
+first wrote `else (problem)` with `problem` never read, nothing said that
+the second exists, and D370's repair for statements under a bare `else`
+wrote ` (problem)` itself, so the compiler's own fix produced the unused
+name.
+
+**Chosen:** L0684, a warning under D251's policy, at an `else (name)` whose
+block has no reference to `name`. Its note names the forms that bind
+nothing: `else begin ... end` runs a block and `else value` stands in for
+the result. `_ = name` is a reference and silences it, as it must stay
+legal. One place is exempt: in the arm of an `if`, an `else` with no name
+is the `if`'s own [1820], so the name is what makes the recovery the
+call's, and nothing is said. Like L0326 it is raised only in a routine body
+the checker checked and in an active configuration. It offers no fix:
+replacing `(name)` with `begin` is the edit, but the checker does not prove
+it here. D370's repair now writes ` begin`, the block the statements
+written under the bare `else` already fit, and its message names that
+block.
+
+**The alternatives:** saying nothing, where it stood; refusing an unused
+binding, which makes a lint a rule of the language against D251; a new
+block form after a bare `else`, which D370 declined and which the grammar
+does not need, having `else begin`; and warning in an `if` arm too, where
+the only repairs are parentheses round the call or the name the warning
+objects to.
+
+**Pinned by** `negative/unused-else-binding`, whose report is recorded and
+whose program holds each exempt form, and
+`negative/statements-after-a-bare-else-name-its-binder`, whose fix the
+`fixes` suite compiles clean, without a warning.
 
 ## DECISIONS: NUMBERS AND LITERALS
 
@@ -15275,7 +15350,7 @@ with its grammar, flow edge, formatter and highlighter changes, for a line the
 language already writes. A library helper such as `require(condition)` meets
 a different limit: its trap reports the helper's site rather than its
 caller's, which a `caller` site argument to `compiler.unreachable` would
-answer; that waits for library contract helpers that need it.
+answer; D1262 has since added it.
 
 **Pinned by** the "Blocks" rule in `docs/format.md`, which the test program
 holds the formatter to.
@@ -18632,6 +18707,7 @@ The complete enabled check disposition is:
 | Volatile/atomic scalar address alignment; atom-domain validation; packed encoded membership, packed field-width fit or reserved-bit pattern validation | `bad_conversion` at the operation that validates the value. Raw packed copying still preserves every bit without extracting or validating fields. |
 | A callee returns despite `noreturn` | `unreachable` at the call, before any continuation. |
 | `compiler.unreachable()` [1560] | `unreachable` at the call, including inside `unchecked` (D278). |
+| `compiler.unreachable(where)` [1560] | `unreachable` at the call that filled the `caller` parameter `where` (D1262). |
 | In a program that prepares a stack, a routine's frame or a call's area that would go below the current stack's limit (D471); `compiler.stack_prepare` with a slice too small for its first frame and the margin (D450, D472) | `stack_exhausted` (D451) at the routine, or at the call to the builtin, including inside `unchecked`. |
 | Compiler-owned firmware entry returns | `unreachable`, synthetic site zero. Normal entry cleanup runs before an ordinary entry return reaches this guard. |
 | Recursive/concurrent panic entry, or a selected handler somehow returns | Terminal default instruction; no second handler invocation. |
@@ -21364,11 +21440,13 @@ report nor its help said, and the repair is `else (problem)`.
 **Chosen:** a bare `else` that ends its line, followed by a line that begins
 a statement rather than a value (a binding, an assignment, `inc`, `dec`,
 `return`, `fail`, `defer`, `undo` or a discard), is refused at the `else` as
-L0100, naming the binder: "a recovery that runs statements names the error
-after `else`: write `else (problem)`". Its note says that `_ = problem`
-discards an error the block does not use, and its Likely fix writes
-` (problem)` after the `else`. The block is read as the bound recovery to its
-`end`, so the mistake is one report.
+L0100, naming the block: "a recovery that runs statements opens a block
+after `else`: write `else begin`". Its note names both blocks, `else begin`
+and the `else (problem)` that names the error, and its Likely fix writes
+` begin` after the `else`: the statements written name no error, and since
+D1261 a name they never read is warned about, so the repair is no longer
+` (problem)`. The block is read as that recovery to its `end`, so the
+mistake is one report.
 
 **The alternatives:** admitting a block after a bare `else`, which gives one
 recovery two block forms that differ only in whether the error is named;
@@ -30723,6 +30801,52 @@ trapping through an ordinary check, a nonnull conversion of zero, reports
 `negative/compiler-unreachable-value`, the driver case `an explicit trap has
 its own panic site`, `abi/r670-panic`'s startup modes and the Cortex-M corpus
 rows for the three runtime fixtures.
+
+### D1262 — A trap given a `caller` parameter is reported at that call
+
+**The tour said** at [1560] that `compiler.unreachable()` stops the program
+as a failed check does, and D278 reports it at its own site. D436 noted
+what that costs a library: a helper such as `require(condition)` traps at
+the helper's line, the same line for every caller, and [1040]'s `caller`
+parameter, which knows the call, had no way to reach the report.
+
+**Chosen:** `compiler.unreachable(where)`, where `where` is a `caller`
+parameter of the routine the call is written in, given by its name alone
+as D192 has a forward be. It is the same `() -> noreturn` call in every
+other respect, and reaching it raises `unreachable` through D232 at the
+site of the call that filled `where`: the call that left the position out,
+however many wrappers forwarded it since. Anything else in the argument's
+place stays L0327, an ordinary parameter of the same struct, a copy, a
+field or a labelled argument among them, because D192 lets only the
+compiler make the value of a caller position and that is what makes the
+report sound. No handler, panic map, site number or backend changes: the
+compiler knows every call of the program that fills a position of that
+struct type, and the trap compares the three coordinates with each of them
+and stops at an ordinary trap whose site is that call's. A hosted program
+with no handler prints that call's file, line and column (D361); a
+selected handler receives that call's site number, on firmware as on a
+host. A value none of them wrote, which only code outside the language can
+put there, stops at the trap's own site. The comparisons are reached only
+when the program is already stopping, and they cost code in the trapping
+routine for each such call in the program.
+
+**The alternatives:** handing the three coordinates to the panic handler,
+which changes D232's `(kind, site)` contract and the default handlers of
+every target for one builtin, and gives firmware a file number where it
+has a site; a second builtin, `compiler.unreachable_at`, which is a name
+for what the argument already says; letting any value of the struct type
+be given, which lets a program report a trap at a place no call was
+written; making every trap in a routine with a `caller` parameter report
+the caller, which takes the helper's own site from a routine that wants
+both; and a table of sites searched by a routine of the runtime, smaller
+where many calls fill one type, which adds a runtime routine and a datum
+to firmware that the comparisons do not need. That last one is the form to
+return to if the code this adds is ever measured as a cost.
+
+**Pinned by** `runtime/caller-site-trap`, whose report names the call
+through a forwarding wrapper, `runtime/caller-site-trap-dispatches`, whose
+handler is given the call's site and which the Cortex-M corpus runs, and
+`negative/compiler-unreachable-not-a-caller`.
 
 ### D279 — Linux's system interface is `platform/linux`, with no C library
 

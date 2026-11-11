@@ -1,0 +1,26 @@
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
+--- An ordinary parameter of the struct type is not a `caller` parameter.
+plain: (where: site) -> none =
+    compiler.unreachable(where)
+end plain
+
+--- A copy is a value the program made, as D192 says of a forward.
+copied: (caller where: site) -> none =
+    copy := where
+    compiler.unreachable(copy)
+end copied
+
+--- The trap has no parameter to name.
+named: (caller where: site) -> none =
+    compiler.unreachable(where: where)
+end named
+
+--- This is the accepted form.
+given: (caller where: site) -> none =
+    compiler.unreachable(where)
+end given

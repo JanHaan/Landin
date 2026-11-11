@@ -27,7 +27,7 @@ public main: () -> (code: i32) =
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
-    path := io.argument_at(host, 0) else (problem)
+    path := io.argument_at(host, 0) else begin
         io.write(host, io.err(host), "usage: number FILE\n") else none
         return
     end

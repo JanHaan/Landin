@@ -1,0 +1,13 @@
+warning[L0684]: this `else` binds the error as `problem`, and its block never reads it
+  --> ../tests/fixtures/negative/unused-else-binding/program.ldn:14:25
+   |
+14 |     first := open(path) else (problem)
+   |                         ^^^^
+  = note: [1030]: a recovery that does not read the error leaves the name out: `else begin ... end` runs a block, and `else value` stands in for the result
+warning[L0684]: this `else` binds the error as `problem`, and its block never reads it
+  --> ../tests/fixtures/negative/unused-else-binding/program.ldn:18:26
+   |
+18 |     second := open(path) else (problem) 0 end
+   |                          ^^^^
+  = note: [1030]: a recovery that does not read the error leaves the name out: `else begin ... end` runs a block, and `else value` stands in for the result
+refine: checked ../tests/fixtures/negative/unused-else-binding/program.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

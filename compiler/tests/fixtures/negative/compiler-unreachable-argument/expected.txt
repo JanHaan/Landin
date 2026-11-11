@@ -1,4 +1,4 @@
-error[L0327]: this call gives 1 argument and compiler.unreachable takes none
+error[L0327]: this call gives 1 argument and compiler.unreachable takes none, or one `caller` parameter of this routine
   --> ../tests/fixtures/negative/compiler-unreachable-argument/program.ldn:2:5
   |
 2 |     compiler.unreachable(code)
@@ -7,4 +7,4 @@ error[L0327]: this call gives 1 argument and compiler.unreachable takes none
   |
 2 |     compiler.unreachable(code)
   |     ^^^^^^^^^^^^^^^^^^^^ this builtin trap
-  = note: [1560]: compiler.unreachable() takes no arguments and never returns
+  = note: [1560]: compiler.unreachable() traps at its own site, and compiler.unreachable(where) at the call that filled the `caller` parameter `where`

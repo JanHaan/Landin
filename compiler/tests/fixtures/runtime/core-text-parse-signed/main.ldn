@@ -8,7 +8,7 @@ refusal: type = text.invalid_number | text.number_overflow
 
 --  Whether the bytes parse as an i8 to the expected value.
 i8_verdict: (source: []u8, expected: i8) -> (yes: bool) =
-    value: i8 = text.parse_i8(source) else (problem)
+    value: i8 = text.parse_i8(source) else begin
         yes = false
         return
     end

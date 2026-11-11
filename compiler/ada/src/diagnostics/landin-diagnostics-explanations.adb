@@ -1612,6 +1612,19 @@ package body Landin.Diagnostics.Explanations is
                & "E2\x80\xAE""`, in a `[]u8`. `--allow=L0628` suppresses th"
                & "e warning for a source that writes right-to-left text on"
                & " purpose; `--deny=L0628` makes it an invocation error.",
+            when Catalogue.Unused_Else_Binding =>
+               "A call-site `else (name)` binds the call's error to `nam"
+               & "e` inside its block [1030], and this block never reads i"
+               & "t (D1261). The program is accepted. A recovery that does"
+               & " not read the error is written without the name: `else b"
+               & "egin ... end` runs a block of statements, `else value` s"
+               & "tands in for the call's result, and `else none` ignores "
+               & "the failure of a call that returns nothing. In the arm o"
+               & "f an `if`, an `else` that binds no name is the `if`'s ow"
+               & "n [1820], so a binding written there is what keeps the r"
+               & "ecovery and is not warned about. `--allow=L0684` suppres"
+               & "ses the warning; `--deny=L0684` makes it an invocation e"
+               & "rror.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -3072,6 +3085,28 @@ package body Landin.Diagnostics.Explanations is
                & LF,
             when Catalogue.Bidirectional_Control =>
                "",
+            when Catalogue.Unused_Else_Binding =>
+               "missing: atom"
+               & LF
+               & "open: (path: i32) -> (handle: i32) ! missing ="
+               & LF
+               & "    fail missing when path == 0"
+               & LF
+               & "    handle = path"
+               & LF
+               & "end open"
+               & LF
+               & LF
+               & "first: (path: i32) -> (handle: i32) ="
+               & LF
+               & "    handle = open(path) else (problem)"
+               & LF
+               & "        0"
+               & LF
+               & "    end"
+               & LF
+               & "end first"
+               & LF,
             when Catalogue.No_Toolchain =>
                "",
             when Catalogue.Toolchain_Failed =>
@@ -3391,6 +3426,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Unvalidated_Text_Checked =>
                "",
             when Catalogue.Bidirectional_Control =>
+               "",
+            when Catalogue.Unused_Else_Binding =>
                "",
             when Catalogue.No_Toolchain =>
                "",

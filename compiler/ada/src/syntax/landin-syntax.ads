@@ -1177,6 +1177,14 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Recovery_Clause;
 
+   --  [1820]: the clause was written where an `else` that binds no name
+   --  would have divided an enclosing `if` instead of recovering the call,
+   --  so its `(name)` is what makes it the call's and cannot be left out.
+   function Binding_Keeps_Recovery
+     (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Recovery_Clause;
+
    --  Two facts about a line end the grammar decided without it, kept so
    --  a later stage refusing what the parser accepted can say what the
    --  line end did.  Continued_At is the `(` of a call, the `[` of an

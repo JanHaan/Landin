@@ -219,26 +219,26 @@ walk_fallback: (source: badge) -> (sum: i32) =
 end walk_fallback
 
 public main: () -> (code: i32) =
-    success: i32 = walk(0) else (e) 99 end
+    success: i32 = walk(0) else 99
     success_trace: i32 = cleanup_trace
-    first_error: i32 = walk(1) else (e) -1 end
+    first_error: i32 = walk(1) else -1
     first_trace: i32 = cleanup_trace
-    head_error: i32 = walk(2) else (e) -1 end
+    head_error: i32 = walk(2) else -1
     head_trace: i32 = cleanup_trace
-    item_error: i32 = walk(3) else (e) -1 end
+    item_error: i32 = walk(3) else -1
     item_trace: i32 = cleanup_trace
-    step_error: i32 = walk(4) else (e) -1 end
+    step_error: i32 = walk(4) else -1
     step_trace: i32 = cleanup_trace
-    inferred_error: i32 = walk_inferred(3) else (e) -1 end
-    picked: i32 = find_first() else (e) -1 end
+    inferred_error: i32 = walk_inferred(3) else -1
+    picked: i32 = find_first() else -1
     boxed: cell(i32) = (value: 7)
-    generic_sum: i32 = walk_cell(boxed) else (e) -1 end
+    generic_sum: i32 = walk_cell(boxed) else -1
     object: badge = (value: 11)
     plain: stream = (mode: 0)
     ordinary_sum: i32 = walk_plain(plain)
     fallback_sum: i32 = walk_fallback(object)
     erased: any reader = any(addr object)
-    erased_error: i32 = walk_erased(erased) else (e) -1 end
+    erased_error: i32 = walk_erased(erased) else -1
     code = if success == 3 and first_error == -1
       and head_error == -1 and item_error == -1
       and step_error == -1 and inferred_error == -1

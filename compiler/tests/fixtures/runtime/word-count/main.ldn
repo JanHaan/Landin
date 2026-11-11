@@ -57,7 +57,7 @@ public main: () -> (code: i32) =
     defer io.flush(out) else none
     code = 1
     mut buffer: [4096]u8 = zeroed
-    totals := count(host, io.input(host), buffer) else (problem)
+    totals := count(host, io.input(host), buffer) else begin
         io.write(host, io.err(host), "wc: standard input could not be read\n")
             else none
         return

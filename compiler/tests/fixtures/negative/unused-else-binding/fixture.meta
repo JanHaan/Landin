@@ -1,0 +1,9 @@
+class: negative
+summary: D1261 warns of a call-site else binding its block never reads, and names the forms that bind none
+program: program.ldn
+codes: L0684, L0684
+status: 0
+constructs: 1030, 1820
+targets: linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
+args: ../tests/fixtures/negative/unused-else-binding/program.ldn
+expect: expected.txt

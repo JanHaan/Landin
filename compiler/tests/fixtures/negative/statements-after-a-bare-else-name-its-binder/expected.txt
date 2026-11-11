@@ -1,7 +1,7 @@
-error[L0100]: a recovery that runs statements names the error after `else`: write `else (problem)`
+error[L0100]: a recovery that runs statements opens a block after `else`: write `else begin`
   --> ../tests/fixtures/negative/statements-after-a-bare-else-name-its-binder/program.ldn:9:16
   |
 9 |     attempt(n) else
   |                ^^^^
-  = note: [1030]: `else value` stands in for the call's result; `else (problem)` opens a block that closes with `end`, and `_ = problem` discards an error the block does not use
-  = help (guess): write `(problem)` after `else`
+  = note: [1030]: `else value` stands in for the call's result; `else begin` opens a block that closes with `end`, and `else (problem)` opens one that names the error
+  = help (guess): write `begin` after `else`
