@@ -291,6 +291,16 @@ class BuildIdentity(unittest.TestCase):
                           ' `refine --version` reports covers'])
         self.assertEqual(said(base + ['source 5 compiler/ada/src/b.adb']),
                          ['compiler/ada/src/b.adb appeared'])
+        #  With the inputs' digest in the row, as build.sh writes it, the
+        #  same revision, state and digest leave only the tag.
+        self.assertEqual(
+            IDENTITY.changed('identity 3 abc clean d1', 'identity 4 abc clean d1'),
+            ['a release tag at HEAD appeared or went, which changes only'
+             ' the provenance `refine --version` reports'])
+        self.assertEqual(
+            IDENTITY.changed('identity 3 abc clean d1', 'identity 4 abc clean d2'),
+            ['a build script changed, which the provenance'
+             ' `refine --version` reports covers'])
 
 
 class CheckoutInputs(unittest.TestCase):

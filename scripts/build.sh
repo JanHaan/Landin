@@ -318,7 +318,29 @@ if [ -n "$Previous" ] && [ "$Current" != "$Previous" ]; then
             echo "landin: source inventory or project changed; rebuilding from clean, keeping bin/"
             landin_clean_objects
         else
-            echo "landin: source content changed; using checksum recompilation"
+            #  Which rows moved.  A commit or a document edit moves the
+            #  identity row alone, and was once announced as changed source
+            #  content with nothing to show which file was meant.
+            Compared="$LANDIN_BUILD_DIR/compared"
+            printf '%s\n' "$Previous" > "$Compared-before.txt"
+            printf '%s\n' "$Current" > "$Compared-after.txt"
+            if python3 "$LANDIN_ROOT/scripts/build_identity.py" \
+                --provenance-only "$Compared-before.txt" "$Compared-after.txt"
+            then
+                echo "landin: the checkout changed since the last build, in" \
+                     "nothing the compiler is built from; using checksum" \
+                     "recompilation for the provenance unit alone:"
+            else
+                echo "landin: source content changed; using checksum" \
+                     "recompilation:"
+            fi
+            Moved="$(python3 "$LANDIN_ROOT/scripts/build_identity.py" \
+                --changed "$Compared-before.txt" "$Compared-after.txt")" || exit
+            rm -f "$Compared-before.txt" "$Compared-after.txt"
+            awk 'NR <= 12 { print "landin:   " $0 }
+                 END { if (NR > 12) print "landin:   and", NR - 12, "more" }' <<EOF
+$Moved
+EOF
         fi
     else
         echo "landin: sources changed since the last build; rebuilding from clean, keeping bin/"
