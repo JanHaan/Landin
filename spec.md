@@ -26924,8 +26924,8 @@ defect` and no diagnostic at all.
 **Chosen:** `refine` reports the diagnostic. The label that repeats the
 report's span is left out where the code's row lets a report go without
 one. Where the row promises exactly one label, as L0313's and L0340's do
-with thirty-two others, the label is kept and the row stays true of every
-occurrence: the report then shows its span once, with the label's words
+and most rows that take a label, the label is kept and the row stays true
+of every occurrence: the report then shows its span once, with the label's words
 under it, as it already did for a label that explains the primary span.
 The test program asks for the refusal before it runs anything, through
 `Landin.Diagnostics.Checking.Refuse_Repeated_Places`, so a check that
@@ -26936,7 +26936,7 @@ switch is the program's and not the build mode's: a debug build of
 **The alternatives:** raising in every program, as before. Raising by
 build mode, which makes the development build a user or a maintainer runs
 by hand the one that hides the diagnostic. Leaving the label out of every
-report and loosening the thirty-four rows to admit none, which makes the
+report and loosening every row that promises one to admit none, which makes the
 catalogue describe a state only a defect produces. Auditing every call
 site instead, which holds until the next one is written.
 
