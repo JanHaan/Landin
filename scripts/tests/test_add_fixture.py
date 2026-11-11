@@ -347,6 +347,22 @@ class AddFixtureTest(unittest.TestCase):
                "targets: linux-x86-64, linux-arm64, cortex-m0\n"
                "program: main.ldn\nstatus: 0\nconstructs: 0570\n")
 
+    def test_arm64_not_emitting_yet_stands_for_a_parity_record(self):
+        """D1308: a fixture arm64 does not emit yet says so instead of a
+        record naming a counterpart that does not exist."""
+        alone = self.RUNTIME.replace(", linux-arm64, cortex-m0", "")
+        status, out, _, _ = self.run_main(["runtime/first"],
+                                          {"runtime/first": alone})
+        self.assertEqual(status, 1)
+        self.assertIn("left to do: runtime/first: name linux-arm64 in its"
+                      " targets; or, while arm64 does not emit", out)
+        self.assertIn("not_yet_emitted: linux-arm64=CODE", out)
+        status, out, _, _ = self.run_main(
+            ["runtime/first"],
+            {"runtime/first": alone + "not_yet_emitted: linux-arm64=L0500\n"})
+        self.assertEqual(status, 0)
+        self.assertNotIn("left to do", out)
+
     def test_a_batch_continues_past_one_refusal(self):
         status, out, err, rows = self.run_main(
             ["runtime/first", "runtime/broken", "runtime/absent",

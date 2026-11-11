@@ -1872,6 +1872,25 @@ class Transcriptions(unittest.TestCase):
             said = [why for _, _, why in checker.fixture_sources()]
         self.assertIn("`fixed` names absent.fixed, which is not here", said)
 
+    def test_a_recording_numbering_a_library_line_is_reported(self):
+        #  D1306: a recorded report writes `*` for a library line.
+        from check_controls import tree
+        with tree(copied=["compiler/tests/fixtures"]) as root:
+            case = root / ("compiler/tests/fixtures/negative/"
+                           "core-text-private-position")
+            self.assertFalse([why for _, _, why in checker.fixture_sources()
+                              if "library line" in why])
+            report = case / "expected.txt"
+            report.write_text(report.read_text().replace(
+                "text.ldn:*:1\n  |\n* |", "text.ldn:10:1\n   |\n10 |"))
+            said = [why for _, _, why in checker.fixture_sources()
+                    if "library line" in why]
+        self.assertEqual(said, [
+            "`expect` names expected.txt, which cites a library line by its"
+            " number; ./scripts/dev-test.sh"
+            " --record=negative/core-text-private-position records it with"
+            " `*`"])
+
     def test_every_code_is_explained_and_retirement_is_said(self):
         from check_controls import tree
         inputs = EXPLAINED

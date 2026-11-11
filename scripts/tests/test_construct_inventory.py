@@ -7,6 +7,7 @@ requires `inventory_problems` to name the resulting missing, stale, unowned
 or unexplained row.  The unaltered repository must produce none.
 """
 import copy
+import json
 import importlib.util
 from pathlib import Path
 import unittest
@@ -404,6 +405,33 @@ class Inventory(unittest.TestCase):
                                         lambda: dropped):
             self.refused([m for _, _, m in CHECK.arm64_linux_problems()],
                          "neither names linux-arm64 nor has a record")
+        #  D1308: or by saying arm64 does not emit it yet, with a code
+        #  the catalogue has, and then with no record as well.
+        pending = dict(records)
+        pending[name] = (meta, dict(fields, targets="linux-x86-64",
+                                    not_yet_emitted="linux-arm64=L0500"))
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: pending):
+            self.assertEqual(CHECK.arm64_linux_problems(), [])
+            self.assertEqual(CHECK.not_yet_emitted_problems(), [])
+        recorded = next(iter(json.loads((ROOT / CHECK.ARM64_LINUX_PARITY)
+                                        .read_text())["differences"]))
+        both = dict(records)
+        both[recorded] = (records[recorded][0], dict(
+            records[recorded][1], not_yet_emitted="linux-arm64=L0500"))
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: both):
+            self.refused([m for _, _, m in CHECK.arm64_linux_problems()],
+                         "says linux-arm64 does not emit it yet and has a"
+                         " record")
+        retired = dict(records)
+        retired[name] = (meta, dict(fields, targets="linux-x86-64",
+                                    not_yet_emitted="linux-arm64=L0999"))
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: retired):
+            self.refused([m for _, _, m in CHECK.not_yet_emitted_problems()],
+                         "linux-arm64 refuses it with L0999, which the"
+                         " catalogue has no row for")
         selected = dict(records)
         selected[name] = (meta, dict(fields, targets="linux-x86-64",
                                      args="--target=linux-arm64 main.ldn"))

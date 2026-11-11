@@ -26946,6 +26946,45 @@ handed a binary by path, where the stale one was met.
 **Pinned by** `scripts/tests/test_refine_revision.py`, whose `Callers`
 holds every lane that takes `--refine` and the developer build to asking.
 
+### D1308 — A runtime fixture may name the targets that do not emit it yet
+
+**The tour said** nothing; a runtime fixture for a feature that lands on
+one backend before another could stay off Linux arm64 only through a
+`linux-arm64/parity.json` record naming the counterpart that runs there
+instead, and while arm64 did not emit the feature there was none, so a
+negative fixture pinning arm64's refusal was written to stand as the
+counterpart of four runtime fixtures, and nothing retired it when arm64
+landed.
+
+**Chosen:** a runtime fixture's `not_yet_emitted:` names, as
+`TARGET=CODE`, each target the compiler describes that does not emit the
+program yet, which its `targets:` leaves out, and the code that target
+refuses it with. Both metadata readers hold each entry's shape, a target
+named once and a code of L and four digits; `check.py` holds the code to
+the catalogue. The test program compiles the program to assembly for
+each named target, from any host, and requires a refusal whose codes are
+that one code and no other: an entry whose target compiles the program
+fails, naming the entry to remove and the target to name in `targets:`,
+so the disposition cannot outlive the gap. An entry for Linux arm64
+stands for the parity record, and a fixture with both is refused;
+`targets.matrix` lists the entries after the targets, and
+`scripts/add_fixture.py` offers the entry beside the record.
+
+**The alternatives:** the negative stand-in, which pins arm64's refusal
+but is evidence about nothing the runtime fixtures run and must be
+retired by hand; a parity record with a refusal in place of a
+counterpart, which keeps the gap in a file the test program does not
+read and so nothing lapses; and an entry checked only on the named
+target's own lane, which lapses only where that lane runs.
+
+**Pinned by** the `fixture execution` cases `targets not emitting yet
+still refuse` and `a target not emitting yet lapses when it emits`,
+`compiler/tests/fixture-meta.cases`' three `not_yet_emitted` cases,
+`scripts/tests/test_construct_inventory.py`'s
+`test_linux_arm64_leaves_the_x86_corpus_only_by_record` and
+`scripts/tests/test_add_fixture.py`'s
+`test_arm64_not_emitting_yet_stands_for_a_parity_record`.
+
 ### D542 — A device description is a module of directives, and its generated half has one text
 
 **The tour said** at [1410] that a module is every `.ldn` file of one

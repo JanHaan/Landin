@@ -544,3 +544,43 @@ fixture positive/odd-layout
 problem layout is not evidence: free
 problem duplicate key: layout
 end
+
+case a runtime fixture names the targets that do not emit it yet
+fixture runtime/lands-on-x86-first
+| class: runtime
+| summary: a feature x86-64 emits before arm64 and rv64 do
+| profiles: standard
+| program: main.ldn
+| not_yet_emitted: linux-arm64=L0350, linux-rv64 = L0351
+| constructs: 0300
+| targets: linux-x86-64, darwin-arm64
+field not_yet_emitted = linux-arm64=L0350, linux-rv64 = L0351
+field targets = linux-x86-64, darwin-arm64
+end
+
+case a target not emitting yet is one the fixture leaves out, named once with a code
+fixture runtime/pending-faults
+| class: runtime
+| summary: every way a not_yet_emitted entry is wrong
+| profiles: standard
+| program: main.ldn
+| not_yet_emitted: linux-arm64, vax=L0350, linux-x86-64=L0350, linux-rv64=L0350, linux-rv64=L0351, darwin-arm64=350
+| constructs: 0300
+| targets: linux-x86-64
+problem not_yet_emitted entry is not TARGET=CODE: linux-arm64
+problem not_yet_emitted names no target the compiler describes: vax
+problem not_yet_emitted names a target the fixture runs on: linux-x86-64
+problem not_yet_emitted names a target twice: linux-rv64
+problem not_yet_emitted gives darwin-arm64 no code, L and four digits: 350
+end
+
+case only a runtime fixture has targets that do not emit it yet
+fixture positive/pending-compile
+| class: positive
+| summary: a compile-time fixture has nothing to emit
+| program: main.ldn
+| not_yet_emitted: linux-arm64=L0350
+| constructs: 0300
+| targets: linux-x86-64
+problem not_yet_emitted belongs only to a runtime fixture
+end

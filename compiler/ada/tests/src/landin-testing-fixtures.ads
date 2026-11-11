@@ -89,6 +89,15 @@ package Landin.Testing.Fixtures is
    --  A program whose result is a feature fact returns the level's own.
    function Status_At (Item : Fixture; Level : String) return Integer;
 
+   --  A runtime fixture's `not_yet_emitted:`, comma-separated
+   --  `TARGET=CODE` entries: each a target that does not emit what the
+   --  program needs yet, which its `targets:` therefore leave out, and the
+   --  code that target refuses the program with.  The harness compiles the
+   --  program for each and holds it to that refusal, so an entry fails the
+   --  moment its target emits the program and cannot outlive the gap.  The
+   --  empty string when the fixture names none.
+   function Not_Yet_Emitted (Item : Fixture) return String;
+
    --  The levels `levels:` names that are x86-64's, which the Linux lane
    --  runs; each lane reads its own family's.
    function Levels_Of_Family
@@ -362,6 +371,7 @@ private
       Profiles  : Profile_Policy := Standard;
       Levels    : Ada.Strings.Unbounded.Unbounded_String;
       Level_Status : Ada.Strings.Unbounded.Unbounded_String;
+      Not_Yet_Emitted : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    package Fixture_Vectors is new Ada.Containers.Indefinite_Vectors

@@ -5760,11 +5760,20 @@ def arm64_linux_problems():
         if ARM64_LINUX_TARGET_FLAG in args and "linux-arm64" not in named:
             out.append((relative, 1, "%s selects %s and does not name"
                         " linux-arm64" % (name, ARM64_LINUX_TARGET_FLAG)))
+        pending = [one.partition("=")[0].strip() for one in
+                   (fields.get("not_yet_emitted") or "").split(",")]
         if kind in ("runtime", "abi") and "linux-x86-64" in named \
-                and "linux-arm64" not in named and name not in records:
+                and "linux-arm64" not in named and name not in records \
+                and "linux-arm64" not in pending:
             out.append((relative, 1, "%s runs on linux-x86-64 and neither"
-                        " names linux-arm64 nor has a record in %s"
+                        " names linux-arm64 nor has a record in %s, nor"
+                        " says linux-arm64 does not emit it yet"
                         % (name, ARM64_LINUX_PARITY)))
+        if name in records and "linux-arm64" in pending:
+            out.append((relative, 1, "%s says linux-arm64 does not emit it"
+                        " yet and has a record in %s: the record is for a"
+                        " fixture that cannot run there, and the entry for"
+                        " one that will" % (name, ARM64_LINUX_PARITY)))
     for name, record in sorted(records.items()):
         if name not in fixtures:
             out.append((ARM64_LINUX_PARITY, 1, "%s names no fixture" % name))
@@ -5786,6 +5795,28 @@ def arm64_linux_problems():
                 fixtures[counterpart][1]):
             out.append((ARM64_LINUX_PARITY, 1, "%s's counterpart %s is not a"
                         " fixture linux-arm64 runs" % (name, counterpart)))
+    return out
+
+
+def not_yet_emitted_problems():
+    """D1308: a target that does not emit a fixture yet names a real code.
+
+    The readers hold each entry's shape, its target and that the fixture
+    leaves the target out; the harness holds the target to refusing with
+    the code.  What neither can hold is that the code is a diagnostic at
+    all, so a fixture's pending refusal cannot name one the catalogue
+    retired.
+    """
+    known = {row["code"] for row in catalogue_rows() or []}
+    out = []
+    for name, (meta, fields) in sorted(fixture_records().items()):
+        for one in (fields.get("not_yet_emitted") or "").split(","):
+            target, _, code = one.partition("=")
+            if code.strip() and known and code.strip() not in known:
+                out.append((os.path.relpath(meta, ROOT), 1,
+                            "%s says %s refuses it with %s, which the"
+                            " catalogue has no row for"
+                            % (name, target.strip(), code.strip())))
     return out
 
 
@@ -6518,6 +6549,7 @@ def check_matrix(full_run):
     out += cortex_target_problems()
     out += rv32_target_problems()
     out += arm64_linux_problems()
+    out += not_yet_emitted_problems()
     out += unplaced_target_problems()
     out += cortex_probe_problems(construct_titles() or ())
     recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
@@ -7047,7 +7079,12 @@ def coverage_dumps():
         t_lines.append("%s | %s" %
                        (row["Scope"].strip("`"), row["Targets"]))
     for name, (_, fields) in sorted(fixture_records().items()):
-        t_lines.append("%s | %s" % (name, fields.get("targets", "-")))
+        #  D1308: the targets that do not emit the fixture yet, beside
+        #  those that run it.
+        pending = fields.get("not_yet_emitted")
+        t_lines.append("%s | %s%s" % (name, fields.get("targets", "-"),
+                                      " | not yet emitted: " + pending
+                                      if pending else ""))
 
     return {"guarantees.matrix": "\n".join(g_lines) + "\n",
             "conformances.matrix": "\n".join(c_lines) + "\n",
