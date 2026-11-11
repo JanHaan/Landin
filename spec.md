@@ -27775,7 +27775,8 @@ load image in flash and having reset copy it before anything reads it, as
 `.ramtext` is. Constants in tightly coupled memory are a real wish, and
 that is the way to grant it, but it is new startup code on every firmware
 target and not a repair; until it exists the placement is refused rather
-than accepted and wrong. This is a maintainer's choice to confirm.
+than accepted and wrong. The maintainer confirmed it and scheduled the load image and reset copy
+(see the roadmap).
 
 **Pinned by** `negative/description-places-code-where-nothing-loads`, both
 refusals, and `rv32 firmware/the derived script guards its placements`,
