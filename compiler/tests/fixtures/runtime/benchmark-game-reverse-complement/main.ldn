@@ -106,12 +106,12 @@ public main: () -> (code: i32) =
         end if
         return
     end
-    records(out, text.used(whole)) else (problem)
+    records(out, text.used(whole)) else begin
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
             else none
         return
     end
-    io.flush(out) else (problem)
+    io.flush(out) else begin
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
             else none
         return

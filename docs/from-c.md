@@ -304,7 +304,7 @@ public main: () -> (code: i32) =
         io.write(host, io.err(host), "usage: tool FILE...\n") else none
         return
     end if
-    print_arguments(host) else (problem)
+    print_arguments(host) else begin
         code = 1
         return
     end
@@ -545,7 +545,7 @@ import hosted/blocking
 --- Write each argument on a line of its own.
 print_arguments: (host: blocking.host) -> none ! io.io_failed =
     for index in usize(0)..<io.argument_count(host) do
-        argument := io.argument_at(host, index) else (problem)
+        argument := io.argument_at(host, index) else begin
             return
         end
         try io.write(host, io.out(host), text.host_bytes(argument))
@@ -991,7 +991,7 @@ import hosted/blocking
 
 --- The home directory, or `/` when the environment names none.
 home_directory: (host: blocking.host) -> (home: text.host_string from host) =
-    home = io.variable_named(host, text.host_over("HOME")) else (problem)
+    home = io.variable_named(host, text.host_over("HOME")) else begin
         text.host_over("/")
     end
 end home_directory

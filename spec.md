@@ -3075,6 +3075,41 @@ report is recorded, `resolution/predeclared types use lexical lookup` and
 `lowering/calls respect resolved declarations`, whose functions named as a
 scalar now write their signatures in other types.
 
+### D1261 — An `else` binding its block never reads is warned about
+
+**The discrepancy:** [1030] has two blocks for a call-site recovery,
+`else (e) ... end`, which binds the error, and `else begin ... end`, the
+bare block as the value, which binds nothing. A reader who knew only the
+first wrote `else (problem)` with `problem` never read, nothing said that
+the second exists, and D370's repair for statements under a bare `else`
+wrote ` (problem)` itself, so the compiler's own fix produced the unused
+name.
+
+**Chosen:** L0684, a warning under D251's policy, at an `else (name)` whose
+block has no reference to `name`. Its note names the forms that bind
+nothing: `else begin ... end` runs a block and `else value` stands in for
+the result. `_ = name` is a reference and silences it, as it must stay
+legal. One place is exempt: in the arm of an `if`, an `else` with no name
+is the `if`'s own [1820], so the name is what makes the recovery the
+call's, and nothing is said. Like L0326 it is raised only in a routine body
+the checker checked and in an active configuration. It offers no fix:
+replacing `(name)` with `begin` is the edit, but the checker does not prove
+it here. D370's repair now writes ` begin`, the block the statements
+written under the bare `else` already fit, and its message names that
+block.
+
+**The alternatives:** saying nothing, where it stood; refusing an unused
+binding, which makes a lint a rule of the language against D251; a new
+block form after a bare `else`, which D370 declined and which the grammar
+does not need, having `else begin`; and warning in an `if` arm too, where
+the only repairs are parentheses round the call or the name the warning
+objects to.
+
+**Pinned by** `negative/unused-else-binding`, whose report is recorded and
+whose program holds each exempt form, and
+`negative/statements-after-a-bare-else-name-its-binder`, whose fix the
+`fixes` suite compiles clean, without a warning.
+
 ## DECISIONS: NUMBERS AND LITERALS
 
 How a literal is written, what it means, and which scalar types the
@@ -21371,11 +21406,13 @@ report nor its help said, and the repair is `else (problem)`.
 **Chosen:** a bare `else` that ends its line, followed by a line that begins
 a statement rather than a value (a binding, an assignment, `inc`, `dec`,
 `return`, `fail`, `defer`, `undo` or a discard), is refused at the `else` as
-L0100, naming the binder: "a recovery that runs statements names the error
-after `else`: write `else (problem)`". Its note says that `_ = problem`
-discards an error the block does not use, and its Likely fix writes
-` (problem)` after the `else`. The block is read as the bound recovery to its
-`end`, so the mistake is one report.
+L0100, naming the block: "a recovery that runs statements opens a block
+after `else`: write `else begin`". Its note names both blocks, `else begin`
+and the `else (problem)` that names the error, and its Likely fix writes
+` begin` after the `else`: the statements written name no error, and since
+D1261 a name they never read is warned about, so the repair is no longer
+` (problem)`. The block is read as that recovery to its `end`, so the
+mistake is one report.
 
 **The alternatives:** admitting a block after a bare `else`, which gives one
 recovery two block forms that differ only in whether the error is named;

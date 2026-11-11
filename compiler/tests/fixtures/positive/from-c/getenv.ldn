@@ -4,7 +4,7 @@ import hosted/blocking
 
 --- The home directory, or `/` when the environment names none.
 home_directory: (host: blocking.host) -> (home: text.host_string from host) =
-    home = io.variable_named(host, text.host_over("HOME")) else (problem)
+    home = io.variable_named(host, text.host_over("HOME")) else begin
         text.host_over("/")
     end
 end home_directory

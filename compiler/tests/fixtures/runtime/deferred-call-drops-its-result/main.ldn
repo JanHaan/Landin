@@ -32,7 +32,7 @@ run: (stop: bool) -> none ! bad =
 end run
 
 public main: () -> (code: i32) =
-    run(false) else (error)
+    run(false) else begin
         code = 1
         return
     end
@@ -40,7 +40,7 @@ public main: () -> (code: i32) =
         code = 2
         return
     end if
-    run(true) else (error)
+    run(true) else begin
         code = if calls == 6 then 42 else 3 end if
         return
     end

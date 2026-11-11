@@ -44788,6 +44788,46 @@ package body Landin.Stages.Checking is
                            end;
                         end if;
                      end;
+                  elsif Syn.Kind (Of_Tree.all, Node) = Syn.Recovery_Clause
+                    and then Syn.Name (Of_Tree.all, Node)
+                               /= Landin.Source.Names.No_Name
+                    and then not Syn.Binding_Keeps_Recovery
+                                   (Of_Tree.all, Node)
+                  then
+                     --  D1261: `else (problem)` whose block never reads
+                     --  `problem`.  Where leaving the name out would give
+                     --  the `else` to an enclosing `if` [1820] the name is
+                     --  what keeps the recovery, and nothing is said.
+                     declare
+                        Means : constant Res.Declaration_Id :=
+                          Res.Declaration_At (Meanings.all, Id, Node);
+                     begin
+                        if Means /= Res.No_Declaration
+                          and then not Referenced.Contains (Means)
+                          and then Landin.Configuration.Is_Active
+                            (Configurations (Context).all, Id, Node)
+                          and then
+                            (for some Checked of Checked_Bodies =>
+                               Checked.Source = Id
+                               and then Landin.Source.Contains
+                                 (Checked.Where,
+                                  Syn.Where (Of_Tree.all, Node)))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Unused_Else_Binding,
+                              Source  => Id,
+                              Where   => Syn.Anchor (Of_Tree.all, Node),
+                              Message => "this `else` binds the error as `"
+                                & Spelled (Syn.Name (Of_Tree.all, Node))
+                                & "`, and its block never reads it",
+                              Note    => "[1030]: a recovery that does"
+                                & " not read the error leaves the name"
+                                & " out: `else begin ... end` runs a"
+                                & " block, and `else value` stands in for"
+                                & " the result",
+                              Into    => Found);
+                        end if;
+                     end;
                   end if;
                end loop;
             end;

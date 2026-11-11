@@ -128,7 +128,7 @@ end sequence_size
 public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
-    n := sequence_size(host) else (problem)
+    n := sequence_size(host) else begin
         io.write(host, io.err(host), "usage: fasta N\n") else none
         return
     end
@@ -136,10 +136,10 @@ public main: () -> (code: i32) =
     mut storage: [16384]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
-    fasta(out, n) else (problem)
+    fasta(out, n) else begin
         return
     end
-    io.flush(out) else (problem)
+    io.flush(out) else begin
         return
     end
     code = 0

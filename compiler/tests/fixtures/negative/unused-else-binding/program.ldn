@@ -1,0 +1,45 @@
+missing: atom
+locked: atom
+
+open: (path: i32) -> (handle: i32) ! missing | locked =
+    fail missing when path == 0
+    fail locked when path == 1
+    handle = path
+end open
+
+note: () -> none = end note
+
+--- The name is never read, in a block and in a one-value block.
+unread: (path: i32) -> (handle: i32) =
+    first := open(path) else (problem)
+        note()
+        0
+    end
+    second := open(path) else (problem) 0 end
+    handle = first + second
+end unread
+
+--- Every one of these reads the name or binds none, and is not warned of.
+read: (path: i32) -> (handle: i32) ! missing | locked =
+    first := open(path) else (problem) fail problem end
+    second := open(path) else (problem)
+        _ = problem
+        0
+    end
+    third := open(path) else begin
+        note()
+        0
+    end
+    fourth := open(path) else 0
+    handle = first + second + third + fourth
+end read
+
+--- In the arm of an `if` an `else` with no name is the `if`'s own, so the
+--- name is what makes this one the call's, and it is not warned of.
+kept: (path: i32) -> (handle: i32) =
+    if path > 1 then
+        handle = open(path) else (problem) 0 end
+    else
+        handle = 0
+    end if
+end kept

@@ -1790,6 +1790,32 @@ unused: () -> none =
 end unused
 ```
 
+### L0684
+
+A call-site `else (name)` binds the call's error to `name` inside its block
+[1030], and this block never reads it (D1261). The program is accepted. A
+recovery that does not read the error is written without the name: `else
+begin ... end` runs a block of statements, `else value` stands in for the
+call's result, and `else none` ignores the failure of a call that returns
+nothing. In the arm of an `if`, an `else` that binds no name is the `if`'s
+own [1820], so a binding written there is what keeps the recovery and is
+not warned about. `--allow=L0684` suppresses the warning; `--deny=L0684`
+makes it an invocation error.
+
+```landin
+missing: atom
+open: (path: i32) -> (handle: i32) ! missing =
+    fail missing when path == 0
+    handle = path
+end open
+
+first: (path: i32) -> (handle: i32) =
+    handle = open(path) else (problem)
+        0
+    end
+end first
+```
+
 ### L0350
 
 A float literal converted to an integer, `u64(1.0e18)`, has no type of its

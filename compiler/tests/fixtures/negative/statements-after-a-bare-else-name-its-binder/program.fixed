@@ -6,7 +6,7 @@ end attempt
 
 run: (n: i32) -> (code: i32) =
     code = 0
-    attempt(n) else (problem)
+    attempt(n) else begin
         code = 1
     end
 end run

@@ -1735,8 +1735,9 @@ it does not assign the binding being initialized.
 - `else (e)` binds the atom. `e` has the call's whole error set and exists
   only inside the block. A `match` on it must cover every atom, or end
   with one `_` arm for the rest ([1210]).
-- The name may go unused. To run statements without naming the atom at
-  all, give `else` a bare block as its value: `else begin ... end`.
+- A name the block never reads draws a warning. To run statements
+  without naming the atom at all, give `else` a bare block as its value:
+  `else begin ... end`.
   The compiler refuses `else (_)`; leave the parentheses out instead.
 - A call that returns nothing has no value to supply. Its block only
   handles the error, and the statement after the call runs next.

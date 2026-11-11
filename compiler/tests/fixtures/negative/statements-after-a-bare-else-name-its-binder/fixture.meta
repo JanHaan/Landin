@@ -1,5 +1,5 @@
 class: negative
-summary: D370 statements under a bare `else` are refused once at the `else`, naming the bound recovery, and its fix writes `(problem)`
+summary: D370 statements under a bare `else` are refused once at the `else`, naming the recovery's block, and its fix writes `begin`
 program: program.ldn
 codes: L0100
 fixed: program.fixed

@@ -296,7 +296,7 @@ end complain
 public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
-    path := io.argument_at(host, 0) else (problem)
+    path := io.argument_at(host, 0) else begin
         io.write(host, io.err(host), "usage: count FILE\n") else none
         return
     end
@@ -1032,7 +1032,7 @@ public main: () -> (code: i32) =
     defer io.flush(out) else none
     code = 1
     mut buffer: [4096]u8 = zeroed
-    totals := count(host, io.input(host), buffer) else (problem)
+    totals := count(host, io.input(host), buffer) else begin
         io.write(host, io.err(host), "wc: standard input could not be read\n")
             else none
         return
@@ -2885,7 +2885,7 @@ edge_cases: (host: blocking.host) -> none ! ... =
     --  as well, and the system says why, EBADF.
     reading: io.file = try io.open_read(host, locked)
     mut refused: bool = false
-    io.write(host, reading, "overwritten\n") else (problem)
+    io.write(host, reading, "overwritten\n") else begin
         refused = blocking.last_errno(host) == posix.number(posix.ebadf)
     end
     try io.close(host, reading)
@@ -3325,14 +3325,14 @@ end report
 public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
-    n := order_size(host) else (problem)
+    n := order_size(host) else begin
         io.write(host, io.err(host),
                  "usage: fannkuch-redux N, where N is 1 to 16\n") else none
         return
     end
 
     value: score = fannkuch(n)
-    report(host, n, value) else (problem)
+    report(host, n, value) else begin
         return
     end
     code = 0
@@ -3440,12 +3440,12 @@ public main: () -> (code: i32) =
     host := blocking.new()
     memory := heap.new()
     code = 1
-    n := image_size(host) else (problem)
+    n := image_size(host) else begin
         io.write(host, io.err(host), "usage: mandelbrot N\n") else none
         return
     end
 
-    mut row := mem.new_bytes(memory, (n + 7) / 8) else (problem)
+    mut row := mem.new_bytes(memory, (n + 7) / 8) else begin
         io.write(host, io.err(host), "mandelbrot: out of memory\n") else none
         return
     end
@@ -3454,10 +3454,10 @@ public main: () -> (code: i32) =
     mut storage: [16384]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
-    render(out, n, mem.bytes(row)) else (problem)
+    render(out, n, mem.bytes(row)) else begin
         return
     end
-    io.flush(out) else (problem)
+    io.flush(out) else begin
         return
     end
     code = 0
@@ -3610,7 +3610,7 @@ end sequence_size
 public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
-    n := sequence_size(host) else (problem)
+    n := sequence_size(host) else begin
         io.write(host, io.err(host), "usage: fasta N\n") else none
         return
     end
@@ -3618,10 +3618,10 @@ public main: () -> (code: i32) =
     mut storage: [16384]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
-    fasta(out, n) else (problem)
+    fasta(out, n) else begin
         return
     end
-    io.flush(out) else (problem)
+    io.flush(out) else begin
         return
     end
     code = 0
@@ -3762,12 +3762,12 @@ public main: () -> (code: i32) =
         end if
         return
     end
-    records(out, text.used(whole)) else (problem)
+    records(out, text.used(whole)) else begin
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
             else none
         return
     end
-    io.flush(out) else (problem)
+    io.flush(out) else begin
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
             else none
         return
@@ -3918,7 +3918,7 @@ end tree_depth
 public main: () -> (code: i32) =
     host := blocking.new()
     code = 1
-    n := tree_depth(host) else (problem)
+    n := tree_depth(host) else begin
         io.write(host, io.err(host),
                  "usage: binary-trees N, where N is 0 to 59\n") else none
         return

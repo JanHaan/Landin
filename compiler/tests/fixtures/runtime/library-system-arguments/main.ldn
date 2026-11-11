@@ -16,7 +16,7 @@ public main: () -> (code: i32) =
     count: usize = io.argument_count(host)
     io.format(out, "{} arguments\n", [any(addr count)]) else none
     for index in 0..<count do
-        argument := io.argument_at(host, index) else (problem)
+        argument := io.argument_at(host, index) else begin
             return
         end
         io.format(out, "{}: {}\n", [any(addr index), any(addr argument)])
