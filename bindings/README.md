@@ -469,7 +469,9 @@ Signatures, parameter names, variadicness, and all type dependencies come from
 the header. A pointer to a pointer, `char **argv` or `void **out`, is `ptr`
 to `ptr` with each level's own `const`. A pointer to an array, which is
 what `int m[][3]` decays to, and a pointer to an unnamed function pointer
-type are refused; name the function pointer with a typedef.
+type are refused, each by its form, `unsupported pointer to an array` and
+`unsupported pointer to an unnamed function pointer type`; name the
+function pointer with a typedef.
 
 An attribute a header writes on a selected function is refused, whatever
 it is. An attribute Clang adds itself to a declaration of one of its

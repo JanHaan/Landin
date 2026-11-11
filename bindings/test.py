@@ -2680,6 +2680,43 @@ int main(void) { return f(36) != 37; }
         self.assertRegex(text, r"names: \(\) -> \(result: ptr mut ptr mut c\.c_char\)")
         self.checked(source, output)
 
+    def test_a_refused_pointer_form_is_named(self) -> None:
+        #  A pointer to an array and a pointer to an unnamed function
+        #  pointer type are not bound, and each refusal says which it is
+        #  rather than that Clang printed something unknown.
+        reference = annotation()
+        array = "unsupported pointer to an array: int (*)[3]"
+        callback = ("unsupported pointer to an unnamed function pointer type,"
+                    " which a typedef would name: int (**)(void)")
+        refused = [
+            ("int f(int (*m)[3]);", {"m": reference}, array),
+            ("int f(int m[][3]);", {"m": reference}, array),
+            ("int f(int m[2][3]);", {"m": reference}, array),
+            ("int f(int (**cb)(void));", {"cb": reference}, callback),
+            ("int f(int (*const *cb)(void));", {"cb": reference},
+             "unsupported pointer to an unnamed function pointer type,"
+             " which a typedef would name: int (*const *)(void)"),
+        ]
+        for header, parameters, message in refused:
+            with self.subTest(header=header):
+                process, _ = self.generate(
+                    self.root / ("form-" + str(len(list(self.root.iterdir())))),
+                    header=header + "\n", expect_success=False,
+                    selected_policy=self.selection(
+                        self.function("f", parameters=parameters)))
+                self.assertIn(process.returncode, REFUSED)
+                self.assertIn(message, process.stderr)
+                self.assertNotIn("unrecognized Clang type", process.stderr)
+        #  Named with a typedef, the same pointer is bound.
+        source = self.root / "named-callback"
+        _, output = self.generate(source, selected_policy=self.selection(
+            {"kind": "callback", "name": "step", "nullable": False,
+             "parameters": {}},
+            self.function("f", parameters={"cb": reference})),
+            header="typedef int (*step)(void);\nint f(step *cb);\n")
+        self.assertIn("f: (cb: ptr mut step) -> (result: c.c_int)",
+                      (output / "bindings.ldn").read_text())
+
     def test_ambient_include_variables_are_excluded_from_every_clang_invocation(self) -> None:
         parent = self.root / "ambient"
         sysroot, includes, output = self.make_tree(parent, header="#include <dep.h>\n",
