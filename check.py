@@ -3192,6 +3192,51 @@ def check_developer_loops(full_run):
     return out
 
 
+LOOP_TABLE = "docs/process.md"
+
+
+def check_loop_commands(full_run):
+    """A command in the loop table runs as it is written.
+
+    The table gave the cross lane as `./scripts/dev-test.sh ...
+    --toolchain=DRIVER`, a placeholder where every other cell is a
+    command, and a brief that copied it failed with "DRIVER or
+    qemu-aarch64 could not be started".  A script's command in the table
+    therefore gives no option a value written in capitals; what a reader
+    has to supply is said in words beside it.
+    """
+    if not full_run:
+        return []
+    path = os.path.join(ROOT, LOOP_TABLE)
+    missing = absent([path])
+    if missing:
+        return missing
+    out = []
+    lines = read_file(path, encoding="utf-8").split("\n")
+    try:
+        start = lines.index("## The loop that runs now")
+    except ValueError:
+        return [(LOOP_TABLE, 1, "the loop table's section is missing")]
+    rows = 0
+    for n in range(start + 1, len(lines)):
+        line = lines[n]
+        if line.startswith("## "):
+            break
+        if not line.startswith("| ") or line.startswith("|---"):
+            continue
+        rows += 1
+        for command in re.findall(r"`((?:\./scripts/|python3 )[^`]*)`", line):
+            for option in re.findall(r"--[a-z-]+=[A-Z][A-Z_/]+\b", command):
+                out.append((LOOP_TABLE, n + 1,
+                            "the loop table's command `%s` gives %s, a"
+                            " placeholder, so it fails as written; give"
+                            " the command that runs and say beside it"
+                            " what a reader supplies" % (command, option)))
+    if rows < 2:
+        out.append((LOOP_TABLE, start + 1, "the loop table has no rows"))
+    return out
+
+
 #  Where a reader is told which cases check a thing, keyed by the file
 #  that describes it.  A recorded negative's report was stale while
 #  `--suite=fixtures` passed, because the two cases that compare it are
@@ -11415,6 +11460,7 @@ def main(argv):
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)
     extra += check_developer_loops(full_run)
+    extra += check_loop_commands(full_run)
     extra += check_harness_selectors(full_run)
     extra += check_source_locations(full_run)
     extra += check_optimization_contract(full_run)

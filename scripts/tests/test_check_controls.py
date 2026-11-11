@@ -1564,6 +1564,44 @@ class DeveloperLoops(unittest.TestCase):
         self.assertTrue(said)
 
 
+class LoopTable(unittest.TestCase):
+    """A command in docs/process.md's loop table runs as written."""
+
+    TABLE = ("# Process\n\n## The loop that runs now\n\n"
+             "| stage | command | what it says |\n|---|---|---|\n"
+             "| loop | `./scripts/dev-test.sh` with `--suite` | feedback |\n"
+             "| cross | `./scripts/dev-test.sh --target=linux-arm64"
+             " --runner=qemu-aarch64%s` | a cross lane |\n"
+             "| boards | `gh workflow run gate.yml --ref BRANCH` | boards |\n"
+             "\n## Next\n\n`./scripts/x.sh --toolchain=DRIVER` is prose.\n")
+
+    def said(self, extra):
+        return reasons(checker.check_loop_commands,
+                       written={"docs/process.md": self.TABLE % extra})
+
+    def test_the_real_table_passes(self):
+        self.assertEqual(faults(checker.check_loop_commands,
+                                copied=["docs/process.md"]), [])
+
+    def test_a_command_that_runs_passes(self):
+        self.assertEqual(self.said(""), [])
+        self.assertEqual(self.said(" --suite='fixture execution'"), [])
+
+    def test_a_placeholder_value_is_reported(self):
+        said = self.said(" --toolchain=DRIVER")
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("gives --toolchain=DRIVER, a placeholder", said[0])
+
+    def test_a_missing_page_or_table_is_reported(self):
+        self.assertTrue(reasons(checker.check_loop_commands, written={}))
+        self.assertTrue(reasons(checker.check_loop_commands,
+                                written={"docs/process.md": "# Process\n"}))
+        self.assertTrue(reasons(
+            checker.check_loop_commands,
+            written={"docs/process.md":
+                     "## The loop that runs now\n\nNo table.\n"}))
+
+
 class Vocabularies(unittest.TestCase):
     """The faces, the highlighting vocabulary and the examples page."""
 
