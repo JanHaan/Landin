@@ -8477,6 +8477,14 @@ package body Landin.Tests.Driver_Suite is
                "the kernel, user and double exception stubs stand where"
                & " both cores vector: 0x300, 0x340 and 0x3C0");
             Landin.Testing.Check
+              (Item, Contains (Assembly,
+                 "_landin_firmware_double_exception:" & LF)
+               and then Contains (Assembly, "rsr a2, DEPC" & LF
+                 & "s32i a2, a0, 4" & LF)
+               and then not Contains (Assembly, "rsr a2, EPC1" & LF),
+               "a double exception's recorded PC is DEPC, which it writes,"
+               & " and not EPC1, which it leaves");
+            Landin.Testing.Check
               (Item, Entry_At > 0 and then Prelude_At > Entry_At
                and then Jump_At > Prelude_At
                and then Reset_At > Jump_At,

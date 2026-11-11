@@ -24,6 +24,13 @@ INVENTORY = ROOT / 'compiler/tests/cortex-m/corpus.json'
 COUNTERPARTS = ROOT / 'compiler/tests/cortex-m/counterparts.json'
 
 
+#  The controls that must end in the firmware's trap cells with one
+#  illegal instruction, whose recorded PC is held to the emitted ILL: an
+#  ordinary one, and one raised with PS.EXCM set, a double exception,
+#  whose PC only DEPC holds.
+TRAP_CONTROLS = ('trap-control', 'double-exception-control')
+
+
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -289,8 +296,8 @@ def main():
                                expected=(37 if name == 'status-control' else
                                          (7 if args.chip == 'esp32s3' else 6)
                                          if name == 'feature-level' else 0),
-                               traps=name == 'trap-control'))
-        if name in ('status-control', 'trap-control'):
+                               traps=name in TRAP_CONTROLS))
+        if name in ('status-control', *TRAP_CONTROLS):
             try:
                 verify(results[-1])
             except RuntimeError:
