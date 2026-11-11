@@ -798,6 +798,83 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Array_Addresses_Keep_Homes;
 
+   --  D1291: `--debug=lines` names each module binding with its type at
+   --  its symbol, and a unit with no binding keeps the sections it had.
+   procedure Lines_Name_Module_Bindings
+     (Item : in out Landin.Testing.Context);
+
+   procedure Lines_Name_Module_Bindings
+     (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+
+      function Assembly (Source : String) return String;
+      function Assembly (Source : String) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("p.ldn", Source);
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--debug=lines");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("p.s");
+         Args.Append ("p.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               US.To_String (Result.Report));
+            return (if Result.Status = Landin.Driver.Status_Success
+                    then Host.Written ("p.s") else "");
+         end;
+      end Assembly;
+
+      Routine : constant String :=
+        "bump: (x: u32) -> (r: u32) = r = x + 1 end bump" & LF;
+      With_Data : constant String := Assembly
+        ("point: type = struct" & LF & "    x: i32" & LF & "    y: i16" & LF
+         & "end point" & LF
+         & "mut geometry: u32 = 7" & LF
+         & "mut origin: point = point(x: 1, y: 2)" & LF
+         & "mut table: [4]u8 = [1, 2, 3, 4]" & LF & Routine);
+      Without : constant String := Assembly (Routine);
+
+      procedure Holds (Part, What : String);
+      procedure Holds (Part, What : String) is
+      begin
+         Landin.Testing.Check
+           (Item, Contains (With_Data, Part), What & ": " & With_Data);
+      end Holds;
+   begin
+      --  A variable: its name, its type, its coordinates, and an
+      --  expression of DW_OP_addr and one four-byte address.
+      Holds (HT & ".uleb128 14" & LF & HT & ".asciz ""geometry""" & LF
+             & HT & ".long .Llandin_debug_type_1-.Llandin_debug_info" & LF,
+             "the binding is a variable with a type");
+      Holds (HT & ".uleb128 5" & LF & HT & ".byte 0x03" & LF
+             & HT & ".long geometry" & LF,
+             "the binding's location is its symbol, four bytes wide");
+      Holds (HT & ".asciz ""origin""" & LF, "a struct binding is named");
+      Holds (HT & ".asciz ""point""" & LF, "the struct's type is described");
+      Holds (HT & ".asciz ""x""" & LF, "the struct's field is described");
+      Holds (HT & ".asciz ""table""" & LF, "an array binding is named");
+      Holds (HT & ".asciz ""u32""" & LF, "the scalar's type is described");
+      Holds (HT & ".asciz ""bump""" & LF, "the routine is still named");
+      Landin.Testing.Check
+        (Item, not Contains (With_Data, ".quad"),
+         "no eight-byte address is written for a 32-bit target");
+      Landin.Testing.Check
+        (Item, Contains (Without, HT & ".uleb128 0x03,0x08,0x11,0x01,0x12,"
+                         & "0x01,0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0,0,0" & LF)
+           and then not Contains (Without, HT & ".uleb128 14" & LF)
+           and then not Contains (Without, "debug_type_"),
+         "a unit with no module binding keeps its sections: " & Without);
+   end Lines_Name_Module_Bindings;
+
    procedure Terminal_Locations_Stop_Before_Restores
      (Item : in out Landin.Testing.Context);
 
@@ -1598,6 +1675,9 @@ package body Landin.Tests.Debugging_Suite is
       Landin.Testing.Register
         (Into, "debugging", "loop reentry resets initialization",
          Loops'Access);
+      Landin.Testing.Register
+        (Into, "debugging", "lines name module bindings",
+         Lines_Name_Module_Bindings'Access);
       Landin.Testing.Register
         (Into, "debugging", "nested array fields and rooted copies",
          Arrays'Access);

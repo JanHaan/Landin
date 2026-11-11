@@ -21949,6 +21949,50 @@ library routine named `start` turned an entry `start` into `main.start`.
 They reserve both now, and the driver suite's `the firmware entry keeps its
 symbol` pins all three.
 
+### D1291 — `--debug=lines` names each module binding, with its type
+
+**The discrepancy:** D417 links a module binding that shares its spelling
+with another module's routine under its module's path, `main.geometry`
+beside `l1.geometry`, and firmware's `--debug=lines` described routines
+and nothing else. So the only `geometry` a debugger knew by a source name
+was the routine: GDB's `*(unsigned*)&geometry` read the routine's code and
+printed `$1 = 2961355840` without a word. And a binding no routine
+shadowed was a symbol with no type: `print NAME` answered "'NAME' has
+unknown type; cast it to its declared type".
+
+**Chosen:** `--debug=lines` describes each module datum a declaration
+names, as a variable of the compilation unit: its source name, its
+declaration's file, line and column, its type, and the one address
+expression `DW_OP_addr SYMBOL`, the symbol being whatever D415 and D417
+linked it as. Its type is described as `--debug=full` describes one, by
+the same encoder: scalars, pointers, structs with their fields, arrays,
+and D423's enumeration for an atom-set value. A debugger resolves a bare
+name in an expression to the variable before a routine of that name, so
+`print geometry` is the binding's value, `ptype geometry` its type and
+`&geometry` its address, and `break geometry` is still the routine. No
+link name changes, and nothing is added to a loaded segment.
+
+`lines` still describes no routine's parameters, locals or slots and emits
+no location list: those need the placement plan `--debug=full` reads, which
+no firmware backend offers. A unit with no module binding has the debugging
+sections it had, byte for byte. Hosted targets refuse `lines` and already
+describe module data under `full`; they are unchanged.
+
+**The alternative:** a D417 that preferred the entry module's items, so
+the binding kept its bare spelling and the routine alone was qualified.
+That changes link names an image's C objects and scripts may already use,
+only moves the collision to whichever item loses, and leaves `print NAME`
+without a type. The maintainer chose the debugging entry.
+
+**Pinned by** `debugging/lines name module bindings`: a scalar, a struct
+and an array binding with their types and four-byte addresses on
+`cortex-m0`, and a unit with no binding unchanged. Under QEMU, GDB 16.3
+read `geometry` beside an imported `l1.geometry` as `u32` 2961355841 after
+the program wrote it, a struct as `{x = -8, y = 9}`, a `[4]u8`, a `bool`
+and a `u64`, on `cortex-m0` (`microbit`) and on `rv32` (`sifive_e`); those
+sessions are not a lane. Xtensa takes the same description, and no
+debugger has read it there.
+
 ### D421 — A generic instance is a symbol named after its routine
 
 **The discrepancy:** D417 said how the second instance of one generic
@@ -22018,8 +22062,8 @@ module datum or a parameter, is an enumeration over the set's atoms with
 the code this program gives each, its carrier the type it refers to, on
 every target whose debug information describes types: Linux x86-64, Linux
 arm64, Linux RV64, FreeBSD and Darwin, which share one encoder. Cortex-M0's
-`--debug=lines` describes no types, as `docs/targets.md` says, and is
-unchanged. The set has no name in the IR, so the enumeration has none
+`--debug=lines` described no types then, and is unchanged for every
+routine; since D1291 it describes a module binding's. The set has no name in the IR, so the enumeration has none
 either; GDB and LLDB print a
 value as its atom's name. The derived parser's token kind is now an atom
 set, and its sessions read `number` and `newline`.

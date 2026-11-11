@@ -113,90 +113,6 @@ package body Landin.Backend.Dwarf is
       return US.To_String (Result);
    end Preamble;
 
-   function Line_Sections
-     (Of_Unit : Unit;
-      Meanings : Landin.Resolution.Table;
-      Names : Landin.Source.Names.Table;
-      Facts : Landin.Targets.Target_Facts;
-      Info : Landin.Debugging.Information;
-      Prefix : String;
-      Symbol : not null access function (Item : Item_Id) return String)
-      return String
-   is
-      Result : US.Unbounded_String;
-      CU : constant String := Prefix & "debug_info";
-      Width : constant Positive := Landin.Targets.Bytes
-        (Landin.Targets.Pointer_Size (Facts));
-      Address : constant String := (if Width = 4 then ".long " else ".quad ");
-      procedure Put (Text : String);
-      procedure Put (Text : String) is
-      begin
-         US.Append (Result, Text & LF);
-      end Put;
-   begin
-      --  Declare ARM debug sections after all loadable input sections. GNU
-      --  ld's veneer ordering depends on input section identities.
-      Put (Section ("line", False, Arm => True));
-      Put (Prefix & "debug_line:");
-      Put (Section ("abbrev", False, Arm => True));
-      Put (Prefix & "debug_abbrev:");
-      Put (HT & ".uleb128 1,0x11,1");
-      Put (HT & ".uleb128 0x25,0x08,0x13,0x05,0x03,0x08,"
-        & "0x1b,0x08,0x10,0x17,0,0");
-      Put (HT & ".uleb128 2,0x2e,0");
-      Put (HT & ".uleb128 0x03,0x08,0x11,0x01,0x12,0x01,"
-        & "0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0,0,0");
-      Put (Section ("info", False, Arm => True));
-      Put (CU & ":");
-      Put (HT & ".long " & CU & "_end-" & CU & "-4");
-      Put (HT & ".short 4");
-      Put (HT & ".long " & Prefix & "debug_abbrev");
-      Put (HT & ".byte " & N (Width));
-      Put (HT & ".uleb128 1");
-      Put (HT & ".asciz ""Landin refine (lines)""");
-      Put (HT & ".short 0x0002");
-      Put (HT & ".asciz " & Quoted
-        (Landin.Debugging.Recorded_Name (Info, 1)));
-      Put (HT & ".asciz " & Quoted (Landin.Debugging.Directory (Info)));
-      Put (HT & ".long " & Prefix & "debug_line");
-      for Index in 1 .. Item_Count (Of_Unit) loop
-         declare
-            Item : constant Item_Id := Item_Id (Index);
-            Decl : constant Declaration_Id :=
-              (if Generic_Template_Of (Of_Unit, Item) /= No_Declaration
-               then Generic_Template_Of (Of_Unit, Item)
-               else Declares (Of_Unit, Item));
-         begin
-            if Kind_Of (Of_Unit, Item) = Landin.IR.Routine
-              and then not Is_External (Of_Unit, Item)
-            then
-               declare
-                  Site : constant Landin.Provenance.Origin :=
-                    Origin_Of (Of_Unit, Item);
-                  Pos : constant Landin.Source.Position :=
-                    Landin.Source.Position_Of
-                      (Landin.Debugging.Source (Info, Site.Source),
-                       Site.Where.First);
-               begin
-                  Put (HT & ".uleb128 2");
-                  Put (HT & ".asciz " & Quoted
-                    (if Decl = No_Declaration then Symbol (Item)
-                     else Landin.Source.Names.Spelling
-                       (Names, Landin.Resolution.Name_Of (Meanings, Decl))));
-                  Put (HT & Address & Label_Name (Prefix, "begin", Item));
-                  Put (HT & Address & Label_Name (Prefix, "end", Item));
-                  Put (HT & ".uleb128 " & N (Natural (Site.Source)) & ","
-                    & N (Natural (Pos.Line)) & ","
-                    & N (Natural (Pos.Column)));
-               end;
-            end if;
-         end;
-      end loop;
-      Put (HT & ".uleb128 0");
-      Put (CU & "_end:");
-      return US.To_String (Result);
-   end Line_Sections;
-
    function Sections
      (Of_Unit : Unit;
       Meanings : Landin.Resolution.Table;
@@ -216,6 +132,12 @@ package body Landin.Backend.Dwarf is
    is
       Result, Locations, Ranges : US.Unbounded_String;
       CU : constant String := Prefix & "debug_info";
+      --  The target's address, which Lines writes; the complete
+      --  description's targets all have eight bytes.
+      Width : constant Positive := Landin.Targets.Bytes
+        (Landin.Targets.Pointer_Size (Facts));
+      Address : constant String :=
+        (if Lines and then Width = 4 then ".long " else ".quad ");
       type Description is record
          Shape : Field_Shape;
          Source : Landin.Source.Source_Id := Landin.Source.No_Source;
@@ -243,7 +165,7 @@ package body Landin.Backend.Dwarf is
            Landin.Targets.Capabilities.Backend_For (Facts);
       begin
          if not Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item) then
-            return HT & ".byte 0x03" & LF & HT & ".quad " & Symbol (Item)
+            return HT & ".byte 0x03" & LF & HT & Address & Symbol (Item)
               & LF;
          elsif Backend = Landin.Targets.Capabilities.X86_64_ELF then
             return HT & ".byte 0x0e" & LF & HT & ".long " & Symbol (Item)
@@ -1550,7 +1472,7 @@ package body Landin.Backend.Dwarf is
             --  DW_OP_addr and an address, or DW_OP_const8u, an offset and
             --  DW_OP_form_tls_address.
             U (if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
-               then 10 else 9);
+               then 10 elsif Lines then Width + 1 else 9);
             US.Append (Result, Expression);
          end;
       end Module_Datum;
@@ -1579,7 +1501,120 @@ package body Landin.Backend.Dwarf is
             Put (HT & ".uleb128 " & Fields);
          end if;
       end Abbreviation;
+      --  D1291: whether Lines describes a module binding, so that a
+      --  unit without one keeps the sections it had.
+      function Describes_Data return Boolean is
+        (for some Index in 1 .. Item_Count (Of_Unit) =>
+           Kind_Of (Of_Unit, Item_Id (Index)) = Landin.IR.Datum
+           and then Declares (Of_Unit, Item_Id (Index)) /= No_Declaration
+           and then not Is_External (Of_Unit, Item_Id (Index)));
+
+      --  Lines and subprogram identity, and D1291's module bindings
+      --  with their types: no local, parameter or location list.
+      procedure Line_Description;
+      procedure Line_Description is
+         With_Data : constant Boolean := Describes_Data;
+      begin
+         --  Declare ARM debug sections after all loadable input sections.
+         --  GNU ld's veneer ordering depends on input section identities.
+         Put (Section ("line", False, Arm => True));
+         Put (Prefix & "debug_line:");
+         Put (Section ("abbrev", False, Arm => True));
+         Put (Prefix & "debug_abbrev:");
+         Put (HT & ".uleb128 1,0x11,1");
+         Put (HT & ".uleb128 0x25,0x08,0x13,0x05,0x03,0x08,"
+           & "0x1b,0x08,0x10,0x17,0,0");
+         Put (HT & ".uleb128 2,0x2e,0");
+         if With_Data then
+            Put (HT & ".uleb128 0x03,0x08,0x11,0x01,0x12,0x01,"
+              & "0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0,0");
+            --  The complete description's codes for a type and a module
+            --  variable, so one emitter writes both.
+            Abbreviation (4, 16#24#, False, "0x03,0x08,0x0b,0x0f,0x3e,0x0f");
+            Abbreviation (5, 16#0f#, False, "0x0b,0x0f,0x49,0x13");
+            Abbreviation (6, 16#13#, True, "0x03,0x08,0x0b,0x0f");
+            Abbreviation (7, 16#0d#, False, "0x03,0x08,0x49,0x13,0x38,0x0f");
+            Abbreviation (8, 16#01#, True, "0x49,0x13");
+            Abbreviation (9, 16#21#, False, "0x37,0x0f");
+            Abbreviation (12, 16#13#, False, "0x03,0x08,0x3c,0x0c");
+            Abbreviation (13, 16#13#, False, "0x03,0x08,0x0b,0x0f");
+            Abbreviation (14, 16#34#, False,
+              "0x03,0x08,0x49,0x13,0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0x02,0x18");
+            if Atom_Set_Count (Of_Unit) > 0 then
+               Abbreviation (23, 16#04#, True, "0x0b,0x0f,0x49,0x13");
+               Abbreviation (24, 16#28#, False, "0x03,0x08,0x1c,0x0f");
+            end if;
+            U (0);
+         else
+            Put (HT & ".uleb128 0x03,0x08,0x11,0x01,0x12,0x01,"
+              & "0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0,0,0");
+         end if;
+         Put (Section ("info", False, Arm => True));
+         Put (CU & ":");
+         Put (HT & ".long " & CU & "_end-" & CU & "-4");
+         Put (HT & ".short 4");
+         Put (HT & ".long " & Prefix & "debug_abbrev");
+         Put (HT & ".byte " & N (Width));
+         Put (HT & ".uleb128 1");
+         Put (HT & ".asciz ""Landin refine (lines)""");
+         Put (HT & ".short 0x0002");
+         Put (HT & ".asciz " & Quoted
+           (Landin.Debugging.Recorded_Name (Info, 1)));
+         Put (HT & ".asciz " & Quoted (Landin.Debugging.Directory (Info)));
+         Put (HT & ".long " & Prefix & "debug_line");
+         for Index in 1 .. Item_Count (Of_Unit) loop
+            declare
+               Item : constant Item_Id := Item_Id (Index);
+            begin
+               if Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+                 and then not Is_External (Of_Unit, Item)
+               then
+                  declare
+                     Site : constant Landin.Provenance.Origin :=
+                       Origin_Of (Of_Unit, Item);
+                     Pos : constant Landin.Source.Position :=
+                       Landin.Source.Position_Of
+                         (Landin.Debugging.Source (Info, Site.Source),
+                          Site.Where.First);
+                  begin
+                     Put (HT & ".uleb128 2");
+                     Put (HT & ".asciz " & Quoted (Routine_Name (Item)));
+                     Put (HT & Address & Label_Name (Prefix, "begin", Item));
+                     Put (HT & Address & Label_Name (Prefix, "end", Item));
+                     Put (HT & ".uleb128 " & N (Natural (Site.Source)) & ","
+                       & N (Natural (Pos.Line)) & ","
+                       & N (Natural (Pos.Column)));
+                  end;
+               end if;
+            end;
+         end loop;
+         if With_Data then
+            for Index in 1 .. Item_Count (Of_Unit) loop
+               if Kind_Of (Of_Unit, Item_Id (Index)) = Landin.IR.Datum
+                 and then Declares (Of_Unit, Item_Id (Index))
+                   /= No_Declaration
+                 and then not Is_External (Of_Unit, Item_Id (Index))
+               then
+                  Module_Datum (Item_Id (Index));
+               end if;
+            end loop;
+            declare
+               Index : Positive := 1;
+            begin
+               while Index <= Natural (Types.Length) loop
+                  Emit_Type (Index);
+                  Index := Index + 1;
+               end loop;
+            end;
+         end if;
+         Put (HT & ".uleb128 0");
+         Put (CU & "_end:");
+      end Line_Description;
    begin
+      if Lines then
+         Line_Description;
+         return US.To_String (Result);
+      end if;
       Put (Section ("abbrev", Mach_O));
       Put (Prefix & "debug_abbrev:");
       --  Attribute/form pairs from DWARF4. Strings are inline; all DIE
@@ -1704,5 +1739,74 @@ package body Landin.Backend.Dwarf is
       US.Append (Result, Ranges);
       return US.To_String (Result);
    end Sections;
+
+   --  Lines takes no placement: no routine's slots are described.
+   type No_Placement is null record;
+   type No_Placement_Access is access all No_Placement;
+   type Plain_Frame_Access is access all Frame;
+
+   function No_Plan
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return No_Placement;
+   function No_Plan
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return No_Placement
+   is
+      pragma Unreferenced (Of_Unit, Item, Facts, Options);
+   begin
+      return (null record);
+   end No_Plan;
+
+   function No_Frame
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts; Plan : No_Placement;
+      Options : Landin.Optimization.Options) return Frame;
+   function No_Frame
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts; Plan : No_Placement;
+      Options : Landin.Optimization.Options) return Frame
+   is
+      pragma Unreferenced (Of_Unit, Item, Facts, Plan, Options);
+      Result : Frame;
+   begin
+      return Result;
+   end No_Frame;
+
+   function No_Slot
+     (Plan : No_Placement; Layout : Frame; Slot : Landin.IR.Slot_Id;
+      Indirect, Address_Only : Boolean) return String;
+   function No_Slot
+     (Plan : No_Placement; Layout : Frame; Slot : Landin.IR.Slot_Id;
+      Indirect, Address_Only : Boolean) return String
+   is
+      pragma Unreferenced (Plan, Layout, Slot, Indirect, Address_Only);
+   begin
+      return "";
+   end No_Slot;
+
+   function Line_Encoding is new Sections
+     (Placement => No_Placement, Placement_Access => No_Placement_Access,
+      Frame_Access => Plain_Frame_Access, Make => No_Plan,
+      Frame_For => No_Frame, Slot_Expression => No_Slot,
+      Frame_Register => 0, Mach_O => False, Single_LEB_Operand => True,
+      Lines => True);
+
+   function Line_Sections
+     (Of_Unit : Unit;
+      Meanings : Landin.Resolution.Table;
+      Names : Landin.Source.Names.Table;
+      Facts : Landin.Targets.Target_Facts;
+      Info : Landin.Debugging.Information;
+      Prefix : String;
+      Symbol : not null access function (Item : Item_Id) return String)
+      return String
+   is
+      Options : Landin.Optimization.Options;
+   begin
+      return Line_Encoding
+        (Of_Unit, Meanings, Names, Facts, Options, Info, Prefix, Symbol);
+   end Line_Sections;
 
 end Landin.Backend.Dwarf;

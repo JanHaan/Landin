@@ -450,15 +450,19 @@ and [LLDB scripting](https://lldb.llvm.org/use/tutorials/script-driven-debugging
 ## Cortex source debugging
 
 `refine --target=cortex-m0 --firmware-entry=start --emit=exe --debug=lines`
-adds DWARF 4 line tables, source function identities and ordinary-frame CFI.
+adds DWARF 4 line tables, source function identities, ordinary-frame CFI
+and each module binding with its type (D1291).
 The pinned Linux-hosted GDB 16.3 connects to the QEMU microbit CPU lane, or
 through the peripheral harness's relay to the same QEMU with the driver's
 synthetic device behind it. Native Linux GDB and Darwin LLDB acceptance remain
 separate.
 
 `--debug=full` remains refused on Cortex. `lines` advertises no source locals,
-arguments, types, expression evaluation or optimized-value locations. It emits
-no variable/type DIEs or location lists. A source line removed by optimization
+arguments or optimized-value locations: it describes no routine's slots and
+emits no location list. A module binding is the exception, since it lives
+at one symbol for the whole run: `print NAME`, `ptype NAME` and
+`print NAME.field` read it by its source name, a struct, an array and an
+atom-set value as their types. A source line removed by optimization
 has no guaranteed stopping address; emitted generic specializations retain
 the template's source name/coordinates, and a source breakpoint can select
 multiple instances. Hosted targets retain their existing `full` contract and
@@ -508,15 +512,17 @@ A debugger session meets the symbol spellings of D415 and D417, which the
 opening of this guide describes. A module binding of the entry module that
 shares its name with an imported routine, `mut geometry` beside
 `l1.geometry`, is neither's export, so the image holds
-`main.geometry` and `platform.cortex_m.l1.geometry` and no `geometry`. In
-GDB, with `--debug=lines`, `&geometry` is then the routine, whose source
-name the line tables carry, and `*(unsigned*)&geometry` reads its code
-without a word; without debug information it is refused with GDB's own
+`main.geometry` and `platform.cortex_m.l1.geometry` and no `geometry`.
+With `--debug=lines` the debugging information names the binding by its
+source name, so in GDB `print geometry` is the binding's value as a `u32`
+and `&geometry` its address, `(u32 *) 0x20000000 <main[geometry]>`; the
+routine is still `break geometry` and `info functions geometry`. Without
+debugging information the bare name is refused with GDB's own
 `No symbol table is loaded.  Use the "file" command.`, which only means
-that no symbol of that spelling exists. Find the spelling with
-`info variables geometry`, which lists the binding as a non-debugging
-symbol (GDB 16 prints it `main[geometry]`), or `nm IMAGE`, and read it
-quoted, since an unquoted dot is GDB's member operator:
+that no symbol of that spelling exists: find the spelling with
+`info variables geometry` (GDB 16 prints it `main[geometry]`) or
+`nm IMAGE`, and read it quoted and cast, since an unquoted dot is GDB's
+member operator and a symbol alone has no type:
 `print *(unsigned*)&'main.geometry'` or `x/wx &'main.geometry'`. A name no
 other item holds, or an export, keeps its own spelling.
 
@@ -1187,8 +1193,10 @@ terminal:
 gdb-multiarch firmware.elf -ex 'target remote :1234' -ex 'break _landin_firmware_returned' -ex continue
 ```
 
-At the stop, `print (unsigned) NAME` reads a `u32` module binding by its
-name; the cast is needed because the image carries symbols and no types.
+At the stop, `print NAME` reads a module binding by its name and as its
+type when the image was compiled with `--debug=lines` (D1291); an image
+without debugging information carries symbols and no types, and there the
+binding is read with a cast, `print (unsigned) NAME`.
 `break _landin_firmware_unhandled` instead catches a trap or an unhandled
 interrupt. The gate runs its own pinned QEMU the same way; its lanes are
 [the emulator evidence](../environments/cortex-m/README.md).
