@@ -9,8 +9,12 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Commands.Catalogue;
 with Landin.Driver;
+with Landin.Driver.Checking;
+with Landin.Panics;
 with Landin.Platform;
 with Landin.Source;
+with Landin.Stages;
+with Landin.Targets;
 with Landin.Testing.Fakes;
 with Landin.Syntax.Parser;
 
@@ -9497,6 +9501,213 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Assembly_Directives_Cannot_Hide;
 
+   procedure A_Recorded_Signal_Stops_The_Frontend_Between_Stages
+     (Item : in out Landin.Testing.Context);
+
+   --  D1046: a command that holds something answers a recorded signal
+   --  where one frontend stage hands over to the next, not when the last
+   --  has ended.  The program is one the checker refuses, so whether the
+   --  checker ran is what its report says.
+   procedure A_Recorded_Signal_Stops_The_Frontend_Between_Stages
+     (Item : in out Landin.Testing.Context)
+   is
+      Program : constant String :=
+        "public main: () -> (code: i32) =" & LF
+        & "    code = true" & LF
+        & "end main" & LF;
+      Asked, Began : Natural := 0;
+      Stop_At : Natural := 0;
+
+      procedure Watch (Name : String; Finished : Boolean);
+
+      procedure Watch (Name : String; Finished : Boolean) is
+         pragma Unreferenced (Name);
+      begin
+         if not Finished then
+            Began := Began + 1;
+         end if;
+      end Watch;
+
+      function Stop return Boolean;
+
+      function Stop return Boolean is
+      begin
+         Asked := Asked + 1;
+         return Asked = Stop_At;
+      end Stop;
+   begin
+      --  Syntax, configuration, names, then the checker, which refuses:
+      --  a stop at the fourth ask is before the checker, and there is no
+      --  fifth ask, the refusal having ended the run.
+      for At_Ask in 1 .. 5 loop
+         declare
+            Context : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Panic : Landin.Panics.Plan;
+            Stopped : Boolean;
+            Added : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source (Context, "main.ldn", Program);
+            pragma Unreferenced (Added);
+         begin
+            Asked := 0;
+            Began := 0;
+            Stop_At := At_Ask;
+            Landin.Driver.Checking.Run
+              (Context, Panic, Watch'Access, Stop'Access, Stopped);
+            if At_Ask <= 4 then
+               Landin.Testing.Check
+                 (Item, Stopped and then Began = At_Ask - 1
+                    and then not Landin.Stages.Failed (Context),
+                  "a stop at ask" & At_Ask'Image & " ran the stages before"
+                  & " it and not the checker: began" & Began'Image & ", "
+                  & Landin.Stages.Rendered_Report (Context));
+            else
+               Landin.Testing.Check
+                 (Item, not Stopped and then Began = 4
+                    and then Landin.Stages.Failed (Context),
+                  "a run nothing stopped reaches the checker's refusal: "
+                  & Landin.Stages.Rendered_Report (Context));
+            end if;
+         end;
+      end loop;
+      --  The driver asks its host: with the signal already recorded no
+      --  stage runs, so the refusal is not reported and nothing is
+      --  written, and the command still fails.
+      declare
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_File ("main.ldn", Program);
+         Host.Request_Cancellation;
+         Tools.Raise_On_Run;
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute
+                (["main.ldn", "--emit=exe", "--link=libc"], Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+                 and then not Contains (Report, "error[")
+                 and then Host.Write_Count = 0
+                 and then Tools.Run_Count = 0,
+               "a recorded signal is answered before the first stage: "
+               & Report);
+         end;
+      end;
+      declare
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Program);
+         Result := Landin.Driver.Execute
+           (["main.ldn", "--emit=exe", "--link=libc"], Host, Tools);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+              and then Contains (Unbounded.To_String (Result.Report),
+                                 "error["),
+            "the same request, no signal recorded, reports the refusal");
+      end;
+   end A_Recorded_Signal_Stops_The_Frontend_Between_Stages;
+
+   procedure A_Refused_Reservation_Names_Its_Option
+     (Item : in out Landin.Testing.Context);
+
+   --  A path that cannot be prepared is named with the option that named
+   --  it, so a report's path refused is not read as the program's.  The
+   --  fake refuses to prepare one path a case.
+   procedure A_Refused_Reservation_Names_Its_Option
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refused (Option, Path, Kind : String);
+
+      procedure Refused (Option, Path, Kind : String) is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Meter : Landin.Platform.Unmetered;
+         Args : Landin.Platform.Path_List :=
+           ["main.ldn", "--link=libc", "--emit=asm"];
+      begin
+         Host.Add_File ("main.ldn", Entry_Program);
+         Host.Refuse_Preparation (Path);
+         if Option = "-o" then
+            Args.Append ("-o=" & Path);
+         elsif Option /= "--depfile" then
+            Args.Append ("-o=out.s");
+            Args.Append (Option & "=" & Path);
+         end if;
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute
+                (Args, Host, Tools, Meter,
+                 Depfile => (if Option = "--depfile" then Path else ""));
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+                 and then Occurrences (Report, "error[") = 1
+                 and then Contains
+                   (Report, "error[L0005]: cannot prepare " & Kind & " "
+                    & Path & ": "),
+               Option & " " & Path & " is refused as " & Kind & ": "
+               & Report);
+         end;
+      end Refused;
+   begin
+      Refused ("--build-report", "report.json", "--build-report output");
+      Refused ("--stage-report", "stages.json", "--stage-report output");
+      Refused ("--depfile", "main.d", "--depfile output");
+      Refused ("-o", "named.s", "-o output");
+   end A_Refused_Reservation_Names_Its_Option;
+
+   procedure A_Command_Level_Option_Is_Not_Unknown
+     (Item : in out Landin.Testing.Context);
+
+   --  An option Landin.Commands.Execute reads is refused here as what it
+   --  is, with the parameter that carries it where there is one, and not
+   --  as an option that does not exist.
+   procedure A_Command_Level_Option_Is_Not_Unknown
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refused (Option, Words : String);
+
+      procedure Refused (Option, Words : String) is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Stem : constant String :=
+           (if Ada.Strings.Fixed.Index (Option, "=") = 0 then Option
+            else Option
+              (Option'First .. Ada.Strings.Fixed.Index (Option, "=") - 1));
+      begin
+         Host.Add_File ("main.ldn", Entry_Program);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (["main.ldn", Option], Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Misuse
+                 and then Contains
+                   (Report, "error[L0002]: " & Stem & " is an option of the"
+                    & " command line, which Landin.Commands.Execute reads:"
+                    & " Landin.Driver.Execute does not take it as an"
+                    & " argument" & Words)
+                 and then not Contains (Report, "unknown option")
+                 and then not Contains (Report, "did you mean")
+                 and then Host.Write_Count = 0,
+               Option & " is named as the command line's: " & Report);
+         end;
+      end Refused;
+   begin
+      Refused ("--depfile=out.d",
+               ", and takes the path as its Depfile parameter");
+      Refused ("--dry-run", ", and takes the request as its Dry_Run"
+               & " parameter");
+      Refused ("--diagnostics=json", "");
+      Refused ("--quiet", "");
+   end A_Command_Level_Option_Is_Not_Unknown;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -9645,6 +9856,16 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "unknown options are diagnosed",
          Unknown_Options_Are_Diagnosed'Access);
+      Landin.Testing.Register
+        (Into, "driver",
+         "a recorded signal stops the frontend between stages",
+         A_Recorded_Signal_Stops_The_Frontend_Between_Stages'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a refused reservation names its option",
+         A_Refused_Reservation_Names_Its_Option'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a command-level option is not unknown",
+         A_Command_Level_Option_Is_Not_Unknown'Access);
       Landin.Testing.Register
         (Into, "driver", "emission without sources is misuse",
          Emission_Without_Sources_Is_Misuse'Access);

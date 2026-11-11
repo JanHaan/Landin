@@ -43,10 +43,19 @@ procedure Refine is
       Signal_Number : constant Natural :=
         Landin.Platform.Native.Tools.Cancellation_Requested;
    begin
+      --  The line may have no reader: a recorded closed-pipe signal is
+      --  standard error's own reader gone (D1047).  The status still says
+      --  what happened, and a write refused here is not a defect.
       if Signal_Number /= 0 then
-         Text_IO.Put_Line
-           (Text_IO.Standard_Error, "refine: cancelled by signal"
-            & Natural'Image (Signal_Number));
+         begin
+            Text_IO.Put_Line
+              (Text_IO.Standard_Error, "refine: cancelled by signal"
+               & Natural'Image (Signal_Number));
+         exception
+            when Ada.IO_Exceptions.Device_Error
+               | Ada.IO_Exceptions.Use_Error =>
+               null;
+         end;
       end if;
       Landin.Platform.Native.Tools.End_Invocation;
       Command_Line.Set_Exit_Status

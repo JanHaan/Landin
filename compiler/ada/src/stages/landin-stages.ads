@@ -249,6 +249,22 @@ package Landin.Stages is
       Watch       : not null access procedure
         (Name : String; Finished : Boolean)) return Natural;
 
+   --  The same watched run, asking Stop before each stage and running no
+   --  further stage once it answers True.  A stage is never interrupted:
+   --  the run ends where one stage hands over to the next, so what the
+   --  stages that ran left in Context is whole, and what the later ones
+   --  would have made is absent.  It is how a caller that holds something
+   --  to recover answers a request to end between stages rather than
+   --  after the last (D1046).  Returns how many stages ran, which is none
+   --  when Stop answers True at once.
+   function Run
+     (Of_Pipeline : Pipeline;
+      Context     : in out Compilation;
+      Watch       : not null access procedure
+        (Name : String; Finished : Boolean);
+      Stop        : not null access function return Boolean)
+      return Natural;
+
 private
 
    package Stage_Vectors is new Ada.Containers.Vectors

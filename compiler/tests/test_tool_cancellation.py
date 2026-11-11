@@ -200,9 +200,11 @@ def unheld_commands(refine, output):
     """A command that holds nothing is ended by a signal at once.
 
     `refine check` reads and computes; it has no output to put back and no
-    directory to remove, so a signal's default action is all there is to do.
-    Recorded and looked at only when the command ended, the signal used to
-    cost the whole remaining check before the process went."""
+    directory to remove, so the handler itself writes the cancellation's
+    last line and exits with 128 plus the number (D1046), the outcome a
+    command that held something ends with.  Recorded and looked at only
+    when the command ended, the signal used to cost the whole remaining
+    check before the process went."""
     root = output / 'unheld'
     root.mkdir()
     source = root / 'large.ldn'
@@ -230,9 +232,11 @@ def unheld_commands(refine, output):
             process.kill()
             stdout, stderr = process.communicate()
         took = time.monotonic() - sent
-        # Ended by the signal, and long before the check would have ended.
-        passed = (process.returncode == -number and took < max(0.5, whole / 2)
-                  and b'cancelled by signal' not in stderr)
+        # Reported and ended, long before the check would have ended, and
+        # with nothing else said: no diagnostic of the unfinished check.
+        passed = (process.returncode == 128 + number
+                  and took < max(0.5, whole / 2) and not stdout
+                  and stderr == b'refine: cancelled by signal %d\n' % number)
         row = dict(command='check', signal=number.name, passed=passed,
                    exit_status=process.returncode, seconds_after_signal=took,
                    whole_check_seconds=whole, complete_exit=complete.returncode,
@@ -359,12 +363,18 @@ def run_case(executable, output, mode, number):
         passed = (error is None and process.returncode == 0 and not stderr
                   and eof and "PASS" in lines)
     elif mode in ("unheld", "grace"):
-        # Ended by the signal itself, not by an exit status that names it:
-        # at once when nothing is held, and when a recorded signal is never
-        # answered, only once the grace period has run.
+        # With nothing held the handler reports and exits with 128 plus
+        # the number, at once; the closed-pipe signal alone still ends the
+        # process itself, quietly.  A recorded signal that is never
+        # answered ends the process by that signal, with no line, only
+        # once the grace period has run.
         elapsed = time.monotonic() - started
-        passed = (error is None and process.returncode == -number
-                  and not stderr and eof and injected and "PASS" not in lines
+        reported = mode == "unheld" and number != signal.SIGPIPE
+        passed = (error is None and eof and injected and "PASS" not in lines
+                  and process.returncode == (128 + number if reported
+                                             else -number)
+                  and stderr == ("refine: cancelled by signal %d\n" % number
+                                 if reported else "")
                   and (elapsed < 5 and "RECORDED" not in lines
                        if mode == "unheld"
                        else 8 <= elapsed < 15 and "RECORDED" in lines))

@@ -61,9 +61,86 @@ package body Landin.Testing.Fakes is
       return 0;
    end Find;
 
+   --  PATH with every symbolic link in it followed, in a directory above
+   --  its last component or as that component, or "" when nothing is
+   --  there: a link's target is read against the directory the link is in
+   --  unless it is absolute, and what follows the link is kept.
+   function Resolved
+     (Host : Fake_Filesystem; Path : String) return String;
+   function Resolved
+     (Host : Fake_Filesystem; Path : String) return String
+   is
+      Name : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String (Path);
+   begin
+      for Depth in 1 .. 40 loop
+         declare
+            Current : constant String := Unbounded.To_String (Name);
+            Followed : Boolean := False;
+         begin
+            for Stop in Current'First + 1 .. Current'Last + 1 loop
+               if Stop > Current'Last or else Current (Stop) = '/' then
+                  declare
+                     Prefix : constant String :=
+                       Current (Current'First .. Stop - 1);
+                     Index : constant Natural := Find (Host, Prefix);
+                  begin
+                     if Index /= 0
+                       and then Host.Writes.Data.Files (Index).Kind = A_Link
+                     then
+                        declare
+                           Target : constant String := Unbounded.To_String
+                             (Host.Writes.Data.Files (Index).Content);
+                           Slash : constant Natural :=
+                             Ada.Strings.Fixed.Index
+                               (Prefix, "/", Ada.Strings.Backward);
+                        begin
+                           Name := Unbounded.To_Unbounded_String
+                             ((if Target /= ""
+                                 and then Target (Target'First) = '/'
+                               then ""
+                               else Prefix (Prefix'First .. Slash))
+                              & Target & Current (Stop .. Current'Last));
+                           Followed := True;
+                        end;
+                        exit;
+                     end if;
+                  end;
+               end if;
+            end loop;
+            if not Followed then
+               return (if Find (Host, Current) = 0 then "" else Current);
+            end if;
+         end;
+      end loop;
+      return "";
+   end Resolved;
+
+   --  The entry PATH names, a link as its last component followed.  An
+   --  entry held under the path as it is spelled is the one meant; a path
+   --  nothing is held under is read through the links in its directories
+   --  (D1069's linked root and linked import directory).
    function Resolve_Find
      (Host : Fake_Filesystem; Path : String) return Natural;
+   function Resolve_Final
+     (Host : Fake_Filesystem; Path : String) return Natural;
+
    function Resolve_Find
+     (Host : Fake_Filesystem; Path : String) return Natural
+   is
+      Index : constant Natural := Resolve_Final (Host, Path);
+   begin
+      if Index /= 0 or else Path = "" then
+         return Index;
+      end if;
+      declare
+         Through : constant String := Resolved (Host, Path);
+      begin
+         return (if Through = "" then 0 else Find (Host, Through));
+      end;
+   end Resolve_Find;
+
+   function Resolve_Final
      (Host : Fake_Filesystem; Path : String) return Natural
    is
       Name : Unbounded.Unbounded_String :=
@@ -90,7 +167,7 @@ package body Landin.Testing.Fakes is
          end;
       end loop;
       return 0;
-   end Resolve_Find;
+   end Resolve_Final;
 
    procedure Add
      (Host : in out Fake_Filesystem;
@@ -524,6 +601,14 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Read_Exception := Reason;
    end Raise_On_Read;
 
+   procedure Raise_On_Reads_Of
+     (Host : in out Fake_Filesystem; Path : String;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity) is
+   begin
+      Host.Writes.Data.Raising_Reads.Append (Path);
+      Host.Writes.Data.Raising_Reads_Reason := Reason;
+   end Raise_On_Reads_Of;
+
    procedure Raise_On_Read_After
      (Host : in out Fake_Filesystem; Reads : Natural;
       Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity) is
@@ -586,6 +671,11 @@ package body Landin.Testing.Fakes is
       Claimed : Boolean;
    begin
       Content := Unbounded.Null_Unbounded_String;
+      if Host.Writes.Data.Raising_Reads.Contains (Path) then
+         Ada.Exceptions.Raise_Exception
+           (Host.Writes.Data.Raising_Reads_Reason,
+            "a fake read of " & Path & " injected an exception");
+      end if;
       if not Stage_Path_Usable (Host, Path, Claimed) then
          Status := Landin.Platform.Not_Readable;
          return;
@@ -622,6 +712,12 @@ package body Landin.Testing.Fakes is
    begin
       Host.Writes.Data.Refuses_Write := True;
    end Refuse_Writes;
+
+   procedure Refuse_Preparation
+     (Host : in out Fake_Filesystem; Path : String) is
+   begin
+      Host.Writes.Data.Refused_Preparations.Append (Path);
+   end Refuse_Preparation;
 
    procedure Refuse_Staged_Write
      (Host : in out Fake_Filesystem; Public_Path : String) is
@@ -944,7 +1040,9 @@ package body Landin.Testing.Fakes is
             & " choose another output");
          return;
       end if;
-      if Host.Writes.Data.Refuses_Write or else Host.Is_Link (Path) then
+      if Host.Writes.Data.Refuses_Write or else Host.Is_Link (Path)
+        or else Host.Writes.Data.Refused_Preparations.Contains (Path)
+      then
          Reason := Unbounded.To_Unbounded_String
            ("output is linked or unwritable; choose another ordinary output");
          return;
@@ -1596,8 +1694,17 @@ package body Landin.Testing.Fakes is
       package Sorting is new Landin.Platform.Path_Vectors.Generic_Sorting
         ("<" => "<");
 
-      Index  : constant Natural := Find (Host, Path);
-      Base   : constant String := Directory_Path (Path);
+      --  A directory reached through a link, as the path's last component
+      --  or in a directory above it, lists what its target holds.
+      Spelled : constant Natural := Find (Host, Path);
+      Through : constant String :=
+        (if Path /= ""
+           and then (Spelled = 0
+                     or else Host.Writes.Data.Files (Spelled).Kind = A_Link)
+         then Resolved (Host, Path) else "");
+      Listed : constant String := (if Through = "" then Path else Through);
+      Index  : constant Natural := Find (Host, Listed);
+      Base   : constant String := Directory_Path (Listed);
       Prefix : constant String :=
         (if Base'Length > 0 and then Base (Base'Last) = '/'
          then Base else Base & "/");

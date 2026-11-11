@@ -33,6 +33,11 @@ package Landin.Testing.Fakes is
       return Landin.Platform.Identity_Observation;
 
    --  Real direntries sharing an object, and links whose target can dangle.
+   --  A symbolic link is followed as a path's last component and in the
+   --  directories above it, when the path is read, tested, listed or
+   --  identified; Is_Link asks about the entry as it is spelled.  An entry
+   --  added under a path that spells a link in a directory is held as it
+   --  was spelled and is what that spelling finds.
    procedure Add_Hard_Link
      (Host : in out Fake_Filesystem; Path, Target : String);
    procedure Add_Symbolic_Link
@@ -139,6 +144,12 @@ package Landin.Testing.Fakes is
       Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity);
 
    --  Let Reads calls to Read_File finish before injecting.
+   --  Raise Reason at every read of Path from now on: a defect, or with
+   --  Storage_Error an exhausted stack, that lasts while a text reads it.
+   procedure Raise_On_Reads_Of
+     (Host : in out Fake_Filesystem; Path : String;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity);
+
    procedure Raise_On_Read_After
      (Host : in out Fake_Filesystem; Reads : Natural;
       Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity);
@@ -147,6 +158,10 @@ package Landin.Testing.Fakes is
    --  This pins the driver's output diagnostic without depending on native
    --  filesystem permissions.
    procedure Refuse_Writes (Host : in out Fake_Filesystem);
+   --  Refuse to prepare the one output Path, as a host does a path it
+   --  cannot reserve, and prepare every other.
+   procedure Refuse_Preparation
+     (Host : in out Fake_Filesystem; Path : String);
 
    --  Refuse the private write reserved for this logical public output.
    procedure Refuse_Staged_Write
@@ -537,6 +552,10 @@ private
         Compiler_Defect'Identity;
       Refuses_Write : Boolean := False;
       Refused_Staged_Writes : Landin.Platform.Path_List;
+      Refused_Preparations : Landin.Platform.Path_List;
+      Raising_Reads : Landin.Platform.Path_List;
+      Raising_Reads_Reason : Ada.Exceptions.Exception_Id :=
+        Compiler_Defect'Identity;
       Refuses_Removal : Boolean := False;
       Cancelled, Cancel_Armed, Removal_Refusal_Armed : Boolean := False;
       Removal_Refusal_Action : Landin.Platform.Publication_Action :=

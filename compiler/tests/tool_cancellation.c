@@ -528,9 +528,10 @@ int main(int argc, char **argv)
     events = dup(STDOUT_FILENO);
     require(events >= 0, "inheritable event descriptor");
     if (strcmp(mode, "unheld") == 0) {
-        /* Nothing is held, so nothing would be left half done: the signal
-           ends the process by its default action, at once. Reaching the
-           deadline instead is the failure. */
+        /* Nothing is held, so nothing would be left half done: the handler
+           reports the signal and exits with 128 plus its number, at once,
+           and the closed-pipe signal ends the process by its default
+           action. Reaching the deadline instead is the failure. */
         puts("READY");
         while (!timed_out)
             pause();

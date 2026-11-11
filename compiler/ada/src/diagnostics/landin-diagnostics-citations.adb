@@ -2099,8 +2099,8 @@ package body Landin.Diagnostics.Citations is
                "A standard output that cannot be written is the host's f"
                & "ailure",
             when 1046 =>
-               "A signal ends a command at once unless it holds somethin"
-               & "g to recover",
+               "A signal ends a command with one report and status, at o"
+               & "nce unless it holds something to recover",
             when 1047 =>
                "The file-size and closed-pipe signals reach the recovery"
                & " written for their errors",
@@ -2140,6 +2140,9 @@ package body Landin.Diagnostics.Citations is
             when 260 =>
                "A parse reports a mistake once, inside the construct it "
                & "is in",
+            when 1220 =>
+               "An analysis that exhausts the server's stack or memory i"
+               & "s that document's defect",
             when 1074 =>
                "A program the grammar derives is read by the grammar alo"
                & "ne",
@@ -4002,6 +4005,8 @@ package body Landin.Diagnostics.Citations is
             when 1070 =>
                "Decisions: The toolchain, C and the machine",
             when 260 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1220 =>
                "Decisions: The toolchain, C and the machine",
             when 1074 =>
                "Decisions: The toolchain, C and the machine",
@@ -5905,7 +5910,8 @@ package body Landin.Diagnostics.Citations is
                & "at-cannot-be-written-is-the-host-s-failure",
             when 1046 =>
                "https://www.701.dev/spec.html#d1046-a-signal-ends-a-comm"
-               & "and-at-once-unless-it-holds-something-to-recover",
+               & "and-with-one-report-and-status-at-once-unless-it-holds-s"
+               & "omething-to-recover",
             when 1047 =>
                "https://www.701.dev/spec.html#d1047-the-file-size-and-cl"
                & "osed-pipe-signals-reach-the-recovery-written-for-their-e"
@@ -5952,6 +5958,10 @@ package body Landin.Diagnostics.Citations is
             when 260 =>
                "https://www.701.dev/spec.html#d260-a-parse-reports-a-mis"
                & "take-once-inside-the-construct-it-is-in",
+            when 1220 =>
+               "https://www.701.dev/spec.html#d1220-an-analysis-that-exh"
+               & "austs-the-server-s-stack-or-memory-is-that-document-s-de"
+               & "fect",
             when 1074 =>
                "https://www.701.dev/spec.html#d1074-a-program-the-gramma"
                & "r-derives-is-read-by-the-grammar-alone",

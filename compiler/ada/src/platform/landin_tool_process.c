@@ -73,9 +73,15 @@ const char *landin_process_start_error(int error)
 }
 
 /* Invocation cancellation.  A signal that finds nothing to recover ends the
-   process at once by its default action, as it would a program with no
-   handler: a command that is only reading and computing holds nothing a
-   signal could leave half done.  While something is held (an open
+   process at once, from the handler: a command that is only reading and
+   computing holds nothing a signal could leave half done, so the handler
+   writes the line a recovered cancellation ends with and exits with 128
+   plus the number, the one outcome a caller sees whether or not anything
+   was held (D1046).  It does so itself, with write and _exit alone, so
+   that a stage that is running, or will never end, is stopped there and
+   then; asking between stages would cost the rest of the stage, and
+   asking inside one would reach every loop of the compiler.  While
+   something is held (an open
    publication, a private directory, a tool's capture, a source being
    rewritten) the signal is recorded instead, and the supervising thread
    unwinds: no filesystem work, Ada cleanup, or potentially reused
@@ -87,8 +93,8 @@ const char *landin_process_start_error(int error)
 
    SIGPIPE is one of them: refine writing its own report into a closed pipe
    while `refine run` holds a private directory must reach the removal of
-   that directory, and with nothing held it still ends the process as the
-   default action would.
+   that directory, and with nothing held it still ends the process by its
+   default action, quietly: the report's reader is the one that left.
 
    SIGXFSZ is ignored for the invocation, so a write past the file-size
    limit returns EFBIG to the adapters, whose recovery is written for that
@@ -133,12 +139,48 @@ static void landin_cancel_default(int number)
     pthread_sigmask(SIG_UNBLOCK, &only, NULL);
 }
 
+/* End from inside a handler as a recovered cancellation ends: the last
+   line on standard error, then 128 plus NUMBER.  Only write and _exit are
+   called, both async-signal-safe; nothing buffered is flushed and no
+   cleanup runs, which is right because nothing is held.  A standard error
+   that cannot take the line changes nothing: the status still says it. */
+static void landin_cancel_report(int number)
+{
+    static const char head[] = "refine: cancelled by signal ";
+    char line[sizeof head + 16];
+    char digits[12];
+    size_t length = 0, count = 0;
+    int rest = number;
+    for (; length < sizeof head - 1; ++length)
+        line[length] = head[length];
+    do {
+        digits[count++] = (char)('0' + rest % 10);
+        rest /= 10;
+    } while (rest != 0 && count < sizeof digits);
+    while (count != 0)
+        line[length++] = digits[--count];
+    line[length++] = '\n';
+    while (count < length) {
+        ssize_t wrote = write(STDERR_FILENO, line + count, length - count);
+        if (wrote <= 0) {
+            if (wrote < 0 && errno == EINTR)
+                continue;
+            break;
+        }
+        count += (size_t)wrote;
+    }
+    _exit(128 + number);
+}
+
 static void landin_cancel_notify(int number)
 {
     int saved = errno;
     if (landin_cancel_signal == 0) {
-        if (atomic_load(&landin_cancel_holds) <= 0)
-            landin_cancel_default(number);
+        if (atomic_load(&landin_cancel_holds) <= 0) {
+            if (number == SIGPIPE)
+                landin_cancel_default(number);
+            landin_cancel_report(number);
+        }
         landin_cancel_signal = number;
         if (landin_cancel_grace)
             alarm(LANDIN_CANCEL_GRACE_SECONDS);

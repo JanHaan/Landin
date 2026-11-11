@@ -299,4 +299,26 @@ package body Landin.Stages is
       return Ran;
    end Run;
 
+   function Run
+     (Of_Pipeline : Pipeline;
+      Context     : in out Compilation;
+      Watch       : not null access procedure
+        (Name : String; Finished : Boolean);
+      Stop        : not null access function return Boolean)
+      return Natural
+   is
+      Ran     : Natural := 0;
+      Outcome : Stage_Outcome;
+   begin
+      for Item of Of_Pipeline.Items loop
+         exit when Stop.all;
+         Watch (Item.all.Name, Finished => False);
+         Item.all.Run (Context, Outcome);
+         Watch (Item.all.Name, Finished => True);
+         Ran := Ran + 1;
+         exit when Outcome = Landin.Stages.Stop;
+      end loop;
+      return Ran;
+   end Run;
+
 end Landin.Stages;

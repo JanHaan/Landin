@@ -149,8 +149,8 @@ package body Landin.Diagnostics.Explanations is
                & "signal reports no output failure: refine's last line nam"
                & "es the signal, and nothing it would have replaced was. A"
                & " command that held nothing when the signal came, such as"
-               & " `refine check`, is ended by the signal itself and write"
-               & "s no last line (D1046)."
+               & " `refine check`, ends at once with the same last line an"
+               & "d the same status, 128 plus the signal's number (D1046)."
                & LF
                & LF
                & "A late failure can follow successful staging or installa"
