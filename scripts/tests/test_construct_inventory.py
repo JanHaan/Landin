@@ -372,6 +372,43 @@ class Inventory(unittest.TestCase):
         self.assertIn("positive/ramtext-esp32c3 selects --target=rv32 and does"
                       " not name rv32 among its targets", messages)
 
+    def test_an_xtensa_claim_must_be_a_run_that_is_made(self):
+        """D1315: xtensa fills no column, and naming it takes a run."""
+        self.assertEqual(CHECK.xtensa_target_problems(), [])
+        records = CHECK.fixture_records()
+        altered = dict(records)
+        #  A runtime fixture the Xtensa lane executes may name it.
+        runs = "runtime/a-zero-divisor-traps"
+        meta, fields = records[runs]
+        altered[runs] = (meta, dict(fields,
+                                    targets=fields["targets"] + ", xtensa"))
+        #  An ABI fixture Cortex-M executes and Xtensa refuses may not.
+        refused = "abi/c-function-from-address"
+        meta, fields = records[refused]
+        altered[refused] = (meta, dict(fields,
+                                       targets=fields["targets"] + ", xtensa"))
+        #  A compile-time fixture that names xtensa and selects nothing.
+        hosted = "negative/name-declared-nowhere"
+        meta, fields = records[hosted]
+        altered[hosted] = (meta, dict(fields,
+                                      targets=fields["targets"] + ", xtensa"))
+        #  One that selects xtensa and does not name it.
+        own = "positive/ramtext-esp32c3"
+        meta, fields = records[own]
+        altered[own] = (meta, dict(fields, args="--target=xtensa main.ldn"))
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: altered):
+            messages = [m for _, _, m in CHECK.xtensa_target_problems()]
+        self.assertEqual(len(messages), 3, messages)
+        self.assertTrue(any(message.startswith(
+            "abi/c-function-from-address names xtensa, and only the firmware"
+            " corpus's Xtensa lane runs a program there") for message
+            in messages), messages)
+        self.assertIn("negative/name-declared-nowhere names xtensa and no"
+                      " argument selects --target=xtensa", messages)
+        self.assertIn("positive/ramtext-esp32c3 selects --target=xtensa and"
+                      " does not name xtensa among its targets", messages)
+
     def test_every_named_target_is_placed_by_a_record(self):
         """A target line with no record behind it is refused, not believed."""
         self.assertEqual(CHECK.unplaced_target_problems(), [])

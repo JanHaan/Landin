@@ -27,5 +27,8 @@
  ],
  "tour.md": [
   "### [0590]"
+ ],
+ "compiler/tests/registers.md": [
+  "rv32, xtensa, synthetic-32 |"
  ]
 }

@@ -28551,6 +28551,38 @@ Cortex-M family and would claim Arm evidence for a RISC-V target.
 `test_an_rv32_claim_must_be_a_run_that_is_made` and
 `scripts/tests/test_check_controls.py`'s `TargetLists`.
 
+### D1315 — Xtensa is no product target of the construct inventory, and prototype 3 applies to it
+
+**The tour said** nothing; `check.py`'s `PRODUCT_TARGETS` left `xtensa`
+out as it left `rv32`, and no decision said why. The only reason given,
+in a `check.py` comment and `compiler/tests/registers.md`, was that no
+prototype applies to Xtensa, so no row of the target applicability table
+lists it and no fixture may name it; but prototype 3's row listed `rv32`,
+and Xtensa's lane executes the same firmware corpus, prototype 3's
+container derivations among its 718 executed rows.
+
+**Chosen:** Xtensa stays out of the product targets, for D840's reason
+and one of its own. The seven constructs whose Cortex-M evidence comes
+only from Cortex-M's own records would be gaps on it as on RV32, and its
+lane runs the firmware corpus through the rows of
+`compiler/tests/cortex-m/corpus.json`, where 17 rows Cortex-M executes are
+Xtensa refusals; counting it opens gaps no live item owns. Prototype 3,
+whose containers are target-independent, applies to it as to RV32, so its
+applicability row lists `xtensa`, and a fixture may name it on the terms
+D840 sets for `rv32`: a compile-time one exactly when its `args` select
+`--target=xtensa`, a runtime or ABI one only with a corpus row whose
+Xtensa disposition executes it.
+
+**The alternatives:** Xtensa as a product target, the step for an item
+that owns its parity with Cortex-M and the 17 refusals; and keeping it
+out of prototype 3's row, which would keep the table saying no prototype
+applies to a target that runs that prototype's derivations.
+
+**Pinned by** `scripts/tests/test_construct_inventory.py`'s
+`test_an_xtensa_claim_must_be_a_run_that_is_made` and
+`scripts/tests/test_check_controls.py`'s
+`test_a_target_no_applicability_row_lists_names_the_register`.
+
 ### D841 — The host manifest selects what it compiles, and its debug entries compare on one checkout
 
 **The tour said** nothing; `scripts/emit_manifest.py emit` ran four

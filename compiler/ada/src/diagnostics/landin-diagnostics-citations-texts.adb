@@ -28857,6 +28857,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & "` and `dev-test.sh` ask after their build and every lane"
                & " that takes `--refine` asks after reading its arguments;"
                & " the warning never changes a status.",
+            when 1308 =>
+               "Chosen: a runtime fixture's `not_yet_emitted:` names, as"
+               & " `TARGET=CODE`, each target the compiler describes that "
+               & "does not emit the program yet, which its `targets:` leav"
+               & "es out, and the code that target refuses it with. Both m"
+               & "etadata readers hold each entry's shape, a target named "
+               & "once and a code of L and four digits; `check.py` holds t"
+               & "he code to the catalogue. The test program compiles the "
+               & "program to assembly for each named target, from any host"
+               & ", and requires a refusal whose codes are that one code a"
+               & "nd no other: an entry whose target compiles the program "
+               & "fails, naming the entry to remove and the target to name"
+               & " in `targets:`, so the disposition cannot outlive the ga"
+               & "p. An entry for Linux arm64 stands for the parity record"
+               & ", and a fixture with both is refused; `targets.matrix` l"
+               & "ists the entries after the targets, and `scripts/add_fix"
+               & "ture.py` offers the entry beside the record.",
             when 542 =>
                "Chosen: a device is described in Landin source, as one m"
                & "odule made only of tool directives in [1740]'s `tool_dir"
@@ -29896,6 +29913,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ts above to name only targets the compiler describes wit"
                & "h a backend, and each scope to lie within the product ta"
                & "rgets.",
+            when 1315 =>
+               "Chosen: Xtensa stays out of the product targets, for D84"
+               & "0's reason and one of its own. The seven constructs whos"
+               & "e Cortex-M evidence comes only from Cortex-M's own recor"
+               & "ds would be gaps on it as on RV32, and its lane runs the"
+               & " firmware corpus through the rows of `compiler/tests/cor"
+               & "tex-m/corpus.json`, where 17 rows Cortex-M executes are "
+               & "Xtensa refusals; counting it opens gaps no live item own"
+               & "s. Prototype 3, whose containers are target-independent,"
+               & " applies to it as to RV32, so its applicability row list"
+               & "s `xtensa`, and a fixture may name it on the terms D840 "
+               & "sets for `rv32`: a compile-time one exactly when its `ar"
+               & "gs` select `--target=xtensa`, a runtime or ABI one only "
+               & "with a corpus row whose Xtensa disposition executes it.",
             when 841 =>
                "Chosen: `emit` runs as many compilations as the host has"
                & " cores, so the whole host manifest, 41,832 entries, took"

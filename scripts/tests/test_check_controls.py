@@ -2571,12 +2571,19 @@ class Registers(unittest.TestCase):
         self.assertTrue(said)
 
     def test_a_target_no_applicability_row_lists_names_the_register(self):
-        #  xtensa is a described target no prototype applies to,
-        #  and the refusal used to call it unknown without saying where
-        #  the targets a fixture may name come from.
+        #  xtensa, with prototype 3's row made to leave it out, is a
+        #  described target no prototype applies to, and the refusal used
+        #  to call it unknown without saying where the targets a fixture
+        #  may name come from.
         from check_controls import tree
         meta = "compiler/tests/fixtures/positive/any-slice-dispatch/fixture.meta"
         with tree(copied=REGISTERS) as root:
+            table = root / "compiler/tests/registers.md"
+            rows = table.read_text()
+            row = quote("compiler/tests/registers.md",
+                        "rv32, xtensa, synthetic-32 |")
+            self.assertIn(row, rows)
+            table.write_text(rows.replace(row, "rv32, synthetic-32 |", 1))
             target = root / meta
             text = target.read_text()
             self.assertIn("targets: ", text)

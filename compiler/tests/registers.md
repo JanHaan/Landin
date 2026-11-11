@@ -41,10 +41,14 @@ with every named refusal and the wording of its [1830] note.
   item owns. A fixture that names it is still held to a run there: a
   compile-time one selects `--target=rv32`, and a runtime or ABI one has
   a firmware corpus row an RV32 lane executes. `xtensa` is not a product
-  target either: no prototype applies to it, so no row of the
+  target either, and has no column (D1315), for RV32's reason and its
+  own: its lane runs the firmware corpus through the rows of
+  `cortex-m/corpus.json`, and refuses rows Cortex-M executes. Prototype
+  3 applies to it as to RV32, so the
   [target applicability table](#target-applicability-coverage) lists it
-  and no fixture may name it, and its lanes reach the firmware corpus
-  through the rows of `cortex-m/corpus.json`. **Gaps** are applicable targets without the state's
+  in that row, and a fixture that names it is held to a run there as one
+  naming `rv32` is: a compile-time one selects `--target=xtensa`, and a
+  runtime or ABI one has a corpus row whose Xtensa disposition executes. **Gaps** are applicable targets without the state's
   evidence, and every gap needs an owning item.
 - **Owners** are live roadmap items or successor families. A finished owner,
   an unknown owner or an owner the disposition does not mention is refused.
@@ -336,6 +340,6 @@ model used before the Cortex-M backend existed.
 | --- | --- |
 | `prototype-1` | cortex-m0, rv32 |
 | `prototype-2` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |
-| `prototype-3` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, rv32, synthetic-32 |
+| `prototype-3` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, rv32, xtensa, synthetic-32 |
 | `prototype-4` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |
 | `prototype-5` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0 |

@@ -5913,6 +5913,55 @@ def rv32_target_problems():
     return problems
 
 
+XTENSA_TARGET_FLAG = "--target=xtensa"
+
+
+def xtensa_target_problems():
+    """A fixture that names xtensa is one a run makes there (D1315).
+
+    Prototype 3 applies to Xtensa as it does to RV32, so a fixture may name
+    it, and like rv32 it is no product target of the construct inventory,
+    so no column is filled from it and only a run backs the name.  A
+    compile-time fixture names xtensa exactly when its own `args` select
+    it; a runtime or ABI one names it only with a firmware corpus row whose
+    Xtensa disposition executes it, since environments/xtensa/corpus.py is
+    the only run of a program there.
+    """
+    corpus_path = os.path.join(ROOT, CORTEX_CORPUS)
+    if not os.path.exists(corpus_path):
+        return []
+    with io.open(corpus_path, encoding="utf-8") as stream:
+        corpus = json.load(stream)["fixtures"]
+    problems = []
+    for name, (path, fields) in sorted(fixture_records().items()):
+        named = "xtensa" in [
+            one.strip() for one in fields.get("targets", "").split(",")]
+        kind = name.split("/")[0]
+        if kind in ("runtime", "abi"):
+            row = corpus.get(name, {})
+            own = dict(row, **row.get("targets", {}).get("xtensa", {}))
+            if named and (own.get("mode") != "execute"
+                          or "profile_limit" in own):
+                problems.append((path, 0, (
+                    "%s names xtensa, and only the firmware corpus's Xtensa"
+                    " lane runs a program there; give it a row in %s whose"
+                    " xtensa disposition is \"execute\", or drop xtensa from"
+                    " its targets: (environments/xtensa/README.md)"
+                    % (name, CORTEX_CORPUS))))
+            continue
+        if kind not in ("positive", "negative", "end-to-end"):
+            continue
+        selected = XTENSA_TARGET_FLAG in (fields.get("args", "") or "").split()
+        if named and not selected:
+            problems.append((path, 0, "%s names xtensa and no argument"
+                             " selects %s" % (name, XTENSA_TARGET_FLAG)))
+        elif selected and not named:
+            problems.append((path, 0, (
+                "%s selects %s and does not name xtensa among its targets"
+                % (name, XTENSA_TARGET_FLAG))))
+    return problems
+
+
 def unplaced_target_problems():
     """Every target a fixture names is a verdict some record places.
 
@@ -6548,6 +6597,7 @@ def check_matrix(full_run):
         (REGISTERS, 1, "the construct inventory's inputs cannot be read")]
     out += cortex_target_problems()
     out += rv32_target_problems()
+    out += xtensa_target_problems()
     out += arm64_linux_problems()
     out += not_yet_emitted_problems()
     out += unplaced_target_problems()
@@ -7411,8 +7461,8 @@ def check_coverage_registers(full_run):
                             "every fixture must name its targets"))
                 continue
             #  A fixture may name only a target some applicability row
-            #  lists, so a described target no prototype applies to, such
-            #  as xtensa, is refused too, and the refusal names the table.
+            #  lists, so a described target no prototype applies to is
+            #  refused too, and the refusal names the table.
             for target in (one.strip() for one in targets.split(",")):
                 if target in allowed:
                     continue

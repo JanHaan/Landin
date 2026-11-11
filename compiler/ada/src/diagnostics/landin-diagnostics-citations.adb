@@ -2645,6 +2645,9 @@ package body Landin.Diagnostics.Citations is
                & "its number",
             when 1307 =>
                "The scripts say when a refine is not its checkout's",
+            when 1308 =>
+               "A runtime fixture may name the targets that do not emit "
+               & "it yet",
             when 542 =>
                "A device description is a module of directives, and its "
                & "generated half has one text",
@@ -2758,6 +2761,9 @@ package body Landin.Diagnostics.Citations is
             when 840 =>
                "rv32 is no product target of the construct inventory, an"
                & "d a fixture naming it is held to a run",
+            when 1315 =>
+               "Xtensa is no product target of the construct inventory, "
+               & "and prototype 3 applies to it",
             when 841 =>
                "The host manifest selects what it compiles, and its debu"
                & "g entries compare on one checkout",
@@ -4399,6 +4405,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 1307 =>
                "Decisions: The toolchain, C and the machine",
+            when 1308 =>
+               "Decisions: The toolchain, C and the machine",
             when 542 =>
                "Decisions: The toolchain, C and the machine",
             when 543 =>
@@ -4478,6 +4486,8 @@ package body Landin.Diagnostics.Citations is
             when 791 =>
                "Decisions: The toolchain, C and the machine",
             when 840 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1315 =>
                "Decisions: The toolchain, C and the machine",
             when 841 =>
                "Decisions: The toolchain, C and the machine",
@@ -6583,6 +6593,9 @@ package body Landin.Diagnostics.Citations is
             when 1307 =>
                "https://www.701.dev/spec.html#d1307-the-scripts-say-when"
                & "-a-refine-is-not-its-checkout-s",
+            when 1308 =>
+               "https://www.701.dev/spec.html#d1308-a-runtime-fixture-ma"
+               & "y-name-the-targets-that-do-not-emit-it-yet",
             when 542 =>
                "https://www.701.dev/spec.html#d542-a-device-description-"
                & "is-a-module-of-directives-and-its-generated-half-has-one"
@@ -6715,6 +6728,10 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d840-rv32-is-no-product-ta"
                & "rget-of-the-construct-inventory-and-a-fixture-naming-it-"
                & "is-held-to-a-run",
+            when 1315 =>
+               "https://www.701.dev/spec.html#d1315-xtensa-is-no-product"
+               & "-target-of-the-construct-inventory-and-prototype-3-appli"
+               & "es-to-it",
             when 841 =>
                "https://www.701.dev/spec.html#d841-the-host-manifest-sel"
                & "ects-what-it-compiles-and-its-debug-entries-compare-on-o"
