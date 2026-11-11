@@ -17,6 +17,10 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("activations", ROOT / "scripts/activations.py")
@@ -55,17 +59,8 @@ FILES = ("scripts/debug.sh", "environments/cortex-m/run.py",
 
 
 def git(cwd, *arguments):
-    #  No detached maintenance.  Git 2.54 starts `git maintenance run
-    #  --auto --detach` after every commit, and on a loaded host one was
-    #  still at work under .git when a case's cleanup removed the
-    #  repository, which then failed with "Directory not empty".
-    environment = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
-                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
-                       GIT_CONFIG_COUNT="2", GIT_CONFIG_KEY_0="gc.auto",
-                       GIT_CONFIG_VALUE_0="0",
-                       GIT_CONFIG_KEY_1="maintenance.auto",
-                       GIT_CONFIG_VALUE_1="false")
-    return subprocess.run(["git", *arguments], cwd=cwd, env=environment, check=True,
+    #  No detached maintenance: temporary_git.py says why.
+    return subprocess.run(["git", *arguments], cwd=cwd, env=environment(), check=True,
                           stdout=subprocess.PIPE, text=True).stdout.strip()
 
 

@@ -7,6 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "links_inputs.py"
@@ -24,8 +28,6 @@ class LinkInputsTests(unittest.TestCase):
         os.chdir(self.temp.name)
         self.addCleanup(os.chdir, self.previous)
         self.git("init", "-q")
-        self.git("config", "user.name", "Test")
-        self.git("config", "user.email", "test@example.com")
         Path("changed.md").write_text("old\n")
         Path("untouched.md").write_text("untouched\n")
         Path("lychee.toml").write_text("old\n")
@@ -33,7 +35,8 @@ class LinkInputsTests(unittest.TestCase):
         self.before = self.git("rev-parse", "HEAD").strip()
 
     def git(self, *args):
-        return subprocess.check_output(("git", *args), text=True)
+        return subprocess.check_output(("git", *args), text=True,
+                                       env=environment())
 
     def commit(self):
         self.git("add", "-A")

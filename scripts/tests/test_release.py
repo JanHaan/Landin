@@ -18,6 +18,9 @@ import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import release  # noqa: E402
@@ -177,10 +180,8 @@ class Gated(unittest.TestCase):
         self.asked = []
 
     def git(self, cwd, *arguments):
-        environment = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
-                           GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.org",
-                           GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.org")
-        return subprocess.run(["git", *arguments], cwd=cwd, check=True, text=True, env=environment,
+        settings = environment(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
+        return subprocess.run(["git", *arguments], cwd=cwd, check=True, text=True, env=settings,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
 
     def commit(self, where, text):

@@ -11,6 +11,10 @@ import tempfile
 import shutil
 import shlex
 import unittest
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -675,19 +679,13 @@ path.write_text("-- generated at " + str(path) + "\\n"
         (self.root / "README.md").write_text("a document\n")
         (self.root / ".gitignore").write_text("compiler/ada/build/\ncalls\n"
                                               "compiler/ada/.build-locks/\n")
-        #  No detached maintenance after a commit: it can be at work
-        #  under .git while the cleanup removes the repository.
-        identity = ["-c", "user.name=t", "-c", "user.email=t@t",
-                    "-c", "maintenance.auto=false"]
+        #  No detached maintenance after a commit, in this test's own
+        #  commits or the fake builder's: temporary_git.py says why.
+        self.env = environment(self.env)
         for arguments in (["init", "-q"], ["add", "-A"],
-                          [*identity, "commit", "-q", "-m", "base"]):
+                          ["commit", "-q", "-m", "base"]):
             subprocess.run(["git", "-C", str(self.root), *arguments],
-                           check=True, timeout=HANG)
-        self.env.update(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
-                        GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t",
-                        GIT_CONFIG_COUNT="1",
-                        GIT_CONFIG_KEY_0="maintenance.auto",
-                        GIT_CONFIG_VALUE_0="false")
+                           check=True, timeout=HANG, env=self.env)
 
     def test_a_document_edit_during_the_build_leaves_it_verified(self):
         #  A README edited beside a build turns the checkout dirty, and a

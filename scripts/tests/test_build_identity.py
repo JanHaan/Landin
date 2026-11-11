@@ -6,6 +6,10 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment   # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('build_identity', ROOT / 'scripts/build_identity.py')
@@ -32,12 +36,12 @@ class BuildIdentity(unittest.TestCase):
             'end Landin_Tests;\n')
         self.git('init', '-q')
         self.git('add', '.')
-        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
-                 'commit', '-qm', 'fixture')
+        self.git('commit', '-qm', 'fixture')
 
     def git(self, *args):
         return subprocess.run(['git', '-C', str(self.root), *args], check=True,
-                              capture_output=True, text=True).stdout.strip()
+                              capture_output=True, text=True,
+                              env=environment()).stdout.strip()
 
     def test_revision_and_relative_digest(self):
         before = IDENTITY.identity(self.root, 'debug')
