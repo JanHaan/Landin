@@ -24667,6 +24667,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "dit is another text and says it again. Nothing is promis"
                & "ed where the host ends the process instead of reporting "
                & "the exhaustion to it.",
+            when 1250 =>
+               "Chosen: while a module's publication ends in a defect, e"
+               & "ach of its open documents is published, at its version, "
+               & "with one diagnostic, the defect's report as `window/show"
+               & "Message` words it, an error from `refine` with no code a"
+               & "t the document's first position; every other source the "
+               & "module had reported on is cleared, or refreshed by anoth"
+               & "er open module that reports on it too. The same holds ea"
+               & "ch time the text is published again, while D1220's messa"
+               & "ge is still shown once for a text. The first publication"
+               & " that completes publishes the module's findings as it al"
+               & "ways does, and so they return. What the module watched o"
+               & "n disk is kept through the defect, so that a change ther"
+               & "e analyses it again.",
             when 1074 =>
                "Chosen: a file is read first by the grammar alone. No cl"
                & "oser is looked for beforehand: a function is closed by t"
@@ -27264,6 +27278,38 @@ package body Landin.Diagnostics.Citations.Texts is
                & " keep. A builtin Clang knows not to return, `exit` or `a"
                & "bort`, has `noreturn` in its type rather than as an attr"
                & "ibute, and stays refused with every `noreturn` function.",
+            when 1252 =>
+               "Chosen: fifteen attribute kinds, by Clang's names, are p"
+               & "assed over on a selected function and on its parameters,"
+               & " wherever they stand and whoever wrote them: `NoThrowAtt"
+               & "r`, `LeafAttr`, `PureAttr`, `ConstAttr`, `NonNullAttr`, "
+               & "`ReturnsNonNullAttr`, `WarnUnusedResultAttr`, `FormatAtt"
+               & "r`, `FormatArgAttr`, `SentinelAttr`, `RestrictAttr` (C's"
+               & " `malloc`), `AllocSizeAttr`, `AllocAlignAttr`, `ColdAttr"
+               & "` and `DeprecatedAttr`. Each says what a call may assume"
+               & " or what a C compiler should warn of; none says how the "
+               & "function is called, what symbol it has, how it is linked"
+               & " or how a type is laid out. The list is closed and is th"
+               & "e kinds that have been read: every other kind is refused"
+               & " by name as before, among them `AsmLabelAttr`, `Visibili"
+               & "tyAttr`, `WeakAttr`, `AliasAttr`, `AlwaysInlineAttr`, `G"
+               & "NUInlineAttr`, `OverloadableAttr`, `PassObjectSizeAttr`,"
+               & " `ReturnsTwiceAttr` and `UnavailableAttr`, and so is any"
+               & " attribute Clang writes into the function's type, a call"
+               & "ing convention above all. `BuiltinAttr` stays D1065's, p"
+               & "assed over only where Clang added it. Nothing of a passe"
+               & "d-over attribute reaches the binding."
+               & LF
+               & LF
+               & "A function C says does not return, by `noreturn` in its "
+               & "type, by `_Noreturn` or by `[[noreturn]]`, is declared `"
+               & "-> noreturn` ([0890]) and its metadata entry says `""nore"
+               & "turn"": true`; no other entry gains the member, so every "
+               & "binding made before generates byte for byte. It is bound"
+               & " with a `void` result, as a direct import. One with a re"
+               & "sult type, an export, an `incoming_varargs` handler and "
+               & "a form that needs an adapter are refused, each in words "
+               & "that say so.",
             when 1066 =>
                "Chosen: the thirteen scalar names, as `Landin.Types` spe"
                & "lls them, are avoided as the keywords are: such a C name"
@@ -28357,6 +28403,22 @@ package body Landin.Diagnostics.Citations.Texts is
                & "from any other, and only trouble logged after it stops a"
                & " run. A run stopped by the pace names the command in its"
                & " refusal. Nothing clears the trouble on its own.",
+            when 1253 =>
+               "Chosen: an ESP run, RAM or boot, holding the rig's lock "
+               & "and before it touches its board, reads the listing of it"
+               & "s own hub and of its console's hub where the board has t"
+               & "wo ports. A port of its own that the listing shows `off`"
+               & " it switches on, as one action of D725's pace like any o"
+               & "ther power operation: unacknowledged USB trouble stops i"
+               & "t, the Arty must be off the cascade, and the hub must sh"
+               & "ow its guarded port. It then waits for the board to list"
+               & " and goes on, and its `result.json` says so in `power_at"
+               & "_start`, with each hub and port switched and the reason."
+               & " A run that finds its ports on records nothing, and a bo"
+               & "ard's record never carries the member. A hub that does n"
+               & "ot list is named as `unread` and left alone. A switch th"
+               & "at fails or is refused fails the run, with the port stil"
+               & "l off and the same words about it as a failed cycle's.",
             when 836 =>
                "Chosen: the ESP32-C5's, the ESP32-C3's and the STM32H753"
                & "'s tools, which open a tty, run themselves again through"
@@ -28821,6 +28883,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & "s what the real one wrote, so it runs on a host without "
                & "a Cortex-M toolchain; the stand-in is one of the files s"
                & "hown. A section has a program or a fixture, not both.",
+            when 1251 =>
+               "Chosen: `refine` reports the diagnostic. The label that "
+               & "repeats the report's span is left out where the code's r"
+               & "ow lets a report go without one. Where the row promises "
+               & "exactly one label, as L0313's and L0340's do and most ro"
+               & "ws that take a label, the label is kept and the row stay"
+               & "s true of every occurrence: the report then shows its sp"
+               & "an once, with the label's words under it, as it already "
+               & "did for a label that explains the primary span. The test"
+               & " program asks for the refusal before it runs anything, t"
+               & "hrough `Landin.Diagnostics.Checking.Refuse_Repeated_Plac"
+               & "es`, so a check that passes its own span still fails the"
+               & " case or fixture that reaches it. The switch is the prog"
+               & "ram's and not the build mode's: a debug build of `refine"
+               & "` reports as a release build does.",
             when 542 =>
                "Chosen: a device is described in Landin source, as one m"
                & "odule made only of tool directives in [1740]'s `tool_dir"

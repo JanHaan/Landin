@@ -2150,6 +2150,9 @@ package body Landin.Diagnostics.Citations is
             when 1220 =>
                "An analysis that exhausts the server's stack or memory i"
                & "s that document's defect",
+            when 1250 =>
+               "A publication's defect replaces what the module had show"
+               & "n",
             when 1074 =>
                "A program the grammar derives is read by the grammar alo"
                & "ne",
@@ -2442,6 +2445,9 @@ package body Landin.Diagnostics.Citations is
             when 1065 =>
                "An attribute Clang adds to one of its builtins is not th"
                & "e header's",
+            when 1252 =>
+               "An attribute that says nothing of the call is passed ove"
+               & "r, and `noreturn` is bound",
             when 1066 =>
                "A C name that is one of Landin's scalar names takes `c_`",
             when 1067 =>
@@ -2580,6 +2586,9 @@ package body Landin.Diagnostics.Citations is
             when 835 =>
                "USB trouble stops the pace until it is acknowledged with"
                & " a reason",
+            when 1253 =>
+               "An ESP run switches on a port of its own that it finds o"
+               & "ff",
             when 836 =>
                "A board tool that opens a tty runs itself in the tty's g"
                & "roup",
@@ -2640,6 +2649,9 @@ package body Landin.Diagnostics.Citations is
                & "with",
             when 1230 =>
                "A diagnostic's example may be a fixture",
+            when 1251 =>
+               "A related label on the report's own span is a defect onl"
+               & "y in the test program",
             when 542 =>
                "A device description is a module of directives, and its "
                & "generated half has one text",
@@ -4020,6 +4032,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 1220 =>
                "Decisions: The toolchain, C and the machine",
+            when 1250 =>
+               "Decisions: The toolchain, C and the machine",
             when 1074 =>
                "Decisions: The toolchain, C and the machine",
             when 261 =>
@@ -4248,6 +4262,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 1065 =>
                "Decisions: The toolchain, C and the machine",
+            when 1252 =>
+               "Decisions: The toolchain, C and the machine",
             when 1066 =>
                "Decisions: The toolchain, C and the machine",
             when 1067 =>
@@ -4348,6 +4364,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 835 =>
                "Decisions: The toolchain, C and the machine",
+            when 1253 =>
+               "Decisions: The toolchain, C and the machine",
             when 836 =>
                "Decisions: The toolchain, C and the machine",
             when 645 =>
@@ -4389,6 +4407,8 @@ package body Landin.Diagnostics.Citations is
             when 599 =>
                "Decisions: The toolchain, C and the machine",
             when 1230 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1251 =>
                "Decisions: The toolchain, C and the machine",
             when 542 =>
                "Decisions: The toolchain, C and the machine",
@@ -5982,6 +6002,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d1220-an-analysis-that-exh"
                & "austs-the-server-s-stack-or-memory-is-that-document-s-de"
                & "fect",
+            when 1250 =>
+               "https://www.701.dev/spec.html#d1250-a-publication-s-defe"
+               & "ct-replaces-what-the-module-had-shown",
             when 1074 =>
                "https://www.701.dev/spec.html#d1074-a-program-the-gramma"
                & "r-derives-is-read-by-the-grammar-alone",
@@ -6328,6 +6351,10 @@ package body Landin.Diagnostics.Citations is
             when 1065 =>
                "https://www.701.dev/spec.html#d1065-an-attribute-clang-a"
                & "dds-to-one-of-its-builtins-is-not-the-header-s",
+            when 1252 =>
+               "https://www.701.dev/spec.html#d1252-an-attribute-that-sa"
+               & "ys-nothing-of-the-call-is-passed-over-and-noreturn-is-bo"
+               & "und",
             when 1066 =>
                "https://www.701.dev/spec.html#d1066-a-c-name-that-is-one"
                & "-of-landin-s-scalar-names-takes-c",
@@ -6494,6 +6521,9 @@ package body Landin.Diagnostics.Citations is
             when 835 =>
                "https://www.701.dev/spec.html#d835-usb-trouble-stops-the"
                & "-pace-until-it-is-acknowledged-with-a-reason",
+            when 1253 =>
+               "https://www.701.dev/spec.html#d1253-an-esp-run-switches-"
+               & "on-a-port-of-its-own-that-it-finds-off",
             when 836 =>
                "https://www.701.dev/spec.html#d836-a-board-tool-that-ope"
                & "ns-a-tty-runs-itself-in-the-tty-s-group",
@@ -6568,6 +6598,10 @@ package body Landin.Diagnostics.Citations is
             when 1230 =>
                "https://www.701.dev/spec.html#d1230-a-diagnostic-s-examp"
                & "le-may-be-a-fixture",
+            when 1251 =>
+               "https://www.701.dev/spec.html#d1251-a-related-label-on-t"
+               & "he-report-s-own-span-is-a-defect-only-in-the-test-progra"
+               & "m",
             when 542 =>
                "https://www.701.dev/spec.html#d542-a-device-description-"
                & "is-a-module-of-directives-and-its-generated-half-has-one"
