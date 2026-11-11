@@ -386,9 +386,13 @@ package body Landin.IR.Verifier is
           else Landin.Types.Holds
             (Held, Landin.Types.Integer_Name (Element), Facts));
 
+      --  Probed: whether the scratch probe counts the array.  It counts
+      --  what a routine's walk allocates; a table the whole unit sizes is
+      --  on the heap for the stack's sake and is none of its figures.
       generic
          type Element is private;
          Initial : Element;
+         Probed : Boolean := True;
       package Scratch_Arrays is
          type Elements is array (Positive range <>) of Element;
          type Elements_Access is access Elements;
@@ -408,7 +412,7 @@ package body Landin.IR.Verifier is
          begin
             if Value.Data /= null then
                Free (Value.Data);
-               if Probe /= null then
+               if Probed and then Probe /= null then
                   Probe.Releases := Probe.Releases + 1;
                   Probe.Live := Probe.Live - 1;
                   Probe.Live_Bytes := Probe.Live_Bytes - Value.Bytes;
@@ -428,19 +432,23 @@ package body Landin.IR.Verifier is
                raise Landin.Compiler_Defect with
                  "scratch owner allocated twice";
             end if;
-            Checkpoint;
+            if Probed then
+               Checkpoint;
+            end if;
             --  Publish the allocation immediately to its controlled owner.
             --  Fill in place: no input-sized initialization/return temporary.
             Value.Data := new Elements (1 .. Count);
             Value.Bytes := Bytes;
-            if Probe /= null then
+            if Probed and then Probe /= null then
                Probe.Allocations := Probe.Allocations + 1;
                Probe.Live := Probe.Live + 1;
                Probe.Live_Bytes := Probe.Live_Bytes + Bytes;
                Probe.Peak_Bytes := System.Storage_Elements.Storage_Count'Max
                  (Probe.Peak_Bytes, Probe.Live_Bytes);
             end if;
-            Checkpoint;
+            if Probed then
+               Checkpoint;
+            end if;
             for Held of Value.Data.all loop
                Held := Initial;
             end loop;
@@ -450,6 +458,8 @@ package body Landin.IR.Verifier is
       package Flags is new Scratch_Arrays (Boolean, False);
       package Indices is new Scratch_Arrays (Natural, 0);
       package Images is new Scratch_Arrays (Landin.Packed.Image, 0);
+      package Item_Marks is new Scratch_Arrays
+        (Item_Id, No_Item, Probed => False);
       --  A pointer read Pointer_Provenance traces.  Instantiated once per
       --  walk rather than per routine: each instance elaborates a tagged
       --  owner type, and registering one is not free.
@@ -3927,11 +3937,16 @@ package body Landin.IR.Verifier is
       --  is used by canonical registration, relocations or instructions.
       declare
          type Visit_State is (Unseen, Active, Complete);
-         Seen : array (1 .. Signature_Count (Of_Unit)) of Visit_State :=
-           [others => Unseen];
+         --  One entry a signature and one a pointee, so on the heap as
+         --  every table the program sizes is.
+         package States is new Scratch_Arrays
+           (Visit_State, Unseen, Probed => False);
+         Seen_Owner, Pointers_Owner : States.Owner;
 
-         Pointers : array (1 .. Pointee_Count (Of_Unit)) of Visit_State :=
-           [others => Unseen];
+         function Seen return States.Elements_Access
+           is (Seen_Owner.Data);
+         function Pointers return States.Elements_Access
+           is (Pointers_Owner.Data);
 
          function Visit (Signature : Signature_Id) return Boolean;
          function Visit_Pointer (Pointee : Pointee_Id) return Boolean;
@@ -4034,6 +4049,8 @@ package body Landin.IR.Verifier is
             return True;
          end Visit;
       begin
+         States.Allocate (Seen_Owner, Signature_Count (Of_Unit));
+         States.Allocate (Pointers_Owner, Pointee_Count (Of_Unit));
          for Position in 1 .. Signature_Count (Of_Unit) loop
             if not Visit (Signature_Id (Position)) then
                return (Kind => Signature_Part_Malformed, others => <>);
@@ -4363,47 +4380,55 @@ package body Landin.IR.Verifier is
       --  gap.
       declare
          Total : constant Natural := Natural (Of_Unit.Images.Length);
-         Seen  : array (1 .. Positive'Max (1, Total))
-                   of Item_Id := [others => No_Item];
+         --  One entry for every element of every image: a module that
+         --  holds a mebibyte of data made this table eight in the frame,
+         --  which is all of a process's stack, and the check ended as
+         --  the host exhausted.
+         Owner : Item_Marks.Owner;
       begin
-         for Which in 1 .. Item_Count (Of_Unit) loop
-            declare
-               Held : constant Item_Record :=
-                 Of_Unit.Items.Element (Which);
-            begin
-               if Held.Image.Count /= 0 then
-                  --  Subtraction-safe against Natural overflow, so a
-                  --  corrupt Held.Image.First at Natural'Last does not
-                  --  raise Constraint_Error before the walk speaks.  The
-                  --  two conditions read left-to-right: the base has to
-                  --  be inside the vector, and the run past the base has
-                  --  to fit the bytes that follow.
-                  if Held.Image.First > Total
-                    or else Held.Image.Count > Total - Held.Image.First
-                  then
-                     return (Kind => Item_Runs_Overlap,
-                             Item => Item_Id (Which), others => <>);
-                  end if;
-
-                  for Position in
-                    Held.Image.First + 1
-                    .. Held.Image.First + Held.Image.Count
-                  loop
-                     if Seen (Position) /= No_Item then
+         Item_Marks.Allocate (Owner, Positive'Max (1, Total));
+         declare
+            Seen : Item_Marks.Elements renames Owner.Data.all;
+         begin
+            for Which in 1 .. Item_Count (Of_Unit) loop
+               declare
+                  Held : constant Item_Record :=
+                    Of_Unit.Items.Element (Which);
+               begin
+                  if Held.Image.Count /= 0 then
+                     --  Subtraction-safe against Natural overflow, so a
+                     --  corrupt Held.Image.First at Natural'Last does not
+                     --  raise Constraint_Error before the walk speaks.  The
+                     --  two conditions read left-to-right: the base has to
+                     --  be inside the vector, and the run past the base has
+                     --  to fit the bytes that follow.
+                     if Held.Image.First > Total
+                       or else Held.Image.Count > Total - Held.Image.First
+                     then
                         return (Kind => Item_Runs_Overlap,
                                 Item => Item_Id (Which), others => <>);
                      end if;
-                     Seen (Position) := Item_Id (Which);
-                  end loop;
-               end if;
-            end;
-         end loop;
 
-         for Position in 1 .. Total loop
-            if Seen (Position) = No_Item then
-               return (Kind => Item_Runs_Overlap, others => <>);
-            end if;
-         end loop;
+                     for Position in
+                       Held.Image.First + 1
+                       .. Held.Image.First + Held.Image.Count
+                     loop
+                        if Seen (Position) /= No_Item then
+                           return (Kind => Item_Runs_Overlap,
+                                   Item => Item_Id (Which), others => <>);
+                        end if;
+                        Seen (Position) := Item_Id (Which);
+                     end loop;
+                  end if;
+               end;
+            end loop;
+
+            for Position in 1 .. Total loop
+               if Seen (Position) = No_Item then
+                  return (Kind => Item_Runs_Overlap, others => <>);
+               end if;
+            end loop;
+         end;
       end;
 
       --  D67's one descriptor per aggregate field is filled in the same
@@ -4413,42 +4438,46 @@ package body Landin.IR.Verifier is
       declare
          Total : constant Natural :=
            Natural (Of_Unit.Aggregate_Images.Length);
-         Seen  : array (1 .. Positive'Max (1, Total))
-                   of Item_Id := [others => No_Item];
+         Owner : Item_Marks.Owner;
       begin
-         for Which in 1 .. Item_Count (Of_Unit) loop
-            declare
-               Held : constant Item_Record := Of_Unit.Items.Element (Which);
-            begin
-               if Held.Aggregate_Images.Count /= 0 then
-                  if Held.Aggregate_Images.First > Total
-                    or else Held.Aggregate_Images.Count
-                              > Total - Held.Aggregate_Images.First
-                  then
-                     return (Kind => Item_Runs_Overlap,
-                             Item => Item_Id (Which), others => <>);
-                  end if;
-
-                  for Position in
-                    Held.Aggregate_Images.First + 1
-                    .. Held.Aggregate_Images.First
-                         + Held.Aggregate_Images.Count
-                  loop
-                     if Seen (Position) /= No_Item then
+         Item_Marks.Allocate (Owner, Positive'Max (1, Total));
+         declare
+            Seen : Item_Marks.Elements renames Owner.Data.all;
+         begin
+            for Which in 1 .. Item_Count (Of_Unit) loop
+               declare
+                  Held : constant Item_Record := Of_Unit.Items.Element (Which);
+               begin
+                  if Held.Aggregate_Images.Count /= 0 then
+                     if Held.Aggregate_Images.First > Total
+                       or else Held.Aggregate_Images.Count
+                                 > Total - Held.Aggregate_Images.First
+                     then
                         return (Kind => Item_Runs_Overlap,
                                 Item => Item_Id (Which), others => <>);
                      end if;
-                     Seen (Position) := Item_Id (Which);
-                  end loop;
-               end if;
-            end;
-         end loop;
 
-         for Position in 1 .. Total loop
-            if Seen (Position) = No_Item then
-               return (Kind => Item_Runs_Overlap, others => <>);
-            end if;
-         end loop;
+                     for Position in
+                       Held.Aggregate_Images.First + 1
+                       .. Held.Aggregate_Images.First
+                            + Held.Aggregate_Images.Count
+                     loop
+                        if Seen (Position) /= No_Item then
+                           return (Kind => Item_Runs_Overlap,
+                                   Item => Item_Id (Which), others => <>);
+                        end if;
+                        Seen (Position) := Item_Id (Which);
+                     end loop;
+                  end if;
+               end;
+            end loop;
+
+            for Position in 1 .. Total loop
+               if Seen (Position) = No_Item then
+                  return (Kind => Item_Runs_Overlap, others => <>);
+               end if;
+            end loop;
+         end;
       end;
 
       --  The operand vector is owned by instruction runs, which a call

@@ -5,10 +5,13 @@ with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
+with Landin.Backend.Dispatch;
 with Landin.Backend.X86_64.Allocation;
 with Landin.Driver;
 with Landin.Backend.X86_64.Machine;
 with Landin.Build_Reports;
+with Landin.Checking;
+with Landin.Debugging;
 with Landin.IR.Shape_Measurement;
 with Landin.Layouts;
 with Landin.Optimization;
@@ -20,6 +23,7 @@ with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets.Layouts;
+with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
 with Landin.Types;
 
@@ -148,22 +152,134 @@ package body Landin.Tests.Backend_Scale_Suite is
          "an equivalent private body still folds after the distinct run");
    end Many_Private_Bodies;
 
-   --  What the emitter keeps for each item is on the heap.  In its frame
-   --  those tables took some four hundred bytes a routine, so twenty
-   --  thousand routines did not fit a process's eight megabytes and the
-   --  build ended as the host exhausted.  Emitted here on a stack of one
-   --  megabyte, four thousand routines would not have fitted either.
+   --  What lowering and each emitter keep for each declaration, syntax
+   --  node and item is on the heap.  In their frames those tables grew
+   --  with the program: twenty thousand routines did not fit the eight
+   --  megabytes a process's stack is given in the x86-64 emitter, nor
+   --  forty thousand in lowering on any target, and the build ended as
+   --  the host exhausted.  Lowered and emitted here on a stack of half a
+   --  megabyte, with debug output so that the DWARF writer runs too; the
+   --  frame tables of every one of them passed that at this size.
    procedure Item_Tables_Are_Off_The_Stack
      (Item : in out Landin.Testing.Context)
    is
-      Routines : constant := 4000;
-      Work : Landin.Stages.Compilation :=
-        Landin.Stages.Create (Targets.Linux_X86_64);
+      Routines : constant := 8000;
       Source : US.Unbounded_String;
-      Text : US.Unbounded_String;
-      Report : Reports.Report;
-      Overflowed : Boolean := False;
-      Failure : US.Unbounded_String;
+
+      procedure Lower_And_Emit
+        (Work : aliased in out Landin.Stages.Compilation;
+         Back : Landin.Stages.Pipeline; Facts : Targets.Target_Facts;
+         Lowered : out Natural; Text : out US.Unbounded_String;
+         Report : in out Reports.Report);
+
+      procedure Lower_And_Emit
+        (Work : aliased in out Landin.Stages.Compilation;
+         Back : Landin.Stages.Pipeline; Facts : Targets.Target_Facts;
+         Lowered : out Natural; Text : out US.Unbounded_String;
+         Report : in out Reports.Report)
+      is
+         Debug : aliased Landin.Debugging.Information
+           (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+      begin
+         Lowered := Landin.Stages.Run (Back, Work);
+         if Lowered /= 1 then
+            return;
+         end if;
+         Landin.Debugging.Set_Directory (Debug, "/work");
+         for Index in 1 .. Landin.Stages.Source_Count (Work) loop
+            Landin.Debugging.Append
+              (Debug, Landin.Stages.Source
+                 (Work, Landin.Stages.Nth_Source (Work, Index)));
+         end loop;
+         for Index in 1 .. Landin.Checking.Declaration_Limit
+           (Landin.Stages.Types (Work).all)
+         loop
+            declare
+               Binding : constant Landin.Checking.Declaration_Id :=
+                 Landin.Checking.Declaration_Id (Index);
+               Shape : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Result_Shape_Of
+                   (Landin.Stages.Types (Work).all, Binding);
+               use type Landin.Checking.Signature_Id;
+            begin
+               if Shape /= Landin.Checking.No_Signature then
+                  for Field in 1 ..
+                    Landin.Checking.Signature_Result_Count
+                      (Landin.Stages.Types (Work).all, Shape)
+                  loop
+                     Landin.Debugging.Append_Result_Name
+                       (Debug, Binding,
+                        Landin.Checking.Nth_Signature_Result
+                          (Landin.Stages.Types (Work).all,
+                           Shape, Field).Name);
+                  end loop;
+               end if;
+            end;
+         end loop;
+         Landin.Backend.Dispatch.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Facts,
+            Landin.Targets.Levels.Default_Level (Facts),
+            (Opt.None, Opt.Off), Text, Report,
+            Debug => Debug'Access);
+      end Lower_And_Emit;
+
+      procedure Run (Facts : Targets.Target_Facts; Name : String);
+
+      procedure Run (Facts : Targets.Target_Facts; Name : String) is
+         Work : aliased Landin.Stages.Compilation :=
+           Landin.Stages.Create (Facts);
+         Front, Back : Landin.Stages.Pipeline;
+         Written : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source
+             (Work, "tables.ldn", US.To_String (Source));
+         Text : US.Unbounded_String;
+         Report : Reports.Report;
+         Overflowed : Boolean := False;
+         Lowered : Natural := 0;
+         Failure : US.Unbounded_String;
+         use type Landin.Source.Source_Id;
+      begin
+         Landin.Testing.Check
+           (Item, Written /= Landin.Source.No_Source, "source is retained");
+         Landin.Stages.Append (Front, Frontend'Access);
+         Landin.Stages.Append (Front, Configurer'Access);
+         Landin.Stages.Append (Front, Resolver'Access);
+         Landin.Stages.Append (Front, Checker'Access);
+         Landin.Stages.Append (Back, Lowerer'Access);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Stages.Run (Front, Work), 4,
+            Name & ": the source is checked: "
+            & Landin.Stages.Rendered_Report (Work));
+         declare
+            task Bounded with Storage_Size => 256 * 1024;
+
+            task body Bounded is
+            begin
+               Lower_And_Emit (Work, Back, Facts, Lowered, Text, Report);
+            exception
+               when Storage_Error =>
+                  Overflowed := True;
+               when Error : others =>
+                  Failure := US.To_Unbounded_String
+                    (Ada.Exceptions.Exception_Information (Error));
+            end Bounded;
+         begin
+            null;
+         end;
+         Landin.Testing.Check
+           (Item, not Overflowed,
+            Name & ": no stack grows with the number of routines");
+         Landin.Testing.Check_Equal
+           (Item, Lowered, 1, Name & ": the program is lowered: "
+            & Landin.Stages.Rendered_Report (Work));
+         Landin.Testing.Check
+           (Item, US.Length (Failure) = 0
+              and then Contains (US.To_String (Text), LF & "private_"
+                                 & Image (Routines) & ":" & LF),
+            Name & ": every routine is emitted: " & US.To_String (Failure));
+      end Run;
    begin
       for Index in 1 .. Routines loop
          US.Append
@@ -171,31 +287,12 @@ package body Landin.Tests.Backend_Scale_Suite is
             & ": (x: i64) -> (r: i64) = r = x +% " & Image (Index)
             & " end private_" & Image (Index) & LF);
       end loop;
-      Lower (Item, Work, US.To_String (Source));
-      declare
-         task Bounded with Storage_Size => 1024 * 1024;
-
-         task body Bounded is
-         begin
-            Emit (Work, Opt.None, Text, Report);
-         exception
-            when Storage_Error =>
-               Overflowed := True;
-            when Error : others =>
-               Failure := US.To_Unbounded_String
-                 (Ada.Exceptions.Exception_Information (Error));
-         end Bounded;
-      begin
-         null;
-      end;
-      Landin.Testing.Check
-        (Item, not Overflowed,
-         "the emitter's stack does not grow with the number of routines");
-      Landin.Testing.Check
-        (Item, US.Length (Failure) = 0
-           and then Contains (US.To_String (Text), LF & "private_"
-                              & Image (Routines) & ":" & LF),
-         "every routine is emitted: " & US.To_String (Failure));
+      Run (Targets.Linux_X86_64, "linux-x86-64");
+      Run (Targets.Linux_Arm64, "linux-arm64");
+      Run (Targets.Linux_RV64, "linux-rv64");
+      Run (Targets.Cortex_M, "cortex-m");
+      Run (Targets.RV32, "rv32");
+      Run (Targets.Xtensa, "xtensa");
    end Item_Tables_Are_Off_The_Stack;
 
    procedure Exposure_Channels (Item : in out Landin.Testing.Context) is

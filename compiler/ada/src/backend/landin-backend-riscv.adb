@@ -630,21 +630,40 @@ package body Landin.Backend.RiscV is
 
       --  Each routine's one frame, which emission and debug output both
       --  read; a build without debug output keeps none past its routine.
+      --  The table is on the heap: in this frame it grows with the
+      --  program until its stack is spent.
       type Frame_Array is array (Positive range <>) of Debug_Frame_Access;
+      type Frame_Array_Access is access Frame_Array;
       procedure Free_Frame is new Ada.Unchecked_Deallocation
         (Frame, Debug_Frame_Access);
+      procedure Free_Frames is new Ada.Unchecked_Deallocation
+        (Frame_Array, Frame_Array_Access);
       type Retained_Frames (Last : Natural) is
         new Ada.Finalization.Limited_Controlled with record
-         Frames : Frame_Array (1 .. Last) := [others => null];
+         Frames : Frame_Array_Access;
       end record;
+      overriding procedure Initialize (Owned : in out Retained_Frames);
       overriding procedure Finalize (Owned : in out Retained_Frames);
+      overriding procedure Initialize (Owned : in out Retained_Frames) is
+      begin
+         Owned.Frames := new Frame_Array (1 .. Owned.Last);
+         --  In a loop, so that no aggregate the table's size is built in
+         --  this frame on its way to the heap.
+         for Held of Owned.Frames.all loop
+            Held := null;
+         end loop;
+      end Initialize;
       overriding procedure Finalize (Owned : in out Retained_Frames) is
       begin
+         if Owned.Frames = null then
+            return;
+         end if;
          for Index in Owned.Frames'Range loop
             if Owned.Frames (Index) /= null then
                Free_Frame (Owned.Frames (Index));
             end if;
          end loop;
+         Free_Frames (Owned.Frames);
       end Finalize;
       Saved : Retained_Frames (Landin.IR.Item_Count (Of_Unit));
       function Cached_Frame (Item : Landin.IR.Item_Id)
@@ -1198,9 +1217,17 @@ package body Landin.Backend.RiscV is
         (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
          else Landin.Backend.Entry_Point.Argument_Initializer
            (Of_Unit, Names));
-      Allocated_Symbols : array
-        (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
-          Unbounded.Unbounded_String;
+      --  On the heap, as every table with an entry for each item is: in
+      --  this frame they grow with the program until its stack is spent,
+      --  which ends the build as the host exhausted.
+      type Symbol_Texts is array (Positive range <>) of
+        Unbounded.Unbounded_String;
+      package Symbol_Buffers is new Landin.Backend.Work_Arrays
+        (Unbounded.Unbounded_String, Symbol_Texts,
+         Unbounded.Null_Unbounded_String);
+      Symbol_Data : Symbol_Buffers.Buffer
+        (Positive'Max (1, Landin.IR.Item_Count (Of_Unit)));
+      Allocated_Symbols : Symbol_Texts renames Symbol_Data.Data.all;
 
       --  D676: firmware's placements.  A later item may retain a section
       --  an earlier item selected.
@@ -5798,10 +5825,18 @@ package body Landin.Backend.RiscV is
       --  defect rather than something to fold.
       type Fold_State is (Unseen, Running, Settled);
 
-      Fold_Of : array (1 .. Landin.IR.Item_Count (Of_Unit))
-                  of Landin.Types.Folded := [others => 0];
-      Fold_At : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Fold_State :=
-        [others => Unseen];
+      type Item_Folds is array (Positive range <>) of Landin.Types.Folded;
+      package Item_Fold_Buffers is new Landin.Backend.Work_Arrays
+        (Landin.Types.Folded, Item_Folds, 0);
+      type Fold_States is array (Positive range <>) of Fold_State;
+      package Fold_State_Buffers is new Landin.Backend.Work_Arrays
+        (Fold_State, Fold_States, Unseen);
+      Fold_Data : Item_Fold_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_State_Data : Fold_State_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_Of : Item_Folds renames Fold_Data.Data.all;
+      Fold_At : Fold_States renames Fold_State_Data.Data.all;
 
       function Evaluate (Item : Landin.IR.Item_Id)
         return Landin.Types.Folded

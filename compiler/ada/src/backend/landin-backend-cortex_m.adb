@@ -1016,9 +1016,17 @@ package body Landin.Backend.Cortex_M is
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean;
 
-      Allocated_Symbols : array
-        (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
-          Unbounded.Unbounded_String;
+      --  On the heap, as every table with an entry for each item is: in
+      --  this frame they grow with the program until its stack is spent,
+      --  which ends the build as the host exhausted.
+      type Symbol_Texts is array (Positive range <>) of
+        Unbounded.Unbounded_String;
+      package Symbol_Buffers is new Landin.Backend.Work_Arrays
+        (Unbounded.Unbounded_String, Symbol_Texts,
+         Unbounded.Null_Unbounded_String);
+      Symbol_Data : Symbol_Buffers.Buffer
+        (Positive'Max (1, Landin.IR.Item_Count (Of_Unit)));
+      Allocated_Symbols : Symbol_Texts renames Symbol_Data.Data.all;
 
       package Section_Sets is new Ada.Containers.Hashed_Sets
         (Element_Type        => Landin.Source.Names.Name_Id,
@@ -5680,10 +5688,18 @@ package body Landin.Backend.Cortex_M is
       --  defect rather than something to fold.
       type Fold_State is (Unseen, Running, Settled);
 
-      Fold_Of : array (1 .. Landin.IR.Item_Count (Of_Unit))
-                  of Landin.Types.Folded := [others => 0];
-      Fold_At : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Fold_State :=
-        [others => Unseen];
+      type Item_Folds is array (Positive range <>) of Landin.Types.Folded;
+      package Item_Fold_Buffers is new Landin.Backend.Work_Arrays
+        (Landin.Types.Folded, Item_Folds, 0);
+      type Fold_States is array (Positive range <>) of Fold_State;
+      package Fold_State_Buffers is new Landin.Backend.Work_Arrays
+        (Fold_State, Fold_States, Unseen);
+      Fold_Data : Item_Fold_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_State_Data : Fold_State_Buffers.Buffer
+        (Landin.IR.Item_Count (Of_Unit));
+      Fold_Of : Item_Folds renames Fold_Data.Data.all;
+      Fold_At : Fold_States renames Fold_State_Data.Data.all;
 
       function Folded (Item : Landin.IR.Item_Id) return Landin.Types.Folded is
          Answer : Landin.Types.Folded := 0;
