@@ -26179,6 +26179,26 @@ package body Landin.Diagnostics.Citations.Texts is
                & "aches the terminal default instruction. That is a proper"
                & "ty of the fixture and not a recovery idiom: [1670]'s han"
                & "dler still ends the program's checked computation.",
+            when 1293 =>
+               "Chosen: D462's resume is the portable report and no mech"
+               & "anism is added. D450 admits the stack builtins on every "
+               & "target with a native backend and every backend now emits"
+               & " them, RV32 and Xtensa included, so the one source runs "
+               & "on every hosted lane and every firmware corpus. A fixtur"
+               & "e that pins a handler runs the computation whose check f"
+               & "ails on a prepared stack; the handler stores its verdict"
+               & " in a module value and resumes the context `main` saved "
+               & "when it switched there, and `main` returns the verdict a"
+               & "s its `status`, which a hosted lane reads as the process"
+               & "'s and a firmware harness as the value `main` returned. "
+               & "The verdict is 42 for exactly the expected kind and site"
+               & " and a distinct code otherwise, so a missing dispatch, a"
+               & "nother kind, another site and a call that returned each "
+               & "fail the status. The handler does not return, so D232's "
+               & "rule for a returning handler is not engaged, and its lat"
+               & "ch stays claimed as D462 says. A check that fails on `ma"
+               & "in`'s own stack, before any switch, has no saved context"
+               & " to resume; a fixture of one keeps `traps: yes`.",
             when 467 =>
                "Chosen: `--stack-report=PATH` writes, beside emitted ass"
                & "embly or an executable, one JSON row for every routine t"

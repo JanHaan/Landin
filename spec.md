@@ -22645,6 +22645,46 @@ execution. Both were declined.
 **Pinned by** the two fixtures, on the x86-64 targets they name and in
 the Cortex-M corpus.
 
+### D1293 — A handler reports its verdict by resuming `main`
+
+**The discrepancy:** a fixture that pins what a selected `panic_handler`
+received has to observe the handler, and a handler cannot return (D232).
+`runtime/compiler-unreachable-dispatches` entered itself again on the kind
+and site it expected, which stopped at the terminal default trap, and spun
+otherwise, which `traps: yes` refuses as a timeout; but a program that never
+dispatched to the handler stopped at that same trap and passed. D462's resume
+was the exact form, and was thought to need the stack builtins on targets
+whose backends did not yet emit them.
+
+**Chosen:** D462's resume is the portable report and no mechanism is added.
+D450 admits the stack builtins on every target with a native backend and
+every backend now emits them, RV32 and Xtensa included, so the one source
+runs on every hosted lane and every firmware corpus. A fixture that pins a
+handler runs the computation whose check fails on a prepared stack; the
+handler stores its verdict in a module value and resumes the context `main`
+saved when it switched there, and `main` returns the verdict as its
+`status`, which a hosted lane reads as the process's and a firmware harness
+as the value `main` returned. The verdict is 42 for exactly the expected
+kind and site and a distinct code otherwise, so a missing dispatch, another
+kind, another site and a call that returned each fail the status. The
+handler does not return, so D232's rule for a returning handler is not
+engaged, and its latch stays claimed as D462 says. A check that fails on
+`main`'s own stack, before any switch, has no saved context to resume; a
+fixture of one keeps `traps: yes`.
+
+**The alternatives:** a `core/panic` routine that ends the program with a
+status, which firmware cannot give without a harness of its own and which
+would be a library contract made for fixtures; a harness key reading a
+module value at the terminal trap through a debugger, which the firmware
+lanes have and the hosted lanes, run without one, do not; a provider per
+target, `platform/posix.exit` hosted and something else on firmware, which
+is two sources of one fixture; and a builtin that reports, which is a
+language feature for a test's sake. All were declined.
+
+**Pinned by** `runtime/compiler-unreachable-dispatches`, which returns 42
+for `unreachable` at its call's site on every target it names, and in the
+Cortex-M corpus on each of its lanes, the two RV32 machines included.
+
 ### D467 — The depth report covers every emitted routine, from its caller's stack pointer
 
 **The tour said** nothing. D447 has the compiler report, for each routine a

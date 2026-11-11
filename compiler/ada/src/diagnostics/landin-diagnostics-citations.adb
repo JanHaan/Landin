@@ -2324,6 +2324,8 @@ package body Landin.Diagnostics.Citations is
                "A fibre's backing on Cortex-M0 holds one exception frame",
             when 462 =>
                "The stack builtins' fixtures run on firmware as they are",
+            when 1293 =>
+               "A handler reports its verdict by resuming `main`",
             when 467 =>
                "The depth report covers every emitted routine, from its "
                & "caller's stack pointer",
@@ -4165,6 +4167,8 @@ package body Landin.Diagnostics.Citations is
             when 461 =>
                "Decisions: The toolchain, C and the machine",
             when 462 =>
+               "Decisions: The toolchain, C and the machine",
+            when 1293 =>
                "Decisions: The toolchain, C and the machine",
             when 467 =>
                "Decisions: The toolchain, C and the machine",
@@ -6206,6 +6210,9 @@ package body Landin.Diagnostics.Citations is
             when 462 =>
                "https://www.701.dev/spec.html#d462-the-stack-builtins-fi"
                & "xtures-run-on-firmware-as-they-are",
+            when 1293 =>
+               "https://www.701.dev/spec.html#d1293-a-handler-reports-it"
+               & "s-verdict-by-resuming-main",
             when 467 =>
                "https://www.701.dev/spec.html#d467-the-depth-report-cove"
                & "rs-every-emitted-routine-from-its-caller-s-stack-pointer",

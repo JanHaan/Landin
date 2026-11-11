@@ -1,18 +1,31 @@
 -- [1560]: reaching compiler.unreachable() raises `unreachable` through the
--- selected panic handler at the call's own site (D232).  The handler enters
--- itself again only when it receives exactly that kind and site, and a
--- second entry stops at the terminal default trap; any other report spins,
--- and a spin never satisfies `traps: yes`.
+-- selected panic handler at the call's own site (D232).  The call runs on a
+-- prepared stack, and the handler reports what it received as main's
+-- status by resuming the context main saved when it switched there (D462,
+-- D1293): 42 for exactly that kind and site, 5 for the kind at another
+-- site and its own code for another kind.  A missing dispatch reaches the
+-- terminal default trap, and a call that returned leaves 7, so each fails
+-- the status.  It imports only core/panic, so firmware runs the same source.
 import core/panic
 
 -- The call's site in this file: one, plus five times the byte offset of
 -- `compiler.unreachable()` below, plus the unreachable family's three.
-expected_site: u32 = 4194
+expected_site: u32 = 6879
+
+mut backing: [2048]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut seen: i32 = 6
 
 public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
-    if kind == panic.unreachable and site == expected_site then
-        compiler.unreachable()
-    end if
+    seen = match kind
+        panic.unreachable: if site == expected_site then 42 else 5 end if
+        panic.out_of_range: 1
+        panic.overflow: 2
+        panic.bad_conversion: 3
+        panic.stack_exhausted: 4
+    end match
+    compiler.stack_switch(addr fibre_saved, main_saved)
     loop do
     end loop
 end panic_handler
@@ -24,6 +37,16 @@ stop: (reached: bool) -> (code: i32) =
     end if
 end stop
 
+fibre: (argument: usize) -> noreturn =
+    _ = stop(argument == 1)
+    seen = 7
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end fibre
+
 public main: () -> (code: i32) =
-    code = stop(true)
+    fibre_saved = compiler.stack_prepare(backing[0..<2048], fibre, 1)
+    compiler.stack_switch(addr main_saved, fibre_saved)
+    code = seen
 end main

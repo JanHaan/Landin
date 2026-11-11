@@ -1,7 +1,7 @@
 class: runtime
 profiles: standard
-summary: reaching compiler.unreachable() hands the selected panic handler `unreachable` at the call's own site
+summary: reaching compiler.unreachable() on a prepared stack hands the selected panic handler `unreachable` at the call's own site, which it reports as main's status by resuming main (D1293)
 program: main.ldn
-traps: yes
-constructs: 1560, 1670, 1960
+status: 42
+constructs: 1560, 1670, 1960, 1995
 targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
