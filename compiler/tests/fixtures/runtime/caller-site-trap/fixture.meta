@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1262 compiler.unreachable(where) reports the trap at the call that filled the `caller` parameter, through a wrapper that forwards its own, and not at the helper's line
+program: main.ldn
+traps: yes
+constructs: 1040, 1560, 1670, 1960
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+trap_report: main.ldn:23:5: trap: unreachable

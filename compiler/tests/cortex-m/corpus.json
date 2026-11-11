@@ -1714,6 +1714,12 @@
     "runtime/caller-parameters": {
       "mode": "execute"
     },
+    "runtime/caller-site-trap": {
+      "mode": "execute"
+    },
+    "runtime/caller-site-trap-dispatches": {
+      "mode": "execute"
+    },
     "runtime/calls-return-through-the-abi": {
       "counterpart": "calls-return-through-the-abi",
       "mode": "execute",

@@ -15350,7 +15350,7 @@ with its grammar, flow edge, formatter and highlighter changes, for a line the
 language already writes. A library helper such as `require(condition)` meets
 a different limit: its trap reports the helper's site rather than its
 caller's, which a `caller` site argument to `compiler.unreachable` would
-answer; that waits for library contract helpers that need it.
+answer; D1262 has since added it.
 
 **Pinned by** the "Blocks" rule in `docs/format.md`, which the test program
 holds the formatter to.
@@ -18707,6 +18707,7 @@ The complete enabled check disposition is:
 | Volatile/atomic scalar address alignment; atom-domain validation; packed encoded membership, packed field-width fit or reserved-bit pattern validation | `bad_conversion` at the operation that validates the value. Raw packed copying still preserves every bit without extracting or validating fields. |
 | A callee returns despite `noreturn` | `unreachable` at the call, before any continuation. |
 | `compiler.unreachable()` [1560] | `unreachable` at the call, including inside `unchecked` (D278). |
+| `compiler.unreachable(where)` [1560] | `unreachable` at the call that filled the `caller` parameter `where` (D1262). |
 | In a program that prepares a stack, a routine's frame or a call's area that would go below the current stack's limit (D471); `compiler.stack_prepare` with a slice too small for its first frame and the margin (D450, D472) | `stack_exhausted` (D451) at the routine, or at the call to the builtin, including inside `unchecked`. |
 | Compiler-owned firmware entry returns | `unreachable`, synthetic site zero. Normal entry cleanup runs before an ordinary entry return reaches this guard. |
 | Recursive/concurrent panic entry, or a selected handler somehow returns | Terminal default instruction; no second handler invocation. |
@@ -30574,6 +30575,52 @@ trapping through an ordinary check, a nonnull conversion of zero, reports
 `negative/compiler-unreachable-value`, the driver case `an explicit trap has
 its own panic site`, `abi/r670-panic`'s startup modes and the Cortex-M corpus
 rows for the three runtime fixtures.
+
+### D1262 — A trap given a `caller` parameter is reported at that call
+
+**The tour said** at [1560] that `compiler.unreachable()` stops the program
+as a failed check does, and D278 reports it at its own site. D436 noted
+what that costs a library: a helper such as `require(condition)` traps at
+the helper's line, the same line for every caller, and [1040]'s `caller`
+parameter, which knows the call, had no way to reach the report.
+
+**Chosen:** `compiler.unreachable(where)`, where `where` is a `caller`
+parameter of the routine the call is written in, given by its name alone
+as D192 has a forward be. It is the same `() -> noreturn` call in every
+other respect, and reaching it raises `unreachable` through D232 at the
+site of the call that filled `where`: the call that left the position out,
+however many wrappers forwarded it since. Anything else in the argument's
+place stays L0327, an ordinary parameter of the same struct, a copy, a
+field or a labelled argument among them, because D192 lets only the
+compiler make the value of a caller position and that is what makes the
+report sound. No handler, panic map, site number or backend changes: the
+compiler knows every call of the program that fills a position of that
+struct type, and the trap compares the three coordinates with each of them
+and stops at an ordinary trap whose site is that call's. A hosted program
+with no handler prints that call's file, line and column (D361); a
+selected handler receives that call's site number, on firmware as on a
+host. A value none of them wrote, which only code outside the language can
+put there, stops at the trap's own site. The comparisons are reached only
+when the program is already stopping, and they cost code in the trapping
+routine for each such call in the program.
+
+**The alternatives:** handing the three coordinates to the panic handler,
+which changes D232's `(kind, site)` contract and the default handlers of
+every target for one builtin, and gives firmware a file number where it
+has a site; a second builtin, `compiler.unreachable_at`, which is a name
+for what the argument already says; letting any value of the struct type
+be given, which lets a program report a trap at a place no call was
+written; making every trap in a routine with a `caller` parameter report
+the caller, which takes the helper's own site from a routine that wants
+both; and a table of sites searched by a routine of the runtime, smaller
+where many calls fill one type, which adds a runtime routine and a datum
+to firmware that the comparisons do not need. That last one is the form to
+return to if the code this adds is ever measured as a cost.
+
+**Pinned by** `runtime/caller-site-trap`, whose report names the call
+through a forwarding wrapper, `runtime/caller-site-trap-dispatches`, whose
+handler is given the call's site and which the Cortex-M corpus runs, and
+`negative/compiler-unreachable-not-a-caller`.
 
 ### D279 — Linux's system interface is `platform/linux`, with no C library
 

@@ -1,0 +1,41 @@
+-- [1560]: compiler.unreachable(where) raises `unreachable` through the
+-- selected panic handler at the call that filled the `caller` parameter
+-- `where` (D1262), not at its own site.  The handler enters itself again
+-- only when it receives exactly that kind and site, and a second entry
+-- stops at the terminal default trap; any other report spins, and a spin
+-- never satisfies `traps: yes`.
+import core/panic
+
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
+-- The site of `require(value > 0)` in `half` below: one, plus five times
+-- the byte offset of that call, plus the unreachable family's three.
+expected_site: u32 = 5619
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    if kind == panic.unreachable and site == expected_site then
+        compiler.unreachable()
+    end if
+    loop do
+    end loop
+end panic_handler
+
+--- A contract check: the trap is reported where `require` was called.
+require: (holds: bool, caller where: site) -> none =
+    if not holds then compiler.unreachable(where) end if
+end require
+
+half: (value: i32) -> (result: i32) =
+    require(value > 0)
+    result = value / 2
+end half
+
+public main: () -> (code: i32) =
+    require(true)
+    code = half(4) - 2
+    code = code + half(0)
+end main

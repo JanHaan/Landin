@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1262 compiler.unreachable(where) hands the selected panic handler `unreachable` at the site of the call that filled the `caller` parameter
+program: main.ldn
+traps: yes
+constructs: 1040, 1560, 1670, 1960
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

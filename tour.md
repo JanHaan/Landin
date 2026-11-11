@@ -1064,6 +1064,16 @@ Leave out `where:` there and the report points at the wrapper's own call
 instead. Only a `caller` parameter can fill a `caller` position: a copied or
 constructed `site` cannot.
 
+A check that stops the program gives its `caller` parameter to
+`compiler.unreachable` ([1560]). The stop is then reported at the call,
+through any wrappers that passed the parameter on, and not at the check:
+
+```landin
+require: (cond: bool, caller where: site) -> none =
+    if not cond then compiler.unreachable(where) end if
+end require
+```
+
 This `site` is not the `site` that a panic handler receives at [1670]. That
 one is a single `u32` number, which the compiler gives a failing check.
 
@@ -4448,7 +4458,9 @@ without an import, which is why nobody else can use their bare names.
 Two of those calls:
 
 - `compiler.unreachable()` is a call that never returns. It stops the
-  program as a failed check does ([1670]).
+  program as a failed check does ([1670]). Given a `caller` parameter of
+  the function it is written in, `compiler.unreachable(where)`, it
+  reports the stop at the call that filled the parameter ([1040]).
 - `compiler.utf8_unvalidated(bytes)` is text of bytes known to be UTF-8,
   made without reading them and only inside `unchecked` ([0600]).
 

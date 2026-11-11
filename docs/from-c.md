@@ -712,9 +712,16 @@ assert(len % 4 == 0);
 ```
 
 ```landin
+--- Where a call was written; the compiler fills one in.
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
 --- C's `assert`: stop the program when `holds` is false.
-expect: (holds: bool) -> none =
-    if not holds then compiler.unreachable() end if
+expect: (holds: bool, caller where: site) -> none =
+    if not holds then compiler.unreachable(where) end if
 end expect
 
 --- How many whole 32-bit words a block holds; it must hold nothing else.
@@ -725,12 +732,13 @@ end words_in
 ```
 
 There is no `assert` macro; a function does its work.
-`compiler.unreachable()` never returns. It stops the program as a failed
+`compiler.unreachable` never returns. It stops the program as a failed
 check does, and a hosted program first prints where it stopped [1560].
 
-That place is the line of `compiler.unreachable()`. To report the caller's
-line instead, give `expect` a `caller` parameter, which the compiler fills
-with the call's place [1040].
+That place is the line that called `expect`, as C's `assert` names the line
+it is written on. The compiler fills a `caller` parameter with the call's
+place [1040], and `compiler.unreachable(where)` reports it. Written with no
+argument, `compiler.unreachable()` reports its own line.
 
 Nothing turns the check off as `NDEBUG` does. Many of C's assertions need
 no function at all: indexing, conversions and overflow are checked already

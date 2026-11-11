@@ -2539,6 +2539,48 @@ package body Landin.Checking is
       end if;
    end Match_Runtime_Argument;
 
+   procedure Note_Caller_Fills
+     (Into : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Call : Landin.Syntax.Node_Id;
+      Signature : Signature_Id)
+   is
+   begin
+      for Position in 1 .. Signature_Parameter_Count (Into, Signature) loop
+         declare
+            Part : constant Signature_Part :=
+              Nth_Signature_Parameter (Into, Signature, Position);
+         begin
+            if Part.Caller
+              and then not
+                (for some Written in
+                   1 .. Landin.Syntax.Argument_Count (Of_Tree, Call) =>
+                   Landin.Syntax.Kind
+                     (Of_Tree,
+                      Landin.Syntax.Nth_Argument (Of_Tree, Call, Written))
+                       = Landin.Syntax.Call_Argument
+                   and then Landin.Syntax.Argument_Label
+                     (Of_Tree,
+                      Landin.Syntax.Nth_Argument (Of_Tree, Call, Written))
+                       = Part.Name)
+            then
+               Into.Caller_Fills.Append
+                 (Caller_Fill'
+                    (Source  => Landin.Syntax.Source_Of (Of_Tree),
+                     Where   => Landin.Syntax.Anchor (Of_Tree, Call),
+                     Nominal => Part.Nominal));
+            end if;
+         end;
+      end loop;
+   end Note_Caller_Fills;
+
+   function Caller_Fill_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.Caller_Fills.Length));
+
+   function Nth_Caller_Fill
+     (Of_Table : Table; Index : Positive) return Caller_Fill
+     is (Of_Table.Caller_Fills.Element (Index));
+
    procedure Finish_Call_Match
      (Into : in out Table;
       Meanings : in out Landin.Resolution.Table;

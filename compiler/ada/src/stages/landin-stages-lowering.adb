@@ -1015,6 +1015,47 @@ package body Landin.Stages.Lowering is
       Current : IR.Block_Id := IR.No_Block;
       Active_Result : IR.Slot_Id := IR.No_Slot;
 
+      --  D1262: `compiler.unreachable(where)` traps at the call that
+      --  filled `where`.  D192 lets nothing but the compiler make the
+      --  value in a caller position, so every value `where` can hold is
+      --  one of the triples this stage writes at a call that omitted the
+      --  position.  The checker noted each such call, and they are kept
+      --  here in an order that does not depend on when a routine is
+      --  checked or lowered.  A trap compares `where` with each kept call
+      --  of its struct type and halts with that call's origin, so a
+      --  backend sees only ordinary D232 traps, each with a site its
+      --  panic map already holds.
+      type Caller_Fill is record
+         Nominal : Positive;
+         Source  : Landin.Source.Source_Id;
+         Line    : Ty.Magnitude;
+         Column  : Ty.Magnitude;
+         Where   : Landin.Source.Span;
+      end record;
+      function Before (Left, Right : Caller_Fill) return Boolean
+        is (if Left.Nominal /= Right.Nominal
+            then Left.Nominal < Right.Nominal
+            elsif Natural (Left.Source) /= Natural (Right.Source)
+            then Natural (Left.Source) < Natural (Right.Source)
+            elsif Left.Line /= Right.Line then Left.Line < Right.Line
+            else Left.Column < Right.Column);
+      function Same_Fill (Left, Right : Caller_Fill) return Boolean
+        is (Left.Nominal = Right.Nominal
+            and then Natural (Left.Source) = Natural (Right.Source)
+            and then Left.Line = Right.Line
+            and then Left.Column = Right.Column);
+      package Caller_Fill_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Caller_Fill, "<" => Before, "=" => Same_Fill);
+      --  What the checker noted, read when the first trap needs it, and
+      --  what this stage filled.  The second is held to the first for a
+      --  struct type some trap names, once every routine is lowered.
+      Caller_Fills : Caller_Fill_Sets.Set;
+      Caller_Fills_Read : Boolean := False;
+      Lowered_Fills : Caller_Fill_Sets.Set;
+      package Trapped_Nominal_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Positive);
+      Trapped_Nominals : Trapped_Nominal_Sets.Set;
+
       type Cleanup_Entry is record
          Kind   : Cleanup.Cleanup_Kind := Cleanup.Deferred_Call;
          Call   : Syn.Node_Id := Syn.No_Node;
@@ -5870,6 +5911,148 @@ package body Landin.Stages.Lowering is
          --  `unchecked` region removes it.
          if Landin.Configuration.Unreachable_Call
            (Spellings.all, Of_Tree, Node)
+           and then Syn.Argument_Count (Of_Tree, Node) = 1
+         then
+            --  D1262: the file is compared once for each run of calls in
+            --  it, then the line and the column of each.  A value no kept
+            --  call wrote, which only code outside the language can pass,
+            --  traps at the `compiler.unreachable` itself.  The slot is
+            --  read again in each block, because a value does not cross
+            --  one.
+            declare
+               Given : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, 1);
+               Means : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Given);
+               Held_In : constant IR.Slot_Id :=
+                 Slot_For (Of_Tree, Given, Means);
+               Nominal : constant Positive :=
+                 Landin.Checking.Nominal_Identities.Position
+                   (Types.all,
+                    Landin.Checking.Nominal_Of (Types.all, Means));
+               Site : constant Landin.Provenance.Origin :=
+                 Syn.Origin (Of_Tree, Node);
+               Last_Source : Natural := 0;
+               --  Two blocks nothing has filled yet: where the next
+               --  file's test goes, and where a call's failed line or
+               --  column test goes on to.
+               File_Test : IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+               Call_Test : IR.Block_Id := IR.No_Block;
+
+               --  Fills Tests: on to Taken when the field holds Wanted
+               --  and to Otherwise when it does not.
+               procedure Test
+                 (Tests : IR.Block_Id;
+                  Field : IR.Part_Position; Wanted : Ty.Magnitude;
+                  Taken, Otherwise : IR.Block_Id);
+
+               procedure Test
+                 (Tests : IR.Block_Id;
+                  Field : IR.Part_Position; Wanted : Ty.Magnitude;
+                  Taken, Otherwise : IR.Block_Id) is
+               begin
+                  IR.Enter (Unit.all, Filling, Tests);
+                  declare
+                     Held : constant IR.Value_Id :=
+                       IR.Emit_Load_Slot_Field
+                         (Unit.all, Filling, Held_In, Field, Ty.U32, Site);
+                     Number : constant IR.Value_Id := IR.Emit_Number
+                       (Unit.all, Filling, Ty.U32, Wanted, False, Site);
+                     Same : constant IR.Value_Id := IR.Emit_Binary
+                       (Unit.all, Filling, IR.Equal_To, Held, Number,
+                        Ty.Bool, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling, Same, Taken, Otherwise, Site);
+                  end;
+                  IR.Leave_Block (Unit.all, Filling);
+               end Test;
+
+               procedure Halt_In
+                 (Halts : IR.Block_Id; Reported : Landin.Provenance.Origin);
+
+               procedure Halt_In
+                 (Halts : IR.Block_Id; Reported : Landin.Provenance.Origin)
+               is
+               begin
+                  IR.Enter (Unit.all, Filling, Halts);
+                  IR.Emit_Halt (Unit.all, Filling, Reported);
+                  IR.Leave_Block (Unit.all, Filling);
+               end Halt_In;
+            begin
+               if not Caller_Fills_Read then
+                  for Index in
+                    1 .. Landin.Checking.Caller_Fill_Count (Types.all)
+                  loop
+                     declare
+                        Noted : constant Landin.Checking.Caller_Fill :=
+                          Landin.Checking.Nth_Caller_Fill
+                            (Types.all, Index);
+                        Position : constant Landin.Source.Position :=
+                          Landin.Source.Position_Of
+                            (Source (Context, Noted.Source),
+                             Noted.Where.First);
+                     begin
+                        Caller_Fills.Include
+                          (Caller_Fill'
+                             (Nominal =>
+                                Landin.Checking.Nominal_Identities.Position
+                                  (Types.all, Noted.Nominal),
+                              Source  => Noted.Source,
+                              Line    => Ty.Magnitude (Position.Line),
+                              Column  => Ty.Magnitude (Position.Column),
+                              Where   => Noted.Where));
+                     end;
+                  end loop;
+                  Caller_Fills_Read := True;
+               end if;
+               Trapped_Nominals.Include (Nominal);
+               IR.Emit_Jump (Unit.all, Filling, File_Test, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               for Fill of Caller_Fills loop
+                  if Fill.Nominal = Nominal then
+                     declare
+                        Same_File : constant Boolean :=
+                          Natural (Fill.Source) = Last_Source;
+                        On_Line : constant IR.Block_Id :=
+                          (if Same_File then Call_Test
+                           else Fresh (Of_Tree, Node, Scope));
+                        On_Column : constant IR.Block_Id :=
+                          Fresh (Of_Tree, Node, Scope);
+                        Halts : constant IR.Block_Id :=
+                          Fresh (Of_Tree, Node, Scope);
+                        Tests : constant IR.Block_Id := File_Test;
+                     begin
+                        if not Same_File then
+                           --  The file before this one held `where` and
+                           --  none of its calls did.
+                           if Call_Test /= IR.No_Block then
+                              Halt_In (Call_Test, Site);
+                           end if;
+                           File_Test := Fresh (Of_Tree, Node, Scope);
+                           Test (Tests, 1, Ty.Magnitude (Fill.Source),
+                                 On_Line, File_Test);
+                           Last_Source := Natural (Fill.Source);
+                        end if;
+                        Call_Test := Fresh (Of_Tree, Node, Scope);
+                        Test (On_Line, 2, Fill.Line, On_Column, Call_Test);
+                        Test (On_Column, 3, Fill.Column, Halts, Call_Test);
+                        Halt_In
+                          (Halts,
+                           (Source => Fill.Source, Where => Fill.Where));
+                     end;
+                  end if;
+               end loop;
+               Halt_In (File_Test, Site);
+               if Call_Test /= IR.No_Block then
+                  Halt_In (Call_Test, Site);
+               end if;
+            end;
+            Current := IR.No_Block;
+            return IR.No_Value;
+         end if;
+         if Landin.Configuration.Unreachable_Call
+           (Spellings.all, Of_Tree, Node)
          then
             IR.Emit_Halt (Unit.all, Filling, Syn.Origin (Of_Tree, Node));
             IR.Leave_Block (Unit.all, Filling);
@@ -6554,6 +6737,15 @@ package body Landin.Stages.Lowering is
                      Ty.Magnitude (Position.Column)];
                begin
                   IR.Note_Caller_Source (Unit.all, Source_Id);
+                  Lowered_Fills.Include
+                    (Caller_Fill'
+                       (Nominal =>
+                          Landin.Checking.Nominal_Identities.Position
+                            (Types.all, Id),
+                        Source  => Source_Id,
+                        Line    => Fields (2),
+                        Column  => Fields (3),
+                        Where   => Syn.Anchor (Of_Tree, Node)));
                   for Field in Fields'Range loop
                      Add_Stored_Field (Id, Field, Slot => Temporary);
                      declare
@@ -21345,6 +21537,18 @@ package body Landin.Stages.Lowering is
                Landin.Checking.Restore_Routine_View (Types.all, Previous);
                raise;
          end;
+      end loop;
+
+      --  D1262: a trap compared its `caller` parameter with the calls
+      --  the checker noted.  A call this stage filled and the checker did
+      --  not note would be reported at the trap instead, silently.
+      for Fill of Lowered_Fills loop
+         if Trapped_Nominals.Contains (Fill.Nominal)
+           and then not Caller_Fills.Contains (Fill)
+         then
+            raise Landin.Compiler_Defect with
+              "a call filled a caller position the checker did not note";
+         end if;
       end loop;
 
       --  Text datums were appended after every routine and declaration
