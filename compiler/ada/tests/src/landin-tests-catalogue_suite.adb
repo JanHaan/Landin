@@ -4,6 +4,9 @@
 --  separately from prose, and that rendering has focused golden tests.
 --  These cases do the first; the golden is the last one.
 
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
+
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Explanations;
 with Landin.Diagnostics.Lexical;
@@ -28,6 +31,7 @@ package body Landin.Tests.Catalogue_Suite is
 
    use type Landin.Diagnostics.Severity;
    use type Rows.Code_Name;
+   use type Landin.Platform.Read_Status;
    use type Landin.Tokens.Fault_Kind;
    use type Rows.Disposition;
    use type Landin.Source.Byte_Offset;
@@ -558,9 +562,91 @@ package body Landin.Tests.Catalogue_Suite is
    --  real-host exception; nothing is written through the overlay.
    procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context);
 
+   --  SHOWN is what the executable carries for CODE's example fixture.
+   --  Its first line names the fixture after PREFIX; the fixture's
+   --  recorded report, read from the checkout as this suite's example
+   --  case reads the library, is what SHOWN ends with, each line of it
+   --  indented, and that report begins with the code.
+   procedure Check_Fixture_Example
+     (Item   : in out Landin.Testing.Context;
+      Real   : Landin.Platform.Filesystem'Class;
+      Code   : String;
+      Shown  : String;
+      Prefix : String);
+
+   procedure Check_Fixture_Example
+     (Item   : in out Landin.Testing.Context;
+      Real   : Landin.Platform.Filesystem'Class;
+      Code   : String;
+      Shown  : String;
+      Prefix : String)
+   is
+      use Ada.Strings.Fixed;
+      Stop : constant Natural := Index (Shown, " of the repository");
+   begin
+      if Shown'Length <= Prefix'Length
+        or else Shown (Shown'First .. Shown'First + Prefix'Length - 1)
+                  /= Prefix
+        or else Stop = 0
+      then
+         Landin.Testing.Fail
+           (Item, Code & "'s fixture example does not begin by naming it");
+         return;
+      end if;
+
+      declare
+         Name   : constant String :=
+           Shown (Shown'First + Prefix'Length .. Stop - 1);
+         Where  : constant String :=
+           "../tests/fixtures/" & Name & "/expected.txt";
+         Report : Ada.Strings.Unbounded.Unbounded_String;
+         Status : Landin.Platform.Read_Status;
+         Lines  : Ada.Strings.Unbounded.Unbounded_String;
+      begin
+         Real.Read_File (Where, Report, Status);
+         if Status /= Landin.Platform.Read_Ok then
+            Landin.Testing.Fail
+              (Item, Code & "'s example fixture has no report at " & Where);
+            return;
+         end if;
+
+         declare
+            Text  : constant String :=
+              Ada.Strings.Unbounded.To_String (Report);
+            Start : Positive := Text'First;
+         begin
+            Landin.Testing.Check
+              (Item, Index (Text, "error[" & Code & "]") = Text'First
+                 or else Index (Text, "warning[" & Code & "]") = Text'First,
+               Code & "'s example fixture " & Name & " reports it first");
+            for At_Byte in Text'Range loop
+               if Text (At_Byte) = LF then
+                  Ada.Strings.Unbounded.Append
+                    (Lines,
+                     (if At_Byte > Start then "    " else "")
+                     & Text (Start .. At_Byte));
+                  Start := At_Byte + 1;
+               end if;
+            end loop;
+         end;
+
+         declare
+            Tail : constant String := Ada.Strings.Unbounded.To_String (Lines);
+         begin
+            Landin.Testing.Check
+              (Item, Shown'Length >= Tail'Length
+                 and then Shown (Shown'Last - Tail'Length + 1 .. Shown'Last)
+                            = Tail,
+               Code & "'s built-in fixture example ends with the report "
+               & Name & " records");
+         end;
+      end;
+   end Check_Fixture_Example;
+
    procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context)
    is
       Examples : Natural := 0;
+      Fixtures : Natural := 0;
       Real     : aliased Landin.Platform.Native.Native_Filesystem;
    begin
       for Name in Rows.Code_Name loop
@@ -609,9 +695,30 @@ package body Landin.Tests.Catalogue_Suite is
                   end;
                end;
             end if;
+
+            --  D1230: a fixture named as the example is one of the tree,
+            --  and what the executable carries ends with the report the
+            --  fixture records, which `recorded expectations hold` runs.
+            declare
+               Shown  : constant String :=
+                 Landin.Diagnostics.Explanations.Fixture (Name);
+               Prefix : constant String := "For example, the fixture ";
+            begin
+               if Shown /= "" then
+                  Fixtures := Fixtures + 1;
+                  Landin.Testing.Check
+                    (Item, Example = "",
+                     Rows.Code (Name) & " shows a program or a fixture");
+                  Check_Fixture_Example
+                    (Item, Real, Rows.Code (Name), Shown, Prefix);
+               end if;
+            end;
          end;
       end loop;
 
+      Landin.Testing.Check
+        (Item, Fixtures >= 5,
+         "the codes whose example needs a second file name a fixture");
       Landin.Testing.Check
         (Item, Examples >= 40,
          "most codes a short program provokes show one");

@@ -1,0 +1,2 @@
+error[L0587]: the firmware image holds C constructors in `.init_array`, which compiler-owned startup never runs
+  = note: D924: build the library without `__attribute__((constructor))` or static constructors, and call its initialisation from the firmware entry

@@ -1,0 +1,7 @@
+class: end-to-end
+summary: D588: a second stage whose assembled section is longer than the 252 bytes before the boot ROM's checksum is L0538, read from the object the assembler wrote; a stand-in driver writes that object
+constructs: 1630, 1990
+targets: cortex-m0
+expect: expected.txt
+args: compile --root=../tests/fixtures/end-to-end/boot-stage-too-long/devices --target=cortex-m0 --firmware-entry=start --emit=exe --toolchain=../tests/fixtures/end-to-end/boot-stage-too-long/driver -o build/boot-stage-too-long.elf ../tests/fixtures/end-to-end/boot-stage-too-long/app
+status: 1

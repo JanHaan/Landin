@@ -35,10 +35,29 @@ The line is a comment, so the example is still the whole program, and
 `refine --target=cortex-m0 example.ldn` reproduces the report. Each option
 begins `--`, with one space before it, and none names a file, since the
 example is the only one it is compiled with (D599); `check.py` and the test
-program refuse any other `-- refine:` line, naming it. A code whose program
-needs a file of its own beside it, a description without the library's
-reference, a developer's linker script, a C archive or the object the
-assembler writes, shows no example.
+program refuse any other `-- refine:` line, naming it.
+
+A code whose program needs a file of its own beside it, a library without
+the reference description, a developer's linker script, a C archive or the
+object the assembler writes, names a fixture instead (D1230). Its section
+ends with a line of the form
+
+```text
+Example fixture: `end-to-end/boot-stage-too-long`
+```
+
+and shows what that directory of `compiler/tests/fixtures` holds: each
+text file under its path, each binary file by its path and size, then the
+command and the report it records. `refine explain` prints the same from
+its own copy, so it needs no checkout. `check.py` holds the fixture's
+report to carrying the section's code and no other, and the section to
+showing the files as they are; `python3 check.py --example=CLASS/NAME`
+prints those lines. The test program runs the fixture with every other
+recorded one. Where the refusal comes after the assembler or the linker
+ran, the fixture's `driver` stands in for the Cortex-M toolchain and
+writes the file the real one wrote, so the fixture runs on any host; with
+that toolchain installed, the same command without `--toolchain=` reaches
+the same report.
 
 A code whose diagnostic offers a fix says so. A fix is shown as a `help` line
 and handed to an editor as an edit; a likely fix is a guess, an exact one is
@@ -2046,6 +2065,32 @@ description, and the library refine found holds no
 description, or name a library that holds the reference with
 `--library=DIR`.
 
+Example fixture: `negative/placement-with-no-reference-profile`
+
+`library/core/README`:
+
+```text
+A library that holds no platform/cortex_m/reference.
+```
+
+`program.ldn`:
+
+```landin
+link(region: "RAM") table: u32 = 1
+```
+
+Run from `compiler/ada`, it is refused:
+
+```text
+$ refine --target=cortex-m0 --library=../tests/fixtures/negative/placement-with-no-reference-profile/library ../tests/fixtures/negative/placement-with-no-reference-profile/program.ldn
+error[L0518]: this placement needs a device profile, and the program selects none
+  --> ../tests/fixtures/negative/placement-with-no-reference-profile/program.ldn:1:21
+  |
+1 | link(region: "RAM") table: u32 = 1
+  |                     ^^^^^
+  = note: D543: import the device's description; with none, the library's platform/cortex_m/reference applies, and this library holds none: name one that does with --library=DIR
+```
+
 ### L0519
 
 A firmware image linked with `--linker-script=FILE`, or any RAM-layout
@@ -2060,6 +2105,64 @@ loaded sections must be in SRAM, their load and runtime addresses equal,
 and their ranges clear of the reserved stack. Change the script so the
 clause holds; the derived script refine writes beside the image as `OUT.ld`
 meets every clause.
+
+Example fixture: `end-to-end/firmware-linker-script-breaks-contract`
+
+`dev.ld`:
+
+```text
+SECTIONS { }
+```
+
+`driver`:
+
+```sh
+#!/bin/sh
+# A stand-in for the Cortex-M C driver, so that this fixture runs on a host
+# without one. It writes what the real driver wrote when the fixture was
+# made: assembled.o for the assembling step and linked.elf for the linking
+# step, each where its -o says, and an empty file for a step the fixture
+# holds no file for.
+here=$(dirname -- "$0")
+step=linked.elf
+output=
+previous=
+for argument
+do
+    case $argument in
+        -c) step=assembled.o ;;
+    esac
+    if [ "$previous" = -o ]; then
+        output=$argument
+    fi
+    previous=$argument
+done
+if [ -z "$output" ]; then
+    echo "driver: no -o names what to write" >&2
+    exit 1
+fi
+if [ -f "$here/$step" ]; then
+    cp "$here/$step" "$output"
+else
+    : > "$output"
+fi
+```
+
+`linked.elf` is binary, 4648 bytes.
+
+`main.ldn`:
+
+```landin
+start: () -> none =
+end start
+```
+
+Run from `compiler/ada`, it is refused:
+
+```text
+$ refine compile --target=cortex-m0 --firmware-entry=start --emit=exe --linker-script=../tests/fixtures/end-to-end/firmware-linker-script-breaks-contract/dev.ld --toolchain=../tests/fixtures/end-to-end/firmware-linker-script-breaks-contract/driver -o build/firmware-linker-script-breaks-contract.elf ../tests/fixtures/end-to-end/firmware-linker-script-breaks-contract/main.ldn
+error[L0519]: ../tests/fixtures/end-to-end/firmware-linker-script-breaks-contract/dev.ld breaks the firmware linker script contract, clause 2, the startup symbols: the image defines no _landin_firmware_reset, _landin_firmware_unhandled, _landin_firmware_vectors, _landin_firmware_stack_top, _landin_firmware_stack_bottom, _landin_firmware_data_load, _landin_firmware_ramtext_load, _landin_firmware_data_start, _landin_firmware_ramtext_start, _landin_firmware_data_end, _landin_firmware_ramtext_end, _landin_firmware_bss_start, _landin_firmware_bss_end (D546); the derived script beside it, build/firmware-linker-script-breaks-contract.elf.ld, keeps every clause
+```
 
 ### L0525
 
@@ -2302,6 +2405,83 @@ another address differ from the ones summed, and the message names the
 relocation and its symbol. Make the stage shorter, or write it with no
 symbol outside itself and refer to it from nowhere.
 
+Example fixture: `end-to-end/boot-stage-too-long`
+
+`app/main.ldn`:
+
+```landin
+import board
+
+start: () -> none =
+end start
+```
+
+`assembled.o` is binary, 2596 bytes.
+
+`devices/board/board.ldn`:
+
+```landin
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("rp2040-boot2")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+
+--- A second stage of 127 two-byte instructions and a return: 256 bytes,
+--- where the boot ROM's slot holds 252 before its checksum.
+link(boot_stage) extern(naked) stage: () -> none =
+    assembler.block("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nbx lr")
+end stage
+```
+
+`driver`:
+
+```sh
+#!/bin/sh
+# A stand-in for the Cortex-M C driver, so that this fixture runs on a host
+# without one. It writes what the real driver wrote when the fixture was
+# made: assembled.o for the assembling step and linked.elf for the linking
+# step, each where its -o says, and an empty file for a step the fixture
+# holds no file for.
+here=$(dirname -- "$0")
+step=linked.elf
+output=
+previous=
+for argument
+do
+    case $argument in
+        -c) step=assembled.o ;;
+    esac
+    if [ "$previous" = -o ]; then
+        output=$argument
+    fi
+    previous=$argument
+done
+if [ -z "$output" ]; then
+    echo "driver: no -o names what to write" >&2
+    exit 1
+fi
+if [ -f "$here/$step" ]; then
+    cp "$here/$step" "$output"
+else
+    : > "$output"
+fi
+```
+
+Run from `compiler/ada`, it is refused:
+
+```text
+$ refine compile --root=../tests/fixtures/end-to-end/boot-stage-too-long/devices --target=cortex-m0 --firmware-entry=start --emit=exe --toolchain=../tests/fixtures/end-to-end/boot-stage-too-long/driver -o build/boot-stage-too-long.elf ../tests/fixtures/end-to-end/boot-stage-too-long/app
+error[L0538]: the second stage and its literals are 258 bytes, and its slot holds 252 before the checksum: make the stage shorter (D588)
+```
+
 ### L0545
 
 A device description names a float unit refine does not build, or one its
@@ -2369,6 +2549,77 @@ Arm executable for RP2350 that runs in Secure state, and the LAST item giving
 that word, with no relocation in it. The message names the part that is
 not. refine writes these words itself, so this is a defect of refine or of the
 assembler it ran rather than of the program; report it with the message.
+
+Example fixture: `end-to-end/image-block-not-as-emitted`
+
+`app/main.ldn`:
+
+```landin
+import board
+
+start: () -> none =
+end start
+```
+
+`assembled.o` is binary, 2448 bytes.
+
+`devices/board/board.ldn`:
+
+```landin
+compiler.device("board")
+compiler.core("cortex-m33")
+compiler.vectors(68)
+compiler.boot("rp2350-image-block")
+linker.region("FLASH", 0x1000_0000, 4 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 512 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
+
+`driver`:
+
+```sh
+#!/bin/sh
+# A stand-in for the Cortex-M C driver, so that this fixture runs on a host
+# without one. It writes what the real driver wrote when the fixture was
+# made: assembled.o for the assembling step and linked.elf for the linking
+# step, each where its -o says, and an empty file for a step the fixture
+# holds no file for.
+here=$(dirname -- "$0")
+step=linked.elf
+output=
+previous=
+for argument
+do
+    case $argument in
+        -c) step=assembled.o ;;
+    esac
+    if [ "$previous" = -o ]; then
+        output=$argument
+    fi
+    previous=$argument
+done
+if [ -z "$output" ]; then
+    echo "driver: no -o names what to write" >&2
+    exit 1
+fi
+if [ -f "$here/$step" ]; then
+    cp "$here/$step" "$output"
+else
+    : > "$output"
+fi
+```
+
+Run from `compiler/ada`, it is refused:
+
+```text
+$ refine compile --root=../tests/fixtures/end-to-end/image-block-not-as-emitted/devices --target=cortex-m0 --firmware-entry=start --emit=exe --toolchain=../tests/fixtures/end-to-end/image-block-not-as-emitted/driver -o build/image-block-not-as-emitted.elf ../tests/fixtures/end-to-end/image-block-not-as-emitted/app
+error[L0555]: the image block ends with 0xab123578, not the end marker 0xab123579 (D638)
+```
 
 ### L0560
 
@@ -2596,6 +2847,86 @@ object would bring. The message names the section. Build the library without
 constructors and call its initialisation from the firmware entry; declare a
 thread-local variable as ordinary static data; and link the library's static
 archive built for the firmware's core.
+
+Example fixture: `end-to-end/firmware-archive-with-constructor`
+
+`driver`:
+
+```sh
+#!/bin/sh
+# A stand-in for the Cortex-M C driver, so that this fixture runs on a host
+# without one. It writes what the real driver wrote when the fixture was
+# made: assembled.o for the assembling step and linked.elf for the linking
+# step, each where its -o says, and an empty file for a step the fixture
+# holds no file for.
+here=$(dirname -- "$0")
+step=linked.elf
+output=
+previous=
+for argument
+do
+    case $argument in
+        -c) step=assembled.o ;;
+    esac
+    if [ "$previous" = -o ]; then
+        output=$argument
+    fi
+    previous=$argument
+done
+if [ -z "$output" ]; then
+    echo "driver: no -o names what to write" >&2
+    exit 1
+fi
+if [ -f "$here/$step" ]; then
+    cp "$here/$step" "$output"
+else
+    : > "$output"
+fi
+```
+
+`libsensor.a` is binary, 1332 bytes.
+
+`linked.elf` is binary, 6664 bytes.
+
+`main.ldn`:
+
+```landin
+linker.library("sensor")
+
+extern(c) sensor_read: () -> (value: u32)
+
+mut seen: u32 = 0
+
+start: () -> none =
+    seen = sensor_read()
+end start
+```
+
+`sensor.c`:
+
+```c
+/* A C library whose state is set up by a constructor, which firmware
+   startup never runs. */
+static unsigned ready;
+
+__attribute__((constructor)) static void sensor_setup(void)
+{
+    ready = 1;
+}
+
+unsigned sensor_read(void)
+{
+    return ready;
+}
+```
+
+Run from `compiler/ada`, it is refused:
+
+```text
+$ refine compile --target=cortex-m0 --firmware-entry=start --emit=exe --toolchain=../tests/fixtures/end-to-end/firmware-archive-with-constructor/driver -L ../tests/fixtures/end-to-end/firmware-archive-with-constructor -o build/firmware-archive-with-constructor.elf ../tests/fixtures/end-to-end/firmware-archive-with-constructor/main.ldn
+error[L0587]: the firmware image holds C constructors in `.init_array`, which compiler-owned startup never runs
+  = note: D924: build the library without `__attribute__((constructor))` or static constructors, and call its initialisation from the firmware entry
+```
 
 ### L0610
 

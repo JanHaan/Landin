@@ -1,0 +1,9 @@
+linker.library("sensor")
+
+extern(c) sensor_read: () -> (value: u32)
+
+mut seen: u32 = 0
+
+start: () -> none =
+    seen = sensor_read()
+end start

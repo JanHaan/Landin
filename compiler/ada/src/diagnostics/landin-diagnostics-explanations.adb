@@ -3116,4 +3116,854 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Firmware_Foreign_Section =>
                "");
 
+   function Fixture (Of_Code : Catalogue.Code_Name) return String
+     is (case Of_Code is
+            when Catalogue.No_Frontend =>
+               "",
+            when Catalogue.Unknown_Option =>
+               "",
+            when Catalogue.Unreadable_Source =>
+               "",
+            when Catalogue.Unknown_Target =>
+               "",
+            when Catalogue.Unwritable_Output =>
+               "",
+            when Catalogue.Module_Not_Found =>
+               "",
+            when Catalogue.Module_Directory_Invalid =>
+               "",
+            when Catalogue.Module_Unavailable_For_Target =>
+               "",
+            when Catalogue.Root_Holds_Library_Module =>
+               "",
+            when Catalogue.Empty_Module_Hides_Root =>
+               "",
+            when Catalogue.Import_Of_Named_Entry =>
+               "",
+            when Catalogue.Not_Formatted =>
+               "",
+            when Catalogue.Unknown_Level =>
+               "",
+            when Catalogue.Construct_Not_Enabled =>
+               "",
+            when Catalogue.Malformed_Integer =>
+               "",
+            when Catalogue.Unknown_Bytes =>
+               "",
+            when Catalogue.Unterminated_Comment =>
+               "",
+            when Catalogue.Unterminated_Literal =>
+               "",
+            when Catalogue.Name_Expected =>
+               "",
+            when Catalogue.Type_Expected =>
+               "",
+            when Catalogue.Expression_Expected =>
+               "",
+            when Catalogue.Token_Expected =>
+               "",
+            when Catalogue.Unclosed_Construct =>
+               "",
+            when Catalogue.Assignment_In_Expression =>
+               "",
+            when Catalogue.Comparison_Chained =>
+               "",
+            when Catalogue.Return_Carries_Value =>
+               "",
+            when Catalogue.Public_On_Statement =>
+               "",
+            when Catalogue.End_Name_Mismatch =>
+               "",
+            when Catalogue.Stray_Token =>
+               "",
+            when Catalogue.Nesting_Too_Deep =>
+               "",
+            when Catalogue.Positional_After_Named =>
+               "",
+            when Catalogue.Duplicate_Declaration =>
+               "",
+            when Catalogue.Unresolved_Name =>
+               "",
+            when Catalogue.Inaccessible_Name =>
+               "",
+            when Catalogue.Reserved_Tool_Name =>
+               "",
+            when Catalogue.Literal_Out_Of_Range =>
+               "",
+            when Catalogue.Register_Reserved_Bits =>
+               "",
+            when Catalogue.Type_Mismatch =>
+               "",
+            when Catalogue.Not_Definitely_Assigned =>
+               "",
+            when Catalogue.Immutable_Target =>
+               "",
+            when Catalogue.Unsupported_Use =>
+               "",
+            when Catalogue.Not_Known_At_Compile_Time =>
+               "",
+            when Catalogue.Impossible_Operand =>
+               "",
+            when Catalogue.Compile_Time_Assertion_Failed =>
+               "",
+            when Catalogue.Cyclic_Type_Alias =>
+               "",
+            when Catalogue.Unresolved_Field =>
+               "",
+            when Catalogue.Field_Named_Twice =>
+               "",
+            when Catalogue.Field_Not_Given =>
+               "",
+            when Catalogue.Variant_Case_Named_Twice =>
+               "",
+            when Catalogue.Variant_Case_Not_Matched =>
+               "",
+            when Catalogue.Recursive_Nominal_Value =>
+               "",
+            when Catalogue.Reference_Escapes =>
+               "",
+            when Catalogue.Borrowed_Place =>
+               "",
+            when Catalogue.Return_Sources_Disagree =>
+               "",
+            when Catalogue.Conformance_Collision =>
+               "",
+            when Catalogue.Unsatisfied_Constraint =>
+               "",
+            when Catalogue.Compiler_Conformance_Reserved =>
+               "",
+            when Catalogue.Malformed_Text_Literal =>
+               "",
+            when Catalogue.Malformed_Float_Literal =>
+               "",
+            when Catalogue.Malformed_Character_Literal =>
+               "",
+            when Catalogue.Malformed_Raw_Literal =>
+               "",
+            when Catalogue.Size_Limit_Exceeded =>
+               "",
+            when Catalogue.Invalid_Option_Declaration =>
+               "",
+            when Catalogue.Invalid_Tool_Directive =>
+               "",
+            when Catalogue.Mutable_Never_Written =>
+               "",
+            when Catalogue.Call_Argument_Match =>
+               "",
+            when Catalogue.Zero_Image_Unavailable =>
+               "",
+            when Catalogue.Error_Contract_Violated =>
+               "",
+            when Catalogue.Assembly_Block_Contract =>
+               "",
+            when Catalogue.Result_Use =>
+               "",
+            when Catalogue.Control_Value =>
+               "",
+            when Catalogue.Match_Arm_Form =>
+               "",
+            when Catalogue.Aggregate_Form =>
+               "",
+            when Catalogue.Pointer_Union_Use =>
+               "",
+            when Catalogue.Packed_Image =>
+               "",
+            when Catalogue.Place_Required =>
+               "",
+            when Catalogue.Type_Declaration_Form =>
+               "",
+            when Catalogue.Signature_Form =>
+               "",
+            when Catalogue.Generic_Deduction =>
+               "",
+            when Catalogue.Conformance_Form =>
+               "",
+            when Catalogue.Erased_Contract =>
+               "",
+            when Catalogue.Noreturn_Contract =>
+               "",
+            when Catalogue.Memory_Contract =>
+               "",
+            when Catalogue.Machine_Entry_Contract =>
+               "",
+            when Catalogue.Foreign_Boundary =>
+               "",
+            when Catalogue.Linkage_Contract =>
+               "",
+            when Catalogue.Traversal_Source =>
+               "",
+            when Catalogue.Invalid_Description_Directive =>
+               "",
+            when Catalogue.Description_Structure =>
+               "",
+            when Catalogue.Description_Layout =>
+               "",
+            when Catalogue.Description_Core_Mismatch =>
+               "",
+            when Catalogue.Boot_Kind_Reserved =>
+               "",
+            when Catalogue.Region_Placement =>
+               "",
+            when Catalogue.No_Description =>
+               "For example, the fixture negative/placement-with-no-refe"
+               & "rence-profile of the repository, in compiler/tests/fixtu"
+               & "res:"
+               & LF
+               & LF
+               & "library/core/README:"
+               & LF
+               & LF
+               & "    A library that holds no platform/cortex_m/reference."
+               & LF
+               & LF
+               & "program.ldn:"
+               & LF
+               & LF
+               & "    link(region: ""RAM"") table: u32 = 1"
+               & LF
+               & LF
+               & "Run from compiler/ada, it is refused:"
+               & LF
+               & LF
+               & "    $ refine --target=cortex-m0 --library=../tests/fixtu"
+               & "res/negative/placement-with-no-reference-profile/library"
+               & " ../tests/fixtures/negative/placement-with-no-reference-"
+               & "profile/program.ldn"
+               & LF
+               & "    error[L0518]: this placement needs a device profile,"
+               & " and the program selects none"
+               & LF
+               & "      --> ../tests/fixtures/negative/placement-with-no-r"
+               & "eference-profile/program.ldn:1:21"
+               & LF
+               & "      |"
+               & LF
+               & "    1 | link(region: ""RAM"") table: u32 = 1"
+               & LF
+               & "      |                     ^^^^^"
+               & LF
+               & "      = note: D543: import the device's description; wit"
+               & "h none, the library's platform/cortex_m/reference applie"
+               & "s, and this library holds none: name one that does with "
+               & "--library=DIR"
+               & LF,
+            when Catalogue.Boot_Stage_Form =>
+               "",
+            when Catalogue.Boot_Stage_Outside =>
+               "",
+            when Catalogue.Boot_Stage_Unwanted =>
+               "",
+            when Catalogue.Boot_Stage_Repeated =>
+               "",
+            when Catalogue.Boot_Stage_Missing =>
+               "",
+            when Catalogue.Float_Unit_Unsupported =>
+               "",
+            when Catalogue.Float_Unit_Level =>
+               "",
+            when Catalogue.Cache_Unsupported =>
+               "",
+            when Catalogue.Cache_Line_Wrong =>
+               "",
+            when Catalogue.Reset_Stage_Return =>
+               "",
+            when Catalogue.Reset_Stage_Stack =>
+               "",
+            when Catalogue.Boot_Kind_Family =>
+               "",
+            when Catalogue.ESP_Image_Facts =>
+               "",
+            when Catalogue.RAM_Code_Unplaceable =>
+               "",
+            when Catalogue.Unused_Pure_Local =>
+               "",
+            when Catalogue.Literal_Rounded_Away =>
+               "",
+            when Catalogue.Unvalidated_Text_Checked =>
+               "",
+            when Catalogue.Bidirectional_Control =>
+               "",
+            when Catalogue.No_Toolchain =>
+               "",
+            when Catalogue.Toolchain_Failed =>
+               "",
+            when Catalogue.Entry_Point_Missing =>
+               "",
+            when Catalogue.Argument_Not_In_A_Register =>
+               "",
+            when Catalogue.Frame_Not_Addressable =>
+               "",
+            when Catalogue.Image_Budget_Exceeded =>
+               "",
+            when Catalogue.Panic_Contract_Invalid =>
+               "",
+            when Catalogue.Firmware_Frame_Exceeds_Stack =>
+               "",
+            when Catalogue.Handler_Exceeds_Stack_Margin =>
+               "",
+            when Catalogue.Library_Not_Found =>
+               "",
+            when Catalogue.Linker_Script_Contract =>
+               "For example, the fixture end-to-end/firmware-linker-scri"
+               & "pt-breaks-contract of the repository, in compiler/tests/"
+               & "fixtures:"
+               & LF
+               & LF
+               & "dev.ld:"
+               & LF
+               & LF
+               & "    SECTIONS { }"
+               & LF
+               & LF
+               & "driver:"
+               & LF
+               & LF
+               & "    #!/bin/sh"
+               & LF
+               & "    # A stand-in for the Cortex-M C driver, so that this"
+               & " fixture runs on a host"
+               & LF
+               & "    # without one. It writes what the real driver wrote "
+               & "when the fixture was"
+               & LF
+               & "    # made: assembled.o for the assembling step and link"
+               & "ed.elf for the linking"
+               & LF
+               & "    # step, each where its -o says, and an empty file fo"
+               & "r a step the fixture"
+               & LF
+               & "    # holds no file for."
+               & LF
+               & "    here=$(dirname -- ""$0"")"
+               & LF
+               & "    step=linked.elf"
+               & LF
+               & "    output="
+               & LF
+               & "    previous="
+               & LF
+               & "    for argument"
+               & LF
+               & "    do"
+               & LF
+               & "        case $argument in"
+               & LF
+               & "            -c) step=assembled.o ;;"
+               & LF
+               & "        esac"
+               & LF
+               & "        if [ ""$previous"" = -o ]; then"
+               & LF
+               & "            output=$argument"
+               & LF
+               & "        fi"
+               & LF
+               & "        previous=$argument"
+               & LF
+               & "    done"
+               & LF
+               & "    if [ -z ""$output"" ]; then"
+               & LF
+               & "        echo ""driver: no -o names what to write"" >&2"
+               & LF
+               & "        exit 1"
+               & LF
+               & "    fi"
+               & LF
+               & "    if [ -f ""$here/$step"" ]; then"
+               & LF
+               & "        cp ""$here/$step"" ""$output"""
+               & LF
+               & "    else"
+               & LF
+               & "        : > ""$output"""
+               & LF
+               & "    fi"
+               & LF
+               & LF
+               & "linked.elf: binary, 4648 bytes"
+               & LF
+               & LF
+               & "main.ldn:"
+               & LF
+               & LF
+               & "    start: () -> none ="
+               & LF
+               & "    end start"
+               & LF
+               & LF
+               & "Run from compiler/ada, it is refused:"
+               & LF
+               & LF
+               & "    $ refine compile --target=cortex-m0 --firmware-entry"
+               & "=start --emit=exe --linker-script=../tests/fixtures/end-"
+               & "to-end/firmware-linker-script-breaks-contract/dev.ld --t"
+               & "oolchain=../tests/fixtures/end-to-end/firmware-linker-sc"
+               & "ript-breaks-contract/driver -o build/firmware-linker-scr"
+               & "ipt-breaks-contract.elf ../tests/fixtures/end-to-end/fir"
+               & "mware-linker-script-breaks-contract/main.ldn"
+               & LF
+               & "    error[L0519]: ../tests/fixtures/end-to-end/firmware-"
+               & "linker-script-breaks-contract/dev.ld breaks the firmware"
+               & " linker script contract, clause 2, the startup symbols: "
+               & "the image defines no _landin_firmware_reset, _landin_fir"
+               & "mware_unhandled, _landin_firmware_vectors, _landin_firmw"
+               & "are_stack_top, _landin_firmware_stack_bottom, _landin_fi"
+               & "rmware_data_load, _landin_firmware_ramtext_load, _landin"
+               & "_firmware_data_start, _landin_firmware_ramtext_start, _l"
+               & "andin_firmware_data_end, _landin_firmware_ramtext_end, _"
+               & "landin_firmware_bss_start, _landin_firmware_bss_end (D54"
+               & "6); the derived script beside it, build/firmware-linker-"
+               & "script-breaks-contract.elf.ld, keeps every clause"
+               & LF,
+            when Catalogue.Boot_Stage_Object =>
+               "For example, the fixture end-to-end/boot-stage-too-long "
+               & "of the repository, in compiler/tests/fixtures:"
+               & LF
+               & LF
+               & "app/main.ldn:"
+               & LF
+               & LF
+               & "    import board"
+               & LF
+               & LF
+               & "    start: () -> none ="
+               & LF
+               & "    end start"
+               & LF
+               & LF
+               & "assembled.o: binary, 2596 bytes"
+               & LF
+               & LF
+               & "devices/board/board.ldn:"
+               & LF
+               & LF
+               & "    compiler.device(""board"")"
+               & LF
+               & "    compiler.core(""cortex-m0plus"")"
+               & LF
+               & "    compiler.vectors(48)"
+               & LF
+               & "    compiler.boot(""rp2040-boot2"")"
+               & LF
+               & "    linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024,"
+               & " ""rx"")"
+               & LF
+               & "    linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "    linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "    linker.place(""text"", ""FLASH"")"
+               & LF
+               & "    linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "    linker.place(""data"", ""RAM"")"
+               & LF
+               & "    linker.place(""bss"", ""RAM"")"
+               & LF
+               & "    linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF
+               & LF
+               & "    --- A second stage of 127 two-byte instructions and "
+               & "a return: 256 bytes,"
+               & LF
+               & "    --- where the boot ROM's slot holds 252 before its c"
+               & "hecksum."
+               & LF
+               & "    link(boot_stage) extern(naked) stage: () -> none ="
+               & LF
+               & "        assembler.block(""nop\nnop\nnop\nnop\nnop\nnop\nn"
+               & "op\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nno"
+               & "p\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop"
+               & "\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\"
+               & "nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n"
+               & "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nn"
+               & "op\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nno"
+               & "p\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop"
+               & "\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\"
+               & "nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n"
+               & "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nn"
+               & "op\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nbx lr"")"
+               & LF
+               & "    end stage"
+               & LF
+               & LF
+               & "driver:"
+               & LF
+               & LF
+               & "    #!/bin/sh"
+               & LF
+               & "    # A stand-in for the Cortex-M C driver, so that this"
+               & " fixture runs on a host"
+               & LF
+               & "    # without one. It writes what the real driver wrote "
+               & "when the fixture was"
+               & LF
+               & "    # made: assembled.o for the assembling step and link"
+               & "ed.elf for the linking"
+               & LF
+               & "    # step, each where its -o says, and an empty file fo"
+               & "r a step the fixture"
+               & LF
+               & "    # holds no file for."
+               & LF
+               & "    here=$(dirname -- ""$0"")"
+               & LF
+               & "    step=linked.elf"
+               & LF
+               & "    output="
+               & LF
+               & "    previous="
+               & LF
+               & "    for argument"
+               & LF
+               & "    do"
+               & LF
+               & "        case $argument in"
+               & LF
+               & "            -c) step=assembled.o ;;"
+               & LF
+               & "        esac"
+               & LF
+               & "        if [ ""$previous"" = -o ]; then"
+               & LF
+               & "            output=$argument"
+               & LF
+               & "        fi"
+               & LF
+               & "        previous=$argument"
+               & LF
+               & "    done"
+               & LF
+               & "    if [ -z ""$output"" ]; then"
+               & LF
+               & "        echo ""driver: no -o names what to write"" >&2"
+               & LF
+               & "        exit 1"
+               & LF
+               & "    fi"
+               & LF
+               & "    if [ -f ""$here/$step"" ]; then"
+               & LF
+               & "        cp ""$here/$step"" ""$output"""
+               & LF
+               & "    else"
+               & LF
+               & "        : > ""$output"""
+               & LF
+               & "    fi"
+               & LF
+               & LF
+               & "Run from compiler/ada, it is refused:"
+               & LF
+               & LF
+               & "    $ refine compile --root=../tests/fixtures/end-to-end"
+               & "/boot-stage-too-long/devices --target=cortex-m0 --firmwa"
+               & "re-entry=start --emit=exe --toolchain=../tests/fixtures/"
+               & "end-to-end/boot-stage-too-long/driver -o build/boot-stag"
+               & "e-too-long.elf ../tests/fixtures/end-to-end/boot-stage-t"
+               & "oo-long/app"
+               & LF
+               & "    error[L0538]: the second stage and its literals are "
+               & "258 bytes, and its slot holds 252 before the checksum: m"
+               & "ake the stage shorter (D588)"
+               & LF,
+            when Catalogue.Image_Block_Object =>
+               "For example, the fixture end-to-end/image-block-not-as-e"
+               & "mitted of the repository, in compiler/tests/fixtures:"
+               & LF
+               & LF
+               & "app/main.ldn:"
+               & LF
+               & LF
+               & "    import board"
+               & LF
+               & LF
+               & "    start: () -> none ="
+               & LF
+               & "    end start"
+               & LF
+               & LF
+               & "assembled.o: binary, 2448 bytes"
+               & LF
+               & LF
+               & "devices/board/board.ldn:"
+               & LF
+               & LF
+               & "    compiler.device(""board"")"
+               & LF
+               & "    compiler.core(""cortex-m33"")"
+               & LF
+               & "    compiler.vectors(68)"
+               & LF
+               & "    compiler.boot(""rp2350-image-block"")"
+               & LF
+               & "    linker.region(""FLASH"", 0x1000_0000, 4 * 1024 * 1024,"
+               & " ""rx"")"
+               & LF
+               & "    linker.region(""RAM"", 0x2000_0000, 512 * 1024, ""rwx"")"
+               & LF
+               & "    linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "    linker.place(""text"", ""FLASH"")"
+               & LF
+               & "    linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "    linker.place(""data"", ""RAM"")"
+               & LF
+               & "    linker.place(""bss"", ""RAM"")"
+               & LF
+               & "    linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF
+               & LF
+               & "driver:"
+               & LF
+               & LF
+               & "    #!/bin/sh"
+               & LF
+               & "    # A stand-in for the Cortex-M C driver, so that this"
+               & " fixture runs on a host"
+               & LF
+               & "    # without one. It writes what the real driver wrote "
+               & "when the fixture was"
+               & LF
+               & "    # made: assembled.o for the assembling step and link"
+               & "ed.elf for the linking"
+               & LF
+               & "    # step, each where its -o says, and an empty file fo"
+               & "r a step the fixture"
+               & LF
+               & "    # holds no file for."
+               & LF
+               & "    here=$(dirname -- ""$0"")"
+               & LF
+               & "    step=linked.elf"
+               & LF
+               & "    output="
+               & LF
+               & "    previous="
+               & LF
+               & "    for argument"
+               & LF
+               & "    do"
+               & LF
+               & "        case $argument in"
+               & LF
+               & "            -c) step=assembled.o ;;"
+               & LF
+               & "        esac"
+               & LF
+               & "        if [ ""$previous"" = -o ]; then"
+               & LF
+               & "            output=$argument"
+               & LF
+               & "        fi"
+               & LF
+               & "        previous=$argument"
+               & LF
+               & "    done"
+               & LF
+               & "    if [ -z ""$output"" ]; then"
+               & LF
+               & "        echo ""driver: no -o names what to write"" >&2"
+               & LF
+               & "        exit 1"
+               & LF
+               & "    fi"
+               & LF
+               & "    if [ -f ""$here/$step"" ]; then"
+               & LF
+               & "        cp ""$here/$step"" ""$output"""
+               & LF
+               & "    else"
+               & LF
+               & "        : > ""$output"""
+               & LF
+               & "    fi"
+               & LF
+               & LF
+               & "Run from compiler/ada, it is refused:"
+               & LF
+               & LF
+               & "    $ refine compile --root=../tests/fixtures/end-to-end"
+               & "/image-block-not-as-emitted/devices --target=cortex-m0 -"
+               & "-firmware-entry=start --emit=exe --toolchain=../tests/fi"
+               & "xtures/end-to-end/image-block-not-as-emitted/driver -o b"
+               & "uild/image-block-not-as-emitted.elf ../tests/fixtures/en"
+               & "d-to-end/image-block-not-as-emitted/app"
+               & LF
+               & "    error[L0555]: the image block ends with 0xab123578, "
+               & "not the end marker 0xab123579 (D638)"
+               & LF,
+            when Catalogue.ESP_Image_Object =>
+               "",
+            when Catalogue.Svd_Malformed =>
+               "",
+            when Catalogue.Svd_Policy_Invalid =>
+               "",
+            when Catalogue.Svd_Input_Mismatch =>
+               "",
+            when Catalogue.Svd_Form_Unsupported =>
+               "",
+            when Catalogue.Svd_Device_Inconsistent =>
+               "",
+            when Catalogue.Svd_Not_Found =>
+               "",
+            when Catalogue.Svd_Output_Refused =>
+               "",
+            when Catalogue.Bindings_Policy_Invalid =>
+               "",
+            when Catalogue.Bindings_Clang_Refused =>
+               "",
+            when Catalogue.Bindings_Declaration_Refused =>
+               "",
+            when Catalogue.Bindings_Output_Refused =>
+               "",
+            when Catalogue.Firmware_Foreign_Section =>
+               "For example, the fixture end-to-end/firmware-archive-wit"
+               & "h-constructor of the repository, in compiler/tests/fixtu"
+               & "res:"
+               & LF
+               & LF
+               & "driver:"
+               & LF
+               & LF
+               & "    #!/bin/sh"
+               & LF
+               & "    # A stand-in for the Cortex-M C driver, so that this"
+               & " fixture runs on a host"
+               & LF
+               & "    # without one. It writes what the real driver wrote "
+               & "when the fixture was"
+               & LF
+               & "    # made: assembled.o for the assembling step and link"
+               & "ed.elf for the linking"
+               & LF
+               & "    # step, each where its -o says, and an empty file fo"
+               & "r a step the fixture"
+               & LF
+               & "    # holds no file for."
+               & LF
+               & "    here=$(dirname -- ""$0"")"
+               & LF
+               & "    step=linked.elf"
+               & LF
+               & "    output="
+               & LF
+               & "    previous="
+               & LF
+               & "    for argument"
+               & LF
+               & "    do"
+               & LF
+               & "        case $argument in"
+               & LF
+               & "            -c) step=assembled.o ;;"
+               & LF
+               & "        esac"
+               & LF
+               & "        if [ ""$previous"" = -o ]; then"
+               & LF
+               & "            output=$argument"
+               & LF
+               & "        fi"
+               & LF
+               & "        previous=$argument"
+               & LF
+               & "    done"
+               & LF
+               & "    if [ -z ""$output"" ]; then"
+               & LF
+               & "        echo ""driver: no -o names what to write"" >&2"
+               & LF
+               & "        exit 1"
+               & LF
+               & "    fi"
+               & LF
+               & "    if [ -f ""$here/$step"" ]; then"
+               & LF
+               & "        cp ""$here/$step"" ""$output"""
+               & LF
+               & "    else"
+               & LF
+               & "        : > ""$output"""
+               & LF
+               & "    fi"
+               & LF
+               & LF
+               & "libsensor.a: binary, 1332 bytes"
+               & LF
+               & LF
+               & "linked.elf: binary, 6664 bytes"
+               & LF
+               & LF
+               & "main.ldn:"
+               & LF
+               & LF
+               & "    linker.library(""sensor"")"
+               & LF
+               & LF
+               & "    extern(c) sensor_read: () -> (value: u32)"
+               & LF
+               & LF
+               & "    mut seen: u32 = 0"
+               & LF
+               & LF
+               & "    start: () -> none ="
+               & LF
+               & "        seen = sensor_read()"
+               & LF
+               & "    end start"
+               & LF
+               & LF
+               & "sensor.c:"
+               & LF
+               & LF
+               & "    /* A C library whose state is set up by a constructo"
+               & "r, which firmware"
+               & LF
+               & "       startup never runs. */"
+               & LF
+               & "    static unsigned ready;"
+               & LF
+               & LF
+               & "    __attribute__((constructor)) static void sensor_setu"
+               & "p(void)"
+               & LF
+               & "    {"
+               & LF
+               & "        ready = 1;"
+               & LF
+               & "    }"
+               & LF
+               & LF
+               & "    unsigned sensor_read(void)"
+               & LF
+               & "    {"
+               & LF
+               & "        return ready;"
+               & LF
+               & "    }"
+               & LF
+               & LF
+               & "Run from compiler/ada, it is refused:"
+               & LF
+               & LF
+               & "    $ refine compile --target=cortex-m0 --firmware-entry"
+               & "=start --emit=exe --toolchain=../tests/fixtures/end-to-e"
+               & "nd/firmware-archive-with-constructor/driver -L ../tests/"
+               & "fixtures/end-to-end/firmware-archive-with-constructor -o"
+               & " build/firmware-archive-with-constructor.elf ../tests/fi"
+               & "xtures/end-to-end/firmware-archive-with-constructor/main"
+               & ".ldn"
+               & LF
+               & "    error[L0587]: the firmware image holds C constructor"
+               & "s in `.init_array`, which compiler-owned startup never r"
+               & "uns"
+               & LF
+               & "      = note: D924: build the library without `__attribu"
+               & "te__((constructor))` or static constructors, and call it"
+               & "s initialisation from the firmware entry"
+               & LF);
+
 end Landin.Diagnostics.Explanations;

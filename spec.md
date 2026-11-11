@@ -26674,8 +26674,8 @@ options it is compiled with, each a word of printable characters that begins
 --level=armv7-m`. The line is a Landin comment and stays in the example's
 text, so `refine explain` shows a reader how to reproduce the report. The
 example is still the one file it is compiled with, so an option names no
-root, library or other file, and a code whose program needs one, L0517 to
-L0519 and L0538, has no example. An example without the line is compiled as
+root, library or other file, and a code whose program needs one names a
+fixture instead (D1230). An example without the line is compiled as
 before. `check.py` and the test program refuse a `-- refine:` line that is
 not the example's first or not of that form, naming the line.
 
@@ -26691,6 +26691,43 @@ compiles each example with its options, and `unreadable options are
 named`, the `driver` case `explain is a subcommand`, and `check.py`'s
 reading of the page, whose control is
 `test_an_unreadable_options_line_is_named`.
+
+### D1230 — A diagnostic's example may be a fixture
+
+**The discrepancy:** D599 keeps an example to the one file it is compiled
+with, so five codes showed none. L0518 needs a library without the
+reference description, L0519 a developer's linker script, L0538 and L0555
+the object the assembler wrote and L0587 a C archive, and two of those
+files are binary, which no fenced block holds.
+
+**Chosen:** a section of `docs/diagnostics.md` may end, in place of its
+program, with the line ``Example fixture: `CLASS/NAME` ``, naming a
+`negative` or `end-to-end` fixture under `compiler/tests/fixtures` that
+records a report. After the line the page shows the fixture as it is: each
+text file under its path, each binary file by its path and size, and the
+`refine` command with the report it records. `refine explain CODE` prints
+the same, from a copy built into the executable when it was generated, so
+it reads no file and needs no repository. `check.py` holds the reference to
+a fixture that is there, whose report carries the section's code and no
+other, and holds what the page shows to the fixture's files;
+`python3 check.py --example=CLASS/NAME` prints it. The test program runs the
+fixture as it runs every recorded one, and requires what the executable
+carries to end with the fixture's report. A fixture whose refusal comes after
+the assembler or the linker ran carries a stand-in driver that writes what
+the real one wrote, so it runs on a host without a Cortex-M toolchain; the
+stand-in is one of the files shown. A section has a program or a fixture,
+not both.
+
+**The alternatives:** a second fenced block with a file name, which holds
+the text files and neither binary one, so L0538 and L0587 would still show
+nothing; and a reference alone, which sends a reader of `refine explain`
+without a checkout to files that are not there.
+
+**Pinned by** `negative/placement-with-no-reference-profile`,
+`end-to-end/firmware-linker-script-breaks-contract`,
+`end-to-end/boot-stage-too-long`, `end-to-end/image-block-not-as-emitted`
+and `end-to-end/firmware-archive-with-constructor`, each its code's
+example, and the `catalogue` case `every code is explained`.
 
 ### D542 — A device description is a module of directives, and its generated half has one text
 

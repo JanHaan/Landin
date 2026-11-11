@@ -7438,6 +7438,12 @@ CATALOGUE_ADS = "compiler/ada/src/diagnostics/landin-diagnostics-catalogue.ads"
 EXPLANATIONS_ADA = ("compiler/ada/src/diagnostics"
                     "/landin-diagnostics-explanations.adb")
 EXAMPLE_OPTIONS = "-- refine:"
+#  D1230: the line that names a fixture as a section's example, and what
+#  the page's last reading found: code -> (line, CLASS/NAME, the lines the
+#  page shows after the reference).  explanation_sections fills it.
+EXAMPLE_FIXTURE = re.compile(
+    r"^Example fixture: `((?:negative|end-to-end)/[a-z0-9-]+)`$")
+EXPLANATION_FIXTURES = collections.OrderedDict()
 
 
 def explanation_sections():
@@ -7454,9 +7460,22 @@ def explanation_sections():
         return None, [(EXPLANATIONS, 1, "the explanations are missing")]
     lines = read_file(path, encoding="utf-8").split("\n")
     sections = collections.OrderedDict()
+    fixtures = EXPLANATION_FIXTURES
+    fixtures.clear()
     problems = []
     current = None
+    fenced = False
     for n, line in enumerate(lines, 1):
+        if current in fixtures and (fenced or not line.startswith("#")):
+            #  D1230: everything after the reference is the fixture shown,
+            #  which check_explanations holds to the fixture's own files.
+            #  A file's line may begin with `#`, so only a heading outside
+            #  a fence ends the section.
+            if line.startswith("```"):
+                fenced = not fenced
+            fixtures[current][2].append(line)
+            continue
+        fenced = False
         heading = re.match(r"^### (\S+)\s*$", line)
         if heading:
             code = heading.group(1)
@@ -7477,6 +7496,14 @@ def explanation_sections():
         if current is None:
             continue
         section = sections[current]
+        named = EXAMPLE_FIXTURE.match(line)
+        if named and not section[3]:
+            if section[2]:
+                problems.append((EXPLANATIONS, n,
+                                 "%s has one example at most: a program or"
+                                 " a fixture" % current))
+            fixtures[current] = (n, named.group(1), [])
+            continue
         if line.startswith("```"):
             if not section[3] and line.strip() == "```landin":
                 if section[2]:
@@ -7518,6 +7545,131 @@ def explanation_sections():
         out[code] = (n, "\n\n".join(paragraphs),
                      "\n".join(example) + ("\n" if example else ""))
     return out, problems
+
+
+FIXTURE_FENCES = {".ldn": "landin", ".c": "c", ".h": "c", ".sh": "sh"}
+
+
+def fixture_example(name):
+    """What a fixture named as an example shows: (files, command, report).
+
+    FILES is every file of the fixture but its metadata and its recorded
+    report, by path, each (path, text) or, for one that is not text,
+    (path, None, size).  COMMAND is the `refine` command its `args` are,
+    and REPORT the recorded report.  None when the fixture is not there
+    or records no report.
+    """
+    directory = os.path.join(ROOT, "compiler/tests/fixtures", name)
+    meta = os.path.join(directory, "fixture.meta")
+    if not os.path.isfile(meta):
+        return None
+    fields = fixture_fields(meta)
+    expect = fields.get("expect")
+    if not expect or not fields.get("args") or not os.path.isfile(
+            os.path.join(directory, expect)):
+        return None
+    files = []
+    for here, folders, names in os.walk(directory):
+        folders.sort()
+        for one in sorted(names):
+            path = os.path.join(here, one)
+            relative = os.path.relpath(path, directory).replace(os.sep, "/")
+            if relative in ("fixture.meta", expect):
+                continue
+            data = read_file(path, "rb")
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError:
+                text = None
+            if text is None or "\0" in text:
+                files.append((relative, None, len(data)))
+            else:
+                files.append((relative, text))
+    files.sort()
+    return (files, "refine " + " ".join(fields["args"].split()),
+            read_file(os.path.join(directory, expect), encoding="utf-8"))
+
+
+def fixture_example_page(name):
+    """The lines `docs/diagnostics.md` shows after naming fixture NAME."""
+    shown = fixture_example(name)
+    if shown is None:
+        return None
+    files, command, report = shown
+    out = [""]
+    for entry in files:
+        if entry[1] is None:
+            out += ["`%s` is binary, %d bytes." % (entry[0], entry[2]), ""]
+            continue
+        suffix = os.path.splitext(entry[0])[1]
+        fence = FIXTURE_FENCES.get(
+            suffix, "sh" if entry[1].startswith("#!/bin/sh") else "text")
+        out += ["`%s`:" % entry[0], "", "```" + fence]
+        out += entry[1].rstrip("\n").split("\n")
+        out += ["```", ""]
+    out += ["Run from `compiler/ada`, it is refused:", "", "```text",
+            "$ " + command]
+    out += report.rstrip("\n").split("\n")
+    out += ["```", ""]
+    return out
+
+
+def fixture_example_text(name):
+    """The same fixture as `refine explain` prints it, for a terminal."""
+    shown = fixture_example(name)
+    if shown is None:
+        return ""
+    files, command, report = shown
+
+    def block(text):
+        return ["    " + line if line else ""
+                for line in text.rstrip("\n").split("\n")]
+    out = ["For example, the fixture %s of the repository, in"
+           " compiler/tests/fixtures:" % name, ""]
+    for entry in files:
+        if entry[1] is None:
+            out += ["%s: binary, %d bytes" % (entry[0], entry[2]), ""]
+        else:
+            out += [entry[0] + ":", ""] + block(entry[1]) + [""]
+    out += ["Run from compiler/ada, it is refused:", "",
+            "    $ " + command] + block(report)
+    return "\n".join(out) + "\n"
+
+
+def fixture_example_problems():
+    """What is wrong with the fixtures the page names as examples (D1230).
+
+    The fixture is there and records a report, every code that report
+    carries is the section's and it carries it, and the page shows after
+    the reference exactly what the fixture holds.
+    """
+    out = []
+    for code, (n, name, shown) in EXPLANATION_FIXTURES.items():
+        example = fixture_example(name)
+        if example is None:
+            out.append((EXPLANATIONS, n,
+                        "%s's example names the fixture %s, which is not"
+                        " there or records no report: an example fixture"
+                        " has `args` and `expect`" % (code, name)))
+            continue
+        carried = re.findall(r"^(?:error|warning)\[(L\d{4})\]", example[2],
+                             re.M)
+        if not carried or set(carried) != {code}:
+            out.append((EXPLANATIONS, n,
+                        "%s's example fixture %s reports %s; an example's"
+                        " report carries its own code and no other"
+                        % (code, name, ", ".join(carried) or "no code")))
+        wanted = fixture_example_page(name)
+        while shown and not shown[-1].strip():
+            shown = shown[:-1]
+        if shown != wanted[:-1]:
+            at = next((i for i, (a, b) in enumerate(zip(shown, wanted))
+                       if a != b), min(len(shown), len(wanted) - 1))
+            out.append((EXPLANATIONS, n + 1 + at,
+                        "%s's section does not show the fixture %s as it"
+                        " is; write what `python3 check.py --example=%s`"
+                        " prints after the reference" % (code, name, name)))
+    return out
 
 
 def ada_string(text):
@@ -7578,14 +7730,18 @@ def explanations_dump():
             "",
             "   LF : constant Character := Character'Val (10);",
             ""]
-    for function, index in (("Explanation", 1), ("Example", 2)):
+    shown = {code: fixture_example_text(name)
+             for code, (_, name, _) in EXPLANATION_FIXTURES.items()}
+    for function, index in (("Explanation", 1), ("Example", 2),
+                            ("Fixture", None)):
         body.append("   function %s (Of_Code : Catalogue.Code_Name)"
                     " return String" % function)
         body.append("     is (case Of_Code is")
         for row in rows:
             body.append("            when Catalogue.%s =>" % row["name"])
             body.append("               %s," % ada_string(
-                sections[row["code"]][index]))
+                shown.get(row["code"], "") if index is None
+                else sections[row["code"]][index]))
         body[-1] = body[-1][:-1] + ");"
         body.append("")
     body.append("end Landin.Diagnostics.Explanations;")
@@ -7640,6 +7796,7 @@ def check_explanations(full_run):
             out.append((EXPLANATIONS, n,
                         "%s is explained and no catalogue row holds it"
                         % code))
+    out += fixture_example_problems()
     fresh = explanations_dump()
     target = os.path.join(ROOT, EXPLANATIONS_ADA)
     if fresh is not None and (not os.path.exists(target)
@@ -11154,6 +11311,8 @@ def usage():
         lines.append("  python3 check.py %-12s regenerates %s"
                      % (flag, files[0]))
         lines += ["%31s %s" % ("", one) for one in files[1:]]
+    lines.append("  python3 check.py --example=CLASS/NAME prints what"
+                 " docs/diagnostics.md shows for that example fixture")
     return "\n".join(lines)
 
 
@@ -11176,6 +11335,16 @@ def main(argv):
 
     if argv[1:] in (["--help"], ["-h"]):
         print(usage())
+        return 0
+    if len(argv) == 2 and argv[1].startswith("--example="):
+        #  D1230: what docs/diagnostics.md shows for an example fixture.
+        name = argv[1][len("--example="):]
+        page = fixture_example_page(name)
+        if page is None:
+            print("%s is no fixture under compiler/tests/fixtures that"
+                  " records a report with `args` and `expect`" % name)
+            return 2
+        print("Example fixture: `%s`\n%s" % (name, "\n".join(page[:-1])))
         return 0
     flags = [one for one in argv[1:] if one.startswith("--")]
     valid = [GENERATE_ALL] + [flag for flag, _ in GENERATORS]

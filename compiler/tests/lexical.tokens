@@ -85929,6 +85929,18 @@ file negative/placement-on-a-hosted-target/program.ldn tokens 15
   29 31 u8
   32 33 =
   34 40 zeroed
+file negative/placement-with-no-reference-profile/program.ldn tokens 11
+  0 4 link
+  4 5 (
+  5 11 region
+  11 12 :
+  13 18 "RAM"
+  18 19 )
+  20 25 table
+  25 26 :
+  27 30 u32
+  31 32 =
+  33 34 1
 file negative/pointer-case-arm-is-not-an-atom/program.ldn tokens 48
   0 5 north
   5 6 :

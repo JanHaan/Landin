@@ -77,6 +77,7 @@ abi/socket-write-raises-no-sigpipe | linux-x86-64, linux-arm64, darwin-arm64, fr
 abi/system-new-records-per-thread | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 abi/thread-storage-per-thread | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 end-to-end/assembly-refuses-a-public-main-that-is-not-the-entry | linux-x86-64
+end-to-end/boot-stage-too-long | cortex-m0
 end-to-end/check-refuses-a-public-main-that-is-not-the-entry | linux-x86-64
 end-to-end/check-refuses-a-static-c-import | linux-x86-64
 end-to-end/example-firmware-serial | cortex-m0
@@ -90,6 +91,9 @@ end-to-end/feature-level-linux-arm64-armv8-a-selects-without-lse | linux-arm64
 end-to-end/feature-level-linux-arm64-default-lacks-lse | linux-arm64
 end-to-end/feature-level-of-another-family | linux-x86-64
 end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
+end-to-end/firmware-archive-with-constructor | cortex-m0
+end-to-end/firmware-linker-script-breaks-contract | cortex-m0
+end-to-end/image-block-not-as-emitted | cortex-m0
 end-to-end/link-assembly-operand-dry-run | linux-x86-64
 end-to-end/link-firmware-archives-dry-run | cortex-m0
 end-to-end/link-libc-dry-run | linux-x86-64
@@ -965,6 +969,7 @@ negative/parenthesised-name-after-a-call-else-is-its-recovery | linux-x86-64, li
 negative/payload-alias-outlives-a-loop-match | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/placement-of-a-generic-routine | cortex-m0
 negative/placement-on-a-hosted-target | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/placement-with-no-reference-profile | cortex-m0
 negative/pointer-case-arm-is-not-an-atom | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-comparison-referent-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-to-cstring-conversion | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

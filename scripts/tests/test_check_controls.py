@@ -29,6 +29,19 @@ from check_controls import checker, faults, quote, reasons   # noqa: E402
 
 ORACLES = list(checker.BENCHMARK_GAME_ORACLES)
 
+#  The fixtures docs/diagnostics.md names as examples (D1230), and what a
+#  control of the explanations copies: the page, the compiler's sources
+#  and those fixtures.
+EXAMPLE_FIXTURES = ["negative/placement-with-no-reference-profile",
+                    "end-to-end/firmware-linker-script-breaks-contract",
+                    "end-to-end/boot-stage-too-long",
+                    "end-to-end/image-block-not-as-emitted",
+                    "end-to-end/firmware-archive-with-constructor"]
+EXPLAINED = (["compiler/ada/src", "docs/diagnostics.md",
+              "compiler/tests/fixture_meta.py"]
+             + ["compiler/tests/fixtures/" + name
+                for name in EXAMPLE_FIXTURES])
+
 
 class BenchmarkGameOracles(unittest.TestCase):
     """The three correctness outputs stay byte-for-byte canonical."""
@@ -1823,7 +1836,7 @@ class Transcriptions(unittest.TestCase):
 
     def test_every_code_is_explained_and_retirement_is_said(self):
         from check_controls import tree
-        inputs = ["compiler/ada/src", "docs/diagnostics.md"]
+        inputs = EXPLAINED
         with tree(copied=inputs) as root:
             self.assertEqual(checker.check_explanations(True), [])
             page = root / "docs/diagnostics.md"
@@ -1840,9 +1853,96 @@ class Transcriptions(unittest.TestCase):
                       said)
         self.assertIn("retired L0503 must begin `Retired.`", said)
 
+    def test_an_example_fixture_is_held_to_its_code_and_its_files(self):
+        #  D1230: a section may name a fixture as its example.
+        from check_controls import tree
+        name = "end-to-end/image-block-not-as-emitted"
+        self.assertIn(name, EXAMPLE_FIXTURES)
+        with tree(copied=EXPLAINED) as root:
+            self.assertEqual(checker.check_explanations(True), [])
+            fixture = root / "compiler/tests/fixtures" / name
+
+            def said(path, change):
+                target = fixture / path
+                kept = target.read_bytes()
+                target.write_bytes(change(kept))
+                try:
+                    return [why for _, _, why
+                            in checker.check_explanations(True)]
+                finally:
+                    target.write_bytes(kept)
+            #  Another code in the report, or none.
+            other = said("expected.txt",
+                         lambda b: b.replace(b"L0555", b"L0538"))
+            self.assertTrue(any(
+                why.startswith("L0555's example fixture " + name
+                               + " reports L0538;") for why in other), other)
+            none = said("expected.txt", lambda b: b"refused\n")
+            self.assertTrue(any("reports no code" in why for why in none),
+                            none)
+            two = said("expected.txt",
+                       lambda b: b + b"error[L0100]: another\n")
+            self.assertTrue(any("reports L0555, L0100" in why
+                                for why in two), two)
+            #  A text file, or a binary one's size, that the page no
+            #  longer shows as it is.
+            for path, change in (
+                    ("app/main.ldn", lambda b: b + b"x: u8 = 1\n"),
+                    ("assembled.o", lambda b: b + b"\0")):
+                with self.subTest(path=path):
+                    stale = said(path, change)
+                    self.assertTrue(any(
+                        "does not show the fixture " + name + " as it is"
+                        in why and "--example=" + name in why
+                        for why in stale), stale)
+            #  A file the page does not show at all.
+            (fixture / "extra.txt").write_text("more\n")
+            self.assertTrue(checker.check_explanations(True))
+            (fixture / "extra.txt").unlink()
+            self.assertEqual(checker.check_explanations(True), [])
+            #  What the page shows is what --example prints.
+            page = (root / "docs/diagnostics.md").read_text()
+            shown = "\n".join(checker.fixture_example_page(name))
+            self.assertIn("Example fixture: `%s`\n%s" % (name, shown), page)
+            self.assertIn("`assembled.o` is binary, ", shown)
+            #  A fixture that is not there, and a section with both forms.
+            text = page.replace("Example fixture: `%s`" % name,
+                                "Example fixture: `end-to-end/no-such`", 1)
+            (root / "docs/diagnostics.md").write_text(text)
+            gone = [why for _, _, why in checker.check_explanations(True)]
+            self.assertTrue(any("which is not there or records no report"
+                                in why for why in gone), gone)
+            both = page.replace(
+                "Example fixture: `%s`" % name,
+                "```landin\na: u8 = 1\n```\n\nExample fixture: `%s`"
+                % name, 1)
+            (root / "docs/diagnostics.md").write_text(both)
+            twice = [why for _, _, why in checker.check_explanations(True)]
+            self.assertTrue(any("one example at most: a program or a"
+                                " fixture" in why for why in twice), twice)
+
+    def test_an_example_fixture_is_built_into_the_explanations(self):
+        from check_controls import tree
+        with tree(copied=EXPLAINED):
+            body = checker.explanations_dump()
+        self.assertIn("function Fixture (Of_Code : Catalogue.Code_Name)",
+                      body)
+        self.assertIn('"For example, the fixture end-to-end/boot-stage-too-long',
+                      body)
+        text = None
+        with tree(copied=EXPLAINED):
+            checker.explanation_sections()
+            text = checker.fixture_example_text(
+                "end-to-end/firmware-archive-with-constructor")
+        self.assertIn("\nlibsensor.a: binary, ", text)
+        self.assertIn("\nsensor.c:\n\n    /* A C library", text)
+        self.assertIn("\n    $ refine compile --target=cortex-m0 ", text)
+        self.assertTrue(text.rstrip("\n").split("\n")[-1].startswith(
+            "      = note: D924"), text[-200:])
+
     def test_an_unreadable_options_line_is_named(self):
         from check_controls import tree
-        inputs = ["compiler/ada/src", "docs/diagnostics.md"]
+        inputs = EXPLAINED
         with tree(copied=inputs) as root:
             page = root / "docs/diagnostics.md"
             text = page.read_text()
@@ -1866,7 +1966,7 @@ class Transcriptions(unittest.TestCase):
 
     def test_an_explanation_the_compiler_does_not_carry_is_stale(self):
         from check_controls import tree
-        inputs = ["compiler/ada/src", "docs/diagnostics.md"]
+        inputs = EXPLAINED
         with tree(copied=inputs) as root:
             self.assertEqual(checker.check_explanations(True), [])
             page = root / "docs/diagnostics.md"
