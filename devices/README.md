@@ -312,6 +312,10 @@ python3 devices/test.py                          # offline, as check.py runs it
 python3 devices/test.py --refine "$(command -v refine)"   # fetches and regenerates
 ```
 
+`--offline` beside `--refine` uses the input cache alone, as
+`scripts/fetch_inputs.py --offline` does: a case whose input the cache
+lacks fails, naming the input and the path the cache wants it at.
+
 Offline, the test requires the lock and the policies to name the same SVD
 hashes, every generated file to have its manifest's hash, and every module
 to carry its notice. With `--refine` it fetches the inputs and regenerates

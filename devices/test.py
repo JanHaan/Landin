@@ -17,10 +17,13 @@ vendor's own C headers, which refine never reads.
     python3 devices/test.py                       # offline only
     python3 devices/test.py --refine PATH         # everything; fetches
     python3 devices/test.py --refine PATH --require-inputs
+    python3 devices/test.py --refine PATH --offline   # the cache alone
 
 Without --refine, $LANDIN_REFINE names the compiler.  The regeneration
 tests are skipped, and say so, when there is none, unless --require-inputs
-is given, which the gate gives.
+is given, which the gate gives.  With --offline no input is fetched: a
+case whose input the cache lacks fails, naming the input and where the
+cache wants it.
 """
 import argparse
 import ast
@@ -50,6 +53,12 @@ DESCRIPTIONS = HERE / 'descriptions'
 REFINE = None
 TOOLCHAIN = None
 REQUIRE = False
+OFFLINE = False
+
+
+def fetch_input(name):
+    """The cached path of a pinned input, never fetched under --offline."""
+    return fetch_inputs.fetch(name, offline=OFFLINE)
 
 
 def digest(data):
@@ -374,7 +383,7 @@ def generate(name, policy, root):
     out = Path(root) / name
     out.mkdir()
     run_svd(POLICIES / (name + '.json'),
-            fetch_inputs.fetch(svd_input(policy)), out)
+            fetch_input(svd_input(policy)), out)
     return tree(out)
 
 
@@ -557,7 +566,7 @@ class Regeneration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             out = Path(root) / 'out'
             out.mkdir()
-            svd = fetch_inputs.fetch(svd_input(policy))
+            svd = fetch_input(svd_input(policy))
             run_svd(POLICIES / 'rp2040.json', svd, out)
             expected = tree(out)
             changed = out / 'generated/rp2040/uart0/device.ldn'
@@ -584,7 +593,7 @@ class Regeneration(unittest.TestCase):
     @requires_refine
     def test_unsupported_forms_are_refused(self):
         policy = json.loads((POLICIES / 'rp2040.json').read_text())
-        original = fetch_inputs.fetch(svd_input(policy)).read_bytes()
+        original = fetch_input(svd_input(policy)).read_bytes()
         register = b'<register>\n                <name>GPIO0_CTRL</name>'
         anchor = b'<name>GPIO0_CTRL</name>'
 
@@ -652,7 +661,7 @@ class Regeneration(unittest.TestCase):
             path.write_text(json.dumps(unnumbered))
             out = Path(root) / 'unnumbered'
             out.mkdir()
-            result = run_svd(path, fetch_inputs.fetch(svd_input(policy)), out, expect=1)
+            result = run_svd(path, fetch_input(svd_input(policy)), out, expect=1)
             self.assertEqual(result.stderr.count('error[L0528]'), 1)
             for name in ('XOSC.CTRL.FREQ_RANGE ("1_15MHZ")', 'XOSC.STATUS.FREQ_RANGE',
                          'PADS_BANK0.GPIO0.DRIVE ("2mA")', 'PADS_BANK0.GPIO3.DRIVE'):
@@ -678,7 +687,7 @@ class Regeneration(unittest.TestCase):
                 del missing['policies'][key]
             path = Path(root) / 'missing.json'
             path.write_text(json.dumps(missing))
-            result = run_svd(path, fetch_inputs.fetch(svd_input(policy)),
+            result = run_svd(path, fetch_input(svd_input(policy)),
                              out, expect=1)
             self.assertIn('error[L0530]', result.stderr)
 
@@ -789,7 +798,7 @@ def compare_with_pico_sdk(case, rows, device, bases, requests, family_of):
     for row in rows:
         peripheral, register = row['source'].split('.')
         family = family_of(peripheral)
-        text = fetch_inputs.fetch(device + '/' + family.lower() + '.h').read_text()
+        text = fetch_input(device + '/' + family.lower() + '.h').read_text()
         macros = dict(re.findall(r'^#define (\w+)\s+_u\((0x[0-9a-fA-F]+|[0-9]+)\)',
                                  text, re.MULTILINE))
         prefix = family + '_' + register
@@ -838,7 +847,7 @@ class D542Form(unittest.TestCase):
     def test_each_interrupts_ldn_is_the_form(self):
         for name, policy in policies().items():
             with self.subTest(policy=name):
-                raw = fetch_inputs.fetch(svd_input(policy)).read_bytes()
+                raw = fetch_input(svd_input(policy)).read_bytes()
                 description, sources = render_d542(raw, policy)
                 self.assertEqual(
                     (HERE / policy['description'] / 'interrupts.ldn').read_bytes(),
@@ -965,7 +974,7 @@ class Rp2350Oracles(unittest.TestCase):
     def test_vendor_headers(self):
         # Each base is addressmap.h's PERIPHERAL_BASE; the M33's private
         # bus is PPB_BASE, whose registers m33.h gives as M33_.
-        addresses = fetch_inputs.fetch('rp2350/addressmap.h').read_text()
+        addresses = fetch_input('rp2350/addressmap.h').read_text()
         bases = {name: int(value, 0) for name, value in re.findall(
             r'^#define (\w+)_BASE _u\((0x[0-9a-fA-F]+)\)', addresses, re.MULTILINE)}
         compare_with_pico_sdk(
@@ -1026,7 +1035,7 @@ class Rp2350Oracles(unittest.TestCase):
 
     @requires_refine
     def test_interrupts_against_the_header(self):
-        header = fetch_inputs.fetch('rp2350/intctrl.h').read_text()
+        header = fetch_input('rp2350/intctrl.h').read_text()
         numbers = {int(value): name for name, value in re.findall(
             r'^#define (\w+) (\d+)$', header, re.MULTILINE)}
         text = (DESCRIPTIONS / 'rp2350/interrupts.ldn').read_text()
@@ -1207,7 +1216,7 @@ class Stm32h753Oracles(unittest.TestCase):
 
     @requires_refine
     def test_cmsis_header(self):
-        header = CmsisHeader(fetch_inputs.fetch('stm32h753/stm32h753xx.h')
+        header = CmsisHeader(fetch_input('stm32h753/stm32h753xx.h')
                              .read_text())
         rows = {row['source']: row for row in self.rows()}
         self.assertEqual(set(rows), set(H753_REGISTERS))
@@ -1332,7 +1341,7 @@ class Stm32h753Oracles(unittest.TestCase):
 
     @requires_refine
     def test_interrupts_against_the_header(self):
-        header = fetch_inputs.fetch('stm32h753/stm32h753xx.h').read_text()
+        header = fetch_input('stm32h753/stm32h753xx.h').read_text()
         numbers = {int(m.group(2)): m.group(1) for m in re.finditer(
             r'^\s*(\w+)_IRQn\s*=\s*(-?\d+)', header, re.MULTILINE)}
         text = (DESCRIPTIONS / 'stm32h753/interrupts.ldn').read_text()
@@ -1482,7 +1491,7 @@ class Stm32h753Oracles(unittest.TestCase):
 
     @requires_refine
     def test_the_hand_written_memory_against_the_header(self):
-        header = CmsisHeader(fetch_inputs.fetch('stm32h753/stm32h753xx.h')
+        header = CmsisHeader(fetch_input('stm32h753/stm32h753xx.h')
                              .read_text())
         text = (DESCRIPTIONS / 'stm32h753/memory.ldn').read_text()
 
@@ -1639,7 +1648,7 @@ def compare_with_esp_idf(case, rows, chip, families, names, unshared, resets):
         key = row['source']
         peripheral, register = key.split('.')
         header_file, prefix, instance = families[peripheral]
-        header = IdfHeader(*[fetch_inputs.fetch(chip + '/' + name).read_text()
+        header = IdfHeader(*[fetch_input(chip + '/' + name).read_text()
                              for name in ('reg_base.h', 'soc.h', header_file)])
         macro = names.get((key, None), prefix + '_' + register + '_REG')
         call = re.match(r'(\w+)\((\d+)\)$', macro)
@@ -1695,7 +1704,7 @@ def compare_with_esp_idf(case, rows, chip, families, names, unshared, resets):
 def sources_of(chip):
     """The interrupt-matrix sources IDF's interrupts.h numbers, by the
     name between ETS_ and its _INTR_SOURCE or _SOURCE."""
-    text = fetch_inputs.fetch(chip + '/interrupts.h').read_text()
+    text = fetch_input(chip + '/interrupts.h').read_text()
     body = text[text.index('typedef enum'):text.index('ETS_MAX_INTR_SOURCE')]
     found = {}
     number = -1
@@ -2064,7 +2073,7 @@ class Rp2350Hazard3Oracles(unittest.TestCase):
         policy = policies()['rp2350_hazard3']
         rows = json.loads((HERE / policy['modules'] /
                            policy['correspondence']).read_text())
-        addresses = fetch_inputs.fetch('rp2350/addressmap.h').read_text()
+        addresses = fetch_input('rp2350/addressmap.h').read_text()
         bases = {name: int(value, 0) for name, value in re.findall(
             r'^#define (\w+)_BASE _u\((0x[0-9a-fA-F]+)\)', addresses, re.MULTILINE)}
         compare_with_pico_sdk(
@@ -2688,10 +2697,10 @@ class XtensaOracles(unittest.TestCase):
         for chip, prefix, maximum in (('esp32', 'ESP32', 399),
                                       ('esp32s3', 'ESP32S3', 99)):
             with self.subTest(chip=chip):
-                memory = fetch_inputs.fetch(chip + '/memory.ld.in').read_text()
-                boot = fetch_inputs.fetch(chip + '/bootloader.memory.ld.in').read_text()
-                config = fetch_inputs.fetch(chip + '/Kconfig.hw_support').read_text()
-                stall = fetch_inputs.fetch(chip + '/cpu_utility_ll.h').read_text()
+                memory = fetch_input(chip + '/memory.ld.in').read_text()
+                boot = fetch_input(chip + '/bootloader.memory.ld.in').read_text()
+                config = fetch_input(chip + '/Kconfig.hw_support').read_text()
+                stall = fetch_input(chip + '/cpu_utility_ll.h').read_text()
                 self.assertRegex(config, r'config ' + prefix
                                  + r'_REV_MAX_FULL\s+int\s+default ' + str(maximum))
                 self.assertIn('0x86', stall)
@@ -2728,7 +2737,7 @@ class XtensaOracles(unittest.TestCase):
     def test_uart_idle_contract(self):
         for chip in ('esp32', 'esp32s3'):
             with self.subTest(chip=chip):
-                header = fetch_inputs.fetch(chip + '/uart_ll.h').read_text()
+                header = fetch_input(chip + '/uart_ll.h').read_text()
                 idle = header.split('bool uart_ll_is_tx_idle', 1)[1].split('}', 1)[0]
                 self.assertRegex(idle, r'(?s)txfifo_cnt.*== 0.*&&.*st_utx_out == 0')
                 rows = {row['source']: row for row in self.rows(chip)}
@@ -2742,7 +2751,7 @@ class XtensaOracles(unittest.TestCase):
     @requires_refine
     def test_classic_cold_rom_abi(self):
         contract = json.loads((HERE / 'esp32-rom.json').read_text())
-        with tarfile.open(fetch_inputs.fetch(contract['elf_archive'])) as archive:
+        with tarfile.open(fetch_input(contract['elf_archive'])) as archive:
             elf = archive.extractfile(contract['elf_member']).read()
         self.assertEqual(digest(elf), contract['elf_sha256'])
         self.assertEqual(contract['elf_member'], 'esp32_rev300_rom.elf')
@@ -2759,8 +2768,8 @@ class XtensaOracles(unittest.TestCase):
             self.assertEqual(len(matches), 1, hex(address))
             return matches[0]
 
-        symbols = fetch_inputs.fetch('esp32/rom.ld').read_text()
-        header = fetch_inputs.fetch('esp32/rom-cache.h').read_text()
+        symbols = fetch_input('esp32/rom.ld').read_text()
+        header = fetch_input('esp32/rom-cache.h').read_text()
         self.assertEqual({function['name'] for function in contract['functions']},
                          {'Cache_Read_Disable', 'Cache_Flush'})
         ranges = {int(region['address'], 0): region for region in contract['word_ranges']}
@@ -2790,7 +2799,7 @@ class XtensaOracles(unittest.TestCase):
     @requires_refine
     def test_s3_cold_rom_abi(self):
         contract = json.loads((HERE / 'esp32s3-rom.json').read_text())
-        with tarfile.open(fetch_inputs.fetch(contract['elf_archive'])) as archive:
+        with tarfile.open(fetch_input(contract['elf_archive'])) as archive:
             elf = archive.extractfile(contract['elf_member']).read()
         self.assertEqual(elf[:7], b'\x7fELF\x01\x01\x01')
         phoff = struct.unpack_from('<I', elf, 28)[0]
@@ -2805,8 +2814,8 @@ class XtensaOracles(unittest.TestCase):
             self.assertEqual(len(matches), 1, hex(address))
             return matches[0]
 
-        symbols = fetch_inputs.fetch('esp32s3/rom.ld').read_text()
-        header = fetch_inputs.fetch('esp32s3/rom-cache.h').read_text()
+        symbols = fetch_input('esp32s3/rom.ld').read_text()
+        header = fetch_input('esp32s3/rom-cache.h').read_text()
         self.assertIn('rom_cache_internal_table_ptr = 0x3fceffc4', symbols)
         for function in contract['functions']:
             entry, body = int(function['entry'], 0), int(function['body'], 0)
@@ -2852,7 +2861,7 @@ class XtensaOracles(unittest.TestCase):
 
 
 def main():
-    global REFINE, REQUIRE, TOOLCHAIN
+    global OFFLINE, REFINE, REQUIRE, TOOLCHAIN
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--refine', type=Path,
@@ -2861,9 +2870,12 @@ def main():
                         help='the Cortex-M C driver the consumer links with')
     parser.add_argument('--require-inputs', action='store_true',
                         help='fail, rather than skip, without refine or inputs')
+    parser.add_argument('--offline', action='store_true',
+                        help='use the input cache alone; fetch nothing')
     args, rest = parser.parse_known_args()
     REFINE = Path(args.refine).resolve() if args.refine else None
     REQUIRE = args.require_inputs
+    OFFLINE = args.offline
     TOOLCHAIN = args.toolchain
     unittest.main(argv=[sys.argv[0]] + rest)
 

@@ -741,7 +741,8 @@ fixture is generated from:
 The pinned headers come from the input cache, `$LANDIN_INPUTS` or
 `~/.cache/landin/inputs`, and one the cache lacks is fetched by its hash,
 as `scripts/fetch_inputs.py` fetches it; with `--offline` the command
-refuses instead.
+refuses instead. The cases take `--offline` too, without `--write`, and the
+ones that read a pinned header then fail on one the cache lacks.
 
 The small declaration-only `stdlib.h` supplies the same C ABI declarations used
 by the test's empty-sysroot configuration; actual adapter linking uses libc.
