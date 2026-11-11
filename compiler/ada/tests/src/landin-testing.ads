@@ -70,6 +70,14 @@ package Landin.Testing is
 
    function Case_Count (In_Registry : Registry) return Natural;
 
+   --  Every case registered under SUITE, or every case when SUITE is
+   --  empty, one `SUITE/NAME` to a line as `--case=` takes it, in the
+   --  order a run sorts them.  The test program prints it for `--cases`,
+   --  so naming a case does not mean reading a suite's source for its
+   --  registrations.
+   function Case_List
+     (In_Registry : Registry; Suite : String := "") return String;
+
    --  A run divided across processes, so a gate whose runners have a few
    --  CPUs each can run the inventory on several at once.  Shard Index of
    --  Count runs each ordinary case whose place among the ordinary cases,

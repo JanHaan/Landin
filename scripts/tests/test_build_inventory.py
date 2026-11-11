@@ -993,6 +993,10 @@ class DeveloperScripts(unittest.TestCase):
                                  "'analysis agrees",
                                  "'refused sources are served'",
                                  "LANDIN_TEST_TIMINGS=1 adds",
+                                 name + " [--host] --cases=SUITE ... |"
+                                 " --cases",
+                                 "--cases=SUITE lists that suite's cases"
+                                 " and runs none",
                                  "--fixture-code=LNNNN is --fixture, and"
                                  " --record-code=LNNNN --record"):
                         self.assertIn(said, result.stdout)

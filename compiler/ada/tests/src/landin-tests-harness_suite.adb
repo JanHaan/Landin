@@ -338,6 +338,59 @@ package body Landin.Tests.Harness_Suite is
          "a case named without its suite is offered the one that has it");
    end Several_Selectors_Run_Once;
 
+   --  `--cases` prints the registry's own names, so a case is named
+   --  without reading its suite's source for the registration.
+   procedure Cases_Are_Listed_As_Selectors
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cases_Are_Listed_As_Selectors
+     (Item : in out Landin.Testing.Context)
+   is
+      Scratch    : Landin.Testing.Registry;
+      Transcript : Unbounded.Unbounded_String;
+      Result     : Landin.Testing.Summary;
+      Selected   : Landin.Testing.Selector_Vectors.Vector;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Case_List (Scratch), "",
+         "an empty registry lists nothing");
+
+      Landin.Testing.Register (Scratch, "beta", "one", Always_Passes'Access);
+      Landin.Testing.Register
+        (Scratch, "alpha", "two words", Always_Passes'Access);
+      Landin.Testing.Register
+        (Scratch, "alpha beta", "z", Always_Passes'Access);
+      Landin.Testing.Register (Scratch, "alpha", "one", Always_Fails'Access);
+
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Case_List (Scratch, "alpha"),
+         "alpha/one" & ASCII.LF & "alpha/two words" & ASCII.LF,
+         "one suite's cases are listed, sorted, and no other suite's");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Case_List (Scratch),
+         "alpha/one" & ASCII.LF & "alpha/two words" & ASCII.LF
+         & "alpha beta/z" & ASCII.LF & "beta/one" & ASCII.LF,
+         "every suite's cases are listed in the order a run takes them");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Case_List (Scratch, "alph"), "",
+         "a name that is no suite lists nothing");
+
+      --  A listed line is a selector: the text after the slash runs
+      --  exactly that case, and listing ran none.
+      Selected.Append
+        (Landin.Testing.Selector'
+           (Suite => Unbounded.To_Unbounded_String ("alpha"),
+            Name  => Unbounded.To_Unbounded_String ("two words")));
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Selection_Problem
+           (Scratch, Selected.First_Element), "",
+         "a listed case is one a selector names");
+      Landin.Testing.Run (Scratch, Selected, Transcript, Result);
+      Landin.Testing.Check
+        (Item, Result.Cases = 1 and then Result.Failed = 0,
+         "the listed name selects its one case");
+   end Cases_Are_Listed_As_Selectors;
+
    procedure Failures_Are_Counted (Item : in out Landin.Testing.Context) is
       Scratch    : Landin.Testing.Registry;
       Transcript : Unbounded.Unbounded_String;
@@ -585,6 +638,9 @@ package body Landin.Tests.Harness_Suite is
       Landin.Testing.Register
         (Into, "harness", "several selectors run once",
          Several_Selectors_Run_Once'Access);
+      Landin.Testing.Register
+        (Into, "harness", "cases are listed as selectors",
+         Cases_Are_Listed_As_Selectors'Access);
       Landin.Testing.Register
         (Into, "harness", "filters select exact cases",
          Filters_Select_Exact_Cases'Access);

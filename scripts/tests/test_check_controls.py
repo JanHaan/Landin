@@ -1777,6 +1777,38 @@ class Transcriptions(unittest.TestCase):
         self.assertTrue(any(why.startswith("L0004 has no negative source"
                                            " fixture") for why in said), said)
 
+    def test_a_quoted_code_is_evidence_unless_its_line_says_it_is_not(self):
+        #  A harness case that hands a code about as data marks the line;
+        #  one once spelled the code in two parts to stay out of the matrix.
+        from check_controls import tree
+        inputs = ["compiler/tests/diagnostics.matrix", "compiler/ada/src",
+                  "compiler/ada/tests", "compiler/tests/fixtures",
+                  "spec.md", "tour.md"]
+        name = "landin-tests-harness_suite.adb"
+        with tree(copied=inputs) as root:
+            source = root / "compiler/ada/tests/src" / name
+            text = source.read_text()
+            matrix = (root / "compiler/tests/diagnostics.matrix").read_text()
+            self.assertNotIn("test:" + name, matrix)
+
+            def said(line):
+                source.write_text(text + line + "\n")
+                return [why for _, _, why
+                        in checker.check_diagnostic_matrix(True)]
+            self.assertEqual(
+                said('   Sample : constant String := "L0100";'
+                     '  --  not evidence'), [])
+            self.assertEqual(checker.diagnostic_matrix_dump(), matrix)
+            stale = said('   Sample : constant String := "L0100";')
+            self.assertTrue(any("stale" in why for why in stale), stale)
+            self.assertIn("test:" + name, checker.diagnostic_matrix_dump())
+            #  The words elsewhere on the line exempt nothing.
+            self.assertTrue(said('   --  not evidence\n'
+                                 '   Sample : constant String := "L0100";'))
+        self.assertEqual(
+            checker.test_evidence_text('a "L0001";  --  not evidence\nb\n'),
+            "b\n")
+
     def test_a_fixture_naming_a_missing_fix_result_is_reported(self):
         from check_controls import tree
         with tree(copied=["compiler/tests/fixtures"]) as root:
