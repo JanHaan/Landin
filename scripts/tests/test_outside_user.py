@@ -150,6 +150,11 @@ class Archive(unittest.TestCase):
                 for namespace in ("core", "hosted", "platform"):
                     self.assertIn("lib/landin/" + namespace, names)
                 self.assertIn("lib/landin/core/mem/mem.ldn", names)
+                #  D1240: what `refine explain D275` reads.
+                self.assertIn("lib/landin/citations.txt", names)
+                packed = archive.extractfile("lib/landin/citations.txt")
+                self.assertEqual(packed.read(),
+                                 (ROOT / "citations.txt").read_bytes())
                 self.assertIn("LICENSE", names)
                 mode = archive.getmember("bin/refine").mode
                 self.assertEqual(mode & 0o111, 0o111)

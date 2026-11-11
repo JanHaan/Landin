@@ -212,25 +212,49 @@ package body Landin.Driver is
    --  driver report with no source, rendered as every other one is.  It
    --  answers a diagnostic code, and a construct or decision a note cites
    --  (D530); `--full` adds a construct's or decision's own text.
+   --
+   --  A code's explanation is built in.  A construct's and a decision's
+   --  words are not (D1240): they are read from `citations.txt` in the
+   --  library, found as a compilation finds it (D275) or where
+   --  `--library=DIR` says, and read only when one is asked for.  A file
+   --  that is missing, unreadable or in another format is reported with
+   --  its path, and what was asked for is still named with its document.
    ---------------------------------------------------------------------
 
-   function Explain (Arguments : Landin.Platform.Path_List) return Outcome;
+   function Explain
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class) return Outcome;
 
-   function Explain (Arguments : Landin.Platform.Path_List) return Outcome
+   function Explain
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class) return Outcome
    is
       use type Rows.Disposition;
       use type Landin.Diagnostics.Severity;
 
       package Citations renames Landin.Diagnostics.Citations.Answers;
 
-      Result : Outcome;
-      Text   : Unbounded.Unbounded_String;
-      Found  : Landin.Diagnostics.Diagnostic_List;
+      Library_Option : constant String := "--library=";
+
+      Result  : Outcome;
+      Text    : Unbounded.Unbounded_String;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Misused : Boolean := False;
+
+      --  The library `--library=DIR` names, the last one written.
+      Named   : Unbounded.Unbounded_String;
+
+      --  The citations, read at most once and only when one is asked for;
+      --  Unread says why they could not be, and is "" when they were.
+      Table   : Landin.Diagnostics.Citations.Table;
+      Asked_Table : Boolean := False;
+      Unread  : Unbounded.Unbounded_String;
 
       procedure Refuse (Message : String);
 
       procedure Refuse (Message : String) is
       begin
+         Misused := True;
          Found.Append
            (Landin.Diagnostics.Make
               (Code    => Code_Unknown_Option,
@@ -239,6 +263,62 @@ package body Landin.Driver is
                Where   => Landin.Source.Empty_Span,
                Message => Message));
       end Refuse;
+
+      function Is_Library (Word : String) return Boolean
+        is (Word'Length > Library_Option'Length
+            and then Word (Word'First
+                           .. Word'First + Library_Option'Length - 1)
+                     = Library_Option);
+
+      --  Find and read the citations file, once.
+      procedure Read_Table;
+
+      procedure Read_Table is
+         Root : constant String :=
+           (if Unbounded.Length (Named) > 0
+            then Unbounded.To_String (Named)
+            else Landin.Driver.Library.Located (Host));
+         Path : constant String :=
+           (if Root = "" then ""
+            else Loading.Joined_Path
+                   (Root, Landin.Diagnostics.Citations.File_Name));
+         Content : Unbounded.Unbounded_String;
+         Read    : Landin.Platform.Read_Status;
+      begin
+         Asked_Table := True;
+         if Root = "" then
+            Unread := Unbounded.To_Unbounded_String
+              ("from " & Landin.Diagnostics.Citations.File_Name
+               & " in its library, and no library was found: "
+               & Landin.Driver.Library.Looked_In (Host)
+               & "; name the library's directory with --library=DIR");
+            return;
+         end if;
+         Host.Read_File (Path, Content, Read);
+         if Read /= Landin.Platform.Read_Ok then
+            Unread := Unbounded.To_Unbounded_String
+              ("from " & Path
+               & (if Read = Landin.Platform.Not_Found
+                  then ", which is not there"
+                  else ", which cannot be read")
+               & "; install the " & Landin.Diagnostics.Citations.File_Name
+               & " this refine came with, or name a library that holds"
+               & " it with --library=DIR");
+            return;
+         end if;
+         Table := Landin.Diagnostics.Citations.Read (Content);
+         if not Landin.Diagnostics.Citations.Readable (Table) then
+            Unread := Unbounded.To_Unbounded_String
+              ("from " & Path & ", which is written for another refine:"
+               & " its first line is `"
+               & Landin.Diagnostics.Citations.First_Line (Table)
+               & "` and this refine reads `"
+               & Landin.Diagnostics.Citations.Format_Line
+               & "`; install the "
+               & Landin.Diagnostics.Citations.File_Name
+               & " this refine came with");
+         end if;
+      end Read_Table;
 
       function Row_Line (Name : Rows.Code_Name) return String
         is (Rows.Code (Name)
@@ -250,9 +330,21 @@ package body Landin.Driver is
       Full  : constant Boolean :=
         (for some Index in 2 .. Natural (Arguments.Length) =>
            Arguments.Element (Index) = "--full");
-      Asked_For : constant Natural :=
-        Natural (Arguments.Length) - 1 - Boolean'Pos (Full);
+      Asked_For : Natural := 0;
    begin
+      for Index in 2 .. Natural (Arguments.Length) loop
+         if Is_Library (Arguments.Element (Index)) then
+            declare
+               Word : constant String := Arguments.Element (Index);
+            begin
+               Named := Unbounded.To_Unbounded_String
+                 (Word (Word'First + Library_Option'Length .. Word'Last));
+            end;
+         elsif Arguments.Element (Index) /= "--full" then
+            Asked_For := Asked_For + 1;
+         end if;
+      end loop;
+
       if Asked_For = 0 then
          for Name in Rows.Code_Name loop
             Unbounded.Append (Text, Row_Line (Name));
@@ -263,22 +355,39 @@ package body Landin.Driver is
          declare
             Asked : constant String := Arguments.Element (Index);
          begin
-            if Asked = "--full" then
+            if Asked = "--full" or else Is_Library (Asked) then
                null;
             elsif Citations.Is_Citation (Asked) then
-               if not Citations.Is_Known (Asked) then
+               if not Asked_Table then
+                  Read_Table;
+               end if;
+               if Unbounded.Length (Unread) > 0 then
+                  --  D1240: not misuse, and nothing asked for is lost:
+                  --  the citation is named with where else it is read.
+                  Found.Append
+                    (Landin.Diagnostics.Make
+                       (Code    => Code_Unreadable,
+                        Level   => Landin.Diagnostics.Error,
+                        Source  => Landin.Source.No_Source,
+                        Where   => Landin.Source.Empty_Span,
+                        Message =>
+                          "explain reads constructs and decisions "
+                          & Unbounded.To_String (Unread) & "; "
+                          & Citations.Elsewhere (Asked)));
+               elsif not Citations.Is_Known (Table, Asked) then
                   Refuse (Citations.Unknown (Asked));
                else
                   if Unbounded.Length (Text) > 0 then
                      Unbounded.Append (Text, LF & "");
                   end if;
-                  Unbounded.Append (Text, Citations.Answer (Asked, Full));
+                  Unbounded.Append
+                    (Text, Citations.Answer (Table, Asked, Full));
                end if;
             elsif not Landin.Diagnostics.Is_Valid_Code (Asked)
               or else not Rows.Holds (Asked)
             then
                Refuse ((if Asked'Length > 0 and then Asked (Asked'First) = '-'
-                        then "explain takes one option, --full: "
+                        then "explain takes --full and --library=DIR: "
                         else "no catalogue row holds the code: ")
                        & Asked);
             else
@@ -324,7 +433,8 @@ package body Landin.Driver is
       end loop;
 
       if Landin.Diagnostics.Count (Found) > 0 then
-         Result.Status := Status_Misuse;
+         Result.Status :=
+           (if Misused then Status_Misuse else Status_Reported);
          Result.Found := Found;
          declare
             None : Landin.Source.Sets.Source_Set;
@@ -945,7 +1055,7 @@ package body Landin.Driver is
       end if;
 
       if Arguments.Element (1) = Explain_Command then
-         return Explain (Arguments);
+         return Explain (Arguments, Host);
       elsif Arguments.Element (1) = Format_Command then
          return Format
            (Arguments, Host, Protected_Inputs, Protected_Identities);

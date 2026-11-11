@@ -198,7 +198,8 @@ package body Landin.Commands.Catalogue is
           when Svd => Flag in Policy | Out_Dir,
           when Bindings =>
             Flag in Target | Policy | Out_Dir | Clang .. Define,
-          when Explain => Flag = Explain_Full,
+          --  D1240: where the citations file is, as a compilation's.
+          when Explain => Flag in Explain_Full | Library,
           when Server => Flag = Stdio,
           when Version => Flag in JSON | Library,
           when Targets => Flag = JSON,

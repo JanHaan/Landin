@@ -1356,8 +1356,9 @@ limited `out` parameter is passed by reference and `Lex` had not cleared it.
 ## Diagnostic and semantic coverage registers
 
 `python3 check.py --generate` regenerates every generated file at once: the
-token dump, the catalogue and its matrix and explanations, the coverage and
-construct matrices and the editor files. Each flag below writes its own share,
+token dump, the catalogue and its matrix and explanations, the citations
+`refine explain` reads at run time (`citations.txt`, D1240), the coverage
+and construct matrices and the editor files. Each flag below writes its own share,
 and one run may name several flags.
 
 `python3 check.py --catalogue` writes both `diagnostics.catalogue` and

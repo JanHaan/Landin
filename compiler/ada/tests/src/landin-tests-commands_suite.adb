@@ -142,13 +142,37 @@ package body Landin.Tests.Commands_Suite is
       end;
       --  D530: `--full` is explain's own option, before or after what it
       --  is asked about, and the command line hands it to the driver.
+      --  D1240: the text comes from the library's citations file, found
+      --  beside refine or where `--library` says, an option explain takes
+      --  as a compilation does.
       declare
+         function With_Citations
+           return Landin.Testing.Fakes.Fake_Filesystem;
+
+         function With_Citations
+           return Landin.Testing.Fakes.Fake_Filesystem is
+         begin
+            return Made : Landin.Testing.Fakes.Fake_Filesystem do
+               Made.Add_Citations;
+            end return;
+         end With_Citations;
+
+         Beside : constant Landin.Testing.Fakes.Fake_Filesystem :=
+           With_Citations;
          Before : constant Landin.Driver.Outcome :=
            Landin.Commands.Execute
-             (["explain", "--full", "D280"], Host, Tools, Meter);
+             (["explain", "--full", "D280"], Beside, Tools, Meter);
          After : constant Landin.Driver.Outcome :=
            Landin.Commands.Execute
-             (["explain", "D280", "--full"], Host, Tools, Meter);
+             (["explain", "D280", "--full"], Beside, Tools, Meter);
+         Nowhere : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["explain", "--library=/nowhere", "D280"], Beside, Tools,
+              Meter);
+         Spaced : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["explain", "D280", "--library", "/elsewhere"], Beside,
+              Tools, Meter);
          Elsewhere : constant Landin.Driver.Outcome :=
            Landin.Commands.Execute
              (["check", "--full", "main.ldn"], Host, Tools, Meter);
@@ -162,6 +186,18 @@ package body Landin.Tests.Commands_Suite is
             "explain --full answers wherever --full is written");
          Landin.Testing.Check_Equal
            (Item, Elsewhere.Status, 2, "--full is explain's alone");
+         Landin.Testing.Check
+           (Item, Nowhere.Status = 1
+                  and then Ada.Strings.Fixed.Index
+                    (US.To_String (Nowhere.Report),
+                     "/nowhere/citations.txt, which is not there") > 0,
+            "explain --library names where the citations are read");
+         Landin.Testing.Check
+           (Item, Spaced.Status = 1
+                  and then Ada.Strings.Fixed.Index
+                    (US.To_String (Spaced.Report),
+                     "/elsewhere/citations.txt, which is not there") > 0,
+            "the command line hands --library DIR to explain as one word");
       end;
       Landin.Testing.Check_Equal
         (Item, Host.Write_Count, 0, "informational commands write no files");
@@ -1070,9 +1106,9 @@ package body Landin.Tests.Commands_Suite is
                "--root=lib is an option of check, compile and run, and"
                & " follows its command: refine compile --root=lib ...");
       Refused (["--library", "/opt/lib", "compile", "a.ldn"],
-               "--library=/opt/lib is an option of check, compile, run and"
-               & " version, and follows its command: refine compile"
-               & " --library=/opt/lib ...");
+               "--library=/opt/lib is an option of check, compile, run,"
+               & " explain and version, and follows its command: refine"
+               & " compile --library=/opt/lib ...");
       Refused (["--emit=asm", "check", "a.ldn"],
                "--emit=asm is an option of compile, not of check, and"
                & " follows its command: refine compile --emit=asm ...");

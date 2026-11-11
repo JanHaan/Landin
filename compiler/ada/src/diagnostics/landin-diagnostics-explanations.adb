@@ -79,6 +79,15 @@ package body Landin.Diagnostics.Explanations is
                & "iB of their text (D1059)."
                & LF
                & LF
+               & "`refine explain` raises it for a construct or a decision"
+               & ", `[1760]` or `D275`, when it cannot read `citations.txt"
+               & "` in the compiler's library (D1240). The message names t"
+               & "he path it read, or where it looked for a library, and t"
+               & "he document that holds what was asked for. Install the f"
+               & "ile the compiler came with, or name a library that holds"
+               & " it with `--library=DIR`."
+               & LF
+               & LF
                & "In an assembly input the word `.include` or `.incbin` is"
                & " the directive wherever it stands outside a double-quote"
                & "d string and a `/* */` comment, behind a label, a separa"

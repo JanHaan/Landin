@@ -646,6 +646,9 @@
               #  compiler/ada, so the source tree is two levels up.
               mkdir -p "$out/lib/landin"
               cp -R ../../core ../../hosted ../../platform "$out/lib/landin/"
+              #  D1240: the texts `refine explain` reads for a construct
+              #  or a decision, in the library with the modules.
+              install -m644 ../../citations.txt "$out/lib/landin/citations.txt"
               #  refine names its assembler and linker by GNU triplet and
               #  deliberately will not fall back to a bare gcc, so the
               #  wrapped compiler has to be on its path: without this the

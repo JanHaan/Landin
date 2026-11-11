@@ -411,6 +411,26 @@ package body Landin.Testing.Fakes is
         (Landin.Targets.Xtensa, "xtensa-esp32s3"));
    end Add_Firmware_Library;
 
+   procedure Add_Citations (Host : in out Fake_Filesystem) is
+      --  Deliberate real-host read of the checkout's generated file, from
+      --  the test program's working directory, compiler/ada.
+      Real : Landin.Platform.Native.Native_Filesystem;
+      Library : constant String := "/opt/landin/lib/landin";
+      Text : Ada.Strings.Unbounded.Unbounded_String;
+      Status : Landin.Platform.Read_Status;
+   begin
+      Real.Read_File ("../../citations.txt", Text, Status);
+      if Status /= Landin.Platform.Read_Ok then
+         raise Program_Error with "the checkout's citations.txt cannot be"
+           & " read; python3 check.py --catalogue writes it";
+      end if;
+      Host.Add_Directory (Library);
+      Host.Add_Directory (Library & "/core");
+      Host.Add_File
+        (Library & "/citations.txt", Ada.Strings.Unbounded.To_String (Text));
+      Host.Set_Executable_Directory ("/opt/landin/bin");
+   end Add_Citations;
+
    overriding function Executable_Directory
      (Host : Fake_Filesystem) return String
      is (Unbounded.To_String (Host.Executable));
