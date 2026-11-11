@@ -214,7 +214,7 @@ public after: atom
                     if i.name == 'reason')
         self.assertIn('text.invalid_format', item.signature)
         self.assertIn('line.unsupported_format', item.signature)
-        self.assertEqual(item.signature.count('|') + 1, 38)
+        self.assertEqual(item.signature.count('|') + 1, 39)
 
     def test_unknown_public_form_and_unclosed_type_fail(self):
         with self.assertRaisesRegex(ValueError, 'unsupported public'):

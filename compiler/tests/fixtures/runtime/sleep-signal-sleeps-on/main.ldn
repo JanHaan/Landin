@@ -26,23 +26,19 @@ mut caught: u32 = 0
 mut sent_at: u64 = 0
 mut sent: bool = false
 
---  A handler as `sigaction` calls one.
-caught_type: type = extern(c) (number: i32) -> none
-
 extern(c) caught_signal: (number: i32) -> none =
     _ = number
     seen: u32 = compiler.atomic_load(addr caught, compiler.acquire)
     compiler.atomic_store(addr caught, seen + 1, compiler.release)
 end caught_signal
 
---  Catch SIGUSR1 with `caught_signal`.  `signal_action` keeps the handler
---  as the word its code address is.
+--  Catch SIGUSR1 with `caught_signal`: `libc.handling` makes the action
+--  whose handler is the function, and `sigaction_handler` installs it
+--  (D1280).
 caught_by_handler: () -> (yes: bool) =
-    entry: caught_type = caught_signal
-    word: ptr u64 = ptr(usize(addr entry))
-    mut action: libc.signal_action = zeroed
-    action.handler = word.val
-    yes = libc.sigaction(libc.sigusr1, addr action, libc.no_address) == 0
+    action: libc.handler_action = libc.handling(caught_signal, 0)
+    yes = libc.sigaction_handler(libc.sigusr1, addr action,
+                                 libc.no_address) == 0
 end caught_by_handler
 
 --  The monotonic clock in nanoseconds, read as hosted/blocking reads it.
@@ -74,7 +70,11 @@ send: (inout state: sender) -> none ! failure.reason =
         fail io.io_failed
     end
     sent_at = reading()
-    sent = libc.kill(libc.getpid(), libc.sigusr1) == 0
+    sent = true
+    posix.kill(posix.current_process(), posix.signal_user1) else (problem)
+        _ = problem
+        sent = false
+    end
 end send
 
 --  Two stacks of glibc's least, 128 KiB on arm64, and the task's own.

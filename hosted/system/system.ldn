@@ -206,9 +206,14 @@ end is_socket
 --  reports EINTR before publishing a descriptor, so the same request is
 --  retried; every other errno is kept before it is mapped to the stable
 --  atom set, a name an exclusive open finds taken `already_exists`.
+--  A directory is `is_a_directory` (D1276): the system refuses one opened
+--  to write with EISDIR, and opens one to read and fails each read, so
+--  an open to read alone asks what it opened, closes a directory and
+--  keeps EISDIR.
 open: (self: host, path: text.host_string, options: posix.open_options,
        mode: u32) -> (opened: io.file)
-      ! io.already_exists | io.not_found | io.no_access | io.io_failed =
+      ! io.already_exists | io.not_found | io.no_access | io.is_a_directory
+      | io.io_failed =
     keep_failure(self, 0)
     loop do
         made: posix.descriptor =
@@ -219,30 +224,48 @@ open: (self: host, path: text.host_string, options: posix.open_options,
                     record(self, problem)
                     fail io.already_exists
                 end if
+                if problem == posix.eisdir then
+                    record(self, problem)
+                    fail io.is_a_directory
+                end if
                 try path_failure(self, problem)
                 fail io.io_failed
             end
         opened = file_of(made)
+        if options.access == posix.read_only and not options.directory then
+            found: posix.status = posix.status_of(made) else (problem)
+                posix.close(made) else none
+                record(self, problem)
+                fail io.io_failed
+            end
+            if found.kind == posix.directory then
+                posix.close(made) else none
+                record(self, posix.eisdir)
+                fail io.is_a_directory
+            end if
+        end if
         return
     end loop
 end open
 
 system_open_read: (self: host, path: text.host_string)
                   -> (opened: io.file)
-                  ! io.not_found | io.no_access | io.io_failed =
+                  ! io.not_found | io.no_access | io.is_a_directory | io.io_failed =
     opened = open(self, path, posix.reading, created_mode) else (problem)
         fail io.not_found when problem == io.not_found
         fail io.no_access when problem == io.no_access
+        fail io.is_a_directory when problem == io.is_a_directory
         fail io.io_failed
     end
 end system_open_read
 
 system_open_write: (self: host, path: text.host_string)
                    -> (opened: io.file)
-                   ! io.not_found | io.no_access | io.io_failed =
+                   ! io.not_found | io.no_access | io.is_a_directory | io.io_failed =
     opened = open(self, path, posix.writing, created_mode) else (problem)
         fail io.not_found when problem == io.not_found
         fail io.no_access when problem == io.no_access
+        fail io.is_a_directory when problem == io.is_a_directory
         fail io.io_failed
     end
 end system_open_write

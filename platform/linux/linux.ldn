@@ -554,6 +554,21 @@ fixed if compiler.os == linux then
                                  i64(usize(status)), i64(options), 0, 0, 0))
     end wait4
 
+    --- The calling process's ID, which never fails.
+    public getpid:
+        () -> (process: i32) =
+        process = i32(system_call(getpid_number, 0, 0, 0, 0, 0, 0))
+    end getpid
+
+    --- Send `signal` to the process `process`, or with zero only ask
+    --- whether it is there: zero, or minus the errno, ESRCH for no such
+    --- process and EPERM for one the caller may not signal.
+    public kill:
+        (process: i32, signal: i32) -> (result: i32) =
+        result = i32(system_call(kill_number, i64(process), i64(signal), 0,
+                                 0, 0, 0))
+    end kill
+
     --- Close, or with `close_range_cloexec` mark closed on exec, the
     --- descriptors from `first` to `last`: zero, or minus the errno, ENOSYS
     --- from a kernel older than 5.9 and EINVAL for a flag older than 5.11.

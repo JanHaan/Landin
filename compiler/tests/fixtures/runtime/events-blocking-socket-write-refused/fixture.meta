@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1278: hosted/events refuses a write to a blocking descriptor that is neither a pipe nor a regular file, which could hold the thread, rather than make it: a write and a write_some to one end of a socket pair the program made and left blocking fail io_failed keeping EAGAIN and send nothing, a megabyte among them that would never have returned, while the same end made non-blocking takes the bytes, which the other end reads back, a blocking pipe still takes a short write, and hosted/blocking writes to the blocking socket as before
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660, 1675
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

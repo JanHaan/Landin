@@ -6,7 +6,9 @@ import hosted/blocking
 --- out.
 copy_first_block: (host: blocking.host, source_path: text.host_string,
                    target_path: text.host_string)
-                  -> none ! io.not_found | io.no_access | io.io_failed =
+                  -> none
+                  ! io.not_found | io.no_access | io.is_a_directory
+                  | io.io_failed =
     source := try io.open_read(host, source_path)
     defer io.close(host, source) else none
     target := try io.open_write(host, target_path)

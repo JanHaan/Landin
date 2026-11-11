@@ -374,7 +374,8 @@ end volume_opening_of
 volume_open_file: (self: volume, path: text.host_string,
                    options: io.open_options)
                   -> (opened: io.file)
-                  ! io.already_exists | io.not_found | io.no_access | io.io_failed =
+                  ! io.already_exists | io.not_found | io.no_access
+                  | io.is_a_directory | io.io_failed =
     try volume_call(self)
     inc self.state.val.opens
     opened = io.file(0)
@@ -391,6 +392,8 @@ volume_open_file: (self: volume, path: text.host_string,
     mut index: usize = volume_find(self, room[0..<length])
     if index < count then
         fail io.already_exists when options.exclusive
+        fail io.is_a_directory
+            when self.nodes[index].kind == io.subdirectory
         fail io.io_failed when self.nodes[index].kind <> io.regular
         fail io.no_access when options.write and self.nodes[index].read_only
     else
@@ -420,25 +423,29 @@ volume_open_file: (self: volume, path: text.host_string,
 end volume_open_file
 
 volume_open_read: (self: volume, path: text.host_string)
-                  -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
+                  -> (opened: io.file)
+                  ! io.not_found | io.no_access | io.is_a_directory | io.io_failed =
     opened = volume_open_file(self, path,
                               (read: true, write: false, append: false,
                                create: false, exclusive: false,
                                truncate: false)) else (problem)
         fail io.not_found when problem == io.not_found
         fail io.no_access when problem == io.no_access
+        fail io.is_a_directory when problem == io.is_a_directory
         fail io.io_failed
     end
 end volume_open_read
 
 volume_open_write: (self: volume, path: text.host_string)
-                   -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
+                   -> (opened: io.file)
+                   ! io.not_found | io.no_access | io.is_a_directory | io.io_failed =
     opened = volume_open_file(self, path,
                               (read: false, write: true, append: false,
                                create: true, exclusive: false,
                                truncate: true)) else (problem)
         fail io.not_found when problem == io.not_found
         fail io.no_access when problem == io.no_access
+        fail io.is_a_directory when problem == io.is_a_directory
         fail io.io_failed
     end
 end volume_open_write

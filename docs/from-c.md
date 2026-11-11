@@ -476,13 +476,15 @@ import hosted/blocking
 
 --- Whether the settings file is there; any other failure is the caller's.
 settings_present: (host: blocking.host)
-                  -> (present: bool) ! io.no_access | io.io_failed =
+                  -> (present: bool)
+                  ! io.no_access | io.is_a_directory | io.io_failed =
     present = false
     path := text.host_over("settings.conf")
     opened := io.open_read(host, path) else (problem)
         match problem
             io.not_found: return
             io.no_access: fail io.no_access
+            io.is_a_directory: fail io.is_a_directory
             io.io_failed: fail io.io_failed
         end match
     end
@@ -889,7 +891,9 @@ import hosted/blocking
 --- out.
 copy_first_block: (host: blocking.host, source_path: text.host_string,
                    target_path: text.host_string)
-                  -> none ! io.not_found | io.no_access | io.io_failed =
+                  -> none
+                  ! io.not_found | io.no_access | io.is_a_directory
+                  | io.io_failed =
     source := try io.open_read(host, source_path)
     defer io.close(host, source) else none
     target := try io.open_write(host, target_path)
@@ -1170,9 +1174,16 @@ process's arguments and environment, so C hands them over itself. It calls
 before it starts a thread that may make one.
 
 Without the call, `blocking.new()` or `system.new()` stops the program with
-a trap at a line of `platform/posix/processes.ldn`. The trap is
-`trap: unreachable`, which does not name the call it lacks. Files, standard
-streams and the heap work either way.
+a trap at a line of `platform/posix/processes.ldn`. A trap carries no
+words of its own, so the library names the call on standard error first
+(D1281):
+
+```text
+landin: the host was not initialized: a C main calls _landin_host_initialize_arguments(argc, argv, envp) first
+platform/posix/processes.ldn:54:5: trap: unreachable
+```
+
+Files, standard streams and the heap work either way.
 
 [A C `main` that calls Landin](library.md#a-c-main-that-calls-landin) in
 the library reference has the rest: which values the call takes, and that

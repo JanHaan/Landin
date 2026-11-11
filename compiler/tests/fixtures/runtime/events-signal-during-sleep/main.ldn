@@ -17,9 +17,6 @@ import core/time
 import hosted/events
 import hosted/system
 import hosted/thread
-import platform/libc
-import platform/linux
-import platform/linux/numbers
 import platform/posix
 
 --  Set when the watcher watches and when the sleeper is about to sleep;
@@ -34,18 +31,13 @@ mut arrived_at: u64 = 0
 mut sent: bool = false
 
 --  Send SIGUSR1 to this process.
-fixed if compiler.os == linux then
-    signal_self: () -> (done: bool) =
-        process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0,
-                                         0, 0)
-        done = linux.system_call(numbers.kill_number, process,
-                                 i64(linux.sigusr1), 0, 0, 0, 0) == 0
-    end signal_self
-else
-    signal_self: () -> (done: bool) =
-        done = libc.kill(libc.getpid(), libc.sigusr1) == 0
-    end signal_self
-end if
+signal_self: () -> (done: bool) =
+    done = true
+    posix.kill(posix.current_process(), posix.signal_user1) else (problem)
+        _ = problem
+        done = false
+    end
+end signal_self
 
 sender: type = struct
     reserved: u32

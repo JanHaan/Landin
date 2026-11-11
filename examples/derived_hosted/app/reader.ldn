@@ -17,7 +17,8 @@ public open_reader: (provider: type is mem.allocator, memory: provider,
                      world: any io.world, path: text.host_string,
                      chunk_size: usize)
                     -> (value: reader)
-                    ! io.not_found | io.no_access | io.io_failed | mem.out_of_memory =
+                    ! io.not_found | io.no_access | io.is_a_directory
+                    | io.io_failed | mem.out_of_memory =
     fail io.io_failed when chunk_size == 0
     opened: io.file = try world.open_read(path)
     chunk := mem.new_bytes(memory, chunk_size) else (problem)

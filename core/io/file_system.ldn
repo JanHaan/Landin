@@ -86,11 +86,13 @@ public file_system: type = concept (provider: type) is files
     --- Open the file at `path` as `options` say.  A missing file without
     --- `create`, and a path through something that is not a directory, are
     --- `not_found`; a file that `exclusive` finds is `already_exists`; a
-    --- file the provider may not open that way is `no_access`.
+    --- file the provider may not open that way is `no_access`; and a path
+    --- that names a directory is `is_a_directory`.
     open_file: (self: provider, path: text.host_string,
                 options: open_options)
                -> (opened: file)
-               ! already_exists | not_found | no_access | io_failed
+               ! already_exists | not_found | no_access | is_a_directory
+               | io_failed
     --- Give the file at `old` the name `new` in one step, replacing a file
     --- already named `new`; a missing `old` or parent of `new` is
     --- `not_found`.  A rename does not cross from one file system to
@@ -162,7 +164,8 @@ end valid_options
 public open_file: (provider: type is file_system, host: provider,
                    path: text.host_string, options: open_options)
                   -> (opened: file)
-                  ! already_exists | not_found | no_access | io_failed =
+                  ! already_exists | not_found | no_access | is_a_directory
+                  | io_failed =
     opened = try provider.open_file(host, path, options)
 end open_file
 

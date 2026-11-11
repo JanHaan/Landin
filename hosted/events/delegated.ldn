@@ -82,7 +82,7 @@ events_open_file: (self: host, path: text.host_string,
                    options: io.open_options)
                   -> (opened: io.file)
                   ! io.already_exists | io.not_found | io.no_access
-                  | io.io_failed =
+                  | io.is_a_directory | io.io_failed =
     opened = try io.open_file(services(self), path, options)
 end events_open_file
 

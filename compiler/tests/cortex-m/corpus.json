@@ -2442,6 +2442,12 @@
       ],
       "mode": "refuse"
     },
+    "runtime/events-blocking-socket-write-refused": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/events-child-wait": {
       "codes": [
         "L0015"
@@ -2882,6 +2888,12 @@
       "mode": "refuse"
     },
     "runtime/hosted-heap-resize": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/hosted-io-directory-as-file": {
       "codes": [
         "L0015"
       ],
@@ -3683,6 +3695,12 @@
       "reason": "Firmware has no file system, terminal, lock or account database."
     },
     "runtime/posix-files": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/posix-kill-child": {
       "codes": [
         "L0015"
       ],

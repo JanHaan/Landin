@@ -43,7 +43,8 @@ end process
 public run_logged: (provider: type is mem.allocator, memory: provider,
                     world: any io.world, chunk_size: usize, log: any diag.log) -> (kept: usize)
                    ! bad_argument | mem.out_of_memory
-                   | io.not_found | io.no_access | io.io_failed =
+                   | io.not_found | io.no_access | io.is_a_directory
+                   | io.io_failed =
     mut cfg := try prepare_logged(memory, world, log)
     mut reader := open_reader(memory, world, cfg.input, chunk_size)
         else (problem)
@@ -69,7 +70,8 @@ end run_logged
 public run: (provider: type is mem.allocator, memory: provider,
              world: any io.world, chunk_size: usize) -> (kept: usize)
             ! bad_argument | mem.out_of_memory
-            | io.not_found | io.no_access | io.io_failed =
+            | io.not_found | io.no_access | io.is_a_directory
+            | io.io_failed =
     lent := io.writer_of(world)
     writer: any io.writer = any(addr lent)
     mut logger := diag.stream(writer, world.err())

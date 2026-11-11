@@ -37,7 +37,8 @@ read: (self: device, opened: io.file, into: []mut u8)
 end read
 
 open: (self: device, path: text.host_string)
-      -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
+      -> (opened: io.file)
+      ! io.not_found | io.no_access | io.is_a_directory | io.io_failed =
     _ = self
     _ = path
     fail io.no_access

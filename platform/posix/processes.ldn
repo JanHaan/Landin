@@ -38,6 +38,22 @@ mut root_environment: root_table = no_table
 
 word: usize = sizeof usize
 
+--  What a program that reads the argument root before anything
+--  established it is told on standard error, before it traps (D1281).
+uninitialized_report: []u8 =
+    "landin: the host was not initialized: a C main calls "
+uninitialized_call: []u8 =
+    "_landin_host_initialize_arguments(argc, argv, envp) first\n"
+
+--  End a program that reads the argument root before it exists.  A trap
+--  carries no words of its own, so the call the program lacks is named
+--  on standard error first; the writes ask nothing of the root.
+uninitialized: () -> noreturn =
+    _ = write(standard_error, uninitialized_report) else none
+    _ = write(standard_error, uninitialized_call) else none
+    compiler.unreachable()
+end uninitialized
+
 --- Establish the process's argument root from C's `main` carriers.  The
 --- hosted entry calls this with its own `argc`, `argv` and `envp` before
 --- its body runs; a C `main` that drives Landin exports calls it itself,
@@ -126,11 +142,12 @@ end argument_table
 --- The process's arguments, `argv[0]` not among them.  It traps when no
 --- argument root has been established: the hosted entry establishes one
 --- before `main` runs, and a C `main` calls
---- `_landin_host_initialize_arguments` itself.
+--- `_landin_host_initialize_arguments` itself.  The trap is `unreachable`,
+--- and a line on standard error before it names that call (D1281).
 public arguments:
     () -> (table: argument_table) =
     held: ptr ptr u8 = match root_values
-        no_table: compiler.unreachable()
+        no_table: uninitialized()
         ptr (found): found
     end match
     first: ptr ptr u8 = ptr(usize(held) + word)
@@ -165,7 +182,7 @@ end argument
 public program_name:
     () -> (name: text.host_string) =
     held: ptr ptr u8 = match root_values
-        no_table: compiler.unreachable()
+        no_table: uninitialized()
         ptr (found): found
     end match
     name = text.host_over(no_bytes[0..<0])
@@ -280,8 +297,9 @@ end duplicate_above
 
 process_value: type = distinct i32
 
---- A child process's ID, as `spawn` gives it and `wait` takes it: a
---- handle, not a number to count with.
+--- A process's ID, as `spawn` gives a child's and `wait` and `kill` take
+--- it, and `current_process` gives this process's own: a handle, not a
+--- number to count with.
 public process_id: type = process_value
 
 --- The descriptors a child's standard input, output and error are made
@@ -494,6 +512,50 @@ public wait:
              else (how: signalled(signal: ending)) end if
 end wait
 
+--- This process's own ID, POSIX's `getpid`, for a process to signal
+--- itself with `kill`.
+public current_process:
+    () -> (process: process_id) =
+    process = system_current_process()
+end current_process
+
+--- Send the signal numbered `signal` to the process `process`, POSIX's
+--- `kill`: the way a parent stops a child `spawn` started, or a process
+--- signals itself.  The number is the system's own, which
+--- `signal_terminate` and its neighbours name; zero sends nothing and
+--- only asks whether the process is there.  It fails with the errno:
+--- `esrch` for no such process, a child already waited for among them,
+--- `eperm` for one this process may not signal and `einval` for a number
+--- that is no signal's.  A group or every process, which C's `kill` takes
+--- as a zero or negative ID, is refused `einval`: a child's ID is always
+--- positive.
+public kill:
+    (process: process_id, signal: i32) -> none ! errno =
+    fail einval when i32(process) <= 0
+    try system_kill(process, signal)
+end kill
+
+--- SIGHUP's number, the same on every hosted system.
+public signal_hangup: i32 = 1
+--- SIGINT's number, the same on every hosted system.
+public signal_interrupt: i32 = 2
+--- SIGKILL's number, the same on every hosted system: the signal no
+--- process catches or ignores.
+public signal_kill: i32 = 9
+--- SIGTERM's number, the same on every hosted system.
+public signal_terminate: i32 = 15
+fixed if compiler.os == linux then
+    --- SIGUSR1's number, which the hosted systems do not share.
+    public signal_user1: i32 = 10
+    --- SIGUSR2's number, which the hosted systems do not share.
+    public signal_user2: i32 = 12
+elsif compiler.os == darwin or compiler.os == freebsd then
+    --- SIGUSR1's number, which the hosted systems do not share.
+    public signal_user1: i32 = 30
+    --- SIGUSR2's number, which the hosted systems do not share.
+    public signal_user2: i32 = 31
+end if
+
 --  The system's own calls beneath the facility above: Linux's system
 --  calls through platform/linux, and the C library through
 --  platform/libc on Darwin and FreeBSD, whose system interface it is.
@@ -705,6 +767,15 @@ fixed if compiler.os == linux then
         fail errno_of(-result) when result < 0
         word = status
     end system_wait
+
+    system_current_process: () -> (process: process_id) =
+        process = process_id(linux.getpid())
+    end system_current_process
+
+    system_kill: (process: process_id, signal: i32) -> none ! errno =
+        result: i32 = linux.kill(i32(process), signal)
+        fail errno_of(-result) when result < 0
+    end system_kill
 elsif compiler.os == darwin or compiler.os == freebsd then
     --  The highest signal `default_in_children` takes, Darwin's set
     --  holding 31 and FreeBSD's more than the record's 64, and SIGSTOP,
@@ -927,4 +998,12 @@ elsif compiler.os == darwin or compiler.os == freebsd then
         fail failure() when libc.waitpid(i32(child), addr status, 0) < 0
         word = status
     end system_wait
+
+    system_current_process: () -> (process: process_id) =
+        process = process_id(libc.getpid())
+    end system_current_process
+
+    system_kill: (process: process_id, signal: i32) -> none ! errno =
+        fail failure() when libc.kill(i32(process), signal) <> 0
+    end system_kill
 end if

@@ -4,13 +4,15 @@ import hosted/blocking
 
 --- Whether the settings file is there; any other failure is the caller's.
 settings_present: (host: blocking.host)
-                  -> (present: bool) ! io.no_access | io.io_failed =
+                  -> (present: bool)
+                  ! io.no_access | io.is_a_directory | io.io_failed =
     present = false
     path := text.host_over("settings.conf")
     opened := io.open_read(host, path) else (problem)
         match problem
             io.not_found: return
             io.no_access: fail io.no_access
+            io.is_a_directory: fail io.is_a_directory
             io.io_failed: fail io.io_failed
         end match
     end

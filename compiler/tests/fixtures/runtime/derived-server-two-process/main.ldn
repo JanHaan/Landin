@@ -22,9 +22,6 @@ import core/text
 import core/time
 import hosted/blocking
 import hosted/system
-import platform/libc
-import platform/linux
-import platform/linux/numbers
 import platform/posix
 import examples/derived_server/app
 
@@ -33,16 +30,13 @@ import examples/derived_server/app
 mut step: i32 = 1
 
 --  Send SIGTERM to the child CHILD, and say whether the system took it.
-fixed if compiler.os == linux then
-    terminate: (child: posix.process_id) -> (sent: bool) =
-        sent = linux.system_call(numbers.kill_number, i64(i32(child)),
-                                 i64(linux.sigterm), 0, 0, 0, 0) == 0
-    end terminate
-else
-    terminate: (child: posix.process_id) -> (sent: bool) =
-        sent = libc.kill(i32(child), libc.sigterm) == 0
-    end terminate
-end if
+terminate: (child: posix.process_id) -> (sent: bool) =
+    sent = true
+    posix.kill(child, posix.signal_terminate) else (problem)
+        _ = problem
+        sent = false
+    end
+end terminate
 
 --  Start this program again as the server, over the provider IO_WORD
 --  names, its output piped to the harness.
