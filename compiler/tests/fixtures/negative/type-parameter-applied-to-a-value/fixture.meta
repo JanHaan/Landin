@@ -1,9 +1,0 @@
-class: negative
-summary: D1100 refuses a type parameter applied as a conversion or a construction, where the routine is instantiated
-constructs: 0700, 1290
-program: program.ldn
-targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-codes: L0301, L0301
-expect: expected.txt
-args: ../tests/fixtures/negative/type-parameter-applied-to-a-value/program.ldn
-status: 1

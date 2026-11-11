@@ -1,0 +1,14 @@
+--  D1100: the conversion a type parameter makes keeps its actual type's
+--  range check, so a value outside `u8` traps in the `u8` instance.
+narrow: (t: type, value: i64) -> (out: t) =
+    out = t(value)
+end narrow
+
+mut large: i64 = 300
+
+public main: () -> (code: i32) =
+    fits: i16 = narrow(t: i16, value: large)
+    code = i32(fits)
+    lost: u8 = narrow(t: u8, value: large)
+    code = i32(lost)
+end main

@@ -1,0 +1,9 @@
+class: negative
+summary: D1100 a type parameter's conversion is refused in the instance whose actual type has none from the value or cannot hold a known one, and with labels or two values it is refused as a construction
+constructs: 0310, 0700, 1290
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0301, L0301, L0300, L0301, L0327
+expect: expected.txt
+args: ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn
+status: 1

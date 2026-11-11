@@ -1,0 +1,117 @@
+--  D1100: a type parameter applied to one value is the conversion the
+--  instance's actual type has, with that type's rules.
+import core/cmp
+
+metres: type = distinct u32
+byte_view: type = []u8
+
+pair: type = struct
+    a: i32
+    b: i32
+end pair
+
+wrapped: type = distinct pair
+
+--  A literal takes the instance's type, and folds as `i32(0)` does.
+total: (t: type, values: []t) -> (sum: t) =
+    sum = t(0)
+    for value in values do
+        sum += value
+    end for
+end total
+
+--  A constrained formal converts as an unconstrained one does.
+largest: (t: type is cmp.ordered, values: []t) -> (best: t) =
+    best = t(0)
+    for value in values do
+        if t.less(best, value) then
+            best = value
+        end if
+    end for
+end largest
+
+--  Integer to integer checks the range, here inside it.
+narrow: (t: type, value: i64) -> (out: t) =
+    out = t(value)
+end narrow
+
+--  In an `unchecked` region it wraps, as the written conversion does.
+wrap: (t: type, value: i64) -> (out: t) =
+    unchecked begin
+        out = t(value)
+    end unchecked
+end wrap
+
+--  Integer to float, and the conversion as an operand.
+real: (t: type, value: i32) -> (out: t) =
+    out = t(value) / t(2)
+end real
+
+--  A distinct type converts from its base, scalar or struct.
+from_base: (t: type, value: u32) -> (out: t) =
+    out = t(value)
+end from_base
+
+enclose: (t: type, value: pair) -> (out: t) =
+    out = t(value)
+end enclose
+
+--  And its base type converts from it.
+bare: (t: type, value: metres) -> (out: t) =
+    out = t(value)
+end bare
+
+--  Text to its bytes, the result still a view of the text.
+bytes: (t: type, value: utf8) -> (out: t from value) =
+    out = t(value)
+end bytes
+
+--  Two formals, and one routine's formal given to another's.
+across: (a: type, b: type, value: a) -> (out: b) =
+    out = b(value)
+end across
+
+inner: (u: type, value: i32) -> (out: u) =
+    out = u(value)
+end inner
+
+outer: (t: type, value: i32) -> (out: t) =
+    out = inner(u: t, value: value) + t(1)
+end outer
+
+--  As a condition's operand.
+clamp: (t: type, value: i64, limit: t) -> (out: t) =
+    out = limit
+    if t(value) < limit then
+        out = t(value)
+    end if
+end clamp
+
+public main: () -> (code: i32) =
+    code = 1
+    readings: [3]i32 = [1, 9, 3]
+    wide: [2]u64 = [40, 2]
+    length: metres = metres(5)
+    small: i16 = 7
+    a: i32 = total(readings)
+    b: u64 = total(wide)
+    c := largest(readings)
+    d: u8 = narrow(t: u8, value: 200)
+    e: i16 = narrow(t: i16, value: -3)
+    f: u8 = wrap(t: u8, value: 300)
+    g: f64 = real(t: f64, value: 5)
+    h: metres = from_base(t: metres, value: 7)
+    i: wrapped = enclose(t: wrapped, value: (a: 4, b: 5))
+    j: u32 = bare(t: u32, value: length)
+    k: []u8 = bytes(t: byte_view, value: "ab")
+    l: f32 = across(a: i16, b: f32, value: small)
+    m: i64 = outer(t: i64, value: 4)
+    n: u8 = clamp(t: u8, value: 50, limit: 100)
+    opened: pair = pair(i)
+    if a == 13 and b == 42 and c == 9 and d == 200 and e == -3 and f == 44
+      and g == 2.5 and u32(h) == 7 and opened.b == 5 and j == 5
+      and lenof k == 2 and l == 7.0 and m == 5 and n == 50
+    then
+        code = 42
+    end if
+end main

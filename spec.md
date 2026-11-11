@@ -15681,33 +15681,58 @@ facts`, the lowering case `generic routines lower once per key`,
 verifier case uses a generic-instance item to pin that only the finalized
 concrete signature and ordinary failure opcode reach neutral IR.
 
-### D1100 — A type parameter is not applied to a value
+### D1100 — A type parameter applied to a value converts to the instance's type
 
-**The tour said** that a conversion and a construction are a type applied
-to arguments [0700], and that a generic routine takes its type as an
-ordinary parameter [1290]. It did not say whether the parameter may stand
-where [0700] applies a type: `t(0)` or `t(x)` in a routine whose `t` is a
-type parameter. The checker asked the formal's declaration for a value it
-does not have, and an instantiated routine that wrote the form ended in an
+**The tour said** that a conversion is a type applied to a value [0310],
+[0700], and that a generic routine takes its type as an ordinary parameter
+[1290]. It did not say whether the parameter may stand where a conversion
+names its type: `t(0)` or `t(x)` in a routine whose `t` is a type
+parameter. The checker asked the formal's declaration for a value it does
+not have, and an instantiated routine that wrote the form ended in an
 internal compiler defect.
 
-**Chosen:** a type parameter names a type in a type position only. Applied
-to a value, positionally or with labels, it is refused with L0301 where the
-routine is instantiated, the report naming the parameter and the
-application. A value takes the parameter's type through a typed binding,
-`zero: t = 0`, or through an entry of a concept that constrains the
-parameter.
+**Chosen:** in a generic routine, a type parameter applied to exactly one
+value is a conversion to the actual type of the instance being checked,
+and means what that type written in its place means. D266 already lets a
+conversion's head be a type as written; the parameter is that head, and
+the instance supplies what it writes. Every rule is therefore the actual
+type's own: which source types it converts from, the range check and its
+trap, a known value folded and refused when it does not fit, a distinct
+type converting only from its base and its base only from it, text to its
+bytes with the origin kept, and `unchecked` wrapping where it wraps a
+written conversion. A body is checked for each instance (D771), so an
+instance whose actual type has no conversion from the value is refused
+there, in the body, as every other instance-time refusal of a generic
+routine is; where no other refusal names it, the report says which type
+the parameter is in that instance. An instance that never converts what
+its type cannot is not refused for another instance's sake.
 
-**The alternative** was to read `t(x)` as [0700]'s conversion to the actual
-type of each instance. It was declined for now, because a conversion's rule
-is chosen by its two types: integer to integer checks a range, float to
-integer truncates, and a distinct type converts only from its base. One
-spelling would then be accepted for some actuals and
-refused for others with nothing in the signature saying which, which is
-what a concept exists to state. This is the conservative choice of the two
-and may be revisited with a program that needs the conversion.
+A type parameter still constructs nothing: applied with labels,
+`t(a: 1)`, or to another count of values where its actual type is no
+scalar, it is L0301, "`t` is a type parameter, which converts one value
+and constructs nothing". A struct is built where its type is known.
 
-**Pinned by** `negative/type-parameter-applied-to-a-value`.
+A generic routine is always checked and lowered as an instance with its
+actuals known, so there is no path on which the conversion's type is
+unknown where it is lowered; an `any C` value dispatches entries and has
+no type parameter to apply. A range subtype is no type argument [0660],
+so a parameter's conversion never carries bounds of its own.
+
+**The alternative** was to refuse the form, which D1100 first chose: a
+type parameter names a type in a type position only, and a value takes its
+type through a typed binding, `zero: t = 0`, or a concept entry. Its
+reason was that one spelling is accepted for some actuals and refused for
+others with nothing in the signature saying which. It was declined by the
+maintainer: that is already true of every operator and every written
+conversion in a generic body, `value + value` and `i64(value)` among
+them, since the body is checked per instance, and the refusal left numeric
+generic code no way to convert except through a concept written for it.
+Admitting construction, `t(a: 1)`, as well was declined because a
+construction names its fields, which no two actuals share.
+
+**Pinned by** `runtime/type-parameter-converts-a-value`,
+`runtime/type-parameter-conversion-traps` and
+`negative/type-parameter-conversion-refused`.
 
 ### D1101 — A generic signature's array bound is D136's, validated at the signature
 

@@ -1,0 +1,46 @@
+error[L0301]: `t` is `pair` in this instance, which has no conversion from the supplied value
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:12:11
+   |
+12 |     out = t(value) -- error: `pair` has none; `metres` wants its base
+   |           ^^^^^^^^
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:12:11
+   |
+12 |     out = t(value) -- error: `pair` has none; `metres` wants its base
+   |           ^ the type parameter
+  = note: D1100: a type parameter applied to a value is the conversion its actual type has, and every instance's actual needs one from this value
+error[L0301]: this is `i64` and `u32` belongs here
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:12:13
+   |
+12 |     out = t(value) -- error: `pair` has none; `metres` wants its base
+   |             ^^^^^
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:12:11
+   |
+12 |     out = t(value) -- error: `pair` has none; `metres` wants its base
+   |           ^ the distinct representation
+  = note: [1890]: these types must agree, with no implicit conversion; [0310]: write T(value) where an explicit conversion exists
+error[L0300]: `300` does not fit `u8`
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:16:13
+   |
+16 |     out = t(300) + seed -- error: 300 does not fit the `u8` instance
+   |             ^^^
+  = note: [1880]: a literal takes the type of its context and is checked there
+error[L0301]: `t` is a type parameter, which converts one value and constructs nothing
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:20:11
+   |
+20 |     out = t(a: 1) -- error: a construction
+   |           ^
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:20:11
+   |
+20 |     out = t(a: 1) -- error: a construction
+   |           ^^^^^^^ this application
+  = note: D1100: `t(value)` converts to each instance's type; a struct is built where its type is known, by the caller or through a concept entry
+error[L0327]: a conversion requires exactly one value
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:24:11
+   |
+24 |     out = t(1, 2) -- error: two values
+   |           ^^^^^^^
+  --> ../tests/fixtures/negative/type-parameter-conversion-refused/program.ldn:24:11
+   |
+24 |     out = t(1, 2) -- error: two values
+   |           ^ the conversion type
+  = note: [0700]: a conversion applies its target type to one source value
