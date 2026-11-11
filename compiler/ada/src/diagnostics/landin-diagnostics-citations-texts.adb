@@ -4555,7 +4555,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "for its names and for operands no type could make valid."
                & " An error that depends on what `t` turns out to be, such"
                & " as a view held across a call that may move its source, "
-               & "is reported once a call picks `t`.",
+               & "is reported once a call picks `t`."
+               & LF
+               & "- In the body, `t(value)` converts one value to whatever"
+               & " type `t` turns out to be, by that type's own conversion"
+               & " ([0310]): `t(0)` starts a sum in any numeric type. An i"
+               & "nstance whose type has no conversion from the value is a"
+               & "n error once a call picks it. A type parameter converts "
+               & "and does not construct: `t(a: 1)` is an error.",
             when 1300 =>
                "The compiler normally deduces the type from the argument"
                & "s. You may also name it, in the same named-argument list"
@@ -21482,13 +21489,41 @@ package body Landin.Diagnostics.Citations.Texts is
                & "function value: only a direct call chooses the concrete "
                & "instance signature.",
             when 1100 =>
-               "Chosen: a type parameter names a type in a type position"
-               & " only. Applied to a value, positionally or with labels, "
-               & "it is refused with L0301 where the routine is instantiat"
-               & "ed, the report naming the parameter and the application."
-               & " A value takes the parameter's type through a typed bind"
-               & "ing, `zero: t = 0`, or through an entry of a concept tha"
-               & "t constrains the parameter.",
+               "Chosen: in a generic routine, a type parameter applied t"
+               & "o exactly one value is a conversion to the actual type o"
+               & "f the instance being checked, and means what that type w"
+               & "ritten in its place means. D266 already lets a conversio"
+               & "n's head be a type as written; the parameter is that hea"
+               & "d, and the instance supplies what it writes. Every rule "
+               & "is therefore the actual type's own: which source types i"
+               & "t converts from, the range check and its trap, a known v"
+               & "alue folded and refused when it does not fit, a distinct"
+               & " type converting only from its base and its base only fr"
+               & "om it, text to its bytes with the origin kept, and `unch"
+               & "ecked` wrapping where it wraps a written conversion. A b"
+               & "ody is checked for each instance (D771), so an instance "
+               & "whose actual type has no conversion from the value is re"
+               & "fused there, in the body, as every other instance-time r"
+               & "efusal of a generic routine is; where no other refusal n"
+               & "ames it, the report says which type the parameter is in "
+               & "that instance. An instance that never converts what its "
+               & "type cannot is not refused for another instance's sake."
+               & LF
+               & LF
+               & "A type parameter still constructs nothing: applied with "
+               & "labels, `t(a: 1)`, or to another count of values where i"
+               & "ts actual type is no scalar, it is L0301, ""`t` is a type"
+               & " parameter, which converts one value and constructs noth"
+               & "ing"". A struct is built where its type is known."
+               & LF
+               & LF
+               & "A generic routine is always checked and lowered as an in"
+               & "stance with its actuals known, so there is no path on wh"
+               & "ich the conversion's type is unknown where it is lowered"
+               & "; an `any C` value dispatches entries and has no type pa"
+               & "rameter to apply. A range subtype is no type argument [0"
+               & "660], so a parameter's conversion never carries bounds o"
+               & "f its own.",
             when 1101 =>
                "Chosen: a bound in a generic routine's signature is vali"
                & "dated where the routine is declared, called or not, by D"

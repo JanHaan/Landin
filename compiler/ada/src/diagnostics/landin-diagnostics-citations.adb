@@ -1918,7 +1918,8 @@ package body Landin.Diagnostics.Citations is
                "Direct generic calls deduce one checker-owned routine in"
                & "stance",
             when 1100 =>
-               "A type parameter is not applied to a value",
+               "A type parameter applied to a value converts to the inst"
+               & "ance's type",
             when 1101 =>
                "A generic signature's array bound is D136's, validated a"
                & "t the signature",
@@ -5691,8 +5692,8 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d138-direct-generic-calls-"
                & "deduce-one-checker-owned-routine-instance",
             when 1100 =>
-               "https://www.701.dev/spec.html#d1100-a-type-parameter-is-"
-               & "not-applied-to-a-value",
+               "https://www.701.dev/spec.html#d1100-a-type-parameter-app"
+               & "lied-to-a-value-converts-to-the-instance-s-type",
             when 1101 =>
                "https://www.701.dev/spec.html#d1101-a-generic-signature-"
                & "s-array-bound-is-d136-s-validated-at-the-signature",
