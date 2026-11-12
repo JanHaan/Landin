@@ -35591,8 +35591,9 @@ opposite of what happened; and leaving the route as `last_errno`, which
 the memory providers and a program written over `io.files` do not have.
 All were declined.
 
-**Pinned by** `runtime/hosted-io-directory-as-file`: the root directory
-opened each of the four ways through `hosted/blocking` and through
+**Pinned by** `runtime/hosted-io-directory-as-file`: a directory the
+program makes, not the root, which is a read-only and protected volume
+on Darwin, opened each of the four ways through `hosted/blocking` and through
 `hosted/events`, each `is_a_directory` with EISDIR kept and the phrase
 "is a directory", a directory node of the memory volume the same, and a
 file and a missing path as before. Darwin's and FreeBSD's arm was written

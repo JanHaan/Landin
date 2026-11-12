@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D1276: a path that names a directory is is_a_directory, not io_failed, through hosted/blocking, hosted/events and core/io's memory volume: open_read of the root directory, which the system would open and then refuse to read, open_write of it and open_file of it to read and to update, each keeping EISDIR as last_errno, with failure.words giving "is a directory"; a regular file still opens, and a missing one is still not_found
+summary: D1276: a path that names a directory is is_a_directory, not io_failed, through hosted/blocking, hosted/events and core/io's memory volume: open_read of a directory it makes, which the system would open and then refuse to read, open_write of it and open_file of it to read and to update, each keeping EISDIR as last_errno, with failure.words giving "is a directory"; a regular file still opens, and a missing one is still not_found
 program: main.ldn
 root: ../../../../..
 status: 42

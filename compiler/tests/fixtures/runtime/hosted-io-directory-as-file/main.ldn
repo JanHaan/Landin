@@ -1,8 +1,13 @@
 --  D1276: a directory named where a file is opened is `is_a_directory`.
 --  The system refuses a directory opened to write with EISDIR, 21 on
 --  every hosted system, and opens one to read, failing each read; the
---  hosted provider answers both at the open and keeps EISDIR.  The root
---  directory is one on every system, and /dev/null a file that opens.
+--  hosted provider answers both at the open and keeps EISDIR.  The
+--  directory is one the program makes in its working directory: the root
+--  is a read-only, protected volume on Darwin, where a write is refused
+--  for that before anything is said of a directory.  /dev/null is a file
+--  that opens.  Each open that answers otherwise ends with its own status:
+--  10 and up for the failure, 20 and up for the errno, by how it opened,
+--  and 30 and 40 likewise through the event provider.
 import core/cmp
 import core/failure
 import core/io
@@ -12,7 +17,7 @@ import core/text
 import hosted/blocking
 import hosted/events
 
-directory: []u8 = "/"
+directory: []u8 = "hosted-io-directory-as-file-scratch"
 existing: []u8 = "/dev/null"
 missing: []u8 = "/landin-absent-parent/absent"
 
@@ -53,26 +58,29 @@ refused: (provider: type is io.file_system, host: provider, path: []u8,
     io.close(host, opened) else none
 end refused
 
---  Every open of the directory through the blocking provider.
-blocking_refuses: (host: blocking.host) -> (yes: bool) =
-    yes = false
+--  Every open of the directory through the blocking provider: zero, or
+--  the status that says which open answered otherwise, and how.
+blocking_refuses: (host: blocking.host) -> (code: i32) =
     for how in by_read..by_file_updating do
+        code = 10 + i32(how)
         return when not refused(host, directory, how, io.is_a_directory,
                                 "is a directory")
+        code = 20 + i32(how)
         return when blocking.last_errno(host) <> 21
     end for
-    yes = true
+    code = 0
 end blocking_refuses
 
 --  And through the event provider, whose opens are the system's too.
-events_refuses: (host: events.host) -> (yes: bool) =
-    yes = false
+events_refuses: (host: events.host) -> (code: i32) =
     for how in by_read..by_file_updating do
+        code = 30 + i32(how)
         return when not refused(host, directory, how, io.is_a_directory,
                                 "is a directory")
+        code = 40 + i32(how)
         return when events.last_errno(host) <> 21
     end for
-    yes = true
+    code = 0
 end events_refuses
 
 mut paths: [2][16]u8 = zeroed
@@ -107,7 +115,11 @@ end volume_refuses
 public main: () -> (code: i32) =
     host: blocking.host = blocking.new()
     code = 1
-    return when not blocking_refuses(host)
+    io.make_directory(host, text.host_over(directory)) else (problem)
+        return when problem <> io.already_exists
+    end
+    code = blocking_refuses(host)
+    return when code <> 0
     code = 2
     --  A file still opens, and a missing one is still not found.
     opened: io.file = io.open_read(host, text.host_over(existing))
@@ -126,12 +138,18 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when not events_refuses(waiting)
+    code = events_refuses(waiting)
+    return when code <> 0
     code = 5
     held: bool = volume_refuses() else (problem)
         _ = problem
         return
     end
     return when not held
+    code = 6
+    io.remove_directory(host, text.host_over(directory)) else (problem)
+        _ = problem
+        return
+    end
     code = 42
 end main
