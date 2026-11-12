@@ -1,0 +1,85 @@
+warning[L0692]: this declaration takes the name of the predeclared type `utf16`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:7:1
+  |
+7 | utf16: atom
+  | ^^^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `utf16`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `u16`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:9:1
+  |
+9 | u16: () -> (r: i32) =
+  | ^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `u16`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `i16`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:13:1
+   |
+13 | i16: i32 = 3
+   | ^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `i16`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `cstring`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:15:1
+   |
+15 | cstring: type = struct
+   | ^^^^^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `cstring`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `f32`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:19:1
+   |
+19 | f32: type = concept (t: type)
+   | ^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `f32`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `u64`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:25:9
+   |
+25 |         u64: (width: i32) |
+   |         ^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `u64`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `i8`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:42:9
+   |
+42 | first: (i8: type, fixed isize: u32, values: [isize]i8) -> (bool: i32) =
+   |         ^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `i8`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `isize`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:42:19
+   |
+42 | first: (i8: type, fixed isize: u32, values: [isize]i8) -> (bool: i32) =
+   |                   ^^^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `isize`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `bool`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:42:60
+   |
+42 | first: (i8: type, fixed isize: u32, values: [isize]i8) -> (bool: i32) =
+   |                                                            ^^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `bool`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `usize`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:47:9
+   |
+47 | scale: (usize: i32) -> (r: i32) =
+   |         ^^^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `usize`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `i64`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:48:5
+   |
+48 |     i64 := usize * 2
+   |     ^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `i64`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `utf8`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:49:12
+   |
+49 |     (quot: utf8) := pair(i64, 1)
+   |            ^^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `utf8`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `f64`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:55:13
+   |
+55 |         u64(f64): r = f64
+   |             ^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `f64`; give the declaration another name
+warning[L0692]: this declaration takes the name of the predeclared type `u32`
+  --> ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn:61:20
+   |
+61 |     r = open(path) else (u32)
+   |                    ^^^^
+  = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `u32`; give the declaration another name
+refine: checked ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

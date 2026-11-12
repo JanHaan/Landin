@@ -117,6 +117,7 @@ L0350  Live     D760: an untyped float literal converted to an integer that its 
 L0600  Live     D949: compiler.utf8_unvalidated outside an unchecked region
 L0628  Live     D1077: a bidirectional control character in a comment or a literal
 L0684  Live     D1261: a call-site `else` that binds an error its block never reads
+L0692  Live     D1342: a declaration that takes a predeclared type's name
 L0500  Live     [1550]: the requested output cannot be made with the target, settings or available toolchain
 L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure
 L0502  Live     [1970] [1990]: a missing or invalid hosted main or explicitly selected firmware entry

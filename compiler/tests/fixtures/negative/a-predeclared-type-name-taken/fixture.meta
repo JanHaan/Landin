@@ -1,0 +1,9 @@
+class: negative
+summary: D1342 warns once at each declaration that takes a predeclared type's name, of every kind of declaration a scope holds, a type among them, and not at a field or a function type's parameter, which declare nothing in a scope
+program: program.ldn
+codes: L0692, L0692, L0692, L0692, L0692, L0692, L0692, L0692, L0692, L0692, L0692, L0692, L0692, L0692
+status: 0
+constructs: 0140, 1790, 1850
+targets: linux-x86-64, synthetic-32
+args: ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn
+expect: expected.txt

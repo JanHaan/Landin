@@ -1830,6 +1830,27 @@ first: (path: i32) -> (handle: i32) =
 end first
 ```
 
+### L0692
+
+A declaration takes the name of one of the sixteen predeclared types, the
+thirteen scalars and `utf8`, `utf16` and `cstring` (D1342). The program is
+accepted: the names are not reserved, and the nearest declaration of a
+spelling is what a type position names [1790], so every type position the
+declaration reaches names it, and the predeclared type is out of reach
+there. A function named `u8` cannot write `u8` in its own signature, and a
+local named `i64` ends `i64` for the rest of its block, which is almost
+never what was meant. Give the declaration another name. Like L0684 it is
+raised only in a program with no error, since a type position the
+declaration reaches is already refused with L0338, whose note names it.
+`--allow=L0692` suppresses the warning; `--deny=L0692` makes it an
+invocation error.
+
+```landin
+scale: (usize: i32) -> (r: i32) =
+    r = usize * 2
+end scale
+```
+
 ### L0350
 
 A float literal converted to an integer, `u64(1.0e18)`, has no type of its

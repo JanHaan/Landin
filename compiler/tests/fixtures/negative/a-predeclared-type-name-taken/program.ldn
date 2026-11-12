@@ -1,0 +1,65 @@
+--  D1342: each kind of declaration that takes a predeclared type's name is
+--  warned of once, at its name, a type declaration among them.  None of
+--  the spellings taken is written as a type afterwards, so the program has
+--  no error.  A field and a function type's parameter named `u8` declare
+--  nothing in a scope, and `u8` stays the scalar.
+missing: atom
+utf16: atom
+
+u16: () -> (r: i32) =
+    r = 1
+end u16
+
+i16: i32 = 3
+
+cstring: type = struct
+    u8: u8
+end cstring
+
+f32: type = concept (t: type)
+    less: (a: t, b: t) -> (yes: bool)
+end f32
+
+shape: type = struct
+    kind: variant
+        u64: (width: i32) |
+        other: (height: i32)
+    end kind
+end shape
+
+callback: type = (u8: u8) -> none
+
+pair: (left: i32, right: i32) -> (quot: i32, rem: i32) =
+    quot = left / right
+    rem = left % right
+end pair
+
+open: (path: i32) -> (handle: i32) ! missing =
+    fail missing when path == 0
+    handle = path
+end open
+
+first: (i8: type, fixed isize: u32, values: [isize]i8) -> (bool: i32) =
+    _ = values
+    bool = 0
+end first
+
+scale: (usize: i32) -> (r: i32) =
+    i64 := usize * 2
+    (quot: utf8) := pair(i64, 1)
+    r = utf8
+end scale
+
+measure: (s: shape) -> (r: i32) =
+    match s.kind
+        u64(f64): r = f64
+        other(height): r = height
+    end match
+end measure
+
+recover: (path: i32) -> (r: i32) =
+    r = open(path) else (u32)
+        _ = u32
+        0
+    end
+end recover

@@ -1632,6 +1632,22 @@ package body Landin.Diagnostics.Explanations is
                & " the `)` on one line, so it never removes a comment. `--"
                & "allow=L0684` suppresses the warning; `--deny=L0684` make"
                & "s it an invocation error.",
+            when Catalogue.Predeclared_Type_Name_Taken =>
+               "A declaration takes the name of one of the sixteen prede"
+               & "clared types, the thirteen scalars and `utf8`, `utf16` a"
+               & "nd `cstring` (D1342). The program is accepted: the names"
+               & " are not reserved, and the nearest declaration of a spel"
+               & "ling is what a type position names [1790], so every type"
+               & " position the declaration reaches names it, and the pred"
+               & "eclared type is out of reach there. A function named `u8"
+               & "` cannot write `u8` in its own signature, and a local na"
+               & "med `i64` ends `i64` for the rest of its block, which is"
+               & " almost never what was meant. Give the declaration anoth"
+               & "er name. Like L0684 it is raised only in a program with "
+               & "no error, since a type position the declaration reaches "
+               & "is already refused with L0338, whose note names it. `--a"
+               & "llow=L0692` suppresses the warning; `--deny=L0692` makes"
+               & " it an invocation error.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -3150,6 +3166,13 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end first"
                & LF,
+            when Catalogue.Predeclared_Type_Name_Taken =>
+               "scale: (usize: i32) -> (r: i32) ="
+               & LF
+               & "    r = usize * 2"
+               & LF
+               & "end scale"
+               & LF,
             when Catalogue.No_Toolchain =>
                "",
             when Catalogue.Toolchain_Failed =>
@@ -3477,6 +3500,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Bidirectional_Control =>
                "",
             when Catalogue.Unused_Else_Binding =>
+               "",
+            when Catalogue.Predeclared_Type_Name_Taken =>
                "",
             when Catalogue.No_Toolchain =>
                "",

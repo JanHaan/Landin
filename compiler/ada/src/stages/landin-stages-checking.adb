@@ -45056,6 +45056,48 @@ package body Landin.Stages.Checking is
          end loop;
       end if;
 
+      --  D1342: a declaration that takes one of the sixteen predeclared
+      --  type names hides that type from every type position it reaches
+      --  [1790], which is almost never what was meant.  Like D1261's
+      --  warning it waits for a program with no error, since an L0338 at
+      --  a type position the declaration reaches already names it.
+      if not Landin.Diagnostics.Has_Errors (Found) then
+         for Index in 1 .. Res.Declaration_Count (Meanings.all) loop
+            declare
+               Means : constant Res.Declaration_Id :=
+                 Res.Declaration_Id (Index);
+               Name : constant String :=
+                 Spelled (Res.Name_Of (Meanings.all, Means));
+               Id : constant Landin.Source.Source_Id :=
+                 Res.Source_Of (Meanings.all, Means);
+               Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Means);
+            begin
+               if ((for some Scalar in Ty.Scalar_Name =>
+                      Name = Ty.Spelling (Scalar))
+                   or else
+                     (for some View in Ty.Text_View =>
+                        Name = Ty.Spelling (View)))
+                 and then Landin.Configuration.Is_Active
+                   (Configurations (Context).all, Id, Node)
+               then
+                  Bad.Report
+                    (Item    => Bad.Predeclared_Type_Name_Taken,
+                     Source  => Id,
+                     Where   => Syn.Anchor (Tree_For (Id).all, Node),
+                     Message => "this declaration takes the name of the"
+                       & " predeclared type `" & Name & "`",
+                     Note    => "[1790]: the nearest declaration of a"
+                       & " spelling is what a type position names, so no"
+                       & " type position this one reaches names the"
+                       & " predeclared `" & Name & "`; give the"
+                       & " declaration another name",
+                     Into    => Found);
+               end if;
+            end;
+         end loop;
+      end if;
+
       --  D412: the declared types and `offsetof` paths a deferred compiler
       --  assertion measures are checked as any measurement is, so the
       --  late configuration fold reads their checked layout.

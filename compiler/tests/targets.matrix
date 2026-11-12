@@ -129,6 +129,7 @@ negative/a-missing-conformance-entry-is-one-report | linux-x86-64, linux-arm64, 
 negative/a-nested-mistake-after-a-refused-statement-is-reported | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-non-type-shadows-a-predeclared-type | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-noreturn-call-is-not-a-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-predeclared-type-name-taken | linux-x86-64, synthetic-32
 negative/a-refused-write-still-assigns | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-text-literal-is-not-indexed | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-type-argument-is-offered-by-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

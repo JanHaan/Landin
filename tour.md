@@ -5808,7 +5808,10 @@ Version 0.2.9 — what each version changed is in
 Warnings are the compiler's observations about legal source, never extra
 language rules. You can select, suppress or deny them by code. A denied
 warning fails that compilation, and the program stays legal Landin all the
-same. The compiler never warns about shadowing.
+same. The compiler never warns about shadowing; it does warn about a
+declaration that takes a predeclared type's name, such as a local named
+`u8`, because no type written where that name reaches can then mean the
+type.
 
 ### [0620] Storing a collection field by field (deferred)
 

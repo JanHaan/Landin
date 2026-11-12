@@ -1011,7 +1011,11 @@ between an inner scope and an outer one and not within one. So
 it is refused, and the report names both places.
 Shadowing is not this. An inner scope may shadow an outer name
 [0140] and nothing is said about it, because a rule that
-permits something does not also warn about it.
+permits something does not also warn about it. The compiler's one
+observation about a name is D1342's warning at a declaration that takes a
+predeclared type's name: those types are in no scope, so such a
+declaration hides none of the program's names, only the language's own
+type from every type position it reaches [1790].
 The file-import scope follows the same rule: two imports with one final segment,
 including a repeated identical import, are refused and both import sites are
 reported.
@@ -2917,7 +2921,9 @@ compiler already established; an automatic edit is a separate claim. An exact
 fix is offered only when the compiler can prove that applying those edits
 preserves meaning and does not swallow comments or neighbouring source.
 Otherwise the warning carries its observation and explanation without a fix.
-Shadowing is never warned about, as [1850] says.
+Shadowing is never warned about, as [1850] says; D1342 later warns of a
+declaration that takes a predeclared type's name, which hides no
+declaration of the program's.
 
 Invocation policy lives in `refine check` and `refine compile`, not in source
 syntax. `--warnings=default|all|none` chooses a baseline. `default` selects
@@ -3076,10 +3082,55 @@ outward past a non-type, which no other name does; and reserving the
 sixteen spellings, which [1760] declines and D1066 works around for C
 names.
 
+D1342 later warns at such a declaration, keeping this rule.
+
 **Pinned by** `negative/a-non-type-shadows-a-predeclared-type`, whose
 report is recorded, `resolution/predeclared types use lexical lookup` and
 `lowering/calls respect resolved declarations`, whose functions named as a
 scalar now write their signatures in other types.
+
+### D1342 — A declaration that takes a predeclared type's name is warned about
+
+**The tour said** at [1790] that the sixteen predeclared type names are in
+no scope and not reserved, and D1260 made the nearest declaration of a
+spelling what a type position names, whatever it declares. A program may
+therefore name a function `u8`, a local `i64` or a parameter `usize`, and
+from there on no type position the declaration reaches can name the
+predeclared type: the next `x: u8` is L0338, or, under a type declaration
+named `u8`, quietly another type.
+
+**Chosen:** D1260's rule stays, and L0692, a warning under D251's policy,
+is given at every declaration in an active configuration whose name is one
+of the thirteen scalar names or `utf8`, `utf16` or `cstring`, whatever it
+declares: a function, an atom, a type, a concept, a module or local
+binding, a variant case, a type or fixed formal, a parameter, a named
+return, a pattern, traversal or destructured binding and a call's error
+name. Like
+L0684 it is raised only in a program with no error, since a type position
+the declaration reaches is already L0338, whose note names it. It offers
+no fix: which name was meant is the author's. This is the one warning
+about a name, and it is no warning about shadowing in [1850]'s sense: the
+predeclared types are in no scope, so the declaration hides no name the
+program declared. Generated bindings already avoid the spellings (D1066),
+and the library and the examples declared none. D1260's controls keep
+their declarations: the negative fixture's report holds errors and so no
+warning, the resolution and lowering cases do not read warnings, and the
+checker case `conversions require one value`, which calls user functions
+named `u8` and `utf8`, now accepts them with this warning and nothing
+else.
+
+**The alternatives:** reserving the sixteen names, which [1760] declines
+and D1066 works around for C; warning only where a type position the
+declaration reaches spells the name, which the L0338 or the other type
+already shows, and which misses the declaration a later edit trips over;
+warning only for declarations that are no type, which leaves `u8: type =
+u16`, the most misleading of them, unsaid; and saying nothing, where D1260
+left it.
+
+**Pinned by** `negative/a-predeclared-type-name-taken`, whose report is
+recorded and whose program takes each name kind's spelling once, a type
+declaration among them, and holds a field and a function type's parameter
+named `u8`, which declare nothing in a scope and are not warned about.
 
 ### D1261 — An `else` binding its block never reads is warned about
 
@@ -34303,7 +34354,6 @@ provide. All were declined.
 **Pinned by** `runtime/sleep-signal-sleeps-on`, whose handler is
 installed this way and runs once, on every hosted target. Darwin's and
 FreeBSD's records were written by reading and are run by their lanes.
-
 ### D1281 — A program that reads the argument root before it exists is told the call it lacks
 
 **The tour said** nothing. A C `main` that drives Landin exports calls
