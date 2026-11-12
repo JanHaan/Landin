@@ -62,8 +62,12 @@ paragraph of `tour.md` or `spec.md`; `refine explain D542` prints either.
   evidence (D904, D905).
   The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
-  `--linker-script=FILE` and held to a contract (D546), and
-  `link(region: ...)` places a declaration in a named region (D547).
+  `--linker-script=FILE` and held to a contract of five clauses, among
+  them every section with content clear of the stack and nothing a program
+  declares at address zero (D546, D1323), and
+  `link(region: ...)` places a declaration in a named region (D547). A
+  generic routine's `section:`, `align:` and `region:` place every instance
+  the program makes of it (D1322).
   A flash image keeps `text` and `rodata` where reset need not put them:
   a description that places either in RAM nothing loads is refused with
   L0514 (D1116). The link asserts the stack's reservation against whatever
@@ -563,10 +567,13 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   field. A
   module binding of function type may be written on one line,
   `chosen: () -> (v: i32) = seven`, and an immutable module integer sizes an
-  array, `[path_max]u8` (D438). A run in a static image is written as one
-  `.zero` or `.fill` where one directive writes it, and as repetitions no
-  wider than 256 otherwise, so the assembly and the assembler's memory stay
-  the source's size rather than the image's (D536). Before emission every
+  array, `[path_max]u8` (D438). An array length, in a routine body too,
+  reads an integer compiler fact and `sizeof` of a built-in scalar at the
+  selected target's value: `[sizeof usize]u8` is `[4]u8` on a 32-bit
+  target and `[8]u8` on a 64-bit one (D1321). A run in a static image is
+  written as one `.zero` or `.fill` where one directive writes it, and as
+  repetitions no wider than 256 otherwise, so the assembly and the
+  assembler's memory stay the source's size rather than the image's (D536). Before emission every
   target holds a program's images to a budget, refused as L0505: written
   images to the code model's reach, 2 GiB on x86-64, Darwin and RV64 and
   4 GiB on arm64, or to a firmware profile's flash and RAM, and zero images
@@ -613,7 +620,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   refuses a float operand as its boundary. A block's text is held to its
   rules behind any margin of blanks or tabs, and an ordinary block defines
   neither a label nor a symbol (D1054); on x86-64 the straight-line rule
-  reads past instruction prefixes (D1117).
+  reads past instruction prefixes (D1117). An ordinary RV64 or RV32 block's
+  text may name `zero`, x0, as a source and as a destination, though no
+  operand may be placed there (D1320).
 - **Stacks.** D450's stack builtins, `compiler.stack_prepare` and
   `compiler.stack_switch`, run on every target with a native backend. On
   Cortex-M0 a prepared stack runs on the process stack pointer, and an
@@ -1011,7 +1020,8 @@ in accelerated VMs and Cortex-M firmware under QEMU, with separate runtime,
 C ABI and debugger verdicts; RV64 Linux runs under QEMU's user emulation, as
 above. On a push to `main`, weekly and by dispatch it also runs all eight
 board ports on the physical rig, each RAM run followed by its boot check.
-The [gate reference](process.md#the-mechanical-gate) describes every job.
+The gate's scripts job holds every workflow to the pinned actionlint. The
+[gate reference](process.md#the-mechanical-gate) describes every job.
 The recorded boundaries stand as measured: the 32 KiB capacity verdicts, linked again against RP2040's,
 RP2350's and the STM32H753's derived scripts, the lines-and-functions Cortex-M
 debugging contract and the macOS shared-region placement limit observed on
@@ -1022,7 +1032,9 @@ host, under the same locked QEMU and GDB: a program of one's own at the
 corpus's profiles, printing what it returned or where it trapped, a single
 lane, a firmware case or an evidence control, each marked `FILTERED`; a
 stack that overruns its reservation is named with its routine. On NixOS
-they run under steam-run, and refuse otherwise naming that route
+they run from `nix develop`, re-running themselves inside its `landin-fhs`
+FHS environment with the same locked binaries, and refuse outside it
+naming that route
 ([the lane's guide](../environments/cortex-m/README.md#on-nixos)).
 
 The test program lists a suite's cases as selectors with

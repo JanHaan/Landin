@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""scripts/release.py against a throwaway repository and a stand-in `gh`.
+"""scripts/release.py against a throwaway repository and a stand-in `gh`,
+and release.yml's publishing job held to what D1337 settled.
 
 The stand-in keeps one release in a JSON file and does what the real
 command does with it, as far as release.py asks: view, create, upload,
@@ -13,6 +14,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -140,6 +142,16 @@ class Publish(unittest.TestCase):
         self.assertEqual(state["release"], dict(tag="v0.0.0", draft=False, assets=self.NAMES))
         self.assertEqual({tuple(seen) for seen in state["seen"]}, {(), tuple(self.NAMES)})
 
+    def test_the_release_says_how_to_check_an_archive_s_attestation(self):
+        status, said = self.run_publish()
+        self.assertEqual(status, 0, said)
+        create = self.read()["calls"][1]
+        text = create[create.index("--notes") + 1]
+        self.assertIn("gh attestation verify FILE --repo %s" % release.repository(), text)
+        self.assertIn("--signer-workflow %s/.github/workflows/release.yml"
+                      % release.repository(), text)
+        self.assertIn("--source-ref refs/tags/v0.0.0", text)
+
     def test_a_published_release_never_has_a_file_replaced(self):
         state = self.read()
         state["release"] = dict(tag="v0.0.0", draft=False, assets=[self.NAMES[0]])
@@ -165,6 +177,77 @@ class Publish(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("holds no file to publish", said)
         self.assertEqual(self.read()["calls"], [])
+
+
+class Ref(unittest.TestCase):
+    """A run publishes only the tag it runs on, as the environment requires."""
+
+    def refused(self, tag, ref):
+        said = io.StringIO()
+        saved = os.environ.get("GITHUB_REF")
+        os.environ["GITHUB_REF"] = ref
+        try:
+            with contextlib.redirect_stderr(said):
+                status = release.main(["release.py", "ref", tag])
+        finally:
+            if saved is None:
+                os.environ.pop("GITHUB_REF")
+            else:
+                os.environ["GITHUB_REF"] = saved
+        return status, said.getvalue()
+
+    def test_a_run_on_its_tag_may_publish_it(self):
+        self.assertEqual(self.refused("v0.3.0", "refs/tags/v0.3.0"), (0, ""))
+
+    def test_a_dispatch_on_a_branch_is_refused_before_the_builds(self):
+        status, said = self.refused("v0.3.0", "refs/heads/main")
+        self.assertEqual(status, 1)
+        self.assertIn("dispatch it with --ref v0.3.0", said)
+        status, said = self.refused("v0.3.0", "refs/tags/v0.2.9")
+        self.assertEqual(status, 1)
+
+    def test_a_tag_the_environment_does_not_deploy_from_is_refused(self):
+        status, said = self.refused("0.3.0", "refs/tags/0.3.0")
+        self.assertEqual(status, 1)
+        self.assertIn("is not a v* tag", said)
+
+
+class Workflow(unittest.TestCase):
+    """release.yml's jobs, read as text: only the publishing job writes,
+    waits in the `release` environment and may sign, and it attests every
+    archive before it publishes any."""
+
+    def setUp(self):
+        text = (ROOT / ".github/workflows/release.yml").read_text()
+        self.head, jobs = re.split(r"^jobs:\n", text, flags=re.M)
+        self.jobs = dict(re.findall(r"^  ([\w-]+):\n((?:(?:    .*)?\n)*)", jobs, flags=re.M))
+        self.assertEqual(sorted(self.jobs), ["build", "gated", "publish"])
+
+    def test_only_the_publishing_job_writes_or_signs(self):
+        grants = ("contents: write", "id-token: write", "attestations: write")
+        for grant in grants:
+            self.assertNotIn(grant, self.head)
+        publish = self.jobs["publish"]
+        self.assertRegex(publish, r"\n    environment: release\n")
+        for grant in grants:
+            self.assertIn("\n      %s\n" % grant, publish)
+        for name in ("gated", "build"):
+            for grant in grants:
+                self.assertNotIn(grant, self.jobs[name], name)
+            self.assertNotIn("environment:", self.jobs[name], name)
+
+    def test_every_archive_is_attested_before_the_release_is_published(self):
+        publish = self.jobs["publish"]
+        attest = re.search(r"uses: actions/attest-build-provenance@([0-9a-f]{40}) # v\S+\n"
+                           r"        with:\n          subject-path: release-assets/\*\.tar\.gz\n",
+                           publish)
+        self.assertIsNotNone(attest, publish)
+        self.assertLess(attest.start(), publish.index("scripts/release.py publish"))
+
+    def test_the_tag_is_checked_before_anything_is_built(self):
+        gated = self.jobs["gated"]
+        self.assertIn('python3 scripts/release.py ref "$TAG"', gated)
+        self.assertLess(gated.index("release.py ref"), gated.index("release.py gated"))
 
 
 class Gated(unittest.TestCase):

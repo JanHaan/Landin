@@ -210,10 +210,12 @@ delivers, and `assets/fonts.py` is every rendering of them: the
 `@font-face` block a page carries, the `--ui` and `--mono` stacks, and the
 list of files copied beside the pages. `Nunito Sans` is under the OFL and
 vendored in `assets/fonts/`; `MonoLisaCode` is under a foundry EULA that
-forbids passing the files on, so it lives in the private `landin-fonts`
-repository, found through `LANDIN_FONTS` or beside this one, and a host
-without it renders in the fallback stack while the publishing workflow
-refuses. The module reads each family's own stylesheet rather than
+forbids passing the files on, so it is not in the repository: its one
+source is the project's object storage, pinned by
+`assets/fonts/licensed.sha256`, and `python3 assets/fonts.py --fetch`
+brings it to a host, into the cache directory or the one `LANDIN_FONTS`
+names. A host without it renders in the fallback stack while the
+publishing workflow refuses. The module reads each family's own stylesheet rather than
 transcribing thirty `unicode-range` lists, and `check.py` holds every
 character of every rendered document to falling inside a subset of both
 families, because a range nobody covers is a paragraph in a fallback face

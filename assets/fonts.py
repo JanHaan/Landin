@@ -11,8 +11,12 @@ one place and no consumer can name a face the repository does not ship.
 They do not live in the same place.  Nunito Sans is under the OFL and is
 vendored under `fonts/`.  MonoLisa is under a EULA that licenses it to
 one licensee and forbids supplying the font data to anyone else, so its
-package lives in a private repository -- `landin-fonts`, found through
-`LANDIN_FONTS` or beside this one -- and a checkout without it renders
+package is not in the repository.  No build can fetch it from the
+foundry, so one licensed copy of it sits in the maintainer's object
+storage, `LICENSED_SOURCE`, which is the family's source for this
+project, and `licensed.sha256` beside the vendored family pins that copy.
+`--fetch` brings it to a host, into a cache directory by default, where
+everything that renders a page finds it; a checkout without it renders
 the pages in the stack behind the family.  `missing()` says when that
 happened, and the publishing workflow refuses to publish that way.
 
@@ -31,15 +35,19 @@ copied through as text: a rule is rebuilt from the descriptors named in
 `DESCRIPTORS`, each value held to `VALUE`, a face's file name to `FILE`,
 and a licence header that could end the element is refused.  Anything
 else stops the build.  `licensed.sha256` beside the vendored family pins
-the licensed family's stylesheet and faces by SHA-256 once it exists;
-`--pin` writes it from a checkout the maintainer trusts.
+the licensed family's stylesheet and faces by SHA-256, and a render or a
+fetch refuses a file that differs; `--pin` rewrites it from a copy the
+maintainer has read, when the foundry's package is replaced.
 
     python3 fonts.py            what is available, and what it covers
     python3 fonts.py --require  exit 1 naming any family that is not
-    python3 fonts.py --pin      record the licensed family's digests
+    python3 fonts.py --fetch    fetch the pinned licensed family from
+                                LICENSED_SOURCE into where it is looked
+                                for, replacing an earlier fetch there
     python3 fonts.py --fetch BASE DEST
                                 fetch the licensed family from BASE into
                                 the new directory DEST, and verify it
+    python3 fonts.py --pin      record the licensed family's digests
 
 Standard library only, like everything else the site build reads.
 """
@@ -49,19 +57,28 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 VENDOR = HERE / "fonts"
 
-#  Where a licensed family is looked for: the variable first, then a
-#  checkout of landin-fonts beside this repository, which is where a
-#  developer's own copy sits.  pages.yml fetches the faces from object
-#  storage and names the directory through the variable.
+#  Where the licensed family comes from: the maintainer's object storage,
+#  which holds the one licensed copy the project uses (D1336).  It answers
+#  anyone who has the address, as the pages that serve the faces do.
+LICENSED_SOURCE = "https://fsn1.your-objectstorage.com/landin/fonts"
+
+#  Where a licensed family is looked for: the variable first, then the
+#  cache directory a bare `--fetch` fills.  pages.yml names a directory
+#  of its own through the variable.
 LICENSED_VAR = "LANDIN_FONTS"
-LICENSED_DEFAULT = HERE.parent.parent / "landin-fonts"
+
+#  The file a fetch leaves in what it made, which is what lets a later
+#  bare `--fetch` replace that directory and nothing else.
+FETCHED = ".landin-fetched"
 
 #  Where the faces go beside the pages, and how a page asks for them.
 #  Flat, because the pages are flat: one directory of woff2 files next to
@@ -151,9 +168,15 @@ class Face:
         return "@font-face{%s}" % ";".join(parts)
 
 
+def licensed_default() -> Path:
+    """The cache directory a bare `--fetch` fills, as XDG places one."""
+    cache = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+    return Path(cache) / "landin" / "fonts"
+
+
 def licensed_root() -> Path:
     """Where the licensed families are looked for on this host."""
-    return Path(os.environ.get(LICENSED_VAR) or LICENSED_DEFAULT)
+    return Path(os.environ.get(LICENSED_VAR) or licensed_default())
 
 
 def stylesheet(spec) -> Path:
@@ -411,44 +434,85 @@ def _download(url: str, into: Path) -> None:
     into.write_bytes(data)
 
 
-def fetch(base: str, dest: Path) -> int:
-    """Fetch the licensed families from `base` into the new `dest`.
+def _fetch_into(base: str, into: Path) -> None:
+    """Download the licensed families from `base` into the empty `into`."""
+    for relative in FETCHED_BESIDE:
+        _download(f"{base}/{relative}", into / relative)
+    for spec in FAMILIES:
+        if not spec["licensed"]:
+            continue
+        sheet = into / spec["css"]
+        _download(f"{base}/{spec['css']}", sheet)
+        names = set()
+        for target in URL.findall(sheet.read_text(encoding="utf-8")):
+            found = re.fullmatch(r"/?woff2/(.+)", target)
+            if not found or not FILE.fullmatch(found.group(1)):
+                raise ValueError(
+                    f"{spec['css']} names a face {target!r}, which is "
+                    "not woff2/FILE.woff2")
+            names.add(found.group(1))
+        folder = spec["css"].rsplit("/", 1)[0]
+        for name in sorted(names):
+            _download(f"{base}/{folder}/woff2/{name}",
+                      sheet.parent / "woff2" / name)
+    saved = os.environ.get(LICENSED_VAR)
+    os.environ[LICENSED_VAR] = str(into)
+    try:
+        for spec in FAMILIES:
+            if spec["licensed"]:
+                _read(spec)
+    finally:
+        if saved is None:
+            os.environ.pop(LICENSED_VAR, None)
+        else:
+            os.environ[LICENSED_VAR] = saved
+
+
+def fetch(base: str, dest: Path, replace: bool = False) -> int:
+    """Fetch the licensed families from `base` into `dest`.
 
     The stylesheet is the list of faces, so a subset added at the source
     arrives without editing the workflow.  It is also text from outside
     the repository, so a face is fetched only under the name `woff2/FILE`
     and written only as that file, and what arrived is then read exactly
     as a render reads it, pins included, before anything uses it.
+
+    It arrives in a directory of its own beside `dest` and takes `dest`'s
+    name only once it has been read, so a fetch that fails leaves nothing
+    a render would find.  `dest` must not exist unless `replace` is asked
+    for, and then only as a directory an earlier fetch made.
     """
     base = base.rstrip("/")
-    if dest.exists():
-        print(f"fonts: {dest} exists; --fetch wants a new directory")
+    if dest.exists() and not replace:
+        print(f"fonts: {dest} exists; --fetch BASE DEST wants a new directory")
+        return 1
+    if dest.exists() and not (dest / FETCHED).is_file():
+        print(f"fonts: {dest} was not made by --fetch, so it is not "
+              f"replaced; remove it, or set {LICENSED_VAR} to another "
+              "directory")
         return 1
     try:
-        for relative in FETCHED_BESIDE:
-            _download(f"{base}/{relative}", dest / relative)
-        for spec in FAMILIES:
-            if not spec["licensed"]:
-                continue
-            sheet = dest / spec["css"]
-            _download(f"{base}/{spec['css']}", sheet)
-            names = set()
-            for target in URL.findall(sheet.read_text(encoding="utf-8")):
-                found = re.fullmatch(r"/?woff2/(.+)", target)
-                if not found or not FILE.fullmatch(found.group(1)):
-                    raise ValueError(
-                        f"{spec['css']} names a face {target!r}, which is "
-                        "not woff2/FILE.woff2")
-                names.add(found.group(1))
-            folder = spec["css"].rsplit("/", 1)[0]
-            for name in sorted(names):
-                _download(f"{base}/{folder}/woff2/{name}",
-                          sheet.parent / "woff2" / name)
-        os.environ[LICENSED_VAR] = str(dest)
-        for spec in FAMILIES:
-            if spec["licensed"]:
-                _read(spec)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".{dest.name}.",
+                                        dir=dest.parent))
+    except OSError as error:
+        print(f"fonts: the licensed family was not fetched: {error}")
+        return 1
+    try:
+        _fetch_into(base, staging)
+        (staging / FETCHED).write_text(base + "\n", encoding="utf-8")
+        if dest.exists():
+            #  The old copy steps aside before the new one takes its
+            #  name, so a render never sees half of each.
+            old = Path(tempfile.mkdtemp(prefix=f".{dest.name}.",
+                                        dir=dest.parent))
+            dest.rename(old / dest.name)
+            staging.rename(dest)
+            shutil.rmtree(old)
+        else:
+            staging.rename(dest)
     except (OSError, ValueError) as error:
+        shutil.rmtree(staging, ignore_errors=True)
         print(f"fonts: the licensed family was not fetched: {error}")
         return 1
     if pins() is None:
@@ -463,6 +527,8 @@ def fetch(base: str, dest: Path) -> int:
 def main(argv) -> int:
     if argv[:1] == ["--pin"] and len(argv) == 1:
         return pin()
+    if argv == ["--fetch"]:
+        return fetch(LICENSED_SOURCE, licensed_root(), replace=True)
     if argv[:1] == ["--fetch"] and len(argv) == 3:
         return fetch(argv[1], Path(argv[2]))
     if argv and argv != ["--require"]:
@@ -471,14 +537,15 @@ def main(argv) -> int:
     absent = missing()
     if "--require" in argv:
         for name in absent:
-            print(f"fonts: {name} is not available; set {LICENSED_VAR} or "
-                  f"check out landin-fonts at {LICENSED_DEFAULT}")
+            print(f"fonts: {name} is not available in {licensed_root()}; "
+                  "python3 assets/fonts.py --fetch fetches it there")
         return 1 if absent else 0
 
     for spec in FAMILIES:
         if not available(spec):
             print(f"{spec['role']:>5}  {spec['family']}: not available "
-                  f"(looked in {stylesheet(spec).parent})")
+                  f"(looked in {stylesheet(spec).parent}; "
+                  "python3 assets/fonts.py --fetch fetches it)")
             print(f"       {stack(spec['role'])}")
             continue
         header, group = _read(spec)

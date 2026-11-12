@@ -15,6 +15,7 @@ to itself, so it works from anywhere.
 import collections
 from functools import lru_cache
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -9052,11 +9053,13 @@ def check_fonts(full_run):
     documents stayed narrow.
 
     The code face is licensed rather than vendored -- its EULA forbids
-    passing the files on, so they live in a private checkout the module
-    finds through `LANDIN_FONTS` or beside this repository.  A host
-    without that checkout is an ordinary host, not a broken one: the
-    family's coverage is reported skipped rather than failed, and
-    The publishing workflow is what refuses to go without it.
+    passing the files on, so they are not in the repository, and
+    `python3 assets/fonts.py --fetch` brings the pinned copy from the
+    project's object storage to where the module finds it, through
+    `LANDIN_FONTS` or in the cache directory.  A host that has not
+    fetched it is an ordinary host, not a broken one: the family's
+    coverage is reported skipped rather than failed, and the publishing
+    workflow is what refuses to go without it.
     """
     if not full_run:
         return []
@@ -9071,18 +9074,20 @@ def check_fonts(full_run):
     code = read_file(module, encoding="utf-8")
     css = read_file(site, encoding="utf-8")
 
-    #  Where the module looks for a licensed family, read out of the
-    #  module the same way its families are, so this check and the
-    #  renderer cannot look in two different places.
-    var = re.search(r'LICENSED_VAR = "([^"]+)"', code)
-    default = re.search(r'LICENSED_DEFAULT = HERE\.parent\.parent / "([^"]+)"',
-                        code)
-    if not (var and default):
+    #  Where the module looks for a licensed family, asked of the module
+    #  itself, so this check and the renderer cannot look in two
+    #  different places.  It is loaded by path under a name of its own:
+    #  the check may run over a copy of the tree another check imported.
+    loader = importlib.util.spec_from_file_location("check_fonts_module",
+                                                    module)
+    located = importlib.util.module_from_spec(loader)
+    try:
+        loader.loader.exec_module(located)
+        licensed_root = str(located.licensed_root())
+    except Exception as error:
         out.append((module, 1, "no licensed-family location this check "
-                               "can read"))
+                               "can read: %s" % error))
         return out
-    licensed_root = os.environ.get(var.group(1)) or os.path.join(
-        os.path.dirname(ROOT), default.group(1))
 
     #  Each family, its own stylesheet, and the ranges its subsets carry.
     families = re.findall(
@@ -9096,7 +9101,8 @@ def check_fonts(full_run):
             source = os.path.join(licensed_root, relative)
             if not os.path.exists(source):
                 print("check_fonts: %s is not available on this host "
-                      "(looked in %s); its coverage was not checked"
+                      "(looked in %s; python3 assets/fonts.py --fetch "
+                      "fetches it); its coverage was not checked"
                       % (family, os.path.dirname(source)))
                 continue
         else:

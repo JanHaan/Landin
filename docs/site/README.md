@@ -43,8 +43,9 @@ fragments, external links and page-local anchors retain their meaning.
 The faces are not chosen here. They come from
 [`assets/fonts.py`](../../assets/fonts/README.md), through which every
 rendering of the two families goes: `Nunito Sans` for prose, vendored, and
-`MonoLisaCode` for code, kept in a private checkout as its licence
-requires. So `--ui` and `--mono` cannot name a face the site does not ship
+`MonoLisaCode` for code, kept out of the repository as its licence
+requires and fetched from the project's object storage, against the
+digests the repository pins, by `python3 assets/fonts.py --fetch`. So `--ui` and `--mono` cannot name a face the site does not ship
 beside the pages. The `@font-face` rules are read out of each family's own
 stylesheet rather than transcribed: they carry thirty `unicode-range`
 lists, and a mistyped range does not fail the build but quietly sets a
@@ -195,8 +196,8 @@ seconds of invisible text. Which of the thirty subsets a reader fetches is
 the browser's decision, from each face's `unicode-range` — the tour asks
 for three of them. `check.py` holds the other end of that: a document that
 drifts outside the ranges fails the build rather than the page. A host
-without the private checkout the code face lives in renders in the
-fallback stack and says so. What refuses to publish that way is the
+that has not fetched the code face renders in the fallback stack and says
+so; `python3 assets/fonts.py --fetch` puts it where the build finds it. What refuses to publish that way is the
 workflow: its font fetch is fatal rather than best-effort, because a
 silent fallback ships a site set in the wrong face.
 

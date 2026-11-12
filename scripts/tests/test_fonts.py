@@ -6,7 +6,9 @@ outside the repository, and what the module makes of it lands inside a
 `<style>` element on every page.  These cases give the module a stylesheet
 that tries to leave that element, a declaration or the fonts directory, a
 pinned file that changed, and a source to fetch from that names files it
-should not.
+should not.  A bare `--fetch` fills the cache from the project's storage,
+replaces only a directory a fetch made, and keeps the earlier copy when
+the new one is refused.
 """
 import contextlib
 import hashlib
@@ -136,8 +138,8 @@ class Licensed(unittest.TestCase):
         fetched = self.root / "fetched"
         self.assertEqual(sorted(path.relative_to(fetched).as_posix()
                                 for path in fetched.rglob("*") if path.is_file()),
-                         ["README.md", "monolisa/LICENSE.md", "monolisa/monolisa.css",
-                          "monolisa/woff2/0-MonoLisa.woff2"])
+                         [fonts.FETCHED, "README.md", "monolisa/LICENSE.md",
+                          "monolisa/monolisa.css", "monolisa/woff2/0-MonoLisa.woff2"])
         # Unpinned, it says so where the run's summary shows it.
         self.assertIn("::warning::the licensed face is not pinned", said)
         # It refuses to fetch over something that is already there.
@@ -158,12 +160,9 @@ class Licensed(unittest.TestCase):
                 self.assertEqual(status, 1, said)
                 self.assertIn("which is not woff2/FILE.woff2", said)
                 self.assertEqual(victim.read_text(), "the renderer\n")
-                fetched = self.root / "fetched"
-                self.assertEqual([path.name for path in fetched.rglob("*.py")], [])
-                self.assertFalse((fetched / "monolisa/woff2").exists())
-                for path in sorted(fetched.rglob("*"), reverse=True):
-                    path.rmdir() if path.is_dir() else path.unlink()
-                fetched.rmdir()
+                # Nothing of the refused fetch is left, under its name or beside it.
+                self.assertEqual(sorted(path.name for path in self.root.iterdir()),
+                                 ["render_html.py", "source"])
 
     def test_fetch_holds_what_arrived_to_the_pins(self):
         self.family()
@@ -174,6 +173,62 @@ class Licensed(unittest.TestCase):
         status, said = self.fetch()
         self.assertEqual(status, 1, said)
         self.assertIn("is not the file licensed.sha256 pins", said)
+
+    def bare_fetch(self):
+        said = io.StringIO()
+        with contextlib.redirect_stdout(said):
+            status = fonts.main(["--fetch"])
+        return status, said.getvalue()
+
+    def test_a_bare_fetch_fills_the_cache_from_the_project_s_storage(self):
+        self.family()
+        saved = fonts.LICENSED_SOURCE, os.environ.get("XDG_CACHE_HOME")
+        self.addCleanup(lambda: (setattr(fonts, "LICENSED_SOURCE", saved[0]),
+                                 os.environ.pop("XDG_CACHE_HOME", None) if saved[1] is None
+                                 else os.environ.__setitem__("XDG_CACHE_HOME", saved[1])))
+        fonts.LICENSED_SOURCE = self.source.as_uri()
+        os.environ["XDG_CACHE_HOME"] = str(self.root / "cache")
+        os.environ.pop(fonts.LICENSED_VAR)
+        cache = self.root / "cache/landin/fonts"
+        self.assertEqual(fonts.licensed_root(), cache)
+        self.assertEqual(fonts.missing(), ["MonoLisaCode"])
+        status, said = self.bare_fetch()
+        self.assertEqual(status, 0, said)
+        self.assertIn("fetched into %s" % cache, said)
+        self.assertEqual(fonts.missing(), [])
+        self.assertIn("0-MonoLisa.woff2", [name for name, _ in fonts.files()])
+        # Fetching again replaces what the first fetch made.
+        (self.source / "monolisa/woff2/0-MonoLisa.woff2").write_bytes(b"wOF2 the next one")
+        status, said = self.bare_fetch()
+        self.assertEqual(status, 0, said)
+        self.assertEqual((cache / "monolisa/woff2/0-MonoLisa.woff2").read_bytes(),
+                         b"wOF2 the next one")
+        # A fetch that is refused leaves the copy it would have replaced.
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(fonts.main(["--pin"]), 0)
+        (self.source / "monolisa/woff2/0-MonoLisa.woff2").write_bytes(b"changed in storage")
+        status, said = self.bare_fetch()
+        self.assertEqual(status, 1, said)
+        self.assertIn("is not the file licensed.sha256 pins", said)
+        self.assertEqual((cache / "monolisa/woff2/0-MonoLisa.woff2").read_bytes(),
+                         b"wOF2 the next one")
+        self.assertEqual(sorted(path.name for path in cache.parent.iterdir()), ["fonts"])
+
+    def test_a_bare_fetch_replaces_only_a_directory_a_fetch_made(self):
+        self.family()
+        saved = fonts.LICENSED_SOURCE
+        self.addCleanup(setattr, fonts, "LICENSED_SOURCE", saved)
+        fonts.LICENSED_SOURCE = self.source.as_uri()
+        mine = self.root / "mine"
+        (mine / "monolisa").mkdir(parents=True)
+        (mine / "monolisa/notes.txt").write_text("a developer's own files\n")
+        os.environ[fonts.LICENSED_VAR] = str(mine)
+        status, said = self.bare_fetch()
+        self.assertEqual(status, 1, said)
+        self.assertIn("was not made by --fetch, so it is not replaced", said)
+        self.assertEqual((mine / "monolisa/notes.txt").read_text(), "a developer's own files\n")
+        self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["mine", "source"])
+
 
 
 class Vendored(unittest.TestCase):
