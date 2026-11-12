@@ -325,8 +325,9 @@ another name.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
-and `%`; D438 adds immutable module integers, and D1321 compiler facts and
-`sizeof` of a scalar type, each at the selected target's value.
+and `%`; D438 adds immutable module integers, D1321 compiler facts and
+`sizeof` of a scalar type, and D1340 `alignof` of a scalar type, each at the
+selected target's value.
 The element is a type like any other. A parameterized alias or nominal struct
 is a type position through its fully applied positional application. D135
 substitutes an alias during checking; D137 interns a struct application by its
@@ -6445,8 +6446,9 @@ this target-independent fold. A runtime or storage name is not a fixed formal;
 a type formal or another non-value name is diagnosed as such rather than called
 runtime storage. D438 later admits an immutable module integer whose own image
 is in this fold, and refuses a `mut` one as storage the program may write.
-D1321 admits an integer compiler fact and `sizeof` of a scalar type, which the
-selected target answers before checking. A call is syntactically valid in the
+D1321 admits an integer compiler fact and `sizeof` of a scalar type, and D1340
+`alignof` of a scalar type, which the selected target answers before checking.
+A call is syntactically valid in the
 brackets but is not a fixed expression:
 the compiler rejects it and never executes its body. No other expression form
 is admitted, and an implementation becoming better at ordinary constant
@@ -7087,7 +7089,7 @@ is, and type identity has depended on the target since D139. A bool fact
 in a length is refused as no count, an atom fact alone stays L0203, and
 every other measurement, `sizeof` of a declared type, a fixed array or a
 type formal, and `alignof` of anything, stays L0305 with a message that
-says what folds. A fixed actual of a type application is still an integer
+says what folds. D1340 later admits `alignof` of a scalar type. A fixed actual of a type application is still an integer
 literal or a forwarded fixed formal (D135), and a routine body still reads
 no fact as a value.
 
@@ -7103,6 +7105,37 @@ product target, Cortex-M0 included;
 `[sizeof usize]u8` to `[4]u8` on `synthetic-32` and to `[8]u8` on the
 64-bit targets; and
 `negative/array-length-refusals-are-reported-once`.
+
+### D1340 — An array length reads `alignof` of a scalar
+
+**The tour said** at [0520] that a length is a constant the compiler works
+out without running anything, and at [0370] that `alignof` measures a
+type. D1321 admitted `sizeof` of a built-in scalar type in a length and in
+the image of a module integer D438 counts, and left `alignof` of anything
+L0305, as nothing had asked for it.
+
+**Chosen:** `alignof` of a built-in scalar type folds wherever D1321's
+`sizeof` does, in an array length and in a counted module integer's
+image, as the literal the selected target answers: the alignment the same
+measurement gives in a routine body and in a fixed condition, the scalar's
+size capped at the target's widest scalar alignment. Like a scalar's size
+it is known before checking, so `[alignof usize]u8` is `[4]u8` on a 32-bit
+target and `[8]u8` on a 64-bit one, whatever the host is. `alignof` of a
+declared type, a fixed array or a type formal stays L0305, whose message
+now names the alignment rather than saying that `alignof` never folds.
+
+**The alternatives:** keeping `alignof` out, which D1321 chose for want of
+a use and which leaves a buffer aligned to a scalar to write the number;
+and admitting `alignof` of every type, which would make a length wait for
+a declared type's layout, as D1321 declined for `sizeof`.
+
+**Pinned by** `runtime/array-length-reads-facts-and-sizeof`, whose field
+and module integer read `alignof` of a scalar and are held to the same
+measurement made in the routine, on every product target, Cortex-M0
+included; `positive/array-length-facts-at-the-target-width`, which holds
+`[alignof usize]u8` to `[4]u8` on `synthetic-32` and to `[8]u8` on the
+64-bit targets; and `negative/array-length-refusals-are-reported-once`,
+whose `alignof` of a struct stays L0305.
 
 ## DECISIONS: DECLARED TYPES, RANGES AND LAYOUT
 

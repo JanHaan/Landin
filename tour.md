@@ -2317,7 +2317,7 @@ running anything. You may write:
 - integer literals;
 - fixed parameters ([1520]);
 - compiler facts such as `compiler.word_size` [1500];
-- `sizeof` of a built-in scalar type, such as `sizeof usize`;
+- `sizeof` or `alignof` of a built-in scalar type, such as `sizeof usize`;
 - immutable module integers;
 - parentheses, unary `-` and plain `+`, `-`, `*`, `/` and `%` to combine
   them.
@@ -2325,8 +2325,9 @@ running anything. You may write:
 Calls, wrapping operators, bitwise operators, shifts and measurements of
 your own types are not allowed.
 
-A fact and a scalar's size are the selected target's, so `[sizeof usize]u8`
-is `[8]u8` on a 64-bit target and `[4]u8` on Cortex-M0. A module integer
+A fact and a scalar's size and alignment are the selected target's, so
+`[sizeof usize]u8` is `[8]u8` on a 64-bit target and `[4]u8` on Cortex-M0.
+A module integer
 counts only when its own value is such a constant. A `mut` one never counts,
 because the program may write it. With `path_max: usize = 4096`,
 `[path_max]u8` is the same type as `[4096]u8`.

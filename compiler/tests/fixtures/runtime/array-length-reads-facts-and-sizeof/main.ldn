@@ -3,11 +3,15 @@
 --  on a 64-bit target, 32 and 4 on a 32-bit one. The length is part of the
 --  type, so `[sizeof usize]u8` is the type `[8]u8` or `[4]u8` per target,
 --  and a module integer whose image reads `sizeof` of a scalar is a count.
+--  D1340: `alignof` of a scalar folds the same way, to the alignment the
+--  same measurement gives in a routine on that target.
 mut backing: [2 * compiler.word_size]u8 = zeroed
 mut stack: [16 * sizeof usize]u8 = zeroed
 word: type = [sizeof usize]u8
 cells: usize = 4 * sizeof u32
 table: type = [cells]u8
+lanes: usize = 2 * alignof u16
+paired: type = [lanes]u8
 
 fixed if compiler.word_size == 64 then
     exactly: type = [8]u8
@@ -18,6 +22,8 @@ end if
 held: type = struct
     bits: [compiler.word_size / 8]u8
     half: [sizeof u16]u8
+    line: [alignof usize]u8
+    wide: [alignof u64]u8
 end held
 
 same: (w: word) -> (r: exactly) =
@@ -38,7 +44,12 @@ public main: () -> (code: i32) =
     code = 5
     h: held = zeroed
     return when lenof h.bits <> sizeof usize or lenof h.half <> 2
-    code = 6
+    code = 7
+    return when lenof h.line <> alignof usize or lenof h.wide <> alignof u64
+    code = 8
+    p: paired = zeroed
+    return when lenof p <> 4
+    code = 9
     mut w: word = zeroed
     w[0] = 42
     e := same(w)

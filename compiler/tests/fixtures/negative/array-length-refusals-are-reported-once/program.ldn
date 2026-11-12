@@ -7,7 +7,7 @@ pair: type = struct
 end pair
 
 takes: (a: [3 << 1]u8) -> none =
-    mut local: [2 * alignof usize]u8 = zeroed
+    mut local: [2 * alignof pair]u8 = zeroed
     _ = local
     _ = a
 end takes

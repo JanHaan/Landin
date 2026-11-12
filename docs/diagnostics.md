@@ -881,10 +881,12 @@ unknown fixed name or form, or depend on itself, within one module or through
 several. A fixed condition or option default measures scalar types only: a
 declared type's size, alignment or field offset is measured by
 `compiler.assert`, once checking has laid the type out (D412). An array bound
-reads literals, fixed formals, integer compiler facts and `sizeof` of a scalar
-type (D1321) under `+ - * / %`, and may name an immutable module integer whose
-own image is such a count, but not a `mut` one, which the program may write
-(D438); `alignof` and `sizeof` of a declared type are not in that fold. Change such an expression to one the closed fold can evaluate. A value
+reads literals, fixed formals, integer compiler facts and `sizeof` and
+`alignof` of a scalar type (D1321, D1340) under `+ - * / %`, and may name an
+immutable module integer whose own image is such a count, but not a `mut` one,
+which the program may write (D438); `sizeof` and `alignof` of a declared type
+are not in that fold. Change such an expression to one the closed fold can
+evaluate. A value
 another module exports, named through that module as `sizes.page`, is known as
 it is in its own module; a field of a record image, an element of an array
 image and a call are not, in either. A module function binding without an

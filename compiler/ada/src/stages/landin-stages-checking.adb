@@ -3973,14 +3973,24 @@ package body Landin.Stages.Checking is
 
       --  D438: an immutable module integer is a fixed count when its
       --  image is: integer literals, D437's integer compiler facts,
-      --  `sizeof` of a scalar type (D1321), other such module integers,
-      --  unary `-` and D136's mathematical `+ - * / %`.  Admitted is the
-      --  count; Outside says the image is something else, which the bound
-      --  reports; Faulty is a fault in the image the
-      --  module value's own check reports, a cycle, an overflow or a zero
-      --  divisor, so the bound says nothing more.
+      --  `sizeof` and `alignof` of a scalar type (D1321, D1340), other
+      --  such module integers, unary `-` and D136's mathematical
+      --  `+ - * / %`.  Admitted is the count; Outside says the image is
+      --  something else, which the bound reports; Faulty is a fault in the
+      --  image the module value's own check reports, a cycle, an overflow
+      --  or a zero divisor, so the bound says nothing more.
       type Count_Outcome is (Count_Admitted, Count_Outside, Count_Faulty);
       Counting : Declaration_Sets.Set;
+
+      --  D1321/D1340: what `sizeof` or `alignof` of a scalar is on the
+      --  selected target, as the configuration fold answers it.
+      function Scalar_Measure
+        (Measure : Syn.Node_Kind; Held : Ty.Scalar_Name) return Ty.Folded
+      is (if Measure = Syn.Align_Of
+          then Ty.Folded (Landin.Targets.Alignment_Of
+            (Facts, Ty.Storage_Size (Held, Facts)))
+          else Ty.Folded (Landin.Targets.Bytes
+            (Ty.Storage_Size (Held, Facts))));
 
       function Module_Count
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Value : out Ty.Folded)
@@ -4128,9 +4138,10 @@ package body Landin.Stages.Checking is
                        when others => Left rem Right);
                   return Count_Admitted;
                end;
-            when Syn.Size_Of =>
-               --  D1321: a scalar's size is known for the target before
-               --  checking, so it counts as the literal it stands for.
+            when Syn.Size_Of | Syn.Align_Of =>
+               --  D1321/D1340: a scalar's size and alignment are known for
+               --  the target before checking, so each counts as the
+               --  literal it stands for.
                declare
                   Held : constant Ty.Type_Kind :=
                     Type_At (Of_Tree, Syn.Measured_Type (Of_Tree, Node));
@@ -4138,8 +4149,7 @@ package body Landin.Stages.Checking is
                   if Held not in Ty.Scalar_Name then
                      return Count_Outside;
                   end if;
-                  Value := Ty.Folded (Landin.Targets.Bytes
-                    (Ty.Storage_Size (Held, Facts)));
+                  Value := Scalar_Measure (Kind, Held);
                   return Count_Admitted;
                end;
             when others =>
@@ -4171,11 +4181,12 @@ package body Landin.Stages.Checking is
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, At_Node),
                Message => Message,
-               Note    => "D136/D438/D1321: an array bound folds integer"
-                          & " literals, fixed formals, compiler facts,"
-                          & " `sizeof` of a scalar type, immutable module"
-                          & " integers and target-independent integer"
-                          & " arithmetic; no user routine runs",
+               Note    => "D136/D438/D1321/D1340: an array bound folds"
+                          & " integer literals, fixed formals, compiler"
+                          & " facts, `sizeof` and `alignof` of a scalar"
+                          & " type, immutable module integers and"
+                          & " target-independent integer arithmetic; no"
+                          & " user routine runs",
                Into    => Found);
          end Report_Not_Fixed;
 
@@ -4362,9 +4373,10 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
-         --  D1321: `sizeof` of a scalar type is the target's size of it,
-         --  known before checking as a fact is; any other measurement
-         --  needs a layout and stays outside the fold.
+         --  D1321/D1340: `sizeof` and `alignof` of a scalar type are the
+         --  target's size and alignment of it, known before checking as a
+         --  fact is; any other measurement needs a layout and stays
+         --  outside the fold.
          if Of_Kind in Syn.Size_Of | Syn.Align_Of then
             declare
                Held : constant Ty.Type_Kind :=
@@ -4372,21 +4384,20 @@ package body Landin.Stages.Checking is
             begin
                if Held = Ty.Ill_Typed then
                   return 0;
-               elsif Of_Kind = Syn.Size_Of and then Held in Ty.Scalar_Name
-               then
+               elsif Held in Ty.Scalar_Name then
                   Valid := True;
                   Known := True;
-                  return Ty.Folded (Landin.Targets.Bytes
-                    (Ty.Storage_Size (Held, Facts)));
+                  return Scalar_Measure (Of_Kind, Held);
                end if;
                Report_Not_Fixed
                  (Written,
-                  (if Of_Kind = Syn.Align_Of
-                   then "`alignof` is not one of the fixed-expression"
-                        & " forms; `sizeof` of a scalar type is"
-                   else "`sizeof` folds in a fixed expression for a"
-                        & " scalar type only, and this type's size is"
-                        & " its checked layout's"));
+                  "`" & (if Of_Kind = Syn.Align_Of then "alignof"
+                         else "sizeof")
+                  & "` folds in a fixed expression for a scalar type"
+                  & " only, and this type's "
+                  & (if Of_Kind = Syn.Align_Of then "alignment"
+                     else "size")
+                  & " is its checked layout's");
                return 0;
             end;
          end if;
