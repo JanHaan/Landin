@@ -1,0 +1,109 @@
+--  D1356: platform/posix's `kill` takes a process group as C's `kill`
+--  does, on every hosted system.  The test harness starts every program
+--  as the leader of a process group of its own, so this one first asks,
+--  sending nothing, that the group its own ID names is there, and stops
+--  before any signal is sent when it is not.  Zero names the same group,
+--  -1, which C takes for every process the caller may signal, is
+--  `einval` before the system is asked, and a group nobody leads is
+--  `esrch`.  Then the program watches SIGTERM through hosted/events, so
+--  that the signal reaches it as an event and does not end it, and starts
+--  a shell that waits on a pipe nobody writes, which the group's signal
+--  ends: once sent to the group zero names and once to the group its
+--  leader's negated ID names.  Each time the program reads the signal
+--  that reached it too, and waits for a child ended by it.
+import core/io
+import core/io/signal
+import core/text
+import hosted/events
+import platform/posix
+
+--  The shell waiting for a line on `input`, its other streams inherited
+--  and, since the provider watches SIGTERM, SIGTERM at its default.
+waiting_shell: (input: posix.descriptor)
+               -> (child: posix.process_id) ! posix.errno =
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"),
+          value: text.host_over("/bin:/usr/bin"))]
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over("read line")]
+    child = try posix.spawn(text.host_over("/bin/sh"), arguments[0..<2],
+                            variables[0..<1],
+                            (input: input, output: posix.standard_output,
+                             errors: posix.standard_error))
+end waiting_shell
+
+--  Whether `kill` of `process` with `signal` fails `wanted`.
+refused: (process: posix.process_id, signal: i32, wanted: posix.errno)
+         -> (yes: bool) =
+    yes = false
+    posix.kill(process, signal) else (problem)
+        yes = problem == wanted
+    end
+end refused
+
+--  Start a waiting shell, send SIGTERM to `group`, and say whether this
+--  process read the signal as an event and the shell ended by it.
+signal_group: (host: events.host, group: posix.process_id)
+              -> (yes: bool) ! posix.errno =
+    yes = false
+    held: posix.pipe_ends = try posix.pipe()
+    child: posix.process_id = try waiting_shell(held.reading)
+    try posix.kill(group, posix.signal_terminate)
+    arrival: signal.event = signal.next_signal(host) else (problem)
+        _ = problem
+        return
+    end
+    ending: posix.child_status = try posix.wait(child)
+    try posix.close(held.reading)
+    try posix.close(held.writing)
+    return when arrival.which <> signal.terminate
+    yes = match ending.how
+        posix.exited(given): given < 0
+        posix.signalled(number): number == posix.signal_terminate
+    end match
+end signal_group
+
+run: (host: events.host) -> (code: i32) ! posix.errno =
+    code = 2
+    own: posix.process_id = posix.current_process()
+    leader: posix.process_id = posix.process_id(-i32(own))
+    --  This process leads its own group; nothing is sent otherwise.
+    posix.kill(leader, 0) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    try posix.kill(posix.process_id(0), 0)
+    return when not refused(posix.process_id(-1), 0, posix.einval)
+    return when not refused(posix.process_id(-2147483647), 0, posix.esrch)
+    code = 4
+    signal.watch(host, signal.terminate) else (problem)
+        _ = problem
+        return
+    end
+    return when not try signal_group(host, posix.process_id(0))
+    code = 5
+    return when not try signal_group(host, leader)
+    code = 6
+    signal.stop_watching(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    --  No fibre: the home stack reads the signals, and the provider
+    --  takes no fewer than two entries.
+    mut entries: [2]usize = zeroed
+    host := events.over(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = run(host) else (problem)
+        _ = problem
+        1
+    end
+end main

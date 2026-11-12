@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D1356: platform/posix's kill takes a process group as C's kill does: a program the harness starts as its own group's leader finds that group by its negated ID and by zero, sending nothing, is refused einval for -1 and esrch for a group nobody leads, then, watching SIGTERM through hosted/events, sends SIGTERM to its own group by zero and by its negated ID, each time reading the signal as an event and waiting for a shell that signal ended
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1620, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

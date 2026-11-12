@@ -34199,6 +34199,52 @@ name `posix` numbers ends by the signal of that number.
 send their signals through it. Darwin's and FreeBSD's arm was written by
 reading and is run by their lanes.
 
+**Amended by D1356:** a zero or negative ID is no longer refused. Zero
+names the caller's own process group and a negative ID another group, as
+C's `kill` takes them; only -1 is still `einval`.
+
+### D1356 — `posix.kill` signals a process group as C's `kill` does
+
+**The tour said** nothing. D1279 refused a zero or negative ID with
+`einval`, so a program that stopped a group of processes, a shell's job
+or the children a server started into its own group, wrote Linux's raw
+system call and the C library's `kill` again.
+
+**Chosen:** `posix.kill(process, signal)` takes the IDs C's `kill` takes
+for a group. A positive ID is one process; zero is every process in the
+caller's own group, the caller among them; and a negative ID is every
+process in the group whose ID is its magnitude, so
+`posix.process_id(-i32(leader))` names the group `leader` leads. The
+signal number zero asks whether the group is there, as it does for a
+process, and a group with no process in it is `esrch`. An ID of -1,
+which C takes for every process the caller may signal, is refused
+`einval` before the system is asked: it names no group, and a sign
+mistaken there reaches every process the user owns. The ID goes to the
+system unchanged on every hosted target, Linux's `kill` system call and
+the C library's `kill` on Darwin and FreeBSD, so the smallest `i32`,
+whose magnitude no `i32` holds, is the system's to answer. `process_id`
+keeps its one type for a process and a group, and the library names no
+group of its own: `current_process()` gives the ID whose negation is
+the caller's group when the caller leads one.
+
+**The alternatives:** keeping D1279's refusal, which the maintainer
+reversed; passing -1 through as C does, which makes one sign mistake a
+signal to every process; and a separate `process_group` type or
+`kill_group` entry, which would add a second name for what C's `kill`
+says with a sign. The maintainer chose the groups as C has them; the
+refusal of -1 is the implementer's.
+
+**Pinned by** `runtime/posix-kill-group`: a program the harness starts as
+its own group's leader finds that group by its negated ID and by zero,
+sending nothing, is refused `einval` for -1 and `esrch` for a group
+nobody leads, and, watching SIGTERM through `hosted/events`, sends
+SIGTERM to its own group by zero and then by its negated ID, each time
+reading the signal it sent itself as an event and waiting for a shell
+that the signal ended. The fixture asks first and sends nothing when it
+does not lead its group, so a run outside the harness signals no other
+process. Darwin's and FreeBSD's arm is the one D1279 wrote, run by their
+lanes.
+
 ### D1280 — A signal handler is installed as a C function value, through a second view of `sigaction`'s record
 
 **The tour said** at [1570] that an `extern(c)` function is a value C can
