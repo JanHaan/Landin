@@ -73383,6 +73383,66 @@ file negative/import-without-a-root-is-refused-there/program.ldn tokens 25
   75 76 )
   77 80 end
   81 86 count
+file negative/imported-atom-outside-the-set/main.ldn tokens 59
+  285 291 import
+  292 296 core
+  296 297 /
+  297 299 io
+  301 309 argument
+  309 310 :
+  311 312 (
+  312 317 index
+  317 318 :
+  319 324 usize
+  324 325 )
+  326 328 ->
+  329 330 (
+  330 335 value
+  335 336 :
+  337 342 usize
+  342 343 )
+  344 345 !
+  346 348 io
+  348 349 .
+  349 360 no_argument
+  361 362 =
+  367 368 _
+  369 370 =
+  371 376 index
+  381 385 fail
+  386 388 io
+  388 389 .
+  389 398 no_access
+  399 402 end
+  403 411 argument
+  413 419 public
+  420 424 main
+  424 425 :
+  426 427 (
+  427 428 )
+  429 431 ->
+  432 433 (
+  433 437 code
+  437 438 :
+  439 442 i32
+  442 443 )
+  444 445 =
+  450 454 code
+  455 456 =
+  457 458 1
+  463 464 _
+  465 466 =
+  467 475 argument
+  475 476 (
+  476 477 0
+  477 478 )
+  479 483 else
+  484 485 0
+  490 494 code
+  495 496 =
+  497 498 0
+  499 502 end
+  503 507 main
 file negative/increment-unassigned-local-array-element/program.ldn tokens 21
   0 1 f
   1 2 :

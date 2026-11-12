@@ -1,0 +1,16 @@
+--  An atom of an imported module, written qualified, that a body fails
+--  with outside its declared set is refused as a plain name's is, the
+--  `fail` that raises it labelled; it once reached the lowering, which
+--  found the fail outside the routine's set and stopped as a defect.
+import core/io
+
+argument: (index: usize) -> (value: usize) ! io.no_argument =
+    _ = index
+    fail io.no_access
+end argument
+
+public main: () -> (code: i32) =
+    code = 1
+    _ = argument(0) else 0
+    code = 0
+end main

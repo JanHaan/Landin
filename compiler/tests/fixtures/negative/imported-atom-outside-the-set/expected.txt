@@ -1,0 +1,10 @@
+error[L0329]: this body can fail with `io.no_access`, which is outside its declared error set
+  --> ../tests/fixtures/negative/imported-atom-outside-the-set/main.ldn:7:1
+  |
+7 | argument: (index: usize) -> (value: usize) ! io.no_argument =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/imported-atom-outside-the-set/main.ldn:9:5
+  |
+9 |     fail io.no_access
+  |     ^^^^^^^^^^^^^^^^^ this `fail` raises `io.no_access`
+  = note: [0940]: every failing path belongs to the function's `!` set; add `io.no_access` to it, or recover the failure where it is raised

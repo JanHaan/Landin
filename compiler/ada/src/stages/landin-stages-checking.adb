@@ -41378,8 +41378,22 @@ package body Landin.Stages.Checking is
             end if;
 
             case Syn.Kind (Of_Tree, Node) is
-               when Syn.Name_Reference =>
-                  if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+               --  A selection the resolver bound is a qualified name, such
+               --  as `io.no_access`, whose atoms are its declaration's as
+               --  a plain name's are; the expression carries none of its
+               --  own, so taking them from it left an imported atom
+               --  outside every set and the body unrefused.
+               when Syn.Name_Reference | Syn.Member_Selection =>
+                  if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                               /= Res.Bound
+                  then
+                     Include_Set
+                       (Into, Caller,
+                        Landin.Checking.Atom_Set_Of
+                          (Types.all, Of_Tree, Node));
+                  elsif Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                          = Res.Bound
                   then
                      declare
                         Id : constant Res.Declaration_Id :=

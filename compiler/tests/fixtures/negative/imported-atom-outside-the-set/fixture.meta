@@ -1,0 +1,8 @@
+class: negative
+summary: a fail of an imported atom written qualified, io.no_access, outside the routine's declared set is L0329 naming it and the fail that raises it, not a lowering defect
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/imported-atom-outside-the-set
+codes: L0329
+status: 1
+constructs: 0940, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
