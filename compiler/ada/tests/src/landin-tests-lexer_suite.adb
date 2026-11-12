@@ -605,7 +605,10 @@ package body Landin.Tests.Lexer_Suite is
    --  link symbol, a `linker.library` name, a device identity and a raw
    --  literal read as `utf16` each had a buffer the length of the lexeme
    --  on the frame of the stage that read it.  Four mebibytes of lexeme
-   --  are checked here on a stack of two.
+   --  are checked here on a stack of two.  A library name is refused by a
+   --  static link alone, so it is checked for linux-x86-64, whose static
+   --  link names it in the refusal, and for darwin-arm64, which links the
+   --  C library and accepts it, whatever the host.
    procedure Long_Texts_Are_Decoded_Off_The_Stack
      (Item : in out Landin.Testing.Context);
 
@@ -619,11 +622,11 @@ package body Landin.Tests.Lexer_Suite is
 
       procedure Check
         (Name, Before, After : String; Quotes : Positive;
-         Accepted : Boolean);
+         Accepted : Boolean; Target : String := "");
 
       procedure Check
         (Name, Before, After : String; Quotes : Positive;
-         Accepted : Boolean)
+         Accepted : Boolean; Target : String := "")
       is
          Text : Unbounded.Unbounded_String;
          Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -639,6 +642,9 @@ package body Landin.Tests.Lexer_Suite is
          Unbounded.Append (Text, Unbounded."*" (Quotes, '"'));
          Unbounded.Append (Text, After);
          Host.Add_File ("long.ldn", Unbounded.To_String (Text));
+         if Target /= "" then
+            Arguments.Append ("--target=" & Target);
+         end if;
          Arguments.Append ("long.ldn");
          declare
             task Bounded with Storage_Size => 2 * 2 ** 20;
@@ -674,8 +680,13 @@ package body Landin.Tests.Lexer_Suite is
         ("the entry's link symbol", "link(symbol: ",
          ") " & Main, 1, Accepted => False);
       Check
-        ("a library name", "linker.library(", ")" & ASCII.LF & Main, 1,
-         Accepted => False);
+        ("a library name a static link refuses", "linker.library(",
+         ")" & ASCII.LF & Main, 1, Accepted => False,
+         Target => "linux-x86-64");
+      Check
+        ("a library name the C library's link takes", "linker.library(",
+         ")" & ASCII.LF & Main, 1, Accepted => True,
+         Target => "darwin-arm64");
       Check
         ("a device identity", "compiler.device(", ")" & ASCII.LF, 1,
          Accepted => False);
