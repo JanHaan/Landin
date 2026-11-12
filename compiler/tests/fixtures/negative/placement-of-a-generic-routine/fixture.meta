@@ -1,5 +1,5 @@
 class: negative
-summary: a generic routine cannot be placed: the refusal names the generic parameter that makes it one routine for each instance and offers a nongeneric routine that calls it
+summary: D1322 a generic routine is placed by section, alignment or region, every instance in it, and `keep`, a vector slot and the boot stage name one routine, so `keep` on a generic routine is refused naming the generic parameter and the nongeneric routine that calls it
 program: program.ldn
 args: --target=cortex-m0 ../tests/fixtures/negative/placement-of-a-generic-routine/program.ldn
 expect: expected.txt

@@ -17255,9 +17255,12 @@ package body Landin.Stages.Lowering is
                                       and then Syn.Is_Public (Of_Tree, Node))
                              or else Syn.Machine_Convention (Of_Tree, Node)
                                /= Landin.Machine.Ordinary))
-                       or else Landin.Configuration.Placement_Of
-                         (Source (Context, Src), Of_Tree, Node,
-                          Spellings.all) /= Default
+                       or else ((not Routine
+                                 or else Syn.Generic_Formal_Count
+                                   (Of_Tree, Node) = 0)
+                                and then Landin.Configuration.Placement_Of
+                                  (Source (Context, Src), Of_Tree, Node,
+                                   Spellings.all) /= Default)
                        or else Named_In_Assembly (Id)
                      then
                         Reach_Declaration (Id);
@@ -17870,6 +17873,13 @@ package body Landin.Stages.Lowering is
                   end if;
                   IR.Set_Signature
                     (Unit.all, Made, Signature_For_Instance (Source));
+                  --  D1322: every instance of a placed generic routine
+                  --  goes where its template is placed.
+                  IR.Set_Placement
+                    (Unit.all, Made, Landin.Configuration.Placement_Of
+                       (Landin.Stages.Source
+                          (Context, Res.Source_Of (Meanings.all, Template)),
+                        Of_Tree.all, Node, Spellings.all));
                end;
             end if;
          end;

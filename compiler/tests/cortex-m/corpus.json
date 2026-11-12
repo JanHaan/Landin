@@ -1423,6 +1423,9 @@
     "runtime/array-field-passed-inout": {
       "mode": "execute"
     },
+    "runtime/array-length-reads-facts-and-sizeof": {
+      "mode": "execute"
+    },
     "runtime/array-lent-to-slice": {
       "mode": "execute"
     },
@@ -1515,6 +1518,9 @@
       "mode": "execute"
     },
     "runtime/assembly-saved-registers": {
+      "mode": "execute"
+    },
+    "runtime/assembly-zero-register": {
       "mode": "execute"
     },
     "runtime/atom-union-written-in-place": {

@@ -1112,10 +1112,12 @@ script is D229's, byte for byte. The driver retains `OUTPUT.s`, `OUTPUT.o`,
 `OUTPUT.ld`, `OUTPUT.map` and the ELF; `--emit=linker-script` writes the
 script alone, with no program to link (D589). `--linker-script=FILE` links with a
 developer's script instead, still writing `OUTPUT.ld`, and then holds the ELF
-to D546's four clauses: the vector table at the boot address, with the
+to D546's five clauses: the vector table at the boot address, with the
 second stage or the image block its boot kind gives, the startup
-symbols, the stack in a writable region of its size, and each initialized
-image loaded from the text region; a broken one is L0519, naming it.
+symbols, the stack in a writable region of its size with no section of
+the image in it (D1114), each initialized image loaded from the text
+region, and no datum or routine at address zero (D1115, D1323); a broken
+one is L0519, naming it.
 With `--build-report=PATH`, a successful firmware executable also reports
 post-link occupied flash and static RAM extents, their limits and remaining
 capacity, the reserved stack size, the selected libgcc archive members, and

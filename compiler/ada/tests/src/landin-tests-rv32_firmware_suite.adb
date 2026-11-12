@@ -764,6 +764,51 @@ package body Landin.Tests.RV32_Firmware_Suite is
       end;
    end Assembly_Of;
 
+   --  D1320: an ordinary block's text names x0 as a source and as a
+   --  destination, and the block reaches the emitted assembly as written;
+   --  an operand at x0 is still refused, saying why.
+   procedure Zero_Both_Ways (Item : in out Landin.Testing.Context);
+   procedure Zero_Both_Ways (Item : in out Landin.Testing.Context) is
+      Both : constant String :=
+        "link(vector: 7) extern(interrupt) h: () -> none =" & LF
+        & "    assembler.block(""sw zero, 4(t0)"")" & LF
+        & "    assembler.block(""csrrw zero, mscratch, zero"")" & LF
+        & "    assembler.block(""add x0, t1, t2\nadd t1, x0, t2"")" & LF
+        & "end h" & LF;
+      Operand : constant String :=
+        "link(vector: 7) extern(interrupt) h: () -> none =" & LF
+        & "    assembler.block(""sw {v}, 4(t0)"", in v: u32 at x0 = 1)"
+        & LF & "end h" & LF;
+      Text, Said, Refused_Text, Refused : U.Unbounded_String;
+
+      procedure Holds (Part : String);
+      procedure Holds (Part : String) is
+      begin
+         Landin.Testing.Check
+           (Item, Contains (U.To_String (Text), ASCII.HT & Part & LF),
+            "the emitted assembly holds " & Part & ": "
+            & U.To_String (Said) & U.To_String (Text));
+      end Holds;
+   begin
+      Assembly_Of ("", Both, Text, Said);
+      Holds ("sw zero, 4(t0)");
+      Holds ("csrrw zero, mscratch, zero");
+      Holds ("add x0, t1, t2" & LF & ASCII.HT & "add t1, x0, t2");
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Said), "error"),
+         "an ordinary block names x0 without a refusal: "
+         & U.To_String (Said));
+      Assembly_Of ("", Operand, Refused_Text, Refused);
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Refused), "error[L0330]: `x0` is a"
+                         & " register no operand may name")
+           and then Contains (U.To_String (Refused),
+                              "x0 reads as zero and discards writes")
+           and then U.Length (Refused_Text) = 0,
+         "an operand at x0 is refused, saying why: "
+         & U.To_String (Refused));
+   end Zero_Both_Ways;
+
    --  The jump slot SLOT of the table in TEXT holds, or "".
    function Slot_Of (Text : String; Slot : Natural) return String;
    function Slot_Of (Text : String; Slot : Natural) return String is
@@ -1222,6 +1267,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Landin.Testing.Register
         (Into, "rv32 firmware", "RAM layout omits ROM packaging",
          RAM_Layout'Access);
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "an ordinary block names x0 both ways",
+         Zero_Both_Ways'Access);
       Landin.Testing.Register
         (Into, "rv32 firmware", "traps follow the interrupt model",
          Traps_Follow_The_Model'Access);

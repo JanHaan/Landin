@@ -1,10 +1,10 @@
-error[L0347]: a generic routine cannot be placed: `port` is a type parameter, so this declares one routine for each instance
-  --> ../tests/fixtures/negative/placement-of-a-generic-routine/program.ldn:5:34
+error[L0347]: a generic routine takes no `keep`: `port` is a type parameter, so this declares one routine for each instance
+  --> ../tests/fixtures/negative/placement-of-a-generic-routine/program.ldn:5:40
   |
-5 | link(section: ".ramtext.handle") handle: (port: type is device, bytes: []u8,
-  |                                  ^^^^^^
-  --> ../tests/fixtures/negative/placement-of-a-generic-routine/program.ldn:5:43
+5 | link(keep, section: ".ramtext.handle") handle: (port: type is device,
+  |                                        ^^^^^^
+  --> ../tests/fixtures/negative/placement-of-a-generic-routine/program.ldn:5:49
   |
-5 | link(section: ".ramtext.handle") handle: (port: type is device, bytes: []u8,
-  |                                           ^^^^^^^^^^^^^^^^^^^^ the generic parameter
-  = note: [1640]: a placement names one routine; place a nongeneric routine that calls this one, or pass the varying part as a function value
+5 | link(keep, section: ".ramtext.handle") handle: (port: type is device,
+  |                                                 ^^^^^^^^^^^^^^^^^^^^ the generic parameter
+  = note: D1322: every instance of a generic routine goes to its section, alignment or region; a slot, the boot stage and `keep` name one routine, so give them a nongeneric routine that calls this one

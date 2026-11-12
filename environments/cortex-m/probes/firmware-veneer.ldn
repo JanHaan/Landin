@@ -2,6 +2,7 @@ bad: atom
 mut denominator: u64 = 7
 mut observed: u32 = 0
 mut irq_seen: u32 = 0
+mut relayed: u32 = 0
 link(section: ".ramtext.worker")
 ram_worker: (value: u32) -> (result: u32) ! bad =
     fail bad when value == 0
@@ -12,7 +13,35 @@ link(section: ".ramtext.irq", vector: 11)
 extern(interrupt) ram_irq: () -> none =
     irq_seen = irq_seen + 1
 end ram_irq
+--  D1322: both instances of a placed generic routine are RAM code.
+counter: type = concept (c: type)
+    bump: (self: c, by: u32) -> none
+end counter
+ones: type = struct
+    unused: u32
+end ones
+tens: type = struct
+    unused: u32
+end tens
+bump_ones: (self: ones, by: u32) -> none =
+    _ = self
+    relayed = relayed + by
+end bump_ones
+bump_tens: (self: tens, by: u32) -> none =
+    _ = self
+    relayed = relayed + 10 * by
+end bump_tens
+ones is counter (bump: bump_ones)
+tens is counter (bump: bump_tens)
+link(section: ".ramtext.relay")
+relay: (port: type is counter, p: port, by: u32) -> none =
+    port.bump(p, by)
+end relay
 start: () -> none =
     observed = (ram_worker(20) else 0) + (ram_worker(0) else 1)
+    one: ones = zeroed
+    ten: tens = zeroed
+    relay(one, 2)
+    relay(ten, 4)
     assembler.block("svc #0")
 end start

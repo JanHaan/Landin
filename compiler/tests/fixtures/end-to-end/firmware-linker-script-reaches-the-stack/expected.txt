@@ -1,0 +1,1 @@
+error[L0519]: ../tests/fixtures/end-to-end/firmware-linker-script-reaches-the-stack/dev.ld breaks the firmware linker script contract, clause 3, the stack: .rodata overlaps it (D546); the derived script beside it, build/firmware-linker-script-reaches-the-stack.elf.ld, keeps every clause

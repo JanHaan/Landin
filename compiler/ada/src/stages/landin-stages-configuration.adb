@@ -2988,6 +2988,9 @@ package body Landin.Stages.Configuration is
       begin
          if Node = Syn.No_Node
            or else Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function
+           or else Landin.Configuration.Fact_At
+             (Activity.all, Syn.Source_Of (Of_Tree), Node)
+               not in Landin.Configuration.No_Fact
          then
             return;
          elsif Is_Feature_Fact (Of_Tree, Node)
@@ -3010,6 +3013,25 @@ package body Landin.Stages.Configuration is
             Record_Module_Facts (Of_Tree, Syn.Slot (Of_Tree, Node, Index));
          end loop;
       end Record_Module_Facts;
+
+      --  D1321: an array length is a fixed expression that reads a
+      --  compiler fact directly, wherever the array type is written, a
+      --  routine body included, since the length is part of a type and
+      --  no routine reads it.  Configuration records each fact in an
+      --  active length as it records one in a module value, once the arms
+      --  are selected, and the checker folds it as the literal it is.
+      procedure Record_Length_Facts (Of_Tree : Syn.Tree);
+      procedure Record_Length_Facts (Of_Tree : Syn.Tree) is
+      begin
+         for Node in 1 .. Syn.Last_Node (Of_Tree) loop
+            if Syn.Kind (Of_Tree, Node) = Syn.Array_Type
+              and then Landin.Configuration.Is_Active
+                (Activity.all, Syn.Source_Of (Of_Tree), Node)
+            then
+               Record_Module_Facts (Of_Tree, Syn.Bound_Of (Of_Tree, Node));
+            end if;
+         end loop;
+      end Record_Length_Facts;
 
       procedure Configure_Declaration
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
@@ -3281,6 +3303,7 @@ package body Landin.Stages.Configuration is
                Configure_Declaration
                  (Of_Tree.all, Syn.Nth_Declaration (Of_Tree.all, Which));
             end loop;
+            Record_Length_Facts (Of_Tree.all);
          end;
       end loop;
       Find_Boot_Stages;

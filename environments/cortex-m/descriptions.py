@@ -399,6 +399,8 @@ def select_rv32(run, refine, device):
 TRAP_MACHINES = {'riscv-reference': 'sifive_e', 'esp32-c3': 'esp32c3'}
 #  A write to the read-only cycle CSR, an illegal instruction that is not
 #  the compiler's own trap, whose compressed form would leave mtval zero.
+#  Not `csrrw zero, cycle, zero`, which D1320 admits: that is `unimp`, the
+#  compiler's own trap.
 TRAP_PROGRAM = ('start: () -> none =\n'
                 '    assembler.block("csrw cycle, {value}", in value: u32 at general = 0)\n'
                 'end start\n')
@@ -885,6 +887,46 @@ def contract(run, refine):
                 'a script breaking clause %s is not refused naming it: %s' % (clause, said))
         require(not (run.out / ('clause%s.elf' % clause)).exists(),
                 'a refused image is left behind for clause %s' % clause)
+    #  D1323: the two rules the derived script keeps, each broken by a
+    #  script that keeps the four clauses above.  D1114: read-only data
+    #  placed at the bottom of RP2040's reserved stack, in SCRATCH_Y.
+    constants = ('import descriptions/rp2040\n'
+                 'table: [8]u32 = [7, 1, 2, 3, 4, 5, 6, 8]\n'
+                 'mut counted: u32 = 1\nmut at: usize = 3\n'
+                 'start: () -> none = counted += table[at] end start\n')
+    compile_firmware(run, refine, constants, name='constants.elf')
+    rule = (run.out / 'constants.elf.ld').read_text()
+    old = '  .rodata : { *(.rodata .rodata.*) } > FLASH\n'
+    require(old in rule, 'the derived script lacks %r' % old)
+    (run.out / 'stack.ld').write_text(rule.replace(old, (
+        '  .rodata _landin_firmware_stack_bottom : { *(.rodata .rodata.*) }'
+        ' > SCRATCH_Y AT> FLASH\n')))
+    #  D1115: the STM32H753's ITCM begins at zero, and a datum placed there
+    #  without the derived script's eight unused bytes is at address zero.
+    tightly = ('import descriptions/stm32h753\n'
+               'link(region: "ITCM") mut first: u32 = 7\n'
+               'mut counted: u32 = 1\n'
+               'start: () -> none = counted += first end start\n')
+    h7 = ['--level=armv7e-m']
+    image = compile_firmware(run, refine, tightly, h7, name='tightly.elf')
+    require(image.symbols.get('first') == 8,
+            'the derived script does not keep the ITCM datum off address zero')
+    rule = (run.out / 'tightly.elf.ld').read_text()
+    old = ('_landin_firmware_region_ITCM_data_start = .;'
+           ' . = . + (ABSOLUTE(.) < 8 ? 8 - ABSOLUTE(.) : 0);')
+    require(old in rule, 'the derived script lacks %r' % old)
+    (run.out / 'zero.ld').write_text(
+        rule.replace(old, '_landin_firmware_region_ITCM_data_start = .;'))
+    for name, program, extra, named in (
+            ('stack', constants, [], 'clause 3, the stack: .rodata overlaps it'),
+            ('zero', tightly, h7, 'clause 5, address zero: first is at address zero')):
+        said = compile_firmware(run, refine, program,
+                                extra + ['--linker-script=%s.ld' % name],
+                                name='%s.elf' % name, check=False)
+        require('error[L0519]' in said and named in said,
+                'a script breaking the %s rule is not refused naming it: %s' % (name, said))
+        require(not (run.out / ('%s.elf' % name)).exists(),
+                'a refused image is left behind for the %s rule' % name)
     said = compile_firmware(run, refine, 'import descriptions/rp2040\n'
                             'link(region: "NOWHERE") table: u32 = 1\n'
                             'start: () -> none = end start\n',
@@ -939,7 +981,7 @@ def execute_suite(parent, refine):
     out = root / 'contract'
     out.mkdir()
     contract(Run(out, parent.tools), refine)
-    controls.append({'contract': 'four clauses, the stage\'s checksum and an unknown region',
+    controls.append({'contract': 'five clauses, the stage\'s checksum and an unknown region',
                      'status': 'passed'})
     out = root / 'block-contract'
     out.mkdir()

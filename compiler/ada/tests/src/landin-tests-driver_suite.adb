@@ -1853,6 +1853,123 @@ package body Landin.Tests.Driver_Suite is
    procedure RV32_Checks_Assembly_Text
      (Item : in out Landin.Testing.Context);
 
+   --  D1322: `link(section: ...)` on a generic routine places every
+   --  instance in that section on each firmware target; a slot, the boot
+   --  stage and `keep` still name one routine, and a hosted target still
+   --  places nothing.
+   procedure Generic_Placement_Places_Every_Instance
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Placement_Places_Every_Instance
+     (Item : in out Landin.Testing.Context)
+   is
+      Concept : constant String :=
+        "counter: type = concept (c: type)" & LF
+        & "    bump: (self: c, by: u32) -> none" & LF
+        & "end counter" & LF
+        & "ones: type = struct" & LF & "    unused: u32" & LF & "end ones"
+        & LF
+        & "tens: type = struct" & LF & "    unused: u32" & LF & "end tens"
+        & LF
+        & "mut relayed: u32 = 0" & LF
+        & "bump_ones: (self: ones, by: u32) -> none =" & LF
+        & "    _ = self" & LF & "    relayed = relayed + by" & LF
+        & "end bump_ones" & LF
+        & "bump_tens: (self: tens, by: u32) -> none =" & LF
+        & "    _ = self" & LF & "    relayed = relayed + 10 * by" & LF
+        & "end bump_tens" & LF
+        & "ones is counter (bump: bump_ones)" & LF
+        & "tens is counter (bump: bump_tens)" & LF;
+      Uses : constant String :=
+        "relay: (port: type is counter, p: port, by: u32) -> none =" & LF
+        & "    port.bump(p, by)" & LF
+        & "end relay" & LF
+        & "start: () -> none =" & LF
+        & "    one: ones = zeroed" & LF
+        & "    ten: tens = zeroed" & LF
+        & "    relay(one, 2)" & LF
+        & "    relay(ten, 4)" & LF
+        & "end start" & LF;
+
+      procedure Emit
+        (Target, Placement : String;
+         Text, Said : out Unbounded.Unbounded_String);
+      procedure Emit
+        (Target, Placement : String;
+         Text, Said : out Unbounded.Unbounded_String)
+      is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args  : Landin.Platform.Path_List;
+         Ran   : Landin.Driver.Outcome;
+      begin
+         Host.Add_Firmware_Library;
+         Host.Add_File ("main.ldn", Concept & Placement & LF & Uses);
+         Args.Append ("--target=" & Target);
+         if Target /= "linux-x86-64" then
+            Args.Append ("--firmware-entry=start");
+         end if;
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("out.s");
+         Args.Append ("main.ldn");
+         Ran := Landin.Driver.Execute (Args, Host, Tools);
+         Said := Ran.Report;
+         Text := Unbounded.Null_Unbounded_String;
+         if Host.Exists ("out.s") then
+            Text := Unbounded.To_Unbounded_String (Host.Written ("out.s"));
+         end if;
+      end Emit;
+
+      Text, Said : Unbounded.Unbounded_String;
+   begin
+      for Target of Landin.Platform.Path_List'(["cortex-m0", "rv32"]) loop
+         Emit (Target, "link(section: "".ramtext.relay"")", Text, Said);
+         declare
+            Got : constant String := Unbounded.To_String (Text);
+            Section : constant String := ".section .ramtext.relay,""ax""";
+            First : constant Natural :=
+              Ada.Strings.Fixed.Index (Got, Section);
+            Second : constant Natural :=
+              (if First = 0 then 0
+               else Ada.Strings.Fixed.Index (Got, Section, First + 1));
+         begin
+            Landin.Testing.Check
+              (Item, Occurrences (Got, Section) = 2
+                 and then Ada.Strings.Fixed.Index
+                   (Got (First .. Second), "main.relay:" & LF) /= 0
+                 and then Ada.Strings.Fixed.Index
+                   (Got (Second .. Got'Last), "main.relay.1:" & LF) /= 0,
+               Target & ": both instances are emitted in .ramtext.relay: "
+               & Unbounded.To_String (Said) & Got);
+         end;
+      end loop;
+      Emit ("cortex-m0", "link(section: "".text.relay"", align: 16)",
+            Text, Said);
+      Landin.Testing.Check
+        (Item, Occurrences
+           (Unbounded.To_String (Text),
+            ".section .text.relay,""ax"",%progbits" & LF & ASCII.HT
+            & ".balign 16")
+           = 2,
+         "both instances take the section and its alignment: "
+         & Unbounded.To_String (Said) & Unbounded.To_String (Text));
+      Emit ("cortex-m0", "link(keep, section: "".text.relay"")", Text, Said);
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Said),
+                         "error[L0347]: a generic routine takes no `keep`:"
+                         & " `port` is a type parameter")
+           and then Unbounded.Length (Text) = 0,
+         "keep still names one routine: " & Unbounded.To_String (Said));
+      Emit ("linux-x86-64", "link(section: "".text.relay"")", Text, Said);
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Said),
+                         "linux-x86-64 places nothing")
+           and then Unbounded.Length (Text) = 0,
+         "a hosted target still places nothing: "
+         & Unbounded.To_String (Said));
+   end Generic_Placement_Places_Every_Instance;
+
    procedure RV32_Checks_Assembly_Text
      (Item : in out Landin.Testing.Context)
    is
@@ -10109,6 +10226,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "rv32 checks assembly text",
          RV32_Checks_Assembly_Text'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a placed generic routine places every instance",
+         Generic_Placement_Places_Every_Instance'Access);
       Landin.Testing.Register
         (Into, "driver", "the arm64 default is armv8-a",
          The_Arm64_Default_Is_Armv8_A'Access);

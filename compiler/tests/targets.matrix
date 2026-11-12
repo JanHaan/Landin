@@ -93,6 +93,8 @@ end-to-end/feature-level-of-another-family | linux-x86-64
 end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
 end-to-end/firmware-archive-with-constructor | cortex-m0
 end-to-end/firmware-linker-script-breaks-contract | cortex-m0
+end-to-end/firmware-linker-script-places-at-zero | cortex-m0
+end-to-end/firmware-linker-script-reaches-the-stack | cortex-m0
 end-to-end/image-block-not-as-emitted | cortex-m0
 end-to-end/link-assembly-operand-dry-run | linux-x86-64
 end-to-end/link-firmware-archives-dry-run | cortex-m0
@@ -178,7 +180,6 @@ negative/array-copy-length-mismatch | linux-x86-64, linux-arm64, darwin-arm64, f
 negative/array-field-inout-beside-its-view | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/array-initializer-element-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/array-initializer-length-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-negative/array-length-compiler-fact | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/array-length-refusals-are-reported-once | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/array-lent-refusals | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/array-literal-argument-shape-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -233,7 +234,6 @@ negative/assembly-reserved-registers-arm64 | darwin-arm64
 negative/assembly-reserved-registers-cortex | cortex-m0
 negative/assembly-reserved-registers-linux-arm64 | linux-arm64
 negative/assembly-reserved-registers-x86-64 | linux-x86-64
-negative/assembly-rv32-zero-register | rv32
 negative/assembly-rv64-system-call | linux-rv64
 negative/assembly-shorthand-after-operand | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assembly-shorthand-hosted | linux-x86-64
@@ -1679,6 +1679,7 @@ positive/alias-conversion | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86
 positive/any-provider-without-main | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/any-slice-dispatch | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/arm-scopes-are-siblings | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/array-length-facts-at-the-target-width | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-literal-assignment | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-literal-value-after-a-call-statement | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-longer-than-a-host-natural | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2013,6 +2014,7 @@ runtime/arena-is-an-ordinary-name | linux-x86-64, linux-arm64, darwin-arm64, fre
 runtime/array-arguments-cross-calls | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/array-elements-hold-their-own | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/array-field-passed-inout | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/array-length-reads-facts-and-sizeof | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/array-lent-to-slice | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/array-literal-assignment-is-source-ordered | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/array-of-structs | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2032,6 +2034,7 @@ runtime/assembly-operand-free | linux-x86-64, linux-arm64, darwin-arm64, freebsd
 runtime/assembly-operands | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/assembly-saved-float-registers | linux-arm64, darwin-arm64, freebsd-arm64, linux-rv64
 runtime/assembly-saved-registers | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/assembly-zero-register | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/atom-union-written-in-place | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/atom-values-cross-the-abi | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/atomic-accesses-at-every-ordering | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

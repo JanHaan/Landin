@@ -138,7 +138,11 @@ package body Landin.Targets.Assembly is
               and then Number_In (Name, "f", 0, 31)
             then
                return Float_Register;
-            elsif Names_Reserved (Facts, Name) then
+            elsif Name in "x0" | "zero"
+              or else Names_Reserved (Facts, Name)
+            then
+               --  D1320: an operand at x0 would lose its input and read
+               --  its output as zero, so only the text names x0.
                return Never_Named;
             end if;
          when Synthetic_32_Architecture =>
@@ -439,9 +443,11 @@ package body Landin.Targets.Assembly is
                  | "w29" | "x30" | "w30",
             --  LP64D's preserved float registers, f8, f9 and f18-f27, are
             --  declared as its preserved integers are (D630).
+            --  D1320: x0 reads as zero and discards writes, so a text
+            --  that names it overwrites nothing the routine keeps.
             when RV64 | RV32 =>
-               Number_In (Word, "x", 0, 4) or else Word in "x8"
-                 | "zero" | "ra" | "sp" | "gp" | "tp" | "fp" | "s0",
+               Number_In (Word, "x", 1, 4) or else Word in "x8"
+                 | "ra" | "sp" | "gp" | "tp" | "fp" | "s0",
             when Synthetic_32_Architecture => False);
 
    function Lowered (Word : String) return String

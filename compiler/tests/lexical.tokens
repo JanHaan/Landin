@@ -315,6 +315,116 @@ file positive/arm-scopes-are-siblings/program.ldn tokens 41
   134 136 if
   137 140 end
   141 142 f
+file positive/array-length-facts-at-the-target-width/program.ldn tokens 109
+  259 264 fixed
+  265 267 if
+  268 276 compiler
+  276 277 .
+  277 286 word_size
+  287 289 ==
+  290 292 32
+  293 297 then
+  302 309 exactly
+  309 310 :
+  311 315 type
+  316 317 =
+  318 319 [
+  319 320 4
+  320 321 ]
+  321 323 u8
+  324 328 else
+  333 340 exactly
+  340 341 :
+  342 346 type
+  347 348 =
+  349 350 [
+  350 351 8
+  351 352 ]
+  352 354 u8
+  355 358 end
+  359 361 if
+  363 367 word
+  367 368 :
+  369 373 type
+  374 375 =
+  376 377 [
+  377 383 sizeof
+  384 389 usize
+  389 390 ]
+  390 392 u8
+  393 397 bits
+  397 398 :
+  399 403 type
+  404 405 =
+  406 407 [
+  407 415 compiler
+  415 416 .
+  416 425 word_size
+  426 427 /
+  428 429 8
+  429 430 ]
+  430 432 u8
+  434 438 same
+  438 439 :
+  440 441 (
+  441 442 w
+  442 443 :
+  444 448 word
+  448 449 )
+  450 452 ->
+  453 454 (
+  454 455 r
+  455 456 :
+  457 464 exactly
+  464 465 )
+  466 467 =
+  472 473 r
+  474 475 =
+  476 477 w
+  478 481 end
+  482 486 same
+  488 493 again
+  493 494 :
+  495 496 (
+  496 497 b
+  497 498 :
+  499 503 bits
+  503 504 )
+  505 507 ->
+  508 509 (
+  509 510 r
+  510 511 :
+  512 519 exactly
+  519 520 )
+  521 522 =
+  527 528 r
+  529 530 =
+  531 532 b
+  533 536 end
+  537 542 again
+  544 549 start
+  549 550 :
+  551 552 (
+  552 553 )
+  554 556 ->
+  557 561 none
+  562 563 =
+  568 569 w
+  569 570 :
+  571 575 word
+  576 577 =
+  578 584 zeroed
+  589 590 _
+  591 592 =
+  593 598 again
+  598 599 (
+  599 603 same
+  603 604 (
+  604 605 w
+  605 606 )
+  606 607 )
+  608 611 end
+  612 617 start
 file positive/array-literal-assignment/program.ldn tokens 36
   0 1 f
   1 2 :
@@ -43060,23 +43170,7 @@ file negative/array-initializer-length-mismatch/program.ldn tokens 24
   62 68 source
   69 72 end
   73 74 f
-file negative/array-length-compiler-fact/program.ldn tokens 15
-  0 3 mut
-  4 11 backing
-  11 12 :
-  13 14 [
-  14 15 2
-  16 17 *
-  18 21 128
-  22 23 *
-  24 32 compiler
-  32 33 .
-  33 42 word_size
-  42 43 ]
-  43 45 u8
-  46 47 =
-  48 54 zeroed
-file negative/array-length-refusals-are-reported-once/program.ldn tokens 58
+file negative/array-length-refusals-are-reported-once/program.ldn tokens 71
   0 3 mut
   4 11 shifted
   11 12 :
@@ -43095,46 +43189,59 @@ file negative/array-length-refusals-are-reported-once/program.ldn tokens 58
   45 46 2
   47 48 *
   49 55 sizeof
-  56 61 usize
-  61 62 ]
-  62 64 u8
-  65 66 =
-  67 73 zeroed
-  75 80 takes
-  80 81 :
-  82 83 (
-  83 84 a
-  84 85 :
-  86 87 [
-  87 88 3
-  89 91 <<
-  92 93 1
-  93 94 ]
-  94 96 u8
-  96 97 )
-  98 100 ->
-  101 105 none
-  106 107 =
-  112 115 mut
-  116 121 local
-  121 122 :
-  123 124 [
-  124 125 2
-  126 127 *
-  128 134 sizeof
-  135 140 usize
-  140 141 ]
-  141 143 u8
-  144 145 =
-  146 152 zeroed
-  157 158 _
-  159 160 =
-  161 166 local
-  171 172 _
-  173 174 =
-  175 176 a
-  177 180 end
-  181 186 takes
+  56 60 pair
+  60 61 ]
+  61 63 u8
+  64 65 =
+  66 72 zeroed
+  74 78 pair
+  78 79 :
+  80 84 type
+  85 86 =
+  87 93 struct
+  98 101 low
+  101 102 :
+  103 106 u32
+  111 115 high
+  115 116 :
+  117 120 u32
+  121 124 end
+  125 129 pair
+  131 136 takes
+  136 137 :
+  138 139 (
+  139 140 a
+  140 141 :
+  142 143 [
+  143 144 3
+  145 147 <<
+  148 149 1
+  149 150 ]
+  150 152 u8
+  152 153 )
+  154 156 ->
+  157 161 none
+  162 163 =
+  168 171 mut
+  172 177 local
+  177 178 :
+  179 180 [
+  180 181 2
+  182 183 *
+  184 191 alignof
+  192 197 usize
+  197 198 ]
+  198 200 u8
+  201 202 =
+  203 209 zeroed
+  214 215 _
+  216 217 =
+  218 223 local
+  228 229 _
+  230 231 =
+  232 233 a
+  234 237 end
+  238 243 takes
 file negative/array-lent-refusals/main.ldn tokens 123
   284 288 fill
   288 289 :
@@ -46166,37 +46273,6 @@ file negative/assembly-reserved-registers-x86-64/program.ldn tokens 57
   224 225 )
   226 229 end
   230 231 f
-file negative/assembly-rv32-zero-register/program.ldn tokens 30
-  0 10 store_zero
-  10 11 :
-  12 13 (
-  13 14 )
-  15 17 ->
-  18 22 none
-  23 24 =
-  29 38 assembler
-  38 39 .
-  39 44 block
-  44 45 (
-  45 61 "sw zero, 4(t0)"
-  61 62 )
-  63 66 end
-  67 77 store_zero
-  79 92 write_counter
-  92 93 :
-  94 95 (
-  95 96 )
-  97 99 ->
-  100 104 none
-  105 106 =
-  111 120 assembler
-  120 121 .
-  121 126 block
-  126 127 (
-  127 152 "csrrw zero, cycle, zero"
-  152 153 )
-  154 157 end
-  158 171 write_counter
 file negative/assembly-rv64-system-call/program.ldn tokens 96
   216 219 pid
   219 220 :
@@ -86498,7 +86574,7 @@ file negative/payload-alias-outlives-a-loop-match/main.ldn tokens 286
   1924 1929 while
   1930 1933 end
   1934 1946 inside_value
-file negative/placement-of-a-generic-routine/program.ldn tokens 70
+file negative/placement-of-a-generic-routine/program.ldn tokens 72
   0 6 device
   6 7 :
   8 12 type
@@ -86526,49 +86602,51 @@ file negative/placement-of-a-generic-routine/program.ldn tokens 70
   74 80 device
   82 86 link
   86 87 (
-  87 94 section
-  94 95 :
-  96 113 ".ramtext.handle"
-  113 114 )
-  115 121 handle
-  121 122 :
-  123 124 (
-  124 128 port
-  128 129 :
-  130 134 type
-  135 137 is
-  138 144 device
-  144 145 ,
-  146 151 bytes
-  151 152 :
-  153 154 [
-  154 155 ]
-  155 157 u8
-  157 158 ,
-  201 202 p
-  202 203 :
-  204 208 port
-  208 209 )
-  210 212 ->
-  213 217 none
-  218 219 =
-  224 227 for
-  228 232 byte
-  233 235 in
-  236 241 bytes
-  242 244 do
-  253 257 port
-  257 258 .
-  258 261 put
-  261 262 (
-  262 263 p
-  263 264 ,
-  265 269 byte
-  269 270 )
-  275 278 end
-  279 282 for
-  283 286 end
-  287 293 handle
+  87 91 keep
+  91 92 ,
+  93 100 section
+  100 101 :
+  102 119 ".ramtext.handle"
+  119 120 )
+  121 127 handle
+  127 128 :
+  129 130 (
+  130 134 port
+  134 135 :
+  136 140 type
+  141 143 is
+  144 150 device
+  150 151 ,
+  200 205 bytes
+  205 206 :
+  207 208 [
+  208 209 ]
+  209 211 u8
+  211 212 ,
+  213 214 p
+  214 215 :
+  216 220 port
+  220 221 )
+  222 224 ->
+  225 229 none
+  230 231 =
+  236 239 for
+  240 244 byte
+  245 247 in
+  248 253 bytes
+  254 256 do
+  265 269 port
+  269 270 .
+  270 273 put
+  273 274 (
+  274 275 p
+  275 276 ,
+  277 281 byte
+  281 282 )
+  287 290 end
+  291 294 for
+  295 298 end
+  299 305 handle
 file negative/placement-on-a-hosted-target/program.ldn tokens 15
   0 4 link
   4 5 (

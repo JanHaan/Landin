@@ -6177,9 +6177,25 @@ package body Landin.Tests.Checking_Suite is
         ("flag: bool = true" & LF
          & "bad: type (t: type) = [flag]t" & LF,
          "this module value is not a fixed count: its image is not an"
-         & " integer folded from literals, compiler facts and other"
-         & " immutable module integers",
+         & " integer folded from literals, compiler facts, `sizeof` of a"
+         & " scalar type and other immutable module integers",
          "a module value that is no count is identified as such");
+      --  D1321: `sizeof` of a declared type needs its layout, so it is
+      --  no count, and neither is a module value whose image measures one.
+      Check_Rejected_Message
+        ("pair: type = struct" & LF & "    a: u32" & LF & "end pair" & LF
+         & "bad: type (t: type) = [sizeof pair]t" & LF,
+         "`sizeof` folds in a fixed expression for a scalar type only, and"
+         & " this type's size is its checked layout's",
+         "sizeof of a declared type is no fixed count");
+      Check_Rejected_Message
+        ("pair: type = struct" & LF & "    a: u32" & LF & "end pair" & LF
+         & "measured: usize = sizeof pair" & LF
+         & "bad: type (t: type) = [measured]t" & LF,
+         "this module value is not a fixed count: its image is not an"
+         & " integer folded from literals, compiler facts, `sizeof` of a"
+         & " scalar type and other immutable module integers",
+         "a module value measuring a declared type is no fixed count");
       Check_Rejected
         ("size: () -> (n: u32) = n = 4 end size" & LF
          & "bad: type (t: type) = [size()]t" & LF,

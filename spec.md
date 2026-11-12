@@ -325,7 +325,8 @@ another name.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
-and `%`.
+and `%`; D438 adds immutable module integers, and D1321 compiler facts and
+`sizeof` of a scalar type, each at the selected target's value.
 The element is a type like any other. A parameterized alias or nominal struct
 is a type position through its fully applied positional application. D135
 substitutes an alias during checking; D137 interns a struct application by its
@@ -2402,7 +2403,7 @@ A register is a name the selected target's table answers for, never text:
 | `float` chooses from | `d0`–`d7` with the unit | `xmm0`–`xmm15` | `v0`–`v7`, `v16`–`v31` | `f0`–`f7`, `f10`–`f17`, `f28`–`f31` | none |
 | every ordinary block overwrites | `r0`–`r7`, flags, and with the unit the `float` row and FPSCR's flags | the `general` and `float` rows, flags | the `general` and `float` rows, flags | the `general` and `float` rows | the `general` row |
 | saved by the routine when a block names one | `d8`–`d15` with the unit | `rbx`, `r12`–`r15` | `x19`–`x28`, `v8`–`v15` | `x9`, `x18`–`x27`, `f8`, `f9`, `f18`–`f27` | `x9`, `x18`–`x27` |
-| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30` | `x0`–`x4`, `x8` and their aliases | `x0`–`x4`, `x8` and their aliases |
+| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30` | `x1`–`x4`, `x8` and their aliases; `x0` by an operand | `x1`–`x4`, `x8` and their aliases; `x0` by an operand |
 
 A fixed register is its full-width name; `general` and `float` are the two
 classes, spelled the same on every target, and each asks the compiler to
@@ -2423,7 +2424,11 @@ operand must be written in the text, and every register the text names at
 any width must be declared or overwritten and never be one no block names.
 Frame pointers, stack pointers, link registers, the platform register and
 Cortex-M0's reserved r9 are therefore never named, and no register is
-reserved by the language beyond them. arm64's `v8`–`v15`, whose low halves
+reserved by the language beyond them. RISC-V's `x0`, `zero`, reads as zero
+and discards every write, so an ordinary block's text may name it as a
+source or a destination, as in `sw zero, 4(t0)` or `csrrw zero, mscratch,
+zero`; no operand names it, since an input there would be lost and an
+output would read zero (D1320). arm64's `v8`–`v15`, whose low halves
 AAPCS64 preserves, and RV64's `f8`, `f9` and `f18`–`f27` (`fs0`–`fs11`)
 are declared as the saved integer registers are, at whatever width the text
 names them: `d8`, `s8` and `q8` are all `v8`, x86-64's `ymm3` and `zmm3`
@@ -6439,7 +6444,10 @@ bitwise, complement and shift operations need an operand width and are not in
 this target-independent fold. A runtime or storage name is not a fixed formal;
 a type formal or another non-value name is diagnosed as such rather than called
 runtime storage. D438 later admits an immutable module integer whose own image
-is in this fold, and refuses a `mut` one as storage the program may write. A call is syntactically valid in the brackets but is not a fixed expression:
+is in this fold, and refuses a `mut` one as storage the program may write.
+D1321 admits an integer compiler fact and `sizeof` of a scalar type, which the
+selected target answers before checking. A call is syntactically valid in the
+brackets but is not a fixed expression:
 the compiler rejects it and never executes its body. No other expression form
 is admitted, and an implementation becoming better at ordinary constant
 folding does not enlarge this set.
@@ -7038,12 +7046,15 @@ selects arms before checking begins, so the count is fixed before any type is
 interned, exactly as a type alias a `fixed if` selects per target already
 is; type identity has depended on the selected target since D139. D136's
 objection, a fold at a target's width, does not arise: the fold stays
-mathematical. A fact written in the brackets themselves is not admitted;
-D437 admits facts in module values, and the bound names the value.
+mathematical. A fact written in the brackets themselves was not admitted
+here, the bound naming a module value that holds it; D1321 admits it, and
+`sizeof` of a scalar type, in the bound and in the image.
 
 **Why not more:** a module value admits more than D136's fold, measurements,
 conversions and wrapping arithmetic among it, and admitting those in a bound
 would carry target-width answers into type identity, which D136 declined.
+D1321 later admits the one measurement whose answer the target gives before
+checking, `sizeof` of a scalar type.
 
 **The alternatives:** keeping the refusal and naming the type-alias route in
 L0305's note; and admitting any module value the ordinary folder knows, which
@@ -7052,6 +7063,46 @@ moves a bound's legality with D224's folder. Both were declined.
 **Pinned by** `runtime/fixed-array-bound-module-constant` on every target,
 Cortex-M0 included, `negative/fixed-array-bound-module-value` and the checker
 case `invalid parameterized templates are checked when unused`.
+
+### D1321 — An array length reads a compiler fact and `sizeof` of a scalar
+
+**The tour said** at [0520] that a length is a constant the compiler works
+out without running anything, and at [1500] that `compiler.word_size` is a
+fixed fact. D136 closed the bound's fold over literals, fixed formals and
+mathematical arithmetic; D437 let a module value read a fact and D438 let a
+bound name such a value, so `[2 * 128 * compiler.word_size]u8` was L0203,
+whose note sent the fact through a module value, and `[2 * 1024 * sizeof
+usize]u8` was L0305, "not one of the closed fixed-expression forms".
+
+**Chosen:** an array length, wherever its type is written, a routine body,
+a signature, a struct field and an alias template included, may read an
+integer compiler fact (`compiler.word_size`, `compiler.cache_line`) and
+`sizeof` of a built-in scalar type, directly, and so may the image of a
+module integer D438 counts. Each folds as the literal it stands for: the
+fact is the value configuration found for the selected target once it chose
+the arms, and the size is that target's storage size of the scalar, so a
+32-bit target's `[sizeof usize]u8` is `[4]u8` on a 64-bit host. Both are
+known before checking begins, exactly as the selected arm of a `fixed if`
+is, and type identity has depended on the target since D139. A bool fact
+in a length is refused as no count, an atom fact alone stays L0203, and
+every other measurement, `sizeof` of a declared type, a fixed array or a
+type formal, and `alignof` of anything, stays L0305 with a message that
+says what folds. A fixed actual of a type application is still an integer
+literal or a forwarded fixed formal (D135), and a routine body still reads
+no fact as a value.
+
+**The alternatives:** keeping the module-value route that D438 named, which
+makes every stack buffer sized by the word declare a module value first;
+admitting `alignof` of a scalar too, which nothing has asked for; and
+admitting any measurement the checker can answer, which would make a bound
+wait for a declared type's layout and move type identity with it.
+
+**Pinned by** `runtime/array-length-reads-facts-and-sizeof` on every
+product target, Cortex-M0 included;
+`positive/array-length-facts-at-the-target-width`, which holds
+`[sizeof usize]u8` to `[4]u8` on `synthetic-32` and to `[8]u8` on the
+64-bit targets; and
+`negative/array-length-refusals-are-reported-once`.
 
 ## DECISIONS: DECLARED TYPES, RANGES AND LAYOUT
 
@@ -17450,9 +17501,9 @@ A fact folds into the static image as the literal it stands for; it has no
 origin, storage or address. It may stand anywhere in a module binding's image,
 an array or record image included.
 
-A routine body, an anonymous one included, still reads no fact: L0203, whose
-note names the module value that holds it, which the body reads and branches
-on with an ordinary `if`. An atom fact alone, `compiler.os`, is L0203 in
+A routine body, an anonymous one included, still reads no fact outside an
+array length (D1321): L0203, whose note names the module value that holds
+it, which the body reads and branches on with an ordinary `if`. An atom fact alone, `compiler.os`, is L0203 in
 either place, and `compiler.os == linux` in a body is that one report rather
 than a second on `linux`. Options stay configuration-only (D202); reading one
 as a module value is a separate decision no program has asked for. D438
@@ -23651,6 +23702,36 @@ jump and an ordinary `wfi` and `general` operand and refuses an ordinary
 `j`, an ordinary `ecall` and a float operand as diagnostics, and
 `backend/rv32 verifier refuses invalid registers`.
 
+### D1320 — An ordinary RISC-V block's text names x0 to read and to write
+
+**The tour said** nothing of x0. [1990]'s table listed `x0`–`x4` and `x8`
+as never named on RV64 and RV32, so `sw zero, 4(t0)` and `csrrw zero,
+cycle, zero` were L0330, and the refusal's note sent a zero source through
+a scratch register loaded with `li t1, 0` and a CSR write through the
+`csrw` pseudo-instruction, which assembles to the same `csrrw x0`.
+
+**Chosen:** an ordinary block's text on RV64 and RV32 may name `x0` or
+`zero` as a source and as a destination. x0 reads as zero and discards
+writes, so naming it overwrites nothing the routine keeps and cannot break
+the register-allocation contract an ordinary block's other rules protect:
+the compiler neither saves it nor chooses it for `general`. An operand still
+never names it, to read or to write: an `in` operand at x0 would lose its
+value and an `out` would always read zero, so `in v: u32 at x0` stays L0330,
+whose note now says why and that the text names `zero` itself. The
+scratch-register and `csrw` notes are gone. A naked body named x0 before
+and still does.
+
+**The alternatives:** x0 admitted as a source only, which keeps refusing
+`csrrw zero, ...` and an `add zero, ...` that discards a result, though no
+write to x0 changes anything; an operand at x0 admitted too, which would
+let a declared input or output silently mean nothing; and the refusal kept
+with its notes.
+
+**Pinned by** `rv32 firmware/an ordinary block names x0 both ways`, which
+emits both forms for rv32 and refuses an operand at x0, and
+`runtime/assembly-zero-register`, which stores and adds through `zero` on
+RV64 under QEMU and on the RV32 lanes.
+
 ### D671 — RV32 is RV64's emitter at XLEN 32, with eight-byte values in pairs
 
 **The tour said** nothing of a 32-bit RISC-V emitter. D265 promised that
@@ -26523,9 +26604,9 @@ the device accesses each program makes are the ones it made before, in the
 same order, so the synthetic lane's exact application trace is unchanged.
 
 **The alternatives:** a concept with each program's port type conforming
-([1230], [1360]), whose generic `handle` the compiler refuses to place
-in RAM text, L0347, so that `handle` would have left the RAM text the lane
-checks; a module each
+([1230], [1360]), whose generic `handle` the compiler then refused to
+place in RAM text, L0347, so that `handle` would have left the RAM text
+the lane checks (D1322 later places every instance); a module each
 program supplies under one name in its first root ([1480]), which hides
 which device a program's loop drives behind the order of its roots; and a
 copy of the loop in each program, which leaves no shared outcome to
@@ -26535,6 +26616,45 @@ compare.
 at every profile, `environments/cortex-m/source_debug.py`'s stops in
 `handle` and through the application's `transmit`, and the RP2040 and
 STM32H753 board applications, which build with it.
+
+### D1322 — Every instance of a placed generic routine goes to its placement
+
+**The tour said** at [1640] that a `link(...)` annotation places a
+declaration in a section, at an alignment, in a region or in a vector
+slot, and at [1360] that a generic routine is compiled once for each
+instance. L0347 refused any placement of a generic routine, saying that
+one placement names one routine, so D645's shared command loop took
+function values to keep `handle` in RAM text.
+
+**Chosen:** on a firmware target, `link(section: ...)`, `link(align: ...)`
+and `link(region: ...)` on a generic routine place every instance of it:
+each instance the program makes is emitted in that section, at that
+alignment or in that region, as a nongeneric routine placed there would
+be, under its own instance name. The instances are made by calls, so a
+placed generic routine is no root of its own and one nothing calls places
+nothing. `link(vector: ...)` and `link(boot_stage)` name the one routine a
+slot or the boot kind enters, and `keep` retains a routine no call
+reaches, so a generic routine takes none of them: L0347, naming the
+generic parameter and the nongeneric routine that calls it. A hosted
+target places nothing, a generic routine included, as before. The build
+and stack reports list each instance as they list an unplaced one. An
+evidence adapter the compiler makes for an instance that is itself a
+conformance's provider is not an instance and is not placed.
+
+**The alternatives:** keeping the refusal, which leaves a device-neutral
+routine in RAM text to a function value or a nongeneric wrapper; placing
+only the instances some annotation names, which needs a syntax for
+naming an instance that no program has asked for; and refusing a section
+that already holds another routine, which would refuse a placement that
+links as the same section a nongeneric routine's would.
+
+**Pinned by** `driver/a placed generic routine places every instance`,
+which emits both instances of a generic routine in its RAM text section
+on Cortex-M0 and RV32, both at its alignment, and refuses `keep` and the
+hosted placement; `environments/cortex-m/firmware.py`'s `veneers` case,
+whose two instances the link map puts in copied RAM text, inside the
+`.ramtext.relay` input section, where they run at every profile; and
+`negative/placement-of-a-generic-routine`.
 
 ### D646 — The board tools share one module and keep their own oracles
 
@@ -27705,6 +27825,9 @@ reference's script is still D229's byte for byte.
 to ten times, and a location-counter symbol after the last section, which
 the linker does not keep per region.
 
+D1323 later holds a developer's script to the same rule, in D546's
+third clause.
+
 **Pinned by** `rv32 firmware/the derived script guards its placements`,
 the assertion on `.rodata` for a stack that shares its region with code
 and constants alone. The review's description of that shape, which linked,
@@ -27738,8 +27861,8 @@ bytes is the sections' alignment.
 which gives up the STM32H753's ITCM, memory a program has reason to use,
 for the sake of its first word; and changing the carrier or the union's
 representation, which every backend and every by-value call would pay for.
-A developer's own `--linker-script` is not yet held to the rule; D546's
-contract reads the image's segments, not where its symbols lie.
+D1323 later holds a developer's own `--linker-script` to the rule, as
+D546's fifth clause.
 
 **Pinned by** `rv32 firmware/the derived script guards its placements`,
 the padding in the data and BSS sections of a region at zero and its
@@ -27790,7 +27913,7 @@ each alone.
 `OUT.ld`, which refine still writes beside the image. It is refused
 unless the request is `--target=cortex-m0 --firmware-entry=NAME
 --emit=exe`. refine does not parse the script: after the link it reads the
-ELF and holds it to four clauses, in order, and a broken one is L0519
+ELF and holds it to five clauses, in order, and a broken one is L0519
 naming it, the executable is removed and the derived script is offered:
 
 1. the vector table: `_landin_firmware_vectors` at the profile's boot
@@ -27804,9 +27927,12 @@ naming it, the executable is removed and the derived script is offered:
    stack's two, and each used region's;
 3. the stack: in a writable region of the description, its top aligned to
    eight bytes, its size the description's, and no data, RAM code or BSS
-   reaching into it;
+   reaching into it, nor any other allocated section with content, the
+   vector table, text and read-only data among them (D1114, D1323);
 4. the initialized images: each load image of data, RAM code and a used
-   writable region in the region text is placed in, held in the file.
+   writable region in the region text is placed in, held in the file;
+5. address zero: no datum or routine at address zero, where a pointer is
+   null (D1115, D1323).
 
 **The alternatives:** parsing the script, which is the linker's language
 and changes with it; trusting a developer's script unchecked, which lets an
@@ -27816,6 +27942,43 @@ which the developer's ownership of the linker does not wait for.
 **Pinned by** `environments/cortex-m/descriptions.py`, which links with a
 copy of the derived script and with one breaking each clause, each refused
 naming its clause.
+
+### D1323 — A developer's linker script keeps the stack and address zero as the derived one does
+
+**The tour said** nothing; D546 held a developer's `--linker-script`
+image to four clauses, whose third named data, RAM code and BSS, and
+D1114 and D1115 then made the derived script keep text and read-only
+data off the reserved stack and every datum off address zero. A
+developer's script could still link constants into the stack or a datum
+at zero, and refine accepted the image.
+
+**Chosen:** refine reads the linked image against both rules, as it reads
+the other clauses, and refuses an image that breaks one with L0519. The
+third clause, the stack, also holds every allocated section with content
+clear of the reservation: the vector table, text, read-only data, unwind
+tables and any section a script adds, named in the message; a section
+without content, such as one a script reserves the stack with, is not
+the image's and is not held. A fifth clause, address zero, refuses a
+datum or a routine, a symbol the image types as an object or a function,
+at address zero, naming it; the startup symbols, the vector table's
+among them, and the linker's own labels are not the program's. The
+derived script keeps both, so the images it links are unchanged, and a
+RAM layout's image is held to the fifth clause as it is to the others
+(D900), its third already reading every allocated section.
+
+**The alternatives:** parsing the script for its section order, which
+D546 declined; holding a developer's script to the derived script's
+padding itself, the first eight bytes of a section at zero, rather than
+to where the program's symbols lie, which would refuse a script that
+starts the region with something else; and a new code, where L0519
+already names each clause of the same contract.
+
+**Pinned by** `end-to-end/firmware-linker-script-reaches-the-stack` and
+`end-to-end/firmware-linker-script-places-at-zero`, images the pinned Arm
+driver linked with a script breaking each rule and refused naming it,
+and `environments/cortex-m/descriptions.py`'s contract case, which links
+RP2040 constants into its stack and an STM32H753 ITCM datum at zero and
+refuses each.
 
 ### D900 — A RAM firmware layout is derived from the same device description
 
@@ -28593,7 +28756,7 @@ no segment carries bytes that are not the program's, and asserts the entry word'
 size, the table's, and a stack top aligned to sixteen bytes. On `rv32`,
 `--emit=linker-script` writes it without an emitter, so a harness has every
 profile's script before the backend emits. D546 holds a developer's script
-on `rv32` to the same four clauses, the first reading the entry word as a
+on `rv32` to the same clauses, the first reading the entry word as a
 jump to reset or the stage, the third the sixteen-byte alignment. D537's
 budget reads the profile as on Cortex-M; a text and data region that are
 the same SRAM, as an ESP32's may be, counts every segment in it as static

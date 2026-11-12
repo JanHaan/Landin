@@ -36,8 +36,10 @@ package Landin.Build_Reports.Firmware is
    --  jumping to reset or the stage (D686), and the second stage or the
    --  image block its boot kind gives; 2, every `_landin_firmware_*`
    --  symbol startup reads; 3, the stack in a writable region, of the
-   --  description's size and clear of the image's RAM; 4, each
-   --  initialized image's load address in the region text is placed in.
+   --  description's size and clear of the image's RAM and of every
+   --  section with content (D1114); 4, each initialized image's load
+   --  address in the region text is placed in; 5, no datum or routine at
+   --  address zero (D1115).
    function Contract_Fault
      (Host : Landin.Platform.Filesystem'Class;
       Executable : String;
