@@ -33,6 +33,12 @@ support fails, with no skipped higher-level verdict. The emulated `max`
 CPU's confirmed LSE supplies the capable arm64 execution lane.
 
 Runtime and ABI selection reads fixture metadata and fails when empty.
+Each program runs under `timeout 60` through `group_leader.c`, built
+with the payload, which makes it the leader of a process group of its
+own before it starts, as the test program and Darwin's parity runner
+start every program; timeout(1) would otherwise lead the group, and
+`runtime/posix-kill-group`, which signals its own group only when it
+leads one, would stop with status 2.
 The two I/O fixtures that use Linux `/sys` and `/dev/full` reuse the existing
 portable C fault-endpoint adapter with ELF interposition names; ordinary paths
 reach FreeBSD libc through its documented

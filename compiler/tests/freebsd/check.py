@@ -433,7 +433,8 @@ class Lane:
             out, err, status = (str(path) + suffix for suffix in ('.stdout', '.stderr', '.status'))
             redirection = '2>&1' if meta.get('stream', 'merged') == 'merged' else '2>' + shlex.quote(err)
             given = shlex.quote(str(self.standard_input(result)))
-            script += [f'timeout 60 {command} <{given} >{shlex.quote(out)} {redirection}',
+            leader = shlex.quote(str(self.remote_bundle / 'group_leader'))
+            script += [f'timeout 60 {leader} {command} <{given} >{shlex.quote(out)} {redirection}',
                        f'echo $? >{shlex.quote(status)}']
         remote_results = self.remote_prefix + '-results.tar.gz'
         remote_script = self.remote_prefix + '-execute.sh'
@@ -632,6 +633,10 @@ def build_payload(lane):
     if args.kind == 'debugger':
         return lane.build_debugger()
     lane.command([*lane.cc, HERE / 'processor.c', '-O2', '-o', lane.bundle / 'processor'], 'processor-build')
+    #  Every program runs as its own process group's leader, as the other
+    #  lanes' runners start it; see group_leader.c.
+    lane.command([*lane.cc, HERE / 'group_leader.c', '-O2', '-o', lane.bundle / 'group_leader'],
+                 'group-leader-build')
     lane.assembler_control()
     # The source verdicts are not per fixture, so the first shard owns them.
     if args.kind == 'runtime' and not args.case and (not args.shard or args.shard[0] == 1):
