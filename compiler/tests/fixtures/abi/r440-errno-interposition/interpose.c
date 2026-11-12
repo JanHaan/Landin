@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -11,7 +12,9 @@
  * The link resolves platform/libc's undefined libc references to these
  * functions.  Landin's hosted/system and hosted/blocking therefore still
  * call open, read and their siblings exactly as they call the C library;
- * only the endpoint is scripted.
+ * only the endpoint is scripted.  An open to read asks the status of what
+ * it opened (D1276), so fstat is scripted with them: the fake descriptors
+ * name no file the C library could describe.
  */
 
 enum scenario {
@@ -36,6 +39,7 @@ static unsigned int open_calls;
 static unsigned int read_calls;
 static unsigned int write_calls;
 static unsigned int close_calls;
+static unsigned int status_calls;
 static const char *first_path;
 static int first_flags;
 static mode_t first_mode;
@@ -84,6 +88,7 @@ void r440_errno_select(int32_t scenario_number)
     read_calls = 0;
     write_calls = 0;
     close_calls = 0;
+    status_calls = 0;
     first_path = NULL;
     first_flags = 0;
     first_mode = (mode_t)0;
@@ -376,6 +381,24 @@ int __wrap_close(int descriptor)
     return -1;
 }
 
+int __wrap_fstat(int descriptor, struct stat *status)
+{
+    ++status_calls;
+
+    /* Only the open to read asks, once, of the descriptor its retry gave,
+       and is answered with an ordinary file. */
+    if (selected == OPEN_READ_RETRY && status_calls == 1
+        && open_calls == 2 && descriptor == 101) {
+        memset(status, 0, sizeof *status);
+        status->st_mode = S_IFREG | 0644;
+        return 0;
+    }
+
+    mark_fault(120);
+    errno = EBADF;
+    return -1;
+}
+
 int32_t r440_errno_check(int32_t scenario_number)
 {
     static const unsigned char expected[6] = {10, 20, 30, 40, 50, 60};
@@ -389,6 +412,9 @@ int32_t r440_errno_check(int32_t scenario_number)
 
     switch (selected) {
     case OPEN_READ_RETRY:
+        return open_calls == 2 && status_calls == 1 && close_calls == 1
+               ? 0
+               : 91;
     case OPEN_WRITE_RETRY:
         return open_calls == 2 && close_calls == 1 ? 0 : 91;
     case READ_PARTIAL_EOF:

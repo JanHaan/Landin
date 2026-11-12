@@ -20,7 +20,8 @@ public main: () -> (code: i32) =
     state: blocking.host = blocking.new()
 
     --  A read-only open retries EINTR with the identical path and flags.  The
-    --  successful retry leaves no stale detail, and its fake handle is closed.
+    --  successful retry asks its descriptor's status once, leaves no stale
+    --  detail, and its fake handle is closed.
     r440_errno_select(1)
     read_file: io.file = io.open_read(state, text.host_over(read_path)) else (problem)
         _ = problem
