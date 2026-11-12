@@ -161,6 +161,7 @@ class Callers(unittest.TestCase):
             text = path.read_text(encoding="utf-8", errors="replace")
             if re.search(r"add_argument\(\s*['\"]--refine['\"]", text) \
                     and "refine_revision.warn(" not in text \
+                    and "common.warn_stale_refine(args)" not in text \
                     and relative != "scripts/refine_revision.py":
                 missing.append(relative)
         self.assertEqual(missing, [], "these take --refine and never ask"

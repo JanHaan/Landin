@@ -929,6 +929,20 @@ def verify_ram_helper(args):
     return identity
 
 
+def warn_stale_refine(args) -> None:
+    """Say when the refine a tool builds with is not this checkout's.
+
+    Only a tool that builds from the checkout has a compiler to ask: a
+    prepared bundle is the rig's case, where the board legs and run.py
+    run a tool with neither the compiler nor scripts/ beside it, and the
+    bundle's identity was checked against the checkout that built it."""
+    if getattr(args, 'bundle', None) or not getattr(args, 'refine', None):
+        return
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import refine_revision
+    refine_revision.warn(args.refine)  # is it this checkout's?
+
+
 def board_preflight(args, board):
     """Pure preflight, before taking the lock or touching USB."""
     if board.startswith('rp'):
