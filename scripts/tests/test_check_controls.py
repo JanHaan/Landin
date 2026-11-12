@@ -541,7 +541,9 @@ PINS = ["environments/linux-amd64/Containerfile",
         "highlight/tree-sitter/package-lock.json",
         #  The Cortex-M lane's arm-elf archive's two readers.
         "flake.nix",
-        "environments/cortex-m/setup.py"]
+        "environments/cortex-m/setup.py",
+        #  The workflow that runs the pinned actionlint.
+        ".github/workflows/gate.yml"]
 
 
 class PinnedToolchain(unittest.TestCase):
@@ -657,6 +659,33 @@ class PinnedToolchain(unittest.TestCase):
                  "names LANDIN_TREE_SITTER_SHA256_X86_64_LINUX's 9ce8")):
             with self.subTest(fragment=fragment), tree(copied=copied) as root:
                 path = root / "flake.nix"
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new, 1))
+                said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
+        #  The workflows' actionlint: recorded, read by the shell from the
+        #  pins, and run by the gate through the script that reads them.
+        for relative, old, new, fragment in (
+                ("environments/pins.sh", "LANDIN_ACTIONLINT_SHA256_AARCH64_LINUX=325e",
+                 "LANDIN_ACTIONLINT_SHA256_AARCH64_LINUX=025e",
+                 "LANDIN_ACTIONLINT_SHA256_AARCH64_LINUX 025e"),
+                ("environments/pins.sh", "LANDIN_ACTIONLINT_VERSION=",
+                 "LANDIN_ACTIONLINT_RELEASE=", "LANDIN_ACTIONLINT_VERSION is not pinned"),
+                ("flake.nix", 'pin "LANDIN_ACTIONLINT_SHA256_${suffix}"',
+                 '"8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"',
+                 "does not take the shell's actionlint"),
+                ("flake.nix", 'actionlintVersion = pin "LANDIN_ACTIONLINT_VERSION";',
+                 'actionlintVersion = pin "LANDIN_ACTIONLINT_VERSION"; # 1.7.12',
+                 "names LANDIN_ACTIONLINT_VERSION's 1.7.12 literally"),
+                (".github/workflows/gate.yml", "python3 scripts/actionlint.py --install",
+                 "actionlint",
+                 "the gate does not run the pinned actionlint"),
+                (".github/workflows/gate.yml", "python3 scripts/actionlint.py --install",
+                 "ACTIONLINT=1.7.12 python3 scripts/actionlint.py --install",
+                 "gate.yml names LANDIN_ACTIONLINT_VERSION's 1.7.12 literally")):
+            with self.subTest(fragment=fragment), tree(copied=copied) as root:
+                path = root / relative
                 text = path.read_text()
                 self.assertIn(old, text)
                 path.write_text(text.replace(old, new, 1))

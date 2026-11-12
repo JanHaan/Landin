@@ -514,6 +514,38 @@
             '';
           };
 
+          #  The workflows' linter: the release binary actionlint publishes
+          #  for the pinned version, checked against the sha256
+          #  environments/pins.sh holds for this system -- the binary
+          #  scripts/actionlint.py fetches for the gate's scripts job.  It
+          #  is a static Go program, so nothing is patched.
+          actionlintVersion = pin "LANDIN_ACTIONLINT_VERSION";
+          actionlintAsset =
+            {
+              x86_64-linux = "linux_amd64";
+              aarch64-linux = "linux_arm64";
+              aarch64-darwin = "darwin_arm64";
+            }
+            .${system};
+          actionlint = pkgs.stdenvNoCC.mkDerivation {
+            pname = "landin-actionlint";
+            version = actionlintVersion;
+            src = pkgs.fetchurl {
+              url =
+                "${pin "LANDIN_ACTIONLINT_RELEASES"}/v${actionlintVersion}/"
+                + "actionlint_${actionlintVersion}_${actionlintAsset}.tar.gz";
+              sha256 = pin "LANDIN_ACTIONLINT_SHA256_${suffix}";
+            };
+            sourceRoot = ".";
+            dontConfigure = true;
+            dontBuild = true;
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 actionlint "$out/bin/actionlint"
+              runHook postInstall
+            '';
+          };
+
         in
         {
           #  The published compiler, fetched rather than built.
@@ -690,6 +722,9 @@
               #  The structural editor grammar's corpus, highlight/test.sh
               #  --integration, at the gate's pinned version.
               treeSitter
+              #  The workflows' linter, scripts/actionlint.py, at the
+              #  version the gate's scripts job runs.
+              actionlint
               #  stdenv's bash is built without readline, so it has no
               #  `compgen` or `complete` and a completion script run through
               #  `bash` fails here as it does on no contributor's system.

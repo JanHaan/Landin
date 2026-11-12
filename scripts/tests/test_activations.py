@@ -262,7 +262,9 @@ class Activations(unittest.TestCase):
         for path, wanted in (("compiler/tests/fixtures/positive/x/program.ldn", "editor grammar"),
                              ("spec.md", "editor grammar"),
                              ("environments/pins.sh", "the flake"),
-                             ("flake.lock", "the flake")):
+                             ("flake.lock", "the flake"),
+                             (".github/actionlint.yaml", "actionlint"),
+                             ("scripts/actionlint.py", "actionlint")):
             with self.subTest(path=path):
                 self.assertIn(wanted, self.listed(path)[1])
         self.assertNotIn("The changes reach", self.listed("scripts/debug.sh")[1])

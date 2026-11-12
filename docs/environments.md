@@ -382,7 +382,9 @@ there.
 The shell also holds the editor grammar's tree-sitter CLI, the release
 binary of the version `environments/pins.sh` pins, checked against its
 checksum for each of the three systems, so `highlight/test.sh --integration`
-runs in it without `npm`. Its `bash` is nixpkgs' interactive one, because
+runs in it without `npm`, and actionlint likewise, the release binary
+`scripts/actionlint.py` holds the workflows to, as the gate's scripts job
+does. Its `bash` is nixpkgs' interactive one, because
 stdenv's has no `compgen` or `complete` and the completion case of
 `scripts/tests/test_cli_native.py` needs both. Its two `landin:` banner
 lines go to standard error, so `nix develop -c cmd > file` captures only

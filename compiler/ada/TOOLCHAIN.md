@@ -185,6 +185,28 @@ system's on `PATH`.
 | Linux arm64 | `tree-sitter-linux-arm64.gz` | `c8feeb32115958cb44442ca4d68f6d66cf7605dbd65681e62342181ebdd6db3b` |
 | macOS arm64 | `tree-sitter-macos-arm64.gz` | `e46725b2417c085b0761948abc0cc240bff6a3ab5d2128e3ad0de467ded3388d` |
 
+### Workflow linter
+
+The workflows are held to actionlint `1.7.12`, the release binary its
+publisher builds, pinned the same way as the editor grammar's CLI:
+`environments/pins.sh` names the version, the release URL and the archive
+checksums below. `scripts/actionlint.py` runs it over every file under
+`.github/workflows` with `.github/actionlint.yaml`, which names the two
+runner labels GitHub does not host, `landin-rig` and RISE's
+`ubuntu-24.04-riscv`. It refuses an actionlint of another version, and it
+turns off the shellcheck and pyflakes passes actionlint makes when it finds
+those programs, so the verdict does not depend on what a host's `PATH`
+holds. The gate's scripts job runs `python3 scripts/actionlint.py --install
+DIR`, which fetches the Linux x86-64 archive and verifies it before
+unpacking it; `nix develop` puts its own system's on `PATH`. Outside the
+shell, a missing actionlint is refused with both routes.
+
+| platform | archive | sha256 |
+|---|---|---|
+| Linux x86-64 | `actionlint_1.7.12_linux_amd64.tar.gz` | `8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8` |
+| Linux arm64 | `actionlint_1.7.12_linux_arm64.tar.gz` | `325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6` |
+| macOS arm64 | `actionlint_1.7.12_darwin_arm64.tar.gz` | `aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f` |
+
 ## Warning and style policy
 
 Set once, in `compiler/ada/landin_common.gpr`, and inherited by every project:
