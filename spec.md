@@ -27825,6 +27825,9 @@ reference's script is still D229's byte for byte.
 to ten times, and a location-counter symbol after the last section, which
 the linker does not keep per region.
 
+D1323 later holds a developer's script to the same rule, in D546's
+third clause.
+
 **Pinned by** `rv32 firmware/the derived script guards its placements`,
 the assertion on `.rodata` for a stack that shares its region with code
 and constants alone. The review's description of that shape, which linked,
@@ -27858,8 +27861,8 @@ bytes is the sections' alignment.
 which gives up the STM32H753's ITCM, memory a program has reason to use,
 for the sake of its first word; and changing the carrier or the union's
 representation, which every backend and every by-value call would pay for.
-A developer's own `--linker-script` is not yet held to the rule; D546's
-contract reads the image's segments, not where its symbols lie.
+D1323 later holds a developer's own `--linker-script` to the rule, as
+D546's fifth clause.
 
 **Pinned by** `rv32 firmware/the derived script guards its placements`,
 the padding in the data and BSS sections of a region at zero and its
@@ -27910,7 +27913,7 @@ each alone.
 `OUT.ld`, which refine still writes beside the image. It is refused
 unless the request is `--target=cortex-m0 --firmware-entry=NAME
 --emit=exe`. refine does not parse the script: after the link it reads the
-ELF and holds it to four clauses, in order, and a broken one is L0519
+ELF and holds it to five clauses, in order, and a broken one is L0519
 naming it, the executable is removed and the derived script is offered:
 
 1. the vector table: `_landin_firmware_vectors` at the profile's boot
@@ -27924,9 +27927,12 @@ naming it, the executable is removed and the derived script is offered:
    stack's two, and each used region's;
 3. the stack: in a writable region of the description, its top aligned to
    eight bytes, its size the description's, and no data, RAM code or BSS
-   reaching into it;
+   reaching into it, nor any other allocated section with content, the
+   vector table, text and read-only data among them (D1114, D1323);
 4. the initialized images: each load image of data, RAM code and a used
-   writable region in the region text is placed in, held in the file.
+   writable region in the region text is placed in, held in the file;
+5. address zero: no datum or routine at address zero, where a pointer is
+   null (D1115, D1323).
 
 **The alternatives:** parsing the script, which is the linker's language
 and changes with it; trusting a developer's script unchecked, which lets an
@@ -27936,6 +27942,43 @@ which the developer's ownership of the linker does not wait for.
 **Pinned by** `environments/cortex-m/descriptions.py`, which links with a
 copy of the derived script and with one breaking each clause, each refused
 naming its clause.
+
+### D1323 — A developer's linker script keeps the stack and address zero as the derived one does
+
+**The tour said** nothing; D546 held a developer's `--linker-script`
+image to four clauses, whose third named data, RAM code and BSS, and
+D1114 and D1115 then made the derived script keep text and read-only
+data off the reserved stack and every datum off address zero. A
+developer's script could still link constants into the stack or a datum
+at zero, and refine accepted the image.
+
+**Chosen:** refine reads the linked image against both rules, as it reads
+the other clauses, and refuses an image that breaks one with L0519. The
+third clause, the stack, also holds every allocated section with content
+clear of the reservation: the vector table, text, read-only data, unwind
+tables and any section a script adds, named in the message; a section
+without content, such as one a script reserves the stack with, is not
+the image's and is not held. A fifth clause, address zero, refuses a
+datum or a routine, a symbol the image types as an object or a function,
+at address zero, naming it; the startup symbols, the vector table's
+among them, and the linker's own labels are not the program's. The
+derived script keeps both, so the images it links are unchanged, and a
+RAM layout's image is held to the fifth clause as it is to the others
+(D900), its third already reading every allocated section.
+
+**The alternatives:** parsing the script for its section order, which
+D546 declined; holding a developer's script to the derived script's
+padding itself, the first eight bytes of a section at zero, rather than
+to where the program's symbols lie, which would refuse a script that
+starts the region with something else; and a new code, where L0519
+already names each clause of the same contract.
+
+**Pinned by** `end-to-end/firmware-linker-script-reaches-the-stack` and
+`end-to-end/firmware-linker-script-places-at-zero`, images the pinned Arm
+driver linked with a script breaking each rule and refused naming it,
+and `environments/cortex-m/descriptions.py`'s contract case, which links
+RP2040 constants into its stack and an STM32H753 ITCM datum at zero and
+refuses each.
 
 ### D900 — A RAM firmware layout is derived from the same device description
 
@@ -28713,7 +28756,7 @@ no segment carries bytes that are not the program's, and asserts the entry word'
 size, the table's, and a stack top aligned to sixteen bytes. On `rv32`,
 `--emit=linker-script` writes it without an emitter, so a harness has every
 profile's script before the backend emits. D546 holds a developer's script
-on `rv32` to the same four clauses, the first reading the entry word as a
+on `rv32` to the same clauses, the first reading the entry word as a
 jump to reset or the stage, the third the sixteen-byte alignment. D537's
 budget reads the profile as on Cortex-M; a text and data region that are
 the same SRAM, as an ESP32's may be, counts every segment in it as static

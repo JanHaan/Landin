@@ -1,0 +1,29 @@
+#!/bin/sh
+# A stand-in for the Cortex-M C driver, so that this fixture runs on a host
+# without one. It writes what the real driver wrote when the fixture was
+# made: assembled.o for the assembling step and linked.elf for the linking
+# step, each where its -o says, and an empty file for a step the fixture
+# holds no file for.
+here=$(dirname -- "$0")
+step=linked.elf
+output=
+previous=
+for argument
+do
+    case $argument in
+        -c) step=assembled.o ;;
+    esac
+    if [ "$previous" = -o ]; then
+        output=$argument
+    fi
+    previous=$argument
+done
+if [ -z "$output" ]; then
+    echo "driver: no -o names what to write" >&2
+    exit 1
+fi
+if [ -f "$here/$step" ]; then
+    cp "$here/$step" "$output"
+else
+    : > "$output"
+fi

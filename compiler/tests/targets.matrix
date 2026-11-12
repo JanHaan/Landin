@@ -93,6 +93,8 @@ end-to-end/feature-level-of-another-family | linux-x86-64
 end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
 end-to-end/firmware-archive-with-constructor | cortex-m0
 end-to-end/firmware-linker-script-breaks-contract | cortex-m0
+end-to-end/firmware-linker-script-places-at-zero | cortex-m0
+end-to-end/firmware-linker-script-reaches-the-stack | cortex-m0
 end-to-end/image-block-not-as-emitted | cortex-m0
 end-to-end/link-assembly-operand-dry-run | linux-x86-64
 end-to-end/link-firmware-archives-dry-run | cortex-m0

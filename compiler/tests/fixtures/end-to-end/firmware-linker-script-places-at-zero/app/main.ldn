@@ -1,0 +1,8 @@
+import board
+
+link(region: "ITCM") mut first: u32 = 7
+mut counted: u32 = 1
+
+start: () -> none =
+    counted += first
+end start

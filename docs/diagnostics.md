@@ -2133,8 +2133,10 @@ firmware image, breaks its checked layout contract (D546, D900). The
 message names the clause: the
 vector table at the description's boot address with its whole length, a
 `_landin_firmware_*` startup symbol missing, the stack outside a writable
-region of the description or of another size, or an initialized image whose
-load address is not in the region text is placed in. A description-owned
+region of the description, of another size or reached by a section of the
+image (D1114), an initialized image whose load address is not in the region
+text is placed in, or a datum or routine at address zero, where a pointer
+is null (D1115, D1323). A description-owned
 initialization stage is the reset-vector entry when present. In RAM layout,
 loaded sections must be in SRAM, their load and runtime addresses equal,
 and their ranges clear of the reserved stack. Change the script so the

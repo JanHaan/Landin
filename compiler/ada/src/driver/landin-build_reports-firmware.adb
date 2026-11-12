@@ -695,6 +695,8 @@ package body Landin.Build_Reports.Firmware is
 
          Required : US.Unbounded_String;
          Missing : US.Unbounded_String;
+         --  D1115: the first datum or routine the image places at zero.
+         At_Zero : US.Unbounded_String;
 
          procedure Need (Name : String);
          procedure Need (Name : String) is
@@ -780,14 +782,32 @@ package body Landin.Build_Reports.Firmware is
                               Name : constant String := Text_At
                                 (Strings + Natural
                                    (Word (Table + Symbol * 16)));
-                           begin
-                              if Name'Length > 17
+                              Address : constant Landin.Targets.Byte_Count :=
+                                Word (Table + Symbol * 16 + 4);
+                              Kind : constant Landin.Targets.Byte_Count :=
+                                Number (Table + Symbol * 16 + 12, 1) mod 16;
+                              Section : constant Landin.Targets.Byte_Count :=
+                                Number (Table + Symbol * 16 + 14, 2);
+                              Startup : constant Boolean :=
+                                Name'Length > 17
                                 and then Name (Name'First .. Name'First + 16)
-                                  = "_landin_firmware_"
+                                  = "_landin_firmware_";
+                           begin
+                              if Startup
                                 and then not Symbols.Contains (Name)
                               then
-                                 Symbols.Insert
-                                   (Name, Word (Table + Symbol * 16 + 4));
+                                 Symbols.Insert (Name, Address);
+                              end if;
+                              --  D1115: a datum or a routine, a Thumb
+                              --  one's address its value without bit 0,
+                              --  defined in a section of the image.
+                              if not Startup and then Kind in 1 | 2
+                                and then Section in 1 .. 16#FEFF#
+                                and then Address / 2 = 0
+                                and then (Kind = 2 or else Address = 0)
+                                and then US.Length (At_Zero) = 0
+                              then
+                                 US.Append (At_Zero, Name);
                               end if;
                            end;
                         end loop;
@@ -1023,6 +1043,43 @@ package body Landin.Build_Reports.Firmware is
                   end if;
                end;
             end loop;
+            --  D1114: nor may the vector table, text, read-only data or
+            --  any other allocated section with content, which the derived
+            --  script asserts of whatever it writes last into the stack's
+            --  region.  A RAM layout's check below reads every allocated
+            --  section, and a section without content, such as one a
+            --  script reserves the stack with, is not the image's.
+            if Profile.Layout /= Firmware.RAM_Layout then
+               declare
+                  Sections : constant Natural := Natural (Word (32));
+                  Section_Size : constant Natural := Natural (Number (46, 2));
+                  Names : constant Natural := Natural (Word
+                    (Sections + Natural (Number (50, 2)) * Section_Size
+                     + 16));
+               begin
+                  for Index in 0 .. Natural (Number (48, 2)) - 1 loop
+                     declare
+                        Header : constant Natural :=
+                          Sections + Index * Section_Size;
+                        First : constant Landin.Targets.Byte_Count :=
+                          Word (Header + 12);
+                        Size : constant Landin.Targets.Byte_Count :=
+                          Word (Header + 20);
+                     begin
+                        if (Word (Header + 8) / 2) mod 2 = 1
+                          and then Word (Header + 4) /= 8
+                          and then Size > 0
+                          and then First < Top
+                          and then First + Size > Bottom
+                        then
+                           return "clause 3, the stack: "
+                             & Text_At (Names + Natural (Word (Header)))
+                             & " overlaps it";
+                        end if;
+                     end;
+                  end loop;
+               end;
+            end if;
          end;
 
          --  D900: a RAM run loads only described SRAM, at its execution
@@ -1205,6 +1262,15 @@ package body Landin.Build_Reports.Firmware is
                end;
             end if;
          end loop;
+
+         --  Clause 5: nothing the program declares at address zero, where
+         --  a one-atom pointer union's atom and the zero carrier are.
+         if US.Length (At_Zero) > 0 then
+            return "clause 5, address zero: " & US.To_String (At_Zero)
+              & " is at address zero, where a pointer is null; the derived"
+              & " script leaves the first eight bytes of a section there"
+              & " unused";
+         end if;
          return "";
       end;
    exception
