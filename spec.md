@@ -26688,6 +26688,44 @@ recorded listings and a fake hub. That a hub lists a switched-off port as
 is ready within the wait a download's reset is given, are the rig's to
 show.
 
+### D1254 — The ESP32-C3 parks before the probe reads it
+
+**The tour said** nothing; D722's oracle read the C3's counters over JTAG
+after the scenario while the program ran, as the Arm ports' probes read
+theirs without halting the core.
+
+**Chosen:** the scenario's last byte is 0x14, which the C3 port echoes and
+then parks on: it holds every interrupt off, sets `app_state` to 4, writes
+a last `t` frame and loops on a jump, waiting for nothing. The host
+requires that frame to be the stream's last one with the one byte handled,
+consumed and echoed, a receive interrupt for it and nothing more lost, and
+the probe reads `app_state` 4 before the counters, which must then equal
+that frame. A probe-rs read of the C3 is not passive: each session halts
+the hart about five times and single-steps it twice, and the C3 takes an
+interrupt inside a single step although probe-rs writes `dcsr.stepie` 0.
+Read while it ran, the program was left now and then counting a recovery
+it never met, handling 64 bytes twice, or jumping to address 0 or into the
+middle of an instruction: the gate's "recoveries reads 3 over JTAG, 2 in
+the frame" of 2026-11-09 and 2026-11-12, and seven faults in eighteen rig
+runs that read it thirty or forty times more. Each of the five a session's
+log could place came
+in the session whose first halt landed in a function's prologue or where
+a call returns, and in four of them that halt's single step entered the
+timer's vector slot. Parked, the program counts nothing and nothing can be
+taken, so the comparison is exact.
+
+**The alternatives:** reading through one session that halts the hart and
+keeps it halted, which neither `probe-rs read`, whose end resumes every
+halted core, nor the pinned SRAM helper offers; masking the C3's interrupt
+lines over JTAG first, which leaves the first session's step meeting an
+interrupt; loosening the comparison, which would pass a program that did
+count wrong; and changing probe-rs to mask interrupts around a step on
+this chip, which is right for probe-rs and is not the oracle's to rely on.
+
+**Pinned by** `scripts/tests/test_board_esp.py`'s `Scenario` and `Probe`,
+and `environments/boards/esp32c3/record.json` and `ram-record.json`, whose
+`parked` verdicts and `jtag` `app_state` the rig's runs gave.
+
 ### D836 — A board tool that opens a tty runs itself in the tty's group
 
 **The tour said** nothing; D646's tools ran `uhubctl` through `sg GROUP -c`

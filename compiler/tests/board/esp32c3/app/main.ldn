@@ -6,12 +6,13 @@
 -- indicator are the shared commands.handle (D645).  The ROM loads the image
 -- into SRAM and enters it with no second stage (D683).
 --
--- Four bytes are also commands, after their echo: 0x06 runs the atomics
+-- Five bytes are also commands, after their echo: 0x06 runs the atomics
 -- over the two bytes received before it and writes an `a` frame; 0x11 asks
 -- for a telemetry frame; 0x12 stops reading for 100 ms, so a burst sent
--- then overflows the ring; and 0x13 raises the line threshold above the
+-- then overflows the ring; 0x13 raises the line threshold above the
 -- receive line's priority for 100 ms, so a burst sent then overflows the
--- UART's FIFO while the timer's line, above it, keeps running.
+-- UART's FIFO while the timer's line, above it, keeps running; and 0x14
+-- parks the program for the probe's reads, below.
 import bringup
 import commands
 import core/atomic
@@ -129,6 +130,21 @@ halt: (status: u32) -> noreturn =
     loop do riscv.wait_for_interrupt() end loop
 end halt
 
+-- The program's last state, which the probe reads over JTAG (D1254): every
+-- interrupt held off, app_state 4, a telemetry frame of what it counted,
+-- and a loop that waits for nothing.  Each probe-rs session halts the
+-- running hart and single-steps it, and the C3 takes an interrupt inside
+-- a single step whatever dcsr.stepie says; a session that did so while
+-- the program ran left it counting a recovery it never met, or jumping
+-- to address 0.  Parked, the program counts nothing more and nothing can
+-- be taken.
+park: (r: serial.rx) -> noreturn =
+    _ = riscv.disable_interrupts()
+    app_state = 4
+    telemetry(r)
+    loop do continue end loop
+end park
+
 start: () -> noreturn =
     -- Read before anything changes it: which reset this was, from
     -- RTC_CNTL_RESET_CAUSE_PROCPU (Register 9.12), and the trap vector
@@ -171,6 +187,7 @@ start: () -> noreturn =
                 masked_ticks = pause()
                 bringup.threshold(serial.priority)
             end if
+            if byte == 20 then park(receiver) end if
             previous[0] = previous[1]
             previous[1] = byte
         end for

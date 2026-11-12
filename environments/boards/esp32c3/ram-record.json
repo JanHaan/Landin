@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "aee7bf440da2585e839de9fad23bd35878d7f34310c80ba38648846c54c5a380",
+  "image_sha256": "096daa3f5ff813870994bf9441ba349e7a41e414846b5b11119c5660c1232625",
   "image_name": "board.elf",
-  "elf_sha256": "aee7bf440da2585e839de9fad23bd35878d7f34310c80ba38648846c54c5a380",
+  "elf_sha256": "096daa3f5ff813870994bf9441ba349e7a41e414846b5b11119c5660c1232625",
   "instructions": [],
   "verdicts": {
     "boot": {
@@ -39,22 +39,27 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 2472,
-      "receive_interrupts": 4741,
+      "timer_events": 2446,
+      "receive_interrupts": 4746,
       "echoed": 3014,
       "sent": 3614
     },
     "line": {
       "status": "not run: probehive bridge fixed at 115200 8N1"
+    },
+    "parked": {
+      "app_state": 4,
+      "handled": 3015
     }
   },
   "jtag": {
     "trap_count": 0,
-    "handled": 3014,
+    "app_state": 4,
+    "handled": 3015,
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4741,
+    "entries": 4748,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -62,9 +67,9 @@
   },
   "readback": [
     "0x40380000+0x180",
-    "0x40380180+0x75a0"
+    "0x40380180+0x7670"
   ],
-  "uart_sha256": "155be9f078053344492073e5286272614ca0a017df09b351ca48b9f99f191c74",
+  "uart_sha256": "8e683e3bd3258320ffb85305a40654a0ee14bc30e6b467813d7ada45ed6db339",
   "mode": "ram",
   "warm_load": {
     "board": "esp32c3",
@@ -74,42 +79,42 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "aee7bf440da2585e839de9fad23bd35878d7f34310c80ba38648846c54c5a380",
+    "elf_sha256": "096daa3f5ff813870994bf9441ba349e7a41e414846b5b11119c5660c1232625",
     "entry": 1077411840,
     "flash_written": false,
     "format_version": 1,
     "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
     "mode": "warm",
-    "previous_pc": 1077412506,
+    "previous_pc": 1077415078,
     "segments": [
       {
         "address": 1077411840,
         "bytes": 384,
-        "sha256": "a9f2ceba46621714e5635f67355d57ae8f16417ccf8e6bf05966687d97e60353"
+        "sha256": "06147f7ac2b6f352d7a1e079c3d397e59ceddac12836fd8968cb85cd8ea2a921"
       },
       {
         "address": 1077412224,
-        "bytes": 30112,
-        "sha256": "77dba8c792e796f7b06a47a158f343063f6e8b6ece3e0130fa7d4a9fb08d5dda"
+        "bytes": 30320,
+        "sha256": "63c66ddf0771f1d17757ae7a82e9a46df5cab0fd91e5d52580acea33c52474bd"
       },
       {
         "address": 1070202880,
         "bytes": 84,
-        "sha256": "0eb5e13054115a6554cb68de8091927cec191add10b49b8810db6555ab6b8aaa"
+        "sha256": "dfb605f92a946df573ba32b4eecbf89f68c9949be13180ca308f4c34a10e2c19"
       }
     ],
     "stack": 1070366720,
     "status": "passed",
     "vector": 1077412096
   },
-  "seconds": 14.252,
+  "seconds": 15.122,
   "kernel_usb": {
-    "since": 1794060910.0679636,
-    "until": 1794060924.2962775,
+    "since": 1794506626.0724595,
+    "until": 1794506641.1711888,
     "lines": [],
     "status": "captured"
   },
-  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "sent_sha256": "5ec8f517f647c2346693303af7550368f6241055de0dec47bfd55a9152686ed5",
   "frames": [
     {
       "tag": "b",
@@ -124,27 +129,29 @@
     },
     {
       "tag": "t",
-      "h": "00000bc6",
+      "h": "00000bc7",
       "c": "00000002",
-      "i": "00001285",
-      "m": "000009a8",
+      "i": "0000128c",
+      "m": "000009b9",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",
       "l": "0000002c",
       "o": "00000001",
-      "e": "00000cc6",
+      "e": "00000cc7",
       "g": "00000000",
-      "s": "00000002"
+      "s": "00000004"
     }
   ],
   "commands": [
+    "hub-start",
     "ram-load",
     "jtag-trap-cause",
     "jtag-trap-pc",
     "jtag-trap-value",
     "jtag-trap-sp",
     "jtag-trap-count",
+    "jtag-app_state",
     "jtag-handled",
     "jtag-recoveries",
     "jtag-dropped",

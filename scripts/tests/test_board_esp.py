@@ -261,13 +261,15 @@ class Board:
     """A console onto a board simulated from what compiler/tests/board's
     ports are written to do: every byte echoed, 1 and 0 driving the
     indicator, the `a`, `t` and `b` frames, a ring of 256 bytes that drops
-    the rest while STALL holds the reader off, and a FIFO of 128 that
-    flags an overflow once while MASK holds the interrupt off."""
+    the rest while STALL holds the reader off, a FIFO of 128 that flags an
+    overflow once while MASK holds the interrupt off, and, on a chip that
+    parks, PARK answered with a last frame and nothing taken after it."""
     def __init__(self, chip, fault=None):
         self.chip, self.fault = chip, fault
         self.received, self.sent = bytearray(), bytearray()
         self.indicator = self.handled = self.restarts = self.dropped = self.overflows = 0
         self.entries, self.ticks, self.masked_ticks, self.mode = 0, 5, 0, None
+        self.consumed, self.parked = 0, False
         self.previous = [0, 0]
         self.received += b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'
         # The C5's CLICINT18 and 17 as its port writes them: level bits,
@@ -284,10 +286,13 @@ class Board:
 
     def send(self, data, pace=64):
         self.sent += data
+        if self.parked:
+            return
         if self.mode:
             ring, self.mode = self.mode, None
             if ring == 'stall':
                 self.dropped += max(0, len(data) - 256)
+                self.consumed += min(len(data), 256)
             else:
                 self.overflows += 1 if len(data) > 128 else 0
                 self.masked_ticks = 100 if self.fault != 'masked timer' else 0
@@ -297,6 +302,7 @@ class Board:
         for byte in data:
             self.entries += 1
             self.handled += 1
+            self.consumed += 1
             if byte == 0x31:
                 self.indicator = self.chip.indicator
             if byte == 0x30:
@@ -309,17 +315,27 @@ class Board:
                     atomics[next(iter(atomics))] ^= 1
                 self.frame('a', **atomics)
             if byte == ESP.REPORT:
-                self.ticks += 50
-                cause = self.chip.uart_cause | (0x08000000 if self.chip is C5 else 0)
-                self.frame('t', h=self.handled, c=self.restarts, i=self.entries, m=self.ticks,
-                           p=cause, q=self.chip.timer_cause, k=self.masked_ticks,
-                           l=self.dropped, o=self.overflows, e=0,
-                           g=self.indicator if self.fault != 'indicator' else 0, s=2)
+                self.telemetry(2)
+            if byte == ESP.PARK and self.chip.parks and self.fault != 'no park':
+                # The port's park: interrupts off, then its last frame.
+                if self.fault == 'lost parking':
+                    self.restarts += 1
+                self.telemetry(2 if self.fault == 'running' else ESP.PARKED)
+                self.parked = True
+                return
             if byte == ESP.STALL:
                 self.mode = 'stall'
             if byte == ESP.MASK:
                 self.mode = 'mask'
             self.previous = [self.previous[1], byte]
+
+    def telemetry(self, state):
+        self.ticks += 50
+        cause = self.chip.uart_cause | (0x08000000 if self.chip is C5 else 0)
+        self.frame('t', h=self.handled, c=self.restarts, i=self.entries, m=self.ticks,
+                   p=cause, q=self.chip.timer_cause, k=self.masked_ticks,
+                   l=self.dropped, o=self.overflows, e=self.consumed,
+                   g=self.indicator if self.fault != 'indicator' else 0, s=state)
 
     def wait(self, predicate, seconds, what):
         if predicate(bytes(self.received)):
@@ -347,6 +363,28 @@ class Scenario(unittest.TestCase):
                 self.assertEqual(final['h'], len(ESP.echo_of(board.received)) - len(b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'))
                 self.assertEqual(atomics, chip.atomics(verdicts['atomics']['x'],
                                                        verdicts['atomics']['y']))
+
+    def test_the_c3_parks_last_and_its_frame_is_the_one_the_probe_reads(self):
+        board = Board(C3)
+        verdicts, final, _ = ESP.scenario(board, C3, 1240)
+        self.assertEqual(board.sent[-1], ESP.PARK)
+        self.assertEqual(final['s'], ESP.PARKED)
+        self.assertEqual(verdicts['parked'], dict(app_state=ESP.PARKED, handled=board.handled))
+        self.assertEqual(final['h'], verdicts['stream']['echoed'] + 1)
+
+    def test_a_port_that_does_not_park_is_never_asked_to(self):
+        board = Board(C5)
+        verdicts, final, _ = ESP.scenario(board, C5, 1240)
+        self.assertNotIn(ESP.PARK, board.sent)
+        self.assertNotIn('parked', verdicts)
+        self.assertEqual(final['s'], 2)
+
+    def test_a_c3_that_does_not_park_as_written_is_refused(self):
+        for fault, said in (('no park', "waited for 't' frame"),
+                            ('running', 'did not park'),
+                            ('lost parking', 'lost bytes as it parked')):
+            with self.subTest(fault), self.assertRaisesRegex(COMMON.Failed, said):
+                ESP.scenario(Board(C3, fault), C3, 1240)
 
     def test_each_departure_is_refused(self):
         for fault in ('atomics', 'indicator', 'masked timer'):
@@ -383,7 +421,8 @@ class Scenario(unittest.TestCase):
 
 class Probe(unittest.TestCase):
     def test_counters_and_cells_are_read_from_their_words(self):
-        counters = dict(handled=9, recoveries=2, dropped=44, overflows=1, entries=7, boot_reason=1)
+        counters = dict(handled=9, recoveries=2, dropped=44, overflows=1, entries=7, boot_reason=1,
+                        app_state=ESP.PARKED)
         words = {0x3fca04c0: 0x417e0041, 0x3fca04e4: 0x417e7e41}
 
         class Fake:
@@ -393,13 +432,26 @@ class Probe(unittest.TestCase):
                     for i, c in enumerate(ESP.TRAP_CELLS))
         names = dict(counters, byte_cell=0x3fca04c0, half_cell=0x3fca04c2, word_cell=0x3fca04e4,
                      **trap)
-        final = dict(h=9, c=2, l=44, o=1, i=7, r=1)
+        final = dict(h=9, c=2, l=44, o=1, i=7, r=1, s=ESP.PARKED)
         atomics = dict(b=0x41, h=0x417e, w=0x417e7e41)
         read = ESP.cross_check(Fake(), C3, names, final, atomics)
         self.assertEqual((read['byte_cell'], read['half_cell'], read['word_cell']),
                          (0x41, 0x417e, 0x417e7e41))
-        with self.assertRaises(COMMON.Failed):
+        self.assertEqual(read['app_state'], ESP.PARKED)
+        with self.assertRaisesRegex(COMMON.Failed, '^entries reads 7 over JTAG, 8 in the frame$'):
             ESP.cross_check(Fake(), C3, names, dict(final, i=8), atomics)
+        # Every cell is read first, and the failure names each that differs.
+        with self.assertRaisesRegex(COMMON.Failed, 'recoveries reads 2 over JTAG, 3 in the frame;'
+                                    ' dropped reads 44 over JTAG, 45 in the frame; byte_cell'):
+            ESP.cross_check(Fake(), C3, names, dict(final, c=3, l=45), dict(atomics, b=0x42))
+        # D1254: the C3 is read parked, or not at all; a port that does
+        # not park is read as before.
+        counters['app_state'] = 2
+        with self.assertRaisesRegex(COMMON.Failed, 'did not read the parked program'):
+            ESP.cross_check(Fake(), C3, names, dict(final, s=2), atomics)
+        self.assertNotIn('app_state', ESP.cross_check(Fake(), C5, names, final,
+                                                      dict(d=0x417e7e41, f=0x41)))
+        counters['app_state'] = ESP.PARKED
         words[0x3fca0110], words[0x3fca0100], words[0x3fca0104] = 1, 2, 0x40380294
         with self.assertRaises(COMMON.Failed) as refused:
             ESP.cross_check(Fake(), C3, names, final, atomics)

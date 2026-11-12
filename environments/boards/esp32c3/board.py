@@ -53,6 +53,10 @@ class C3(esp.Chip):
     uart_cause, timer_cause, cause_mask = 0x80000001, 0x80000002, 0xffffffff
     a_extension = False
     cells = {'byte_cell': ('b', 1), 'half_cell': ('h', 2), 'word_cell': ('w', 4)}
+    # probe-rs halts and single-steps the hart in each session, and the
+    # C3 takes interrupts inside a single step; the probe reads it parked
+    # (D1254).
+    parks = True
 
     def mtvec(self, sections, names):
         # Vectored mode, 1, over the table at the profile's vector address
