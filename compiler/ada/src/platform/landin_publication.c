@@ -120,6 +120,7 @@ extern int landin_cancellation_requested(void);
 extern void landin_cancellation_hold(void);
 extern void landin_cancellation_release(void);
 extern int landin_overlaps_any(const char *, const char *const *, size_t);
+extern int landin_separation_shortage(const char *, const char *const *, size_t);
 extern int landin_entry_names_alias(int, const char *, const char *);
 static landin_publication_hook fault_hook;
 void landin_publication_set_hook(landin_publication_hook hook) { fault_hook = hook; }
@@ -1545,8 +1546,16 @@ static int landin_publication_step_locked(int token, int action,
             errno = EALREADY; goto fail;
         }
         if (path_count && landin_overlaps_any(p->path, paths, path_count) != 0) {
-            reason(why, room, "%s aliases a protected input name; choose another output",
-                   p->path); return -1;
+            /* A lookup that ran short of descriptors is no alias. */
+            int shortage = landin_separation_shortage(p->path, paths, path_count);
+            if (shortage)
+                reason(why, room, "%s could not be compared with the protected inputs: %s;"
+                       " retry when the host can spare more",
+                       p->path, strerror(shortage));
+            else
+                reason(why, room, "%s aliases a protected input name; choose another output",
+                       p->path);
+            return -1;
         }
         barrier("before-capture", p->path);
         if (renameat(parent, p->name, recovery_fd, p->recovery) != 0) {

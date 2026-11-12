@@ -110,6 +110,11 @@ package Landin.Testing.Fakes is
      (Host : Fake_Filesystem; Left : String;
       Rights : Landin.Platform.Path_List) return Boolean;
 
+   --  A fake's lookups never run short.
+   overriding function Separation_Shortage
+     (Host : Fake_Filesystem; Left : String;
+      Rights : Landin.Platform.Path_List) return String is ("");
+
    overriding function Working_Directory
      (Host : Fake_Filesystem) return String is ("/virtual/compile");
 

@@ -693,9 +693,7 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here")
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
+    common.warn_stale_refine(args)
     common.board_preflight(args, 'stm32h753')
     # The virtual COM port's tty belongs to --hub-group (D836).
     common.rerun_in_group(args.hub_group)

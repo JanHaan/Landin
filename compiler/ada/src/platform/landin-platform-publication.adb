@@ -57,16 +57,23 @@ package body Landin.Platform.Publication is
          Group.Entries.Append (Item);
          if Paths_Overlap_Any (Files, Path, Group.Protected_Paths) then
             declare
+               --  Asked before the discard frees what the stage holds.
+               Short : constant String :=
+                 Separation_Shortage (Files, Path, Group.Protected_Paths);
                Cleanup_Status : Write_Status;
                Cleanup_Reason : Unbounded_String;
             begin
                Discard (Group, Files, Path, Cleanup_Status, Cleanup_Reason);
                Status := Not_Writable;
                Reason := To_Unbounded_String
-                 ("output " & Path
-                  & " aliases or cannot be proved separate from a protected"
-                  & " input; check input/output paths and access before"
-                  & " retrying");
+                 (if Short /= ""
+                  then "output " & Path & " could not be compared with the"
+                    & " protected inputs: " & Short
+                    & "; retry when the host can spare more"
+                  else "output " & Path
+                    & " aliases or cannot be proved separate from a"
+                    & " protected input; check input/output paths and"
+                    & " access before retrying");
                if Cleanup_Status /= Write_Ok then
                   Append (Reason, "; " & To_String (Cleanup_Reason));
                end if;

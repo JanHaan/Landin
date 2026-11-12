@@ -1095,5 +1095,21 @@ class LockLifecycle(unittest.TestCase):
                         self.assertEqual(result['trap'], {'count': '0x1'})
 
 
+class RigSide(unittest.TestCase):
+    """The rig runs a tool from a prepared bundle, with neither the
+    compiler nor scripts/ beside it, so nothing there may need them."""
+    def test_a_bundle_run_asks_nothing_of_scripts(self):
+        args = SimpleNamespace(bundle=Path('/bundle'), refine=None, spacing=None, quiet=None,
+                               probe_rs='probe-rs', nm=None, objdump=None)
+        with mock.patch.dict(sys.modules, {'refine_revision': None}), \
+                mock.patch.object(ESP.common, 'Pace'):
+            try:
+                ESP.required_tools(args)
+            except ImportError as error:
+                self.fail(f'a bundle run imported a checkout script: {error}')
+            except SystemExit:
+                pass
+
+
 if __name__ == '__main__':
     unittest.main()

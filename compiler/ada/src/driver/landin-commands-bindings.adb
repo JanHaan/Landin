@@ -471,9 +471,19 @@ package body Landin.Commands.Bindings is
                if Host.Exists (Path)
                  and then Host.Paths_Overlap_Any (Path, Input_Paths)
                then
-                  Report (Cat.Bindings_Output_Refused,
-                          Path & " overlaps an input; name another output"
-                          & " directory with --out-dir");
+                  declare
+                     Short : constant String :=
+                       Host.Separation_Shortage (Path, Input_Paths);
+                  begin
+                     Report
+                       (Cat.Bindings_Output_Refused,
+                        (if Short /= ""
+                         then Path & " could not be compared with the"
+                           & " inputs: " & Short
+                           & "; retry when the host can spare more"
+                         else Path & " overlaps an input; name another"
+                           & " output directory with --out-dir"));
+                  end;
                   return False;
                end if;
                if Host.Is_Link (Path) or else Host.Is_Directory (Path) then

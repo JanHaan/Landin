@@ -245,6 +245,53 @@ package body Landin.Platform.Native is
          raise;
    end Paths_Overlap_Any;
 
+   overriding function Separation_Shortage
+     (Host : Native_Filesystem; Left : String; Rights : Path_List)
+      return String
+   is
+      pragma Unreferenced (Host);
+      package C renames Interfaces.C;
+      package Strings renames Interfaces.C.Strings;
+      use type C.int;
+      Paths : aliased Strings.chars_ptr_array
+        (1 .. C.size_t (Rights.Length)) := [others => Strings.Null_Ptr];
+      function Shortage
+        (Destination : C.char_array;
+         Sources : System.Address;
+         Count : C.size_t) return C.int
+        with Import, Convention => C,
+             External_Name => "landin_separation_shortage";
+      Error : C.int;
+   begin
+      --  A name Paths_Overlap_Any refuses without asking the host has no
+      --  shortage to tell of.
+      if Rights.Is_Empty or else Left = ""
+        or else (for some Byte of Left => Byte = Character'Val (0))
+        or else (for some Right of Rights =>
+                   Right = ""
+                   or else (for some Byte of Right =>
+                              Byte = Character'Val (0)))
+      then
+         return "";
+      end if;
+      for Index in Paths'Range loop
+         Paths (Index) := Strings.New_String (Rights (Positive (Index)));
+      end loop;
+      Error := Shortage
+        (C.To_C (Left), Paths'Address, C.size_t (Rights.Length));
+      for Index in Paths'Range loop
+         Strings.Free (Paths (Index));
+      end loop;
+      return (if Error = 0 then ""
+              else GNAT.OS_Lib.Errno_Message (Integer (Error)));
+   exception
+      when others =>
+         for Index in Paths'Range loop
+            Strings.Free (Paths (Index));
+         end loop;
+         raise;
+   end Separation_Shortage;
+
    overriding function Working_Directory
      (Host : Native_Filesystem) return String
    is
