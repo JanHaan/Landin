@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
-"""The two decisions of the release workflow that are not a build.
+"""The decisions of the release workflow that are not a build.
 
+    python3 scripts/release.py ref TAG
     python3 scripts/release.py gated [CHECKOUT]
     python3 scripts/release.py publish TAG DIRECTORY
+
+`ref` answers whether this run may publish TAG at all: it must run on that
+tag, `GITHUB_REF` being `refs/tags/TAG`, since the publishing job's
+environment, `release`, deploys only from a `v*` tag (D1337).  A push of
+the tag runs on it; a dispatch runs on it only when it is made with
+`--ref TAG`, and one made on a branch is refused here, before the builds,
+rather than by the environment after them.
 
 `gated` answers whether the commit checked out in CHECKOUT, by default the
 current directory, may be released: it must be
@@ -22,6 +30,9 @@ published.  A run that stops part-way leaves a draft, which the next run
 empties and fills again.  A release that is already published is final,
 as it always was: a file of a name it already publishes is refused, since
 the build is not reproducible and the flake records the published hashes.
+The release's notes say how a user checks an archive's attestation, which
+the workflow makes before this runs, and the environment holds this job
+until the maintainer approves it.
 """
 import json
 import os
@@ -32,6 +43,37 @@ import urllib.request
 
 WORKFLOW = "gate.yml"
 MAIN = "main"
+#  The workflow that builds, attests and publishes, as an attestation's
+#  signer names it.
+RELEASE_WORKFLOW = ".github/workflows/release.yml"
+
+
+def ref_refused(tag, ref):
+    """Why a run on `ref` may not publish `tag`, or None."""
+    if not tag.startswith("v"):
+        return ("%s is not a v* tag, which is all the release environment "
+                "deploys from" % tag)
+    if ref != "refs/tags/" + tag:
+        return ("this run is on %s; a release of %s runs on its tag, so "
+                "dispatch it with --ref %s: the release environment deploys "
+                "only from a v* tag" % (ref or "no ref", tag, tag))
+    return None
+
+
+def repository():
+    return os.environ.get("GITHUB_REPOSITORY") or "JanHaan/Landin"
+
+
+def notes(tag):
+    """What the release says about checking its files."""
+    return ("The refine compiler, built from %s by the release workflow. "
+            "Each archive is attested; check one with\n\n"
+            "    gh attestation verify FILE --repo %s \\\n"
+            "      --signer-workflow %s/%s \\\n"
+            "      --source-ref refs/tags/%s --deny-self-hosted-runners\n\n"
+            "which says this workflow built it from that tag. The .sha256 "
+            "beside each asset is its digest." % (
+                tag, repository(), repository(), RELEASE_WORKFLOW, tag))
 
 
 def github(path):
@@ -116,12 +158,10 @@ def publish(tag, directory):
     if not files:
         raise Refused("%s holds no file to publish" % directory)
     names = [path.name for path in files]
-    notes = ("The refine compiler, built from %s by the release workflow. "
-             "Verify each asset against the .sha256 published beside it." % tag)
     found = release_of(tag)
     if found is None:
         gh("release", "create", tag, "--draft", "--verify-tag",
-           "--title", "Landin " + tag, "--notes", notes)
+           "--title", "Landin " + tag, "--notes", notes(tag))
         draft = True
     else:
         draft, held = found
@@ -150,6 +190,12 @@ def publish(tag, directory):
 
 
 def main(argv):
+    if len(argv) == 3 and argv[1] == "ref":
+        reason = ref_refused(argv[2], os.environ.get("GITHUB_REF", ""))
+        if reason:
+            print("release: " + reason, file=sys.stderr)
+            return 1
+        return 0
     if argv[1:2] == ["gated"] and len(argv) <= 3:
         reason = gated(cwd=argv[2] if len(argv) == 3 else None)
         if reason:

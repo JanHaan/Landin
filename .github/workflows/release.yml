@@ -16,6 +16,16 @@
 #  silently break every consumer.  An asset that already exists is a
 #  refusal, and replacing one is a deliberate `gh release delete-asset`
 #  followed by a flake commit, never a re-run.
+#
+#  Three repository settings hold the rest (D1337), and docs/process.md
+#  says how to read them.  The ruleset "version tags" lets only an
+#  administrator create, move or delete a `v*` tag on GitHub; the mirror
+#  on git.sr.ht has no such rule, so a release tag is made on GitHub.  The
+#  publishing job runs in the environment `release`, which deploys only
+#  from a `v*` tag and waits for JanHaan's approval.  And each archive is
+#  attested before it is published, so a user can check with
+#  `gh attestation verify` that this workflow, at that tag, built it --
+#  which the .sha256 beside it, written by the same job, cannot say.
 
 name: release
 
@@ -25,7 +35,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: An existing tag to publish assets for.
+        description: >-
+          An existing tag to publish assets for.  Run the dispatch on that
+          tag (`--ref TAG`): the release environment deploys only from one.
         required: true
 
 #  Only the publish job writes; the build jobs run a checked-out tree and
@@ -42,9 +54,11 @@ concurrency:
 jobs:
   #  A tag is a name on any commit.  The build below ties the binary to the
   #  tag; this ties the tag to a tree that was tested: the commit is on
-  #  main, and the gate passed on main's own push of it.  The script comes
-  #  from the workflow's ref and the commit from the tag, so a tag older
-  #  than the script is still judged.
+  #  main, and the gate passed on main's own push of it.  A run is on its
+  #  tag, pushed or dispatched with --ref, so the workflow and the script
+  #  are the tag's own: a tag on a commit older than D1337 runs a workflow
+  #  with no environment and no attestation, which is one reason only an
+  #  administrator may make one.
   gated:
     runs-on: ubuntu-24.04
     permissions:
@@ -52,6 +66,12 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      #  Said here, before the builds, rather than by the environment
+      #  after them.
+      - name: A dispatch runs on the tag it publishes
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: python3 scripts/release.py ref "$TAG"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
@@ -205,11 +225,18 @@ jobs:
             ${{ steps.package.outputs.debug }}
             ${{ steps.package.outputs.debug }}.sha256
 
+  #  The one job that writes, so the one that waits for approval: the
+  #  environment holds it until JanHaan approves the run, after the builds
+  #  above have passed and logged what they made.  It alone may ask for an
+  #  OIDC token, which is what signs the attestation.
   publish:
     needs: build
     runs-on: ubuntu-24.04
+    environment: release
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       #  NOT `assets`: the repository has a directory by that name, and
@@ -227,6 +254,13 @@ jobs:
       - name: What was built
         run: |
           cd release-assets && ls -l && cat ./*.sha256
+
+      #  Before the release is published, so no asset is public without
+      #  its attestation.  One attestation names every archive; the
+      #  .sha256 files are the archives' digests again and need none.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release-assets/*.tar.gz
 
       - name: Install the GitHub CLI
         run: ./scripts/ci_packages.sh gh

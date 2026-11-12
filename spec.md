@@ -37903,8 +37903,8 @@ that the commit is on `main`, where a commit sits before its gate has run
 and stays if it fails; and publishing first and uploading after, which
 shows a reader of the releases page an archive without its checksum or a
 release without a platform. Who may push a `v*` tag, a required reviewer
-on the publishing job and a signed attestation of the assets are settings
-of the repository; the workflow establishes none of them.
+on the publishing job and a signed attestation of the assets were left to
+the repository's settings; D1337 settles them.
 
 **Pinned by** `scripts/tests/test_release.py`, which holds the first job
 to a throwaway repository and the run lists GitHub would answer with, and
@@ -38014,6 +38014,44 @@ from a stand-in storage, a second fetch that replaces it, a refused fetch
 that leaves it and a directory no fetch made that is not replaced, beside
 the pinned file that changed; and `assets/fonts/licensed.sha256` itself,
 which every render of a host holding the family reads.
+
+### D1337 — A release tag is an administrator's, its publication waits for approval, and its archives are attested
+
+**The tour said** nothing. D1133 tied a release to a commit on `main`
+whose gate passed, but who may push a `v*` tag, whether anyone approves
+the publication and how a user tells an archive the workflow built from
+one built elsewhere were left to settings nobody had made; the `.sha256`
+beside an asset is written by the same job with the same token as the
+asset.
+
+**Chosen:** three settings and a step. The repository's ruleset
+`version tags` refuses creating, moving, deleting and force-moving a
+`refs/tags/v*` tag to all but its administrators. The publishing job of
+`release.yml` runs in the environment `release`, which deploys only from
+a `v*` tag and waits for the maintainer's approval, so a release becomes
+public only after the builds passed and someone looked; a dispatch runs
+on its tag, and `scripts/release.py ref` refuses one on a branch before
+anything is built. That job alone holds `id-token: write` and
+`attestations: write`, and attests every archive with
+`actions/attest-build-provenance`, pinned by commit, before the release
+is published; the release notes give the `gh attestation verify` command
+that checks an archive's signer workflow and tag. The git.sr.ht mirror
+has no tag protection, so a release tag is made on GitHub.
+
+**The alternatives:** the approval on the first job, which asks before
+anything is known about the build; a GPG-signed checksum file, which
+needs a key held as a secret by the job it is meant to check; and
+protecting the tag on the mirror too, which SourceHut does not offer.
+All were declined. A tag on a commit older than this decision runs that
+commit's workflow, with neither the environment nor the attestation;
+the ruleset leaves making one to an administrator.
+
+**Pinned by** `scripts/tests/test_release.py`, whose `Workflow` cases hold
+the publishing job alone to the environment and the signing grants and the
+attestation of every archive to before the publication, whose `Ref` cases
+refuse a run off its tag, and whose notes case holds the release to the
+verify command. The ruleset and the environment are repository settings
+that `gh api` reads; no case runs the workflow.
 
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 
