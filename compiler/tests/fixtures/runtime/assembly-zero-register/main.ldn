@@ -1,0 +1,30 @@
+--  D1320: x0 reads as zero and discards writes, so an ordinary RISC-V
+--  block's text names it both ways. A store of `zero` clears the cell, an
+--  `add` into x0 changes nothing, and an `add` from it is its other addend.
+mut cell: u32 = 7
+
+fixed if compiler.arch == rv64 or compiler.arch == rv32 then
+    clear: (at: usize) -> none =
+        assembler.block("sw zero, 0({p})", in p: usize at general = at)
+    end clear
+    through_zero: (a: u32) -> (r: u32) =
+        r = assembler.block("add x0, {x}, {x}\nadd {r}, zero, {x}",
+                            out r: u32 at general,
+                            in x: u32 at general = a)
+    end through_zero
+else
+    clear: (at: usize) -> none =
+        return when at == 0
+        cell = 0
+    end clear
+    through_zero: (a: u32) -> (r: u32) =
+        r = a
+    end through_zero
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    clear(usize(addr cell))
+    return when cell <> 0
+    code = i32(through_zero(42 + cell))
+end main

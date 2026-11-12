@@ -1,9 +1,0 @@
-class: negative
-summary: an ordinary RV32 block that names `zero`, to read or to write, is refused saying that the register is never named, with the scratch register and the `csrw` form that replace it
-program: program.ldn
-args: --target=rv32 ../tests/fixtures/negative/assembly-rv32-zero-register/program.ldn
-expect: expected.txt
-codes: L0330, L0330
-constructs: 1630, 1990
-targets: rv32
-status: 1

@@ -1517,6 +1517,9 @@
     "runtime/assembly-saved-registers": {
       "mode": "execute"
     },
+    "runtime/assembly-zero-register": {
+      "mode": "execute"
+    },
     "runtime/atom-union-written-in-place": {
       "mode": "execute"
     },

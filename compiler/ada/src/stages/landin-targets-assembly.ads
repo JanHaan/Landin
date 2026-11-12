@@ -111,7 +111,8 @@ package Landin.Targets.Assembly is
       Unit : Float_Unit := No_Float_Unit) return String;
 
    --  Whether a text word names a register no ordinary block may name,
-   --  at any of its widths.
+   --  at any of its widths.  RISC-V's x0, `zero`, is not one: it reads
+   --  as zero and discards writes (D1320), though no operand names it.
    function Names_Reserved (Facts : Target_Facts; Word : String)
      return Boolean;
 

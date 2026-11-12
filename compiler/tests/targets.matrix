@@ -233,7 +233,6 @@ negative/assembly-reserved-registers-arm64 | darwin-arm64
 negative/assembly-reserved-registers-cortex | cortex-m0
 negative/assembly-reserved-registers-linux-arm64 | linux-arm64
 negative/assembly-reserved-registers-x86-64 | linux-x86-64
-negative/assembly-rv32-zero-register | rv32
 negative/assembly-rv64-system-call | linux-rv64
 negative/assembly-shorthand-after-operand | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assembly-shorthand-hosted | linux-x86-64
@@ -2032,6 +2031,7 @@ runtime/assembly-operand-free | linux-x86-64, linux-arm64, darwin-arm64, freebsd
 runtime/assembly-operands | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/assembly-saved-float-registers | linux-arm64, darwin-arm64, freebsd-arm64, linux-rv64
 runtime/assembly-saved-registers | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/assembly-zero-register | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/atom-union-written-in-place | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/atom-values-cross-the-abi | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/atomic-accesses-at-every-ordering | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

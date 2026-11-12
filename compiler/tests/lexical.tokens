@@ -46166,37 +46166,6 @@ file negative/assembly-reserved-registers-x86-64/program.ldn tokens 57
   224 225 )
   226 229 end
   230 231 f
-file negative/assembly-rv32-zero-register/program.ldn tokens 30
-  0 10 store_zero
-  10 11 :
-  12 13 (
-  13 14 )
-  15 17 ->
-  18 22 none
-  23 24 =
-  29 38 assembler
-  38 39 .
-  39 44 block
-  44 45 (
-  45 61 "sw zero, 4(t0)"
-  61 62 )
-  63 66 end
-  67 77 store_zero
-  79 92 write_counter
-  92 93 :
-  94 95 (
-  95 96 )
-  97 99 ->
-  100 104 none
-  105 106 =
-  111 120 assembler
-  120 121 .
-  121 126 block
-  126 127 (
-  127 152 "csrrw zero, cycle, zero"
-  152 153 )
-  154 157 end
-  158 171 write_counter
 file negative/assembly-rv64-system-call/program.ldn tokens 96
   216 219 pid
   219 220 :

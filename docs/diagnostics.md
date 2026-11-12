@@ -1294,8 +1294,9 @@ target's own form: `@` on Cortex-M,
 assembler's and take no digit separator, so `0x1800_0000` is written
 `0x18000000`. Change the operand, register, template or text as the message
 says, or move the operands into an assembly block. A reserved register is
-never named, to read or to write: on RISC-V a zero source is a scratch
-register loaded with `li`, and a CSR is written without a read by `csrw`.
+never named, to read or to write. RISC-V's `zero`, x0, is not reserved:
+the text may read and write it, and only an operand may not name it
+(D1320).
 At Cortex-M's `armv6-m` level the refusal names the mnemonic, and says
 whether it is a naked routine's instruction or one that a higher level or a
 float unit has. A pointer crosses as `usize(p)`, and the routine around

@@ -7578,15 +7578,7 @@ package body Landin.Stages.Checking is
                               & " to write",
                               "[1990]: the stack, frame and link registers"
                               & " and the platform's reserved ones are"
-                              & " never named"
-                              & (if Landin.Targets.Architecture_Of (Facts)
-                                      in Landin.Targets.RV64
-                                       | Landin.Targets.RV32
-                                   and then Word in "zero" | "x0"
-                                 then "; for a zero source load a scratch"
-                                   & " register, `li t1, 0`, and to write a"
-                                   & " CSR without reading it use `csrw`"
-                                 else ""));
+                              & " never named");
                            return;
                         elsif Canonical /= ""
                           and then not Asm.Overwritten
@@ -7694,8 +7686,15 @@ package body Landin.Stages.Checking is
                      Refuse_At
                        (Register,
                         "`" & Named & "` is a register no operand may name",
-                        "[1990]: the stack, frame and link registers and"
-                        & " the platform's reserved ones are never named");
+                        (if Landin.Targets.Architecture_Of (Facts)
+                              in Landin.Targets.RV64 | Landin.Targets.RV32
+                           and then Named in "x0" | "zero"
+                         then "[1990]: x0 reads as zero and discards"
+                           & " writes, so an operand there would lose its"
+                           & " value; the text names `zero` itself"
+                         else "[1990]: the stack, frame and link registers"
+                           & " and the platform's reserved ones are never"
+                           & " named"));
                   when Asm.General_Class =>
                      Classes := Classes + 1;
                      Spelled_At (Index) :=

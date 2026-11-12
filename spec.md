@@ -2402,7 +2402,7 @@ A register is a name the selected target's table answers for, never text:
 | `float` chooses from | `d0`–`d7` with the unit | `xmm0`–`xmm15` | `v0`–`v7`, `v16`–`v31` | `f0`–`f7`, `f10`–`f17`, `f28`–`f31` | none |
 | every ordinary block overwrites | `r0`–`r7`, flags, and with the unit the `float` row and FPSCR's flags | the `general` and `float` rows, flags | the `general` and `float` rows, flags | the `general` and `float` rows | the `general` row |
 | saved by the routine when a block names one | `d8`–`d15` with the unit | `rbx`, `r12`–`r15` | `x19`–`x28`, `v8`–`v15` | `x9`, `x18`–`x27`, `f8`, `f9`, `f18`–`f27` | `x9`, `x18`–`x27` |
-| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30` | `x0`–`x4`, `x8` and their aliases | `x0`–`x4`, `x8` and their aliases |
+| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30` | `x1`–`x4`, `x8` and their aliases; `x0` by an operand | `x1`–`x4`, `x8` and their aliases; `x0` by an operand |
 
 A fixed register is its full-width name; `general` and `float` are the two
 classes, spelled the same on every target, and each asks the compiler to
@@ -2423,7 +2423,11 @@ operand must be written in the text, and every register the text names at
 any width must be declared or overwritten and never be one no block names.
 Frame pointers, stack pointers, link registers, the platform register and
 Cortex-M0's reserved r9 are therefore never named, and no register is
-reserved by the language beyond them. arm64's `v8`–`v15`, whose low halves
+reserved by the language beyond them. RISC-V's `x0`, `zero`, reads as zero
+and discards every write, so an ordinary block's text may name it as a
+source or a destination, as in `sw zero, 4(t0)` or `csrrw zero, mscratch,
+zero`; no operand names it, since an input there would be lost and an
+output would read zero (D1320). arm64's `v8`–`v15`, whose low halves
 AAPCS64 preserves, and RV64's `f8`, `f9` and `f18`–`f27` (`fs0`–`fs11`)
 are declared as the saved integer registers are, at whatever width the text
 names them: `d8`, `s8` and `q8` are all `v8`, x86-64's `ymm3` and `zmm3`
@@ -23650,6 +23654,36 @@ admits an `ecall` that cannot return.
 jump and an ordinary `wfi` and `general` operand and refuses an ordinary
 `j`, an ordinary `ecall` and a float operand as diagnostics, and
 `backend/rv32 verifier refuses invalid registers`.
+
+### D1320 — An ordinary RISC-V block's text names x0 to read and to write
+
+**The tour said** nothing of x0. [1990]'s table listed `x0`–`x4` and `x8`
+as never named on RV64 and RV32, so `sw zero, 4(t0)` and `csrrw zero,
+cycle, zero` were L0330, and the refusal's note sent a zero source through
+a scratch register loaded with `li t1, 0` and a CSR write through the
+`csrw` pseudo-instruction, which assembles to the same `csrrw x0`.
+
+**Chosen:** an ordinary block's text on RV64 and RV32 may name `x0` or
+`zero` as a source and as a destination. x0 reads as zero and discards
+writes, so naming it overwrites nothing the routine keeps and cannot break
+the register-allocation contract an ordinary block's other rules protect:
+the compiler neither saves it nor chooses it for `general`. An operand still
+never names it, to read or to write: an `in` operand at x0 would lose its
+value and an `out` would always read zero, so `in v: u32 at x0` stays L0330,
+whose note now says why and that the text names `zero` itself. The
+scratch-register and `csrw` notes are gone. A naked body named x0 before
+and still does.
+
+**The alternatives:** x0 admitted as a source only, which keeps refusing
+`csrrw zero, ...` and an `add zero, ...` that discards a result, though no
+write to x0 changes anything; an operand at x0 admitted too, which would
+let a declared input or output silently mean nothing; and the refusal kept
+with its notes (SR-619, SR-645).
+
+**Pinned by** `rv32 firmware/an ordinary block names x0 both ways`, which
+emits both forms for rv32 and refuses an operand at x0, and
+`runtime/assembly-zero-register`, which stores and adds through `zero` on
+RV64 under QEMU and on the RV32 lanes.
 
 ### D671 — RV32 is RV64's emitter at XLEN 32, with eight-byte values in pairs
 

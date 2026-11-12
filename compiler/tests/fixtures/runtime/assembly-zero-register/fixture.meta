@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1320 an ordinary RISC-V block's text names x0, `zero`, as a source and as a destination: a store of zero clears a cell, a sum written to x0 is discarded and one read from it is its other addend, on RV64 and the RV32 lanes; the other targets return the status alone
+constructs: 1630, 1990
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
