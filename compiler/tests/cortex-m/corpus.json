@@ -71,7 +71,32 @@
       }
     },
     "abi/c-function-to-address": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/c-packed-records": {
       "mode": "execute",

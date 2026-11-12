@@ -295,6 +295,8 @@ class AddFixtureTest(unittest.TestCase):
                 (home / "fixture.meta").write_text(text)
                 if "program: main.ldn" in text:
                     (home / "main.ldn").write_text("fn main()\n")
+                if "c-sources: peer.c" in text:
+                    (home / "peer.c").write_text("int peer(void);\n")
             corpus = root / "corpus.json"
             corpus.write_text(json.dumps({"fixtures": {}}))
             parity = root / "parity.json"
@@ -308,6 +310,9 @@ class AddFixtureTest(unittest.TestCase):
                                       lambda *a: []), \
                     mock.patch.object(add_fixture, "cortex_stack",
                                       lambda *a: self.deepest), \
+                    mock.patch.object(add_fixture, "target_codes",
+                                      lambda *a: self.elsewhere.get(
+                                          a[3], [])), \
                     mock.patch.object(add_fixture, "format_sources",
                                       lambda *a: []), \
                     contextlib.redirect_stdout(out), \
@@ -322,6 +327,58 @@ class AddFixtureTest(unittest.TestCase):
 
     #  What run_main's refine measures as the fixture's deepest routine.
     deepest = 0
+    #  The codes run_main's refine refuses the fixture with on RV32 and
+    #  Xtensa, by target: none, so it compiles on both.
+    elsewhere = {}
+
+    ABI = ("class: abi\nprofiles: standard\nsummary: s\nprogram: main.ldn\n"
+           "c-sources: peer.c\nstatus: 42\nconstructs: 1580\n"
+           "targets: linux-x86-64, linux-arm64, cortex-m0\n")
+
+    def test_a_c_abi_rv32_and_xtensa_do_not_enable_is_their_refusal(self):
+        #  Their lanes run every row Cortex-M0 executes, so a refusal there
+        #  is in the row, in the corpus's own words (D920), as every ABI
+        #  fixture's is; abi/c-function-to-address once lacked them.
+        self.elsewhere = {"rv32": ["L0346"], "xtensa": ["L0346"]}
+        try:
+            status, _, _, rows = self.run_main(
+                ["abi/first"], {"abi/first": self.ABI})
+        finally:
+            self.elsewhere = {}
+        rv32 = {"mode": "refuse", "codes": ["L0346"],
+                "reason": "RV32's ilp32 C ABI is not enabled (D920): refine"
+                          " refuses the fixture's C signatures and layout(c)"
+                          " records there (L0346)."}
+        self.assertEqual((status, rows), (0, {"abi/first": {
+            "mode": "execute",
+            "lanes": {"esp32c3": rv32, "sifive-e": rv32},
+            "targets": {"xtensa": {
+                "mode": "refuse", "codes": ["L0346"],
+                "reason": "Xtensa's windowed C ABI is not enabled (D920):"
+                          " refine refuses the fixture's C signatures and"
+                          " layout(c) records there (L0346)."}}}}))
+        #  The words are the corpus's, so the row reads as its others do.
+        import json
+        corpus = json.loads(add_fixture.CORPUS.read_text())["fixtures"]
+        known = corpus["abi/c-function-from-address"]
+        self.assertEqual(rows["abi/first"]["lanes"], known["lanes"])
+        self.assertEqual(rows["abi/first"]["targets"], known["targets"])
+
+    def test_a_module_of_c_aliases_is_said_and_other_codes_are_a_persons(
+            self):
+        entries = add_fixture.other_firmware(
+            meta("abi/new"), None, None,
+            lambda target, named: ["L0015"] if target == "xtensa" else [])
+        self.assertEqual(entries, {"targets": {"xtensa": {
+            "mode": "refuse", "codes": ["L0015"],
+            "reason": "Xtensa's windowed C ABI is not enabled (D920), so the"
+                      " module of C aliases is not available there."}}})
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.other_firmware(
+                meta("abi/new"), None, None,
+                lambda target, named: ["L0301"] if target == "rv32" else [])
+        self.assertIn("RV32 refuses it with L0301", str(raised.exception))
+        self.assertIn("esp32c3 and sifive-e", str(raised.exception))
 
     def test_a_recorded_limit_is_said_and_is_no_unmeasured_execution(self):
         hosted = self.RUNTIME.replace(", cortex-m0", "")

@@ -35,7 +35,12 @@ fixture.  This then
    gives only under a firmware entry and so no `refuse` row can hold.
    Any other `execute` row says only that Cortex-M0 compiles the
    fixture: nothing here links the image or measures it against the map,
-   and a closing line says so and names the lane that does;
+   and a closing line says so and names the lane that does.  A row
+   Cortex-M0 executes or restricts is compiled for RV32 and Xtensa too,
+   whose lanes run every such row, and a refusal there becomes the RV32
+   lanes' `lanes` entries or Xtensa's `targets` entry, with the corpus's
+   reason for an L0346 or L0015 refusal; any other code is left to a
+   person, and the fixture is not added;
 3. puts a positive, runtime or ABI fixture's sources in the layout
    `refine fmt` gives, which `formatting/the corpus is formatted` holds
    them to, unless the fixture says `layout: evidence` or names [1750]
@@ -90,10 +95,16 @@ def built_refine():
 def cortex_codes(meta, directory, refine):
     """The distinct codes refine refuses the fixture with on Cortex-M0,
     sorted as the corpus compares them; [] when it compiles."""
+    return target_codes(meta, directory, refine, "cortex-m0", "Cortex-M0")
+
+
+def target_codes(meta, directory, refine, target, named):
+    """The distinct codes refine refuses the fixture with for TARGET,
+    which a refusal calls NAMED, sorted; [] when it compiles."""
     with tempfile.TemporaryDirectory() as scratch:
         ran = subprocess.run(
             [str(refine), *meta.module_arguments(str(directory)),
-             "--target=cortex-m0", "--emit=asm", "-o",
+             "--target=" + target, "--emit=asm", "-o",
              str(Path(scratch) / "refused.s")],
             capture_output=True, text=True, timeout=900)
     said = ran.stdout + ran.stderr
@@ -102,14 +113,60 @@ def cortex_codes(meta, directory, refine):
     codes = sorted(set(re.findall(r"error\[(L\d+)\]", said)))
     if ran.returncode != 1 or not codes:
         raise SystemExit("%s: refine ended with %d compiling it for"
-                         " Cortex-M0 and gave no diagnostic code:\n%s"
-                         % (meta.label, ran.returncode, said))
+                         " %s and gave no diagnostic code:\n%s"
+                         % (meta.label, ran.returncode, named, said))
     if "L0006" in codes:
         raise SystemExit("%s: refine %s found no module it imports (L0006),"
                          " so no library is beside it; pass the built"
                          " compiler with --refine=PATH:\n%s"
                          % (meta.label, refine, said))
     return codes
+
+
+#  The firmware corpus's other targets, each run over every row Cortex-M0
+#  executes or restricts: RV32 by its two lanes, `lanes` entries, and
+#  Xtensa by its target, a `targets` entry.  A C ABI neither enables
+#  (D920) refuses a fixture's C signatures with L0346, or its module of C
+#  aliases with L0015; the reasons are the corpus's own words for each.
+OTHER_FIRMWARE = (
+    ("rv32", "RV32", "lanes", ("esp32c3", "sifive-e"), "RV32's ilp32"),
+    ("xtensa", "Xtensa", "targets", ("xtensa",), "Xtensa's windowed"),
+)
+FIRMWARE_REASONS = {
+    "L0346": "%s C ABI is not enabled (D920): refine refuses the fixture's"
+             " C signatures and layout(c) records there (L0346).",
+    "L0015": "%s C ABI is not enabled (D920), so the module of C aliases is"
+             " not available there.",
+}
+
+
+def other_firmware(meta, directory, refine, codes_of=None):
+    """The `lanes` and `targets` entries a row Cortex-M0 executes or
+    restricts needs for each other firmware target that refuses the
+    fixture: those targets run every such row, and one that refuses it
+    fails unless the row records the refusal.  CODES_OF(target, named)
+    gives a target's codes, refine's by default."""
+    codes_of = codes_of or (lambda target, named: target_codes(
+        meta, directory, refine, target, named))
+    entries = {}
+    for target, named, key, names, abi in OTHER_FIRMWARE:
+        codes = codes_of(target, named)
+        if not codes:
+            continue
+        known = ("L0346" if "L0346" in codes
+                 else "L0015" if codes == ["L0015"] else None)
+        if known is None:
+            raise SystemExit(
+                "%s: Cortex-M0 compiles it and %s refuses it with %s; give"
+                " its row a %s entry for %s by hand, with those codes and"
+                " why (environments/cortex-m/README.md, The corpus"
+                " inventory)" % (meta.label, named, ", ".join(codes), key,
+                                 " and ".join(names)))
+        for name in names:
+            entries.setdefault(key, {})[name] = {
+                "mode": "refuse", "codes": codes,
+                "reason": FIRMWARE_REASONS[known] % abi}
+    return entries
 
 
 def held_to_layout(meta):
@@ -390,9 +447,13 @@ def add_one(fixture, args, refine, executing):
             if refused == [] and not args.refuse:
                 deepest = cortex_stack(meta, directory, refine)
                 reserved = reference_stack()
-            record["fixtures"][meta.label] = corpus_row(
+            row = corpus_row(
                 meta, args.refuse, args.reason, refused, args.stops,
                 deepest, reserved)
+            if (row["mode"] in ("execute", "restriction")
+                    and "profile_limit" not in row and refine is not None):
+                row.update(other_firmware(meta, directory, refine))
+            record["fixtures"][meta.label] = row
             record["fixtures"] = dict(sorted(record["fixtures"].items()))
             CORPUS.write_text(json.dumps(record, indent=2) + "\n",
                               encoding="utf-8")
