@@ -108,8 +108,18 @@ package body Landin.Commands.Devices is
             if Host.Exists (Path)
               and then Host.Paths_Overlap_Any (Path, Inputs)
             then
-               Report (Cat.Svd_Output_Refused, Path & " overlaps an input;"
-                       & " name another output directory with --out-dir");
+               declare
+                  Short : constant String :=
+                    Host.Separation_Shortage (Path, Inputs);
+               begin
+                  Report (Cat.Svd_Output_Refused,
+                          (if Short /= ""
+                           then Path & " could not be compared with the"
+                             & " inputs: " & Short
+                             & "; retry when the host can spare more"
+                           else Path & " overlaps an input; name another"
+                             & " output directory with --out-dir"));
+               end;
                return False;
             end if;
             if Host.Is_Link (Path) then

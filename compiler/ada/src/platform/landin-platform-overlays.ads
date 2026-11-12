@@ -60,6 +60,9 @@ package Landin.Platform.Overlays is
    overriding function Paths_Overlap_Any
      (Host : Overlay; Left : String; Rights : Path_List) return Boolean;
 
+   overriding function Separation_Shortage
+     (Host : Overlay; Left : String; Rights : Path_List) return String;
+
    overriding function Same_File
      (Host : Overlay; Left, Right : String) return Boolean;
 

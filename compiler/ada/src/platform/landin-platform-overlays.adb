@@ -145,6 +145,13 @@ package body Landin.Platform.Overlays is
       return Host.Under.Paths_Overlap_Any (Left, Rights);
    end Paths_Overlap_Any;
 
+   --  A held path or a spelling of one is an overlap the overlay answers
+   --  itself, with no lookup to run short.
+   overriding function Separation_Shortage
+     (Host : Overlay; Left : String; Rights : Path_List) return String
+     is (if (for some Right of Rights => Left = Right) then ""
+         else Host.Under.Separation_Shortage (Left, Rights));
+
    overriding function Same_File
      (Host : Overlay; Left, Right : String) return Boolean
      is (Left = Right or else Host.Under.Same_File (Left, Right));

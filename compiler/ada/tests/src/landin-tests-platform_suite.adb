@@ -2049,6 +2049,60 @@ package body Landin.Tests.Platform_Suite is
          "fake hardlink writes affect the shared inode");
    end Publication_Uses_Actual_Entries;
 
+   --  A host whose separation lookups run out of descriptors: it answers
+   --  overlap for every output, as the native adapter does when a lookup
+   --  fails, and says why.
+   type Short_Of_Descriptors is new
+     Landin.Testing.Fakes.Fake_Filesystem with null record;
+   overriding function Paths_Overlap_Any
+     (Host : Short_Of_Descriptors; Left : String;
+      Rights : Landin.Platform.Path_List) return Boolean is (True);
+   overriding function Separation_Shortage
+     (Host : Short_Of_Descriptors; Left : String;
+      Rights : Landin.Platform.Path_List) return String
+     is ("Too many open files");
+
+   --  An output a lookup could not compare with a protected input is
+   --  refused for the shortage, not as an alias; one that does alias is
+   --  still refused as one.
+   procedure Publication_Names_A_Shortage
+     (Item : in out Landin.Testing.Context);
+   procedure Publication_Names_A_Shortage
+     (Item : in out Landin.Testing.Context)
+   is
+      use Landin.Platform;
+      package Pub renames Landin.Platform.Publication;
+      Short : Short_Of_Descriptors;
+      Plain : Landin.Testing.Fakes.Fake_Filesystem;
+      Group, Other : Pub.Transaction;
+      Status : Write_Status;
+      Reason : Unbounded.Unbounded_String;
+   begin
+      Short.Add_File ("source", "original source");
+      Pub.Protect (Group, Short, "source");
+      Pub.Prepare (Group, Short, "output", Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Not_Writable
+           and then Unbounded.Index
+             (Reason, "output could not be compared with the protected"
+              & " inputs: Too many open files") > 0
+           and then Unbounded.Index (Reason, "alias") = 0,
+         "a shortage is named, not called an alias: "
+         & Unbounded.To_String (Reason));
+      Landin.Testing.Check
+        (Item, not Short.Exists ("output"),
+         "the output refused for a shortage is not written");
+      Plain.Add_File ("source", "original source");
+      Plain.Add_Hard_Link ("source-alias", "source");
+      Pub.Protect (Other, Plain, "source");
+      Pub.Prepare (Other, Plain, "source-alias", Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Not_Writable
+           and then Unbounded.Index (Reason, "Too many open files") = 0,
+         "an alias with no shortage is not told as one: "
+         & Unbounded.To_String (Reason));
+   end Publication_Names_A_Shortage;
+
    procedure Publication_Requires_Absent_Snapshot
      (Item : in out Landin.Testing.Context);
    procedure Publication_Requires_Absent_Snapshot
@@ -2277,6 +2331,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "publication requires an absent snapshot",
          Publication_Requires_Absent_Snapshot'Access);
+      Landin.Testing.Register
+        (Into, "platform", "publication names a separation shortage",
+         Publication_Names_A_Shortage'Access);
       Landin.Testing.Register
         (Into, "platform", "publication preserves output kinds",
          Publication_Preserves_Output_Kinds'Access);

@@ -65,6 +65,16 @@ package Landin.Platform is
      (Host : Filesystem; Left : String; Rights : Path_List)
       return Boolean is abstract;
 
+   --  Why Paths_Overlap_Any, or Paths_Overlap with Rights its one path,
+   --  could not prove Left separate when the host ran short of what a
+   --  lookup needs: the host's words, such as "Too many open files".  ""
+   --  when no lookup failed for a shortage, so the overlap answered was
+   --  proven or has another cause.  A refusal names the shortage rather
+   --  than an alias that is not there.
+   function Separation_Shortage
+     (Host : Filesystem; Left : String; Rights : Path_List)
+      return String is abstract;
+
    --  True only for proven identity of existing objects. Unknown identity
    --  is False: source deduplication must never discard an uncertain input.
    --  Like Paths_Overlap, this assumes no concurrent namespace replacement.

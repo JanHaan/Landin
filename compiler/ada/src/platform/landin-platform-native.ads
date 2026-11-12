@@ -38,6 +38,10 @@ package Landin.Platform.Native is
      (Host : Native_Filesystem; Left : String; Rights : Path_List)
       return Boolean;
 
+   overriding function Separation_Shortage
+     (Host : Native_Filesystem; Left : String; Rights : Path_List)
+      return String;
+
    overriding function Working_Directory
      (Host : Native_Filesystem) return String;
 

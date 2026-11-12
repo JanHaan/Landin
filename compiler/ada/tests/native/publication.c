@@ -30,6 +30,8 @@
 int landin_observe_identity(const char *, uint64_t *, uint64_t *, int *);
 int landin_entry_names_alias(int, const char *, const char *);
 int landin_names_alias(const char *, const char *, int);
+int landin_overlaps_any(const char *, const char *const *, size_t);
+int landin_separation_shortage(const char *, const char *const *, size_t);
 void landin_file_identity_set_hook(void (*)(const char *, const char *));
 int landin_open_update(const char *, char **, size_t *, int *, char *, size_t);
 int landin_replace_update(int, const char *, size_t, char *, size_t);
@@ -1107,6 +1109,60 @@ static unsigned descriptor_count(void)
         if (fcntl((int)fd, F_GETFD) >= 0) ++count;
     return count;
 }
+/* A separation check that ran out of descriptors answers overlap, which
+   keeps an output off an input it could not compare; what the caller says
+   of it is the shortage, not an alias.  Under a soft limit at the lowest
+   free descriptor, every lookup that needs one fails EMFILE: Linux opens a
+   directory for its name rules when two absent names in it are compared,
+   and Darwin's realpath of the working directory may open one for an
+   output named relative to it, the route a refused build takes. */
+static void separation_probe(const char *left, const char *right,
+                             int linux_bites)
+{
+    const char *rights[] = { right };
+    int answered = landin_overlaps_any(left, rights, 1);
+    REQUIRE(landin_separation_shortage(left, rights, 1) == 0);
+    struct rlimit saved, limited;
+    REQUIRE(getrlimit(RLIMIT_NOFILE, &saved) == 0);
+    int lowest = 0;
+    while (fcntl(lowest, F_GETFD) >= 0) ++lowest;
+    limited = saved;
+    limited.rlim_cur = (rlim_t)lowest;
+    REQUIRE(setrlimit(RLIMIT_NOFILE, &limited) == 0);
+    int under = landin_overlaps_any(left, rights, 1);
+    int shortage = landin_separation_shortage(left, rights, 1);
+    REQUIRE(setrlimit(RLIMIT_NOFILE, &saved) == 0);
+    snprintf(why, sizeof why, "%s against %s: %d unlimited, %d limited,"
+             " shortage %d", left, right, answered, under, shortage);
+    REQUIRE(shortage == 0 || shortage == EMFILE);
+    REQUIRE(under == answered || shortage == EMFILE);
+#ifdef __linux__
+    if (linux_bites) REQUIRE(under == 1 && shortage == EMFILE);
+#else
+    (void)linux_bites;
+#endif
+    why[0] = '\0';
+}
+static void separation_shortage(void)
+{
+    char directory[4096], left[8192], right[8192];
+    path(directory, sizeof directory, "shortage");
+    REQUIRE(mkdir(directory, 0700) == 0);
+    REQUIRE(snprintf(left, sizeof left, "%s/OUT.s", directory) > 0);
+    REQUIRE(snprintf(right, sizeof right, "%s/out.s", directory) > 0);
+    separation_probe(left, right, 1);
+    /* The refused build's pair: a relative output beside an input. */
+    REQUIRE(snprintf(right, sizeof right, "%s/input.ldn", directory) > 0);
+    put(right, "input");
+    char here[4096];
+    REQUIRE(getcwd(here, sizeof here) != NULL);
+    REQUIRE(chdir(directory) == 0);
+    separation_probe("limited.s", "input.ldn", 0);
+    REQUIRE(chdir(here) == 0);
+    REQUIRE(unlink(right) == 0 && rmdir(directory) == 0);
+    ++passed;
+}
+
 static void lifecycle_window(unsigned *number, unsigned count)
 {
     for (unsigned i = 0; i < count; ++i, ++*number) {
@@ -1651,6 +1707,7 @@ int main(int argc, char **argv)
         return 0;
     }
     write_failure_reasons();
+    separation_shortage();
     registry_lifetimes();
     identity_observations();
     required_absence_snapshot(); absent_directory_publication();

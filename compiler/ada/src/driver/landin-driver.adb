@@ -156,6 +156,27 @@ package body Landin.Driver is
    --  The targets are Landin.Targets.Selection's, in its order: every one
    --  is described, and those a backend emits for are named again, each
    --  with its levels.
+   --  ": WORDS; retry when ..." when the host ran short of
+   --  what comparing Path with Rights needed, WORDS its own (D1051), and
+   --  "" when it did not, so the overlap it answered is the paths'.
+   function Shortage
+     (Host : Landin.Platform.Filesystem'Class; Path : String;
+      Rights : Landin.Platform.Path_List) return String;
+
+   function Shortage
+     (Host : Landin.Platform.Filesystem'Class; Path : String;
+      Rights : Landin.Platform.Path_List) return String
+   is
+      Words : constant String := Host.Separation_Shortage (Path, Rights);
+   begin
+      return (if Words = "" then ""
+              else ": " & Words & "; retry when the host can spare more");
+   end Shortage;
+
+   --  Said & Short when the host ran short, Otherwise when it did not.
+   function Unless_Short (Short, Said, Otherwise : String) return String
+     is (if Short /= "" then Said & Short else Otherwise);
+
    function Identity return String is
       package Selection renames Landin.Targets.Selection;
       function Emits (Index : Positive) return Boolean
@@ -746,8 +767,12 @@ package body Landin.Driver is
                            Host.Identity_Of (Path) = Identity))
                then
                   Lease_Reason := Unbounded.To_Unbounded_String
-                    ("consumed response input cannot be rewritten;"
-                     & " choose another source, or use fmt --stdout");
+                    (Unless_Short
+                       (Shortage (Host, Path, Protected_Inputs),
+                        "cannot compare it with the consumed response"
+                        & " inputs",
+                        "consumed response input cannot be rewritten;"
+                        & " choose another source, or use fmt --stdout"));
                   Read := Landin.Platform.Not_Readable;
                elsif Check or else Printing then
                   Host.Read_File (Path, Content, Read);
@@ -1570,9 +1595,12 @@ package body Landin.Driver is
                   Path = Input or else Host.Same_File (Path, Input))
             then Kind & " collides with source: " & Path
               & "; choose another output path and retry"
-            else "cannot prove " & Kind & " separate from source: " & Path
-              & "; check source and output paths and access, or choose"
-              & " another output path and retry");
+            else Unless_Short
+              (Shortage (Host, Path, Sources),
+               "cannot compare " & Kind & " " & Path & " with the sources",
+               "cannot prove " & Kind & " separate from source: " & Path
+               & "; check source and output paths and access, or choose"
+               & " another output path and retry"));
 
          function Output_Conflict
            (Kind, Path, Other : String;
@@ -1586,16 +1614,38 @@ package body Landin.Driver is
            (if Path = Other or else Host.Same_File (Path, Other)
             then Kind & " collides with " & Other_Kind & ": " & Path
               & " and " & Other & "; choose another output path and retry"
-            else "cannot prove " & Kind & " separate from " & Other_Kind
-              & ": " & Path & " and " & Other
-              & (if (for some Byte of String'(Path & Other) =>
-                       Byte in '~' | ':' or else Character'Pos (Byte) > 127)
-                 then "; this filesystem's rules for names are not known"
-                   & " here, and one holding '~', ':' or a character outside"
-                   & " ASCII may be another spelling of a different name"
-                 else "")
-              & "; check output paths and access, or choose another"
-              & " output path and retry");
+            else Unless_Short
+              (Shortage (Host, Path, [Other]),
+               "cannot compare " & Kind & " " & Path & " with "
+               & Other_Kind & " " & Other,
+               "cannot prove " & Kind & " separate from " & Other_Kind
+               & ": " & Path & " and " & Other
+               & (if (for some Byte of String'(Path & Other) =>
+                        Byte in '~' | ':' or else Character'Pos (Byte) > 127)
+                  then "; this filesystem's rules for names are not known"
+                    & " here, and one holding '~', ':' or a character"
+                    & " outside ASCII may be another spelling of a"
+                    & " different name"
+                  else "")
+               & "; check output paths and access, or choose another"
+               & " output path and retry"));
+
+         --  An output said to collide with or not be provably separate
+         --  from an input, unless the host ran short of what the lookup
+         --  needed, which is said instead.
+         function Input_Conflict (Kind, Path, Input : String) return String;
+
+         function Input_Conflict (Kind, Path, Input : String) return String
+           is (Unless_Short
+                 ((if Path = Input then ""
+                   else Shortage (Host, Path, [Input])),
+                  "cannot compare " & Kind & " " & Path & " with input "
+                  & Input,
+                  Kind & " " & Path
+                  & " collides with or cannot be proved separate"
+                  & " from input " & Input
+                  & "; check paths and access or choose another"
+                  & " output path and retry"));
 
          function Artifact_Output return String is
            (if Unbounded.Length (Output) > 0
@@ -2120,11 +2170,8 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Publication_Failed := True;
                   Note_Failure
-                    (Code_Unknown_Option, "output " & Path
-                     & " collides with or cannot be proved separate"
-                     & " from input " & Input
-                     & "; check paths and access or choose another"
-                     & " output path and retry");
+                    (Code_Unknown_Option,
+                     Input_Conflict ("output", Path, Input));
                   return;
                end if;
             end loop;
@@ -2287,11 +2334,8 @@ package body Landin.Driver is
                         Publication_Failed := True;
                         Bad_Use := True;
                         Note_Failure
-                          (Code_Unknown_Option, "output " & Path
-                           & " collides with or cannot be proved separate"
-                           & " from input " & Input
-                           & "; check paths and access or choose"
-                           & " another output path and retry");
+                          (Code_Unknown_Option,
+                           Input_Conflict ("output", Path, Input));
                      end if;
                   end loop;
                end loop;
@@ -2752,11 +2796,8 @@ package body Landin.Driver is
                then
                   Bad_Use := True;
                   Note_Failure
-                    (Code_Unknown_Option, "stage report output " & Path
-                     & " collides with or cannot be proved separate"
-                     & " from input " & Input
-                     & "; check paths and access or choose another"
-                     & " output path and retry");
+                    (Code_Unknown_Option,
+                     Input_Conflict ("stage report output", Path, Input));
                   return;
                end if;
             end loop;

@@ -41,6 +41,8 @@ int landin_same_existing_file(const char *left, const char *right);
 int landin_existing_file_key(const char *path, char *key, size_t length);
 int landin_overlaps_any(const char *left, const char *const *rights,
                         size_t count);
+int landin_separation_shortage(const char *left, const char *const *rights,
+                               size_t count);
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules);
 int landin_directory_access_denied(const char *path);
@@ -839,6 +841,52 @@ int landin_overlaps_any(const char *left, const char *const *rights,
         if (destination(rights[i], &b, 0) != 0
             || destinations_overlap(&a, &b) != 0)
             return 1;
+    }
+    return 0;
+}
+
+/* An errno that says the host ran short of what a lookup needs, rather
+   than anything about the paths. */
+static int shortage_of(int error)
+{
+    return error == EMFILE || error == ENFILE || error == ENOMEM ? error : 0;
+}
+
+/* Why landin_overlaps_any could not prove LEFT separate from RIGHTS when
+   the reason is a shortage: the errno of the first of its lookups that
+   failed for want of a descriptor or memory, or 0 when none did, so an
+   overlap it answered was proven or has another cause.  Darwin's realpath
+   of a relative output's directory opens one; at a descriptor limit that
+   lookup fails, and the overlap it then answers is no alias.  The lookups
+   are made again, as the caller asks only after an overlap was answered. */
+int landin_separation_shortage(const char *left, const char *const *rights,
+                               size_t count)
+{
+    struct destination a;
+    struct destination b;
+    size_t i;
+    int error;
+
+    if (count == 0)
+        return 0;
+    errno = 0;
+    if (destination(left, &a, 0) != 0)
+        return shortage_of(errno);
+    for (i = 0; i < count; ++i) {
+        errno = 0;
+        if (destination(rights[i], &b, 0) != 0)
+            return shortage_of(errno);
+        /* Two absent names in one directory are compared under its name
+           rules, which open it on Linux. */
+        if (!a.exists && !b.exists
+            && a.parent.st_dev == b.parent.st_dev
+            && a.parent.st_ino == b.parent.st_ino
+            && strcmp(a.name, b.name) != 0) {
+            errno = 0;
+            if (name_rules(a.directory) < 0
+                && (error = shortage_of(errno)) != 0)
+                return error;
+        }
     }
     return 0;
 }
