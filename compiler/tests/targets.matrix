@@ -1575,6 +1575,7 @@ negative/unnamed-result-names-the-named-form | linux-x86-64, linux-arm64, darwin
 negative/unterminated-raw-literal | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/unterminated-text-literal | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/unused-else-binding | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
+negative/unused-else-binding-beside-a-comment | linux-x86-64, synthetic-32
 negative/unused-pure-local | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/upper-case-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/use-after-sink | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

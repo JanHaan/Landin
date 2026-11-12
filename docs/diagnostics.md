@@ -1810,8 +1810,11 @@ begin ... end` runs a block of statements, `else value` stands in for the
 call's result, and `else none` ignores the failure of a call that returns
 nothing. In the arm of an `if`, an `else` that binds no name is the `if`'s
 own [1820], so a binding written there is what keeps the recovery and is
-not warned about. `--allow=L0684` suppresses the warning; `--deny=L0684`
-makes it an invocation error.
+not warned about. The warning's exact fix writes `else begin` for `else
+(name)`, which runs the same block with every name meaning what it meant
+(D1341); it is offered when only blanks stand between `else` and the `)` on
+one line, so it never removes a comment. `--allow=L0684` suppresses the
+warning; `--deny=L0684` makes it an invocation error.
 
 ```landin
 missing: atom

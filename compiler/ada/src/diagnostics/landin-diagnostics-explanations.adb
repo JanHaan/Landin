@@ -1625,9 +1625,13 @@ package body Landin.Diagnostics.Explanations is
                & "the failure of a call that returns nothing. In the arm o"
                & "f an `if`, an `else` that binds no name is the `if`'s ow"
                & "n [1820], so a binding written there is what keeps the r"
-               & "ecovery and is not warned about. `--allow=L0684` suppres"
-               & "ses the warning; `--deny=L0684` makes it an invocation e"
-               & "rror.",
+               & "ecovery and is not warned about. The warning's exact fix"
+               & " writes `else begin` for `else (name)`, which runs the s"
+               & "ame block with every name meaning what it meant (D1341);"
+               & " it is offered when only blanks stand between `else` and"
+               & " the `)` on one line, so it never removes a comment. `--"
+               & "allow=L0684` suppresses the warning; `--deny=L0684` make"
+               & "s it an invocation error.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"

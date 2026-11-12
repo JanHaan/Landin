@@ -3098,9 +3098,9 @@ the result. `_ = name` is a reference and silences it, as it must stay
 legal. One place is exempt: in the arm of an `if`, an `else` with no name
 is the `if`'s own [1820], so the name is what makes the recovery the
 call's, and nothing is said. Like L0326 it is raised only in a routine body
-the checker checked and in an active configuration. It offers no fix:
-replacing `(name)` with `begin` is the edit, but the checker does not prove
-it here. D370's repair now writes ` begin`, the block the statements
+the checker checked and in an active configuration. It offered no fix:
+replacing `(name)` with `begin` is the edit, and D1341 later proves it and
+offers it. D370's repair now writes ` begin`, the block the statements
 written under the bare `else` already fit, and its message names that
 block.
 
@@ -3115,6 +3115,40 @@ objects to.
 whose program holds each exempt form, and
 `negative/statements-after-a-bare-else-name-its-binder`, whose fix the
 `fixes` suite compiles clean, without a warning.
+
+### D1341 — L0684's fix writes `else begin` for the unread binding
+
+**The discrepancy:** D1261's warning named the form that binds nothing and
+offered no edit, so an editor showed the warning with nothing to apply, and
+every `else (problem)` the warning found was retyped by hand.
+
+**Chosen:** L0684 carries one exact fix, which replaces the bytes from the
+end of `else` to the binding's `)` with ` begin`: `else (problem) ... end`
+becomes `else begin ... end`, and the one-line `else (problem) 0 end`
+becomes `else begin 0 end`. It is exact under D251 because the warning is
+raised only where no reference in the block names the binding and the
+program has no error, so the bare block runs what the bound one ran and
+every name in it means what it meant; the `if` arm where leaving the name
+out would hand the `else` to the `if` [1820] is never warned about. The
+fix is offered only when the replaced bytes are the parenthesised name and
+spaces or tabs on one line, so it never removes a comment or a line end;
+otherwise the warning stands alone. It reaches every consumer of a fix:
+the human report's `help`, the JSON report's `exact` fix and the language
+server's preferred quick fix. There is no `refine fix` command, and `refine
+fmt` applies no fix, since D252's layout changes no token.
+
+**The alternatives:** writing `else value` for a one-value block, a second
+edit whose result an `if` arm can reread as the `if`'s own `else`; a
+`Likely` fix, which a batch tool would not apply although nothing about the
+rewrite is a guess; and a fix that also takes a comment or a line end
+inside the parentheses, which removes source the warning is not about.
+
+**Pinned by** `negative/unused-else-binding`, whose `program.fixed` the
+`fixes` suite compiles with an empty report;
+`negative/unused-else-binding-beside-a-comment`, whose comment and line end
+keep the warning without a fix while its spaced binding has one; and the
+server session `unused-else-binding-repair`, whose code action is the
+preferred edit.
 
 ## DECISIONS: NUMBERS AND LITERALS
 

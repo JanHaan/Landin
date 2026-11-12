@@ -44976,19 +44976,78 @@ package body Landin.Stages.Checking is
                                  (Checked.Where,
                                   Syn.Where (Of_Tree.all, Node)))
                         then
-                           Bad.Report
-                             (Item    => Bad.Unused_Else_Binding,
-                              Source  => Id,
-                              Where   => Syn.Anchor (Of_Tree.all, Node),
-                              Message => "this `else` binds the error as `"
-                                & Spelled (Syn.Name (Of_Tree.all, Node))
-                                & "`, and its block never reads it",
-                              Note    => "[1030]: a recovery that does"
-                                & " not read the error leaves the name"
-                                & " out: `else begin ... end` runs a"
-                                & " block, and `else value` stands in for"
-                                & " the result",
-                              Into    => Found);
+                           declare
+                              Name : constant String :=
+                                Spelled (Syn.Name (Of_Tree.all, Node));
+                              Said : constant Landin.Source.Span :=
+                                Syn.Anchor (Of_Tree.all, Node);
+                              Clause : constant Landin.Source.Span :=
+                                Syn.Where (Of_Tree.all, Node);
+                              After : constant String :=
+                                Landin.Source.Slice
+                                  (Text, (Said.Last, Clause.Last));
+                              At_Byte : Natural := After'First;
+                              Closes : Natural := 0;
+
+                              procedure Skip_Blanks;
+                              procedure Skip_Blanks is
+                              begin
+                                 while At_Byte <= After'Last
+                                   and then After (At_Byte)
+                                     in ' ' | ASCII.HT
+                                 loop
+                                    At_Byte := At_Byte + 1;
+                                 end loop;
+                              end Skip_Blanks;
+                           begin
+                              --  D1341: the bytes from `else` to `)` are
+                              --  the parenthesised name and blanks, on
+                              --  one line, or the fix is not offered, so
+                              --  it never swallows a comment.
+                              Skip_Blanks;
+                              if At_Byte <= After'Last
+                                and then After (At_Byte) = '('
+                              then
+                                 At_Byte := At_Byte + 1;
+                                 Skip_Blanks;
+                                 if At_Byte + Name'Length - 1 <= After'Last
+                                   and then After
+                                     (At_Byte .. At_Byte + Name'Length - 1)
+                                       = Name
+                                 then
+                                    At_Byte := At_Byte + Name'Length;
+                                    Skip_Blanks;
+                                    if At_Byte <= After'Last
+                                      and then After (At_Byte) = ')'
+                                    then
+                                       Closes := At_Byte - After'First + 1;
+                                    end if;
+                                 end if;
+                              end if;
+                              Bad.Report
+                                (Item    => Bad.Unused_Else_Binding,
+                                 Source  => Id,
+                                 Where   => Said,
+                                 Message => "this `else` binds the error"
+                                   & " as `" & Name
+                                   & "`, and its block never reads it",
+                                 Note    => "[1030]: a recovery that does"
+                                   & " not read the error leaves the name"
+                                   & " out: `else begin ... end` runs a"
+                                   & " block, and `else value` stands in"
+                                   & " for the result",
+                                 Fixes   =>
+                                   (if Closes > 0 then
+                                    [1 => Landin.Diagnostics.Fixes
+                                       .Unbind_Error
+                                         (Id,
+                                          (Said.Last, Said.Last
+                                             + Landin.Source.Byte_Offset
+                                                 (Closes)),
+                                          Name)]
+                                    else Landin.Diagnostics.No_Fixes),
+                                 Into    => Found);
+                           end;
                         end if;
                      end;
                   end if;

@@ -1,0 +1,9 @@
+class: negative
+summary: D1341 offers L0684's `else begin` only where the bytes it replaces are the parenthesised name and blanks on one line, so a comment or a line end inside keeps the warning without a fix
+program: program.ldn
+codes: L0684, L0684, L0684
+status: 0
+constructs: 1030
+targets: linux-x86-64, synthetic-32
+args: ../tests/fixtures/negative/unused-else-binding-beside-a-comment/program.ldn
+expect: expected.txt

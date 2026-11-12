@@ -227,6 +227,20 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Hold_Exit;
 
+   function Unbind_Error
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span;
+      Name   : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Unbind_Error, Exact,
+         "write `else begin`, which binds no name, for `else ("
+         & Name & ")`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, " begin"));
+      return Result;
+   end Unbind_Error;
+
    function Respellings
      (Source  : Landin.Source.Source_Id;
       Where   : Landin.Source.Span;

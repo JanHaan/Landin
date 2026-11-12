@@ -1,0 +1,18 @@
+missing: atom
+
+open: (path: i32) -> (handle: i32) ! missing =
+    fail missing when path == 0
+    handle = path
+end open
+
+--- A comment, or a line end, between `else` and the binding's `)` is
+--- source the rewrite to `else begin` would remove, so the warning is
+--- given without a fix; spaces alone are not, and it has one.
+unread: (path: i32) -> (handle: i32) =
+    first := open(path) else (problem -- never read
+    ) 0 end
+    second := open(path) else
+        (problem) 0 end
+    third := open(path) else ( problem ) 0 end
+    handle = first + second + third
+end unread

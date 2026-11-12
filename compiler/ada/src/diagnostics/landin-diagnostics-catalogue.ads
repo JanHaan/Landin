@@ -1230,7 +1230,7 @@ package Landin.Diagnostics.Catalogue is
         (Code => "L0684", Level => Warning, State => Live,
          Source => True, Bytes => True,
          Least => 0, Most => 0, Notes => 1, Route => False,
-         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("D1261: a call-site `else` that binds an error its"
                    & " block never reads")),
       --  The backend's reports need not have a source. A missing entry uses an
