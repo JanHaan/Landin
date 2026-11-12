@@ -246,9 +246,15 @@ reaches every Bash command of the session and of its subagents:
 ```json
 {"hooks": {"SessionStart": [{"matcher": "", "hooks": [{"type": "command",
   "timeout": 180,
-  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && cat \"$f\" >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
+  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && m=\"# landin agent_env $(cksum < \"$f\")\" && ! grep -qxF \"$m\" \"$CLAUDE_ENV_FILE\" 2>/dev/null && { echo \"$m\"; cat \"$f\"; } >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
 ```
 
+The hook runs again on every resume of a session, which keeps its
+`$CLAUDE_ENV_FILE`, so it marks what it appended with a line naming the
+environment's checksum and appends nothing when that line is already there:
+appending each time, six resumes took the file past 128 KiB, and every Bash
+command of the session then failed with E2BIG, "Argument list too long".
+`scripts/tests/test_agent_env.py` runs the command above as written here.
 The file is the environment of the checkout the session started in; a
 worktree whose flake or pins differ needs its own `nix develop`. The hook is
 local to Claude Code and is not installed by cloning the repository. In
