@@ -36,6 +36,34 @@ package body Landin.Diagnostics.Citations is
       return Unbounded.To_String (Shown);
    end First_Line;
 
+   function Source (From : Table) return String is
+      First : constant Positive := Format_Line'Length + 2;
+      Last  : constant Natural :=
+        First + Source_Head'Length + Digest_Length - 1;
+      Size  : constant Natural := Unbounded.Length (From.Content);
+   begin
+      if not From.Ok or else Size < Last
+        or else Unbounded.Slice
+          (From.Content, First, First + Source_Head'Length - 1)
+          /= Source_Head
+        or else (Size > Last
+                 and then Unbounded.Element (From.Content, Last + 1) /= LF)
+      then
+         return "";
+      end if;
+      declare
+         Digest : constant String :=
+           Unbounded.Slice (From.Content, Last - Digest_Length + 1, Last);
+      begin
+         if (for some Each of Digest =>
+               Each not in '0' .. '9' | 'a' .. 'f')
+         then
+            return "";
+         end if;
+         return Digest;
+      end;
+   end Source;
+
    --  The number as the file writes it, with no leading blank.
    function Image (Number : Natural) return String;
 

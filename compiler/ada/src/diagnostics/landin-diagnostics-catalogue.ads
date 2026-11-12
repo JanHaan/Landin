@@ -108,6 +108,10 @@ package Landin.Diagnostics.Catalogue is
       --  supplies instead.  A warning: the program is compiled as D275
       --  says, and the reader is told which `core` it was compiled with.
       Root_Holds_Library_Module,
+      --  D1357: the citations file `refine explain` read names compiler
+      --  sources other than this refine's, or none.  A warning: the answer
+      --  is given, and the reader is told it may be another revision's.
+      Citations_From_Other_Sources,
       --  D563: the first directory an import names holds no source, and a
       --  later root's directory of the same path holds the module.
       Empty_Module_Hides_Root,
@@ -451,6 +455,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D275: a project root holds a module the compiler's"
                    & " library supplies instead")),
+      Citations_From_Other_Sources =>
+        (Code => "L0017", Level => Warning, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D1357: the citations file names compiler sources other"
+                   & " than the compiler's")),
       Empty_Module_Hides_Root =>
         (Code => "L0532", Level => Error, State => Live,
          Source => True, Bytes => True,

@@ -422,14 +422,17 @@ Reconcile semantics and fixtures as well as textual conflicts.
 A generated file is never merged by hand. `python3 check.py --help` lists
 them. Every stream that adds a decision to `spec.md` rewrites one,
 `citations.txt`, the data `refine explain` reads a construct or a decision
-from (D1240); it is no compiler source, and `.gitattributes` merges it by
-union, so two such streams neither conflict there nor rebuild. Each stream
+from (D1240), and so does every stream that changes a compiler source,
+whose digest the file's second line names (D1357); it is no compiler
+source, and `.gitattributes` merges it by union, so two such streams
+neither conflict there nor rebuild. Each stream
 regenerates in its own worktree, since its own `check.py` needs the files
 current. The integrator regenerates for the merged tree: resolve the
 documents, then run `python3 check.py --generate`, which writes every
 generated file from them whatever state a merge or a conflict left it in,
 and add the result. A union merge can leave `citations.txt` out of order,
-which the full `python3 check.py` reports as stale until that run. The
+or with two source lines, which the full `python3 check.py` reports as
+stale until that run. The
 compiler is rebuilt only when a generated compiler source changed, which a
 diagnostic's explanation in `docs/diagnostics.md` still does through
 `landin-diagnostics-explanations.adb`; `--suite=catalogue
