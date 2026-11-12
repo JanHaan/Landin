@@ -16717,8 +16717,8 @@ deduction; a closed parameter types it before deduction and needs nothing
 from it, which answers that reason rather than reviving the alternative.
 
 **Pinned by** `runtime/generic-closed-parameter-takes-context` and
-`runtime/buffered-writer-format` on every target,
-`negative/generic-closed-parameter-refusals`,
+`runtime/buffered-writer-format` on every hosted target and, at every
+optimized profile, Cortex-M0, `negative/generic-closed-parameter-refusals`,
 `negative/generic-literal-lent-escapes`, `negative/array-lent-refusals`
 and `negative/any-construction-needs-context`.
 
@@ -37614,7 +37614,7 @@ placeholder too many, on every hosted target;
 `runtime/io-write-format-memory`, whose counted writes show a line that
 fits as one write, a longer value as the bytes before it, the value and
 the rest, a mismatch as no write and a failed write as `io_failed`, on
-Cortex-M0 too; and `negative/core-io-println-is-write-format`,
+Cortex-M0 too at every optimized profile; and `negative/core-io-println-is-write-format`,
 `negative/core-io-printf-is-write-format`, under an alias, and
 `negative/core-io-selected-puts-is-write-format`, whose notes show the call.
 
