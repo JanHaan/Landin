@@ -10,6 +10,7 @@ with Landin.Backend.Firmware;
 with Landin.Backend.Images;
 with Landin.Backend.Toolchain;
 with Landin.Backend.Dispatch;
+with Landin.Build_Identity;
 with Landin.Build_Reports;
 with Landin.Build_Reports.Firmware;
 with Landin.Build_Reports.Sources;
@@ -110,6 +111,8 @@ package body Landin.Driver is
      Rows.Code (Rows.Handler_Exceeds_Stack_Margin);
    Code_Library_Not_Found : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Library_Not_Found);
+   Code_Other_Citations : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Citations_From_Other_Sources);
 
    procedure Keep_Locations
      (Result : in out Outcome;
@@ -219,6 +222,9 @@ package body Landin.Driver is
    --  `--library=DIR` says, and read only when one is asked for.  A file
    --  that is missing, unreadable or in another format is reported with
    --  its path, and what was asked for is still named with its document.
+   --  One generated from other compiler sources than this refine's, or
+   --  that names none, is read and answers, with one warning that names
+   --  both (D1357).
    ---------------------------------------------------------------------
 
    function Explain
@@ -270,6 +276,54 @@ package body Landin.Driver is
                            .. Word'First + Library_Option'Length - 1)
                      = Library_Option);
 
+      --  D1357: warn, once, when the file read from Path names other
+      --  compiler sources than the ones this refine was built from, or
+      --  names none.
+      procedure Compare_Source (Path : String);
+
+      procedure Compare_Source (Path : String) is
+         Named_Source : constant String :=
+           Landin.Diagnostics.Citations.Source (Table);
+         Own : constant String := Landin.Build_Identity.Source_Digest;
+
+         function Short (Text : String) return String
+           is (Text (Text'First
+                     .. Text'First + Natural'Min (12, Text'Length) - 1));
+
+         --  Where a build with this revision and dirtiness was made from;
+         --  a function, since the build's constants make the choices
+         --  static.
+         function Made_At (Revision : String; Dirty : Boolean) return String
+           is (if Revision = "unknown" then " outside a git checkout"
+               else " at revision " & Short (Revision)
+                    & (if Dirty then " with uncommitted edits" else ""));
+      begin
+         if Named_Source = Own then
+            return;
+         end if;
+         Found.Append
+           (Landin.Diagnostics.Make
+              (Code    => Code_Other_Citations,
+               Level   => Landin.Diagnostics.Warning,
+               Source  => Landin.Source.No_Source,
+               Where   => Landin.Source.Empty_Span,
+               Message =>
+                 Path
+                 & (if Named_Source = ""
+                    then " names no compiler sources it was generated from"
+                    else " was generated from compiler sources "
+                         & Short (Named_Source))
+                 & ", and this refine was built from compiler sources "
+                 & Short (Own)
+                 & Made_At (Landin.Build_Identity.Revision,
+                            Landin.Build_Identity.Dirty)
+                 & ", so what it says of a construct or a decision may be"
+                 & " another revision's; install the "
+                 & Landin.Diagnostics.Citations.File_Name
+                 & " this refine came with, or regenerate a checkout's"
+                 & " with python3 check.py --generate"));
+      end Compare_Source;
+
       --  Find and read the citations file, once.
       procedure Read_Table;
 
@@ -307,7 +361,9 @@ package body Landin.Driver is
             return;
          end if;
          Table := Landin.Diagnostics.Citations.Read (Content);
-         if not Landin.Diagnostics.Citations.Readable (Table) then
+         if Landin.Diagnostics.Citations.Readable (Table) then
+            Compare_Source (Path);
+         else
             Unread := Unbounded.To_Unbounded_String
               ("from " & Path & ", which is written for another refine:"
                & " its first line is `"
@@ -432,9 +488,15 @@ package body Landin.Driver is
          end;
       end loop;
 
+      --  A warning alone, D1357's, leaves the answer and the status as
+      --  they are; an error replaces the answer with the report.
       if Landin.Diagnostics.Count (Found) > 0 then
-         Result.Status :=
-           (if Misused then Status_Misuse else Status_Reported);
+         if Landin.Diagnostics.Has_Errors (Found) then
+            Result.Status :=
+              (if Misused then Status_Misuse else Status_Reported);
+         else
+            Result.Output := Text;
+         end if;
          Result.Found := Found;
          declare
             None : Landin.Source.Sets.Source_Set;

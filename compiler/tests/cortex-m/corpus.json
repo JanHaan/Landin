@@ -3722,6 +3722,12 @@
       ],
       "mode": "refuse"
     },
+    "runtime/posix-kill-group": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/posix-libraries": {
       "codes": [
         "L0015"

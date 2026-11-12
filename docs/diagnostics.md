@@ -335,6 +335,20 @@ namespaces, so a project's copy of `core` never replaces it. To compile against
 that copy instead, name its directory with `--library=DIR`; to silence the
 warning, rename or remove the project's directory.
 
+### L0017
+
+A warning: the `citations.txt` that `refine explain` read a construct or a
+decision from was generated beside other compiler sources than the ones this
+`refine` was built from, or names none (D1357). The file's second line names
+the digest of the sources it was generated beside, the one `refine version
+--json` reports as `source_digest`, and the message gives both, the file's
+and the compiler's with its revision. The answer is still printed and the
+status is 0, since a decision's words are as often true of a neighbouring
+revision, but what the file says may be another revision's. Install the
+`citations.txt` the compiler came with, or name its library with
+`--library=DIR`; in a checkout, `python3 check.py --generate` writes the
+file for the sources there, which needs no rebuild.
+
 ### L0532
 
 An import named a directory under the first root that holds one, that

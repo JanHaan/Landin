@@ -299,7 +299,9 @@ process_value: type = distinct i32
 
 --- A process's ID, as `spawn` gives a child's and `wait` and `kill` take
 --- it, and `current_process` gives this process's own: a handle, not a
---- number to count with.
+--- number to count with.  `kill` also takes a process group as C's `kill`
+--- does: `process_id(0)` for this process's own group, and the negated ID
+--- of the group's leader, `process_id(-i32(leader))`, for another.
 public process_id: type = process_value
 
 --- The descriptors a child's standard input, output and error are made
@@ -519,19 +521,23 @@ public current_process:
     process = system_current_process()
 end current_process
 
---- Send the signal numbered `signal` to the process `process`, POSIX's
---- `kill`: the way a parent stops a child `spawn` started, or a process
---- signals itself.  The number is the system's own, which
---- `signal_terminate` and its neighbours name; zero sends nothing and
---- only asks whether the process is there.  It fails with the errno:
---- `esrch` for no such process, a child already waited for among them,
+--- Send the signal numbered `signal` to the process `process`, or to a
+--- process group, POSIX's `kill`: the way a parent stops a child `spawn`
+--- started, a process signals itself, or a group of processes is stopped
+--- at once.  A positive ID is one process.  Zero is every process in this
+--- process's own group, this one among them, and a negative ID every
+--- process in the group whose ID is its magnitude, as C's `kill` takes
+--- them.  The number is the system's own, which `signal_terminate` and
+--- its neighbours name; zero sends nothing and only asks whether the
+--- process or the group is there.  It fails with the errno: `esrch` for
+--- no such process or group, a child already waited for among them,
 --- `eperm` for one this process may not signal and `einval` for a number
---- that is no signal's.  A group or every process, which C's `kill` takes
---- as a zero or negative ID, is refused `einval`: a child's ID is always
---- positive.
+--- that is no signal's.  An ID of -1, which C's `kill` takes for every
+--- process this one may signal, is refused `einval` before the system is
+--- asked: it names no group.
 public kill:
     (process: process_id, signal: i32) -> none ! errno =
-    fail einval when i32(process) <= 0
+    fail einval when i32(process) == -1
     try system_kill(process, signal)
 end kill
 

@@ -2782,17 +2782,21 @@ How signals reach a child:
 - `default_in_children` refuses with `einval` a number that is no
   signal, one past 64, or past 31 on Darwin, and SIGKILL and SIGSTOP.
 
-`kill` is how a parent stops a child, and how a process signals itself
-(D1279). It takes a `process_id`: `system.process_of(child)` gives the ID
-of a child `io.spawn` started, and `current_process()` this process's
-own.
+`kill` is how a parent stops a child, how a process signals itself, and
+how a group of processes is signalled at once (D1279, D1356). It takes a
+`process_id`: `system.process_of(child)` gives the ID of a child
+`io.spawn` started, and `current_process()` this process's own.
 
-- The number zero sends nothing and asks whether the process is there.
-- It fails with `esrch` for a process that is gone, a child already
-  waited for among them, `eperm` for one this process may not signal,
-  and `einval` for a number that is no signal's.
-- A process group, or every process, which C's `kill` takes as a zero or
-  negative ID, is refused with `einval`.
+- A process group is named as C's `kill` names it: `process_id(0)` is
+  every process in this process's own group, this one among them, and
+  `process_id(-i32(leader))` every process in the group `leader` leads.
+- The number zero sends nothing and asks whether the process or the
+  group is there.
+- It fails with `esrch` for a process or a group that is gone, a child
+  already waited for among them, `eperm` for one this process may not
+  signal, and `einval` for a number that is no signal's.
+- An ID of -1, which C's `kill` takes for every process the caller may
+  signal, is refused with `einval`: it names no group.
 - It is Linux's `kill` system call and the C library's `kill` on Darwin
   and FreeBSD, so it needs no `--link=libc`.
 

@@ -683,7 +683,22 @@ class PinnedToolchain(unittest.TestCase):
                  "the gate does not run the pinned actionlint"),
                 (".github/workflows/gate.yml", "python3 scripts/actionlint.py --install",
                  "ACTIONLINT=1.7.12 python3 scripts/actionlint.py --install",
-                 "gate.yml names LANDIN_ACTIONLINT_VERSION's 1.7.12 literally")):
+                 "gate.yml names LANDIN_ACTIONLINT_VERSION's 1.7.12 literally"),
+                #  The shellcheck actionlint runs, held the same way.
+                ("environments/pins.sh", "LANDIN_SHELLCHECK_SHA256_AARCH64_DARWIN=56af",
+                 "LANDIN_SHELLCHECK_SHA256_AARCH64_DARWIN=06af",
+                 "LANDIN_SHELLCHECK_SHA256_AARCH64_DARWIN 06af"),
+                ("environments/pins.sh", "LANDIN_SHELLCHECK_VERSION=",
+                 "LANDIN_SHELLCHECK_RELEASE=", "LANDIN_SHELLCHECK_VERSION is not pinned"),
+                ("flake.nix", 'pin "LANDIN_SHELLCHECK_RELEASES"',
+                 '"https://example.invalid"',
+                 "does not take the shell's shellcheck"),
+                ("flake.nix", 'shellcheckVersion = pin "LANDIN_SHELLCHECK_VERSION";',
+                 'shellcheckVersion = pin "LANDIN_SHELLCHECK_VERSION"; # 0.11.0',
+                 "names LANDIN_SHELLCHECK_VERSION's 0.11.0 literally"),
+                (".github/workflows/gate.yml", "python3 scripts/actionlint.py --install",
+                 "SHELLCHECK=0.11.0 python3 scripts/actionlint.py --install",
+                 "gate.yml names LANDIN_SHELLCHECK_VERSION's 0.11.0 literally")):
             with self.subTest(fragment=fragment), tree(copied=copied) as root:
                 path = root / relative
                 text = path.read_text()

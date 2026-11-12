@@ -27339,6 +27339,65 @@ unchanged, and refuses the two bodies' return; and
 `scripts/tests/test_outside_user.py` with the outside-user lane, whose
 archive holds the file and whose installation answers `refine explain`.
 
+**Amended by D1357:** the file's second line names the compiler sources it
+was generated beside, and `refine explain` warns, L0017, when they are not
+its own. The format line and its rule are as they were.
+
+### D1357 — `citations.txt` names the compiler sources it was generated beside
+
+**The tour said** nothing. D1240 held `citations.txt` to the compiler by
+its format line alone, so a file from an older or a newer checkout, or a
+library installed beside another `refine`, answered `refine explain D275`
+without a word, and D1240 had declined to compare the file with the
+compiler's revision.
+
+**Chosen:** the line after the format line is `source ` and a digest:
+the SHA-256 that `scripts/build_identity.py` gives the compiler sources of
+the checkout the file is generated in, the same `Source_Digest` the build
+compiles into the compiler and `refine version --json` reports as
+`source_digest`. `python3 check.py --generate` writes it, and the full
+`python3 check.py` reports the file as stale, naming both digests, until
+it matches the checkout's sources, so a change to any compiler source, a
+test source or a build script included, regenerates the file with it.
+When `refine explain` reads a construct or a decision from a file whose
+digest is not its own, or that has no such line, it answers as before,
+with status 0, and adds one warning, L0017, that names the file, its
+digest or that it names none, and the compiler's digest and revision: the
+file may say another revision's words. The format stays
+`landin-citations 1`: the fields of an entry are unchanged, and a reader
+of format 1 that predates the line passes over it as it passes over any
+line that is no entry, so an older `refine` reads a newer file as before.
+Two branches that each change compiler sources merge by union to two
+source lines, which the check reports and the run after the merge
+replaces.
+
+The digest decides and not the revision. A file cannot name the commit
+that holds it, so a file naming its revision would differ from every
+compiler built from that commit; and a revision moves when a document is
+committed, where the sources and with them the texts' compiler do not.
+The digest is the one `scripts/refine_revision.py` already holds a
+binary to: equal sources are the same compiler, whatever the
+revision says. The cost is that a compiler source change, which rebuilt
+nothing of the file before, now rewrites its second line too.
+
+**The alternatives:** the revision, which no file can hold of itself; the
+release version, which only a tagged build knows and which names no
+development build; a digest of `tour.md` and `spec.md` compiled into the
+compiler, which would make every edit of their prose a rebuild, the cost
+D1240 removed; and refusing the file, which D1240 declined because the
+texts are true of a neighbouring revision as often as not. The
+maintainer chose the warning with the source revision; the digest as
+that revision, and the format left at 1, are the implementer's.
+
+**Pinned by** `driver/explain reads citations from the library`, which
+reads a file naming this compiler's digest and answers with no report,
+one naming another digest and one naming none, each answering with
+status 0 and one L0017 that names both, and a malformed source line,
+read as none; and `scripts/tests/test_check_inventories.py`'s
+`CitationTable`, which holds the second line to the checkout's sources and
+reports a compiler source changed since the file was written as stale,
+with both digests.
+
 ### D599 — A diagnostic's example names the options it is compiled with
 
 **The tour said** nothing. `docs/diagnostics.md`'s examples were compiled
@@ -34198,6 +34257,52 @@ name `posix` numbers ends by the signal of that number.
 `runtime/thread-signal-reaches-events` and `runtime/sleep-signal-sleeps-on`
 send their signals through it. Darwin's and FreeBSD's arm was written by
 reading and is run by their lanes.
+
+**Amended by D1356:** a zero or negative ID is no longer refused. Zero
+names the caller's own process group and a negative ID another group, as
+C's `kill` takes them; only -1 is still `einval`.
+
+### D1356 — `posix.kill` signals a process group as C's `kill` does
+
+**The tour said** nothing. D1279 refused a zero or negative ID with
+`einval`, so a program that stopped a group of processes, a shell's job
+or the children a server started into its own group, wrote Linux's raw
+system call and the C library's `kill` again.
+
+**Chosen:** `posix.kill(process, signal)` takes the IDs C's `kill` takes
+for a group. A positive ID is one process; zero is every process in the
+caller's own group, the caller among them; and a negative ID is every
+process in the group whose ID is its magnitude, so
+`posix.process_id(-i32(leader))` names the group `leader` leads. The
+signal number zero asks whether the group is there, as it does for a
+process, and a group with no process in it is `esrch`. An ID of -1,
+which C takes for every process the caller may signal, is refused
+`einval` before the system is asked: it names no group, and a sign
+mistaken there reaches every process the user owns. The ID goes to the
+system unchanged on every hosted target, Linux's `kill` system call and
+the C library's `kill` on Darwin and FreeBSD, so the smallest `i32`,
+whose magnitude no `i32` holds, is the system's to answer. `process_id`
+keeps its one type for a process and a group, and the library names no
+group of its own: `current_process()` gives the ID whose negation is
+the caller's group when the caller leads one.
+
+**The alternatives:** keeping D1279's refusal, which the maintainer
+reversed; passing -1 through as C does, which makes one sign mistake a
+signal to every process; and a separate `process_group` type or
+`kill_group` entry, which would add a second name for what C's `kill`
+says with a sign. The maintainer chose the groups as C has them; the
+refusal of -1 is the implementer's.
+
+**Pinned by** `runtime/posix-kill-group`: a program the harness starts as
+its own group's leader finds that group by its negated ID and by zero,
+sending nothing, is refused `einval` for -1 and `esrch` for a group
+nobody leads, and, watching SIGTERM through `hosted/events`, sends
+SIGTERM to its own group by zero and then by its negated ID, each time
+reading the signal it sent itself as an event and waiting for a shell
+that the signal ended. The fixture asks first and sends nothing when it
+does not lead its group, so a run outside the harness signals no other
+process. Darwin's and FreeBSD's arm is the one D1279 wrote, run by their
+lanes.
 
 ### D1280 — A signal handler is installed as a C function value, through a second view of `sigaction`'s record
 

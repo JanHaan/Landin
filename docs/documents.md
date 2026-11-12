@@ -179,9 +179,13 @@ Until it is run the full `python3 check.py` fails with "the citations are
 stale". The regenerated file is committed with the edit. No compiler
 source changes, so nothing is rebuilt: the cases that read the file,
 `driver/explain answers citations` and `commands/help and queries`, read
-the new one on their next run. `citations.txt` is never edited or merged
-by hand; `.gitattributes` merges it by union, and the run after a merge
-puts it right.
+the new one on their next run. Its second line names the digest of the
+compiler sources it was generated beside, so a change to any of them, a
+test source or a build script included, needs the same run (D1357);
+`refine explain` warns, with L0017, when the file's digest is not the
+compiler's own. `citations.txt` is never edited or merged by hand;
+`.gitattributes` merges it by union, and the run after a merge puts it
+right.
 
 A diagnostic code's explanation is the other kind: `docs/diagnostics.md`
 is compiled into `refine` as `landin-diagnostics-explanations.adb`, so an

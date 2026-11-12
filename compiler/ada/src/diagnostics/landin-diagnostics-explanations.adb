@@ -258,6 +258,22 @@ package body Landin.Diagnostics.Explanations is
                & "places it. To compile against that copy instead, name it"
                & "s directory with `--library=DIR`; to silence the warning"
                & ", rename or remove the project's directory.",
+            when Catalogue.Citations_From_Other_Sources =>
+               "A warning: the `citations.txt` that `refine explain` rea"
+               & "d a construct or a decision from was generated beside ot"
+               & "her compiler sources than the ones this `refine` was bui"
+               & "lt from, or names none (D1357). The file's second line n"
+               & "ames the digest of the sources it was generated beside, "
+               & "the one `refine version --json` reports as `source_diges"
+               & "t`, and the message gives both, the file's and the compi"
+               & "ler's with its revision. The answer is still printed and"
+               & " the status is 0, since a decision's words are as often "
+               & "true of a neighbouring revision, but what the file says "
+               & "may be another revision's. Install the `citations.txt` t"
+               & "he compiler came with, or name its library with `--libra"
+               & "ry=DIR`; in a checkout, `python3 check.py --generate` wr"
+               & "ites the file for the sources there, which needs no rebu"
+               & "ild.",
             when Catalogue.Empty_Module_Hides_Root =>
                "An import named a directory under the first root that ho"
                & "lds one, that directory holds no `.ldn` source, and a la"
@@ -2093,6 +2109,8 @@ package body Landin.Diagnostics.Explanations is
                "",
             when Catalogue.Root_Holds_Library_Module =>
                "",
+            when Catalogue.Citations_From_Other_Sources =>
+               "",
             when Catalogue.Empty_Module_Hides_Root =>
                "",
             when Catalogue.Import_Of_Named_Entry =>
@@ -3224,6 +3242,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Module_Unavailable_For_Target =>
                "",
             when Catalogue.Root_Holds_Library_Module =>
+               "",
+            when Catalogue.Citations_From_Other_Sources =>
                "",
             when Catalogue.Empty_Module_Hides_Root =>
                "",

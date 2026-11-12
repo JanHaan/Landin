@@ -264,7 +264,10 @@ class LibraryDocumentation(unittest.TestCase):
 class CitationTable(unittest.TestCase):
     """`refine explain`'s constructs and decisions are the documents'."""
 
+    #  The compiler's sources too, whose digest the file's second line
+    #  names (D1357); the file itself last.
     INPUTS = ["spec.md", "tour.md", "docs/site", "highlight", "assets",
+              "compiler/ada", "scripts", "environments",
               checker.CITATIONS_DATA]
 
     DECISION = ("\n### D99998 — A decision a stream added\n\n"
@@ -315,23 +318,28 @@ class CitationTable(unittest.TestCase):
             spec = root / "spec.md"
             spec.write_text(spec.read_text() + self.DECISION)
             lines = checker.citations_dump().split("\n")
+            identity = runpy.run_path(str(root / "scripts/build_identity.py"))
+            digest = identity["source_digest"](root)
         self.assertEqual(lines[0], checker.CITATIONS_FORMAT)
+        self.assertEqual(lines[1], checker.CITATIONS_SOURCE + digest)
         self.assertEqual(lines[-1], "")
         reader = (ROOT / "compiler/ada/src/diagnostics"
                   / "landin-diagnostics-citations.ads").read_text()
         self.assertIn('Format_Line : constant String := "%s";'
                       % checker.CITATIONS_FORMAT, reader)
+        self.assertIn('Source_Head : constant String := "%s";'
+                      % checker.CITATIONS_SOURCE, reader)
         self.assertIn('File_Name : constant String := "%s";'
                       % checker.CITATIONS_DATA, reader)
         keys = []
-        for line in lines[1:-1]:
+        for line in lines[2:-1]:
             fields = line.split("\t")
             self.assertEqual(len(fields), 6, line[:80])
             self.assertIn(fields[0], ("C", "D"))
             keys.append((fields[0], int(fields[1])))
         self.assertEqual(keys, sorted(keys))
         self.assertEqual(len(keys), len(set(keys)))
-        added = lines[1:-1][keys.index(("D", 99998))].split("\t")
+        added = lines[2:-1][keys.index(("D", 99998))].split("\t")
         self.assertEqual(added[2], "A decision a stream added")
         self.assertEqual(added[5], "Chosen: a tab\\there, a back\\\\slash and"
                                    " a second line.\\n\\n    code")
@@ -368,15 +376,55 @@ class CitationTable(unittest.TestCase):
             self.assertNotIn(checker.CITATIONS_DATA, inputs)
             self.assertIn(checker.EXPLANATIONS_ADA, inputs)
 
+    def test_a_compiler_source_changed_makes_it_stale(self):
+        #  D1357: the second line names the digest of the compiler sources
+        #  the file was generated beside, the one the build compiles in,
+        #  so an edit of one makes the file stale, naming both, and the
+        #  run that regenerates it rebuilds nothing of the documents'.
+        identity = runpy.run_path(str(ROOT / "scripts/build_identity.py"))
+        with tree(copied=self.INPUTS) as root:
+            before = identity["source_digest"](root)
+            self.assertEqual(checker.check_citation_table(True), [])
+            source = root / ("compiler/ada/src/diagnostics"
+                             "/landin-diagnostics-citations.adb")
+            source.write_text(source.read_text() + "--  edited\n")
+            after = identity["source_digest"](root)
+            self.assertNotEqual(before, after)
+            said = checker.check_citation_table(True)
+            self.assertEqual([path for path, _, _ in said],
+                             [checker.CITATIONS_DATA], said)
+            self.assertIn("the citations are stale; they name compiler"
+                          " sources %s and the checkout's are %s (D1357)"
+                          % (before[:12], after[:12]), said[0][2])
+            with contextlib.redirect_stdout(io.StringIO()):
+                checker.write_generated(checker.CITATIONS_DATA,
+                                        checker.citations_dump())
+            self.assertEqual(checker.check_citation_table(True), [])
+            self.assertEqual((root / checker.CITATIONS_DATA).read_text()
+                             .split("\n")[1],
+                             checker.CITATIONS_SOURCE + after)
+
+    def test_a_tree_without_the_compiler_sources_says_so(self):
+        with tree(copied=[each for each in self.INPUTS
+                          if each != "compiler/ada"]):
+            said = [why for _, _, why in checker.check_citation_table(True)]
+        self.assertTrue(any("the digest of the compiler sources its second"
+                            " line names cannot be computed (D1357)" in why
+                            for why in said), said)
+
     def test_the_citations_stay_out_of_the_compiler(self):
         #  The bodies that held the texts before D1240 are refused, and no
         #  compiler source is among what --catalogue writes for a decision.
         body = checker.RETIRED_CITATION_BODIES[0]
         with tree(copied=self.INPUTS, written={body: "-- back\n"}):
             said = checker.check_citation_table(True)
-        self.assertEqual([path for path, _, _ in said], [body], said)
+        #  The body is a compiler source, so the file's second line no
+        #  longer names the sources either (D1357).
+        self.assertEqual([path for path, _, _ in said],
+                         [body, checker.CITATIONS_DATA], said)
         self.assertIn("not compiled in (D1240); remove this file",
                       said[0][2])
+        self.assertIn("(D1357)", said[1][2])
         catalogue = dict(checker.GENERATED)["--catalogue"]
         self.assertIn(checker.CITATIONS_DATA, catalogue)
         self.assertEqual([name for name in catalogue

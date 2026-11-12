@@ -2928,7 +2928,11 @@ GATE_TOOL_PINS = ("LANDIN_CLANG_UBUNTU", "LANDIN_TREE_SITTER_VERSION",
                   "LANDIN_ACTIONLINT_VERSION",
                   "LANDIN_ACTIONLINT_SHA256_X86_64_LINUX",
                   "LANDIN_ACTIONLINT_SHA256_AARCH64_LINUX",
-                  "LANDIN_ACTIONLINT_SHA256_AARCH64_DARWIN")
+                  "LANDIN_ACTIONLINT_SHA256_AARCH64_DARWIN",
+                  "LANDIN_SHELLCHECK_VERSION",
+                  "LANDIN_SHELLCHECK_SHA256_X86_64_LINUX",
+                  "LANDIN_SHELLCHECK_SHA256_AARCH64_LINUX",
+                  "LANDIN_SHELLCHECK_SHA256_AARCH64_DARWIN")
 #  The cross lane's versions, which the nix shell holds its package set to:
 #  read from the pins by name, and never written in flake.nix itself.
 CROSS_LANE_PINS = ("LANDIN_CROSS_QEMU_NIX", "LANDIN_CROSS_GCC_NIX")
@@ -2941,6 +2945,11 @@ SHELL_TREE_SITTER_READS = ('pin "LANDIN_TREE_SITTER_VERSION"',
 SHELL_ACTIONLINT_READS = ('pin "LANDIN_ACTIONLINT_VERSION"',
                           'pin "LANDIN_ACTIONLINT_RELEASES"',
                           'pin "LANDIN_ACTIONLINT_SHA256_${suffix}"')
+#  And the shellcheck actionlint runs over the workflows' `run:` scripts,
+#  the release binary scripts/actionlint.py fetches beside it.
+SHELL_SHELLCHECK_READS = ('pin "LANDIN_SHELLCHECK_VERSION"',
+                          'pin "LANDIN_SHELLCHECK_RELEASES"',
+                          'pin "LANDIN_SHELLCHECK_SHA256_${suffix}"')
 
 
 #  The Cortex-M lane's GCC and binutils, read from the pins by the
@@ -3047,13 +3056,14 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
     """The gate's other tools agree with every file that also names them.
 
     The bindings job's Clang, the editor grammar's CLI and the workflows'
-    actionlint are pinned in environments/pins.sh like the compiler.  Each
-    is also written in one more place a reader or a package manager reads --
-    TOOLCHAIN.md for all three, and the grammar's package.json and lockfile
-    for the CLI -- and a pin that agrees with neither is a job that fetches
-    something nobody recorded.  The gate's scripts job runs actionlint
-    through scripts/actionlint.py, which reads the pins, so no workflow
-    names its version or a checksum itself.
+    actionlint and the shellcheck it runs are pinned in environments/pins.sh
+    like the compiler.  Each is also written in one more place a reader or
+    a package manager reads -- TOOLCHAIN.md for all four, and the grammar's
+    package.json and lockfile for the CLI -- and a pin that agrees with
+    neither is a job that fetches something nobody recorded.  The gate's
+    scripts job runs actionlint and shellcheck through
+    scripts/actionlint.py, which reads the pins, so no workflow names a
+    version or a checksum of either itself.
     """
     values = dict(re.findall(r"^(LANDIN_\w+)=(\S+)$", pins_text, re.M))
     out = []
@@ -3091,7 +3101,8 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
             out.append((gate, 1, "the gate does not run the pinned actionlint"
                                  " through scripts/actionlint.py --install"))
         for name in GATE_TOOL_PINS:
-            if name.startswith("LANDIN_ACTIONLINT") and values[name] in gate_text:
+            if (name.startswith(("LANDIN_ACTIONLINT", "LANDIN_SHELLCHECK"))
+                    and values[name] in gate_text):
                 out.append((gate, 1, "gate.yml names %s's %s literally instead"
                                      " of reading it from environments/pins.sh"
                             % (name, values[name])))
@@ -3120,8 +3131,14 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
             out.append((flake, 1, "flake.nix does not take the shell's "
                                   "actionlint from environments/pins.sh"
                                   " (%s)" % read))
+    for read in SHELL_SHELLCHECK_READS:
+        if read not in flake_text:
+            out.append((flake, 1, "flake.nix does not take the shell's "
+                                  "shellcheck from environments/pins.sh"
+                                  " (%s)" % read))
     for name in GATE_TOOL_PINS:
-        if (name.startswith(("LANDIN_TREE_SITTER", "LANDIN_ACTIONLINT"))
+        if (name.startswith(("LANDIN_TREE_SITTER", "LANDIN_ACTIONLINT",
+                             "LANDIN_SHELLCHECK"))
                 and values[name] in flake_text):
             out.append((flake, 1, "flake.nix names %s's %s literally instead "
                                   "of reading it from environments/pins.sh"
@@ -7996,6 +8013,12 @@ def check_explanations(full_run):
 #  refuses a file that opens with any other line.
 CITATIONS_DATA = "citations.txt"
 CITATIONS_FORMAT = "landin-citations 1"
+#  The second line opens with this and names the digest of the compiler
+#  sources the file was generated beside, scripts/build_identity.py's
+#  Source_Digest, so `refine explain` can warn when the file and the
+#  compiler were made from different sources (D1357).  The compiler's
+#  Landin.Diagnostics.Citations.Source_Head is the same words.
+CITATIONS_SOURCE = "source "
 #  The two Ada bodies that held these texts before D1240.  Nothing may
 #  bring them back: a decision's text compiled in is one every stream
 #  rewrites and every edit rebuilds.
@@ -8148,12 +8171,30 @@ def citation_field(text):
             .replace("\r", "").replace("\n", "\\n"))
 
 
+def citations_source():
+    """(digest, why): the digest of the compiler sources under ROOT, as
+    scripts/build_identity.py computes it for the provenance unit and
+    `refine version --json` reports it, or None and why it cannot be."""
+    script = os.path.join(ROOT, "scripts", "build_identity.py")
+    if not os.path.exists(script):
+        return None, "scripts/build_identity.py is missing"
+    import runpy
+    from pathlib import Path
+    try:
+        identity = runpy.run_path(script, run_name="build_identity_citations")
+        return identity["source_digest"](Path(ROOT)), None
+    except (OSError, ValueError, KeyError) as error:
+        return None, str(error)
+
+
 def citations_dump():
     """The file that carries every construct and decision to `refine
     explain` (D1240), or None when the documents cannot give one.
 
-    Its first line is CITATIONS_FORMAT.  Every other line is one entry of
-    six tab-separated fields: `C` or `D`, the number in decimal, the
+    Its first line is CITATIONS_FORMAT and its second CITATIONS_SOURCE and
+    the digest of the compiler sources it was generated beside (D1357),
+    which a change to any of them changes too.  Every other line is one
+    entry of six tab-separated fields: `C` or `D`, the number in decimal, the
     title, a construct's document or a decision's register section, the
     page, and the text `--full` adds.  Constructs come first and each kind
     is in ascending number, so two branches that each add a decision
@@ -8162,7 +8203,10 @@ def citations_dump():
     constructs, decisions, problems = citation_entries()
     if constructs is None or problems:
         return None
-    lines = [CITATIONS_FORMAT]
+    digest, _ = citations_source()
+    if digest is None:
+        return None
+    lines = [CITATIONS_FORMAT, CITATIONS_SOURCE + digest]
     for number, name, title, page, text in sorted(constructs):
         lines.append("\t".join(["C", str(number)] + [
             citation_field(each) for each in (title, name, page, text)]))
@@ -8190,14 +8234,31 @@ def check_citation_table(full_run):
                         "the citations' texts are read from %s and not"
                         " compiled in (D1240); remove this file"
                         % CITATIONS_DATA))
+    digest, why = citations_source()
+    if digest is None:
+        out.append((CITATIONS_DATA, 2,
+                    "the digest of the compiler sources its second line"
+                    " names cannot be computed (D1357): " + why))
+        return out
     fresh = citations_dump()
     if fresh is None:
         return out
     target = os.path.join(ROOT, CITATIONS_DATA)
-    if (not os.path.exists(target)
-            or read_file(target, encoding="utf-8") != fresh):
-        out.append((CITATIONS_DATA, 1,
-                    "the citations are stale; regenerate them with "
+    held = (read_file(target, encoding="utf-8")
+            if os.path.exists(target) else None)
+    if held != fresh:
+        written, wanted = (held or "").split("\n"), fresh.split("\n")
+        #  Only the source line differs: a compiler source changed, and
+        #  the documents did not.
+        moved = (len(written) == len(wanted) and len(wanted) > 1
+                 and written[:1] + written[2:] == wanted[:1] + wanted[2:])
+        out.append((CITATIONS_DATA, 2 if moved else 1,
+                    "the citations are stale"
+                    + ("; they name compiler sources %s and the checkout's"
+                       " are %s (D1357)" % (
+                           written[1][len(CITATIONS_SOURCE):][:12] or "none",
+                           digest[:12]) if moved else "")
+                    + "; regenerate them with "
                     + regenerating(CITATIONS_DATA)
                     + ", which needs no rebuild"))
     return out
@@ -11462,13 +11523,18 @@ def generate_catalogue():
     if explained is None:
         print_problems("the explanations", explanation_problems())
         return 2
-    cited = citations_dump()
-    if cited is None:
-        print_problems("the citations", citation_entries()[2])
-        return 2
     write_generated("compiler/tests/diagnostics.catalogue", text)
     write_generated("compiler/tests/diagnostics.matrix", matrix)
     write_generated(EXPLANATIONS_ADA, explained)
+    #  After the explanations, which are a compiler source: the citations'
+    #  second line names the digest of the sources as they now are (D1357).
+    cited = citations_dump()
+    if cited is None:
+        digest, why = citations_source()
+        print_problems("the citations", citation_entries()[2] or (
+            [(CITATIONS_DATA, 2, "the digest of the compiler sources cannot"
+              " be computed: " + why)] if digest is None else None))
+        return 2
     write_generated(CITATIONS_DATA, cited)
     return 0
 

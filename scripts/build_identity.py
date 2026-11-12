@@ -115,13 +115,21 @@ def git(root, *args):
     return result.stdout if result.returncode == 0 else None
 
 
-def identity(root, mode):
-    paths = inputs(root)
+def source_digest(root, paths=None):
+    """The SHA-256 of the compiler's inputs under ROOT, in hexadecimal: the
+    provenance unit's Source_Digest, which `refine version --json` reports
+    and the citations file's source line names (D1357)."""
     digest = hashlib.sha256()
-    for name in paths:
+    for name in inputs(root) if paths is None else paths:
         content = (root / name).read_bytes()
         digest.update(name.encode() + b'\0')
         digest.update(str(len(content)).encode() + b'\0' + content)
+    return digest.hexdigest()
+
+
+def identity(root, mode):
+    paths = inputs(root)
+    digest = source_digest(root, paths)
     head = git(root, 'rev-parse', '--show-toplevel')
     # Do not borrow the containing repository's identity for an archive.
     repository = head is not None and Path(head.decode().strip()).resolve() == root.resolve()
@@ -150,7 +158,7 @@ def identity(root, mode):
         version = versions[0] if versions else ''
         dirty = bool(status) or not set(paths).issubset(tracked_paths)
     return (revision.decode().strip() if revision else 'unknown',
-            digest.hexdigest(), dirty, mode, version)
+            digest, dirty, mode, version)
 
 
 def render(root, mode, known=None):

@@ -4,6 +4,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Interfaces;
 
+with Landin.Build_Identity;
 with Landin.Byte_Encoding;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
@@ -7305,7 +7306,9 @@ package body Landin.Tests.Driver_Suite is
    --  found beside refine or where `--library=DIR` says and read only when
    --  a citation is asked for; one that is missing, unreadable or in
    --  another format is reported with its path and the document that
-   --  holds what was asked for, and is not misuse.
+   --  holds what was asked for, and is not misuse.  D1357: one whose
+   --  source line names other compiler sources than this refine's, or
+   --  none, still answers, with one warning that names both.
    procedure Explain_Reads_Citations_From_The_Library
      (Item : in out Landin.Testing.Context);
 
@@ -7325,13 +7328,16 @@ package body Landin.Tests.Driver_Suite is
         & "D" & Tab & "70" & Tab & "Another" & Tab & "Decisions: Tools"
         & Tab & "https://www.701.dev/spec.html#d70-another" & Tab
         & "Chosen: that." & LF;
+      Own : constant String := Landin.Build_Identity.Source_Digest;
+      Other : constant String (1 .. 64) := [others => 'f'];
       Current : constant String :=
-        Landin.Diagnostics.Citations.Format_Line & LF & Entries;
+        Landin.Diagnostics.Citations.Format_Line & LF
+        & Landin.Diagnostics.Citations.Source_Head & Own & LF & Entries;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
 
       type Arrangement is
         (Present, Absent, Unreadable, Other_Format, Empty, No_Library,
-         Elsewhere);
+         Elsewhere, Other_Source, No_Source, Bad_Source);
 
       function Arranged (How : Arrangement)
         return Landin.Testing.Fakes.Fake_Filesystem;
@@ -7356,6 +7362,19 @@ package body Landin.Tests.Driver_Suite is
                   Made.Add_File (File, "");
                when Elsewhere =>
                   Made.Add_File ("/data/citations.txt", Current);
+               when Other_Source =>
+                  Made.Add_File
+                    (File, Landin.Diagnostics.Citations.Format_Line & LF
+                     & "source " & Other & LF & Entries);
+               when No_Source =>
+                  Made.Add_File
+                    (File, Landin.Diagnostics.Citations.Format_Line & LF
+                     & Entries);
+               when Bad_Source =>
+                  Made.Add_File
+                    (File, Landin.Diagnostics.Citations.Format_Line & LF
+                     & "source " & Own (Own'First .. Own'Last - 1) & "G"
+                     & LF & Entries);
                when Absent | No_Library =>
                   null;
             end case;
@@ -7402,7 +7421,69 @@ package body Landin.Tests.Driver_Suite is
         Run (Other_Format, ["explain", "--library=/data"]);
       Both : constant Landin.Driver.Outcome :=
         Run (Absent, ["explain", "L0201", "D7"]);
+      Moved : constant Landin.Driver.Outcome :=
+        Run (Other_Source, ["explain", "D7"]);
+      Moved_Twice : constant Landin.Driver.Outcome :=
+        Run (Other_Source, ["explain", "D7", "[0040]"]);
+      Unnamed : constant Landin.Driver.Outcome :=
+        Run (No_Source, ["explain", "D7"]);
+      Garbled : constant Landin.Driver.Outcome :=
+        Run (Bad_Source, ["explain", "D7"]);
+      Moved_Unknown : constant Landin.Driver.Outcome :=
+        Run (Other_Source, ["explain", "D8"]);
+      Built_From : constant String :=
+        ", and this refine was built from compiler sources "
+        & Own (Own'First .. Own'First + 11);
    begin
+      Landin.Testing.Check
+        (Item, Decision.Status = Landin.Driver.Status_Success
+               and then Refused (Decision) = ""
+               and then Landin.Diagnostics.Count (Decision.Found) = 0,
+         "D1357: a file naming this refine's own sources answers with no"
+         & " report: " & Refused (Decision));
+      Landin.Testing.Check
+        (Item, Moved.Status = Landin.Driver.Status_Success
+               and then Said (Moved) = Said (Decision)
+               and then Landin.Diagnostics.Count (Moved.Found) = 1
+               and then Moved_Twice.Status = Landin.Driver.Status_Success
+               and then Landin.Diagnostics.Count (Moved_Twice.Found) = 1
+               and then Contains (Refused (Moved), "warning[L0017]")
+               and then Contains
+                 (Refused (Moved),
+                  File & " was generated from compiler sources ffffffffffff"
+                  & Built_From)
+               and then Contains
+                 (Refused (Moved),
+                  "may be another revision's; install the citations.txt"
+                  & " this refine came with, or regenerate a checkout's"
+                  & " with python3 check.py --generate"),
+         "a file from other sources answers, with one warning naming both"
+         & " digests however much is asked: " & Refused (Moved));
+      Landin.Testing.Check
+        (Item, Unnamed.Status = Landin.Driver.Status_Success
+               and then Said (Unnamed) = Said (Decision)
+               and then Contains
+                 (Refused (Unnamed),
+                  File & " names no compiler sources it was generated from"
+                  & Built_From),
+         "a file with no source line answers, and is said to name none: "
+         & Refused (Unnamed));
+      Landin.Testing.Check
+        (Item, Garbled.Status = Landin.Driver.Status_Success
+               and then Said (Garbled) = Said (Decision)
+               and then Contains
+                 (Refused (Garbled),
+                  " names no compiler sources it was generated from"),
+         "a source line that is no digest names none");
+      Landin.Testing.Check
+        (Item, Moved_Unknown.Status = Landin.Driver.Status_Misuse
+               and then Said (Moved_Unknown) = ""
+               and then Contains (Refused (Moved_Unknown), "L0017")
+               and then Contains
+                 (Refused (Moved_Unknown),
+                  "no decision is numbered D8 in spec.md's register"),
+         "beside an error the warning is reported and the status is the"
+         & " error's");
       Landin.Testing.Check_Equal
         (Item, Said (Decision),
          "D7  A decision" & LF

@@ -14,8 +14,10 @@
 --  This package reads the file's text and never the file: the driver
 --  finds and reads it through `Landin.Platform` and hands the bytes over.
 --
---  The file's first line is Format_Line.  Each line after it is one entry
---  of six fields a tab apart: `C` or `D`, the number in decimal, the
+--  The file's first line is Format_Line, and its second the source line,
+--  Source_Head and the digest of the compiler sources it was generated
+--  from (D1357).  Each line after them is one entry of six fields a tab
+--  apart: `C` or `D`, the number in decimal, the
 --  title, a construct's document or a decision's register section, the
 --  page, and the text `--full` adds.  In a field `\\`, `\t` and `\n` stand
 --  for a backslash, a tab and a line end.  The text is rendered for a
@@ -38,6 +40,17 @@ package Landin.Diagnostics.Citations is
    --  rather than read as something it does not say.
    Format_Line : constant String := "landin-citations 1";
 
+   --  How the line after Format_Line opens.  The rest of it is the
+   --  SHA-256 digest, in lower-case hexadecimal, that
+   --  scripts/build_identity.py gives the compiler sources of the checkout
+   --  the file was generated in: the one `refine version --json` reports
+   --  as `source_digest`.  It is no entry, so a reader that predates it
+   --  passes over it, and the format line is the same.
+   Source_Head : constant String := "source ";
+
+   --  The length of the digest the source line names.
+   Digest_Length : constant := 64;
+
    type Citation_Kind is (Construct, Decision);
 
    type Table is private;
@@ -52,6 +65,12 @@ package Landin.Diagnostics.Citations is
    --  The first line of what was read, at most sixty bytes of it and only
    --  its printable ASCII, for the refusal that says what was found.
    function First_Line (From : Table) return String;
+
+   --  The digest the source line names, or "" when the line after
+   --  Format_Line is no source line of Digest_Length lower-case hexadecimal
+   --  digits, as in a file written before the line was.  A Readable table
+   --  is read whether or not it has one.
+   function Source (From : Table) return String;
 
    function Holds
      (From : Table; Kind : Citation_Kind; Number : Natural) return Boolean;

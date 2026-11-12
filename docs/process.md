@@ -422,14 +422,17 @@ Reconcile semantics and fixtures as well as textual conflicts.
 A generated file is never merged by hand. `python3 check.py --help` lists
 them. Every stream that adds a decision to `spec.md` rewrites one,
 `citations.txt`, the data `refine explain` reads a construct or a decision
-from (D1240); it is no compiler source, and `.gitattributes` merges it by
-union, so two such streams neither conflict there nor rebuild. Each stream
+from (D1240), and so does every stream that changes a compiler source,
+whose digest the file's second line names (D1357); it is no compiler
+source, and `.gitattributes` merges it by union, so two such streams
+neither conflict there nor rebuild. Each stream
 regenerates in its own worktree, since its own `check.py` needs the files
 current. The integrator regenerates for the merged tree: resolve the
 documents, then run `python3 check.py --generate`, which writes every
 generated file from them whatever state a merge or a conflict left it in,
 and add the result. A union merge can leave `citations.txt` out of order,
-which the full `python3 check.py` reports as stale until that run. The
+or with two source lines, which the full `python3 check.py` reports as
+stale until that run. The
 compiler is rebuilt only when a generated compiler source changed, which a
 diagnostic's explanation in `docs/diagnostics.md` still does through
 `landin-diagnostics-explanations.adb`; `--suite=catalogue
@@ -607,9 +610,9 @@ python3 scripts/script_tests.py test_fuzz_close test_scaling
 python3 scripts/script_tests.py --gate-environment
 
 # Every workflow through the actionlint environments/pins.sh pins, with
-# .github/actionlint.yaml's runner labels, as the gate's scripts job runs
-# it.  nix develop provides it; elsewhere --install DIR fetches and
-# verifies it first.  scripts/activations.py names it when a change
+# .github/actionlint.yaml's runner labels and the pinned shellcheck's pass
+# over every run: script, as the gate's scripts job runs it.  nix develop
+# provides both; elsewhere --install DIR fetches and verifies them first.  scripts/activations.py names it when a change
 # reaches .github/.
 python3 scripts/actionlint.py
 python3 scripts/actionlint.py --install "$(mktemp -d)"
@@ -802,7 +805,7 @@ still succeed. The linked full run contains the target-test results.
 |---|---|---|
 | `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full push pass of main or a branch for a declared explanatory edit |
 | `documents` | `ubuntu-24.04` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
+| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint and its `run:` scripts through the pinned shellcheck, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
 | `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
