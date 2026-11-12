@@ -1,0 +1,13 @@
+# D1261/D1341: an `else (problem)` whose block never reads `problem` is
+# warned of with L0684, and the warning's code action writes `else begin`
+# for the binding, an exact repair the editor may prefer.
+-> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}
+-> {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///workspace/unread.ldn","languageId":"landin","version":1,"text":"missing: atom\n\nopen: (path: i32) -> (handle: i32) ! missing =\n    fail missing when path == 0\n    handle = path\nend open\n\nunread: (path: i32) -> (handle: i32) =\n    handle = open(path) else (problem) 0 end\nend unread\n"}}}
+-> {"jsonrpc":"2.0","id":2,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"file:///workspace/unread.ldn"},"range":{"start":{"line":8,"character":24},"end":{"line":8,"character":28}},"context":{"diagnostics":[]}}}
+-> {"jsonrpc":"2.0","id":3,"method":"shutdown"}
+-> {"jsonrpc":"2.0","method":"exit"}
+<- {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":2},"definitionProvider":true,"hoverProvider":true,"documentFormattingProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"]}},"serverInfo":{"name":"refine"}}}
+<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/unread.ldn","version":1,"diagnostics":[{"range":{"start":{"line":8,"character":24},"end":{"line":8,"character":28}},"severity":2,"code":"L0684","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0684"},"source":"refine","message":"this `else` binds the error as `problem`, and its block never reads it\nnote: [1030]: a recovery that does not read the error leaves the name out: `else begin ... end` runs a block, and `else value` stands in for the result"}]}}
+<- {"jsonrpc":"2.0","id":2,"result":[{"title":"write `else begin`, which binds no name, for `else (problem)`","kind":"quickfix","diagnostics":[{"range":{"start":{"line":8,"character":24},"end":{"line":8,"character":28}},"severity":2,"code":"L0684","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0684"},"source":"refine","message":"this `else` binds the error as `problem`, and its block never reads it\nnote: [1030]: a recovery that does not read the error leaves the name out: `else begin ... end` runs a block, and `else value` stands in for the result"}],"isPreferred":true,"edit":{"changes":{"file:///workspace/unread.ldn":[{"range":{"start":{"line":8,"character":28},"end":{"line":8,"character":38}},"newText":" begin"}]}}}]}
+<- {"jsonrpc":"2.0","id":3,"result":null}
+exit: 0

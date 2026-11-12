@@ -1,0 +1,9 @@
+class: negative
+summary: D1343 refuses an address from a function value in Landin's own convention, named or kept in a binding, and a C function value's address in any integer type but `usize`
+program: program.ldn
+codes: L0301, L0301, L0301, L0301
+status: 1
+constructs: 0470, 1975
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn
+expect: expected.txt

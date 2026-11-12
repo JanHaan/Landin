@@ -68,8 +68,8 @@ fixed if compiler.os == linux then
               and linux.shut_wr == libc.shut_wr
               and linux.shut_rdwr == libc.shut_rdwr
               and linux.sigpipe == libc.sigpipe
-              and linux.sig_dfl == libc.sig_dfl
-              and linux.sig_ign == libc.sig_ign
+              and linux.sig_dfl == u64(libc.sig_dfl)
+              and linux.sig_ign == u64(libc.sig_ign)
               and linux.f_getfd == libc.f_getfd
               and sizeof linux.time_limit == sizeof libc.time_limit
     end l_linux_agrees

@@ -1,0 +1,8 @@
+class: abi
+profiles: standard
+summary: D1343 `usize(f)` of a C function value, imported, defined extern(c) here or kept in a binding, is the address C has for that function: C recognises it as its own function pointer and calls the code through it, and D335's conversion back makes it callable again
+program: program.ldn
+c-sources: peer.c
+status: 42
+constructs: 0470, 0870, 1580, 1975
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

@@ -283,9 +283,9 @@ public sockaddr_in6_size: u32 = 28
 --- The same on every hosted system.
 public sigpipe: i32 = 13
 --- A signal's disposition: the system's default, C's `SIG_DFL`.
-public sig_dfl: u64 = 0
+public sig_dfl: usize = 0
 --- A signal's disposition: ignored, C's `SIG_IGN`.
-public sig_ign: u64 = 1
+public sig_ign: usize = 1
 
 --- What a socket call takes for an address it has none of, and
 --- `sigaction` for an action it is not given: C's null pointer.
@@ -412,22 +412,10 @@ public extern(c) sigprocmask: (how: i32, set: signals_given,
 --- A signal's handler as C declares one, `void (*)(int)`: an `extern(c)`
 --- function, called with the signal's number on the thread that takes it.
 --- What it may do is what C allows a handler: read and write atomics,
---- and call what the system lists as safe in one.
+--- and call what the system lists as safe in one.  A `signal_action`
+--- holds it as its address, `usize(handler)` (D1344), which `handling`
+--- writes.
 public signal_handler: type = extern(c) (number: i32) -> none
-
---- `sigaction` for an action whose handler is a function (D1280): set the
---- action of `signal` to `action`, and put the one it had in `previous`
---- when that is given: 0, or -1 with the reason in errno.  `handling`
---- makes such an action.  `handler_action` is C's `struct sigaction` as
---- `signal_action` is, laid out the same, with the handler member typed
---- as the function C declares there rather than as the word `sig_dfl`
---- and `sig_ign` are, so one address serves both.
-public sigaction_handler:
-    (signal: i32, action: ptr handler_action, previous: action_kept)
-    -> (status: i32) =
-    given: ptr signal_action = ptr(usize(action))
-    status = sigaction(signal, given, previous)
-end sigaction_handler
 
 --- This process's ID.  It never fails.
 public extern(c) getpid: () -> (process: i32)

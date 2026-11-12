@@ -325,8 +325,9 @@ another name.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
-and `%`; D438 adds immutable module integers, and D1321 compiler facts and
-`sizeof` of a scalar type, each at the selected target's value.
+and `%`; D438 adds immutable module integers, D1321 compiler facts and
+`sizeof` of a scalar type, and D1340 `alignof` of a scalar type, each at the
+selected target's value.
 The element is a type like any other. A parameterized alias or nominal struct
 is a type position through its fully applied positional application. D135
 substitutes an alias during checking; D137 interns a struct application by its
@@ -1010,7 +1011,11 @@ between an inner scope and an outer one and not within one. So
 it is refused, and the report names both places.
 Shadowing is not this. An inner scope may shadow an outer name
 [0140] and nothing is said about it, because a rule that
-permits something does not also warn about it.
+permits something does not also warn about it. The compiler's one
+observation about a name is D1342's warning at a declaration that takes a
+predeclared type's name: those types are in no scope, so such a
+declaration hides none of the program's names, only the language's own
+type from every type position it reaches [1790].
 The file-import scope follows the same rule: two imports with one final segment,
 including a repeated identical import, are refused and both import sites are
 reported.
@@ -1948,8 +1953,13 @@ because a function value holds no reference (L0339). Only the C convention
 is made so: a native Landin function type applied to an address is refused
 with L0301, since code outside the program is reached only through its C
 entry points, and so are an integer of another type and a pointer, which
-`usize(p)` converts first. Nothing converts a function value back to an
-address.
+`usize(p)` converts first. The way back is `usize(f)` (D1343): a C function
+value, written as a declared `extern(c)` function or kept in a binding of a
+C function type, converts to the address of its code, the word C keeps for
+that function pointer, with its bits unchanged and no origin. Only a C
+function value converts, and only to `usize`; a function value in Landin's
+own convention, or the conversion to another integer type, is L0301, and
+the address of an interrupt or naked function is no C function's either.
 
 The selected hosted ABIs are Linux and FreeBSD x86-64 SysV AMD64 LP64,
 Darwin arm64 AAPCS64 with Apple's platform differences, both conventions with
@@ -2916,7 +2926,9 @@ compiler already established; an automatic edit is a separate claim. An exact
 fix is offered only when the compiler can prove that applying those edits
 preserves meaning and does not swallow comments or neighbouring source.
 Otherwise the warning carries its observation and explanation without a fix.
-Shadowing is never warned about, as [1850] says.
+Shadowing is never warned about, as [1850] says; D1342 later warns of a
+declaration that takes a predeclared type's name, which hides no
+declaration of the program's.
 
 Invocation policy lives in `refine check` and `refine compile`, not in source
 syntax. `--warnings=default|all|none` chooses a baseline. `default` selects
@@ -3075,10 +3087,55 @@ outward past a non-type, which no other name does; and reserving the
 sixteen spellings, which [1760] declines and D1066 works around for C
 names.
 
+D1342 later warns at such a declaration, keeping this rule.
+
 **Pinned by** `negative/a-non-type-shadows-a-predeclared-type`, whose
 report is recorded, `resolution/predeclared types use lexical lookup` and
 `lowering/calls respect resolved declarations`, whose functions named as a
 scalar now write their signatures in other types.
+
+### D1342 — A declaration that takes a predeclared type's name is warned about
+
+**The tour said** at [1790] that the sixteen predeclared type names are in
+no scope and not reserved, and D1260 made the nearest declaration of a
+spelling what a type position names, whatever it declares. A program may
+therefore name a function `u8`, a local `i64` or a parameter `usize`, and
+from there on no type position the declaration reaches can name the
+predeclared type: the next `x: u8` is L0338, or, under a type declaration
+named `u8`, quietly another type.
+
+**Chosen:** D1260's rule stays, and L0692, a warning under D251's policy,
+is given at every declaration in an active configuration whose name is one
+of the thirteen scalar names or `utf8`, `utf16` or `cstring`, whatever it
+declares: a function, an atom, a type, a concept, a module or local
+binding, a variant case, a type or fixed formal, a parameter, a named
+return, a pattern, traversal or destructured binding and a call's error
+name. Like
+L0684 it is raised only in a program with no error, since a type position
+the declaration reaches is already L0338, whose note names it. It offers
+no fix: which name was meant is the author's. This is the one warning
+about a name, and it is no warning about shadowing in [1850]'s sense: the
+predeclared types are in no scope, so the declaration hides no name the
+program declared. Generated bindings already avoid the spellings (D1066),
+and the library and the examples declared none. D1260's controls keep
+their declarations: the negative fixture's report holds errors and so no
+warning, the resolution and lowering cases do not read warnings, and the
+checker case `conversions require one value`, which calls user functions
+named `u8` and `utf8`, now accepts them with this warning and nothing
+else.
+
+**The alternatives:** reserving the sixteen names, which [1760] declines
+and D1066 works around for C; warning only where a type position the
+declaration reaches spells the name, which the L0338 or the other type
+already shows, and which misses the declaration a later edit trips over;
+warning only for declarations that are no type, which leaves `u8: type =
+u16`, the most misleading of them, unsaid; and saying nothing, where D1260
+left it.
+
+**Pinned by** `negative/a-predeclared-type-name-taken`, whose report is
+recorded and whose program takes each name kind's spelling once, a type
+declaration among them, and holds a field and a function type's parameter
+named `u8`, which declare nothing in a scope and are not warned about.
 
 ### D1261 — An `else` binding its block never reads is warned about
 
@@ -3097,9 +3154,9 @@ the result. `_ = name` is a reference and silences it, as it must stay
 legal. One place is exempt: in the arm of an `if`, an `else` with no name
 is the `if`'s own [1820], so the name is what makes the recovery the
 call's, and nothing is said. Like L0326 it is raised only in a routine body
-the checker checked and in an active configuration. It offers no fix:
-replacing `(name)` with `begin` is the edit, but the checker does not prove
-it here. D370's repair now writes ` begin`, the block the statements
+the checker checked and in an active configuration. It offered no fix:
+replacing `(name)` with `begin` is the edit, and D1341 later proves it and
+offers it. D370's repair now writes ` begin`, the block the statements
 written under the bare `else` already fit, and its message names that
 block.
 
@@ -3114,6 +3171,40 @@ objects to.
 whose program holds each exempt form, and
 `negative/statements-after-a-bare-else-name-its-binder`, whose fix the
 `fixes` suite compiles clean, without a warning.
+
+### D1341 — L0684's fix writes `else begin` for the unread binding
+
+**The discrepancy:** D1261's warning named the form that binds nothing and
+offered no edit, so an editor showed the warning with nothing to apply, and
+every `else (problem)` the warning found was retyped by hand.
+
+**Chosen:** L0684 carries one exact fix, which replaces the bytes from the
+end of `else` to the binding's `)` with ` begin`: `else (problem) ... end`
+becomes `else begin ... end`, and the one-line `else (problem) 0 end`
+becomes `else begin 0 end`. It is exact under D251 because the warning is
+raised only where no reference in the block names the binding and the
+program has no error, so the bare block runs what the bound one ran and
+every name in it means what it meant; the `if` arm where leaving the name
+out would hand the `else` to the `if` [1820] is never warned about. The
+fix is offered only when the replaced bytes are the parenthesised name and
+spaces or tabs on one line, so it never removes a comment or a line end;
+otherwise the warning stands alone. It reaches every consumer of a fix:
+the human report's `help`, the JSON report's `exact` fix and the language
+server's preferred quick fix. There is no `refine fix` command, and `refine
+fmt` applies no fix, since D252's layout changes no token.
+
+**The alternatives:** writing `else value` for a one-value block, a second
+edit whose result an `if` arm can reread as the `if`'s own `else`; a
+`Likely` fix, which a batch tool would not apply although nothing about the
+rewrite is a guess; and a fix that also takes a comment or a line end
+inside the parentheses, which removes source the warning is not about.
+
+**Pinned by** `negative/unused-else-binding`, whose `program.fixed` the
+`fixes` suite compiles with an empty report;
+`negative/unused-else-binding-beside-a-comment`, whose comment and line end
+keep the warning without a fix while its spaced binding has one; and the
+server session `unused-else-binding-repair`, whose code action is the
+preferred edit.
 
 ## DECISIONS: NUMBERS AND LITERALS
 
@@ -6445,8 +6536,9 @@ this target-independent fold. A runtime or storage name is not a fixed formal;
 a type formal or another non-value name is diagnosed as such rather than called
 runtime storage. D438 later admits an immutable module integer whose own image
 is in this fold, and refuses a `mut` one as storage the program may write.
-D1321 admits an integer compiler fact and `sizeof` of a scalar type, which the
-selected target answers before checking. A call is syntactically valid in the
+D1321 admits an integer compiler fact and `sizeof` of a scalar type, and D1340
+`alignof` of a scalar type, which the selected target answers before checking.
+A call is syntactically valid in the
 brackets but is not a fixed expression:
 the compiler rejects it and never executes its body. No other expression form
 is admitted, and an implementation becoming better at ordinary constant
@@ -7087,7 +7179,7 @@ is, and type identity has depended on the target since D139. A bool fact
 in a length is refused as no count, an atom fact alone stays L0203, and
 every other measurement, `sizeof` of a declared type, a fixed array or a
 type formal, and `alignof` of anything, stays L0305 with a message that
-says what folds. A fixed actual of a type application is still an integer
+says what folds. D1340 later admits `alignof` of a scalar type. A fixed actual of a type application is still an integer
 literal or a forwarded fixed formal (D135), and a routine body still reads
 no fact as a value.
 
@@ -7103,6 +7195,37 @@ product target, Cortex-M0 included;
 `[sizeof usize]u8` to `[4]u8` on `synthetic-32` and to `[8]u8` on the
 64-bit targets; and
 `negative/array-length-refusals-are-reported-once`.
+
+### D1340 — An array length reads `alignof` of a scalar
+
+**The tour said** at [0520] that a length is a constant the compiler works
+out without running anything, and at [0370] that `alignof` measures a
+type. D1321 admitted `sizeof` of a built-in scalar type in a length and in
+the image of a module integer D438 counts, and left `alignof` of anything
+L0305, as nothing had asked for it.
+
+**Chosen:** `alignof` of a built-in scalar type folds wherever D1321's
+`sizeof` does, in an array length and in a counted module integer's
+image, as the literal the selected target answers: the alignment the same
+measurement gives in a routine body and in a fixed condition, the scalar's
+size capped at the target's widest scalar alignment. Like a scalar's size
+it is known before checking, so `[alignof usize]u8` is `[4]u8` on a 32-bit
+target and `[8]u8` on a 64-bit one, whatever the host is. `alignof` of a
+declared type, a fixed array or a type formal stays L0305, whose message
+now names the alignment rather than saying that `alignof` never folds.
+
+**The alternatives:** keeping `alignof` out, which D1321 chose for want of
+a use and which leaves a buffer aligned to a scalar to write the number;
+and admitting `alignof` of every type, which would make a length wait for
+a declared type's layout, as D1321 declined for `sizeof`.
+
+**Pinned by** `runtime/array-length-reads-facts-and-sizeof`, whose field
+and module integer read `alignof` of a scalar and are held to the same
+measurement made in the routine, on every product target, Cortex-M0
+included; `positive/array-length-facts-at-the-target-width`, which holds
+`[alignof usize]u8` to `[4]u8` on `synthetic-32` and to `[8]u8` on the
+64-bit targets; and `negative/array-length-refusals-are-reported-once`,
+whose `alignof` of a struct stays L0305.
 
 ## DECISIONS: DECLARED TYPES, RANGES AND LAYOUT
 
@@ -34341,6 +34464,47 @@ provide. All were declined.
 **Pinned by** `runtime/sleep-signal-sleeps-on`, whose handler is
 installed this way and runs once, on every hosted target. Darwin's and
 FreeBSD's records were written by reading and are run by their lanes.
+D1344 later removes the second view, once D1343 converts a C function to
+its address.
+
+### D1344 — `signal_action.handler` is the word C's member holds, and the second view is gone
+
+**The discrepancy:** D1280 gave `platform/libc` two records for C's
+`struct sigaction`, `signal_action` with its handler a `u64` and
+`handler_action` with it a `signal_handler`, and `sigaction_handler` to
+install the second through a pointer cast, because nothing turned a
+function into the word the first holds. D1343 now does.
+
+**Chosen:** each system's `signal_action.handler` is a `usize`, the
+pointer-wide word C's member is, and `sig_dfl` and `sig_ign` are `usize`
+too. A handler is written there as its address: `libc.handling(handler,
+flags)` makes the `signal_action` whose handler is `usize(handler)`, with
+no signal blocked beyond the one it handles, and `libc.sigaction` installs
+it, the one declaration of the C function. `handler_action` and
+`sigaction_handler` are removed. The record keeps its `zeroed` image, so a
+previous action is read into a zeroed record and compared with `sig_dfl`
+and `sig_ign` as before, and `platform/posix`'s readers of a previous
+action are unchanged; `hosted/events`' kqueue arm passes the disposition
+it sets as that `usize`, and `abi/libc-socket-facts` compares
+`platform/linux`'s `u64` words, the kernel's, with `u64(libc.sig_dfl)`. The member is a word and not a `signal_handler`
+because `SIG_DFL` is zero, which no function value can be (D335 traps it)
+and which leaves a record holding one with no zero image (L0328); naming
+the dispositions as function values would make two constants that trap or
+lie. The layout is unchanged on every hosted system, all of them LP64.
+The static Linux program still cannot install a handler, for D1280's
+reason: x86-64's `rt_sigaction` needs a restorer the library cannot write.
+
+**The alternatives:** keeping the second view, which D1280 took only for
+want of the conversion; the member typed `signal_handler` with
+`sig_dfl` and `sig_ign` as function values made from 0 and 1, which the
+first traps and the record's zero image refuses; and keeping the member a
+`u64`, which makes every handler `u64(usize(f))` for a word that is
+pointer-wide in C.
+
+**Pinned by** `runtime/sleep-signal-sleeps-on`, whose handler is installed
+through `signal_action` and `sigaction`, and whose record is checked to hold
+the handler's address, on Linux x86-64, arm64 and RV64 under QEMU; Darwin's
+and FreeBSD's records were edited by reading and are run by their lanes.
 
 ### D1281 — A program that reads the argument root before it exists is told the call it lacks
 
@@ -34813,6 +34977,47 @@ address without an origin; and converting back, which nothing needs.
 
 **Pinned by** `abi/c-function-from-address`, `abi/c-function-from-zero-address-traps`,
 `negative/c-function-from-address-refusals` and `runtime/linux-vdso`.
+
+### D1343 — A C function value converts to its address with `usize(f)`
+
+**The discrepancy:** D335 made a C function value from an address and
+declined the way back, which nothing needed. A C record member that holds
+either a function or a word, `struct sigaction`'s `sa_handler` with its
+`SIG_DFL` and `SIG_IGN`, then had no Landin type that took both: D1280 laid
+the record out twice, once with the member a function and once a word, and
+cast between the two through a pointer.
+
+**Chosen:** an integer conversion applied to a C function value, `usize(f)`,
+gives the address of the function's code: the bits the value already is,
+and the word a C `(uintptr_t)f` gives, Thumb's low bit included on
+Cortex-M. `f` is anything of a C function type: a declared `extern(c)`
+function, whether C or this program defines it, a binding, field or
+parameter of a C function type, or a value D335 made from an address,
+whose `usize` is that address again. The result is a `usize` with no
+origin [0810], as `usize(p)` of a pointer is, and never zero, since no
+function value is. It lowers to the IR's existing integer conversion of a
+word to the same width, a move on every backend, so the IR gains no
+operation. A function value in Landin's own convention is refused with
+L0301, since its convention is no ABI and its address is nothing C could
+call; so is the conversion of a C function value to any integer type but
+`usize`, whose note says to convert the address after it, `u64(usize(f))`.
+Nothing converts a function to a pointer: `ptr(usize(f))` makes one
+through the integer, as any address does, and a pointer to code is no
+value Landin reads.
+
+**The alternatives:** a conversion to any integer type, as a pointer has,
+which makes a narrowing conversion check an address that `usize` already
+holds; a `ptr` conversion of the function, which gives a pointer whose
+pointee is code and whose loads mean nothing; admitting Landin-convention
+functions, which hands C an address it cannot call; and a union of a C
+function and a word, which needs a representation for the word that no
+function value has, since zero is none.
+
+**Pinned by** `abi/c-function-to-address`, whose C peer recognises the
+address of its own function and calls the address of one the program
+defines, on every product target; `negative/c-function-to-address-refusals`;
+and `runtime/sleep-signal-sleeps-on`, whose handler is installed by its
+address (D1344).
 
 ### D336 — A loaded library is a handle, and its function values dangle once it closes
 

@@ -408,7 +408,11 @@ lowers to a range check that traps on zero followed by `Code_Address`, which
 changes no bits and carries the C signature the source named. Unlike a
 function address it names no routine, so nothing about the callee is known
 and no call through it is resolved to one. The verifier admits it only from
-a plain `usize` and only with a C signature.
+a plain `usize` and only with a C signature. The way back, `usize(f)` of a C
+function value, needs no operation of its own: it is the ordinary integer
+`Conversion` of the value's word to `usize`, whose result carries no
+descriptor, so what it gives is an integer and never again a function until
+`Code_Address` makes one.
 
 Landin's concepts describe required operations. Evidence tables supply the
 implementations for a particular type. The IR describes those tables and

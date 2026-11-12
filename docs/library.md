@@ -2801,18 +2801,20 @@ how a group of processes is signalled at once (D1279, D1356). It takes a
   and FreeBSD, so it needs no `--link=libc`.
 
 A handler for a signal is the C library's to install, with
-`platform/libc`'s `sigaction_handler` (D1280): for an `extern(c)`
-function `on_interrupt: (number: i32) -> none`, the program writes
-`action: libc.handler_action = libc.handling(on_interrupt, 0)` and then
-`libc.sigaction_handler(libc.sigint, addr action, libc.no_address)`,
-which gives 0 when the system took it.
+`platform/libc`'s `sigaction` (D1344): for an `extern(c)` function
+`on_interrupt: (number: i32) -> none`, the program writes
+`action: libc.signal_action = libc.handling(on_interrupt, 0)` and then
+`libc.sigaction(libc.sigint, addr action, libc.no_address)`, which gives
+0 when the system took it.
 
 - `libc.signal_handler` is the handler's type, C's `void (*)(int)`, and
-  `libc.handling(handler, flags)` makes the `handler_action` that calls
+  `libc.handling(handler, flags)` makes the `signal_action` that calls
   it, with no further signal blocked while it runs.
-- `handler_action` is C's `struct sigaction` with its handler typed as
-  the function; `signal_action` keeps it as the word `sig_dfl` and
-  `sig_ign` are, for a disposition that is no function.
+- `signal_action.handler` is the word C's member holds, a `usize`: the
+  dispositions `sig_dfl` and `sig_ign`, or a handler's address,
+  `usize(on_interrupt)`, which is how `handling` writes it (D1343). A
+  previous action read back is compared with `sig_dfl` and `sig_ign` as
+  that word.
 - A Linux program that installs a handler links the C library,
   `--link=libc`: a static one has no `sigaction`. `hosted/events`'
   `signal.watch` reads signals with no handler and no C library.
@@ -3042,7 +3044,7 @@ How a call reports a failure:
 | directories | `fdopendir`, `readdir`, `closedir`, `fstatat`, `mkdirat` and `unlinkat`, with each system's `struct dirent` as `directory_record`, its `at_fdcwd`, `o_directory`, `at_symlink_nofollow` and `at_removedir`, and the `d_type` and mode bits |
 | clocks and randomness | `clock_gettime` with a `clock_realtime` or a `clock_monotonic`, `nanosleep` with a `timespec`, and `arc4random_buf` |
 | sockets | `socket`, `socketpair`, `bind`, `listen`, `accept`, `accept4`, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `shutdown`, `setsockopt`, `getsockopt`, `getsockname` and `getpeername`, with each system's `af_inet6`, `sol_socket` and option numbers, `sock_cloexec` and `msg_nosignal` where they exist, `so_nosigpipe`, the address records' sizes and its `time_limit`, C's `struct timeval` |
-| signals | `sigaction` with each system's `signal_action` and `signal_set`, `sigaction_handler` with each system's `handler_action`, which `handling` makes from a `signal_handler`, `sigprocmask` with each system's `sig_block`, `sig_unblock` and `sig_setmask`, `getpid` and `kill`, the signals `sighup`, `sigint` and `sigterm` and each system's `sigusr1` and `sigusr2`, `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef`, and `posix_spawnattr_setsigmask` with `posix_spawn_setsigmask` |
+| signals | `sigaction` with each system's `signal_action`, which `handling` makes from a `signal_handler`, and `signal_set`, `sigprocmask` with each system's `sig_block`, `sig_unblock` and `sig_setmask`, `getpid` and `kill`, the signals `sighup`, `sigint` and `sigterm` and each system's `sigusr1` and `sigusr2`, `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef`, and `posix_spawnattr_setsigmask` with `posix_spawn_setsigmask` |
 | descriptors that do not block | `fcntl`'s `f_getfl` and `f_setfl`, each system's `o_nonblock`, and `sock_nonblock` where it exists |
 | the rest of the file system | `pread`, `pwrite`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat`, `futimens`, `fstat`, `flock` with its `lock_sh`, `lock_ex`, `lock_nb` and `lock_un`, and `fcntl`'s record locks with each system's `f_getlk`, `f_setlk`, `f_setlkw`, lock types and `lock_record`, C's `struct flock` |
 | users and groups | `getuid`, `geteuid`, `getgid` and `getegid` for the process's IDs, and `getpwuid_r`, `getpwnam_r`, `getgrgid_r` and `getgrnam_r` over each system's `account_record`, C's `struct passwd`, and the shared `group_record` |

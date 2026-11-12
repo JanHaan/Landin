@@ -2317,7 +2317,7 @@ running anything. You may write:
 - integer literals;
 - fixed parameters ([1520]);
 - compiler facts such as `compiler.word_size` [1500];
-- `sizeof` of a built-in scalar type, such as `sizeof usize`;
+- `sizeof` or `alignof` of a built-in scalar type, such as `sizeof usize`;
 - immutable module integers;
 - parentheses, unary `-` and plain `+`, `-`, `*`, `/` and `%` to combine
   them.
@@ -2325,8 +2325,9 @@ running anything. You may write:
 Calls, wrapping operators, bitwise operators, shifts and measurements of
 your own types are not allowed.
 
-A fact and a scalar's size are the selected target's, so `[sizeof usize]u8`
-is `[8]u8` on a 64-bit target and `[4]u8` on Cortex-M0. A module integer
+A fact and a scalar's size and alignment are the selected target's, so
+`[sizeof usize]u8` is `[8]u8` on a 64-bit target and `[4]u8` on Cortex-M0.
+A module integer
 counts only when its own value is such a constant. A `mut` one never counts,
 because the program may write it. With `path_max: usize = 4096`,
 `[path_max]u8` is the same type as `[4096]u8`.
@@ -5807,7 +5808,10 @@ Version 0.2.9 — what each version changed is in
 Warnings are the compiler's observations about legal source, never extra
 language rules. You can select, suppress or deny them by code. A denied
 warning fails that compilation, and the program stays legal Landin all the
-same. The compiler never warns about shadowing.
+same. The compiler never warns about shadowing; it does warn about a
+declaration that takes a predeclared type's name, such as a local named
+`u8`, because no type written where that name reaches can then mean the
+type.
 
 ### [0620] Storing a collection field by field (deferred)
 

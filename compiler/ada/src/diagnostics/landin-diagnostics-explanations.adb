@@ -629,7 +629,12 @@ package body Landin.Diagnostics.Explanations is
                & "that returns a plain pointer does not widen it into a un"
                & "ion of several atoms and that pointer (D235): the refusa"
                & "l names the one-atom union to recover into, whose value "
-               & "widens into the larger one (D874).",
+               & "widens into the larger one (D874). A function value conv"
+               & "erts to an address only when it is a C function value an"
+               & "d only to `usize`, `usize(f)` (D1343): a function in Lan"
+               & "din's own convention has no address C could call, and an"
+               & "other integer type converts that `usize` after it, `u64("
+               & "usize(f))`.",
             when Catalogue.Not_Definitely_Assigned =>
                "Required storage is not definitely assigned at a read or"
                & " an exit [1910]. A read needs the place assigned on ever"
@@ -714,20 +719,20 @@ package body Landin.Diagnostics.Explanations is
                & "e, alignment or field offset is measured by `compiler.as"
                & "sert`, once checking has laid the type out (D412). An ar"
                & "ray bound reads literals, fixed formals, integer compile"
-               & "r facts and `sizeof` of a scalar type (D1321) under `+ -"
-               & " * / %`, and may name an immutable module integer whose "
-               & "own image is such a count, but not a `mut` one, which th"
-               & "e program may write (D438); `alignof` and `sizeof` of a "
-               & "declared type are not in that fold. Change such an expre"
-               & "ssion to one the closed fold can evaluate. A value anoth"
-               & "er module exports, named through that module as `sizes.p"
-               & "age`, is known as it is in its own module; a field of a "
-               & "record image, an element of an array image and a call ar"
-               & "e not, in either. A module function binding without an i"
-               & "nitializer has no implicit zero function address; give i"
-               & "t an initial function address, such as a declared functi"
-               & "on or another module function value whose image is known"
-               & ".",
+               & "r facts and `sizeof` and `alignof` of a scalar type (D13"
+               & "21, D1340) under `+ - * / %`, and may name an immutable "
+               & "module integer whose own image is such a count, but not "
+               & "a `mut` one, which the program may write (D438); `sizeof"
+               & "` and `alignof` of a declared type are not in that fold."
+               & " Change such an expression to one the closed fold can ev"
+               & "aluate. A value another module exports, named through th"
+               & "at module as `sizes.page`, is known as it is in its own "
+               & "module; a field of a record image, an element of an arra"
+               & "y image and a call are not, in either. A module function"
+               & " binding without an initializer has no implicit zero fun"
+               & "ction address; give it an initial function address, such"
+               & " as a declared function or another module function value"
+               & " whose image is known.",
             when Catalogue.Impossible_Operand =>
                "An operand the operation cannot take, where the compiler"
                & " knows it [1950]: a divisor of zero, a shift by a negati"
@@ -1641,9 +1646,29 @@ package body Landin.Diagnostics.Explanations is
                & "the failure of a call that returns nothing. In the arm o"
                & "f an `if`, an `else` that binds no name is the `if`'s ow"
                & "n [1820], so a binding written there is what keeps the r"
-               & "ecovery and is not warned about. `--allow=L0684` suppres"
-               & "ses the warning; `--deny=L0684` makes it an invocation e"
-               & "rror.",
+               & "ecovery and is not warned about. The warning's exact fix"
+               & " writes `else begin` for `else (name)`, which runs the s"
+               & "ame block with every name meaning what it meant (D1341);"
+               & " it is offered when only blanks stand between `else` and"
+               & " the `)` on one line, so it never removes a comment. `--"
+               & "allow=L0684` suppresses the warning; `--deny=L0684` make"
+               & "s it an invocation error.",
+            when Catalogue.Predeclared_Type_Name_Taken =>
+               "A declaration takes the name of one of the sixteen prede"
+               & "clared types, the thirteen scalars and `utf8`, `utf16` a"
+               & "nd `cstring` (D1342). The program is accepted: the names"
+               & " are not reserved, and the nearest declaration of a spel"
+               & "ling is what a type position names [1790], so every type"
+               & " position the declaration reaches names it, and the pred"
+               & "eclared type is out of reach there. A function named `u8"
+               & "` cannot write `u8` in its own signature, and a local na"
+               & "med `i64` ends `i64` for the rest of its block, which is"
+               & " almost never what was meant. Give the declaration anoth"
+               & "er name. Like L0684 it is raised only in a program with "
+               & "no error, since a type position the declaration reaches "
+               & "is already refused with L0338, whose note names it. `--a"
+               & "llow=L0692` suppresses the warning; `--deny=L0692` makes"
+               & " it an invocation error.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -3164,6 +3189,13 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end first"
                & LF,
+            when Catalogue.Predeclared_Type_Name_Taken =>
+               "scale: (usize: i32) -> (r: i32) ="
+               & LF
+               & "    r = usize * 2"
+               & LF
+               & "end scale"
+               & LF,
             when Catalogue.No_Toolchain =>
                "",
             when Catalogue.Toolchain_Failed =>
@@ -3493,6 +3525,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Bidirectional_Control =>
                "",
             when Catalogue.Unused_Else_Binding =>
+               "",
+            when Catalogue.Predeclared_Type_Name_Taken =>
                "",
             when Catalogue.No_Toolchain =>
                "",

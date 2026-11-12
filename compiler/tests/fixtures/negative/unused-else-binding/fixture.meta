@@ -1,7 +1,8 @@
 class: negative
-summary: D1261 warns of a call-site else binding its block never reads, and names the forms that bind none
+summary: D1261 warns of a call-site else binding its block never reads, and names the forms that bind none; D1341's exact fix writes `else begin` for the binding
 program: program.ldn
 codes: L0684, L0684
+fixed: program.fixed
 status: 0
 constructs: 1030, 1820
 targets: linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64

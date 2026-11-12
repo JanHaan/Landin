@@ -131,7 +131,8 @@ package Landin.Diagnostics is
       Unwrap_Name,     --  `else (r)` as a branch's value loses them
       Landin_Form,     --  another language's spelling becomes Landin's
       Ignore_Failure,  --  a value no call result needs becomes `none`
-      Hold_Exit);      --  an exit after a call's `else` gets a block
+      Hold_Exit,       --  an exit after a call's `else` gets a block
+      Unbind_Error);   --  `else (e)` its block never reads: `else begin`
 
    type Fix is private;
 

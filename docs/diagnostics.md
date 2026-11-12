@@ -791,7 +791,11 @@ no array the report stands on the `[` and says the line was continued, and
 the value in parentheses, `(name)`, lets the `[` begin a value (D1191). An atom `else` on a
 call that returns a plain pointer does not widen it into a union of several
 atoms and that pointer (D235): the refusal names the one-atom union to
-recover into, whose value widens into the larger one (D874).
+recover into, whose value widens into the larger one (D874). A function
+value converts to an address only when it is a C function value and only
+to `usize`, `usize(f)` (D1343): a function in Landin's own convention has no
+address C could call, and another integer type converts that `usize` after
+it, `u64(usize(f))`.
 
 ```landin
 flag: bool = true
@@ -895,10 +899,12 @@ unknown fixed name or form, or depend on itself, within one module or through
 several. A fixed condition or option default measures scalar types only: a
 declared type's size, alignment or field offset is measured by
 `compiler.assert`, once checking has laid the type out (D412). An array bound
-reads literals, fixed formals, integer compiler facts and `sizeof` of a scalar
-type (D1321) under `+ - * / %`, and may name an immutable module integer whose
-own image is such a count, but not a `mut` one, which the program may write
-(D438); `alignof` and `sizeof` of a declared type are not in that fold. Change such an expression to one the closed fold can evaluate. A value
+reads literals, fixed formals, integer compiler facts and `sizeof` and
+`alignof` of a scalar type (D1321, D1340) under `+ - * / %`, and may name an
+immutable module integer whose own image is such a count, but not a `mut` one,
+which the program may write (D438); `sizeof` and `alignof` of a declared type
+are not in that fold. Change such an expression to one the closed fold can
+evaluate. A value
 another module exports, named through that module as `sizes.page`, is known as
 it is in its own module; a field of a record image, an element of an array
 image and a call are not, in either. A module function binding without an
@@ -1822,8 +1828,11 @@ begin ... end` runs a block of statements, `else value` stands in for the
 call's result, and `else none` ignores the failure of a call that returns
 nothing. In the arm of an `if`, an `else` that binds no name is the `if`'s
 own [1820], so a binding written there is what keeps the recovery and is
-not warned about. `--allow=L0684` suppresses the warning; `--deny=L0684`
-makes it an invocation error.
+not warned about. The warning's exact fix writes `else begin` for `else
+(name)`, which runs the same block with every name meaning what it meant
+(D1341); it is offered when only blanks stand between `else` and the `)` on
+one line, so it never removes a comment. `--allow=L0684` suppresses the
+warning; `--deny=L0684` makes it an invocation error.
 
 ```landin
 missing: atom
@@ -1837,6 +1846,27 @@ first: (path: i32) -> (handle: i32) =
         0
     end
 end first
+```
+
+### L0692
+
+A declaration takes the name of one of the sixteen predeclared types, the
+thirteen scalars and `utf8`, `utf16` and `cstring` (D1342). The program is
+accepted: the names are not reserved, and the nearest declaration of a
+spelling is what a type position names [1790], so every type position the
+declaration reaches names it, and the predeclared type is out of reach
+there. A function named `u8` cannot write `u8` in its own signature, and a
+local named `i64` ends `i64` for the rest of its block, which is almost
+never what was meant. Give the declaration another name. Like L0684 it is
+raised only in a program with no error, since a type position the
+declaration reaches is already refused with L0338, whose note names it.
+`--allow=L0692` suppresses the warning; `--deny=L0692` makes it an
+invocation error.
+
+```landin
+scale: (usize: i32) -> (r: i32) =
+    r = usize * 2
+end scale
 ```
 
 ### L0350

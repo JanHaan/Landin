@@ -198,28 +198,21 @@ fixed if compiler.os == freebsd then
     --- numbers it.
     public sigchld: i32 = 20
 
-    --- C's `struct sigaction` as FreeBSD declares it.
+    --- C's `struct sigaction` as FreeBSD declares it.  `handler` is the word
+    --- C's member holds: `sig_dfl`, `sig_ign` or a handler's address,
+    --- `usize(f)` of a `signal_handler` (D1343).
     public signal_action: type = struct
-        handler: u64
+        handler: usize
         flags: i32
         mask: signal_set
     end signal_action
 
-    --- C's `struct sigaction` as FreeBSD declares it, for an action that
-    --- calls a handler: `signal_action` with its handler a C function
-    --- value, which `sigaction_handler` installs.
-    public handler_action: type = struct
-        handler: signal_handler
-        flags: i32
-        mask: signal_set
-    end handler_action
-
     --- The action that calls `handler` with `flags`, `sa_flags`, and no
     --- signal blocked while it runs beyond the one it handles.
     public handling:
-        (handler: signal_handler, flags: i32) -> (action: handler_action) =
+        (handler: signal_handler, flags: i32) -> (action: signal_action) =
         none_blocked: signal_set = zeroed
-        action = (handler: handler, flags: flags, mask: none_blocked)
+        action = (handler: usize(handler), flags: flags, mask: none_blocked)
     end handling
 
     --- `sigprocmask` operation: block the signals given beside those

@@ -3973,14 +3973,24 @@ package body Landin.Stages.Checking is
 
       --  D438: an immutable module integer is a fixed count when its
       --  image is: integer literals, D437's integer compiler facts,
-      --  `sizeof` of a scalar type (D1321), other such module integers,
-      --  unary `-` and D136's mathematical `+ - * / %`.  Admitted is the
-      --  count; Outside says the image is something else, which the bound
-      --  reports; Faulty is a fault in the image the
-      --  module value's own check reports, a cycle, an overflow or a zero
-      --  divisor, so the bound says nothing more.
+      --  `sizeof` and `alignof` of a scalar type (D1321, D1340), other
+      --  such module integers, unary `-` and D136's mathematical
+      --  `+ - * / %`.  Admitted is the count; Outside says the image is
+      --  something else, which the bound reports; Faulty is a fault in the
+      --  image the module value's own check reports, a cycle, an overflow
+      --  or a zero divisor, so the bound says nothing more.
       type Count_Outcome is (Count_Admitted, Count_Outside, Count_Faulty);
       Counting : Declaration_Sets.Set;
+
+      --  D1321/D1340: what `sizeof` or `alignof` of a scalar is on the
+      --  selected target, as the configuration fold answers it.
+      function Scalar_Measure
+        (Measure : Syn.Node_Kind; Held : Ty.Scalar_Name) return Ty.Folded
+      is (if Measure = Syn.Align_Of
+          then Ty.Folded (Landin.Targets.Alignment_Of
+            (Facts, Ty.Storage_Size (Held, Facts)))
+          else Ty.Folded (Landin.Targets.Bytes
+            (Ty.Storage_Size (Held, Facts))));
 
       function Module_Count
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Value : out Ty.Folded)
@@ -4128,9 +4138,10 @@ package body Landin.Stages.Checking is
                        when others => Left rem Right);
                   return Count_Admitted;
                end;
-            when Syn.Size_Of =>
-               --  D1321: a scalar's size is known for the target before
-               --  checking, so it counts as the literal it stands for.
+            when Syn.Size_Of | Syn.Align_Of =>
+               --  D1321/D1340: a scalar's size and alignment are known for
+               --  the target before checking, so each counts as the
+               --  literal it stands for.
                declare
                   Held : constant Ty.Type_Kind :=
                     Type_At (Of_Tree, Syn.Measured_Type (Of_Tree, Node));
@@ -4138,8 +4149,7 @@ package body Landin.Stages.Checking is
                   if Held not in Ty.Scalar_Name then
                      return Count_Outside;
                   end if;
-                  Value := Ty.Folded (Landin.Targets.Bytes
-                    (Ty.Storage_Size (Held, Facts)));
+                  Value := Scalar_Measure (Kind, Held);
                   return Count_Admitted;
                end;
             when others =>
@@ -4171,11 +4181,12 @@ package body Landin.Stages.Checking is
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, At_Node),
                Message => Message,
-               Note    => "D136/D438/D1321: an array bound folds integer"
-                          & " literals, fixed formals, compiler facts,"
-                          & " `sizeof` of a scalar type, immutable module"
-                          & " integers and target-independent integer"
-                          & " arithmetic; no user routine runs",
+               Note    => "D136/D438/D1321/D1340: an array bound folds"
+                          & " integer literals, fixed formals, compiler"
+                          & " facts, `sizeof` and `alignof` of a scalar"
+                          & " type, immutable module integers and"
+                          & " target-independent integer arithmetic; no"
+                          & " user routine runs",
                Into    => Found);
          end Report_Not_Fixed;
 
@@ -4362,9 +4373,10 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
-         --  D1321: `sizeof` of a scalar type is the target's size of it,
-         --  known before checking as a fact is; any other measurement
-         --  needs a layout and stays outside the fold.
+         --  D1321/D1340: `sizeof` and `alignof` of a scalar type are the
+         --  target's size and alignment of it, known before checking as a
+         --  fact is; any other measurement needs a layout and stays
+         --  outside the fold.
          if Of_Kind in Syn.Size_Of | Syn.Align_Of then
             declare
                Held : constant Ty.Type_Kind :=
@@ -4372,21 +4384,20 @@ package body Landin.Stages.Checking is
             begin
                if Held = Ty.Ill_Typed then
                   return 0;
-               elsif Of_Kind = Syn.Size_Of and then Held in Ty.Scalar_Name
-               then
+               elsif Held in Ty.Scalar_Name then
                   Valid := True;
                   Known := True;
-                  return Ty.Folded (Landin.Targets.Bytes
-                    (Ty.Storage_Size (Held, Facts)));
+                  return Scalar_Measure (Of_Kind, Held);
                end if;
                Report_Not_Fixed
                  (Written,
-                  (if Of_Kind = Syn.Align_Of
-                   then "`alignof` is not one of the fixed-expression"
-                        & " forms; `sizeof` of a scalar type is"
-                   else "`sizeof` folds in a fixed expression for a"
-                        & " scalar type only, and this type's size is"
-                        & " its checked layout's"));
+                  "`" & (if Of_Kind = Syn.Align_Of then "alignof"
+                         else "sizeof")
+                  & "` folds in a fixed expression for a scalar type"
+                  & " only, and this type's "
+                  & (if Of_Kind = Syn.Align_Of then "alignment"
+                     else "size")
+                  & " is its checked layout's");
                return 0;
             end;
          end if;
@@ -27286,6 +27297,66 @@ package body Landin.Stages.Checking is
                            Landin.Checking.Refuse
                              (Types.all, Of_Tree, Node);
                            return Kept (Ty.Ill_Typed);
+                        elsif Got = Ty.Function_Value then
+                           --  D1343: a C function value is the address
+                           --  of its code, the word C keeps for it, so
+                           --  `usize(f)` gives that address, the inverse
+                           --  of D335's `adder(address)`.  Landin's own
+                           --  convention is no ABI, so its function
+                           --  values have no address C could use.
+                           declare
+                              Held_By : constant
+                                Landin.Checking.Signature_Id :=
+                                  Landin.Checking.Signature_Of
+                                    (Types.all, Of_Tree, Value);
+                           begin
+                              if Held_By = Landin.Checking.No_Signature
+                              then
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              elsif not Landin.Checking.Signature_Uses_C_ABI
+                                (Types.all, Held_By)
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "only a C function value"
+                                      & " converts to its address",
+                                    Note    => "[1975]: an extern(c)"
+                                      & " function's address is the one C"
+                                      & " calls; Landin's own convention"
+                                      & " is no ABI, so its functions"
+                                      & " have none to give",
+                                    Related => Syn.Origin (Of_Tree, Callee),
+                                    Because => "the integer type applied"
+                                      & " here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              elsif Conversion /= Ty.Usize then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "a C function value converts"
+                                      & " to a `usize` address, not "
+                                      & Shown (Conversion),
+                                    Note    => "[1975]: convert the address"
+                                      & " after it, as `"
+                                      & Ty.Spelling (Conversion)
+                                      & "(usize(f))`",
+                                    Related => Syn.Origin (Of_Tree, Callee),
+                                    Because => "the integer type applied"
+                                      & " here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              end if;
+                           end;
                         elsif Got /= Ty.Ill_Typed
                           and then Got
                             not in Ty.Integer_Name | Ty.Float_Name | Ty.Bool
@@ -44965,23 +45036,124 @@ package body Landin.Stages.Checking is
                                  (Checked.Where,
                                   Syn.Where (Of_Tree.all, Node)))
                         then
-                           Bad.Report
-                             (Item    => Bad.Unused_Else_Binding,
-                              Source  => Id,
-                              Where   => Syn.Anchor (Of_Tree.all, Node),
-                              Message => "this `else` binds the error as `"
-                                & Spelled (Syn.Name (Of_Tree.all, Node))
-                                & "`, and its block never reads it",
-                              Note    => "[1030]: a recovery that does"
-                                & " not read the error leaves the name"
-                                & " out: `else begin ... end` runs a"
-                                & " block, and `else value` stands in for"
-                                & " the result",
-                              Into    => Found);
+                           declare
+                              Name : constant String :=
+                                Spelled (Syn.Name (Of_Tree.all, Node));
+                              Said : constant Landin.Source.Span :=
+                                Syn.Anchor (Of_Tree.all, Node);
+                              Clause : constant Landin.Source.Span :=
+                                Syn.Where (Of_Tree.all, Node);
+                              After : constant String :=
+                                Landin.Source.Slice
+                                  (Text, (Said.Last, Clause.Last));
+                              At_Byte : Natural := After'First;
+                              Closes : Natural := 0;
+
+                              procedure Skip_Blanks;
+                              procedure Skip_Blanks is
+                              begin
+                                 while At_Byte <= After'Last
+                                   and then After (At_Byte)
+                                     in ' ' | ASCII.HT
+                                 loop
+                                    At_Byte := At_Byte + 1;
+                                 end loop;
+                              end Skip_Blanks;
+                           begin
+                              --  D1341: the bytes from `else` to `)` are
+                              --  the parenthesised name and blanks, on
+                              --  one line, or the fix is not offered, so
+                              --  it never swallows a comment.
+                              Skip_Blanks;
+                              if At_Byte <= After'Last
+                                and then After (At_Byte) = '('
+                              then
+                                 At_Byte := At_Byte + 1;
+                                 Skip_Blanks;
+                                 if At_Byte + Name'Length - 1 <= After'Last
+                                   and then After
+                                     (At_Byte .. At_Byte + Name'Length - 1)
+                                       = Name
+                                 then
+                                    At_Byte := At_Byte + Name'Length;
+                                    Skip_Blanks;
+                                    if At_Byte <= After'Last
+                                      and then After (At_Byte) = ')'
+                                    then
+                                       Closes := At_Byte - After'First + 1;
+                                    end if;
+                                 end if;
+                              end if;
+                              Bad.Report
+                                (Item    => Bad.Unused_Else_Binding,
+                                 Source  => Id,
+                                 Where   => Said,
+                                 Message => "this `else` binds the error"
+                                   & " as `" & Name
+                                   & "`, and its block never reads it",
+                                 Note    => "[1030]: a recovery that does"
+                                   & " not read the error leaves the name"
+                                   & " out: `else begin ... end` runs a"
+                                   & " block, and `else value` stands in"
+                                   & " for the result",
+                                 Fixes   =>
+                                   (if Closes > 0 then
+                                    [1 => Landin.Diagnostics.Fixes
+                                       .Unbind_Error
+                                         (Id,
+                                          (Said.Last, Said.Last
+                                             + Landin.Source.Byte_Offset
+                                                 (Closes)),
+                                          Name)]
+                                    else Landin.Diagnostics.No_Fixes),
+                                 Into    => Found);
+                           end;
                         end if;
                      end;
                   end if;
                end loop;
+            end;
+         end loop;
+      end if;
+
+      --  D1342: a declaration that takes one of the sixteen predeclared
+      --  type names hides that type from every type position it reaches
+      --  [1790], which is almost never what was meant.  Like D1261's
+      --  warning it waits for a program with no error, since an L0338 at
+      --  a type position the declaration reaches already names it.
+      if not Landin.Diagnostics.Has_Errors (Found) then
+         for Index in 1 .. Res.Declaration_Count (Meanings.all) loop
+            declare
+               Means : constant Res.Declaration_Id :=
+                 Res.Declaration_Id (Index);
+               Name : constant String :=
+                 Spelled (Res.Name_Of (Meanings.all, Means));
+               Id : constant Landin.Source.Source_Id :=
+                 Res.Source_Of (Meanings.all, Means);
+               Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Means);
+            begin
+               if ((for some Scalar in Ty.Scalar_Name =>
+                      Name = Ty.Spelling (Scalar))
+                   or else
+                     (for some View in Ty.Text_View =>
+                        Name = Ty.Spelling (View)))
+                 and then Landin.Configuration.Is_Active
+                   (Configurations (Context).all, Id, Node)
+               then
+                  Bad.Report
+                    (Item    => Bad.Predeclared_Type_Name_Taken,
+                     Source  => Id,
+                     Where   => Syn.Anchor (Tree_For (Id).all, Node),
+                     Message => "this declaration takes the name of the"
+                       & " predeclared type `" & Name & "`",
+                     Note    => "[1790]: the nearest declaration of a"
+                       & " spelling is what a type position names, so no"
+                       & " type position this one reaches names the"
+                       & " predeclared `" & Name & "`; give the"
+                       & " declaration another name",
+                     Into    => Found);
+               end if;
             end;
          end loop;
       end if;

@@ -1,0 +1,25 @@
+--  D1343: only a C function value converts to an address, and only to a
+--  `usize`: a function in Landin's own convention, named or kept in a
+--  binding, and another integer type are each refused where they are
+--  written.
+adder: type = extern(c) (a: i32, b: i32) -> (r: i32)
+native: type = (a: i32, b: i32) -> (r: i32)
+
+extern(c) add: (a: i32, b: i32) -> (r: i32) =
+    r = a + b
+end add
+
+subtract: (a: i32, b: i32) -> (r: i32) =
+    r = a - b
+end subtract
+
+bad: (kept: native, c: adder) -> none =
+    named: usize = usize(subtract)
+    held: usize = usize(kept)
+    wide: u64 = u64(add)
+    narrow: u32 = u32(c)
+    _ = named
+    _ = held
+    _ = wide
+    _ = narrow
+end bad

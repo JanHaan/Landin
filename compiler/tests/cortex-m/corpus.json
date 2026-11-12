@@ -70,6 +70,9 @@
         }
       }
     },
+    "abi/c-function-to-address": {
+      "mode": "execute"
+    },
     "abi/c-packed-records": {
       "mode": "execute",
       "lanes": {

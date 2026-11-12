@@ -13832,10 +13832,17 @@ package body Landin.Tests.Checking_Suite is
          begin
             Landin.Testing.Check_Equal
               (Item, Ran, 4, Label & " reaches checking");
+            --  D1342: a user function named as a predeclared type is
+            --  accepted with that warning at its name, and nothing else.
             Landin.Testing.Check
               (Item, Landin.Stages.Failed (Work) /= Accepted
                  and then
-                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                   (if Accepted
+                    then (for all Index in 1 .. Landin.Diagnostics.Count
+                            (Reports) =>
+                            Landin.Diagnostics.Code
+                              (Landin.Diagnostics.Get (Reports, Index))
+                              = "L0692")
                     else Landin.Diagnostics.Count (Reports) = 1
                       and then Landin.Diagnostics.Code
                         (Landin.Diagnostics.Get (Reports, 1)) = Code),

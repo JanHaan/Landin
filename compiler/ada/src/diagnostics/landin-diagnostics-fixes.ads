@@ -175,6 +175,18 @@ package Landin.Diagnostics.Fixes is
       Word   : String) return Fix
      with Pre => Opens < Closes;
 
+   --  D1341: a call's `else (name)` whose block never reads `name`
+   --  becomes `else begin`, the bare block that binds nothing: Where runs
+   --  from the end of `else` past the `)` and becomes ` begin`.  Exact:
+   --  no reference names the binding, so the bare block runs what the
+   --  bound one ran with every name meaning what it meant, and Where
+   --  holds only the parenthesised name and blanks on one line.
+   function Unbind_Error
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span;
+      Name   : String) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
    --  One Respell per name the ranking kept, nearest first; none when it
    --  kept none.
    function Respellings

@@ -33,12 +33,13 @@ extern(c) caught_signal: (number: i32) -> none =
 end caught_signal
 
 --  Catch SIGUSR1 with `caught_signal`: `libc.handling` makes the action
---  whose handler is the function, and `sigaction_handler` installs it
---  (D1280).
+--  whose handler is the function's address, `usize(caught_signal)`, and
+--  `sigaction` installs it (D1343, D1344).
 caught_by_handler: () -> (yes: bool) =
-    action: libc.handler_action = libc.handling(caught_signal, 0)
-    yes = libc.sigaction_handler(libc.sigusr1, addr action,
-                                 libc.no_address) == 0
+    action: libc.signal_action = libc.handling(caught_signal, 0)
+    yes = action.handler == usize(caught_signal)
+          and libc.sigaction(libc.sigusr1, addr action,
+                             libc.no_address) == 0
 end caught_by_handler
 
 --  The monotonic clock in nanoseconds, read as hosted/blocking reads it.
