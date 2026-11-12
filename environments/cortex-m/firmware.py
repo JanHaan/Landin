@@ -953,6 +953,25 @@ def veneers(run, refine, optimize="none", specialize="off"):
             'RAM-to-flash transfer did not exercise a linker veneer')
     require('__aeabi_uldivmod' in disassembly,
             'firmware helper closure was not exercised')
+    #  D1322: a placed generic routine's every instance is in its section,
+    #  which the link map puts in the copied RAM text, as nm reads it.
+    symbols = {parts[-1]: int(parts[0], 16)
+               for line in (run.out / 'symbols.log').read_text().splitlines()
+               if len(parts := line.split()) == 3}
+    relays = sorted(name for name in symbols
+                    if re.fullmatch(r'(?:\w+\.)?relay(?:\.\d+)?', name))
+    low = symbols['_landin_firmware_ramtext_start']
+    high = symbols['_landin_firmware_ramtext_end']
+    require(len(relays) == 2 and all(low <= symbols[name] < high for name in relays),
+            'a placed generic routine left an instance outside RAM text: %s in %#x-%#x'
+            % ({name: hex(symbols[name]) for name in relays}, low, high))
+    mapping = (run.out / 'firmware.elf.map').read_text()
+    placed = re.search(r'^ \.ramtext\.relay\s+(0x[0-9a-f]+)\s+(0x[0-9a-f]+)', mapping, re.M)
+    require(placed is not None and int(placed.group(1), 16) >= 0x20000000
+            and all(int(placed.group(1), 16) <= symbols[name]
+                    < int(placed.group(1), 16) + int(placed.group(2), 16)
+                    for name in relays),
+            'the link map does not place .ramtext.relay, both instances inside it, in RAM')
     execute(run, elf, [
         'python',
         'low=v("&_landin_firmware_ramtext_start")',
@@ -973,6 +992,7 @@ def veneers(run, refine, optimize="none", specialize="off"):
         'assert mem.read_memory(low,high-low).tobytes() == mem.read_memory(load,high-low).tobytes()',
         'end', 'break _landin_firmware_returned', 'continue', 'python',
         'assert v("*(unsigned*)&observed") == 42',
+        'assert v("*(unsigned*)&relayed") == 42',
         'assert v("*(unsigned*)&irq_seen") == 1',
         'assert v("$r12") == 0 and v("$r11") == 0',
         'assert v("$sp") == 0x20004000',

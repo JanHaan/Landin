@@ -5061,6 +5061,10 @@ vector annotation needs a firmware-entry request ([1650]).
   profile's 32 KiB of flash and 16 KiB of RAM, whose top 4 KiB is
   reserved for stacks; a description gives its own. The linker checks
   bounds and overlap.
+- A generic function is a function for each instance, and every instance
+  goes to the section, alignment or region it is placed in. A vector slot,
+  the boot stage and `keep` each name one function, so a generic one takes
+  none of them.
 - The compiler refuses reserved vectors, a section that does not match the
   declaration, duplicate attributes and symbol collisions.
 - There is no module initialization in user code ([1460]).

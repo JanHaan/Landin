@@ -1,6 +1,6 @@
 --  D1321: an array length that reads a compiler fact or `sizeof` of a
 --  scalar folds at the selected target's width, never the host's: on the
---  32-bit models `[sizeof usize]u8` and `[compiler.word_size / 8]u8` are
+--  32-bit model `[sizeof usize]u8` and `[compiler.word_size / 8]u8` are
 --  `[4]u8`, on a 64-bit target `[8]u8`.
 fixed if compiler.word_size == 32 then
     exactly: type = [4]u8

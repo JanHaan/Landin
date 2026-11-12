@@ -43248,13 +43248,23 @@ package body Landin.Stages.Checking is
          end if;
          if Routine
            and then Syn.Generic_Formal_Count (Of_Tree, Node) > 0
+           and then (Attr.Vector /= Landin.Source.Empty_Span
+                     or else Attr.Boot_Stage or else Attr.Keep)
          then
-            --  One placement names one routine, and a generic routine is
-            --  as many as its instances.
+            --  D1322: a section, an alignment or a region places every
+            --  instance of a generic routine, which is as many routines as
+            --  it has instances; a slot or the boot stage takes one
+            --  routine, and `keep` retains one no call reaches, while an
+            --  instance exists only because a call made it.
             Bad.Report
               (Item => Bad.Linkage_Contract, Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Anchor (Of_Tree, Node),
-               Message => "a generic routine cannot be placed: `"
+               Message => "a generic routine takes no "
+                 & (if Attr.Vector /= Landin.Source.Empty_Span
+                    then "vector slot"
+                    elsif Attr.Boot_Stage then "boot stage"
+                    else "`keep`")
+                 & ": `"
                  & Spelled
                      (Syn.Name
                         (Of_Tree, Syn.Nth_Generic_Formal (Of_Tree, Node, 1)))
@@ -43264,9 +43274,10 @@ package body Landin.Stages.Checking is
                     then "` is a type parameter"
                     else "` is a fixed parameter")
                  & ", so this declares one routine for each instance",
-               Note => "[1640]: a placement names one routine; place a"
-                 & " nongeneric routine that calls this one, or pass the"
-                 & " varying part as a function value",
+               Note => "D1322: every instance of a generic routine goes to"
+                 & " its section, alignment or region; a slot, the boot"
+                 & " stage and `keep` name one routine, so give them a"
+                 & " nongeneric routine that calls this one",
                Related =>
                  Syn.Origin
                    (Of_Tree, Syn.Nth_Generic_Formal (Of_Tree, Node, 1)),
@@ -43497,9 +43508,11 @@ package body Landin.Stages.Checking is
                end if;
             end if;
          end if;
+         --  D1322: a generic routine is refused above for what names one
+         --  routine; its section, alignment and region place every
+         --  instance.
          if Routine then
-            Valid := Valid and then not Syn.Is_External (Of_Tree, Node)
-              and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0;
+            Valid := Valid and then not Syn.Is_External (Of_Tree, Node);
          end if;
          if not Valid then
             Bad.Report

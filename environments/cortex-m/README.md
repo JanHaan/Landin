@@ -1149,7 +1149,9 @@ The six optimization/specialization profiles each exercise:
   and a specialized generic opaque-assembly memory write with live values.
   A separate naked-fallthrough image reaches its appended trap without a frame.
 - Copied RAM code and RAM handler, flash/RAM veneers, integer libgcc helpers
-  and private success/failure transport through checked ordinary calls.
+  and private success/failure transport through checked ordinary calls; a
+  generic routine placed in RAM text has both of its instances there, by
+  `nm` and the link map, and both run (D1322).
 - Four synthetic-device runs: DMA IRQ0 half/completion notifications, packed register
   images, invalid-encoding HardFault and byte transactions. The latter three
   execute ordinary generated programs inside a generated SVC handler. Expected

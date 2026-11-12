@@ -1677,7 +1677,7 @@ positive/alias-conversion | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86
 positive/any-provider-without-main | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/any-slice-dispatch | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/arm-scopes-are-siblings | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-positive/array-length-facts-at-the-target-width | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+positive/array-length-facts-at-the-target-width | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-literal-assignment | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-literal-value-after-a-call-statement | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-longer-than-a-host-natural | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

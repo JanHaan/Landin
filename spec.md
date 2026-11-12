@@ -7072,7 +7072,7 @@ fixed fact. D136 closed the bound's fold over literals, fixed formals and
 mathematical arithmetic; D437 let a module value read a fact and D438 let a
 bound name such a value, so `[2 * 128 * compiler.word_size]u8` was L0203,
 whose note sent the fact through a module value, and `[2 * 1024 * sizeof
-usize]u8` was L0305, "not one of the closed fixed-expression forms" (SR-369).
+usize]u8` was L0305, "not one of the closed fixed-expression forms".
 
 **Chosen:** an array length, wherever its type is written, a routine body,
 a signature, a struct field and an alias template included, may read an
@@ -7100,8 +7100,8 @@ wait for a declared type's layout and move type identity with it.
 **Pinned by** `runtime/array-length-reads-facts-and-sizeof` on every
 product target, Cortex-M0 included;
 `positive/array-length-facts-at-the-target-width`, which holds
-`[sizeof usize]u8` to `[4]u8` on `synthetic-32` and Cortex-M0 and to
-`[8]u8` on the 64-bit targets; and
+`[sizeof usize]u8` to `[4]u8` on `synthetic-32` and to `[8]u8` on the
+64-bit targets; and
 `negative/array-length-refusals-are-reported-once`.
 
 ## DECISIONS: DECLARED TYPES, RANGES AND LAYOUT
@@ -23725,7 +23725,7 @@ and still does.
 `csrrw zero, ...` and an `add zero, ...` that discards a result, though no
 write to x0 changes anything; an operand at x0 admitted too, which would
 let a declared input or output silently mean nothing; and the refusal kept
-with its notes (SR-619, SR-645).
+with its notes.
 
 **Pinned by** `rv32 firmware/an ordinary block names x0 both ways`, which
 emits both forms for rv32 and refuses an operand at x0, and
@@ -26604,9 +26604,9 @@ the device accesses each program makes are the ones it made before, in the
 same order, so the synthetic lane's exact application trace is unchanged.
 
 **The alternatives:** a concept with each program's port type conforming
-([1230], [1360]), whose generic `handle` the compiler refuses to place
-in RAM text, L0347, so that `handle` would have left the RAM text the lane
-checks; a module each
+([1230], [1360]), whose generic `handle` the compiler then refused to
+place in RAM text, L0347, so that `handle` would have left the RAM text
+the lane checks (D1322 later places every instance); a module each
 program supplies under one name in its first root ([1480]), which hides
 which device a program's loop drives behind the order of its roots; and a
 copy of the loop in each program, which leaves no shared outcome to
@@ -26616,6 +26616,45 @@ compare.
 at every profile, `environments/cortex-m/source_debug.py`'s stops in
 `handle` and through the application's `transmit`, and the RP2040 and
 STM32H753 board applications, which build with it.
+
+### D1322 — Every instance of a placed generic routine goes to its placement
+
+**The tour said** at [1640] that a `link(...)` annotation places a
+declaration in a section, at an alignment, in a region or in a vector
+slot, and at [1360] that a generic routine is compiled once for each
+instance. L0347 refused any placement of a generic routine, saying that
+one placement names one routine, so D645's shared command loop took
+function values to keep `handle` in RAM text.
+
+**Chosen:** on a firmware target, `link(section: ...)`, `link(align: ...)`
+and `link(region: ...)` on a generic routine place every instance of it:
+each instance the program makes is emitted in that section, at that
+alignment or in that region, as a nongeneric routine placed there would
+be, under its own instance name. The instances are made by calls, so a
+placed generic routine is no root of its own and one nothing calls places
+nothing. `link(vector: ...)` and `link(boot_stage)` name the one routine a
+slot or the boot kind enters, and `keep` retains a routine no call
+reaches, so a generic routine takes none of them: L0347, naming the
+generic parameter and the nongeneric routine that calls it. A hosted
+target places nothing, a generic routine included, as before. The build
+and stack reports list each instance as they list an unplaced one. An
+evidence adapter the compiler makes for an instance that is itself a
+conformance's provider is not an instance and is not placed.
+
+**The alternatives:** keeping the refusal, which leaves a device-neutral
+routine in RAM text to a function value or a nongeneric wrapper; placing
+only the instances some annotation names, which needs a syntax for
+naming an instance that no program has asked for; and refusing a section
+that already holds another routine, which would refuse a placement that
+links as the same section a nongeneric routine's would.
+
+**Pinned by** `driver/a placed generic routine places every instance`,
+which emits both instances of a generic routine in its RAM text section
+on Cortex-M0 and RV32, both at its alignment, and refuses `keep` and the
+hosted placement; `environments/cortex-m/firmware.py`'s `veneers` case,
+whose two instances the link map puts in copied RAM text, inside the
+`.ramtext.relay` input section, where they run at every profile; and
+`negative/placement-of-a-generic-routine`.
 
 ### D646 — The board tools share one module and keep their own oracles
 
