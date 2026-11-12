@@ -801,12 +801,12 @@ D388).
 ### Migrating to a directory's own failure, and to `posix.kill`
 
 A directory named as a file has an atom of its own, and three
-workarounds have library forms (D1276, D1278 to D1280).
+workarounds have library forms (D1276, D1278 to D1280, D1344).
 
 | Was | Now |
 |---|---|
 | `io.open_read`, `io.open_write` and `io.open_file` of a directory failing `io_failed`, with EISDIR in `last_errno` | `io.is_a_directory`, which `failure.words` gives as "is a directory". The three calls' failure sets hold it: a declared set that passes their failures on with `try` names `io.is_a_directory` or is `failure.reason`, and a `match` over the failure with no `_` arm gains an arm |
 | a program's own provider of `io.files` or `io.file_system`, whose `open_read`, `open_write` and `open_file` entries declared `! io.not_found \| io.no_access \| io.io_failed` | the entries declare `io.is_a_directory` too, since an entry provides a concept's with the same failure set, and fail it for a directory |
 | `linux.system_call(numbers.kill_number, ...)` on Linux and `libc.kill` elsewhere, under `fixed if compiler.os` | `posix.kill(process, posix.signal_terminate)`, with `posix.current_process()` for this process and `system.process_of(child)` for a child |
-| a handler's address read out of a function binding through a `ptr u64` for `signal_action.handler` | `libc.sigaction_handler(signal, addr action, libc.no_address)` with `action: libc.handler_action = libc.handling(handler, 0)` |
+| a handler's address read out of a function binding through a `ptr u64` for `signal_action.handler` | `action: libc.signal_action = libc.handling(handler, 0)` then `libc.sigaction(signal, addr action, libc.no_address)`; the handler's address is `usize(handler)` (D1343, D1344) |
 | a write through `hosted/events` to a blocking terminal or socket, which could hold the thread | refused with `io_failed` and EAGAIN; make the descriptor non-blocking with `posix.set_non_blocking`, or write it through `hosted/blocking` |
