@@ -505,6 +505,9 @@ def main():
                                  '%s is %s' % (name, ', '.join(lanes))
                                  for name, lanes in PARTS.items()))
     args = parser.parse_args()
+    #  First, since on NixOS it runs this lane again inside the flake's FHS
+    #  environment, and nothing before it should happen twice.
+    supported_host(args.output)
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
     import refine_revision
     refine_revision.warn(args.refine)  # is it this checkout's?
@@ -514,7 +517,6 @@ def main():
     import build_lock
     if args.refine:
         build_lock.reading(args.refine)
-    supported_host(args.output)
     tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)

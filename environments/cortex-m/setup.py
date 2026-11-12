@@ -123,34 +123,50 @@ def supported_host(output=None):
 
 
 LOADER = '/lib64/ld-linux-x86-64.so.2'
+#  The flake's wrapper, which nix develop puts on PATH on Linux x86-64: it
+#  runs a command in a bubblewrap namespace holding the store's glibc and
+#  libstdc++ at their FHS paths, and sets LANDIN_FHS inside.
+FHS = 'landin-fhs'
 
 
 def nixos_route(output=None):
-    """On NixOS, refuse what the locked Debian binaries cannot run under,
-    naming the route that runs them.
+    """On NixOS, run this lane where the locked Debian binaries can start.
 
     NixOS's own loader path holds a stub that refuses a binary built for
     another distribution, so QEMU and GDB start only inside an FHS
-    environment such as steam-run's.  That environment gives /tmp a
-    private namespace: a TMPDIR the outer shell set into it does not exist
-    inside, so refine cannot make its files, and an --output under /tmp
-    vanishes when the lane ends.
+    environment.  The flake's `landin-fhs` is one: when it is on PATH, as it
+    is in `nix develop`, the lane runs itself again through it, with the
+    same arguments, before it has done anything; without it the lane is
+    refused naming that route.
+
+    Inside landin-fhs /tmp is the host's.  Another FHS environment, such as
+    steam-run's, gives /tmp a private namespace: a TMPDIR the outer shell
+    set into it does not exist inside, so refine cannot make its files, and
+    an --output under /tmp vanishes when the lane ends; those are refused.
     """
     lane = 'environments/cortex-m/' + os.path.basename(sys.argv[0] or 'run.py')
     route = (
-        'mkdir -p $HOME/.cache/landin/tmp\n'
-        '  NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 --run \\\n'
-        '    "TMPDIR=$HOME/.cache/landin/tmp steam-run python3 %s'
-        ' --tools DIR --refine REFINE --output $HOME/NEW-DIRECTORY ..."\n'
+        'nix develop -c python3 %s --tools DIR --refine REFINE --output NEW-DIRECTORY ...\n'
         'See environments/cortex-m/README.md#on-nixos.' % lane)
     stub = 'stub-ld' in os.path.realpath(LOADER) or (
         os.path.exists('/etc/NIXOS') and not os.path.exists(LOADER))
     if stub:
+        if os.environ.get('LANDIN_FHS'):
+            raise SystemExit(
+                'cortex-m: inside %s, %s is still NixOS\'s stub loader, so the flake\'s'
+                ' FHS environment did not provide the store\'s glibc there.' % (FHS, LOADER))
+        wrapper = shutil.which(FHS)
+        if wrapper is not None:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os.execv(wrapper, [wrapper, sys.executable, *sys.orig_argv[1:]])
         raise SystemExit(
             'cortex-m: the locked QEMU and GDB are Debian binaries, and this NixOS host\'s'
-            ' %s is its stub loader, which refuses them.  Run the lane inside steam-run\'s'
-            ' FHS environment, with TMPDIR and --output under $HOME, because steam-run'
-            ' gives /tmp a private namespace:\n  %s' % (LOADER, route))
+            ' %s is its stub loader, which refuses them.  Run the lane from `nix develop`,'
+            ' whose %s runs it in an FHS environment of the store\'s glibc:\n  %s'
+            % (LOADER, FHS, route))
+    if os.environ.get('LANDIN_FHS'):
+        return
     inside = not os.path.exists('/etc/NIXOS') and os.path.isdir('/run/current-system')
     if not inside:
         return
@@ -158,13 +174,15 @@ def nixos_route(output=None):
     if temporary and not os.path.isdir(temporary):
         raise SystemExit(
             'cortex-m: TMPDIR is %s, which does not exist inside this FHS environment:'
-            ' steam-run gives /tmp a private namespace, so set TMPDIR under $HOME:\n  %s'
-            % (temporary, route))
+            ' it gives /tmp a private namespace, as steam-run\'s does.  Run the lane'
+            ' from `nix develop` instead, whose %s keeps the host\'s /tmp:\n  %s'
+            % (temporary, FHS, route))
     if output is not None and Path(os.path.abspath(output)).is_relative_to('/tmp'):
         raise SystemExit(
             'cortex-m: --output %s is under /tmp, which this FHS environment keeps private'
-            ' and discards when the lane ends; give an --output under $HOME:\n  %s'
-            % (output, route))
+            ' and discards when the lane ends, as steam-run\'s does.  Run the lane from'
+            ' `nix develop` instead, whose %s keeps the host\'s /tmp:\n  %s'
+            % (output, FHS, route))
 
 
 def installed_tools(path):
@@ -245,8 +263,8 @@ def installer_tools():
     if missing:
         raise RuntimeError(
             'setup.py needs %s on PATH to unpack the locked archives; install dpkg'
-            ' (for dpkg-deb), tar and xz before retrying. On NixOS add dpkg and'
-            ' xz to the steam-run nix-shell; see environments/cortex-m/README.md#on-nixos.'
+            ' (for dpkg-deb), tar and xz before retrying. On NixOS `nix develop`'
+            ' provides all three; see environments/cortex-m/README.md#on-nixos.'
             % ', '.join(missing))
 
 

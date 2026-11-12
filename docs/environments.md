@@ -407,6 +407,13 @@ away with `--option eval-cache false`, at about a second more per command,
 or by entering `nix develop` once and running the commands inside it, which
 AGENTS.md asks of related commands anyway.
 
+On Linux x86-64 it holds `landin-fhs`, an FHS environment of the store's
+glibc and libstdc++, which the Cortex-M, RV32 and Xtensa lanes run
+themselves again inside on NixOS, whose stub loader refuses the Debian and
+release binaries `environments/cortex-m/tools.lock.json` locks; with
+`dpkg-deb`, `setup.py` installs those binaries from the shell too. See the
+[lanes' guide](../environments/cortex-m/README.md#on-nixos).
+
 On Linux the shell also holds LLDB, LLVM 19's from the same package set,
 FreeBSD 14.4's base LLDB being LLVM 19's too. The LLDB sessions FreeBSD's
 lane runs in its VM run against this host's own Linux images with
