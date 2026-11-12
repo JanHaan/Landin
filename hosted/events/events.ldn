@@ -902,7 +902,7 @@ elsif compiler.os == darwin or compiler.os == freebsd then
     end collect
 
     --  Set `number`'s disposition to `handler`.
-    disposed: (number: i32, handler: u64) -> none ! posix.errno =
+    disposed: (number: i32, handler: usize) -> none ! posix.errno =
         mut action: libc.signal_action = zeroed
         action.handler = handler
         fail failure() when libc.sigaction(number, addr action,

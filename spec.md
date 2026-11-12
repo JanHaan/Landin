@@ -34379,7 +34379,9 @@ it, the one declaration of the C function. `handler_action` and
 `sigaction_handler` are removed. The record keeps its `zeroed` image, so a
 previous action is read into a zeroed record and compared with `sig_dfl`
 and `sig_ign` as before, and `platform/posix`'s readers of a previous
-action are unchanged. The member is a word and not a `signal_handler`
+action are unchanged; `hosted/events`' kqueue arm passes the disposition
+it sets as that `usize`, and `abi/libc-socket-facts` compares
+`platform/linux`'s `u64` words, the kernel's, with `u64(libc.sig_dfl)`. The member is a word and not a `signal_handler`
 because `SIG_DFL` is zero, which no function value can be (D335 traps it)
 and which leaves a record holding one with no zero image (L0328); naming
 the dispositions as function values would make two constants that trap or
