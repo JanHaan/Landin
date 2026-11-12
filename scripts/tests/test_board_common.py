@@ -1150,7 +1150,7 @@ class RigLock(unittest.TestCase):
 class Pace(unittest.TestCase):
     """The watch over actions that disconnect a device on the hub cascade,
     with a spacing and a quiet time as options."""
-    def pace(self, tmp, lines, now=1000.0, spacing=120, quiet=60):
+    def pace(self, tmp, lines, now=1000.0, spacing=120, quiet=60, boot=0.0):
         clock = [now]
         waited = []
 
@@ -1161,7 +1161,9 @@ class Pace(unittest.TestCase):
         pace = COMMON.Pace(state=Path(tmp) / 'rig.pace',
                            kernel=lambda seconds: [l for l in lines if clock[0] - seconds <= l[0] <= clock[0]],
                            clock=lambda: clock[0], sleep=sleep, report=lambda text: None,
-                           **options)
+                           #  The test's own boot: the host's would place
+                           #  it by how long the machine has been up.
+                           boot=lambda: boot, **options)
         return pace, clock, waited
 
     def test_by_default_an_action_follows_the_last_at_once(self):
