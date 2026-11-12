@@ -193,19 +193,33 @@ publisher builds, pinned the same way as the editor grammar's CLI:
 checksums below. `scripts/actionlint.py` runs it over every file under
 `.github/workflows` with `.github/actionlint.yaml`, which names the two
 runner labels GitHub does not host, `landin-rig` and RISE's
-`ubuntu-24.04-riscv`. It refuses an actionlint of another version, and it
-turns off the shellcheck and pyflakes passes actionlint makes when it finds
-those programs, so the verdict does not depend on what a host's `PATH`
-holds. The gate's scripts job runs `python3 scripts/actionlint.py --install
-DIR`, which fetches the Linux x86-64 archive and verifies it before
+`ubuntu-24.04-riscv`. It refuses an actionlint of another version. Its
+shellcheck pass runs the shellcheck pinned beside it, named to actionlint
+by its path, over every `run:` script, so the verdict does not depend on
+what a host's `PATH` holds; its pyflakes pass is turned off, since no step
+runs Python as its shell and pyflakes publishes no release binary to pin.
+The gate's scripts job runs `python3 scripts/actionlint.py --install DIR`,
+which fetches both Linux x86-64 archives and verifies each before
 unpacking it; `nix develop` puts its own system's on `PATH`. Outside the
-shell, a missing actionlint is refused with both routes.
+shell, a missing actionlint or shellcheck is refused with both routes.
 
 | platform | archive | sha256 |
 |---|---|---|
 | Linux x86-64 | `actionlint_1.7.12_linux_amd64.tar.gz` | `8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8` |
 | Linux arm64 | `actionlint_1.7.12_linux_arm64.tar.gz` | `325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6` |
 | macOS arm64 | `actionlint_1.7.12_darwin_arm64.tar.gz` | `aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f` |
+
+The shellcheck is `0.11.0`, the static release binary its publisher
+builds. Its release publishes no checksum file, so the checksums below are
+the archives' own, taken when they were fetched from the release page; a
+new version is pinned the same way, by fetching each archive and recording
+its SHA-256.
+
+| platform | archive | sha256 |
+|---|---|---|
+| Linux x86-64 | `shellcheck-v0.11.0.linux.x86_64.tar.xz` | `8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198` |
+| Linux arm64 | `shellcheck-v0.11.0.linux.aarch64.tar.xz` | `12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588` |
+| macOS arm64 | `shellcheck-v0.11.0.darwin.aarch64.tar.xz` | `56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79` |
 
 ## Warning and style policy
 

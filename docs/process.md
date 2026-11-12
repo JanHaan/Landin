@@ -607,9 +607,9 @@ python3 scripts/script_tests.py test_fuzz_close test_scaling
 python3 scripts/script_tests.py --gate-environment
 
 # Every workflow through the actionlint environments/pins.sh pins, with
-# .github/actionlint.yaml's runner labels, as the gate's scripts job runs
-# it.  nix develop provides it; elsewhere --install DIR fetches and
-# verifies it first.  scripts/activations.py names it when a change
+# .github/actionlint.yaml's runner labels and the pinned shellcheck's pass
+# over every run: script, as the gate's scripts job runs it.  nix develop
+# provides both; elsewhere --install DIR fetches and verifies them first.  scripts/activations.py names it when a change
 # reaches .github/.
 python3 scripts/actionlint.py
 python3 scripts/actionlint.py --install "$(mktemp -d)"
@@ -802,7 +802,7 @@ still succeed. The linked full run contains the target-test results.
 |---|---|---|
 | `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full push pass of main or a branch for a declared explanatory edit |
 | `documents` | `ubuntu-24.04` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
+| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint and its `run:` scripts through the pinned shellcheck, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
 | `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |

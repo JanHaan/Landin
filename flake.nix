@@ -546,6 +546,38 @@
             '';
           };
 
+          #  The shell linter actionlint runs over the workflows' `run:`
+          #  scripts: the release binary shellcheck publishes for the
+          #  pinned version, checked against the sha256 environments/pins.sh
+          #  holds for this system -- the binary scripts/actionlint.py
+          #  fetches beside actionlint.  It is a static program, so nothing
+          #  is patched.
+          shellcheckVersion = pin "LANDIN_SHELLCHECK_VERSION";
+          shellcheckAsset =
+            {
+              x86_64-linux = "linux.x86_64";
+              aarch64-linux = "linux.aarch64";
+              aarch64-darwin = "darwin.aarch64";
+            }
+            .${system};
+          shellcheck = pkgs.stdenvNoCC.mkDerivation {
+            pname = "landin-shellcheck";
+            version = shellcheckVersion;
+            src = pkgs.fetchurl {
+              url =
+                "${pin "LANDIN_SHELLCHECK_RELEASES"}/v${shellcheckVersion}/"
+                + "shellcheck-v${shellcheckVersion}.${shellcheckAsset}.tar.xz";
+              sha256 = pin "LANDIN_SHELLCHECK_SHA256_${suffix}";
+            };
+            dontConfigure = true;
+            dontBuild = true;
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 shellcheck "$out/bin/shellcheck"
+              runHook postInstall
+            '';
+          };
+
           #  The Cortex-M, RV32 and Xtensa lanes' QEMU 10.0.13, GDB 16.3
           #  and Espressif's QEMU 9.2.2 are Debian and release binaries,
           #  locked with every library they load but the C and C++
@@ -759,9 +791,11 @@
               #  The structural editor grammar's corpus, highlight/test.sh
               #  --integration, at the gate's pinned version.
               treeSitter
-              #  The workflows' linter, scripts/actionlint.py, at the
-              #  version the gate's scripts job runs.
+              #  The workflows' linter, scripts/actionlint.py, and the
+              #  shellcheck it runs over their `run:` scripts, at the
+              #  versions the gate's scripts job runs.
               actionlint
+              shellcheck
               #  stdenv's bash is built without readline, so it has no
               #  `compgen` or `complete` and a completion script run through
               #  `bash` fails here as it does on no contributor's system.

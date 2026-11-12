@@ -2927,7 +2927,11 @@ GATE_TOOL_PINS = ("LANDIN_CLANG_UBUNTU", "LANDIN_TREE_SITTER_VERSION",
                   "LANDIN_ACTIONLINT_VERSION",
                   "LANDIN_ACTIONLINT_SHA256_X86_64_LINUX",
                   "LANDIN_ACTIONLINT_SHA256_AARCH64_LINUX",
-                  "LANDIN_ACTIONLINT_SHA256_AARCH64_DARWIN")
+                  "LANDIN_ACTIONLINT_SHA256_AARCH64_DARWIN",
+                  "LANDIN_SHELLCHECK_VERSION",
+                  "LANDIN_SHELLCHECK_SHA256_X86_64_LINUX",
+                  "LANDIN_SHELLCHECK_SHA256_AARCH64_LINUX",
+                  "LANDIN_SHELLCHECK_SHA256_AARCH64_DARWIN")
 #  The cross lane's versions, which the nix shell holds its package set to:
 #  read from the pins by name, and never written in flake.nix itself.
 CROSS_LANE_PINS = ("LANDIN_CROSS_QEMU_NIX", "LANDIN_CROSS_GCC_NIX")
@@ -2940,6 +2944,11 @@ SHELL_TREE_SITTER_READS = ('pin "LANDIN_TREE_SITTER_VERSION"',
 SHELL_ACTIONLINT_READS = ('pin "LANDIN_ACTIONLINT_VERSION"',
                           'pin "LANDIN_ACTIONLINT_RELEASES"',
                           'pin "LANDIN_ACTIONLINT_SHA256_${suffix}"')
+#  And the shellcheck actionlint runs over the workflows' `run:` scripts,
+#  the release binary scripts/actionlint.py fetches beside it.
+SHELL_SHELLCHECK_READS = ('pin "LANDIN_SHELLCHECK_VERSION"',
+                          'pin "LANDIN_SHELLCHECK_RELEASES"',
+                          'pin "LANDIN_SHELLCHECK_SHA256_${suffix}"')
 
 
 #  The Cortex-M lane's GCC and binutils, read from the pins by the
@@ -3046,13 +3055,14 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
     """The gate's other tools agree with every file that also names them.
 
     The bindings job's Clang, the editor grammar's CLI and the workflows'
-    actionlint are pinned in environments/pins.sh like the compiler.  Each
-    is also written in one more place a reader or a package manager reads --
-    TOOLCHAIN.md for all three, and the grammar's package.json and lockfile
-    for the CLI -- and a pin that agrees with neither is a job that fetches
-    something nobody recorded.  The gate's scripts job runs actionlint
-    through scripts/actionlint.py, which reads the pins, so no workflow
-    names its version or a checksum itself.
+    actionlint and the shellcheck it runs are pinned in environments/pins.sh
+    like the compiler.  Each is also written in one more place a reader or
+    a package manager reads -- TOOLCHAIN.md for all four, and the grammar's
+    package.json and lockfile for the CLI -- and a pin that agrees with
+    neither is a job that fetches something nobody recorded.  The gate's
+    scripts job runs actionlint and shellcheck through
+    scripts/actionlint.py, which reads the pins, so no workflow names a
+    version or a checksum of either itself.
     """
     values = dict(re.findall(r"^(LANDIN_\w+)=(\S+)$", pins_text, re.M))
     out = []
@@ -3090,7 +3100,8 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
             out.append((gate, 1, "the gate does not run the pinned actionlint"
                                  " through scripts/actionlint.py --install"))
         for name in GATE_TOOL_PINS:
-            if name.startswith("LANDIN_ACTIONLINT") and values[name] in gate_text:
+            if (name.startswith(("LANDIN_ACTIONLINT", "LANDIN_SHELLCHECK"))
+                    and values[name] in gate_text):
                 out.append((gate, 1, "gate.yml names %s's %s literally instead"
                                      " of reading it from environments/pins.sh"
                             % (name, values[name])))
@@ -3119,8 +3130,14 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
             out.append((flake, 1, "flake.nix does not take the shell's "
                                   "actionlint from environments/pins.sh"
                                   " (%s)" % read))
+    for read in SHELL_SHELLCHECK_READS:
+        if read not in flake_text:
+            out.append((flake, 1, "flake.nix does not take the shell's "
+                                  "shellcheck from environments/pins.sh"
+                                  " (%s)" % read))
     for name in GATE_TOOL_PINS:
-        if (name.startswith(("LANDIN_TREE_SITTER", "LANDIN_ACTIONLINT"))
+        if (name.startswith(("LANDIN_TREE_SITTER", "LANDIN_ACTIONLINT",
+                             "LANDIN_SHELLCHECK"))
                 and values[name] in flake_text):
             out.append((flake, 1, "flake.nix names %s's %s literally instead "
                                   "of reading it from environments/pins.sh"

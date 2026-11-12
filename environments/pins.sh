@@ -44,6 +44,20 @@ LANDIN_ACTIONLINT_SHA256_X86_64_LINUX=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3
 LANDIN_ACTIONLINT_SHA256_AARCH64_LINUX=325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6
 LANDIN_ACTIONLINT_SHA256_AARCH64_DARWIN=aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f
 
+#  The shell linter actionlint runs over every workflow's `run:` scripts:
+#  the release binary shellcheck publishes for this version, checked
+#  against this sha256 before it runs.  The release publishes no checksum
+#  file; these were taken from the archives fetched from its release page.
+#  scripts/actionlint.py fetches the Linux x86-64 one beside actionlint
+#  and names it to actionlint by its path, refusing a shellcheck of
+#  another version, and the nix shell fetches its own system's.  check.py
+#  holds compiler/ada/TOOLCHAIN.md and flake.nix to these.
+LANDIN_SHELLCHECK_VERSION=0.11.0
+LANDIN_SHELLCHECK_RELEASES=https://github.com/koalaman/shellcheck/releases/download
+LANDIN_SHELLCHECK_SHA256_X86_64_LINUX=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+LANDIN_SHELLCHECK_SHA256_AARCH64_LINUX=12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588
+LANDIN_SHELLCHECK_SHA256_AARCH64_DARWIN=56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79
+
 #  The cross lane: QEMU's user emulation and the cross drivers that link
 #  another Linux target's executables.  The nix shell takes both from
 #  flake.lock's nixpkgs and refuses to build when that revision's versions
