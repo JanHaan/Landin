@@ -105,7 +105,15 @@ class NativeReportIdentity(unittest.TestCase):
                          "refusal must precede every artifact and tool")
         self.assertFalse(self.invoked.exists())
 
-    def refuses_linked_publication(self, output, report):
+    # D1051: a linked output is refused for what it is, and a linked
+    # directory with the route of naming the directory the link points to.
+    LINKED_OUTPUT = (b"it is a symbolic link, and an output replaces only a"
+                     b" regular file")
+    LINKED_DIRECTORY = (b" is a symbolic link, and an output is not written"
+                        b" through one; name the directory the link points"
+                        b" to")
+
+    def refuses_linked_publication(self, output, report, cause):
         self.assertFalse(self.invoked.exists())
         before = self.snapshot()
         result = self.compile(output, report)
@@ -113,8 +121,7 @@ class NativeReportIdentity(unittest.TestCase):
         self.assertIn(b"L0005", result.stderr)
         # The rule that refuses a link is said in its own words, not in
         # those of a symbolic-link loop that is not there.
-        self.assertIn(b"it is a symbolic link, and an output replaces only a"
-                      b" regular file", result.stderr)
+        self.assertIn(cause, result.stderr)
         self.assertNotIn(os.strerror(errno.ELOOP).encode(), result.stderr)
         self.assertEqual(self.snapshot(), before,
                          "linked entries and their targets must be preserved")
@@ -170,7 +177,8 @@ class NativeReportIdentity(unittest.TestCase):
         else:
             # Distinct names pass identity preflight, but a linked selected
             # output parent still refuses under the publication contract.
-            self.refuses_linked_publication("real/OUT.s", "alias/out.s")
+            self.refuses_linked_publication("real/OUT.s", "alias/out.s",
+                                            self.LINKED_DIRECTORY)
 
     def test_symlink_dotdot_distinguishes_source(self):
         (self.root / "a").mkdir()
@@ -229,7 +237,8 @@ class NativeReportIdentity(unittest.TestCase):
         # identity; neither form is permission to publish through the link.
         (self.root / "report.json").write_bytes(b"preserved report target")
         (self.root / "report.json").chmod(0o640)
-        self.refuses_linked_publication("out.s", "other-link")
+        self.refuses_linked_publication("out.s", "other-link",
+                                        self.LINKED_OUTPUT)
 
     def test_indeterminate_identity_refuses(self):
         (self.root / "loop").symlink_to("loop")
