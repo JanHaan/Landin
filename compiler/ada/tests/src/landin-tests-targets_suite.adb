@@ -1884,7 +1884,11 @@ package body Landin.Tests.Targets_Suite is
            and then not Asm.Names_Reserved (Linux_RV64, "s1")
            and then Asm.Names_Reserved (Linux_RV64, "s0")
            and then Asm.Names_Reserved (Linux_RV64, "fp")
-           and then Asm.Names_Reserved (Linux_RV64, "zero"),
+           --  D1320: the text reads and writes x0; no operand names it.
+           and then not Asm.Names_Reserved (Linux_RV64, "zero")
+           and then not Asm.Names_Reserved (Linux_RV64, "x0")
+           and then Asm.Names_Reserved (Linux_RV64, "x1")
+           and then Asm.Classify (Linux_RV64, "zero") = Asm.Never_Named,
          "ABI aliases keep canonical operands and saved-register checks");
       --  D630: every float register is an operand's, and LP64D's
       --  preserved ones are declared, as its preserved integers are.
