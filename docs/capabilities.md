@@ -399,7 +399,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   its document and its page on the site, and `--full` adds the construct's
   text or the decision's chosen rule. These it reads from `citations.txt` in
   the library, or under `--library=DIR`; without a readable file it names
-  the path it read and what to install (L0003, D1240).
+  the path it read and what to install (L0003, D1240). A file generated
+  beside other compiler sources than the compiler's own, or naming none,
+  is still read, with an L0017 warning that names both (D1357).
 - `refine site PROGRAM SITE` names the source line of a panic site a
   `panic_handler` received, and the check that failed, and
   `refine site PROGRAM FILE LINE COLUMN` the source position of a caller's
@@ -498,9 +500,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - Every current warning is recommended, L0016 among them, which says a
   `--root` holds a module the library supplies instead, and L0628, which
   marks a bidirectional control character in a comment or a literal and
-  shows it escaped (D1077), and L0684, which marks an `else (name)` whose
-  block never reads `name` and names the forms that bind nothing (D1261),
-  so `default` and `all` currently select the same warnings.
+  shows it escaped (D1077), L0684, which marks an `else (name)` whose
+  block never reads `name`, names the forms that bind nothing and offers
+  the exact rewrite to `else begin` (D1261, D1341), and L0692, which marks
+  a declaration that takes a predeclared type's name, `u8` or `cstring`
+  (D1342), so `default` and `all` currently select the same warnings.
 - Unnecessary local declarations produce advisories even when comments or
   layout prevent a safe automatic repair; unused signed numeric literals are
   also covered. A warning can report an observation without an edit; exact
@@ -568,9 +572,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   module binding of function type may be written on one line,
   `chosen: () -> (v: i32) = seven`, and an immutable module integer sizes an
   array, `[path_max]u8` (D438). An array length, in a routine body too,
-  reads an integer compiler fact and `sizeof` of a built-in scalar at the
-  selected target's value: `[sizeof usize]u8` is `[4]u8` on a 32-bit
-  target and `[8]u8` on a 64-bit one (D1321). A run in a static image is
+  reads an integer compiler fact and `sizeof` or `alignof` of a built-in
+  scalar at the selected target's value: `[sizeof usize]u8` is `[4]u8` on
+  a 32-bit target and `[8]u8` on a 64-bit one (D1321, D1340). A run in a static image is
   written as one `.zero` or `.fill` where one directive writes it, and as
   repetitions no wider than 256 otherwise, so the assembly and the
   assembler's memory stay the source's size rather than the image's (D536). Before emission every
@@ -830,11 +834,14 @@ process ignores SIGPIPE and gives its children the default back.
   `posix.words`, which passes the core library's failures to
   `failure.words` (D582). `duplicate_above` duplicates a descriptor at
   or above a number, clear of the standard streams with 3. `kill` sends a
-  signal to a process it names, beside `current_process` and the signal
-  numbers (D1279). It sits over `platform/libc` on
+  signal to a process it names, or to a process group as C's `kill` names
+  one, zero for the caller's own and a negated leader's ID for another,
+  refusing -1, beside `current_process` and the signal numbers (D1279,
+  D1356). It sits over `platform/libc` on
   Darwin and FreeBSD and `platform/linux` on Linux. `platform/libc`
-  installs a signal handler as a C function value through `handler_action`,
-  which a static Linux program cannot use (D1280).
+  installs a signal handler with `libc.handling(handler, flags)` and
+  `sigaction`, its `signal_action` holding the handler's address, which a
+  static Linux program cannot use (D1280, D1344).
 - A hosted program started with SIGCHLD ignored gets the signal's default
   back at start, so it can wait for its children (D1125).
 - A path, a process argument and a directory entry's name are host strings,
@@ -880,8 +887,9 @@ process ignores SIGPIPE and gives its children the default back.
 - C's byte-packed records as `layout(c, packed)` on every target, whose
   unaligned fields RV64 and Cortex-M0 move a byte at a time, and a
   last-field flexible array member, both passed to C by pointer.
-- Callbacks and variadic calls, and a C function value made from an address
-  a loader found.
+- Callbacks and variadic calls, a C function value made from an address
+  a loader found, and the address of a C function value, `usize(f)`
+  (D1343).
 - `refine bindings` ([`bindings/`](../bindings/README.md)) generates
   bindings, packed and flexible-member records among them and every pointer
   to a generated record typed to it, from an external
@@ -1020,7 +1028,8 @@ in accelerated VMs and Cortex-M firmware under QEMU, with separate runtime,
 C ABI and debugger verdicts; RV64 Linux runs under QEMU's user emulation, as
 above. On a push to `main`, weekly and by dispatch it also runs all eight
 board ports on the physical rig, each RAM run followed by its boot check.
-The gate's scripts job holds every workflow to the pinned actionlint. The
+The gate's scripts job holds every workflow to the pinned actionlint, which
+runs the pinned shellcheck over every `run:` script. The
 [gate reference](process.md#the-mechanical-gate) describes every job.
 The recorded boundaries stand as measured: the 32 KiB capacity verdicts, linked again against RP2040's,
 RP2350's and the STM32H753's derived scripts, the lines-and-functions Cortex-M
