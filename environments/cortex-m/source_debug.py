@@ -223,15 +223,19 @@ def library(run, elf, kind):
 
 def veneer(run, elf):
     checked(run, elf)
+    #  The stops follow their statements, so the probe may grow around them.
+    helper = source_line(run, 'boot.ldn', 'flash_helper: (value: u32) -> (result: u32) ='
+                         ' value + 1 end flash_helper')
+    handler = source_line(run, 'boot.ldn', 'irq_seen = irq_seen + 1')
     execute(run, elf, [*search(elf), *PRELUDE,
-        'break boot.ldn:10', 'continue', 'python',
-        'frame("flash_helper","boot.ldn",10)',
+        f'break boot.ldn:{helper}', 'continue', 'python',
+        f'frame("flash_helper","boot.ldn",{helper})',
         'chain(["flash_helper","ram_worker","start"])', 'end', 'bt',
         'delete breakpoints', 'finish', 'python',
         'frame("ram_worker","boot.ldn")',
         'assert 0x20000000 <= v("$pc") < 0x20003000', 'end',
-        'break boot.ldn:13', 'continue', 'python',
-        'frame("ram_irq","boot.ldn",13)',
+        f'break boot.ldn:{handler}', 'continue', 'python',
+        f'frame("ram_irq","boot.ldn",{handler})',
         'assert gdb.newest_frame().older() is None',
         'assert v("$xpsr") & 511 == 11', 'end', 'bt',
         'delete breakpoints', 'break _landin_firmware_returned', 'continue', 'python',
