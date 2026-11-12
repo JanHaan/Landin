@@ -31,6 +31,19 @@ LANDIN_TREE_SITTER_SHA256_X86_64_LINUX=9ce82137caa65864e7ca8b869fd391cef88c9bd2a
 LANDIN_TREE_SITTER_SHA256_AARCH64_LINUX=c8feeb32115958cb44442ca4d68f6d66cf7605dbd65681e62342181ebdd6db3b
 LANDIN_TREE_SITTER_SHA256_AARCH64_DARWIN=e46725b2417c085b0761948abc0cc240bff6a3ab5d2128e3ad0de467ded3388d
 
+#  The workflows' linter: the release binary actionlint publishes for this
+#  version, checked against this sha256 before it runs.  The gate's scripts
+#  job fetches the Linux x86-64 one through scripts/actionlint.py, which
+#  refuses an actionlint of another version, and the nix shell fetches its
+#  own system's.  .github/actionlint.yaml names the runner labels GitHub
+#  does not host.  check.py holds compiler/ada/TOOLCHAIN.md and flake.nix
+#  to these.
+LANDIN_ACTIONLINT_VERSION=1.7.12
+LANDIN_ACTIONLINT_RELEASES=https://github.com/rhysd/actionlint/releases/download
+LANDIN_ACTIONLINT_SHA256_X86_64_LINUX=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+LANDIN_ACTIONLINT_SHA256_AARCH64_LINUX=325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6
+LANDIN_ACTIONLINT_SHA256_AARCH64_DARWIN=aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f
+
 #  The cross lane: QEMU's user emulation and the cross drivers that link
 #  another Linux target's executables.  The nix shell takes both from
 #  flake.lock's nixpkgs and refuses to build when that revision's versions

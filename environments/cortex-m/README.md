@@ -311,53 +311,61 @@ find and read the binding's spelling.
 ### On NixOS
 
 The locked QEMU and GDB are Debian binaries, and NixOS's own
-`/lib64/ld-linux-x86-64.so.2` is a stub that refuses them, so on NixOS a
-lane runs inside an FHS environment such as steam-run's. That environment
-gives `/tmp` a private namespace: a `TMPDIR` the outer shell set there does
-not exist inside it, so refine cannot write its files, and an `--output`
-under `/tmp` vanishes when the lane ends. Keep both under `$HOME`:
+`/lib64/ld-linux-x86-64.so.2` is a stub that refuses them. Run the lanes
+from `nix develop`: on Linux x86-64 its shell holds `landin-fhs`, the
+flake's FHS environment, which runs a command in a bubblewrap namespace
+with the store's glibc and libstdc++ at their FHS paths. A lane that finds
+the stub loader and `landin-fhs` on `PATH` runs itself again inside it,
+with the same interpreter and arguments, before it builds anything, so the
+commands above work unchanged:
 
 ```sh
-mkdir -p $HOME/.cache/landin/tmp
-NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 --run \
-  "TMPDIR=$HOME/.cache/landin/tmp steam-run python3 environments/cortex-m/run.py \
-   --tools $HOME/.cache/landin/cortex-m --refine $PWD/compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
-   --output $HOME/.cache/landin/NEW-DIRECTORY"
+nix develop -c python3 environments/cortex-m/run.py \
+  --tools $HOME/.cache/landin/cortex-m \
+  --refine $PWD/compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
+  --output NEW-DIRECTORY
 ```
 
-Setup runs the same way, with `dpkg-deb` and `xz`, which NixOS does not put
-on the path, added to the shell steam-run inherits its path from:
+The locked binaries are the gate's, from the same lock and checked by the
+same hashes; only the loader that starts them differs. `landin-fhs` keeps
+the host's `/tmp`, so `TMPDIR` and an `--output` there need nothing, and it
+restores the shell's `PATH` inside, so a lane finds the tools it finds
+outside. It sets `LANDIN_FHS` inside. Setup runs the same way, and the
+shell holds the unpackers it needs, `dpkg-deb`, `xz` and `tar`:
 
 ```sh
-NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 dpkg xz --run \
-  "TMPDIR=$HOME/.cache/landin/tmp steam-run python3 environments/cortex-m/setup.py \
-   --tools $HOME/.cache/landin/NEW-TOOL-ROOT"
+nix develop -c python3 environments/cortex-m/setup.py \
+  --tools $HOME/.cache/landin/NEW-TOOL-ROOT
 ```
 
-`dpkg` supplies the Debian archive unpacker; `xz` decompresses the release
-archives. `setup.py` checks these unpackers and `tar` before creating its
-tool directory, and names this recipe if one is missing.
+`setup.py` checks these unpackers before creating its tool directory, and
+names this route if one is missing.
 
 Both emulators run there, QEMU's `qemu-system-arm` and, for the RV32
 lanes, Espressif's `qemu-system-riscv32`, with `gdb-multiarch` for both;
-`--part=rv32` or `--lane rv32-controls` takes the same route.
+`--part=rv32` or `--lane rv32-controls` takes the same route, and so do the
+[Xtensa runners](../xtensa/README.md) with `--tools`.
 
-To run an emulator or GDB by hand, to try a machine, give it the tool
-root's libraries as the lanes do: they are found only through
-`LD_LIBRARY_PATH`, and Debian's libpulse, which Espressif's QEMU loads
-through SDL2, looks for its own common library in a `pulseaudio`
-directory beside them:
+To run an emulator or GDB by hand, to try a machine, run it under
+`landin-fhs` and give it the tool root's libraries as the lanes do: they
+are found only through `LD_LIBRARY_PATH`, and Debian's libpulse, which
+Espressif's QEMU loads through SDL2, looks for its own common library in a
+`pulseaudio` directory beside them. Set the variable for that program
+alone: the shell's own programs would load the root's Debian libraries
+too, and its bash fails on their readline.
 
 ```sh
 T=$HOME/.cache/landin/TOOL-ROOT L=$T/root/usr/lib/x86_64-linux-gnu
-NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run --run \
-  "LD_LIBRARY_PATH=$L:$L/pulseaudio steam-run \
-   $T/qemu-espressif/bin/qemu-system-riscv32 -M help"
+nix develop -c landin-fhs env LD_LIBRARY_PATH=$L:$L/pulseaudio \
+  $T/qemu-espressif/bin/qemu-system-riscv32 -M help
 ```
 
-Every lane refuses these three hosts before it builds anything and prints
-this route: NixOS's stub loader, a `TMPDIR` that does not exist inside the
-environment, and an `--output` under its `/tmp`. The firmware link driver
+Without `landin-fhs` on `PATH`, a lane on NixOS's stub loader is refused
+before it builds anything, naming `nix develop`. Inside another FHS
+environment that gives `/tmp` a private namespace, as steam-run's does, a
+lane refuses a `TMPDIR` that does not exist inside it and an `--output`
+under that `/tmp`, which would vanish when the lane ended, and names the
+same route. The firmware link driver
 is not among the Debian binaries: `nix develop` carries the pinned
 `arm-eabi-gcc` (D532), so `refine compile --target=cortex-m0
 --firmware-entry=NAME` links in the shell itself, and the locked
@@ -1495,7 +1503,7 @@ python3 environments/cortex-m/counterpart.py --refine PATH_TO_REFINE \
 
 `--all-profiles` runs every scenario at the six profiles with every
 control; `--scenario` and `--control` repeat, and a run that selects any is
-`FILTERED`. On NixOS run it under steam-run as [On NixOS](#on-nixos) says.
+`FILTERED`. On NixOS run it from `nix develop`, as [On NixOS](#on-nixos) says.
 
 ## Freestanding evidence
 

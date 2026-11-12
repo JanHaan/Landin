@@ -1,3 +1,9 @@
+# actionlint's configuration; scripts/actionlint.py runs the pinned
+# actionlint with it over every workflow.  actionlint knows the runner
+# labels GitHub hosts, and these are the others the workflows name.
 self-hosted-runner:
   labels:
+    # The maintainer's rig, which runs the board jobs (D904).
+    - landin-rig
+    # RISE's RISC-V runners, which the rv64 lanes ask for by this label.
     - ubuntu-24.04-riscv

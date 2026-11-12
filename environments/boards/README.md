@@ -27,14 +27,13 @@ board tools default to `--mode=ram` and pass `--firmware-layout=ram`
 explicitly.
 
 On NixOS the foreign cross-toolchain archives need an FHS environment, as
-the [emulator recipe](../cortex-m/README.md#on-nixos) explains.
-After entering Landin's pinned environment, prepare this shell once, then
-run the Python commands below inside it:
+the [emulator recipe](../cortex-m/README.md#on-nixos) explains. Landin's
+pinned environment provides one: inside `nix develop`, `landin-fhs` with no
+command opens a shell in it, which keeps the host's `/tmp` and the pinned
+`PATH`. Run the Python commands below inside that shell:
 
 ```sh
-mkdir -p ~/.cache/landin/tmp
-NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 --run \
-    'TMPDIR=$HOME/.cache/landin/tmp steam-run bash'
+nix develop -c landin-fhs
 ```
 
 The Pi consumes prepared bundles and needs no cross-toolchain or FHS shell.

@@ -138,7 +138,7 @@ jobs:
   #  requires the check to notice.  One after another the modules took
   #  eleven and a half minutes, ten of them the controls, so every module
   #  is its own process and the controls are dealt across shards; the log
-  #  gives each process's time.
+  #  gives each process's time.  Then the workflows' own lint.
   scripts:
     runs-on: ubuntu-24.04
     steps:
@@ -146,6 +146,11 @@ jobs:
 
       - name: scripts/tests
         run: python3 scripts/script_tests.py
+
+      #  Every workflow held to the actionlint environments/pins.sh pins,
+      #  which the script fetches and verifies before it runs it.
+      - name: actionlint
+        run: python3 scripts/actionlint.py --install "$RUNNER_TEMP/actionlint"
 
       - name: The determinism, quality and debugging controls
         run: |

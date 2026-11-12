@@ -514,6 +514,75 @@
             '';
           };
 
+          #  The workflows' linter: the release binary actionlint publishes
+          #  for the pinned version, checked against the sha256
+          #  environments/pins.sh holds for this system -- the binary
+          #  scripts/actionlint.py fetches for the gate's scripts job.  It
+          #  is a static Go program, so nothing is patched.
+          actionlintVersion = pin "LANDIN_ACTIONLINT_VERSION";
+          actionlintAsset =
+            {
+              x86_64-linux = "linux_amd64";
+              aarch64-linux = "linux_arm64";
+              aarch64-darwin = "darwin_arm64";
+            }
+            .${system};
+          actionlint = pkgs.stdenvNoCC.mkDerivation {
+            pname = "landin-actionlint";
+            version = actionlintVersion;
+            src = pkgs.fetchurl {
+              url =
+                "${pin "LANDIN_ACTIONLINT_RELEASES"}/v${actionlintVersion}/"
+                + "actionlint_${actionlintVersion}_${actionlintAsset}.tar.gz";
+              sha256 = pin "LANDIN_ACTIONLINT_SHA256_${suffix}";
+            };
+            sourceRoot = ".";
+            dontConfigure = true;
+            dontBuild = true;
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 actionlint "$out/bin/actionlint"
+              runHook postInstall
+            '';
+          };
+
+          #  The Cortex-M, RV32 and Xtensa lanes' QEMU 10.0.13, GDB 16.3
+          #  and Espressif's QEMU 9.2.2 are Debian and release binaries,
+          #  locked with every library they load but the C and C++
+          #  runtimes in environments/cortex-m/tools.lock.json and
+          #  installed by environments/cortex-m/setup.py; they are the
+          #  binaries the gate runs, and the lock stays their one source.
+          #  NixOS's /lib64/ld-linux-x86-64.so.2 is a stub that refuses
+          #  them, so `landin-fhs CMD` runs CMD in a bubblewrap namespace
+          #  holding the store's glibc and libstdc++ at their FHS paths,
+          #  and the lanes re-run themselves through it when they find
+          #  the stub (environments/cortex-m/setup.py's nixos_route).
+          #  /tmp stays the host's, unlike steam-run's, so TMPDIR and an
+          #  --output there work as they do outside it.  The FHS profile
+          #  puts its own /usr/bin first on PATH; this restores the
+          #  shell's, so a lane finds the same tools inside as out, and
+          #  LANDIN_FHS tells a lane it is inside.  Linux x86-64 only: the
+          #  lock holds amd64 binaries, and the lanes refuse other hosts.
+          lockedToolsFhs = pkgs.buildFHSEnv {
+            name = "landin-fhs";
+            extraPreBwrapCmds = ''
+              export LANDIN_FHS_PATH="$PATH"
+            '';
+            profile = ''
+              if [ -n "''${LANDIN_FHS_PATH:-}" ]; then
+                export PATH="$LANDIN_FHS_PATH"
+              fi
+              unset LANDIN_FHS_PATH
+              export LANDIN_FHS=1
+            '';
+            runScript = pkgs.writeShellScript "landin-fhs-run" ''
+              if [ "$#" -eq 0 ]; then
+                exec bash
+              fi
+              exec "$@"
+            '';
+          };
+
         in
         {
           #  The published compiler, fetched rather than built.
@@ -690,6 +759,9 @@
               #  The structural editor grammar's corpus, highlight/test.sh
               #  --integration, at the gate's pinned version.
               treeSitter
+              #  The workflows' linter, scripts/actionlint.py, at the
+              #  version the gate's scripts job runs.
+              actionlint
               #  stdenv's bash is built without readline, so it has no
               #  `compgen` or `complete` and a completion script run through
               #  `bash` fails here as it does on no contributor's system.
@@ -714,6 +786,12 @@
               #  "Profiling" in compiler/ada/README.md.
               pkgs.perf
               pkgs.valgrind
+            ] ++ lib.optionals (system == "x86_64-linux") [
+              #  The embedded lanes' locked binaries on NixOS, and the
+              #  Debian archive unpacker environments/cortex-m/setup.py
+              #  installs them with.
+              lockedToolsFhs
+              pkgs.dpkg
             ] ++ crossTools;
 
             #  The binding generator's Linux C model comes from the same

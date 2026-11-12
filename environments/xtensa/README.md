@@ -18,8 +18,11 @@ instead pass `--qemu PATH` and use wrappers from `PATH`; they record those
 actual tool hashes and versions. Output directories must
 be new; every command, assembly image, linker script, helper-library hash,
 disassembly, remote-protocol transcript and verdict stays in that directory.
-On NixOS, use the existing Cortex-M README's FHS recipe with `steam-run`;
-QEMU needs the installed runtime libraries described there.
+On NixOS, run them from `nix develop`: with `--tools`, a runner on
+NixOS's stub loader runs itself again inside the flake's `landin-fhs`, as
+the [Cortex-M lanes](../cortex-m/README.md#on-nixos) do, and QEMU loads the
+installation's runtime libraries there. A focused run with `--qemu` alone
+runs the QEMU it is given as it is.
 
 Run selected native controls, including an independent nonzero-status
 control and an intentional trap control:

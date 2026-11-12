@@ -29,8 +29,9 @@ not concern the row.  A row that only such a directory matched is listed
 apart, as one to read, not one the changes are known to meet.
 
 It also names the passes the gate runs and no local check does, when the
-changes reach their inputs: the editor grammar's corpus, and the flake.
---run runs those passes, from inside `nix develop`.
+changes reach their inputs: the editor grammar's corpus, the flake, and
+actionlint over the workflows.  --run runs those passes, from inside
+`nix develop`.
 
 The changes are `git diff --name-only BASE...HEAD`, the commits since HEAD
 left BASE, together with the uncommitted ones: staged, unstaged and
@@ -92,6 +93,9 @@ PASSES = (
      ("flake.nix", "flake.lock", "environments/pins.sh"),
      (("nix", "build", "--no-link", ".#refine", ".#refine-bin"),
       ("nix", "flake", "check", "--no-build", "--all-systems"))),
+    ("the workflows' actionlint, a step of the gate's scripts job",
+     (".github/", "scripts/actionlint.py", "environments/pins.sh"),
+     (("python3", "scripts/actionlint.py"),)),
 )
 
 

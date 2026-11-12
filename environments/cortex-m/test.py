@@ -1413,33 +1413,76 @@ class ProbeFailures(unittest.TestCase):
             self.assertIn('observed.json', observed)
 
     def test_nixos_names_the_route_to_the_locked_tools(self):
+        from contextlib import ExitStack
+        import os
         from unittest.mock import patch
         import setup
-        def host(nixos, loader, run=True, tmp=None):
+
+        def host(stack, nixos, loader, run=True, tmp=None, fhs=None, inside=False):
+            """A host whose loader, /etc/NIXOS, TMPDIR and PATH are these."""
             paths = {'/etc/NIXOS': nixos, '/run/current-system': run}
-            return (patch('setup.os.path.realpath', return_value=loader),
-                    patch('setup.os.path.exists', side_effect=lambda p: paths.get(p, True)),
-                    patch('setup.os.path.isdir', side_effect=lambda p:
-                          paths.get(p, p != tmp)),
-                    patch.dict('setup.os.environ', {'TMPDIR': tmp} if tmp else {}, clear=False))
-        for patches, said in (
-                (host(True, '/nix/store/x-stub-ld-x86_64'), 'stub loader'),
-                (host(False, '/usr/lib/ld-linux-x86-64.so.2', tmp='/tmp/nix-shell-1'),
-                 'TMPDIR is /tmp/nix-shell-1, which does not exist')):
-            with patches[0], patches[1], patches[2], patches[3]:
+            stack.enter_context(patch('setup.os.path.realpath', return_value=loader))
+            stack.enter_context(patch('setup.os.path.exists',
+                                      side_effect=lambda p: paths.get(p, True)))
+            stack.enter_context(patch('setup.os.path.isdir', side_effect=lambda p:
+                                      paths.get(p, p != tmp)))
+            environment = {name: value for name, value in os.environ.items()
+                           if name not in ('TMPDIR', 'LANDIN_FHS')}
+            environment.update({'TMPDIR': tmp} if tmp else {})
+            environment.update({'LANDIN_FHS': '1'} if inside else {})
+            stack.enter_context(patch.dict('setup.os.environ', environment, clear=True))
+            stack.enter_context(patch('setup.shutil.which', side_effect=lambda tool:
+                                      fhs if tool == setup.FHS else None))
+            return stack.enter_context(patch('setup.os.execv',
+                                             side_effect=AssertionError('execv')))
+
+        stub = '/nix/store/x-stub-ld-x86_64'
+        real = '/usr/lib/ld-linux-x86-64.so.2'
+        #  The stub loader with the flake's wrapper on PATH: the lane runs
+        #  itself again inside it, with the same interpreter and arguments.
+        with ExitStack() as stack:
+            execv = host(stack, True, stub, fhs='/nix/store/w-landin-fhs/bin/landin-fhs')
+            stack.enter_context(patch.object(sys, 'orig_argv',
+                                             ['python3', 'run.py', '--output', '/tmp/o']))
+            #  os.execv does not return; this one says it was reached.
+            execv.side_effect = InterruptedError('replaced')
+            with self.assertRaisesRegex(InterruptedError, 'replaced'):
+                setup.nixos_route('/tmp/o')
+            execv.assert_called_once_with(
+                '/nix/store/w-landin-fhs/bin/landin-fhs',
+                ['/nix/store/w-landin-fhs/bin/landin-fhs', sys.executable,
+                 'run.py', '--output', '/tmp/o'])
+        #  Without it, the refusal names nix develop; inside it, a stub
+        #  loader still there is the wrapper's fault and is said so.
+        for arguments, said in (
+                ({}, 'Run the lane from `nix develop`'),
+                ({'inside': True}, 'is still NixOS\'s stub loader')):
+            with self.subTest(said=said), ExitStack() as stack:
+                host(stack, True, stub, **arguments)
                 with self.assertRaises(SystemExit) as refused:
                     setup.nixos_route('/home/u/out')
-            self.assertIn(said, str(refused.exception))
-            self.assertIn('steam-run', str(refused.exception))
-            self.assertIn('TMPDIR=$HOME', str(refused.exception))
-        patches = host(False, '/usr/lib/ld-linux-x86-64.so.2')
-        with patches[0], patches[1], patches[2], patches[3]:
+                self.assertIn(said, str(refused.exception))
+                self.assertIn('landin-fhs', str(refused.exception))
+        #  Inside landin-fhs /tmp is the host's, so nothing there is refused.
+        with ExitStack() as stack:
+            host(stack, False, real, tmp='/tmp/nix-shell-1', inside=True)
+            setup.nixos_route('/tmp/out')
+        #  Another FHS environment that keeps /tmp private, steam-run's.
+        with ExitStack() as stack:
+            host(stack, False, real, tmp='/tmp/nix-shell-1')
+            with self.assertRaises(SystemExit) as refused:
+                setup.nixos_route('/home/u/out')
+            self.assertIn('TMPDIR is /tmp/nix-shell-1, which does not exist',
+                          str(refused.exception))
+            self.assertIn('nix develop', str(refused.exception))
+        with ExitStack() as stack:
+            host(stack, False, real)
             with self.assertRaisesRegex(SystemExit, '--output /tmp/out is under /tmp'):
                 setup.nixos_route('/tmp/out')
             setup.nixos_route('/home/u/out')
         #  An ordinary distribution has a loader of its own.
-        patches = host(False, '/usr/lib/ld-linux-x86-64.so.2', run=False)
-        with patches[0], patches[1], patches[2], patches[3]:
+        with ExitStack() as stack:
+            host(stack, False, real, run=False)
             setup.nixos_route('/tmp/out')
 
     def test_unsupported_host(self):
@@ -1838,7 +1881,7 @@ class RV32Lanes(unittest.TestCase):
                     patch.object(setup, 'fetch') as fetch:
                 with self.assertRaisesRegex(RuntimeError, 'needs dpkg-deb on PATH') as refused:
                     setup.main()
-            self.assertIn('add dpkg', str(refused.exception))
+            self.assertIn('`nix develop` provides all three', str(refused.exception))
             self.assertIn('environments/cortex-m/README.md#on-nixos', str(refused.exception))
             self.assertFalse(root.exists())
             fetch.assert_not_called()

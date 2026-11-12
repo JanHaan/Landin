@@ -106,8 +106,10 @@ Before an item closes:
    the item changed since REV, uncommitted changes included. It also lists
    the passes only the gate runs that those paths reach: the editor
    grammar's corpus, `./highlight/test.sh --integration`, when the grammar,
-   a positive, runtime or ABI fixture or `core/` changed, and the flake's
-   build when `flake.nix`, `flake.lock` or `environments/pins.sh` did. Take
+   a positive, runtime or ABI fixture or `core/` changed; the flake's
+   build when `flake.nix`, `flake.lock` or `environments/pins.sh` did; and
+   `python3 scripts/actionlint.py` when anything under `.github/`, that
+   script or the pins did. Take
    each listed row into the item, or restate its activation; run each listed
    pass inside `nix develop`, or add `--run` to have it run them. A row
    counts only the changes made after the commit that added it or last
@@ -246,9 +248,15 @@ reaches every Bash command of the session and of its subagents:
 ```json
 {"hooks": {"SessionStart": [{"matcher": "", "hooks": [{"type": "command",
   "timeout": 180,
-  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && cat \"$f\" >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
+  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && m=\"# landin agent_env $(cksum < \"$f\")\" && ! grep -qxF \"$m\" \"$CLAUDE_ENV_FILE\" 2>/dev/null && { echo \"$m\"; cat \"$f\"; } >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
 ```
 
+The hook runs again on every resume of a session, which keeps its
+`$CLAUDE_ENV_FILE`, so it marks what it appended with a line naming the
+environment's checksum and appends nothing when that line is already there:
+appending each time, six resumes took the file past 128 KiB, and every Bash
+command of the session then failed with E2BIG, "Argument list too long".
+`scripts/tests/test_agent_env.py` runs the command above as written here.
 The file is the environment of the checkout the session started in; a
 worktree whose flake or pins differ needs its own `nix develop`. The hook is
 local to Claude Code and is not installed by cloning the repository. In
@@ -598,6 +606,14 @@ python3 scripts/script_tests.py test_fuzz_close test_scaling
 # first; script_tests.py's GATE_TOOLS names what a test may assume.
 python3 scripts/script_tests.py --gate-environment
 
+# Every workflow through the actionlint environments/pins.sh pins, with
+# .github/actionlint.yaml's runner labels, as the gate's scripts job runs
+# it.  nix develop provides it; elsewhere --install DIR fetches and
+# verifies it first.  scripts/activations.py names it when a change
+# reaches .github/.
+python3 scripts/actionlint.py
+python3 scripts/actionlint.py --install "$(mktemp -d)"
+
 # Follow HEAD's gate run and return at its first failed job, rather than
 # when its last lane ends; with --all, follow it to its end and name every
 # failed job, when a round's fixes should go in one push.  Its first line
@@ -786,7 +802,7 @@ still succeed. The linked full run contains the target-test results.
 |---|---|---|
 | `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full push pass of main or a branch for a declared explanatory edit |
 | `documents` | `ubuntu-24.04` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, and the determinism, quality and debugging controls |
+| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
 | `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
@@ -964,6 +980,7 @@ environments/cortex-m/test.py`, which `check.py` runs.
 | `environments/cortex-m/test.py` | the `cortex-m` job's `part` matrix is the runner's parts, and it passes `--part`. |
 | `scripts/tests/test_rig_runner_hook.py` | nothing of the jobs: it passes the workflow's path to the rig runner's hook. |
 | `scripts/tests/test_release.py` | nothing of the jobs: it names the workflow in the API path the release check asks for main's run. |
+| `scripts/tests/test_check_controls.py` | nothing of the jobs: `PinnedToolchain` copies the workflow, so that `check.py` can hold the scripts job's actionlint step to `scripts/actionlint.py --install` and to no literal pin. |
 
 ### Physical boards and promotion
 
