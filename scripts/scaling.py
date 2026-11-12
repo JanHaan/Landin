@@ -114,7 +114,8 @@ DERIVED = (
 #  declarations.  Every one has a hosted `main`, so the program is complete
 #  and checks with no diagnostic; a family that begins to report one is a
 #  broken family, and the benchmark refuses it rather than timing the
-#  refusal.
+#  refusal.  Their numbered names start with a letter no predeclared type
+#  does followed by digits, so none is `f32` or `u64` (L0692).
 
 def functions(size: int) -> dict[str, str]:
     """Functions that each call the one before: three declarations each,
@@ -122,11 +123,11 @@ def functions(size: int) -> dict[str, str]:
     count = size // 3
     parts = []
     for index in range(count):
-        call = f"f{index - 1}(x)" if index else "x"
-        parts.append(f"f{index}: (x: i32) -> (r: i32) =\n"
-                     f"    r = {call}\nend f{index}\n")
+        call = f"r{index - 1}(x)" if index else "x"
+        parts.append(f"r{index}: (x: i32) -> (r: i32) =\n"
+                     f"    r = {call}\nend r{index}\n")
     parts.append("public main: () -> (code: i32) =\n"
-                 f"    code = f{count - 1}(42)\nend main\n")
+                 f"    code = r{count - 1}(42)\nend main\n")
     return {"main.ldn": "\n".join(parts)}
 
 
@@ -137,14 +138,14 @@ def atoms(size: int) -> dict[str, str]:
     count = size // 4
     parts = []
     for index in range(count):
-        call = (f"    result = f{index - 1}(value) else 0\n" if index
+        call = (f"    result = r{index - 1}(value) else 0\n" if index
                 else "    result = value\n")
         parts.append(f"e{index}: atom\n"
-                     f"f{index}: (value: i32) -> (result: i32) ! e{index} =\n"
+                     f"r{index}: (value: i32) -> (result: i32) ! e{index} =\n"
                      f"    fail e{index} when value == {index + 100000}\n"
-                     + call + f"end f{index}\n")
+                     + call + f"end r{index}\n")
     parts.append("public main: () -> (code: i32) =\n"
-                 f"    code = f{count - 1}(42) else 1\nend main\n")
+                 f"    code = r{count - 1}(42) else 1\nend main\n")
     return {"main.ldn": "\n".join(parts)}
 
 
@@ -221,13 +222,13 @@ def generics(size: int) -> dict[str, str]:
              "    v = b.value\nend get\n"]
     for index in range(count):
         parts.append(f"t{index}: type = struct\n    x: i32\nend t{index}\n")
-        parts.append(f"u{index}: (x: i32) -> (r: i32) =\n"
+        parts.append(f"w{index}: (x: i32) -> (r: i32) =\n"
                      f"    b: box(t{index}) = (value: (x: x))\n"
                      f"    got: t{index} = get(b)\n"
                      "    r = got.x\n"
-                     f"end u{index}\n")
+                     f"end w{index}\n")
     parts.append("public main: () -> (code: i32) =\n"
-                 "    code = u0(42)\nend main\n")
+                 "    code = w0(42)\nend main\n")
     return {"main.ldn": "\n".join(parts)}
 
 
