@@ -8,18 +8,32 @@ as [the mark](../README.md) and
 
 They do not live in the same place, because their licences do not allow
 it. Nunito Sans is vendored here. MonoLisa is under a EULA that forbids
-passing the font data to anyone else, so its package lives in a private
-repository, `landin-fonts`, that `fonts.py` finds through `LANDIN_FONTS`
-or beside this repository as `../landin-fonts`.
+passing the font data to anyone else, so its package is not in this
+repository. No build can fetch it from the foundry, so the one licensed
+copy the project uses sits in the maintainer's object storage, at the
+address `fonts.py` names as `LICENSED_SOURCE`, and `licensed.sha256` here
+pins it file by file (D1336). That storage is the family's source; a host
+gets it with one command:
+
+```sh
+python3 assets/fonts.py --fetch
+```
+
+That fetches the pinned family into `~/.cache/landin/fonts`, or
+`$XDG_CACHE_HOME/landin/fonts`, where `fonts.py`, `check.py` and the site
+build find it, or into the directory `LANDIN_FONTS` names when it is set.
+It replaces an earlier fetch there, and refuses a directory it did not
+make.
 
 | artifact | is | state |
 |---|---|---|
 | `nunito-sans/nunito-sans.css` | the roman and italic faces of the variable family, ten subsets, from the Google Fonts API | here |
 | `nunito-sans/woff2/` | those ten subsets | here |
 | `nunito-sans/OFL.txt` | the SIL Open Font License 1.1 it is under | here |
-| `landin-fonts/monolisa/monolisa.css` | the foundry's own stylesheet, verbatim: twenty subsets, roman and italic | private checkout |
-| `landin-fonts/monolisa/woff2/` | those twenty subsets | private checkout |
-| `landin-fonts/monolisa/LICENSE.md` | what MonoLisa is licensed under, which is not open source, and why the checkout is private | private checkout |
+| `licensed.sha256` | the SHA-256 of MonoLisa's stylesheet and of each of its faces | here |
+| `monolisa/monolisa.css` | the foundry's own stylesheet, verbatim: MonoLisa 3.000, twenty subsets, roman and italic | object storage, fetched |
+| `monolisa/woff2/` | those twenty subsets | object storage, fetched |
+| `monolisa/LICENSE.md` | what MonoLisa is licensed under, which is not open source | object storage, fetched |
 | `../fonts.py` | the `@font-face` block, the `--ui` and `--mono` stacks, and the list of files to copy | here |
 | `docs/site/render_html.py` | the reading copies | imports the module |
 | `site/fonts/` | the thirty files, copied beside the pages at render time | generated |
@@ -27,8 +41,9 @@ or beside this repository as `../landin-fonts`.
 ```sh
 python3 assets/fonts.py            # what is available, and what a page will ask for
 python3 assets/fonts.py --require  # exit 1 naming any family this host lacks
+python3 assets/fonts.py --fetch    # the pinned licensed family, from its storage
+python3 assets/fonts.py --fetch BASE DEST  # the same from BASE, into a new DEST
 python3 assets/fonts.py --pin      # record the licensed family's digests
-python3 assets/fonts.py --fetch BASE DEST  # what pages.yml runs
 ```
 
 ## Why the declarations are read rather than written
@@ -60,17 +75,20 @@ objected to.
 
 `--fetch` applies the same to where files are written: it fetches a face
 only when the stylesheet names it `woff2/FILE.woff2`, writes it only as
-that file under a directory it created, and then reads the result as a
-render will.
+that file under a directory it created, reads the result as a render
+will, and only then gives that directory the name it was asked to fill.
 
-`licensed.sha256` in this directory, when it exists, pins the licensed
-stylesheet and each face by SHA-256, in `sha256sum`'s format with paths
-relative to the licensed root. A render or a fetch then refuses a file
-that differs and a face that is not pinned. `python3 assets/fonts.py
---pin` writes it from the checkout `LANDIN_FONTS` names, and must be run
-again when the foundry's package is replaced. While the file does not
-exist the licensed family is held to its form only, and `--fetch` says so
-in a warning on the workflow run.
+`licensed.sha256` in this directory pins the licensed stylesheet and each
+face by SHA-256, in `sha256sum`'s format with paths relative to the
+licensed root. A render or a fetch refuses a file that differs and a face
+that is not pinned, so a copy changed in storage stops the publish rather
+than reaching the pages. Replacing the foundry's package is: upload the
+customiser's new `monolisa.css` and `woff2/` to the storage, fetch them
+into a new directory with `--fetch BASE DEST`, read them, run
+`LANDIN_FONTS=DEST python3 assets/fonts.py --pin` and commit the new
+`licensed.sha256` with the change that needs it. Without the file the
+licensed family would be held to its form only, and `--fetch` would say
+so in a warning on the workflow run.
 
 ## Why the subsets are shipped whole
 
@@ -104,17 +122,17 @@ A checkout of this repository alone has one family. `fonts.py` renders
 the pages without the other — `--mono` still names it, and the stack
 behind it is what a reader sees — and `render_html.py` says so once on
 stderr. `check.py` reports the family's coverage as not checked rather
-than failed, because a host without a private checkout is an ordinary
-host. What refuses is `.github/workflows/pages.yml`, whose fetch of the
-family is fatal rather than best-effort: a page published in a fallback
-face is the site quietly not being itself, which no word count can see.
+than failed, because a host that has not fetched the family is an
+ordinary host. What refuses is `.github/workflows/pages.yml`, whose fetch
+of the family is fatal rather than best-effort: a page published in a
+fallback face is the site quietly not being itself, which no word count
+can see.
 
-No job clones `landin-fonts` any more. The pages task that did, with a
-deploy key held as a builds.sr.ht secret, is retired with the SourceHut
-gate. `.github/workflows/pages.yml` fetches the family from the
-maintainer's object storage instead, with `fonts.py --fetch`, which reads
-the faces to fetch out of the family's own stylesheet; a developer still
-works from the checkout beside this repository.
+The family used to live in a private repository, `landin-fonts`, that a
+developer checked out beside this one and a builds.sr.ht task cloned with
+a deploy key. That repository is retired: it was a second copy for every
+host to keep in step with the storage the publish fetched from, and the
+storage, pinned here, is the one source (D1336).
 
 ## What is not inlined
 
@@ -145,7 +163,7 @@ whose web licence permits embedding it in one licensee's site and whose
 prohibited-usage clause forbids supplying the font data to any other firm
 or individual. Serving it from www.701.dev is the former; keeping it in a
 public repository anyone can clone would be the latter, which is why it
-is kept in a private one. The terms are at
-<https://www.monolisa.dev/license>. The foundry's `/*! @preserve */`
-header is carried through `fonts.py` into every page, which is what it is
-for. `landin-fonts/monolisa/LICENSE.md` says the rest.
+is kept out of it and this repository holds only its digests. The terms are at <https://www.monolisa.dev/license>. The
+foundry's `/*! @preserve */` header is carried through `fonts.py` into
+every page, which is what it is for. The fetched `monolisa/LICENSE.md`
+says the rest.

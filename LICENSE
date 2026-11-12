@@ -49,8 +49,9 @@ notices when copying the corresponding material:
     devices/notices/LICENSE-Apache-2.0.stm32h7. Each fixture's NOTICE says
     which; the headers are fetched by hash and not in this tree.
 
-The optional MonoLisa files are supplied by the separate private
-landin-fonts checkout and are not included in this tree. Their separate
+The optional MonoLisa files are fetched from the project's font storage
+by assets/fonts.py and are not included in this tree, which holds only
+their SHA-256 digests in assets/fonts/licensed.sha256. Their separate
 license is documented in assets/fonts/README.md; this project's dual terms
 do not apply to them.
 

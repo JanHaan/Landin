@@ -7,9 +7,11 @@
 #  The licensed code face is not in this repository and never will be:
 #  MonoLisa's EULA licenses it to one licensee and forbids supplying the
 #  font data on.  It is fetched at build time from the maintainer's own
-#  object storage, which is also where a developer's checkout comes from.
-#  A build that cannot reach it renders in the fallback stack, so the
-#  fetch is fatal rather than best-effort.
+#  object storage, the family's one source for this project, which
+#  assets/fonts.py names and where a developer's `fonts.py --fetch` takes
+#  its copy too; what arrives is held to assets/fonts/licensed.sha256
+#  (D1336).  A build that cannot reach it renders in the fallback stack,
+#  so the fetch is fatal rather than best-effort.
 
 name: pages
 
@@ -82,9 +84,6 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-env:
-  FONTS_BASE: https://fsn1.your-objectstorage.com/landin/fonts
-
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -94,13 +93,13 @@ jobs:
       - name: Fetch the licensed face
         run: |
           set -eu
-          dest="${RUNNER_TEMP}/landin-fonts"
+          dest="${RUNNER_TEMP}/licensed-fonts"
           #  The stylesheet is the list of faces, so a subset added upstream
           #  arrives without editing this workflow.  It is text from outside
           #  the repository, so fonts.py fetches a face only as woff2/FILE,
-          #  reads what arrived as a render will, and holds it to
-          #  assets/fonts/licensed.sha256 when that file exists.
-          python3 assets/fonts.py --fetch "$FONTS_BASE" "$dest"
+          #  reads what arrived as a render will, pins included, and only
+          #  then gives it the directory's name.
+          LANDIN_FONTS="$dest" python3 assets/fonts.py --fetch
           echo "LANDIN_FONTS=$dest" >> "$GITHUB_ENV"
 
       - name: Render and verify

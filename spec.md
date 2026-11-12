@@ -37960,8 +37960,8 @@ family's `@font-face` rules are rebuilt from a fixed set of descriptors
 whose values are names, numbers, quotes and the punctuation of a range, a
 face's file is a bare `NAME.woff2`, and a preserved header holding `<` is
 refused. The fetch takes a face only as `woff2/FILE` and writes it only as
-that file. `assets/fonts/licensed.sha256`, once the maintainer records it
-from the licensed files, pins the stylesheet and each face by SHA-256.
+that file. `assets/fonts/licensed.sha256` pins the stylesheet and each
+face by SHA-256; D1336 recorded it.
 
 **The alternatives:** escaping a target and passing it through, which
 still publishes a `javascript:` link; a content security policy, which the
@@ -37975,6 +37975,45 @@ script and one that leaves its attribute, and `scripts/tests/test_fonts.py`,
 with a header and a declaration that end the style element, a face named
 outside its directory, a pinned file that changed and a source to fetch
 from that names files it should not.
+
+### D1336 — The licensed code face comes from the project's object storage, pinned
+
+**The tour said** nothing. MonoLisa, the face the pages set their code
+in, is under a EULA that forbids passing the font data on, so it is not
+in the repository. It lived in a private repository, `landin-fonts`, that
+a developer checked out beside this one, while the publishing workflow
+fetched a copy from the maintainer's object storage; nothing tied the two
+copies together, and nothing pinned either, so the publish held the face
+it fetched to its form only and warned.
+
+**Chosen:** the object storage is the family's one source.
+`assets/fonts.py` names it as `LICENSED_SOURCE`, and
+`assets/fonts/licensed.sha256` pins its stylesheet and each of its twenty
+faces, MonoLisa 3.000, by SHA-256, so a render or a fetch refuses a file
+that differs and a face that is not pinned. `python3 assets/fonts.py
+--fetch` fetches the pinned family into the cache directory
+`$XDG_CACHE_HOME/landin/fonts`, by default `~/.cache/landin/fonts`, or into
+the directory `LANDIN_FONTS` names, where the module, `check.py` and the
+site build find it; the publishing workflow runs the same command into a
+directory of its own. A fetch arrives beside its destination and takes
+its name only once it has been read, pins included, so a refused fetch
+leaves the copy it would have replaced; it replaces only a directory a
+fetch made. Replacing the foundry's package is uploading it to the
+storage, fetching it into a new directory and running `--pin` there. The
+repository holds the digests and never the font data.
+
+**The alternatives:** keeping the private repository as the developer's
+source, which is a second copy for every host to keep in step with the
+one the publish fetches; fetching from the foundry, which offers no
+address a build can fetch the licensed package from; and the storage
+unpinned, which publishes whatever it holds the day the site is built.
+All were declined.
+
+**Pinned by** `scripts/tests/test_fonts.py`, with a fetch into the cache
+from a stand-in storage, a second fetch that replaces it, a refused fetch
+that leaves it and a directory no fetch made that is not replaced, beside
+the pinned file that changed; and `assets/fonts/licensed.sha256` itself,
+which every render of a host holding the family reads.
 
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 

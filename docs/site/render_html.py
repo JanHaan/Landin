@@ -794,11 +794,13 @@ CSS = (CSS.replace("{UI_STACK}", fonts.stack("ui"))
 #  A host without the licensed code face renders without it -- the pages
 #  fall to the stack behind the family -- and says so once, here, rather
 #  than failing: the build that must not go out that way is the publish,
-#  and scripts/site.sh is what refuses it.
+#  and pages.yml's fetch of the face is what refuses it.  A developer
+#  gets the face with `python3 assets/fonts.py --fetch`.
 FONT_CSS = fonts.css()
 for _family in fonts.missing():
     print("render_html: %s is not available on this host; the pages "
-          "fall back to the stack behind it" % _family, file=sys.stderr)
+          "fall back to the stack behind it (python3 assets/fonts.py "
+          "--fetch fetches it)" % _family, file=sys.stderr)
 
 #  The theme switch remembers itself.  It stores the theme chosen rather
 #  than the box's state, because the box means "not what the system
