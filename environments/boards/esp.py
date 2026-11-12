@@ -65,8 +65,11 @@ sys.path.insert(0, str(HERE))
 import common  # noqa: E402
 from common import Failed, echo_of, frames_safe, require, tagged  # noqa: E402
 
-# The board's command bytes, which it also echoes (D721).
-ATOMICS, REPORT, STALL, MASK = 0x06, 0x11, 0x12, 0x13
+# The board's command bytes, which it also echoes (D721), and PARK, which
+# a port that parks before the probe's reads takes last (D1254).
+ATOMICS, REPORT, STALL, MASK, PARK = 0x06, 0x11, 0x12, 0x13, 0x14
+# The app_state a parked program writes and its last frame carries.
+PARKED = 4
 RING = 256              # the application's receive ring
 BURST = 300             # longer than the ring and than the 128-byte FIFO
 WINDOW_MS = 100         # how long STALL and MASK last
@@ -110,6 +113,10 @@ class Chip:
     clkdiv_most = 0xffff
     two_stop_bits = True
     line_plan = None
+    # Whether the port parks before the probe reads it (D1254): PARK, after
+    # the last frame, holds every interrupt off and loops, and its frame is
+    # the one the probe's reads must equal.
+    parks = False
 
     def mtvec(self, sections, names):
         raise NotImplementedError
@@ -418,8 +425,34 @@ def scenario(console, chip, seed, mode='boot'):
                     'the line exchange handled %d bytes, not %d, or lost some'
                     % (last['h'] - final['h'], len(console.sent) - len(sent)))
             final = last
+    if chip.parks:
+        verdicts['parked'], final = parked(console, final, echoed)
     final = dict(final, r=boot['r'])
     return verdicts, final, atomics
+
+
+def parked(console, last, echoed):
+    """PARK, after LAST, the scenario's last frame: the program holds
+    every interrupt off, writes a frame of what it counted and loops
+    waiting for nothing, so that what the probe then reads can no longer
+    change and no probe-rs session's halt or single step meets an
+    interrupt (D1254).  Its frame is LAST with the one byte PARK handled,
+    consumed and echoed, its arrival's receive interrupt, app_state
+    PARKED, and nothing lost; it is the frame the probe's reads must
+    equal.  Returns the verdict and that frame."""
+    frame = common.ask(console, PARK, 't', len(tagged(bytes(console.received), 't')))
+    require(frame['s'] == PARKED, 'the program did not park: its app_state reads %d, not %d'
+            % (frame['s'], PARKED))
+    require(echoed(bytes(console.received)).endswith(bytes([PARK])), 'PARK was not echoed')
+    require(frame['h'] == last['h'] + 1 and frame['e'] == last['e'] + 1,
+            'parking handled %d bytes and consumed %d, not the one PARK'
+            % (frame['h'] - last['h'], frame['e'] - last['e']))
+    require((frame['c'], frame['l'], frame['o']) == (last['c'], last['l'], last['o']),
+            'the program lost bytes as it parked: %d restarts, %d dropped, %d FIFO overflows,'
+            ' not %d, %d and %d' % (frame['c'], frame['l'], frame['o'],
+                                    last['c'], last['l'], last['o']))
+    require(frame['i'] > last['i'], 'PARK arrived with no receive interrupt')
+    return dict(app_state=frame['s'], handled=frame['h']), frame
 
 
 def expected_stream(sent, discarded):
@@ -447,24 +480,34 @@ def trap_cells(probe, names):
 def cross_check(probe, chip, names, final, atomics):
     """The counters and atomic cells as JTAG reads them, against the last
     frames: the probe reads what the firmware counted, not what it said;
-    and no trap reached the unhandled entry."""
+    and no trap reached the unhandled entry.  A port that parks is read
+    parked, which its app_state shows first (D1254)."""
     trap = trap_cells(probe, names)
     require(trap['count'] == 0, 'the unhandled entry took %d trap(s), the last mcause %#x at %#x,'
             ' mtval %#x, sp %#x' % (trap['count'], trap['cause'], trap['pc'], trap['value'],
                                      trap['sp']))
     read = {'trap_count': 0}
+    if chip.parks:
+        read['app_state'] = probe.read_words('jtag-app_state', names['app_state'], 1)[0]
+        require(read['app_state'] == final['s'] == PARKED,
+                'app_state reads %d over JTAG, %d in the frame, not %d: the probe did not read'
+                ' the parked program' % (read['app_state'], final['s'], PARKED))
+    # Every cell is read before any is judged, and a failure names each
+    # that differs: one wrong counter alone does not say what moved.
+    wrong = []
     for name, key in (('handled', 'h'), ('recoveries', 'c'), ('dropped', 'l'),
                       ('overflows', 'o'), ('entries', 'i'), ('boot_reason', 'r')):
         read[name] = probe.read_words('jtag-' + name, names[name], 1)[0]
-        require(read[name] == final[key], '%s reads %d over JTAG, %d in the frame'
-                % (name, read[name], final[key]))
+        if read[name] != final[key]:
+            wrong.append('%s reads %d over JTAG, %d in the frame' % (name, read[name], final[key]))
     for name, (key, width) in chip.cells.items():
         address = names[name]
         word = probe.read_words('jtag-' + name, address & ~3, 1)[0]
         value = (word >> (8 * (address & 3))) & ((1 << (8 * width)) - 1)
-        require(value == atomics[key], '%s reads %#x over JTAG, %#x in the frame'
-                % (name, value, atomics[key]))
+        if value != atomics[key]:
+            wrong.append('%s reads %#x over JTAG, %#x in the frame' % (name, value, atomics[key]))
         read[name] = value
+    require(not wrong, '; '.join(wrong))
     return read
 
 

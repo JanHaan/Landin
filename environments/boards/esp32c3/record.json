@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "dd48a0e9542426ae5cad6cd337dba4419e17c47f12cc2abf75a295d62fa55d5f",
+  "image_sha256": "455db423bfc745eaa3a6fdf19c1c345317bbd498ef08b03c81db8db91f13aa18",
   "image_name": "board.elf.bin",
-  "elf_sha256": "9d656e36349d98341ce82dc116d98b6280488b712200a6b41c3b19ea20f73fa7",
+  "elf_sha256": "778101d1bb0e9ca627d90cb30d88d14d4866c92d9f8e7f1aa7f5a2e1f64a7630",
   "image": {
     "chip": 5,
     "revisions": [
@@ -12,11 +12,11 @@
     "entry": "0x40380000",
     "segments": [
       "0x40380000+0x180",
-      "0x40380180+0x75f8",
-      "0x40387778+0x54"
+      "0x40380180+0x76c8",
+      "0x40387848+0x54"
     ],
-    "checksum": "0x25",
-    "sha256": "66e0699e1a861a31a1ec56afffcc1ab30d0d75fea03834051e6fdd9bb21ef640"
+    "checksum": "0x21",
+    "sha256": "454103104603e2c0dcbf2457f9012b48258bec90c76b22adabee33fc444fdd25"
   },
   "instructions": [],
   "flash": {
@@ -28,8 +28,8 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40380000+0x180",
-      "0x40380180+0x75f8",
-      "0x40387778+0x54"
+      "0x40380180+0x76c8",
+      "0x40387848+0x54"
     ],
     "entry": "0x40380000"
   },
@@ -68,22 +68,27 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 3470,
-      "receive_interrupts": 4745,
+      "timer_events": 4021,
+      "receive_interrupts": 4742,
       "echoed": 3014,
       "sent": 3614
     },
     "line": {
       "status": "not run: probehive bridge fixed at 115200 8N1"
+    },
+    "parked": {
+      "app_state": 4,
+      "handled": 3015
     }
   },
   "jtag": {
     "trap_count": 0,
-    "handled": 3014,
+    "app_state": 4,
+    "handled": 3015,
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4745,
+    "entries": 4744,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -91,9 +96,9 @@
   },
   "readback": [
     "0x40380000+0x180",
-    "0x40380180+0x75f8"
+    "0x40380180+0x76c8"
   ],
-  "uart_sha256": "31a2cebaf5322c8d76206844cba63bd0341469ab6912e4be1023e992473ca7b3",
+  "uart_sha256": "a557b23398991074bbe6ecdd3344d75355899138a9380a0f757c07a2b069dd9e",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -105,39 +110,39 @@
       "elf_sha256": "9684a096e16bb273bc4c4021026add185116f31a5bdf1a23f6311351f676b5ae"
     }
   },
-  "seconds": 26.442,
+  "seconds": 27.745,
   "kernel_usb": {
-    "since": 1794060930.91331,
-    "until": 1794060957.330233,
+    "since": 1794506649.1943972,
+    "until": 1794506676.9143598,
     "lines": [
       {
-        "time": 1794060934.604713,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 5"
+        "time": 1794506653.220715,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 96"
       },
       {
-        "time": 1794060937.520688,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 22 using xhci_hcd"
+        "time": 1794506656.176712,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 97 using xhci_hcd"
       },
       {
-        "time": 1794060937.620694,
+        "time": 1794506656.276705,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       },
       {
-        "time": 1794060953.16577,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 22"
+        "time": 1794506672.873007,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 97"
       },
       {
-        "time": 1794060956.121691,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 23 using xhci_hcd"
+        "time": 1794506675.808681,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 98 using xhci_hcd"
       },
       {
-        "time": 1794060956.231415,
+        "time": 1794506675.912712,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       }
     ],
     "status": "captured"
   },
-  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "sent_sha256": "5ec8f517f647c2346693303af7550368f6241055de0dec47bfd55a9152686ed5",
   "frames": [
     {
       "tag": "b",
@@ -152,21 +157,22 @@
     },
     {
       "tag": "t",
-      "h": "00000bc6",
+      "h": "00000bc7",
       "c": "00000002",
-      "i": "00001289",
-      "m": "00000d8e",
+      "i": "00001288",
+      "m": "00000fe2",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",
       "l": "0000002c",
       "o": "00000001",
-      "e": "00000cc6",
+      "e": "00000cc7",
       "g": "00000000",
-      "s": "00000002"
+      "s": "00000004"
     }
   ],
   "commands": [
+    "hub-start",
     "flash",
     "hub-wait",
     "hub-status",
@@ -175,11 +181,13 @@
     "hub-status",
     "power-on",
     "hub-wait",
+    "hub-wait",
     "jtag-trap-cause",
     "jtag-trap-pc",
     "jtag-trap-value",
     "jtag-trap-sp",
     "jtag-trap-count",
+    "jtag-app_state",
     "jtag-handled",
     "jtag-recoveries",
     "jtag-dropped",

@@ -97,14 +97,20 @@ digits, then ETX and LF. The host never sends STX or ETX.
 | Tag | When | Fields |
 |---|---|---|
 | `b` | once, after the indicator, the timer and the receiver are set up | `r` RTC_CNTL_RESET_CAUSE_PROCPU as read first in `start`, `v` mtvec |
-| `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `i` receive interrupts, `m` timer interrupts, `p` and `q` mcause in the last receive and timer interrupt, `k` timer interrupts in the last threshold window, `l` bytes the receive interrupt dropped, `o` RX FIFO overflows it saw, `e` bytes consumed, `g` the indicator's pad read back, `s` the application's state |
+| `t` | after each 0x11, and once after 0x14 | `h` bytes handled, `c` ring restarts, `i` receive interrupts, `m` timer interrupts, `p` and `q` mcause in the last receive and timer interrupt, `k` timer interrupts in the last threshold window, `l` bytes the receive interrupt dropped, `o` RX FIFO overflows it saw, `e` bytes consumed, `g` the indicator's pad read back, `s` the application's state |
 | `a` | after each 0x06 | `b`, `h` and `w`: the byte, half-word and word cells as loaded after their atomic stores |
 | `h` | when the application halts | `s` its status |
 
-Four bytes are commands after their echo: 0x06 runs the atomics over the
+Five bytes are commands after their echo: 0x06 runs the atomics over the
 two bytes received before it, 0x11 asks for a `t` frame, 0x12 stops
-reading for 100 ms, and 0x13 raises the line threshold above the receive
-line's priority for 100 ms (D721).
+reading for 100 ms, 0x13 raises the line threshold above the receive
+line's priority for 100 ms (D721), and 0x14 parks the application: it
+holds every interrupt off, sets its state to 4, writes a last `t` frame
+and loops waiting for nothing (D1254). The host sends 0x14 last, so that
+the probe reads a program that counts nothing more: each probe-rs session
+halts the hart and single-steps it, and the C3 takes an interrupt inside a
+single step whatever `dcsr.stepie` says, which left a running program
+counting a recovery it never met or jumping to address 0.
 
 ## The oracle
 
@@ -125,7 +131,8 @@ line's priority for 100 ms (D721).
 | a FIFO overflow | after 0x13, a 300-byte burst while the receive line is held off: one RX FIFO overflow, a second restart, none of it echoed, and 99 to 101 timer interrupts in the 100 ms window, since the timer's line is above the threshold |
 | the stream | 3000 more bytes in pieces of 64, each sent after the last one's echo, since the C3 runs at its reset clock, 20 MHz (D727), and every byte sent echoed in order but the two bursts, `h` their count, and the timer advancing |
 | the line exchange | not run: the console is probehive's bridge, fixed at 115200 8N1; the port's `configure` is linked into no image, and only `runtime/library-shared-line`'s arithmetic at 20 MHz stands behind it (D961, D963) |
-| the counters | `handled`, `recoveries`, `dropped`, `overflows` and `entries`, and the three atomic cells, read over JTAG after the scenario, equal the last frames; and `_landin_firmware_trap_count` reads 0: no trap reached the unhandled entry (D656), whose five cells a failed run's result keeps |
+| parking | after 0x14, last: `s` 4, the one byte handled, consumed and echoed, its receive interrupt, and no restart, drop or overflow more than the stream's frame (D1254) |
+| the counters | `app_state` 4 first, so that what follows is read from the parked program; then `handled`, `recoveries`, `dropped`, `overflows` and `entries`, and the three atomic cells, read over JTAG after the scenario, equal the last frames, the parked one; and `_landin_firmware_trap_count` reads 0: no trap reached the unhandled entry (D656), whose five cells a failed run's result keeps |
 | SRAM | the image's read-only segment, read over JTAG, is the ELF's loaded bytes in RAM mode or OUT.bin's segments in boot mode |
 
 What the emulator lane and the boards share is
