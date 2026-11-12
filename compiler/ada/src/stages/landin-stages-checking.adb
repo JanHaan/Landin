@@ -3972,10 +3972,11 @@ package body Landin.Stages.Checking is
       end Report_Fixed_Bound_Operand;
 
       --  D438: an immutable module integer is a fixed count when its
-      --  image is: integer literals, D437's integer compiler facts, other
-      --  such module integers, unary `-` and D136's mathematical `+ - * /
-      --  %`.  Admitted is the count; Outside says the image is something
-      --  else, which the bound reports; Faulty is a fault in the image the
+      --  image is: integer literals, D437's integer compiler facts,
+      --  `sizeof` of a scalar type (D1321), other such module integers,
+      --  unary `-` and D136's mathematical `+ - * / %`.  Admitted is the
+      --  count; Outside says the image is something else, which the bound
+      --  reports; Faulty is a fault in the image the
       --  module value's own check reports, a cycle, an overflow or a zero
       --  divisor, so the bound says nothing more.
       type Count_Outcome is (Count_Admitted, Count_Outside, Count_Faulty);
@@ -4127,6 +4128,20 @@ package body Landin.Stages.Checking is
                        when others => Left rem Right);
                   return Count_Admitted;
                end;
+            when Syn.Size_Of =>
+               --  D1321: a scalar's size is known for the target before
+               --  checking, so it counts as the literal it stands for.
+               declare
+                  Held : constant Ty.Type_Kind :=
+                    Type_At (Of_Tree, Syn.Measured_Type (Of_Tree, Node));
+               begin
+                  if Held not in Ty.Scalar_Name then
+                     return Count_Outside;
+                  end if;
+                  Value := Ty.Folded (Landin.Targets.Bytes
+                    (Ty.Storage_Size (Held, Facts)));
+                  return Count_Admitted;
+               end;
             when others =>
                --  What [1940] refuses in any module value, a call, is
                --  reported there; what it admits is outside the count.
@@ -4156,8 +4171,9 @@ package body Landin.Stages.Checking is
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, At_Node),
                Message => Message,
-               Note    => "D136/D438: an array bound folds integer"
-                          & " literals, fixed formals, immutable module"
+               Note    => "D136/D438/D1321: an array bound folds integer"
+                          & " literals, fixed formals, compiler facts,"
+                          & " `sizeof` of a scalar type, immutable module"
                           & " integers and target-independent integer"
                           & " arithmetic; no user routine runs",
                Into    => Found);
@@ -4192,6 +4208,29 @@ package body Landin.Stages.Checking is
       begin
          Valid := False;
          Known := False;
+
+         --  D1321: a compiler fact configuration read in this length is
+         --  the integer it found for the target, as a literal is; one it
+         --  refused is reported there.
+         case Landin.Configuration.Fact_At
+           (Configurations (Context).all, Syn.Source_Of (Of_Tree), Written)
+         is
+            when Landin.Configuration.Integer_Fact =>
+               Valid := True;
+               Known := True;
+               return Landin.Configuration.Fact_Value
+                 (Configurations (Context).all, Syn.Source_Of (Of_Tree),
+                  Written);
+            when Landin.Configuration.Bool_Fact =>
+               Report_Not_Integer
+                 (Written, "this compiler fact is a bool, not an integer"
+                           & " element count");
+               return 0;
+            when Landin.Configuration.Refused_Fact =>
+               return 0;
+            when Landin.Configuration.No_Fact =>
+               null;
+         end case;
 
          if Of_Kind = Syn.Integer_Literal then
             declare
@@ -4323,6 +4362,35 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
+         --  D1321: `sizeof` of a scalar type is the target's size of it,
+         --  known before checking as a fact is; any other measurement
+         --  needs a layout and stays outside the fold.
+         if Of_Kind in Syn.Size_Of | Syn.Align_Of then
+            declare
+               Held : constant Ty.Type_Kind :=
+                 Type_At (Of_Tree, Syn.Measured_Type (Of_Tree, Written));
+            begin
+               if Held = Ty.Ill_Typed then
+                  return 0;
+               elsif Of_Kind = Syn.Size_Of and then Held in Ty.Scalar_Name
+               then
+                  Valid := True;
+                  Known := True;
+                  return Ty.Folded (Landin.Targets.Bytes
+                    (Ty.Storage_Size (Held, Facts)));
+               end if;
+               Report_Not_Fixed
+                 (Written,
+                  (if Of_Kind = Syn.Align_Of
+                   then "`alignof` is not one of the fixed-expression"
+                        & " forms; `sizeof` of a scalar type is"
+                   else "`sizeof` folds in a fixed expression for a"
+                        & " scalar type only, and this type's size is"
+                        & " its checked layout's"));
+               return 0;
+            end;
+         end if;
+
          if Of_Kind in Syn.True_Literal | Syn.False_Literal
                        | Syn.Equal_To | Syn.Not_Equal_To | Syn.Less_Than
                        | Syn.Less_Or_Equal | Syn.Greater_Than
@@ -4380,8 +4448,9 @@ package body Landin.Stages.Checking is
                      Report_Not_Fixed
                        (Written, "this module value is not a fixed count: its"
                                  & " image is not an integer folded from"
-                                 & " literals, compiler facts and other"
-                                 & " immutable module integers");
+                                 & " literals, compiler facts, `sizeof` of"
+                                 & " a scalar type and other immutable"
+                                 & " module integers");
                      return 0;
                end case;
             end;

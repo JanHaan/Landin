@@ -325,7 +325,8 @@ another name.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
-and `%`.
+and `%`; D438 adds immutable module integers, and D1321 compiler facts and
+`sizeof` of a scalar type, each at the selected target's value.
 The element is a type like any other. A parameterized alias or nominal struct
 is a type position through its fully applied positional application. D135
 substitutes an alias during checking; D137 interns a struct application by its
@@ -6443,7 +6444,10 @@ bitwise, complement and shift operations need an operand width and are not in
 this target-independent fold. A runtime or storage name is not a fixed formal;
 a type formal or another non-value name is diagnosed as such rather than called
 runtime storage. D438 later admits an immutable module integer whose own image
-is in this fold, and refuses a `mut` one as storage the program may write. A call is syntactically valid in the brackets but is not a fixed expression:
+is in this fold, and refuses a `mut` one as storage the program may write.
+D1321 admits an integer compiler fact and `sizeof` of a scalar type, which the
+selected target answers before checking. A call is syntactically valid in the
+brackets but is not a fixed expression:
 the compiler rejects it and never executes its body. No other expression form
 is admitted, and an implementation becoming better at ordinary constant
 folding does not enlarge this set.
@@ -7042,12 +7046,15 @@ selects arms before checking begins, so the count is fixed before any type is
 interned, exactly as a type alias a `fixed if` selects per target already
 is; type identity has depended on the selected target since D139. D136's
 objection, a fold at a target's width, does not arise: the fold stays
-mathematical. A fact written in the brackets themselves is not admitted;
-D437 admits facts in module values, and the bound names the value.
+mathematical. A fact written in the brackets themselves was not admitted
+here, the bound naming a module value that holds it; D1321 admits it, and
+`sizeof` of a scalar type, in the bound and in the image.
 
 **Why not more:** a module value admits more than D136's fold, measurements,
 conversions and wrapping arithmetic among it, and admitting those in a bound
 would carry target-width answers into type identity, which D136 declined.
+D1321 later admits the one measurement whose answer the target gives before
+checking, `sizeof` of a scalar type.
 
 **The alternatives:** keeping the refusal and naming the type-alias route in
 L0305's note; and admitting any module value the ordinary folder knows, which
@@ -7056,6 +7063,46 @@ moves a bound's legality with D224's folder. Both were declined.
 **Pinned by** `runtime/fixed-array-bound-module-constant` on every target,
 Cortex-M0 included, `negative/fixed-array-bound-module-value` and the checker
 case `invalid parameterized templates are checked when unused`.
+
+### D1321 — An array length reads a compiler fact and `sizeof` of a scalar
+
+**The tour said** at [0520] that a length is a constant the compiler works
+out without running anything, and at [1500] that `compiler.word_size` is a
+fixed fact. D136 closed the bound's fold over literals, fixed formals and
+mathematical arithmetic; D437 let a module value read a fact and D438 let a
+bound name such a value, so `[2 * 128 * compiler.word_size]u8` was L0203,
+whose note sent the fact through a module value, and `[2 * 1024 * sizeof
+usize]u8` was L0305, "not one of the closed fixed-expression forms" (SR-369).
+
+**Chosen:** an array length, wherever its type is written, a routine body,
+a signature, a struct field and an alias template included, may read an
+integer compiler fact (`compiler.word_size`, `compiler.cache_line`) and
+`sizeof` of a built-in scalar type, directly, and so may the image of a
+module integer D438 counts. Each folds as the literal it stands for: the
+fact is the value configuration found for the selected target once it chose
+the arms, and the size is that target's storage size of the scalar, so a
+32-bit target's `[sizeof usize]u8` is `[4]u8` on a 64-bit host. Both are
+known before checking begins, exactly as the selected arm of a `fixed if`
+is, and type identity has depended on the target since D139. A bool fact
+in a length is refused as no count, an atom fact alone stays L0203, and
+every other measurement, `sizeof` of a declared type, a fixed array or a
+type formal, and `alignof` of anything, stays L0305 with a message that
+says what folds. A fixed actual of a type application is still an integer
+literal or a forwarded fixed formal (D135), and a routine body still reads
+no fact as a value.
+
+**The alternatives:** keeping the module-value route that D438 named, which
+makes every stack buffer sized by the word declare a module value first;
+admitting `alignof` of a scalar too, which nothing has asked for; and
+admitting any measurement the checker can answer, which would make a bound
+wait for a declared type's layout and move type identity with it.
+
+**Pinned by** `runtime/array-length-reads-facts-and-sizeof` on every
+product target, Cortex-M0 included;
+`positive/array-length-facts-at-the-target-width`, which holds
+`[sizeof usize]u8` to `[4]u8` on `synthetic-32` and Cortex-M0 and to
+`[8]u8` on the 64-bit targets; and
+`negative/array-length-refusals-are-reported-once`.
 
 ## DECISIONS: DECLARED TYPES, RANGES AND LAYOUT
 
@@ -17454,9 +17501,9 @@ A fact folds into the static image as the literal it stands for; it has no
 origin, storage or address. It may stand anywhere in a module binding's image,
 an array or record image included.
 
-A routine body, an anonymous one included, still reads no fact: L0203, whose
-note names the module value that holds it, which the body reads and branches
-on with an ordinary `if`. An atom fact alone, `compiler.os`, is L0203 in
+A routine body, an anonymous one included, still reads no fact outside an
+array length (D1321): L0203, whose note names the module value that holds
+it, which the body reads and branches on with an ordinary `if`. An atom fact alone, `compiler.os`, is L0203 in
 either place, and `compiler.os == linux` in a body is that one report rather
 than a second on `linux`. Options stay configuration-only (D202); reading one
 as a module value is a separate decision no program has asked for. D438

@@ -63,12 +63,9 @@ wait_in_vain: (inout state: waiting) -> none ! failure.reason =
 end wait_in_vain
 
 --  Module storage, so the stacks are no frame's: Cortex-M0's reset stack
---  is 4 KiB, and its 12 KiB of RAM below that hold two stacks of 4 KiB.
-fixed if compiler.word_size == 32 then
-    mut backing: [2 * 4096]u8 = zeroed
-else
-    mut backing: [2 * 8192]u8 = zeroed
-end if
+--  is 4 KiB, and its 12 KiB of RAM below that hold two stacks of 4 KiB,
+--  128 bytes for each bit of the word; a 64-bit target's are 8 KiB.
+mut backing: [2 * 128 * compiler.word_size]u8 = zeroed
 
 run: (signals: fake.signals, counts: ptr fake.signals_space)
      -> none ! failure.reason =

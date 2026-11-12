@@ -1,1 +1,0 @@
-mut backing: [2 * 128 * compiler.word_size]u8 = zeroed

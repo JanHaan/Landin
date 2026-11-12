@@ -2316,16 +2316,20 @@ running anything. You may write:
 
 - integer literals;
 - fixed parameters ([1520]);
+- compiler facts such as `compiler.word_size` [1500];
+- `sizeof` of a built-in scalar type, such as `sizeof usize`;
 - immutable module integers;
 - parentheses, unary `-` and plain `+`, `-`, `*`, `/` and `%` to combine
   them.
 
-Calls, wrapping operators, bitwise operators and shifts are not allowed.
+Calls, wrapping operators, bitwise operators, shifts and measurements of
+your own types are not allowed.
 
-A module integer counts only when its own value is such a constant, which
-may read a compiler fact [1500]. A `mut` one never counts, because the
-program may write it. With `path_max: usize = 4096`, `[path_max]u8` is the
-same type as `[4096]u8`.
+A fact and a scalar's size are the selected target's, so `[sizeof usize]u8`
+is `[8]u8` on a 64-bit target and `[4]u8` on Cortex-M0. A module integer
+counts only when its own value is such a constant. A `mut` one never counts,
+because the program may write it. With `path_max: usize = 4096`,
+`[path_max]u8` is the same type as `[4096]u8`.
 
 Fine print:
 
@@ -4279,8 +4283,9 @@ An integer fact takes its type from context. You read an atom fact, which
 is one of `compiler.arch`, `compiler.os`, `compiler.byte_order` and
 `compiler.build_mode`, by comparing it with one of its atoms.
 
-**Inside a function.** A function body reads no fact directly, and
-`fixed if` cannot begin a statement. Instead:
+**Inside a function.** A function body reads no fact directly, except in
+an array length, which is part of a type [0520], and `fixed if` cannot
+begin a statement. Instead:
 
 - What differs by value branches on a module value like those above.
 - What needs a call that one system lacks is a function declared in each

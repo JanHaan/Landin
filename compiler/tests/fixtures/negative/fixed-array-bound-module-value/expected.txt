@@ -9,10 +9,10 @@ error[L0305]: a `mut` module value can change while the program runs, so it is n
   |
 9 | written: type = [room]u8
   |                  ^^^^
-  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
-error[L0305]: this module value is not a fixed count: its image is not an integer folded from literals, compiler facts and other immutable module integers
+  = note: D136/D438/D1321: an array bound folds integer literals, fixed formals, compiler facts, `sizeof` of a scalar type, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: this module value is not a fixed count: its image is not an integer folded from literals, compiler facts, `sizeof` of a scalar type and other immutable module integers
   --> ../tests/fixtures/negative/fixed-array-bound-module-value/main.ldn:10:16
    |
 10 | truth: type = [flag]u8
    |                ^^^^
-  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+  = note: D136/D438/D1321: an array bound folds integer literals, fixed formals, compiler facts, `sizeof` of a scalar type, immutable module integers and target-independent integer arithmetic; no user routine runs

@@ -3,22 +3,22 @@ error[L0305]: this operator needs an operand width and is not available in a tar
   |
 1 | mut shifted: [2 << 1]u8 = zeroed
   |               ^^^^^^
-  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
-error[L0305]: this is not one of the closed fixed-expression forms
+  = note: D136/D438/D1321: an array bound folds integer literals, fixed formals, compiler facts, `sizeof` of a scalar type, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: `sizeof` folds in a fixed expression for a scalar type only, and this type's size is its checked layout's
   --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:2:17
   |
-2 | mut sized: [2 * sizeof usize]u8 = zeroed
-  |                 ^^^^^^^^^^^^
-  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+2 | mut sized: [2 * sizeof pair]u8 = zeroed
+  |                 ^^^^^^^^^^^
+  = note: D136/D438/D1321: an array bound folds integer literals, fixed formals, compiler facts, `sizeof` of a scalar type, immutable module integers and target-independent integer arithmetic; no user routine runs
 error[L0305]: this operator needs an operand width and is not available in a target-independent fixed expression
-  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:4:13
+  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:9:13
   |
-4 | takes: (a: [3 << 1]u8) -> none =
+9 | takes: (a: [3 << 1]u8) -> none =
   |             ^^^^^^
-  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
-error[L0305]: this is not one of the closed fixed-expression forms
-  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:5:21
-  |
-5 |     mut local: [2 * sizeof usize]u8 = zeroed
-  |                     ^^^^^^^^^^^^
-  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+  = note: D136/D438/D1321: an array bound folds integer literals, fixed formals, compiler facts, `sizeof` of a scalar type, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: `alignof` is not one of the fixed-expression forms; `sizeof` of a scalar type is
+  --> ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn:10:21
+   |
+10 |     mut local: [2 * alignof usize]u8 = zeroed
+   |                     ^^^^^^^^^^^^^
+  = note: D136/D438/D1321: an array bound folds integer literals, fixed formals, compiler facts, `sizeof` of a scalar type, immutable module integers and target-independent integer arithmetic; no user routine runs

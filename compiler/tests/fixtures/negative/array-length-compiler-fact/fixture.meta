@@ -1,9 +1,0 @@
-class: negative
-summary: D437 D438 a compiler fact written inside an array length is L0203, and the note says that an array length reads a module value that holds the fact
-program: program.ldn
-args: ../tests/fixtures/negative/array-length-compiler-fact/program.ldn
-expect: expected.txt
-codes: L0203
-constructs: 0520, 1560
-targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-status: 1

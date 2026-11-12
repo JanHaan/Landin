@@ -1,0 +1,5 @@
+class: positive
+summary: D1321 an array length reading `sizeof usize` or `compiler.word_size` folds at the selected target's width, so on the 32-bit models it is the same type as `[4]u8` and on a 64-bit target as `[8]u8`, whatever the host's width
+program: program.ldn
+constructs: 0520, 1500
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

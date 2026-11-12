@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1321 an array length reads `compiler.word_size` and `sizeof` of a scalar type directly, at module level, in a struct field, in a type alias and in a routine body, and a module integer whose image reads `sizeof` of a scalar is a count; each folds to the selected target's value, so `[sizeof usize]u8` is the same type as `[8]u8` on a 64-bit target and `[4]u8` on Cortex-M0
+program: main.ldn
+status: 42
+constructs: 0520, 1500, 1940
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

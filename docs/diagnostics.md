@@ -741,9 +741,9 @@ p)`, calls `p.start(value, ...)` and is given the value.
 A tool namespace, `compiler`, `assembler` or `linker`, is bound or used in a
 way it does not allow [1560] (D202). Those three are in scope without an
 import and cannot be imported, rebound or given a member they do not have.
-A compiler fact is read in a fixed condition and in a module value (D437),
-never in a routine body: bind it, `fast: bool = compiler.feature.popcnt`, and
-let the body read the binding. `compiler.os` and the other atom facts are read
+A compiler fact is read in a fixed condition, a module value (D437) and an
+array length (D1321), and never as a value in a routine body: bind it, `fast:
+bool = compiler.feature.popcnt`, and let the body read the binding. `compiler.os` and the other atom facts are read
 compared with one of their atoms, `compiler.os == linux`.
 
 ## Types
@@ -881,9 +881,10 @@ unknown fixed name or form, or depend on itself, within one module or through
 several. A fixed condition or option default measures scalar types only: a
 declared type's size, alignment or field offset is measured by
 `compiler.assert`, once checking has laid the type out (D412). An array bound
-may name an immutable module integer whose own image is a count, literals,
-compiler facts and other such integers under `+ - * / %`, but not a `mut` one,
-which the program may write (D438). Change such an expression to one the closed fold can evaluate. A value
+reads literals, fixed formals, integer compiler facts and `sizeof` of a scalar
+type (D1321) under `+ - * / %`, and may name an immutable module integer whose
+own image is such a count, but not a `mut` one, which the program may write
+(D438); `alignof` and `sizeof` of a declared type are not in that fold. Change such an expression to one the closed fold can evaluate. A value
 another module exports, named through that module as `sizes.page`, is known as
 it is in its own module; a field of a record image, an element of an array
 image and a call are not, in either. A module function binding without an

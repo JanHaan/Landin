@@ -1,5 +1,5 @@
 class: negative
-summary: an array length the fold refuses is reported once however many passes fold it, at module level, in a signature and in a routine; `sizeof` and a shift are L0305
+summary: an array length the fold refuses is reported once however many passes fold it, at module level, in a signature and in a routine; a shift, `sizeof` of a struct and `alignof` are L0305, since D1321 folds `sizeof` of a scalar alone
 program: program.ldn
 args: ../tests/fixtures/negative/array-length-refusals-are-reported-once/program.ldn
 expect: expected.txt
