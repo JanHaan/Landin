@@ -1638,7 +1638,9 @@
       "reason": "runtime/core-io-buffered-writer flushes through core/io.memory, failing writes included, here."
     },
     "runtime/buffered-writer-format": {
-      "mode": "execute"
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "At none/off the image needs FLASH 33144 of the 32 KiB profile, over by 376 (.isr_vector 192, .text 32848), and 32780 on the AN505's map, over by 12: D1122's copy of a builder's own bytes before a moved block is released and D1123's count of what a builder has handed on grew core/text's growth, format and truncation by about 2.7 KiB of unoptimized Cortex-M0 code, which gives every IR slot a frame home of its own. Each profile still attempts execution; size/off, size/auto and speed/auto fit in about 27.9 KiB and run, and must pass; this image limit is not runtime evidence."
     },
     "runtime/by-value-records-stay-independent": {
       "mode": "execute"
@@ -3010,6 +3012,8 @@
       "reason": "Firmware has no standard output to print to. runtime/io-write-format-memory writes through write_format here."
     },
     "runtime/io-write-format-memory": {
+      "profile_limit": "selected-image",
+      "reason": "At none/off the image needs FLASH 33048 of the 32 KiB profile, over by 280 (.isr_vector 192, .text 32668): D1122's copy of a builder's own bytes before a moved block is released and D1123's count of what a builder has handed on grew core/text's growth and format by about 1.6 KiB of unoptimized Cortex-M0 code, which gives every IR slot a frame home of its own. Each profile still attempts execution; size/off, size/auto and speed/auto fit in about 28 KiB and run, and must pass, as none/off does on the AN505's map; this image limit is not runtime evidence.",
       "lanes": {
         "esp32c3": {
           "mode": "limit",
@@ -4767,7 +4771,11 @@
       "lanes": {
         "esp32c3": {
           "mode": "limit",
-          "reason": "D698: at none/off and none/all its rv32imc image overflows the esp32c3 lane's 32 KiB of IRAM by 96 and 104 bytes, measured after core/failure's reasons grew; Thumb's text fits the reference's 32 KiB, and every optimized profile runs here."
+          "reason": "D698: at none/off and none/all its rv32imc image overflows the esp32c3 lane's 32 KiB of IRAM by 440 and 448 bytes (FLASH 33208 and 33216, .text 32616 and 32624), measured after D1111's borrow test put an instruction in every routine's stack check and D1124's round_yield, which hands an ending fibre's turn on, grew by 148; Thumb's text fits the reference's 32 KiB, and every optimized profile runs here."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: at none/off and none/all its rv32imac image overflows the sifive-e lane's 32 KiB of flash by 184 and 192 bytes (FLASH 32952 and 32960, .text 32616 and 32624), measured after D1111's borrow test put an instruction in every routine's stack check and D1124's round_yield, which hands an ending fibre's turn on, grew by 148; Thumb's text fits the reference's 32 KiB, and every optimized profile runs here."
         }
       }
     },

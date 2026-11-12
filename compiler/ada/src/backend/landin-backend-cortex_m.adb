@@ -2272,6 +2272,8 @@ package body Landin.Backend.Cortex_M is
          procedure Check_Limit (Bytes : Landin.Targets.Byte_Count);
 
          procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
+            Wrapped : constant String := Fresh;
+            Fits : constant String := Fresh;
          begin
             Emit ("mov r6, sp");
             if Bytes in 1 .. 255 then
@@ -2280,15 +2282,26 @@ package body Landin.Backend.Cortex_M is
                Immediate ("r7", Pattern (Bytes));
                Emit ("subs r6, r6, r7");
             end if;
-            --  A frame larger than the stack pointer's own value borrows,
-            --  and the difference it leaves is above every limit.
-            if Bytes > 0 then
+            if Bytes = 0 then
+               Address ("r7", Stack_Limit);
+               Emit ("ldr r7, [r7]");
+               Emit ("cmp r6, r7");
                Branch ("cc", Limit_Trap);
+            else
+               --  D1111: a frame larger than the stack pointer's own value
+               --  borrows, and the difference it leaves is above every
+               --  limit.  The borrow joins the comparison's own jump to
+               --  the trap, one short branch more: at most a literal pool
+               --  and four instructions lie between it and its label.
+               Emit ("bcc " & Wrapped);
+               Address ("r7", Stack_Limit);
+               Emit ("ldr r7, [r7]");
+               Emit ("cmp r6, r7");
+               Emit ("bcs " & Fits);
+               Put (Wrapped & ":");
+               Long_Jump (Limit_Trap);
+               Put (Fits & ":");
             end if;
-            Address ("r7", Stack_Limit);
-            Emit ("ldr r7, [r7]");
-            Emit ("cmp r6, r7");
-            Branch ("cc", Limit_Trap);
             Limit_Trapped := True;
          end Check_Limit;
          function Array_Length_Of

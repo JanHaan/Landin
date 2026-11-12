@@ -9,8 +9,6 @@
 --  the fake filesystem: written whole, left alone when unchanged, stale
 --  files removed, and nothing replaced when anything is in the way.
 
-with Ada.Execution_Time;
-with Ada.Real_Time;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with GNAT.SHA256;
@@ -20,6 +18,7 @@ with Landin.Devices;
 with Landin.Devices.Projection;
 with Landin.Driver;
 with Landin.Platform;
+with Landin.Platform.Native;
 with Landin.Testing.Fakes;
 with Landin.Targets.Firmware;
 with Landin.Xml;
@@ -1744,10 +1743,13 @@ package body Landin.Tests.Devices_Suite is
    --  as long and a logarithm more; the comparisons each of the three once
    --  made of every item with every other took sixteen.  Processor time is
    --  measured, which other work on the host does not lengthen.
+   --  Deliberate real-host exception: it is this process's own, read
+   --  through the native meter `--build-report` uses, which every pinned
+   --  host answers; Ada.Execution_Time is not supported by Darwin's GNAT.
    procedure A_Large_Svd_Costs_In_Proportion
      (Item : in out Landin.Testing.Context)
    is
-      use type Ada.Execution_Time.CPU_Time;
+      Meter : Landin.Platform.Native.Native_Meter;
 
       Small : constant := 8_000;
       Large : constant := 4 * Small;
@@ -1804,12 +1806,13 @@ package body Landin.Tests.Devices_Suite is
          Policy : constant String := Policy_For (Text);
          Made : Dev.Projection.Result;
          Problem : Dev.Fault;
-         Began : constant Ada.Execution_Time.CPU_Time :=
-           Ada.Execution_Time.Clock;
+         Began : constant Long_Long_Integer :=
+           Meter.Sample.Processor_Microseconds;
          Took : Duration;
       begin
          Dev.Projection.Project (Text, Policy, Made, Problem);
-         Took := Ada.Real_Time.To_Duration (Ada.Execution_Time.Clock - Began);
+         Took := Duration (Meter.Sample.Processor_Microseconds - Began)
+           / 1_000_000;
          Landin.Testing.Check
            (Item, Problem.Kind = Dev.No_Fault
             and then (for some Output of Made.Outputs =>
