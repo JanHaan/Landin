@@ -613,7 +613,12 @@ package body Landin.Diagnostics.Explanations is
                & "that returns a plain pointer does not widen it into a un"
                & "ion of several atoms and that pointer (D235): the refusa"
                & "l names the one-atom union to recover into, whose value "
-               & "widens into the larger one (D874).",
+               & "widens into the larger one (D874). A function value conv"
+               & "erts to an address only when it is a C function value an"
+               & "d only to `usize`, `usize(f)` (D1343): a function in Lan"
+               & "din's own convention has no address C could call, and an"
+               & "other integer type converts that `usize` after it, `u64("
+               & "usize(f))`.",
             when Catalogue.Not_Definitely_Assigned =>
                "Required storage is not definitely assigned at a read or"
                & " an exit [1910]. A read needs the place assigned on ever"

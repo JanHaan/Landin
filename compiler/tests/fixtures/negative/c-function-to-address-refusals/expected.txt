@@ -1,0 +1,40 @@
+error[L0301]: only a C function value converts to its address
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:17:26
+   |
+17 |     named: usize = usize(subtract)
+   |                          ^^^^^^^^
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:17:20
+   |
+17 |     named: usize = usize(subtract)
+   |                    ^^^^^ the integer type applied here
+  = note: [1975]: an extern(c) function's address is the one C calls; Landin's own convention is no ABI, so its functions have none to give
+error[L0301]: only a C function value converts to its address
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:18:25
+   |
+18 |     held: usize = usize(kept)
+   |                         ^^^^
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:18:19
+   |
+18 |     held: usize = usize(kept)
+   |                   ^^^^^ the integer type applied here
+  = note: [1975]: an extern(c) function's address is the one C calls; Landin's own convention is no ABI, so its functions have none to give
+error[L0301]: a C function value converts to a `usize` address, not `u64`
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:19:21
+   |
+19 |     wide: u64 = u64(add)
+   |                     ^^^
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:19:17
+   |
+19 |     wide: u64 = u64(add)
+   |                 ^^^ the integer type applied here
+  = note: [1975]: convert the address after it, as `u64(usize(f))`
+error[L0301]: a C function value converts to a `usize` address, not `u32`
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:20:23
+   |
+20 |     narrow: u32 = u32(c)
+   |                       ^
+  --> ../tests/fixtures/negative/c-function-to-address-refusals/program.ldn:20:19
+   |
+20 |     narrow: u32 = u32(c)
+   |                   ^^^ the integer type applied here
+  = note: [1975]: convert the address after it, as `u32(usize(f))`

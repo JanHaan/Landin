@@ -1,0 +1,37 @@
+--  D1343: `usize(f)` of a C function value is the address of its code, the
+--  word C keeps for the function: for a function C defines, imported by
+--  name, for one this program defines `extern(c)`, and for either kept in
+--  a binding of the function type.  C is given each address as an
+--  integer, says whether it is its own function pointer and calls it
+--  through that pointer, and D335's conversion back makes the address a
+--  callable value again.
+adder: type = extern(c) (a: i32, b: i32) -> (r: i32)
+
+extern(c) add: (a: i32, b: i32) -> (r: i32)
+extern(c) is_add: (address: usize) -> (yes: i32)
+extern(c) call_at: (address: usize, a: i32, b: i32) -> (r: i32)
+
+extern(c) subtract: (a: i32, b: i32) -> (r: i32) =
+    r = a - b
+end subtract
+
+public main: () -> (code: i32) =
+    code = 1
+    if is_add(usize(add)) <> 1 then return end if
+    code = 2
+    kept: adder = add
+    if usize(kept) <> usize(add) then return end if
+    code = 3
+    if call_at(usize(subtract), 50, 8) <> 42 then return end if
+    code = 4
+    other: adder = subtract
+    if is_add(usize(other)) <> 0 then return end if
+    code = 5
+    back: adder = adder(usize(subtract))
+    if back(50, 8) <> 42 or usize(back) <> usize(subtract) then
+        return
+    end if
+    code = 6
+    if usize(add) == 0 then return end if
+    code = 42
+end main

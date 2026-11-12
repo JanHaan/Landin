@@ -777,7 +777,11 @@ no array the report stands on the `[` and says the line was continued, and
 the value in parentheses, `(name)`, lets the `[` begin a value (D1191). An atom `else` on a
 call that returns a plain pointer does not widen it into a union of several
 atoms and that pointer (D235): the refusal names the one-atom union to
-recover into, whose value widens into the larger one (D874).
+recover into, whose value widens into the larger one (D874). A function
+value converts to an address only when it is a C function value and only
+to `usize`, `usize(f)` (D1343): a function in Landin's own convention has no
+address C could call, and another integer type converts that `usize` after
+it, `u64(usize(f))`.
 
 ```landin
 flag: bool = true

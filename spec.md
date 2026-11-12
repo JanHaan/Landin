@@ -1953,8 +1953,13 @@ because a function value holds no reference (L0339). Only the C convention
 is made so: a native Landin function type applied to an address is refused
 with L0301, since code outside the program is reached only through its C
 entry points, and so are an integer of another type and a pointer, which
-`usize(p)` converts first. Nothing converts a function value back to an
-address.
+`usize(p)` converts first. The way back is `usize(f)` (D1343): a C function
+value, written as a declared `extern(c)` function or kept in a binding of a
+C function type, converts to the address of its code, the word C keeps for
+that function pointer, with its bits unchanged and no origin. Only a C
+function value converts, and only to `usize`; a function value in Landin's
+own convention, or the conversion to another integer type, is L0301, and
+the address of an interrupt or naked function is no C function's either.
 
 The selected hosted ABIs are Linux and FreeBSD x86-64 SysV AMD64 LP64,
 Darwin arm64 AAPCS64 with Apple's platform differences, both conventions with
@@ -34354,6 +34359,46 @@ provide. All were declined.
 **Pinned by** `runtime/sleep-signal-sleeps-on`, whose handler is
 installed this way and runs once, on every hosted target. Darwin's and
 FreeBSD's records were written by reading and are run by their lanes.
+D1344 later removes the second view, once D1343 converts a C function to
+its address.
+
+### D1344 — `signal_action.handler` is the word C's member holds, and the second view is gone
+
+**The discrepancy:** D1280 gave `platform/libc` two records for C's
+`struct sigaction`, `signal_action` with its handler a `u64` and
+`handler_action` with it a `signal_handler`, and `sigaction_handler` to
+install the second through a pointer cast, because nothing turned a
+function into the word the first holds. D1343 now does.
+
+**Chosen:** each system's `signal_action.handler` is a `usize`, the
+pointer-wide word C's member is, and `sig_dfl` and `sig_ign` are `usize`
+too. A handler is written there as its address: `libc.handling(handler,
+flags)` makes the `signal_action` whose handler is `usize(handler)`, with
+no signal blocked beyond the one it handles, and `libc.sigaction` installs
+it, the one declaration of the C function. `handler_action` and
+`sigaction_handler` are removed. The record keeps its `zeroed` image, so a
+previous action is read into a zeroed record and compared with `sig_dfl`
+and `sig_ign` as before, and `platform/posix`'s readers of a previous
+action are unchanged. The member is a word and not a `signal_handler`
+because `SIG_DFL` is zero, which no function value can be (D335 traps it)
+and which leaves a record holding one with no zero image (L0328); naming
+the dispositions as function values would make two constants that trap or
+lie. The layout is unchanged on every hosted system, all of them LP64.
+The static Linux program still cannot install a handler, for D1280's
+reason: x86-64's `rt_sigaction` needs a restorer the library cannot write.
+
+**The alternatives:** keeping the second view, which D1280 took only for
+want of the conversion; the member typed `signal_handler` with
+`sig_dfl` and `sig_ign` as function values made from 0 and 1, which the
+first traps and the record's zero image refuses; and keeping the member a
+`u64`, which makes every handler `u64(usize(f))` for a word that is
+pointer-wide in C.
+
+**Pinned by** `runtime/sleep-signal-sleeps-on`, whose handler is installed
+through `signal_action` and `sigaction`, and whose record is checked to hold
+the handler's address, on Linux x86-64, arm64 and RV64 under QEMU; Darwin's
+and FreeBSD's records were edited by reading and are run by their lanes.
+
 ### D1281 — A program that reads the argument root before it exists is told the call it lacks
 
 **The tour said** nothing. A C `main` that drives Landin exports calls
@@ -34825,6 +34870,47 @@ address without an origin; and converting back, which nothing needs.
 
 **Pinned by** `abi/c-function-from-address`, `abi/c-function-from-zero-address-traps`,
 `negative/c-function-from-address-refusals` and `runtime/linux-vdso`.
+
+### D1343 — A C function value converts to its address with `usize(f)`
+
+**The discrepancy:** D335 made a C function value from an address and
+declined the way back, which nothing needed. A C record member that holds
+either a function or a word, `struct sigaction`'s `sa_handler` with its
+`SIG_DFL` and `SIG_IGN`, then had no Landin type that took both: D1280 laid
+the record out twice, once with the member a function and once a word, and
+cast between the two through a pointer.
+
+**Chosen:** an integer conversion applied to a C function value, `usize(f)`,
+gives the address of the function's code: the bits the value already is,
+and the word a C `(uintptr_t)f` gives, Thumb's low bit included on
+Cortex-M. `f` is anything of a C function type: a declared `extern(c)`
+function, whether C or this program defines it, a binding, field or
+parameter of a C function type, or a value D335 made from an address,
+whose `usize` is that address again. The result is a `usize` with no
+origin [0810], as `usize(p)` of a pointer is, and never zero, since no
+function value is. It lowers to the IR's existing integer conversion of a
+word to the same width, a move on every backend, so the IR gains no
+operation. A function value in Landin's own convention is refused with
+L0301, since its convention is no ABI and its address is nothing C could
+call; so is the conversion of a C function value to any integer type but
+`usize`, whose note says to convert the address after it, `u64(usize(f))`.
+Nothing converts a function to a pointer: `ptr(usize(f))` makes one
+through the integer, as any address does, and a pointer to code is no
+value Landin reads.
+
+**The alternatives:** a conversion to any integer type, as a pointer has,
+which makes a narrowing conversion check an address that `usize` already
+holds; a `ptr` conversion of the function, which gives a pointer whose
+pointee is code and whose loads mean nothing; admitting Landin-convention
+functions, which hands C an address it cannot call; and a union of a C
+function and a word, which needs a representation for the word that no
+function value has, since zero is none.
+
+**Pinned by** `abi/c-function-to-address`, whose C peer recognises the
+address of its own function and calls the address of one the program
+defines, on every product target; `negative/c-function-to-address-refusals`;
+and `runtime/sleep-signal-sleeps-on`, whose handler is installed by its
+address (D1344).
 
 ### D336 — A loaded library is a handle, and its function values dangle once it closes
 

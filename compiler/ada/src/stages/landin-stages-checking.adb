@@ -27297,6 +27297,66 @@ package body Landin.Stages.Checking is
                            Landin.Checking.Refuse
                              (Types.all, Of_Tree, Node);
                            return Kept (Ty.Ill_Typed);
+                        elsif Got = Ty.Function_Value then
+                           --  D1343: a C function value is the address
+                           --  of its code, the word C keeps for it, so
+                           --  `usize(f)` gives that address, the inverse
+                           --  of D335's `adder(address)`.  Landin's own
+                           --  convention is no ABI, so its function
+                           --  values have no address C could use.
+                           declare
+                              Held_By : constant
+                                Landin.Checking.Signature_Id :=
+                                  Landin.Checking.Signature_Of
+                                    (Types.all, Of_Tree, Value);
+                           begin
+                              if Held_By = Landin.Checking.No_Signature
+                              then
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              elsif not Landin.Checking.Signature_Uses_C_ABI
+                                (Types.all, Held_By)
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "only a C function value"
+                                      & " converts to its address",
+                                    Note    => "[1975]: an extern(c)"
+                                      & " function's address is the one C"
+                                      & " calls; Landin's own convention"
+                                      & " is no ABI, so its functions"
+                                      & " have none to give",
+                                    Related => Syn.Origin (Of_Tree, Callee),
+                                    Because => "the integer type applied"
+                                      & " here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              elsif Conversion /= Ty.Usize then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "a C function value converts"
+                                      & " to a `usize` address, not "
+                                      & Shown (Conversion),
+                                    Note    => "[1975]: convert the address"
+                                      & " after it, as `"
+                                      & Ty.Spelling (Conversion)
+                                      & "(usize(f))`",
+                                    Related => Syn.Origin (Of_Tree, Callee),
+                                    Because => "the integer type applied"
+                                      & " here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              end if;
+                           end;
                         elsif Got /= Ty.Ill_Typed
                           and then Got
                             not in Ty.Integer_Name | Ty.Float_Name | Ty.Bool
