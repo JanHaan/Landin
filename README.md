@@ -309,7 +309,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R12.70 — Code and constants in RAM from a flash boot (planned).**
+**Next roadmap item: R13.80 — A seeded hash for maps (planned).**
 
 ## Questions, bugs and ideas
 
