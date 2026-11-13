@@ -256,7 +256,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Current roadmap work: R12.80 — Emit what firmware reaches.**
+**Next roadmap item: R12.70 — Code and constants in RAM from a flash boot (planned).**
 
 ## Versions
 
