@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "0b657c2cd75d553229e141f85d0055f3162ff1ec5c219956101e0431ae7ff74c",
+  "image_sha256": "f59b2e77f69b6f4fc3a52c407e45fb1039f6794a0f556827c0477eb65a41d9fe",
   "image_name": "board.elf",
   "verdicts": {
     "boot": {
@@ -30,7 +30,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 9186,
+      "timer_events": 9336,
       "echoed": 11202,
       "sent": 11572
     },
@@ -45,7 +45,7 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "f41ad2093af32d9178aa687ca043cb9014d963194dc28d83618b4100aafc6d9e",
+  "uart_sha256": "e64372667d8b7cc22721691a999246d1a63f8dd37b83b6644c59384dc5c6f07f",
   "mode": "ram",
   "warm_load": {
     "board": "rp2040",
@@ -55,7 +55,7 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "0b657c2cd75d553229e141f85d0055f3162ff1ec5c219956101e0431ae7ff74c",
+    "elf_sha256": "f59b2e77f69b6f4fc3a52c407e45fb1039f6794a0f556827c0477eb65a41d9fe",
     "entry": 536871105,
     "flash_written": false,
     "format_version": 1,
@@ -73,10 +73,10 @@
     "status": "passed",
     "vector": 536870912
   },
-  "seconds": 17.721,
+  "seconds": 17.847,
   "kernel_usb": {
-    "since": 1794060570.2817876,
-    "until": 1794060587.9836009,
+    "since": 1794564730.8136075,
+    "until": 1794564748.6409533,
     "lines": [],
     "status": "captured"
   },
@@ -93,7 +93,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "000023e2",
+      "m": "00002478",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",

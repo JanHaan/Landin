@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "7ce94b5747499e7fbe7b33b4cbd018acee1f7462f470145afe215b613d54290f",
+  "image_sha256": "fc421cdada6dbc7951b2782bd060c069b28f5d8f6b9f3d77fa163087e9872837",
   "image_name": "board.elf",
   "second_stage_crc32": "e5e96a65",
   "second_stage_sha256": "bb2162f7be7e4aeb609c398074206139e53a83696702a404021297271f3cd140",
@@ -33,7 +33,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 7086,
+      "timer_events": 7050,
       "echoed": 11202,
       "sent": 11572
     },
@@ -48,7 +48,7 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "e706fe9b7ca9084dad5fd66f9053df01ef64938c4c640cbdb45e021b173cd576",
+  "uart_sha256": "fd58529664f83bc4b15d0b7806a50b9e9cadfa4a21448afbd0231f9969ef8c91",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -60,10 +60,10 @@
       "elf_sha256": "ffcf113e64faf59521ad10732e15531fb775661ae6c35a0195accd06764f5add"
     }
   },
-  "seconds": 37.042,
+  "seconds": 36.887,
   "kernel_usb": {
-    "since": 1794060594.3026466,
-    "until": 1794060631.3282897,
+    "since": 1794564756.3665924,
+    "until": 1794564793.2348514,
     "lines": [],
     "status": "captured"
   },
@@ -80,7 +80,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00001bae",
+      "m": "00001b8a",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",

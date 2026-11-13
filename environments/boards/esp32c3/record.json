@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "455db423bfc745eaa3a6fdf19c1c345317bbd498ef08b03c81db8db91f13aa18",
+  "image_sha256": "20dbfbbc59b51ee50eeb21054b548321b9ce0f2ff5cf372f09cd9c9140fb4feb",
   "image_name": "board.elf.bin",
-  "elf_sha256": "778101d1bb0e9ca627d90cb30d88d14d4866c92d9f8e7f1aa7f5a2e1f64a7630",
+  "elf_sha256": "fb8f697ba41f0da6f1d82bbc4cfe9ab0701ac035b3e93a8003f9613e202f2113",
   "image": {
     "chip": 5,
     "revisions": [
@@ -12,11 +12,11 @@
     "entry": "0x40380000",
     "segments": [
       "0x40380000+0x180",
-      "0x40380180+0x76c8",
-      "0x40387848+0x54"
+      "0x40380180+0x75e0",
+      "0x40387760+0x54"
     ],
-    "checksum": "0x21",
-    "sha256": "454103104603e2c0dcbf2457f9012b48258bec90c76b22adabee33fc444fdd25"
+    "checksum": "0x0c",
+    "sha256": "58ec044c627f6167ebe24c9d618338f5d1aa61cab57784f1cfebf45cec7f53f3"
   },
   "instructions": [],
   "flash": {
@@ -28,8 +28,8 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40380000+0x180",
-      "0x40380180+0x76c8",
-      "0x40387848+0x54"
+      "0x40380180+0x75e0",
+      "0x40387760+0x54"
     ],
     "entry": "0x40380000"
   },
@@ -68,8 +68,8 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 4021,
-      "receive_interrupts": 4742,
+      "timer_events": 3512,
+      "receive_interrupts": 4747,
       "echoed": 3014,
       "sent": 3614
     },
@@ -88,7 +88,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4744,
+    "entries": 4749,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -96,9 +96,9 @@
   },
   "readback": [
     "0x40380000+0x180",
-    "0x40380180+0x76c8"
+    "0x40380180+0x75e0"
   ],
-  "uart_sha256": "a557b23398991074bbe6ecdd3344d75355899138a9380a0f757c07a2b069dd9e",
+  "uart_sha256": "1270e5b6c5ee494a14e255056c28339704d45e1b6d3b1379b4f3f7e6165050f8",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -110,33 +110,33 @@
       "elf_sha256": "9684a096e16bb273bc4c4021026add185116f31a5bdf1a23f6311351f676b5ae"
     }
   },
-  "seconds": 27.745,
+  "seconds": 27.263,
   "kernel_usb": {
-    "since": 1794506649.1943972,
-    "until": 1794506676.9143598,
+    "since": 1794565050.1317003,
+    "until": 1794565077.3673859,
     "lines": [
       {
-        "time": 1794506653.220715,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 96"
+        "time": 1794565054.136741,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 67"
       },
       {
-        "time": 1794506656.176712,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 97 using xhci_hcd"
+        "time": 1794565057.076682,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 84 using xhci_hcd"
       },
       {
-        "time": 1794506656.276705,
+        "time": 1794565057.179523,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       },
       {
-        "time": 1794506672.873007,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 97"
+        "time": 1794565073.276702,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 84"
       },
       {
-        "time": 1794506675.808681,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 98 using xhci_hcd"
+        "time": 1794565076.208691,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 85 using xhci_hcd"
       },
       {
-        "time": 1794506675.912712,
+        "time": 1794565076.308713,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       }
     ],
@@ -159,8 +159,8 @@
       "tag": "t",
       "h": "00000bc7",
       "c": "00000002",
-      "i": "00001288",
-      "m": "00000fe2",
+      "i": "0000128d",
+      "m": "00000de8",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",
@@ -180,7 +180,6 @@
     "hub-wait",
     "hub-status",
     "power-on",
-    "hub-wait",
     "hub-wait",
     "jtag-trap-cause",
     "jtag-trap-pc",

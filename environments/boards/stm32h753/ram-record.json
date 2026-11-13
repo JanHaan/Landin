@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "8ad74e4301dc608da466537920d47ff63d321856521259638d4910e07f1a7438",
+  "image_sha256": "87f0364f80ee5c4ce5ea4003747f702567b751155752f5425e6c3e9dd76e0909",
   "image_name": "board.elf",
   "image": {
     "float_unit": "passed",
@@ -15,7 +15,7 @@
   },
   "verdicts": {
     "boot": {
-      "rcc_rsr": 0,
+      "rcc_rsr": 16646144,
       "vtor": 603979776,
       "cpacr": 15728640,
       "ccr": 262656,
@@ -113,12 +113,12 @@
   "swd": {
     "handled": 12014,
     "recoveries": 3,
-    "dma_entries": 48,
-    "usart_entries": 140,
+    "dma_entries": 47,
+    "usart_entries": 142,
     "s0ndtr": 229,
     "s0cr": 1049617
   },
-  "uart_sha256": "f8986f2b1e450cc86b9b2ebd3e670623952e1d9b021482f571f49da1f21c75f5",
+  "uart_sha256": "f91ddb6f7a016cfe2a3277966406ea763e310829885e08efaac8f841a559d218",
   "mode": "ram",
   "warm_load": {
     "board": "stm32h753",
@@ -128,13 +128,13 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "8ad74e4301dc608da466537920d47ff63d321856521259638d4910e07f1a7438",
+    "elf_sha256": "87f0364f80ee5c4ce5ea4003747f702567b751155752f5425e6c3e9dd76e0909",
     "entry": 603997673,
     "flash_written": false,
     "format_version": 1,
     "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
     "mode": "warm",
-    "previous_pc": 604001330,
+    "previous_pc": 134218572,
     "segments": [
       {
         "address": 603979776,
@@ -146,10 +146,10 @@
     "status": "passed",
     "vector": 603979776
   },
-  "seconds": 22.453,
+  "seconds": 22.393,
   "kernel_usb": {
-    "since": 1794060771.9773316,
-    "until": 1794060794.412582,
+    "since": 1794564941.1970737,
+    "until": 1794564963.573114,
     "lines": [],
     "status": "captured"
   },
@@ -157,7 +157,7 @@
   "frames": [
     {
       "tag": "b",
-      "r": "00000000",
+      "r": "00fe0000",
       "v": "24000000",
       "a": "00f00000",
       "c": "00040200",
@@ -171,9 +171,9 @@
       "c": "00000003",
       "d": "00000002",
       "w": "0000002f",
-      "k": "00000030",
-      "m": "00003eb3",
-      "u": "0000008c",
+      "k": "0000002f",
+      "m": "00003e71",
+      "u": "0000008e",
       "p": "00000037",
       "n": "000000e5",
       "e": "0000001b",

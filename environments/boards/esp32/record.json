@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "8c80a8acc0ff31874a07b2e8fb933c747087e6caaf5a6d84f1a5325b057a50f4",
+  "image_sha256": "e293e3f615758370b125dd83432d3c7f72c294691ab9601615656eeb4a5a7a62",
   "image_name": "board.elf.bin",
-  "elf_sha256": "cbb27dfac8d36327d7a46e1f5a6eb6a3662de45f27ac14b0137156689782780f",
+  "elf_sha256": "d49b5ca53074f070e1c4b34c62b10010a66de6e4c6eea93349792ed151531bf6",
   "image": {
     "chip": 0,
     "revisions": [
@@ -12,12 +12,12 @@
     "entry": "0x40080400",
     "segments": [
       "0x40080000+0x404",
-      "0x40080404+0xe0b4",
+      "0x40080404+0xdf7c",
       "0x3ffb0000+0x28",
       "0x3ffb0028+0x58"
     ],
-    "checksum": "0x43",
-    "sha256": "cd6c5823444b494fed31399cc004e74da2a5bd7249a8d35f7fc7ae5fdc35f153"
+    "checksum": "0x75",
+    "sha256": "c0ba8b2168c0ffc069cc881e220ef113e4777fb3dc585affd850ad30cdb2e46d"
   },
   "instructions": [
     "call8",
@@ -34,8 +34,8 @@
     "boot_reason": 1,
     "app_state": 2,
     "timer_events": [
-      878,
-      1308
+      842,
+      1256
     ],
     "trap_count": 0,
     "startup_reset": "CHIP_PU",
@@ -48,7 +48,7 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40080000+0x404",
-      "0x40080404+0xe0b4",
+      "0x40080404+0xdf7c",
       "0x3ffb0000+0x28",
       "0x3ffb0028+0x58"
     ],
@@ -71,8 +71,8 @@
       "indicator_after_0": 0
     },
     "interrupts": {
-      "receive_mcause": "0x18042",
-      "timer_mcause": "0x818040"
+      "receive_pending": "0x18042",
+      "timer_pending": "0x818040"
     },
     "atomics": {
       "x": 116,
@@ -94,7 +94,7 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 4933,
+      "timer_events": 4791,
       "receive_interrupts": 3117,
       "echoed": 3014,
       "sent": 3614
@@ -156,7 +156,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 3382,
+    "entries": 3381,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -164,10 +164,10 @@
   },
   "readback": [
     "0x40080000+0x404",
-    "0x40080404+0xe0b4",
+    "0x40080404+0xdf7c",
     "0x3ffb0000+0x28"
   ],
-  "uart_sha256": "b05976d52248cea4db028ee52def5189b812cadeac3e1910bccf9bde06527638",
+  "uart_sha256": "e0b000c13119daf4f31c5ffb5e67a72e00ed875420d689f07edb1b6190e05362",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -187,33 +187,33 @@
       }
     }
   },
-  "seconds": 32.291,
+  "seconds": 28.84,
   "kernel_usb": {
-    "since": 1794488832.4000905,
-    "until": 1794488864.6649177,
+    "since": 1794565203.3212543,
+    "until": 1794565232.1335242,
     "lines": [
       {
-        "time": 1794488839.770883,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 109"
+        "time": 1794565208.674931,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 75"
       },
       {
-        "time": 1794488842.872405,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 116 using xhci_hcd"
+        "time": 1794565211.268677,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 92 using xhci_hcd"
       },
       {
-        "time": 1794488842.978359,
+        "time": 1794565211.372273,
         "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
       },
       {
-        "time": 1794488860.531128,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 116"
+        "time": 1794565228.002944,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 92"
       },
       {
-        "time": 1794488863.11268,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 117 using xhci_hcd"
+        "time": 1794565230.580677,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 93 using xhci_hcd"
       },
       {
-        "time": 1794488863.218262,
+        "time": 1794565230.684703,
         "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
       }
     ],
@@ -239,8 +239,8 @@
       "tag": "t",
       "h": "00000c9a",
       "c": "00000002",
-      "i": "00000d36",
-      "m": "00001a85",
+      "i": "00000d35",
+      "m": "000019f9",
       "p": "00018042",
       "q": "00818040",
       "k": "00000064",
