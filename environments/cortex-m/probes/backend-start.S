@@ -43,7 +43,11 @@
 .section .embedded_block,"a",%progbits
 .space LANDIN_BOOT_SUFFIX
 #endif
-.text
+/* Reset's own section, which a derived script that copies the text keeps
+ * with the vector table (D1359), and otherwise links with the rest of the
+ * text, where `.text` would be.  A profile that copies the text is linked
+ * here and never run, so the harness copies none. */
+.section .text.landin_firmware_reset,"ax",%progbits
 .global _landin_firmware_reset
 .thumb_func
 _landin_firmware_reset:
