@@ -1079,16 +1079,15 @@ either the entry module's directory or its source files and never both
 The driver refuses a known compiler-framed routine larger than the selected
 stack reservation, counting its saved registers and reserved homes. This
 per-routine check does not bound stack use through calls or interrupt nesting.
-`--stack-report=PATH` has a row for every routine the compiler emitted, which
-in a firmware program is more than the image holds (D467). Only a program
-with a public `main` leaves out what it cannot reach (D296); a firmware
-program has none, so every routine of every module it imports is emitted,
-each in its own section, and the link's `--gc-sections` then drops the ones
-nothing reaches (D303). A firmware that imports `core/text` for one routine
-therefore lists the module's other routines too, `doubling_enlarge` and
-`decimal_u32` among its openings, though none of them is in the image. Read
-the rows of the entry, the handlers and the routines they call; `OUTPUT.map`
-beside the image lists the sections the link discarded.
+A firmware build is lowered from what its image starts from (D1358): the
+`--firmware-entry` routine and `panic_handler`, the handlers its vector slots
+take, its placed declarations and boot stage, its public `extern(c)`
+definitions and those with a link symbol, and what an `assembler.block`
+names, and what those reach. A
+routine nothing enters, beside the entry or in an imported module, is not
+emitted, so the assembly, `--stack-report=PATH`'s rows (D467) and the build
+report hold the routines the image does. Assembly without
+`--firmware-entry`, for an object another link takes, keeps everything.
 The vector image has the description's word count at its boot address, the
 start of the region it places `vectors` in, after RP2040's 256-byte
 second-stage slot for `rp2040-boot2` (D545), which holds the description's

@@ -309,7 +309,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R12.80 — Emit what firmware reaches (planned).**
+**Current roadmap work: R12.80 — Emit what firmware reaches.**
 
 ## Questions, bugs and ideas
 

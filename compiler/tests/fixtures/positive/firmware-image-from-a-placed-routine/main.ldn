@@ -1,0 +1,20 @@
+--  D1358: a routine placed in a section of its own is a root of the
+--  image, which a linker script or a debugger may enter, and so is what
+--  it calls; a routine beside it that nothing calls is not lowered.
+mut level: u32 = 0
+
+raise: (by: u32) -> none =
+    level += by
+end raise
+
+fixed if compiler.arch == cortex_m0 then
+    link(section: ".ramtext.fast") fast: () -> none =
+        raise(2)
+    end fast
+end if
+
+unused: () -> none =
+    raise(3)
+end unused
+
+start: () -> none = end start

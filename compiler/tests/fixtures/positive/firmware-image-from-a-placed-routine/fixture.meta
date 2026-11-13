@@ -1,0 +1,9 @@
+class: positive
+summary: D1358 a Cortex-M0 firmware image is lowered with a routine placed in a section of its own and the routine it calls, and not with a routine nothing calls
+program: main.ldn
+root: ../../../../..
+args: --target=cortex-m0 --firmware-entry=start
+expect: expected.txt
+status: 0
+constructs: 1650, 1990
+targets: cortex-m0

@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/firmware-image-from-a-placed-routine and wrote nothing; build it with `refine compile --target=cortex-m0 --firmware-entry=start --root=../tests/fixtures/positive/firmware-image-from-a-placed-routine/../../../../.. ../tests/fixtures/positive/firmware-image-from-a-placed-routine -o firmware-image-from-a-placed-routine`

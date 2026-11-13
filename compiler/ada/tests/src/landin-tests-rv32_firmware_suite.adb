@@ -991,12 +991,14 @@ package body Landin.Tests.RV32_Firmware_Suite is
         & LF);
 
       --  D680, [1995]: with prepared stacks the stub keeps the limit's
-      --  cell at zero while the handler runs, in an 80-byte frame.
+      --  cell at zero while the handler runs, in an 80-byte frame.  The
+      --  entry does not call `go`, so it is kept to be in the image
+      --  (D1358).
       Assembly_Of ("", At_Slot ("7")
         & "mut stack: [256]u8 = zeroed" & LF
         & "first: (argument: usize) -> noreturn =" & LF
         & "    loop do" & LF & "    end loop" & LF & "end first" & LF
-        & "public go: () -> none =" & LF
+        & "link(keep) go: () -> none =" & LF
         & "    _ = compiler.stack_prepare(stack[0..<128], first,"
         & " usize(addr stack[128]))" & LF
         & "end go" & LF, Text, Said);

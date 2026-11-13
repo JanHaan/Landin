@@ -943,10 +943,10 @@ process ignores SIGPIPE and gives its children the default back.
   compute becomes a choice (D338).
 - **Reachability.** A program with a public `main` lowers, emits and
   assembles only the routines it can reach, so it pays for the library it
-  calls rather than everything it imports. A firmware program emits every
-  routine of the modules it imports, each in a section of its own, and its
-  link drops the ones the image does not reach
-  ([Cortex-M firmware images](targets.md)).
+  calls rather than everything it imports, and a firmware image only those
+  its entry, handlers, placed declarations, boot stage and exported C
+  definitions reach, so its assembly and stack report hold what the image
+  does (D296, D1358, [Cortex-M firmware images](targets.md)).
 - `./scripts/quality.sh` measures the objects a built compiler produces, and
   [the Benchmark Game, measured](benchmarks.md) compares five ports, their
   running and their compile times, with seven other languages.

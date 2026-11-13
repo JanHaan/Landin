@@ -1733,7 +1733,7 @@ oracle.
 
 ### R12.80 — Emit what firmware reaches
 
-Status: planned
+Status: active
 Depends on: R13.79
 
 A program with a public `main` emits only the routines it reaches (D296). A
@@ -4559,6 +4559,8 @@ SR-1100, SR-1103, SR-1115, SR-1116, SR-1212, SR-1231, SR-1114.
 | SR-1256 | Release readiness | probe-rs single-steps a RISC-V hart before every resume, even after a halt the debugger asked for, and relies on `dcsr.stepie=0` to keep interrupts out of the step; the ESP32-C3 takes a pending timer interrupt inside the step anyway, which disturbed the firmware the board check read until D1254 parked the C3 first (82 of 1,124 steps entered an interrupt on the old firmware). Met finding the C3 cross-check's failures in R13.79. | The next probe-rs pin bump, or a probe-rs pull request when the maintainer asks for one. | The step taken with interrupts masked on such a core, or not taken after a requested halt. | open |
 | SR-1257 | Release readiness | The ESP32-C5's cross-check reads a running hart through the same halting probe-rs sessions that disturbed the C3 before D1254; it has never been seen to fail, and whether its single step honours `stepie` is unmeasured. Met beside SR-1256 in R13.79. | The next item touching the C5 port or the ESP oracle. | The step's interrupt entry measured on the C5, and the C5 parked as the C3 is if it takes them. | open |
 | SR-1258 | Usability | `probe-rs read` looks like a passive memory read, and the Arm boards' READMEs say their counters are read without halting the core, but on a RISC-V target each call halts and single-steps the core about five times; the board guide does not say so. Met finding the C3 cross-check's failures in R13.79. | The next edit of `environments/boards/README.md`. | The guide saying what a probe read does to a running RISC-V core. | open |
+| SR-1259 | Usability | `./scripts/dev-test.sh --record=lowering` ends "could not write compiler/tests/lowering.ir" and nothing else when a positive fixture fails to lower, so it reads as a filesystem fault; only running `--case='lowering/the recorded corpus is current'` names the fixture and its report. Met in R12.80 recording a new firmware fixture. | The next change to `Record_Artefact` in `compiler/ada/tests/src/landin-tests-lowering_suite.adb` or to the test program's record mode. | Record mode printing each problem that kept it from writing, as the case does. | open |
+| SR-1260 | Usability | A positive fixture is lowered for `compiler/tests/lowering.ir` without the reference description `refine` gives a Cortex-M0 program that imports none, so a fixture with a `link(vector:)` handler that `refine` accepts fails there with L0518 until it imports `platform/cortex_m/reference` itself; the README's account of the recording does not say so. Met in R12.80 adding `positive/firmware-image-from-a-handler`. | The next change to how `landin-tests-lowering_suite.adb` loads a fixture, or to D543's implicit reference. | The recording giving a firmware fixture the description `refine` gives it, or the README saying it does not. | open |
 
 ## Retained positions
 

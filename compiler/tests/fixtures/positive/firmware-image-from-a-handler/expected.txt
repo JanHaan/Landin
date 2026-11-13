@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/firmware-image-from-a-handler and wrote nothing; build it with `refine compile --target=cortex-m0 --firmware-entry=start --root=../tests/fixtures/positive/firmware-image-from-a-handler/../../../../.. ../tests/fixtures/positive/firmware-image-from-a-handler -o firmware-image-from-a-handler`

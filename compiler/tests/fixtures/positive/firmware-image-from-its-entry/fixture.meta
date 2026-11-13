@@ -1,0 +1,9 @@
+class: positive
+summary: D1358 a Cortex-M0 firmware image whose entry calls two routines of core/text is lowered with those routines and what they call alone, and a routine beside its entry that nothing reaches is not lowered
+program: main.ldn
+root: ../../../../..
+args: --target=cortex-m0 --firmware-entry=start
+expect: expected.txt
+status: 0
+constructs: 1990
+targets: cortex-m0

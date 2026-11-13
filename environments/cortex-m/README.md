@@ -1598,9 +1598,10 @@ fibre and 1,340 on the main stack. When the wrapper was introduced (D511),
 the compiler of that revision used 22,492 and 19,916 to 19,944 bytes of
 flash with the tick written over the builtins directly, and painted the
 main stack to 1,472 and 1,248, against its own 23,268 and 20,632 to 20,660
-with the wrapper: a firmware image keeps every scalar's cell entries, since
-a program without a public `main` keeps everything (D296), and the
-handler's two calls deepen the main stack. Every profile fits the 32 KiB
+with the wrapper: a firmware image then kept every scalar's cell entries,
+since a program without a public `main` kept everything (D296) until D1358
+rooted an image in its entry, and the handler's two calls deepen the main
+stack. Every profile fits the 32 KiB
 flash, 16 KiB RAM profile; the control fails a profile that does not. Paint
 is a run's deepest write, not a bound.
 

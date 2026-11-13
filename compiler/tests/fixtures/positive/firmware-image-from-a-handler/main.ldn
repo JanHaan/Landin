@@ -1,0 +1,28 @@
+--  D1358: the handler a vector slot takes is a root of the image, and so
+--  is what it calls.  An interrupt routine that takes no slot, and a
+--  routine nothing calls, are entered by nothing and are not lowered.
+--  The reference description says which slots there are.
+import platform/cortex_m/reference
+
+mut ticks: u32 = 0
+
+count: () -> none =
+    ticks += 1
+end count
+
+fixed if compiler.arch == cortex_m0 then
+    link(vector: 15)
+    extern(interrupt) tick: () -> none =
+        count()
+    end tick
+
+    extern(interrupt) unplaced: () -> none =
+        count()
+    end unplaced
+end if
+
+unused: () -> none =
+    ticks = 0
+end unused
+
+start: () -> none = end start

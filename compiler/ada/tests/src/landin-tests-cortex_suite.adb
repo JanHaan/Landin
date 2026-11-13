@@ -4574,6 +4574,140 @@ package body Landin.Tests.Cortex_Suite is
 
    --  D545: for the constrained reference the derived script is D229's.
    procedure Reference_Script (Item : in out Landin.Testing.Context);
+   --  D1358: a firmware image is lowered from what it starts from, its
+   --  entry, a slot's handler, a placed routine and a public C definition,
+   --  so its assembly, stack report and build report name those and what
+   --  they call; a routine beside the entry, an interrupt routine taking
+   --  no slot and a C definition that is not public are reached by
+   --  nothing.  Assembly for an object, with no entry, keeps everything.
+   procedure Image_Reachability (Item : in out Landin.Testing.Context);
+   procedure Image_Reachability (Item : in out Landin.Testing.Context) is
+      LF : constant Character := ASCII.LF;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      function "+" (Text : String) return U.Unbounded_String
+        renames U.To_Unbounded_String;
+      Kept : constant array (1 .. 7) of U.Unbounded_String :=
+        [+"start", +"called", +"tick", +"counted", +"fast",
+         +"landin_scale", +"doubled"];
+      Dropped : constant array (1 .. 4) of U.Unbounded_String :=
+        [+"unused", +"unplaced", +"landin_hidden", +"only_unused"];
+
+      function Labelled (Text, Name : String) return Boolean is
+        (Ada.Strings.Fixed.Index (Text, LF & Name & ":" & LF) > 0);
+
+      function Reported (Text, Name : String) return Boolean is
+        (Ada.Strings.Fixed.Index (Text, """name"":""main." & Name & """")
+           > 0);
+      Program : constant String :=
+        "mut ticks: u32 = 0" & LF
+        & "called: () -> none = ticks += 1 end called" & LF
+        & "counted: () -> none = ticks += 2 end counted" & LF
+        & "doubled: (value: u32) -> (result: u32) =" & LF
+        & "    result = value * 2" & LF
+        & "end doubled" & LF
+        & "only_unused: () -> none = ticks = 0 end only_unused" & LF
+        & "link(vector: 15)" & LF
+        & "extern(interrupt) tick: () -> none = counted() end tick" & LF
+        & "extern(interrupt) unplaced: () -> none = counted() end unplaced"
+        & LF
+        & "link(section: "".ramtext.fast"") fast: () -> none =" & LF
+        & "    counted()" & LF
+        & "end fast" & LF
+        & "public extern(c) landin_scale: (value: u32) -> (result: u32) ="
+        & LF
+        & "    result = doubled(value)" & LF
+        & "end landin_scale" & LF
+        & "extern(c) landin_hidden: (value: u32) -> (result: u32) =" & LF
+        & "    result = doubled(value)" & LF
+        & "end landin_hidden" & LF
+        & "unused: () -> none = only_unused() end unused" & LF
+        & "start: () -> none = called() end start" & LF;
+   begin
+      Host.Add_Firmware_Library;
+      Host.Add_File ("p.ldn", Program);
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--emit=asm");
+      Args.Append ("--stack-report=p.stack.json");
+      Args.Append ("--build-report=p.json");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Built : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Assembly : constant String := Host.Written ("p.s");
+         Stacks : constant String := Host.Written ("p.stack.json");
+         Report : constant String := Host.Written ("p.json");
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Built.Status, Landin.Driver.Status_Success,
+            U.To_String (Built.Report));
+         for Each of Kept loop
+            declare
+               Name : constant String := U.To_String (Each);
+            begin
+               Landin.Testing.Check
+                 (Item, Labelled (Assembly, Name)
+                    and then Reported (Stacks, Name)
+                    and then Reported (Report, Name),
+                  "the image's " & Name & " is emitted and reported");
+            end;
+         end loop;
+         for Each of Dropped loop
+            declare
+               Name : constant String := U.To_String (Each);
+            begin
+               Landin.Testing.Check
+                 (Item, not Labelled (Assembly, Name)
+                    and then not Reported (Stacks, Name)
+                    and then not Reported (Report, Name),
+                  Name & ", which nothing enters, is neither emitted nor"
+                  & " reported");
+            end;
+         end loop;
+      end;
+
+      --  An object's assembly may not place a vector (L0502).
+      declare
+         Text : constant String := Program;
+         Placement : constant String := "link(vector: 15)" & LF;
+         At_Placement : constant Natural :=
+           Ada.Strings.Fixed.Index (Text, Placement);
+      begin
+         Host.Add_File
+           ("object.ldn",
+            Text (Text'First .. At_Placement - 1)
+            & Text (At_Placement + Placement'Length .. Text'Last));
+      end;
+      Args.Clear;
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("object.s");
+      Args.Append ("object.ldn");
+      declare
+         Built : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Assembly : constant String := Host.Written ("object.s");
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Built.Status, Landin.Driver.Status_Success,
+            U.To_String (Built.Report));
+         for Each of Dropped loop
+            declare
+               Name : constant String := U.To_String (Each);
+            begin
+               Landin.Testing.Check
+                 (Item, Labelled (Assembly, Name),
+                  "assembly for an object keeps " & Name);
+            end;
+         end loop;
+      end;
+   end Image_Reachability;
+
    procedure Reference_Script (Item : in out Landin.Testing.Context) is
       LF : constant Character := ASCII.LF;
       Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -4982,6 +5116,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "the reference derives D229's script",
          Reference_Script'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "a firmware image emits what it starts from",
+         Image_Reachability'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "a boot stage is sealed with its checksum",
          Boot_Stage_Seal'Access);

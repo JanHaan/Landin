@@ -570,6 +570,38 @@ package body Landin.Stages.Lowering is
       Evidence_Retained : Position_Flags renames
         Held_Evidence_Retained.Data.all;
 
+      --  D1358: whose erased table an erased selection of each conformance
+      --  is lowered through, by position, or 0 for its own.  The call reads
+      --  its function from the value's own table, and every erased table of
+      --  one concept has its layout (D374), so the table a selection names
+      --  is a witness of the shape alone: one the program builds anyway,
+      --  for an `any` construction, serves, and the checker's own witness
+      --  is kept, with its providers, only when the program builds no
+      --  table of the concept.  Retain_Reachable decides; a compilation
+      --  that keeps everything keeps every witness its own.
+      Held_Erased_Witness : Position_Count_Tables.Table
+        (Source_Evidence'Last);
+      Erased_Witness : Position_Counts renames
+        Held_Erased_Witness.Data.all;
+
+      function Witness_For
+        (Source : Landin.Checking.Conformance_Id)
+         return Landin.Checking.Conformance_Id;
+
+      function Witness_For
+        (Source : Landin.Checking.Conformance_Id)
+         return Landin.Checking.Conformance_Id
+      is
+         Chosen : constant Natural := Erased_Witness
+           (Landin.Checking.Conformance_Identities.Position
+              (Types.all, Source));
+      begin
+         return
+           (if Chosen = 0 then Source
+            else Landin.Checking.Conformance_Identities.Nth
+              (Types.all, Chosen));
+      end Witness_For;
+
       --  D484: which entries of a retained conformance's table the program
       --  can project, and so whose providers are lowered.  A table every
       --  entry of which is needed, as an erased one is, says so in
@@ -5782,7 +5814,8 @@ package body Landin.Stages.Lowering is
               (Types.all, Of_Tree, Callee));
          Dispatch_Evidence : constant IR.Evidence_Id :=
            (if Dispatched and then not Unanswered then Any_Evidence_For
-              (Landin.Checking.Evidence_Of (Types.all, Of_Tree, Callee))
+              (Witness_For
+                 (Landin.Checking.Evidence_Of (Types.all, Of_Tree, Callee)))
             else IR.No_Evidence);
          Dispatch_Entry : constant Natural :=
            (if Dispatched and then not Unanswered
@@ -16826,24 +16859,30 @@ package body Landin.Stages.Lowering is
       end loop;
 
       --  Which routines, generic instances, evidence tables and module
-      --  bindings this program can reach.  Only a program is pruned: one
-      --  whose entry module declares a public `main`, which is what roots
-      --  it.  A compilation with no such entry, assembly for an object or
-      --  a firmware image entered elsewhere, keeps everything, since
-      --  anything in it may be what a consumer came for.
+      --  bindings this program can reach.  Only a program or an image is
+      --  pruned: one whose entry module declares a public `main`, which
+      --  is what roots a program, or a request that builds a firmware
+      --  image from its firmware entry (D1358).  A compilation with
+      --  neither, a check of a module or assembly for an object, keeps
+      --  everything, since anything in it may be what a consumer came
+      --  for.
       --
-      --  The roots are every routine the entry module defines, `main`
-      --  among them, with D232's `panic_handler` and the firmware entry
-      --  the driver selects by name only after this stage; and, in any
-      --  module, what a C peer, a linker script, a kept section or the
+      --  A program's roots are every routine the entry module defines,
+      --  `main` among them, with D232's `panic_handler`; an image's are
+      --  the entry module's firmware entry and `panic_handler` alone,
+      --  since nothing else enters the image there.  In any module the
+      --  roots are what a C peer, a linker script, a kept section or the
       --  process entry may name: a routine or binding with a link symbol,
       --  a C definition that is public, which [1975] names by its
-      --  spelling, a definition in a machine convention, such as
-      --  platform/linux's naked `_landin_start`, a routine or binding
-      --  with a placement, and one whose name or link
+      --  spelling, a routine or binding with a placement, a vector slot's
+      --  handler and a boot stage among them, and one whose name or link
       --  name, or either with Mach-O's leading `_`, stands as a word in
       --  the text of any `assembler.block`, which reaches code and data by
-      --  symbol where the resolver cannot see it.  A module declaration
+      --  symbol where the resolver cannot see it.  A program's roots also
+      --  take every definition in a machine convention, such as
+      --  platform/linux's naked `_landin_start`; in an image an interrupt
+      --  or naked routine that takes no slot and that nothing names is
+      --  entered by nothing.  A module declaration
       --  that is neither a routine nor a binding, a type whose length
       --  names a constant among them, is walked as a root as well.
       --  `public` alone is not an export, so a public declaration nothing
@@ -16934,7 +16973,26 @@ package body Landin.Stages.Lowering is
 
          Grouped : constant not null access Landin.Modules.Table :=
            Landin.Stages.Modules (Context);
-         Rooted : Boolean := False;
+         --  D1358: the firmware entry the request builds an image from.
+         Image_Entry : constant String :=
+           Landin.Stages.Firmware_Entry (Context);
+         Image : constant Boolean :=
+           Image_Entry /= "" and then Landin.Targets.Is_Firmware (Facts);
+         Rooted : Boolean := Image;
+
+         --  Whether a routine the entry module defines is a root: every
+         --  one in a program, and in an image the routines it is entered
+         --  through.
+         function Enters (Id : Res.Declaration_Id) return Boolean;
+
+         function Enters (Id : Res.Declaration_Id) return Boolean is
+            Name : constant String := Landin.Source.Names.Spelling
+              (Spellings.all, Res.Name_Of (Meanings.all, Id));
+         begin
+            return not Image
+              or else Name = Image_Entry
+              or else Name = "panic_handler";
+         end Enters;
 
          --  What remains to be walked: a reached declaration in the
          --  global view, or a reached instance's template in its own.
@@ -16950,6 +17008,17 @@ package body Landin.Stages.Lowering is
          --  Which reached conformances have had D145's parents reached.
          Held_Closed : Position_Flag_Tables.Table (Source_Evidence'Last);
          Closed : Position_Flags renames Held_Closed.Data.all;
+
+         --  D1358: which conformances' erased tables the program builds,
+         --  for an `any` construction or as a selection's own witness, and
+         --  the witnesses reached erased selections name.
+         Held_Built : Position_Flag_Tables.Table (Source_Evidence'Last);
+         Built : Position_Flags renames Held_Built.Data.all;
+         package Position_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Positive);
+         Witnesses : Position_Vectors.Vector;
+         Held_Witnessed : Position_Flag_Tables.Table (Source_Evidence'Last);
+         Witnessed : Position_Flags renames Held_Witnessed.Data.all;
 
          --  What Reach_Conformance's Which may say besides one entry: that
          --  every entry is reached, or only that the table exists.
@@ -17171,11 +17240,31 @@ package body Landin.Stages.Lowering is
             --  iterable conformance is this same fact, with no entry
             --  (Traversal_Evidence_Of), so its four entries are reached
             --  here too.
-            if Selected /= Landin.Checking.No_Conformance then
+            --  D1358: an erased selection names a witness of its table's
+            --  shape, which is chosen once the walk is done.
+            if Selected = Landin.Checking.No_Conformance then
+               null;
+            elsif Syn.Kind (Of_Tree, Node) /= Syn.Any_Construction
+              and then Is_Erased_Selection (Of_Tree, Node)
+            then
+               declare
+                  Position : constant Positive :=
+                    Landin.Checking.Conformance_Identities.Position
+                      (Types.all, Selected);
+               begin
+                  if not Witnessed (Position) then
+                     Witnessed (Position) := True;
+                     Witnesses.Append (Position);
+                  end if;
+               end;
+            else
+               if Syn.Kind (Of_Tree, Node) = Syn.Any_Construction then
+                  Built (Landin.Checking.Conformance_Identities.Position
+                           (Types.all, Selected)) := True;
+               end if;
                Reach_Conformance
                  (Selected,
-                  Erased => Syn.Kind (Of_Tree, Node) = Syn.Any_Construction
-                    or else Is_Erased_Selection (Of_Tree, Node),
+                  Erased => Syn.Kind (Of_Tree, Node) = Syn.Any_Construction,
                   Which => Landin.Checking.Evidence_Entry_Of
                     (Types.all, Of_Tree, Node));
             end if;
@@ -17245,7 +17334,8 @@ package body Landin.Stages.Lowering is
                          and then Natural (Src)
                            <= Landin.Modules.Source_Count (Grouped.all)
                          and then Landin.Modules.Module_Of (Grouped.all, Src)
-                           = Landin.Modules.Entry_Module)
+                           = Landin.Modules.Entry_Module
+                         and then Enters (Id))
                        or else (not Routine and then Linked)
                        or else
                          (Defined
@@ -17253,8 +17343,10 @@ package body Landin.Stages.Lowering is
                             (Linked
                              or else (Syn.Uses_C_ABI (Of_Tree, Node)
                                       and then Syn.Is_Public (Of_Tree, Node))
-                             or else Syn.Machine_Convention (Of_Tree, Node)
-                               /= Landin.Machine.Ordinary))
+                             or else (not Image
+                                      and then Syn.Machine_Convention
+                                        (Of_Tree, Node)
+                                        /= Landin.Machine.Ordinary)))
                        or else ((not Routine
                                  or else Syn.Generic_Formal_Count
                                    (Of_Tree, Node) = 0)
@@ -17272,6 +17364,49 @@ package body Landin.Stages.Lowering is
                   Visit (Of_Tree, Node, Providers => True);
             end case;
          end Root_Declaration;
+
+         --  Walk what is pending until nothing is.
+         procedure Drain;
+
+         procedure Drain is
+         begin
+            while not Pending.Is_Empty loop
+               declare
+                  Next : constant Pending_Walk := Pending.Last_Element;
+               begin
+                  Pending.Delete_Last;
+                  if Next.Instance = Landin.Checking.No_Routine_Instance then
+                     Visit
+                       (Tree_For
+                          (Res.Source_Of (Meanings.all, Next.Declaration)).all,
+                        Res.Node_Of (Meanings.all, Next.Declaration),
+                        Providers => True);
+                  else
+                     declare
+                        Template : constant Res.Declaration_Id :=
+                          Landin.Checking.Routine_Template_Of
+                            (Types.all, Next.Instance);
+                        Previous : Landin.Checking.Routine_Instance_Id;
+                     begin
+                        Landin.Checking.Activate_Routine_View
+                          (Types.all, Next.Instance, Previous);
+                        Visit
+                          (Tree_For
+                             (Res.Source_Of (Meanings.all, Template)).all,
+                           Res.Node_Of (Meanings.all, Template),
+                           Providers => True);
+                        Landin.Checking.Restore_Routine_View
+                          (Types.all, Previous);
+                     exception
+                        when others =>
+                           Landin.Checking.Restore_Routine_View
+                             (Types.all, Previous);
+                           raise;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end Drain;
       begin
          for Index in 1 .. Res.Declaration_Count (Meanings.all) loop
             declare
@@ -17420,41 +17555,71 @@ package body Landin.Stages.Lowering is
                end;
             end loop;
 
-            while not Pending.Is_Empty loop
+            Drain;
+
+            --  D1358: each erased selection's witness is a table of its
+            --  concept the program builds, the first in conformance order,
+            --  or else its own, which is then built and walked as a table
+            --  an `any` construction builds is; what that walk reaches may
+            --  name more witnesses, so the choice is made at the fixed
+            --  point.
+            loop
                declare
-                  Next : constant Pending_Walk := Pending.Last_Element;
+                  Grew : Boolean := False;
+                  Taken : Natural := 0;
                begin
-                  Pending.Delete_Last;
-                  if Next.Instance = Landin.Checking.No_Routine_Instance then
-                     Visit
-                       (Tree_For
-                          (Res.Source_Of (Meanings.all, Next.Declaration)).all,
-                        Res.Node_Of (Meanings.all, Next.Declaration),
-                        Providers => True);
-                  else
+                  while Taken < Natural (Witnesses.Length) loop
+                     Taken := Taken + 1;
                      declare
-                        Template : constant Res.Declaration_Id :=
-                          Landin.Checking.Routine_Template_Of
-                            (Types.all, Next.Instance);
-                        Previous : Landin.Checking.Routine_Instance_Id;
+                        Wanted : constant Positive := Witnesses (Taken);
+                        Row : constant Landin.Checking.Conformance_Id :=
+                          Landin.Checking.Conformance_Identities.Nth
+                            (Types.all, Wanted);
+                        Found : Boolean := Built (Wanted);
                      begin
-                        Landin.Checking.Activate_Routine_View
-                          (Types.all, Next.Instance, Previous);
-                        Visit
-                          (Tree_For
-                             (Res.Source_Of (Meanings.all, Template)).all,
-                           Res.Node_Of (Meanings.all, Template),
-                           Providers => True);
-                        Landin.Checking.Restore_Routine_View
-                          (Types.all, Previous);
-                     exception
-                        when others =>
-                           Landin.Checking.Restore_Routine_View
-                             (Types.all, Previous);
-                           raise;
+                        for Other in Built'Range loop
+                           exit when Found;
+                           Found := Built (Other)
+                             and then Landin.Checking.Conformance_Concept
+                               (Types.all,
+                                Landin.Checking.Conformance_Identities.Nth
+                                  (Types.all, Other))
+                               = Landin.Checking.Conformance_Concept
+                                   (Types.all, Row);
+                        end loop;
+                        if not Found then
+                           Built (Wanted) := True;
+                           Reach_Conformance (Row, Erased => True);
+                           Grew := True;
+                        end if;
                      end;
-                  end if;
+                  end loop;
+                  exit when not Grew;
+                  Drain;
                end;
+            end loop;
+            for Wanted of Witnesses loop
+               if not Built (Wanted) then
+                  declare
+                     Concept : constant Landin.Checking.Concept_Id :=
+                       Landin.Checking.Conformance_Concept
+                         (Types.all,
+                          Landin.Checking.Conformance_Identities.Nth
+                            (Types.all, Wanted));
+                  begin
+                     for Other in Built'Range loop
+                        if Built (Other)
+                          and then Landin.Checking.Conformance_Concept
+                            (Types.all,
+                             Landin.Checking.Conformance_Identities.Nth
+                               (Types.all, Other)) = Concept
+                        then
+                           Erased_Witness (Wanted) := Other;
+                           exit;
+                        end if;
+                     end loop;
+                  end;
+               end if;
             end loop;
          end if;
       end Retain_Reachable;
@@ -18046,7 +18211,11 @@ package body Landin.Stages.Lowering is
                      if Source /= Landin.Checking.No_Conformance then
                         Used_Any_Evidence
                           (Landin.Checking.Conformance_Identities.Position
-                             (Types.all, Source)) := True;
+                             (Types.all,
+                              (if Syn.Kind (Of_Tree, Node)
+                                    = Syn.Any_Construction
+                               then Source else Witness_For (Source))))
+                          := True;
                      end if;
                   end;
                end if;

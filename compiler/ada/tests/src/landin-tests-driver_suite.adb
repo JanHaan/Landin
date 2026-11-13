@@ -8689,10 +8689,10 @@ package body Landin.Tests.Driver_Suite is
               (Item, Result.Status = Landin.Driver.Status_Success
                and then Contains (Host.Written ("dispatch.s"),
                                   "call8 zero_irq")
-               and then Contains (Host.Written ("dispatch.s"),
-                                  "unplaced_irq:")
+               --  D1358: one that takes no slot is entered by nothing,
+               --  so the image does not hold it.
                and then not Contains (Host.Written ("dispatch.s"),
-                                      "call8 unplaced_irq"),
+                                      "unplaced_irq"),
                "line zero dispatch requires explicit vector placement: "
                & Unbounded.To_String (Result.Report));
          end;

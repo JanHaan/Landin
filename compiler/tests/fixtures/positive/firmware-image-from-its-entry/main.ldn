@@ -1,0 +1,27 @@
+--  D1358: a firmware image is lowered from what it starts from.  `start`
+--  calls two routines of `core/text`, so the image holds them and what
+--  they call, and none of the module's other routines; `unused`, beside
+--  `start` in the entry module, is reached by nothing and is not lowered,
+--  nor `text.append_hex_usize`, which only it calls.
+import core/text
+
+uart: usize = 0x4000_2000
+
+put: (offset: usize, value: u32) -> none =
+    port: ptr mut u32 = ptr(uart + offset)
+    compiler.register_write(port, value, compiler.normal_write,
+                            compiler.write_zero, 0xffff_ffff)
+end put
+
+start: () -> none =
+    mut room: [16]u8 = zeroed
+    mut line := text.over(room)
+    text.append_usize(line, 42) else none
+    put(0x51c, u32(text.length(line)))
+end start
+
+unused: () -> none =
+    mut room: [16]u8 = zeroed
+    mut line := text.over(room)
+    text.append_hex_usize(line, 42) else none
+end unused

@@ -1732,6 +1732,11 @@ positive/else-none-ignores-a-failure | linux-x86-64, linux-arm64, darwin-arm64, 
 positive/external-scalar-c-boundary | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 positive/feature-level-selects-declarations | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/field-named-at | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/firmware-image-from-a-boot-stage | cortex-m0
+positive/firmware-image-from-a-handler | cortex-m0
+positive/firmware-image-from-a-placed-routine | cortex-m0
+positive/firmware-image-from-an-exported-definition | cortex-m0
+positive/firmware-image-from-its-entry | cortex-m0
 positive/fixed-array-bound-expression | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/fixed-array-bound-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/fixed-conditional-cross-file-forward | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64

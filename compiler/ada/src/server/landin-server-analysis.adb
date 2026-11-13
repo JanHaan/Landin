@@ -224,6 +224,14 @@ package body Landin.Server.Analysis is
          if Landin.Stages.Source_Count (Context) > 0
            and then not Landin.Stages.Failed (Context)
          then
+            --  D1358: as the build prunes the image, so the analysis.
+            if Unbounded.Length (Asked.Firmware_Entry) > 0
+              and then Landin.Targets.Is_Firmware
+                (Landin.Stages.Target (Context))
+            then
+               Landin.Stages.Set_Firmware_Entry
+                 (Context, Unbounded.To_String (Asked.Firmware_Entry));
+            end if;
             Landin.Driver.Checking.Run (Context, Panic);
             if not Landin.Stages.Failed (Context)
               and then Unbounded.Length (Asked.Firmware_Entry) > 0

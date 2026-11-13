@@ -360,7 +360,11 @@ table only for the conformances it reaches. Lowering walks the checked
 syntax before it creates any item, from the routines the entry module
 defines and from whatever a linker, a C peer or an `assembler.block`'s text
 may name: link symbols on data, public or linked C definitions, machine
-conventions, imports' link names and placements. A reached declaration
+conventions, imports' link names and placements. A firmware image, a
+compilation given `--firmware-entry`, is walked the same way from what the
+image starts from instead: the entry and `panic_handler` rather than every
+routine of the entry module, and no machine convention that takes no
+vector slot (D1358). A reached declaration
 reaches every routine or binding a resolved reference in it names, every
 generic instance its calls select and every conformance its selections,
 `any` constructions and `for` loops read; an instance is walked in its own
@@ -377,7 +381,11 @@ instance's own view, so a call of `io.out` lowers the provider's `out` and
 none of its other `process` entries; the rest are absent entries, which
 name no routine and keep their places (D484). An erased table, and a `for`
 loop's iterable table, reach every entry, since an `any` value may have
-any of them read.
+any of them read. An erased call names a table only for its shape, since
+it reads its function from the value's own: every erased table of a
+concept has one layout, so the call names the first one the program
+builds for an `any` construction, and the table its checker chose is
+built, with every provider, only when the program builds none (D1358).
 
 Even a reached entry need not be named by the emitted table. Each
 table records its concept, and the backends keep entry N only where code

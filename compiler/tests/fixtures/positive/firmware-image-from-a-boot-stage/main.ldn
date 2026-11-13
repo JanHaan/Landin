@@ -1,0 +1,8 @@
+--  D1358: the description's boot stage is a root of the image, which the
+--  boot ROM enters before reset, though nothing calls it; `unused`, beside
+--  the entry, is reached by nothing and is not lowered.
+import board
+
+start: () -> none = end start
+
+unused: () -> none = end unused

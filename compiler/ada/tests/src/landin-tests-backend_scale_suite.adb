@@ -1101,6 +1101,9 @@ package body Landin.Tests.Backend_Scale_Suite is
 
       Entry_Point : constant String :=
         LF & "start: () -> none = end start" & LF;
+      Reads_Image : constant String :=
+        LF & "start: () -> none =" & LF & "    _ = image[1]" & LF
+        & "end start" & LF;
       --  A public main prunes what it does not reach (D537 counts what
       --  is lowered), so each image is read.
       Main : constant String :=
@@ -1140,10 +1143,16 @@ package body Landin.Tests.Backend_Scale_Suite is
          "zero static images reserve more than 18446744073709551615"
          & " bytes before section GC, past the 18446744073709551615 bytes"
          & " that linux-x86-64's address space holds");
+      --  D1358: an image holds what its entry reaches, so each entry
+      --  reads its images.
       Refused
         ("cortex-m0",
          "mut low: [2147483648]u8 = zeroed" & LF
-         & "mut high: [2147483648]u8 = zeroed" & Entry_Point,
+         & "mut high: [2147483648]u8 = zeroed" & LF
+         & "start: () -> none =" & LF
+         & "    _ = low[1]" & LF
+         & "    _ = high[1]" & LF
+         & "end start" & LF,
          "past the 4294967295 bytes that cortex-m0's address space holds",
          Firmware => True);
       --  A firmware image is held to its profile: the giant fixture's
@@ -1155,16 +1164,13 @@ package body Landin.Tests.Backend_Scale_Suite is
          & " reference profile holds",
          Firmware => True);
       Refused
-        ("cortex-m0", "mut image: [16385]u8 = [of 1]" & Entry_Point,
+        ("cortex-m0", "mut image: [16385]u8 = [of 1]" & Reads_Image,
          "mutable static images write 16385 bytes before section GC, past"
          & " the 16384 bytes that the RAM of cortex-m0's constrained"
          & " reference profile holds",
          Firmware => True);
-      --  With no public main nothing is pruned, so an image nothing
-      --  reaches still counts: the assembler is given it whether or not
-      --  the linker keeps it.
       Refused
-        ("cortex-m0", "image: [32769]u8 = [of 1]" & Entry_Point,
+        ("cortex-m0", "image: [32769]u8 = [of 1]" & Reads_Image,
          "past the 32768 bytes that the flash", Firmware => True);
 
       --  Without a firmware request Cortex-M is held to its reach, and

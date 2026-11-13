@@ -48,6 +48,7 @@
 --  through an accessor on a live compilation.
 
 with Ada.Containers.Vectors;
+with Ada.Strings.Unbounded;
 
 with Landin.Checking;
 with Landin.Configuration;
@@ -84,6 +85,17 @@ package Landin.Stages is
 
    function Level
      (Context : Compilation) return Landin.Targets.Levels.Feature_Level;
+
+   --  D1358: the firmware entry a request builds an image from, as its
+   --  name in the entry module, or "" when the request builds no image:
+   --  a hosted program, a check without `--firmware-entry`, or assembly
+   --  for an object.  The lowering roots a firmware image's reachability
+   --  in what the image starts from rather than in the entry module's
+   --  every routine (D296), so its assembly and reports hold what the
+   --  linked image does.
+   procedure Set_Firmware_Entry (Context : in out Compilation; Name : String);
+
+   function Firmware_Entry (Context : Compilation) return String;
 
    function Add_Source
      (Context : in out Compilation; Name : String; Text : String)
@@ -301,6 +313,7 @@ private
       Active  : aliased Landin.Configuration.Table;
       Typed   : aliased Landin.Checking.Table;
       Lowered : aliased Landin.IR.Unit;
+      Image_Entry : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
 end Landin.Stages;

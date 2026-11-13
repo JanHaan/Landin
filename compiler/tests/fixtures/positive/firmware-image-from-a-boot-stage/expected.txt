@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/firmware-image-from-a-boot-stage and wrote nothing; build it with `refine compile --target=cortex-m0 --firmware-entry=start --root=../tests/fixtures/positive/firmware-image-from-a-boot-stage/devices ../tests/fixtures/positive/firmware-image-from-a-boot-stage -o firmware-image-from-a-boot-stage`

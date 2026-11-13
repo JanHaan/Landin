@@ -7902,7 +7902,8 @@ package body Landin.Tests.Lowering_Suite is
       end Lowered_Target;
 
       --  At the lowered target and the `--level=` its `args` name, or its
-      --  default level when they name none.
+      --  default level when they name none, and on a firmware target as
+      --  the image their `--firmware-entry=` names (D1358).
       function Corpus_Compilation
         (Each : Fixtures.Fixture) return Landin.Stages.Compilation
       is
@@ -7910,14 +7911,30 @@ package body Landin.Tests.Lowering_Suite is
            Landin.Targets.Selection.Described (Lowered_Target (Each));
          Level : constant String :=
            Word_After (Fixtures.Args (Each), "--level=");
+         Image : constant String :=
+           Word_After (Fixtures.Args (Each), "--firmware-entry=");
+         Firmware : constant Boolean :=
+           Image /= "" and then Landin.Targets.Is_Firmware (Facts);
       begin
          if Level /= ""
            and then Landin.Targets.Levels.Is_Level_Of (Facts, Level)
          then
-            return Landin.Stages.Create
-              (Facts, Landin.Targets.Levels.Level_Named (Facts, Level));
+            return Result : Landin.Stages.Compilation :=
+              Landin.Stages.Create
+                (Facts, Landin.Targets.Levels.Level_Named (Facts, Level))
+            do
+               if Firmware then
+                  Landin.Stages.Set_Firmware_Entry (Result, Image);
+               end if;
+            end return;
          end if;
-         return Landin.Stages.Create (Facts);
+         return Result : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Facts)
+         do
+            if Firmware then
+               Landin.Stages.Set_Firmware_Entry (Result, Image);
+            end if;
+         end return;
       end Corpus_Compilation;
    begin
       Fixtures.Discover (Found, Fixture_Root, Host);

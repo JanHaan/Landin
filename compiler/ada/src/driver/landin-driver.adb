@@ -6360,6 +6360,12 @@ package body Landin.Driver is
                declare
                   Stopped : Boolean;
                begin
+                  --  D1358: an image is pruned from what it starts from.
+                  if Firmware_Seen and then Landin.Targets.Is_Firmware (Facts)
+                  then
+                     Landin.Stages.Set_Firmware_Entry
+                       (Context, Unbounded.To_String (Firmware_Name));
+                  end if;
                   Checking.Run
                     (Context, Panic, Watch_Stage'Access,
                      Frontend_Stop'Access, Stopped);

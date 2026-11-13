@@ -1,0 +1,21 @@
+--  D1358: a public C definition is a root of the image, which a C object
+--  linked with it may call, and so is what it calls.  A C definition that
+--  is not public is no export, and with a routine nothing calls it is not
+--  lowered.
+import platform/c
+
+double: (value: c.c_int) -> (result: c.c_int) =
+    result = value * 2
+end double
+
+public extern(c) landin_scale: (value: c.c_int) -> (result: c.c_int) =
+    result = double(value)
+end landin_scale
+
+extern(c) landin_hidden: (value: c.c_int) -> (result: c.c_int) =
+    result = double(value)
+end landin_hidden
+
+unused: () -> none = end unused
+
+start: () -> none = end start

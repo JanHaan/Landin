@@ -35,6 +35,15 @@ package body Landin.Stages is
      (Context : Compilation) return Landin.Targets.Levels.Feature_Level
      is (Context.Assumed);
 
+   procedure Set_Firmware_Entry (Context : in out Compilation; Name : String)
+   is
+   begin
+      Context.Image_Entry := Ada.Strings.Unbounded.To_Unbounded_String (Name);
+   end Set_Firmware_Entry;
+
+   function Firmware_Entry (Context : Compilation) return String
+     is (Ada.Strings.Unbounded.To_String (Context.Image_Entry));
+
    function Add_Source
      (Context : in out Compilation; Name : String; Text : String)
      return Landin.Source.Source_Id

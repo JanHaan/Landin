@@ -16840,6 +16840,10 @@ calls are absent from the assembly and whose IR entry names nothing, while
 an erased table of the same conformance lowers both; and the lowering
 record `compiler/tests/lowering.ir`.
 
+D1358 amends where an erased table is built: for an `any` construction,
+and for an erased selection only when the compilation builds no table of
+its concept, since a selection names its table for the shape alone.
+
 ### D419 — A parameter whose type names no generic formal is an ordinary context
 
 **The discrepancy:** [1880] lists the type of the parameter an argument
@@ -22804,8 +22808,9 @@ rather than reported; the call is otherwise checked and typed as an
 admitted one. Once the lowering knows which code the program keeps, which
 D296's walk from the entry module's routines decides, it reports each held
 refusal whose call is in kept code, and lowers nothing when any is. A
-compilation with no `main` to root the walk keeps everything, so a module
-checked on its own still reports every one, as a firmware image does. A
+compilation with neither a `main` nor a firmware entry to root the walk
+keeps everything, so a module checked on its own still reports every one;
+a firmware image reports those its image reaches (D1358). A
 refusal of the call's own form, an argument outside the contract, a
 missing argument or a recovery, is reported where it is written, as every
 other checker refusal is. A held refusal joins the report only when the
@@ -33173,6 +33178,11 @@ D484 narrows "a reached conformance reaches its providers" to erased tables
 and a `for`'s iterable conformance: a direct table's entry is reached only
 by a reached selection that names it.
 
+D1358 roots a firmware image too, in its entry, its handlers, its placed
+declarations, its boot stage and its exported C definitions rather than in
+every routine of the entry module, and lets an erased selection's table be
+one the compilation builds for an `any` construction.
+
 ### D303 — Every routine and datum has its own section, and a static link counts what it reaches
 
 **The tour said** nothing of sections. Only x86-64 gave each item its own
@@ -33199,6 +33209,74 @@ counting every routine's references, which refuses programs the link accepts.
 `end-to-end/link-static-unsatisfied-c-import`,
 `end-to-end/link-static-dry-run-arm64` and the toolchain and targets suites'
 link arguments.
+
+### D1358 — A firmware image is lowered from what it starts from
+
+**The tour said** nothing. D296 pruned only a program whose entry module
+declares a public `main`, so a firmware image emitted every routine of
+every module it imported, each in a section of its own, and left the
+link's `--gc-sections` to drop the rest (D303). A Cortex-M0 firmware calling
+`text.over` and `text.append_usize` assembled 683 KB for an image of under
+4 KB, and its `--emit=asm`, its `--stack-report`'s 177 rows and its build
+report named routines the image does not hold, `doubling_enlarge` among
+them, which readers new to the project could not explain; a target-limited builtin's refusal (D564) was made in every
+routine it imported. Even a program's pruning kept too much: an erased
+call names a table for its shape, the checker chooses one conformance of
+the concept for it, and its every provider was lowered, though the call
+reads its function from the value's own table.
+
+**Chosen:** a request that builds a firmware image, one that names
+`--firmware-entry` on a firmware target, `refine check` and the language
+server's analysis among them, roots D296's walk in what the image starts
+from: in the entry module, the firmware entry and D232's `panic_handler`;
+in any module, a routine or binding with a placement, a vector slot's
+handler, a boot stage, a section, a region and `keep` among them, a
+definition with a link symbol, a public C definition, which a C object
+linked with the image may call, and a definition an `assembler.block`'s
+text names. The entry module's other routines are not roots, and neither
+is a definition in a machine convention that takes no slot and that
+nothing names: nothing enters the image through them. A compilation that
+builds no image, assembly without `--firmware-entry` for an object another
+link takes, keeps everything as before.
+
+An erased selection, in an image or a program, names as its table the
+first table of its concept, in conformance order, that the compilation
+builds for an `any` construction, since every erased table of a concept
+has one layout (D374) and the call reads its function from the value's
+own. Only when the compilation builds none is the checker's choice built,
+with every provider, as a construction's table is. A compilation that
+keeps everything keeps the checker's choice.
+
+So the assembly, the stack report and the build report of an image hold
+the routines the image does; a held refusal is reported only where the
+image reaches its call. What the link keeps is unchanged, with two
+differences. Atom integers are numbered over the declarations the image
+keeps, which D232 leaves free. And an evidence table names only the
+entries the image projects (D374, D484), so a provider only a left-out
+entry named is no longer linked: the ESP32's, ESP32-S3's and ESP32-C3's
+board images lose `core/atomic`'s `load_u16`, `store_u16` and
+`load_relaxed_u8`, which nothing calls.
+
+**The alternatives:** rooting every routine of the entry module, as a
+program is rooted, which keeps a routine beside the entry that the link
+then discards, so the report still names what the image does not hold;
+rooting every interrupt and naked routine, which keeps one that takes no
+slot; leaving the image to the linker, which those readers met; and giving an
+erased witness's table absent entries, which an erased table of the IR
+does not have and which the verifier, the specializer and every backend
+would have to learn, where a table the compilation builds already serves.
+
+**Pinned by** the positive fixtures `firmware-image-from-its-entry`,
+the two-routine program above, `firmware-image-from-a-handler`,
+`firmware-image-from-a-placed-routine`,
+`firmware-image-from-an-exported-definition` and
+`firmware-image-from-a-boot-stage`, each lowered in
+`compiler/tests/lowering.ir` with its roots and without a routine nothing
+enters; the `cortex ABI` case `a firmware image emits what it starts
+from`, whose assembly, stack report and build report name the image's
+routines and not the others, while assembly for an object keeps them; and
+the Cortex-M firmware lane's `flash-budget` control, whose datum is kept,
+since one nothing reaches is in no image.
 
 ### D284 — A static Linux executable holds the processor to its level in the entry
 
