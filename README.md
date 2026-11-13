@@ -309,7 +309,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Current roadmap work: R13.79 — What the defect review found.**
+**Next roadmap item: R12.80 — Emit what firmware reaches (planned).**
 
 ## Questions, bugs and ideas
 
