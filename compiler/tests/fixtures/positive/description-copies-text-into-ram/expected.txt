@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/description-copies-text-into-ram and wrote nothing; build it with `refine compile --target=cortex-m0 --firmware-entry=start --root=../tests/fixtures/positive/description-copies-text-into-ram/devices ../tests/fixtures/positive/description-copies-text-into-ram -o description-copies-text-into-ram`

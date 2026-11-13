@@ -1,0 +1,9 @@
+class: negative
+summary: D1359: reset copies text or rodata a flash image places in RAM from a load image in flash, but a copy does not make memory executable, so text in a region that may not execute stays refused while rodata beside it is accepted
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0514
+args: --target=cortex-m0 --level=armv7-m ../tests/fixtures/negative/description-places-code-where-it-cannot-run/program.ldn
+expect: expected.txt
+status: 1

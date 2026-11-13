@@ -1,0 +1,18 @@
+-- QEMU's sifive_e with its constants in RAM: the RV32 reference's flash
+-- and DTIM, read-only data placed in the DTIM, which reset copies from its
+-- load image in flash before anything reads it (D1359).  The descriptions
+-- lane runs the image from reset, and again with the copy left out.  A
+-- lane description, not a chip's.
+
+compiler.device("sifive-e-rodata-in-ram")
+compiler.core("sifive-e31")
+compiler.vectors(16)
+compiler.boot("vector-table")
+linker.region("FLASH", 0x2040_0000, 32 * 1024, "rx")
+linker.region("RAM", 0x8000_0000, 16 * 1024, "rw")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "RAM")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)

@@ -204,6 +204,22 @@ def region(profile, part):
     return next(r for r in profile['regions'] if r['name'] == name)
 
 
+def copied(profile, part):
+    """D1359: whether reset copies PART, text or rodata, from a load image:
+    in an image that boots from its own memory, placed in a writable
+    region other than the vectors'."""
+    if part not in ('text', 'rodata') or profile.get('boot') == 'esp-app-image':
+        return False
+    placed = profile['placed']
+    return placed[part] != placed['vectors'] and 'w' in region(profile, part)['access']
+
+
+def flash_region(profile):
+    """D1359: the region every load image of PROFILE is in, its flash: the
+    vectors' when reset copies the text, and the text's otherwise."""
+    return region(profile, 'vectors' if copied(profile, 'text') else 'text')
+
+
 def stack_bottom(profile):
     return profile['stack_top'] - profile['stack_reserved']
 
@@ -211,14 +227,15 @@ def stack_bottom(profile):
 def recorded(device=REFERENCE):
     """DEVICE's profile as descriptions.json records it, apart from the
     compiler, with the capacities a firmware build report derives (D545):
-    the text region's length, and the data region's less a stack it holds."""
+    the image's flash, the text region's length unless reset copies the
+    text (D1359), and the data region's less a stack it holds."""
     want = PROFILES[device]
     profile = {key: want[key] for key in FACTS if key in want}
     profile.update(device=device, stack_top=want['stack_top'], script=None)
     ram = region(profile, 'data')['length']
     if want['placed']['stack'] == want['placed']['data']:
         ram -= want['stack_reserved']
-    profile.update(flash_limit=region(profile, 'text')['length'], static_ram_limit=ram)
+    profile.update(flash_limit=flash_region(profile)['length'], static_ram_limit=ram)
     return profile
 
 
@@ -648,14 +665,15 @@ class ImageLimit(RuntimeError):
 def load_extents(path, profile):
     """Flash and static RAM a linked image occupies, read from its LOAD headers.
 
-    Flash is the end of the last file-backed segment in the text region,
-    and static RAM the end of the last segment in the data region, each
+    Flash is the end of the last file-backed segment in the image's flash,
+    the text region unless reset copies the text (D1359), and static RAM
+    the end of the last segment in the data region, each
     counted from the region's origin, as the firmware build report counts
     them (D545).  Unlike image_contract this holds the image to no bound,
     so it measures an image linked with the enlarged map as well as a
     fitting one.
     """
-    text, data_region = region(profile, 'text'), region(profile, 'data')
+    text, data_region = flash_region(profile), region(profile, 'data')
     data = path.read_bytes()
     header = struct.unpack_from('<16sHHIIIIIHHHHHH', data)
     flash, ram = text['origin'], data_region['origin']
@@ -853,8 +871,8 @@ def measure_overflow(run, profile, objects=None, level='armv6-m'):
     its assertions removed.  The result is a measurement and never runs.
     """
     text = Path(profile['script']).read_text()
-    for part in ('text', 'data'):
-        name = region(profile, part)['name']
+    for name in sorted({region(profile, 'text')['name'], flash_region(profile)['name'],
+                        region(profile, 'data')['name']}):
         line = re.search(r'^  %s \((\w+)\) : ORIGIN = (\d+), LENGTH = (\d+)$' % name, text, re.M)
         require(line is not None, 'the derived script has no MEMORY line for ' + name)
         text = text.replace(line.group(0), '  %s (%s) : ORIGIN = %s, LENGTH = 256M'
@@ -923,8 +941,11 @@ def image_contract(path, profile=None):
     lanes build for.
     """
     profile = profile or recorded()
-    text, data_region = region(profile, 'text'), region(profile, 'data')
+    text, data_region = flash_region(profile), region(profile, 'data')
     flash_lo, flash_hi = text['origin'], text['origin'] + text['length']
+    #  D1359: what reset copies runs or is read in its own region, loaded
+    #  from the flash.
+    moved = [region(profile, part) for part in ('text', 'rodata') if copied(profile, part)]
     ram_lo = data_region['origin']
     ram_hi = ram_lo + profile['static_ram_limit']
     data = path.read_bytes()
@@ -956,6 +977,10 @@ def image_contract(path, profile=None):
         require(file_size <= memory_size and file_at + file_size <= len(data), 'invalid ELF load extent')
         if flash_lo <= virtual < flash_hi:
             require(virtual + memory_size <= flash_hi, 'ELF exceeds selected flash')
+        elif any(r['origin'] <= virtual < r['origin'] + r['length'] for r in moved):
+            require(any(r['origin'] <= virtual and virtual + memory_size
+                        <= r['origin'] + r['length'] for r in moved),
+                    'ELF exceeds a region reset copies into')
         else:
             require(ram_lo <= virtual and virtual + memory_size <= ram_hi,
                     'ELF intrudes on selected RAM/stack boundary')

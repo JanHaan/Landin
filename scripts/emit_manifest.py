@@ -189,6 +189,7 @@ REFUSAL_PAIRS = {
     #  A vector placement needs --firmware-entry (L0502), which the
     #  manifest's assembly, an object's, does not name.
     ("firmware-image-from-a-handler", "cortex-m0"),
+    ("description-copies-text-into-ram", "cortex-m0"),
     #  rv32 has no enabled C ABI (D660, D920), so it refuses every C
     #  fixture cortex-m0 once refused, and r630-memory-scalars' read-modify-write at its
     #  default rv32imc (D690).  assembly-operand-forms has no rv32 arm, and

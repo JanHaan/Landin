@@ -1,0 +1,7 @@
+class: end-to-end
+summary: D1359 D546: a description places text in a RAM region at address zero, and a developer's script links reset with the text it copies, where the vector table's reset word finds nothing after a power cycle; the image breaks clause 1 of the firmware linker script contract, L0519, naming reset; a stand-in driver writes the image the pinned Arm driver linked
+constructs: 1650
+targets: cortex-m0
+expect: expected.txt
+args: compile --root=../tests/fixtures/end-to-end/firmware-linker-script-copies-reset/devices --target=cortex-m0 --firmware-entry=start --emit=exe --linker-script=../tests/fixtures/end-to-end/firmware-linker-script-copies-reset/dev.ld --toolchain=../tests/fixtures/end-to-end/firmware-linker-script-copies-reset/driver -o build/firmware-linker-script-copies-reset.elf ../tests/fixtures/end-to-end/firmware-linker-script-copies-reset/app
+status: 1

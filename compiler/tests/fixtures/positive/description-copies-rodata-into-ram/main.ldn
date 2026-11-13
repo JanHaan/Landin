@@ -1,0 +1,12 @@
+--  D1359: a flash image whose description places its read-only data in
+--  RAM that may not execute is accepted: the constants are given a load
+--  image in flash after the text, and reset copies them before the entry
+--  reads the first of them.
+import board
+
+table: [4]u32 = [5, 8, 13, 21]
+mut counted: u32 = 1
+
+start: () -> none =
+    counted += table[0] + table[3]
+end start

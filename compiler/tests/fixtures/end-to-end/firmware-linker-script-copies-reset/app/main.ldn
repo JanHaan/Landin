@@ -1,0 +1,8 @@
+import board
+
+table: [2]u32 = [5, 8]
+mut counted: u32 = 1
+
+start: () -> none =
+    counted += table[0]
+end start

@@ -86,7 +86,7 @@
         {"name": "SRAM3", "origin": 805568512, "length": 32768, "access": "rw"},
         {"name": "SRAM4", "origin": 939524096, "length": 65536, "access": "rw"}
       ],
-      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "AXI_SRAM", "bss": "AXI_SRAM", "stack": "AXI_SRAM"},
+      "placed": {"vectors": "FLASH", "text": "ITCM", "rodata": "FLASH", "data": "AXI_SRAM", "bss": "AXI_SRAM", "stack": "AXI_SRAM"},
       "vector_address": 134217728,
       "vector_words": 166,
       "boot_prefix": 0,

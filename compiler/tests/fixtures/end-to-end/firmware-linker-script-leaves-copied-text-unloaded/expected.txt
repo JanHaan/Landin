@@ -1,0 +1,1 @@
+error[L0519]: ../tests/fixtures/end-to-end/firmware-linker-script-leaves-copied-text-unloaded/dev.ld breaks the firmware linker script contract, clause 4, the initialized images: .text's load image at 0x0 is not in FLASH, where the vectors are placed (D546); the derived script beside it, build/firmware-linker-script-leaves-copied-text-unloaded.elf.ld, keeps every clause

@@ -1,8 +1,14 @@
 {
   "status": "passed",
-  "image_sha256": "5a086fad21fa6b736323ac3ba8b3b9f8a06a3730f5ebda038e55697a7fd5f72f",
+  "image_sha256": "65d582d2a4fdc4789179e2756a4efc1e83e943751b3a7334797e686f41b0957d",
   "image_name": "board.elf",
   "image": {
+    "copied_text": {
+      "end": 47976,
+      "load": 134218640,
+      "sha256": "5bb2b5385b43294be2339ecb076a27e97344b47dc1f065dbf3f90cced69af413",
+      "start": 0
+    },
     "float_unit": "passed",
     "fp_attributes": [
       "Tag_FP_arch: FPv5/FP-D16 for ARMv8",
@@ -30,7 +36,7 @@
       "indicator_after_0": 0
     },
     "usart3": {
-      "entries": 6,
+      "entries": 10,
       "exception": 55
     },
     "overrun": {
@@ -115,65 +121,70 @@
     "handled": 12014,
     "recoveries": 3,
     "dma_entries": 47,
-    "usart_entries": 145,
+    "usart_entries": 156,
     "s0ndtr": 229,
-    "s0cr": 1049617
+    "s0cr": 1049617,
+    "itcm": {
+      "start": 0,
+      "bytes": 47976,
+      "sha256": "5bb2b5385b43294be2339ecb076a27e97344b47dc1f065dbf3f90cced69af413"
+    }
   },
-  "uart_sha256": "3082c34463a421a45a1d906f5762f931dcb708d43c250672646a06d9ed23ba4b",
+  "uart_sha256": "05de16c02e468482d9a7edc703baa89b1f7b4ee8b3fb9788fe2a3297e0fb4d8b",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
-    "sha256": "d8a29b9c03689ec51138e030803295054d7eb63fec28cb4687e5a2d373c2c216",
+    "sha256": "084ec49dc0562b24815f155459f10081263be46205f1e9773b3c073211f56620",
     "marker": {
       "symbol": "_landin_fixed_ready",
       "address": 603979776,
       "value": 1279678513,
-      "elf_sha256": "d8a29b9c03689ec51138e030803295054d7eb63fec28cb4687e5a2d373c2c216"
+      "elf_sha256": "084ec49dc0562b24815f155459f10081263be46205f1e9773b3c073211f56620"
     }
   },
-  "seconds": 35.994,
+  "seconds": 36.017,
   "kernel_usb": {
-    "since": 1794564983.8241432,
-    "until": 1794565019.797948,
+    "since": 1794579934.4131336,
+    "until": 1794579970.4101126,
     "lines": [
       {
-        "time": 1794564990.556926,
-        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 65"
+        "time": 1794579941.160693,
+        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 15"
       },
       {
-        "time": 1794564992.472682,
-        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 82 using xhci_hcd"
+        "time": 1794579943.064676,
+        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 32 using xhci_hcd"
       },
       {
-        "time": 1794564992.621589,
+        "time": 1794579943.215281,
         "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
       },
       {
-        "time": 1794564992.625713,
+        "time": 1794579943.219166,
         "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
       },
       {
-        "time": 1794564992.628072,
+        "time": 1794579943.22334,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
       },
       {
-        "time": 1794565016.828706,
-        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 82"
+        "time": 1794579967.424692,
+        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 32"
       },
       {
-        "time": 1794565018.744668,
-        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 83 using xhci_hcd"
+        "time": 1794579969.352673,
+        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 33 using xhci_hcd"
       },
       {
-        "time": 1794565018.894239,
+        "time": 1794579969.502543,
         "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
       },
       {
-        "time": 1794565018.897842,
+        "time": 1794579969.506477,
         "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
       },
       {
-        "time": 1794565018.900275,
+        "time": 1794579969.509043,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
       }
     ],
@@ -198,8 +209,8 @@
       "d": "00000002",
       "w": "0000002f",
       "k": "0000002f",
-      "m": "0000422a",
-      "u": "00000091",
+      "m": "00003fcf",
+      "u": "0000009c",
       "p": "00000037",
       "n": "000000e5",
       "e": "0000001b",
@@ -214,13 +225,13 @@
     "hub-status",
     "power-cycle",
     "hub-wait",
-    "hub-wait",
     "swd-handled",
     "swd-recoveries",
     "swd-dma_entries",
     "swd-usart_entries",
     "swd-s0ndtr",
     "swd-s0cr",
+    "swd-itcm",
     "flash",
     "hub-wait",
     "flash-readback",

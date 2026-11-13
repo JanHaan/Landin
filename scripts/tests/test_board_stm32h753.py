@@ -303,6 +303,45 @@ class Instructions(unittest.TestCase):
             BOARD.float_unit(BOARD.float_routines(HARD, {'exercise32': SIZES['exercise32']}))
 
 
+class CopiedText(unittest.TestCase):
+    """D1359: a boot image's text runs from the ITCM, copied by reset from
+    its load image in flash, and the ITCM read over SWD must hold it."""
+    NAMES = {'_landin_firmware_text_start': 0, '_landin_firmware_text_end': 12,
+             '_landin_firmware_text_load': 0x08000400,
+             '_landin_firmware_reset_stage': 0x08000298, '_landin_firmware_reset': 0x080002c8,
+             '_landin_firmware_image_copy': 0x080002d0, '_landin_firmware_unhandled': 0x08000390,
+             'start': 0x9, 'dma_irq': 0x5, 'usart3_irq': 0xb}
+    BODY = bytes(range(12))
+
+    def test_text_in_the_itcm_from_flash_is_taken(self):
+        with mock.patch.object(BOARD.common, 'loaded', return_value=self.BODY):
+            text = BOARD.copied_text(Path('board.elf'), self.NAMES)
+        self.assertEqual((text['start'], text['end'], text['load']), (0, 12, 0x08000400))
+
+    def test_text_reset_or_a_handler_out_of_place_is_refused(self):
+        for symbol, address, said in (
+                ('_landin_firmware_text_end', 0x10004, 'not in the ITCM'),
+                ('_landin_firmware_text_load', 0x24000000, 'load image'),
+                ('_landin_firmware_reset', 0x100, 'where reset finds it'),
+                ('usart3_irq', 0x08000501, 'not in the copied text')):
+            with self.subTest(symbol=symbol), \
+                    mock.patch.object(BOARD.common, 'loaded', return_value=self.BODY):
+                with self.assertRaisesRegex(BOARD.Failed, said):
+                    BOARD.copied_text(Path('board.elf'), dict(self.NAMES, **{symbol: address}))
+
+    def test_the_itcm_must_hold_the_load_image(self):
+        text = {'start': 0, 'end': 12, 'load': 0x08000400}
+        words = list(struct.unpack('<3I', self.BODY))
+        probe = mock.Mock()
+        probe.read_words.return_value = words
+        with mock.patch.object(BOARD, 'probe', return_value=probe), \
+                mock.patch.object(BOARD.common, 'loaded', return_value=self.BODY):
+            self.assertEqual(BOARD.itcm_check(None, None, Path('board.elf'), text)['bytes'], 12)
+            probe.read_words.return_value = [words[0], words[1] ^ 0x100, words[2]]
+            with self.assertRaisesRegex(BOARD.Failed, 'differs .* at 0x5'):
+                BOARD.itcm_check(None, None, Path('board.elf'), text)
+
+
 class Hub(unittest.TestCase):
     class Recorded:
         def __init__(self, status):
@@ -387,7 +426,8 @@ class LockLifecycle(unittest.TestCase):
                     '--nm=nm', '--output=' + tmp + '/run', '--fixed-image=' + str(fixed),
                     '--cascade=1-1']
             argv += ['--objdump=objdump', '--readelf=readelf']
-            built = (elf, b'', {}, {'float_unit': 'passed'})
+            built = (elf, b'', {}, {'float_unit': 'passed',
+                                    'copied_text': {'start': 0, 'end': 8, 'load': 0x08000400}})
             def scenario(console, *_):
                 console.offset = 0
                 console.boot_frame = {'tag': 'b'}
@@ -410,6 +450,7 @@ class LockLifecycle(unittest.TestCase):
                 hardware.append(patch(BOARD, 'flash'))
                 hardware.append(patch(BOARD, 'power_cycle'))
                 hardware.append(patch(BOARD, 'cross_check', return_value={}))
+                hardware.append(patch(BOARD, 'itcm_check', return_value={}))
                 patch(BOARD.common, 'rerun_in_group')
                 hardware.append(patch(BOARD.common, 'wait_for_tty', return_value=Path(tmp) / 'tty'))
                 hardware.append(patch(BOARD.common, 'TtyConsole', return_value=console))

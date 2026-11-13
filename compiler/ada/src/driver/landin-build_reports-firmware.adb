@@ -111,8 +111,11 @@ package body Landin.Build_Reports.Firmware is
       use type Firmware.Section_Kind;
       ELF, Map : US.Unbounded_String;
       Status : Landin.Platform.Read_Status;
-      Flash : constant Firmware.Region :=
-        Firmware.Placed_Region (Profile, Firmware.Text);
+      --  D1359: the image's flash, which holds every load image: the
+      --  text region, or the vectors' when reset copies the text.
+      Image_At : constant Firmware.Region_Count :=
+        Firmware.Image_Region (Profile);
+      Flash : constant Firmware.Region := Profile.Regions (Image_At);
       RAM : constant Firmware.Region :=
         Firmware.Placed_Region (Profile, Firmware.Data);
       RAM_Limit : constant Landin.Targets.Byte_Count :=
@@ -120,7 +123,7 @@ package body Landin.Build_Reports.Firmware is
       Flash_End : Landin.Targets.Byte_Count := Flash.Origin;
       RAM_End : Landin.Targets.Byte_Count := RAM.Origin;
 
-      --  What of text's region is left past the image: less the stack
+      --  What of the image's region is left past the image: less the stack
       --  where the description reserves it in that region, and from the
       --  end of static RAM where data shares the region and ends higher.
       --  The link refuses an image that reaches the stack (D1114), so the
@@ -129,12 +132,12 @@ package body Landin.Build_Reports.Firmware is
       function Flash_Remaining return Landin.Targets.Byte_Count is
          Used : constant Landin.Targets.Byte_Count :=
            (if Profile.Placed (Firmware.Data)
-              = Profile.Placed (Firmware.Text)
+              = Image_At
             then Landin.Targets.Byte_Count'Max (Flash_End, RAM_End)
             else Flash_End) - Flash.Origin;
          Reserved : constant Landin.Targets.Byte_Count :=
            (if Profile.Placed (Firmware.Stack)
-              = Profile.Placed (Firmware.Text)
+              = Image_At
             then Profile.Stack_Size else 0);
       begin
          if Used > Flash.Length or else Reserved > Flash.Length - Used then
@@ -362,6 +365,7 @@ package body Landin.Build_Reports.Firmware is
                           (RAM_End, Virtual + Memory_Size);
                      elsif Region_Of (Virtual, Memory_Size)
                        = Profile.Placed (Firmware.Text)
+                       or else Region_Of (Virtual, Memory_Size) = Image_At
                      then
                         null;
                      elsif Region_Of (Virtual, Memory_Size) = 0 then
@@ -378,8 +382,7 @@ package body Landin.Build_Reports.Firmware is
                         then
                            return;
                         end if;
-                        if Region_Of (Physical, File_Size)
-                          = Profile.Placed (Firmware.Text)
+                        if Region_Of (Physical, File_Size) = Image_At
                         then
                            Flash_End := Landin.Targets.Byte_Count'Max
                              (Flash_End, Physical + File_Size);
@@ -729,15 +732,17 @@ package body Landin.Build_Reports.Firmware is
             elsif Size > 0 and then Profile.Layout /= Firmware.RAM_Layout
               and then not Within
               (Value (Load), Size,
-               Firmware.Placed_Region (Profile, Firmware.Text))
+               Profile.Regions (Firmware.Image_Region (Profile)))
             then
                return "clause 4, the initialized images: " & Name
                  & "'s load image at "
                  & Landin.Backend.Firmware.Hex (Value (Load))
                  & " is not in "
                  & Firmware.Spelling
-                     (Firmware.Placed_Region (Profile, Firmware.Text).Name)
-                 & ", where text is placed";
+                     (Profile.Regions (Firmware.Image_Region (Profile)).Name)
+                 & (if Firmware.Copied (Profile, Firmware.Text)
+                    then ", where the vectors are placed"
+                    else ", where text is placed");
             elsif Size > 0 and then Loaded (Value (Load), Size)
               = Natural'Last
             then
@@ -834,6 +839,15 @@ package body Landin.Build_Reports.Firmware is
          for Part of Image_Parts loop
             Need ("_landin_firmware_data_" & Part.all);
             Need ("_landin_firmware_ramtext_" & Part.all);
+         end loop;
+         --  D1359: the text and read-only data reset copies.
+         for Section in Firmware.Text .. Firmware.Rodata loop
+            if Firmware.Copied (Profile, Section) then
+               for Part of Image_Parts loop
+                  Need ("_landin_firmware_" & Firmware.Spelling (Section)
+                    & "_" & Part.all);
+               end loop;
+            end if;
          end loop;
          Need ("_landin_firmware_bss_start");
          Need ("_landin_firmware_bss_end");
@@ -998,6 +1012,65 @@ package body Landin.Build_Reports.Firmware is
                end;
             end if;
          end;
+
+         --  Clause 1, D1359: in an image that boots from its own memory,
+         --  reset, a stage before it, the copy and the unhandled entry
+         --  run where the image loads them, not from memory reset fills.
+         if Firmware.Boots_From_Image (Profile) then
+            declare
+               Stage : constant String :=
+                 (if Profile.Has_Stage
+                    and then Firmware.Stage_Before_Reset (Profile.Boot)
+                  then Firmware.Reset_Stage_Symbol else "");
+               Copy : constant String :=
+                 (if Has ("_landin_firmware_image_copy")
+                  then "_landin_firmware_image_copy" else "");
+               type Name_List is array (Positive range <>)
+                 of US.Unbounded_String;
+               Names : constant Name_List :=
+                 [US.To_Unbounded_String (Firmware.Reset_Symbol),
+                  US.To_Unbounded_String (Stage),
+                  US.To_Unbounded_String (Copy),
+                  US.To_Unbounded_String ("_landin_firmware_unhandled")];
+               Header : constant Natural := Natural (Word (28));
+            begin
+               for Named of Names loop
+                  declare
+                     Name : constant String := US.To_String (Named);
+                     Address : Landin.Targets.Byte_Count;
+                     In_Place : Boolean := False;
+                  begin
+                     if Name /= "" and then Has (Name) then
+                        Address := (Value (Name) / 2) * 2;
+                        for Index in 0 .. Natural (Number (44, 2)) - 1 loop
+                           declare
+                              At_Entry : constant Natural :=
+                                Header + Index * 32;
+                              Virtual : constant Landin.Targets.Byte_Count :=
+                                Word (At_Entry + 8);
+                           begin
+                              if Word (At_Entry) = 1
+                                and then Word (At_Entry + 12) = Virtual
+                                and then Address >= Virtual
+                                and then Address
+                                  < Virtual + Word (At_Entry + 16)
+                              then
+                                 In_Place := True;
+                              end if;
+                           end;
+                        end loop;
+                        if not In_Place then
+                           return "clause 1, the vector table: " & Name
+                             & " at " & Landin.Backend.Firmware.Hex (Address)
+                             & " is not loaded where it runs; reset, its"
+                             & " copies and the unhandled entry stay where"
+                             & " reset finds them";
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end if;
 
          --  Clause 3: the stack, in a writable region, of its size.
          declare
@@ -1224,7 +1297,23 @@ package body Landin.Build_Reports.Firmware is
             end loop;
          end if;
 
-         --  Clause 4: each initialized image loads from flash.
+         --  Clause 4: each initialized image loads from flash, the text and
+         --  read-only data reset copies first (D1359).
+         for Section in Firmware.Text .. Firmware.Rodata loop
+            if Firmware.Copied (Profile, Section) then
+               declare
+                  Stem : constant String :=
+                    "_landin_firmware_" & Firmware.Spelling (Section);
+                  Fault : constant String := Image_Fault
+                    ("." & Firmware.Spelling (Section), Stem & "_load",
+                     Stem & "_start", Stem & "_end");
+               begin
+                  if Fault /= "" then
+                     return Fault;
+                  end if;
+               end;
+            end if;
+         end loop;
          declare
             Fault : constant String := Image_Fault
               (".data", "_landin_firmware_data_load",

@@ -12,6 +12,14 @@
 -- marks with __FPU_PRESENT and its product pages call double-precision:
 -- FPv5-D16, which makes the build hard-float at --level=armv7e-m (D615).
 --
+-- The text runs from the ITCM, the M7's 64 KiB of instruction memory at
+-- address zero, which flash's wait states do not slow: a boot image keeps
+-- the text's load image in flash, and reset, the supply stage before it
+-- and the vector table stay in flash, where reset finds them, and copy it
+-- before the entry runs (D1359). Its first eight bytes stay unused, since
+-- a pointer to address zero is null (D1115). A program whose code
+-- outgrows 64 KiB places text in FLASH.
+--
 -- DMA1 and DMA2 cannot reach the DTCM or the ITCM, which only the CPU and
 -- the MDMA reach, so initialized data, BSS and the stack, where prototype
 -- 1's DMA buffers are, are placed in the AXI SRAM, which both reach. A
@@ -29,7 +37,7 @@ linker.region("SRAM4", 0x3800_0000, 64 * 1024, "rw")
 compiler.boot("vector-table")
 compiler.float_unit("fpv5-d16")
 linker.place("vectors", "FLASH")
-linker.place("text", "FLASH")
+linker.place("text", "ITCM")
 linker.place("rodata", "FLASH")
 linker.place("data", "AXI_SRAM")
 linker.place("bss", "AXI_SRAM")

@@ -1,9 +1,0 @@
-class: negative
-summary: D1116: an image that boots from flash keeps its code with the vectors or in memory that is not writable, and its constants there or with the code; reset fills nothing else
-program: program.ldn
-constructs: 1990
-targets: cortex-m0
-codes: L0514, L0514
-args: --target=cortex-m0 --level=armv7-m ../tests/fixtures/negative/description-places-code-where-nothing-loads/program.ldn
-expect: expected.txt
-status: 1

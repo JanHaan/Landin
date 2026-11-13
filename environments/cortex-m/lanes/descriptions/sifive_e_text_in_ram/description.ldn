@@ -1,0 +1,20 @@
+-- QEMU's sifive_e with its code run from RAM: the RV32 reference's flash
+-- and DTIM, the first 12 KiB of the DTIM a region of its own that text is
+-- placed in.  Reset copies the text there from its load image in flash
+-- and keeps itself, the entry word and the trap entries with the vector
+-- table (D1359); the descriptions lane runs the image from reset, and
+-- again with the copy left out.  A lane description, not a chip's.
+
+compiler.device("sifive-e-text-in-ram")
+compiler.core("sifive-e31")
+compiler.vectors(16)
+compiler.boot("vector-table")
+linker.region("FLASH", 0x2040_0000, 32 * 1024, "rx")
+linker.region("CODE", 0x8000_0000, 12 * 1024, "rwx")
+linker.region("RAM", 0x8000_3000, 4 * 1024, "rw")
+linker.place("vectors", "FLASH")
+linker.place("text", "CODE")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 2 * 1024)

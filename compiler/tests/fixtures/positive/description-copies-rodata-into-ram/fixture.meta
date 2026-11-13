@@ -1,0 +1,9 @@
+class: positive
+summary: D1359 a Cortex-M0 flash image whose description places rodata in RAM that may not execute is accepted: reset copies the constants from their load image in flash
+program: main.ldn
+root: devices
+args: --target=cortex-m0 --firmware-entry=start
+expect: expected.txt
+status: 0
+constructs: 1640, 1990
+targets: cortex-m0

@@ -1,0 +1,7 @@
+class: end-to-end
+summary: D1359 D546: a description places text in a RAM region at address zero, and a developer's script links the text there with no load image in flash, so reset would copy nothing into it; the image breaks clause 4 of the firmware linker script contract, L0519, naming the text; a stand-in driver writes the image the pinned Arm driver linked
+constructs: 1650
+targets: cortex-m0
+expect: expected.txt
+args: compile --root=../tests/fixtures/end-to-end/firmware-linker-script-leaves-copied-text-unloaded/devices --target=cortex-m0 --firmware-entry=start --emit=exe --linker-script=../tests/fixtures/end-to-end/firmware-linker-script-leaves-copied-text-unloaded/dev.ld --toolchain=../tests/fixtures/end-to-end/firmware-linker-script-leaves-copied-text-unloaded/driver -o build/firmware-linker-script-leaves-copied-text-unloaded.elf ../tests/fixtures/end-to-end/firmware-linker-script-leaves-copied-text-unloaded/app
+status: 1

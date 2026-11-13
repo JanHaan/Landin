@@ -1174,8 +1174,8 @@ package body Landin.Tests.RV32_Firmware_Suite is
          & U.To_String (Said));
    end RAM_Layout;
 
-   --  D1114 to D1116: what the derived script holds for placements no
-   --  description of the repository has.
+   --  D1114, D1115 and D1359: what the derived script holds for
+   --  placements no description of the repository has.
    procedure Script_Guards (Item : in out Landin.Testing.Context);
    procedure Script_Guards (Item : in out Landin.Testing.Context) is
       function Placed
@@ -1244,25 +1244,104 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Landin.Testing.Check
         (Item, not Contains (U.To_String (Shared.Script), "ABSOLUTE(."),
          "no other region's sections are padded");
+      --  D1359: each is copied at reset from a load image in the
+      --  vectors' region, IRAM here, and reset stays there with them.
       Landin.Testing.Check
-        (Item, Constants.Status /= Landin.Driver.Status_Success
-           and then Contains (U.To_String (Constants.Said), "error[L0514]")
+        (Item, Constants.Status = Landin.Driver.Status_Success
            and then Contains
-             (U.To_String (Constants.Said),
-              "nothing fills DRAM at reset, and rodata placed there")
-           and then U.Length (Constants.Script) = 0,
-         "constants in RAM a flash image does not fill are refused: "
-         & U.To_String (Constants.Said));
+             (U.To_String (Constants.Script),
+              "  .rodata : {" & LF
+              & "    _landin_firmware_rodata_start = .;" & LF
+              & "    *(.rodata .rodata.* .srodata .srodata.*)" & LF
+              & "    _landin_firmware_rodata_end = .;" & LF
+              & "  } > DRAM AT> IRAM :rodata" & LF
+              & "  _landin_firmware_rodata_load = LOADADDR(.rodata);" & LF)
+           and then not Contains
+             (U.To_String (Constants.Script), ".landin_boot"),
+         "constants in RAM a flash image boots from are copied from flash: "
+         & U.To_String (Constants.Said) & U.To_String (Constants.Script));
       Landin.Testing.Check
-        (Item, Code.Status /= Landin.Driver.Status_Success
-           and then Contains (U.To_String (Code.Said), "error[L0514]")
+        (Item, Code.Status = Landin.Driver.Status_Success
            and then Contains
-             (U.To_String (Code.Said),
-              "nothing fills DRAM at reset, and text placed there")
-           and then U.Length (Code.Script) = 0,
-         "code in RAM a flash image does not boot from is refused: "
-         & U.To_String (Code.Said));
+             (U.To_String (Code.Script),
+              "  .landin_boot : { *(.text.landin_firmware_reset_stage)"
+              & " *(.text.landin_firmware_reset .text.landin_reset)"
+              & " *(.text.landin_firmware_unhandled)"
+              & " *(.text.landin_firmware_trap"
+              & " .text.landin_firmware_vector_addresses) } > IRAM :image"
+              & LF
+              & "  .text : {" & LF
+              & "    _landin_firmware_text_start = .;" & LF
+              & "    *(.text .text.*)" & LF
+              & "    _landin_firmware_text_end = .;" & LF
+              & "  } > DRAM AT> IRAM :text" & LF
+              & "  _landin_firmware_text_load = LOADADDR(.text);" & LF)
+           and then Contains
+             (U.To_String (Code.Script),
+              "  .rodata : { *(.rodata .rodata.* .srodata .srodata.*) } > IRAM"
+              & " :rodata" & LF),
+         "code in RAM a flash image boots from is copied, and reset stays"
+         & " with the table: " & U.To_String (Code.Said)
+         & U.To_String (Code.Script));
    end Script_Guards;
+
+   --  D1359: reset copies text and read-only data placed in RAM from
+   --  their load images before the data, between the two labels, and a
+   --  handler in the copied text, out of a slot's reach, is entered
+   --  through its stub, its landing copied with it.
+   procedure Copied_Images (Item : in out Landin.Testing.Context);
+   procedure Copied_Images (Item : in out Landin.Testing.Context) is
+      Description : constant String :=
+        "compiler.device(""dev"")" & LF
+        & "compiler.core(""sifive-e31"")" & LF
+        & "compiler.vectors(16)" & LF
+        & "compiler.boot(""vector-table"")" & LF
+        & "linker.region(""FLASH"", 0x2040_0000, 32 * 1024, ""rx"")" & LF
+        & "linker.region(""CODE"", 0x8000_0000, 8 * 1024, ""rwx"")" & LF
+        & "linker.region(""RAM"", 0x8000_2000, 8 * 1024, ""rw"")" & LF
+        & "linker.place(""vectors"", ""FLASH"")" & LF
+        & "linker.place(""text"", ""CODE"")" & LF
+        & "linker.place(""rodata"", ""RAM"")" & LF
+        & "linker.place(""data"", ""RAM"")" & LF
+        & "linker.place(""bss"", ""RAM"")" & LF
+        & "linker.place(""stack"", ""RAM"", 2 * 1024)" & LF;
+      Program : constant String :=
+        "link(vector: 3) extern(naked) soft: () -> none =" & LF
+        & "    assembler.block(""mret"")" & LF & "end soft" & LF;
+      Text, Said : U.Unbounded_String;
+      Copy : constant String :=
+        "_landin_firmware_image_copy:" & LF
+        & "la a0, _landin_firmware_text_load" & LF
+        & "la a1, _landin_firmware_text_start" & LF
+        & "la a2, _landin_firmware_text_end" & LF
+        & "beq a0, a1, 2f" & LF;
+      Rodata : constant String :=
+        "la a0, _landin_firmware_rodata_load" & LF
+        & "la a1, _landin_firmware_rodata_start" & LF
+        & "la a2, _landin_firmware_rodata_end" & LF;
+      Copied : constant String :=
+        "_landin_firmware_image_copied:" & LF
+        & "la a0, _landin_firmware_data_load" & LF;
+   begin
+      Assembly_Of (Description, Program, Text, Said);
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Text), Copy)
+           and then Contains (U.To_String (Text), Rodata)
+           and then Contains (U.To_String (Text), Copied)
+           and then Ada.Strings.Fixed.Index (U.To_String (Text), Copy)
+             < Ada.Strings.Fixed.Index (U.To_String (Text), Rodata)
+           and then Ada.Strings.Fixed.Index (U.To_String (Text), Rodata)
+             < Ada.Strings.Fixed.Index (U.To_String (Text), Copied),
+         "reset copies text, then read-only data, then data: "
+         & U.To_String (Said) & U.To_String (Text));
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Text), 3), "j _landin_firmware_far_3",
+         "a routine in text copied out of reach is entered through its stub");
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Text),
+           ".section .text.landin_far_3,""ax"",@progbits" & LF),
+         "its landing is linked in the copied text: " & U.To_String (Text));
+   end Copied_Images;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -1287,6 +1366,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Landin.Testing.Register
         (Into, "rv32 firmware", "the derived script guards its placements",
          Script_Guards'Access);
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "copied text and constants load from flash",
+         Copied_Images'Access);
       Landin.Testing.Register
         (Into, "rv32 firmware", "descriptions select their profiles",
          Profiles_Are_Derived'Access);

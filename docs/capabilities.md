@@ -68,9 +68,10 @@ paragraph of `tour.md` or `spec.md`; `refine explain D542` prints either.
   `link(region: ...)` places a declaration in a named region (D547). A
   generic routine's `section:`, `align:` and `region:` place every instance
   the program makes of it (D1322).
-  A flash image keeps `text` and `rodata` where reset need not put them:
-  a description that places either in RAM nothing loads is refused with
-  L0514 (D1116). The link asserts the stack's reservation against whatever
+  A flash image whose description places `text` or `rodata` in RAM it
+  does not boot from gives the section a load image in flash, and reset,
+  which stays with the vector table, copies it before anything reads it
+  (D1359); the STM32H753 runs its text from its ITCM so. The link asserts the stack's reservation against whatever
   shares its region (D1114), the build report's `flash_remaining` leaves
   out a stack reserved in text's region, and nothing a program declares is
   placed at address zero (D1115).

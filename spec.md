@@ -2310,8 +2310,9 @@ Reset masks configurable interrupts, initializes reserved r9 and the root
 r11 to zero, and, when the description has a float unit (D615), gives CP10
 and CP11 full access in CPACR followed by DSB and ISB, before anything can
 execute a float instruction, leaving lazy stacking at its reset default
-(D618). It then copies initialized RAM data and RAM code from their load
-addresses, skipping a copy whose source is already its destination, and
+(D618). It then copies text and read-only data a description places in
+RAM (D1359), then initialized RAM data and RAM code, each from its load
+address, skipping a copy whose source is already its destination, and
 clears BSS. `--firmware-layout=ram` derives an in-place SRAM image instead
 of the default boot image (D900); a debugger establishes the core and
 device state before entering its startup. DSB and ISB precede unmasking and transfer to the
@@ -2319,7 +2320,8 @@ selected entry. It does not call user module initializers [1460]/[1940],
 construct a hosted environment, allocate memory or run a scheduler. This reset
 contract assumes execution through the hardware reset vector, with no NMI or
 fault during initialization; a custom NMI/HardFault handler cannot assume
-initialized storage before reset has completed it. D232 routes ordinary entry return and failed language checks to the selected
+initialized storage before reset has completed it, nor, where reset copies
+the text, that its own code is there yet. D232 routes ordinary entry return and failed language checks to the selected
 panic handler, or the terminal default. Naked fallthrough retains its
 undefined-instruction guard. Hardware faults retain hardware fault dispatch;
 no failure is returned to a nonexistent hosted caller. `none` remains absence of a result, not the
@@ -2569,7 +2571,8 @@ overlap and the vector address/size; unresolved symbols and relocation or
 encoding failures remain reported tool failures. Before emission the
 program's static images are held to the selected profile's capacities
 (D537): every written image, including one section GC would drop, to the
-region text is placed in, 32 KiB in the reference, and every mutable written
+region text is placed in, 32 KiB in the reference, or the vectors' when
+reset copies the text (D1359), and every mutable written
 image to the data region, 16 KiB in the reference. The linker stays the
 authority for the map itself.
 Hosted placement annotations, arbitrary section addresses,
@@ -27902,10 +27905,12 @@ two and no less than 128 bytes, fits its region past the boot kind's
 prefix; the table is no longer than the core's architecture allows, 48
 words on ARMv6-M and 512 on ARMv7-M, and on a RISC-V core what D662 gives
 it; each interrupt's slot is inside it;
-and the stack fits its region; and in an image that boots from its own
-memory, `text` is with the vectors or in a region that may not be written,
-and `rodata` there or with `text` (D1116). Those are L0514. `.ramtext` is
-placed with `data`, and every load image in the region `text` is placed in.
+and the stack fits its region. Those are L0514. In an image that boots
+from its own memory, `text` or `rodata` placed in a writable region other
+than the vectors' is copied there at reset from a load image in flash
+(D1359), where D1116 refused it before. `.ramtext` is placed with `data`,
+and every load image is in the region `text` is placed in, or in the
+vectors' when reset copies the text.
 
 A description's core must execute what the request builds: the target is
 its core's family's, `cortex-m0` for an Arm core and `rv32` for a RISC-V
@@ -27991,7 +27996,10 @@ in the stack's region reaches the stack, whichever sections those are
 (D1114), and that the last load image ends inside the text region. A
 section that would begin at address zero leaves its first eight bytes
 unused (D1115). Reset copies and clears what the script places, by
-the `_landin_firmware_*` symbols. For the constrained reference the script
+the `_landin_firmware_*` symbols. Text or read-only data placed in RAM a
+flash image does not boot from is copied there too, its load image in the
+vectors' region when the text is copied, with reset kept there (D1359).
+For the constrained reference the script
 is, byte for byte, the one D229 fixed.
 
 A boot image kind is a fact of the target, not of a device. The closed set
@@ -28091,8 +28099,10 @@ D546's fifth clause.
 
 **Pinned by** `rv32 firmware/the derived script guards its placements`,
 the padding in the data and BSS sections of a region at zero and its
-absence elsewhere. The review's program on `descriptions/stm32h753` now
-links its datum at address 8.
+absence elsewhere. The review's program on `descriptions/stm32h753` linked
+its datum at address 8; since D1359 that description places its text in
+the ITCM, whose first routine is at 8, and the descriptions lane holds a
+developer's script without the text's eight bytes to clause 5.
 
 ### D1116 — A flash image keeps code and constants where reset need not put them
 
@@ -28124,11 +28134,84 @@ load image in flash and having reset copy it before anything reads it, as
 that is the way to grant it, but it is new startup code on every firmware
 target and not a repair; until it exists the placement is refused rather
 than accepted and wrong. The maintainer confirmed it and scheduled the load image and reset copy
-(see the roadmap).
+(see the roadmap). D1359 later granted it, and the refusal is gone.
 
-**Pinned by** `negative/description-places-code-where-nothing-loads`, both
-refusals, and `rv32 firmware/the derived script guards its placements`,
-each alone.
+**Pinned by** D1359's evidence now; `rv32 firmware/the derived script
+guards its placements` holds both placements accepted.
+
+`negative/description-places-code-where-nothing-loads`, which pinned both
+refusals, was retired with them.
+
+### D1359 — A flash image copies the text and constants it places in RAM
+
+**The tour said** nothing; D1116 refused `text` or `rodata` placed in RAM a
+flash image does not boot from, and kept a load image with a reset copy,
+as `.ramtext` has, as the way to grant them, which the maintainer
+scheduled.
+
+**Chosen:** in an image that boots from its own memory, which is every
+image but one built with `--firmware-layout=ram` and those an ESP ROM
+loads, an `esp-app-image` and every Xtensa image, a `text` or `rodata`
+placed in a writable region other than the vectors' is copied. Its output
+section runs or is read in its region and is loaded from the image's
+flash, which holds every load image: the vectors' region when the text is
+copied, and the text's otherwise, which reset reads in place. A copied
+section's bounds and load address are
+`_landin_firmware_text_start`, `_end` and `_load`, or `rodata`'s, and
+reset copies text, then read-only data, before data, RAM code, BSS and a
+used region's sections, so before any constant, string or evidence table
+is read, a byte at a time as the other copies are, between the labels
+`_landin_firmware_image_copy` and `_landin_firmware_image_copied` that a
+debugger finds it by. A description's stage runs before the copy, as it
+does before reset's every write (D653, D684).
+
+When the text is copied, what reset needs before it is copied stays where
+reset finds it: a `.landin_boot` section after the vector table, in the
+vectors' region, holds the description's stage, reset with its copies,
+the unhandled entry and, on `rv32`, the trap entries and the CLIC's table
+of addresses. Reset reaches the entry through the linker's veneer where a
+Thumb `bl` cannot, and an `rv32` slot whose routine is in copied text a
+`j` cannot reach enters it through D1290's stub, its landing linked in
+the text. The unwind tables and an archive's initializer array stay in
+the image's flash, and the build report's flash, its capacity and the
+image budget's (D537) are that region's. Without a copied section the
+script and reset are what they were, so the reference's script is still
+D229's byte for byte and no other image changes.
+
+What stays refused is what D543 refuses: a copy does not make memory
+executable, so `text` in a region that may not execute is L0514, and no
+other placement of `text` or `rodata` is. D546's contract holds a
+developer's script to the rule: clause 2 asks for the copied sections'
+symbols, clause 4 for their load images in the image's flash, and clause
+1 for reset, a stage before it, the copy and the unhandled entry each in
+a segment loaded where it runs.
+
+The STM32H753's description places its text in the ITCM, the M7's 64 KiB
+of instruction memory at zero, which flash's wait states do not slow, and
+its cached profile's does the same: its board's boot image, the
+application whose record the board tool's oracle checks from power-on,
+runs 47,976 bytes of text from it, and the ITCM read over SWD after the
+run holds the text's load image. A program whose code outgrows 64 KiB
+places text in FLASH.
+
+**The alternatives:** a directive of its own for copied sections, such as
+a `linker.copy`, which says again what `linker.place` already says;
+copying words rather than bytes, quicker for a large image and unlike
+the copies beside it; keeping reset in the copied text, which the reset
+vector cannot reach before the copy; and leaving the STM32H753's text in
+flash, which leaves no board running code from RAM after power-on.
+
+**Pinned by** `positive/description-copies-text-into-ram`,
+`positive/description-copies-rodata-into-ram`,
+`negative/description-places-code-where-it-cannot-run`,
+`end-to-end/firmware-linker-script-leaves-copied-text-unloaded` and
+`end-to-end/firmware-linker-script-copies-reset`; the `rv32 firmware`
+cases `the derived script guards its placements` and `copied text and
+constants load from flash`; the descriptions lane, which runs the lane
+descriptions `microbit_text_in_ram`, `microbit_rodata_in_ram`,
+`sifive_e_text_in_ram` and `sifive_e_rodata_in_ram` from reset under QEMU
+and again with the debugger moving reset past the copy, which the same
+oracle refuses; and the STM32H753's boot record.
 
 ### D546 — A developer's linker script is held to a written contract
 
@@ -28147,15 +28230,20 @@ naming it, the executable is removed and the derived script is offered:
    start of its region, its last word the CRC-32 of its first 252 bytes
    (D588), and for `rp2350-image-block` the image block refine checked,
    its words as D637 gives them, ending in the first 4 KiB of the vectors'
-   region (D638);
+   region (D638), and in an image that boots from its own memory reset, a
+   stage before it, reset's copy and the unhandled entry each loaded where
+   it runs, not in memory reset fills (D1359);
 2. the startup symbols: every `_landin_firmware_*` symbol reset reads, the
-   stack's two, and each used region's;
+   stack's two, each used region's, and those of text and read-only data
+   reset copies (D1359);
 3. the stack: in a writable region of the description, its top aligned to
    eight bytes, its size the description's, and no data, RAM code or BSS
    reaching into it, nor any other allocated section with content, the
    vector table, text and read-only data among them (D1114, D1323);
-4. the initialized images: each load image of data, RAM code and a used
-   writable region in the region text is placed in, held in the file;
+4. the initialized images: each load image of copied text and read-only
+   data, data, RAM code and a used writable region in the region text is
+   placed in, or the vectors' when the text is copied (D1359), held in the
+   file;
 5. address zero: no datum or routine at address zero, where a pointer is
    null (D1115, D1323).
 

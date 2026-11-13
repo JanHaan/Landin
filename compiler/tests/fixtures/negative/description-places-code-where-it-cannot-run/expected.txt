@@ -1,0 +1,6 @@
+error[L0514]: text needs a region code runs in, and DTCM is rw
+  --> ../tests/fixtures/negative/description-places-code-where-it-cannot-run/program.ldn:9:1
+  |
+9 | linker.place("text", "DTCM")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D543: place text in an "rx" or "rwx" region

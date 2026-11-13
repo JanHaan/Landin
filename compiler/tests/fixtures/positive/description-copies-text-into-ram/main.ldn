@@ -1,0 +1,17 @@
+--  D1359: a flash image whose description places its text in RAM the
+--  image does not boot from, a tightly coupled memory at address zero, is
+--  accepted: the text is given a load image in flash beside the vectors,
+--  and reset, which stays with them, copies it before calling the entry.
+--  The handler a vector slot names is copied with the rest of the text.
+import board
+
+table: [4]u32 = [5, 8, 13, 21]
+mut counted: u32 = 1
+
+link(vector: 15) extern(interrupt) tick: () -> none =
+    counted += table[1]
+end tick
+
+start: () -> none =
+    counted += table[0]
+end start

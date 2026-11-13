@@ -134,8 +134,39 @@ package body Landin.Backend.Firmware is
       Returned : String := "udf #1";
       Debug : Boolean := False) return String
    is
-      Regions : US.Unbounded_String;
+      Regions, Images : US.Unbounded_String;
    begin
+      --  D1359: text and read-only data reset copies, first, between
+      --  the two labels a debugger finds the copy by.
+      for Section in Profiles.Text .. Profiles.Rodata loop
+         if Profiles.Copied (Profile, Section) then
+            declare
+               Stem : constant String :=
+                 "_landin_firmware_" & Profiles.Spelling (Section);
+            begin
+               US.Append (Images,
+                 "ldr r0, =" & Stem & "_load" & LF
+                 & "ldr r1, =" & Stem & "_start" & LF
+                 & "ldr r2, =" & Stem & "_end" & LF
+                 & "cmp r0, r1" & LF
+                 & "beq 9f" & LF
+                 & "8:" & LF
+                 & "cmp r1, r2" & LF
+                 & "bcs 9f" & LF
+                 & "ldrb r3, [r0]" & LF
+                 & "strb r3, [r1]" & LF
+                 & "adds r0, #1" & LF
+                 & "adds r1, #1" & LF
+                 & "b 8b" & LF
+                 & "9:" & LF);
+            end;
+         end if;
+      end loop;
+      if US.Length (Images) > 0 then
+         Images := US.To_Unbounded_String
+           ("_landin_firmware_image_copy:" & LF & US.To_String (Images)
+            & "_landin_firmware_image_copied:" & LF);
+      end if;
       --  D547: a writable region a placement uses is loaded and cleared
       --  as .data and .bss are, after them.
       for Index in 1 .. Profile.Count loop
@@ -205,6 +236,7 @@ package body Landin.Backend.Firmware is
              & "str r1, [r0]" & LF
              & "dsb sy" & LF
              & "isb sy" & LF)
+        & US.To_String (Images)
         & (if Profile.Layout = Profiles.RAM_Layout then "" else
         "ldr r0, =_landin_firmware_data_load" & LF
         & "ldr r1, =_landin_firmware_data_start" & LF
@@ -495,7 +527,12 @@ package body Landin.Backend.Firmware is
             Last_Slot : constant Landin.Targets.Byte_Count :=
               Table + Profiles.Vector_Bytes (Profile);
          begin
-            if Index = 0 or else Index = Profile.Placed (Profiles.Text) then
+            --  The text a slot reaches, unless reset copies it elsewhere
+            --  (D1359), where it is as far as the region it is copied to.
+            if Index = 0
+              or else (Index = Profile.Placed (Profiles.Text)
+                       and then not Profiles.Copied (Profile, Profiles.Text))
+            then
                return False;
             end if;
             declare
@@ -527,7 +564,7 @@ package body Landin.Backend.Firmware is
 
       --  The section a far routine's landing is linked in, with the
       --  routine: its region's, spelled as the backend spells an item's,
-      --  or RAM code's.
+      --  RAM code's, or the text's when reset copies it (D1359).
       function Landing_Section (Slot : Natural) return String;
       function Landing_Section (Slot : Natural) return String is
          use type Landin.Source.Names.Name_Id;
@@ -536,7 +573,14 @@ package body Landin.Backend.Firmware is
          Name : constant String := "landin_far_"
            & Number (Landin.Targets.Byte_Count (Slot));
       begin
-         if Attr.Region = Landin.Source.Names.No_Name then
+         if Attr.Region = Landin.Source.Names.No_Name
+           and then (Attr.Section = Landin.Source.Names.No_Name
+                     or else Ada.Strings.Fixed.Head
+                       (Landin.Source.Names.Spelling (Names, Attr.Section), 9)
+                       /= ".ramtext.")
+         then
+            return ".text." & Name;
+         elsif Attr.Region = Landin.Source.Names.No_Name then
             return ".ramtext." & Name;
          end if;
          return ".landin_region."
@@ -828,7 +872,24 @@ package body Landin.Backend.Firmware is
       end if;
 
       --  D680: reset, which the entry word or the stage enters with every
-      --  register unknown.
+      --  register unknown.  D1359: text and read-only data reset copies,
+      --  first, between the two labels a debugger finds the copy by.
+      if Profiles.Copied (Profile, Profiles.Text)
+        or else Profiles.Copied (Profile, Profiles.Rodata)
+      then
+         Line (Regions, "_landin_firmware_image_copy:");
+         for Section in Profiles.Text .. Profiles.Rodata loop
+            if Profiles.Copied (Profile, Section) then
+               declare
+                  Stem : constant String :=
+                    "_landin_firmware_" & Profiles.Spelling (Section);
+               begin
+                  Copy (Stem & "_load", Stem & "_start", Stem & "_end");
+               end;
+            end if;
+         end loop;
+         Line (Regions, "_landin_firmware_image_copied:");
+      end if;
       Copy ("_landin_firmware_data_load", "_landin_firmware_data_start",
             "_landin_firmware_data_end");
       Copy ("_landin_firmware_ramtext_load",
@@ -1454,6 +1515,16 @@ package body Landin.Backend.Firmware is
         (Profiles.Spelling
            (Profiles.Placed_Region (Profile, Section).Name));
       Flash : constant String := Placed (Profiles.Text);
+      --  D1359: the region the load images are in, which is the text's
+      --  unless reset copies the text, and then the vectors'.
+      Image_At : constant Profiles.Region_Count :=
+        Profiles.Image_Region (Profile);
+      Image : constant String :=
+        Profiles.Spelling (Profile.Regions (Image_At).Name);
+      Copies_Text : constant Boolean :=
+        Profiles.Copied (Profile, Profiles.Text);
+      Copies_Rodata : constant Boolean :=
+        Profiles.Copied (Profile, Profiles.Rodata);
       Data : constant String := Placed (Profiles.Data);
       Stack_At : constant Profiles.Region_Count :=
         Profile.Placed (Profiles.Stack);
@@ -1490,7 +1561,7 @@ package body Landin.Backend.Firmware is
       Ramtext_With_Text : constant Boolean := Profiles.RAM_Only (Profile);
       RAM : constant Boolean := Profile.Layout = Profiles.RAM_Layout;
       function Load_From_Text return String is
-        (if RAM or Xtensa then "" else " AT> " & Flash);
+        (if RAM or Xtensa then "" else " AT> " & Image);
       Ramtext : constant String :=
         "  .ramtext : ALIGN(8) {" & LF
         & "    _landin_firmware_ramtext_start = .;" & LF
@@ -1551,13 +1622,16 @@ package body Landin.Backend.Firmware is
          End_Of (if Profiles.Takes_Image_Block (Profile.Boot)
                  then ".embedded_block"
                  elsif Xtensa then ".landin_entry" else ".isr_vector"));
+      if Copies_Text then
+         Note_End (Profile.Placed (Profiles.Vectors), End_Of (".landin_boot"));
+      end if;
       Note_End
         (Text_At,
          (if Ramtext_With_Text then "_landin_firmware_ramtext_end"
           else End_Of (".text")));
       Note_End (Rodata_At, End_Of (".rodata"));
       if not Segmented then
-         Note_End (Text_At, End_Of (".ARM.exidx"));
+         Note_End (Image_At, End_Of (".ARM.exidx"));
       end if;
       Note_End
         (Data_At,
@@ -1614,7 +1688,7 @@ package body Landin.Backend.Firmware is
          end if;
       end loop;
       if Archives then
-         Note_End (Text_At, End_Of (".init_array"));
+         Note_End (Image_At, End_Of (".init_array"));
       end if;
       return (if Xtensa
               then "OUTPUT_FORMAT(""elf32-xtensa-le"")" & LF
@@ -1670,26 +1744,54 @@ package body Landin.Backend.Firmware is
            then "  .embedded_block : { KEEP(*(.embedded_block)) } > "
              & Vectors & LF
            else "")
-        & "  .text : {" & Clear_Of_Zero (Text_At) & " "
-        & (if Xtensa then "*(.literal .literal.*) " else "")
-        & "*(.text .text.*)" & Image_Alignment & " } > "
-        & Flash & Segment ("text")
-        & LF
+        --  D1359: when reset copies the text, reset, its copies, the
+        --  description's stage and the entries the table names before
+        --  the copy stay with the table, where reset finds them.
+        & (if Copies_Text
+           then "  .landin_boot : { *(.text.landin_firmware_reset_stage)"
+             & " *(.text.landin_firmware_reset .text.landin_reset)"
+             & " *(.text.landin_firmware_unhandled)"
+             & " *(.text.landin_firmware_trap"
+             & " .text.landin_firmware_vector_addresses) } > " & Vectors
+             & Segment ("image") & LF
+             & "  .text : {" & LF
+             & "    _landin_firmware_text_start = .;" & Clear_Of_Zero (Text_At)
+             & LF
+             & "    *(.text .text.*)" & LF
+             & "    _landin_firmware_text_end = .;" & LF
+             & "  } > " & Flash & Load_From_Text & Segment ("text") & LF
+             & "  _landin_firmware_text_load = LOADADDR(.text);" & LF
+           else "  .text : {" & Clear_Of_Zero (Text_At) & " "
+             & (if Xtensa then "*(.literal .literal.*) " else "")
+             & "*(.text .text.*)" & Image_Alignment & " } > "
+             & Flash & Segment ("text")
+             & LF)
         --  D900, D688: RAM code runs with text when the whole image is
         --  loaded into SRAM; a boot image otherwise copies it into data.
         & (if Ramtext_With_Text
            then Ramtext & "  } > " & Flash & Segment ("text") & LF
            else "")
-        & "  .rodata : {" & Clear_Of_Zero (Rodata_At)
-        & " *(.rodata .rodata.*"
-        & (if RV32 then " .srodata .srodata.*" else "")
-        & ")" & Image_Alignment & " } > "
-        & Placed (Profiles.Rodata)
+        & (if Copies_Rodata
+           then "  .rodata : {" & LF
+             & "    _landin_firmware_rodata_start = .;"
+             & Clear_Of_Zero (Rodata_At) & LF
+             & "    *(.rodata .rodata.*"
+             & (if RV32 then " .srodata .srodata.*" else "") & ")" & LF
+             & "    _landin_firmware_rodata_end = .;" & LF
+             & "  } > " & Placed (Profiles.Rodata) & Load_From_Text
+           else "  .rodata : {" & Clear_Of_Zero (Rodata_At)
+             & " *(.rodata .rodata.*"
+             & (if RV32 then " .srodata .srodata.*" else "")
+             & ")" & Image_Alignment & " } > "
+             & Placed (Profiles.Rodata))
         & (if Profile.Placed (Profiles.Rodata) = Profile.Placed (Profiles.Text)
            then "" else Segment ("rodata")) & LF
+        & (if Copies_Rodata
+           then "  _landin_firmware_rodata_load = LOADADDR(.rodata);" & LF
+           else "")
         & (if Segmented then ""
-           else "  .ARM.extab : { *(.ARM.extab*) } > " & Flash & LF
-             & "  .ARM.exidx : { *(.ARM.exidx*) } > " & Flash & LF)
+           else "  .ARM.extab : { *(.ARM.extab*) } > " & Image & LF
+             & "  .ARM.exidx : { *(.ARM.exidx*) } > " & Image & LF)
         & "  .data : ALIGN(8) {" & LF
         & "    _landin_firmware_data_start = .;" & Clear_Of_Zero (Data_At)
         & LF
@@ -1716,7 +1818,7 @@ package body Landin.Backend.Firmware is
         & US.To_String (Sections)
         & (if Archives
            then "  .init_array : { KEEP(*(.preinit_array .preinit_array.*"
-             & " .init_array .init_array.* .ctors .ctors.*)) } > " & Flash
+             & " .init_array .init_array.* .ctors .ctors.*)) } > " & Image
              & LF
            else "")
         & "  /DISCARD/ : { *(.comment .note.GNU-stack) }" & LF
@@ -1770,7 +1872,7 @@ package body Landin.Backend.Firmware is
         & (if RAM then "" else "ASSERT(LOADADDR("
         & US.To_String (Last_Load) & ") + SIZEOF("
         & US.To_String (Last_Load) & ") <= "
-        & "ORIGIN(" & Flash & ") + LENGTH(" & Flash & ")," & LF
+        & "ORIGIN(" & Image & ") + LENGTH(" & Image & ")," & LF
         & "       ""initialized image exceeds flash"")" & LF);
    end Linker_Script;
 end Landin.Backend.Firmware;

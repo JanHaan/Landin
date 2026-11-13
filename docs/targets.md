@@ -1106,7 +1106,12 @@ ordinary/naked obligations.
 `Backend.Firmware` derives the reset source and the linker script from the
 profile: a MEMORY region for each of the description's, each part of the image
 in the region it is placed in, and an output section, a reset copy and a reset
-clear for each region `link(region: "NAME")` uses (D547). For the reference the
+clear for each region `link(region: "NAME")` uses (D547). A `text` or
+`rodata` placed in a writable region other than the vectors' runs or is read
+there and loads from flash, and reset copies it before data; when the text is
+copied, reset, its copies, the description's stage and the unhandled entry
+stay in a `.landin_boot` section after the vector table, and the vectors'
+region holds every load image (D1359). For the reference the
 script is D229's, byte for byte. The driver retains `OUTPUT.s`, `OUTPUT.o`,
 `OUTPUT.ld`, `OUTPUT.map` and the ELF; `--emit=linker-script` writes the
 script alone, with no program to link (D589). `--linker-script=FILE` links with a
@@ -1115,8 +1120,9 @@ to D546's five clauses: the vector table at the boot address, with the
 second stage or the image block its boot kind gives, the startup
 symbols, the stack in a writable region of its size with no section of
 the image in it (D1114), each initialized image loaded from the text
-region, and no datum or routine at address zero (D1115, D1323); a broken
-one is L0519, naming it.
+region, or the vectors' when the text is copied, with reset where it is
+loaded (D1359), and no datum or routine at address zero (D1115, D1323); a
+broken one is L0519, naming it.
 With `--build-report=PATH`, a successful firmware executable also reports
 post-link occupied flash and static RAM extents, their limits and remaining
 capacity, the reserved stack size, the selected libgcc archive members, and
@@ -1211,11 +1217,13 @@ interrupt. The gate runs its own pinned QEMU the same way; its lanes are
 
 `.text.*` and `.rodata.*` reside in the regions text and rodata are placed in;
 `.data.*`, `.bss.*` and `.ramtext.*` in the data and BSS regions, with load
-images in the text region for initialized data and RAM code.
+images in the text region for initialized data and RAM code, and for text or
+read-only data placed in RAM, whose load images are in the vectors' region
+when the text is copied (D1359).
 Each conformance evidence table has its own `.rodata.landin_evidence_*` input
 section, so section garbage collection can discard an unused table and its
 provider references independently of live tables.
-Startup copies both load images and clears BSS before source entry. GNU ARM
+Startup copies every load image and clears BSS before source entry. GNU ARM
 veneers handle out-of-range calls between flash and RAM. Link assertions bound
 physical images; before emission L0505 independently holds every image the
 compilation lowers, before GC, to the profile's 32 KiB flash, and the mutable

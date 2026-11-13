@@ -17,7 +17,7 @@ from backend import (HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      describe_stack, observed_stack,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
                      hard_float, lane_inputs, lane_of, level_flags, levels_of, link,
-                     measure_overflow, metadata, refine_level, region, target)
+                     flash_region, measure_overflow, metadata, refine_level, region, target)
 from run import CommandFailed, Run, require, workers
 from setup import DEFAULT, installed_tools, sha, supported_host
 
@@ -464,7 +464,8 @@ def overflowed(run, error, profile):
     log = Path(error.log).read_text()
     if 'undefined reference' in log or 'Assembler messages' in log:
         return None
-    parts = {region(profile, 'text')['name']: 'FLASH', region(profile, 'data')['name']: 'RAM'}
+    parts = {region(profile, 'text')['name']: 'FLASH', flash_region(profile)['name']: 'FLASH',
+             region(profile, 'data')['name']: 'RAM'}
     overflows = {}
     for name, value in re.findall(r"region `(\w+)' overflowed by (\d+) bytes", log):
         if name not in parts:

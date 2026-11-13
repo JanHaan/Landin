@@ -1312,6 +1312,17 @@ class ProbeFailures(unittest.TestCase):
             log.write_text('ld: RAM image overlaps the reserved 4 KiB stack\n')
             self.assertEqual(overflowed(None, failed, recorded()), {'RAM': None})
 
+    def test_a_copied_text_keeps_the_image_in_the_vectors_flash(self):
+        #  D1359: the STM32H753 runs its text from the ITCM, and its flash,
+        #  where every load image is, is the vectors' region.
+        from backend import copied, flash_region, recorded
+        h7, reference = recorded('stm32h753'), recorded()
+        self.assertTrue(copied(h7, 'text'))
+        self.assertFalse(copied(h7, 'rodata') or copied(reference, 'text'))
+        self.assertEqual((flash_region(h7)['name'], h7['flash_limit']),
+                         ('FLASH', 2 * 1024 * 1024))
+        self.assertEqual(flash_region(reference)['name'], 'FLASH')
+
     def test_each_description_holds_what_the_reference_holds(self):
         from backend import DESCRIPTIONS, REFERENCE, recorded
         from backend_corpus import dominates

@@ -520,8 +520,37 @@ package Landin.Targets.Firmware is
          then Of_Profile.Placed (Data)
          else 0);
 
+   --  D1359: whether reset is all that fills the image's memory: not when
+   --  the whole image is loaded into RAM, nor under a ROM loader that
+   --  writes every segment where it is mapped, an ESP image's and every
+   --  Xtensa one.
+   function Boots_From_Image (Of_Profile : Profile) return Boolean
+     is (Of_Profile.Layout /= RAM_Layout
+         and then not Takes_ESP_Image (Of_Profile.Boot)
+         and then Of_Profile.Core not in Xtensa_Core);
+
+   --  D1359: whether reset copies SECTION, `text` or `rodata`, from a load
+   --  image: in an image that boots from its own memory, placed in a
+   --  writable region other than the vectors'.
+   function Copied
+     (Of_Profile : Profile; Section : Section_Kind) return Boolean
+     is (Section in Text | Rodata
+         and then Boots_From_Image (Of_Profile)
+         and then Of_Profile.Placed (Section) /= 0
+         and then Of_Profile.Placed (Section)
+           /= Of_Profile.Placed (Vectors)
+         and then Writable
+           (Of_Profile.Regions (Of_Profile.Placed (Section)).Mode));
+
+   --  D1359: the region every load image is in, and the image's flash:
+   --  the vectors', where reset is, when `text` is copied, and the text
+   --  region otherwise, which reset reads in place.
+   function Image_Region (Of_Profile : Profile) return Region_Count
+     is (if Copied (Of_Profile, Text) then Of_Profile.Placed (Vectors)
+         else Of_Profile.Placed (Text));
+
    --  The flash an image may use and the RAM static data may use: the
-   --  text region's length, and the data region's less the stack when the
+   --  image region's length, and the data region's less the stack when the
    --  stack shares it.
    function Flash_Capacity (Of_Profile : Profile) return Byte_Count;
    function RAM_Capacity (Of_Profile : Profile) return Byte_Count;

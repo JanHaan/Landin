@@ -2205,6 +2205,68 @@ item 4 ROUTINE good result none signature 2 params 0 slots 0 blocks 1 values 3
     1 PLACE_ADDRESS usize
     2 CALL none callee 3 retain signature 1 <- 1
     3 LEAVE
+file positive/description-copies-rodata-into-ram/main.ldn
+target cortex-m0 level armv6-m
+unit signatures 1 items 3
+signature 1 () -> none
+item 1 DATUM table result array params 0 slots 0 blocks 1 values 1
+  elements 4 of u32
+  image 5 8 13 21
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM counted result u32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u32 1
+    2 LEAVE <- 1
+item 3 ROUTINE start result none signature 1 params 0 slots 2 blocks 1 values 11
+  slot 1 - u32
+  slot 2 - u32
+  block 1 scope 7 BLOCK length 11
+    1 LOAD_DATUM u32 datum 2 counted
+    2 STORE slot 1 <- 1
+    3 LOAD_FIELD u32 datum 1 table field 1
+    4 STORE slot 2 <- 3
+    5 LOAD_FIELD u32 datum 1 table field 4
+    6 LOAD u32 slot 2
+    7 ADD u32 <- 6 5
+    8 LOAD u32 slot 1
+    9 ADD u32 <- 8 7
+    10 STORE_DATUM datum 2 counted <- 9
+    11 LEAVE
+file positive/description-copies-text-into-ram/main.ldn
+target cortex-m0 level armv6-m
+unit signatures 2 items 4
+signature 1 extern(interrupt) () -> none
+signature 2 () -> none
+item 1 DATUM table result array params 0 slots 0 blocks 1 values 1
+  elements 4 of u32
+  image 5 8 13 21
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM counted result u32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u32 1
+    2 LEAVE <- 1
+item 3 ROUTINE tick result none signature 1 params 0 slots 1 blocks 1 values 7
+  slot 1 - u32
+  block 1 scope 7 BLOCK length 7
+    1 LOAD_DATUM u32 datum 2 counted
+    2 STORE slot 1 <- 1
+    3 LOAD_FIELD u32 datum 1 table field 2
+    4 LOAD u32 slot 1
+    5 ADD u32 <- 4 3
+    6 STORE_DATUM datum 2 counted <- 5
+    7 LEAVE
+item 4 ROUTINE start result none signature 2 params 0 slots 1 blocks 1 values 7
+  slot 1 - u32
+  block 1 scope 9 BLOCK length 7
+    1 LOAD_DATUM u32 datum 2 counted
+    2 STORE slot 1 <- 1
+    3 LOAD_FIELD u32 datum 1 table field 1
+    4 LOAD u32 slot 1
+    5 ADD u32 <- 4 3
+    6 STORE_DATUM datum 2 counted <- 5
+    7 LEAVE
 file positive/discard-of-a-value/program.ldn
 unit signatures 1 items 1
 signature 1 () -> none

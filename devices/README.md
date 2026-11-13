@@ -499,7 +499,9 @@ It boots from the plain vector table at 0x0800_0000, whose reset word is
 the description's [`supply.ldn`](descriptions/stm32h753/supply.ldn): RM0433
 permits no RAM write until the supply is configured (6.4.1, p. 262), so
 that stage writes PWR_CR3 for the LDO and waits for PWR_CSR1's ACTVOSRDY,
-with registers alone, before it enters compiler-owned reset (D653). It names
+with registers alone, before it enters compiler-owned reset (D653). Its
+text runs from the ITCM, which reset fills from the text's load image in
+flash before the entry, itself staying in flash with the table (D1359). It names
 its Cortex-M7's float unit, `compiler.float_unit("fpv5-d16")`, which makes
 the build hard-float (D615, D621). The profile is
 cacheless: startup leaves the M7's caches disabled, as reset leaves them,

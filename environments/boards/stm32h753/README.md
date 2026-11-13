@@ -119,6 +119,7 @@ greater or equal 16, greater 32.
 | the warm RAM entry | the helper validates SRAM-only load segments, writes and reads them back, establishes the vector/trap base, stack and entry, and reports `flash_written: false`; the physical scenario then checks device behavior |
 | the startup frame (RAM mode) | VTOR equals the loaded ELF table; caches are disabled, LDO supply and valid VOS3 are checked as in the boot oracle, and CP10/CP11 must permit the float unit; reset flags are observed without a power-on assertion |
 | the ELF's vector table (boot artifact) | 166 words at 0x0800_0000, the boot address (RM0433 2.6, p. 138), word 1 the supply stage entering reset, word 27 the DMA_STR0 handler and word 55 the USART3 handler (Table 147, pp. 754 and 755) |
+| the ELF's text (boot artifact) | the text in the ITCM, the 64 KiB at address zero that stm32h753xx.h names D1_ITCMRAM_BASE, with the entry and both handlers in it, and its load image, the supply stage, reset and reset's copy in flash, where reset finds them (D1359) |
 | the float routines' instructions | `vadd`, `vsub`, `vmul`, `vdiv` and `vcmp` of both widths and no call to a software float helper; software helpers alone are pending |
 | flash after flashing (boot only) | the vector table, read back over SWD, equal to the image's |
 | the boot frame (boot mode) | RCC_RSR's named flags are Table 56's power-on line alone (p. 333), so the run began at power-on and no software reset followed; VTOR is the boot address; CCR's IC and DC are clear, the cacheless profile read on the chip; PWR_CR3 holds the LDO supply the description's stage wrote before reset, and PWR_CSR1 reads VOS3 with ACTVOSRDY set, the voltage levels valid (6.4.1, p. 262; 6.8.2, p. 305; 6.8.4, p. 308; D653); one byte, the host's, had arrived; CPACR's CP10 and CP11 granting the float unit, pending until the compiler-owned startup grants them |
@@ -132,6 +133,7 @@ greater or equal 16, greater 32.
 | the line exchange | 230400-8N1, 9600-8E1 and 57600-7O2 accepted with BRR, CR1's frame bits and CR2 as RM0433's 48.5.7, 48.8.1 and 48.8.3 give them at 64 MHz, and a payload echoed and counted on each; 300 baud, BRR above 65535, and 6N1, a word M has not, refused with the line unchanged (D959, D962) |
 | the counters | `handled`, `recoveries`, `dma_entries`, `usart_entries` and DMA1_S0NDTR, read over SWD without halting the core, equal the last frame's |
 | the stream's configuration | DMA1_S0CR over SWD has TRBUFF, which a stream serving a USART must (15.5.5, p. 662) |
+| the ITCM (boot mode) | read over SWD once the scenario has run from power-on, byte for byte the text's load image in flash: probe-rs wrote flash alone, so reset's copy put it there (D1359) |
 
 What the emulator lane and the boards share is
 `compiler/tests/driver/commands` (D593, D645): the echo and the indicator.

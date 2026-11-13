@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/description-copies-rodata-into-ram and wrote nothing; build it with `refine compile --target=cortex-m0 --firmware-entry=start --root=../tests/fixtures/positive/description-copies-rodata-into-ram/devices ../tests/fixtures/positive/description-copies-rodata-into-ram -o description-copies-rodata-into-ram`

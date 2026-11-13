@@ -363,8 +363,8 @@ package body Landin.Targets.Firmware is
    end For_Layout;
 
    function Flash_Capacity (Of_Profile : Profile) return Byte_Count is
-     (if Of_Profile.Placed (Text) = 0 then 0
-      else Placed_Region (Of_Profile, Text).Length);
+     (if Image_Region (Of_Profile) = 0 then 0
+      else Of_Profile.Regions (Image_Region (Of_Profile)).Length);
 
    function Static_RAM_Capacity (Of_Profile : Profile) return Byte_Count is
      (if Of_Profile.Placed (Data) = 0 then 0

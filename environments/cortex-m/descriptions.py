@@ -488,6 +488,153 @@ def trap_record(run, refine, device):
     return got
 
 
+#  D1359: the lane descriptions whose flash image keeps its text or its
+#  read-only data in RAM, each with its target, its machine and what reset
+#  copies; lanes/descriptions/ holds them.
+RAM_IMAGES = {
+    'microbit_text_in_ram': ('cortex-m0', 'microbit', 'text'),
+    'microbit_rodata_in_ram': ('cortex-m0', 'microbit', 'rodata'),
+    'sifive_e_text_in_ram': ('rv32', 'sifive_e', 'text'),
+    'sifive_e_rodata_in_ram': ('rv32', 'sifive_e', 'rodata'),
+}
+#  A constant table, a string and an evidence table, `text.format`'s for
+#  its `any`, all read only once reset has run.
+RAM_PROGRAM = (
+    'import core/text\n'
+    'import descriptions/{name}\n'
+    'mut initialized: u32 = 0x1234_5678\n'
+    'mut cleared: u32 = 0\n'
+    'mut observed: u32 = 0\n'
+    'table: [4]u32 = [5, 8, 13, 21]\n'
+    'mut said_room: [48]u8 = zeroed\n'
+    'mut said_length: usize = 0\n'
+    'start: () -> none =\n'
+    '    observed = initialized + cleared + table[0] + table[3]\n'
+    '    mut line := text.over(said_room)\n'
+    '    text.format(line, "observed {{}}\\n", [any(addr observed)]) else none\n'
+    '    said_length = text.length(line)\n'
+    'end start\n')
+RAM_SAID = b'observed 305419922\n'
+
+
+def ram_session(run, elf, machine, rv32, kind, skip):
+    """One run of a RAM image from reset under QEMU, its copy's
+    destination first filled with 0xff, which neither core executes;
+    with SKIP, the debugger moves reset past the copy, as an image
+    without one would be.  What the run left is returned."""
+    name = 'skipped' if skip else 'copied'
+    seen = run.out / (name + '.json')
+    script = run.out / (name + '.gdb')
+    listener, port, stub = gdb_listener()
+    script.write_text('\n'.join([
+        'set pagination off', 'set confirm off',
+        *(['set architecture riscv:rv32'] if rv32 else []),
+        'target remote 127.0.0.1:%d' % port,
+        'python', 'import gdb, json',
+        'def v(e): return int(gdb.parse_and_eval(e)) & 0xffffffff',
+        'mem = gdb.selected_inferior()',
+        'low = v("&_landin_firmware_%s_start")' % kind,
+        'high = v("&_landin_firmware_%s_end")' % kind,
+        'load = v("&_landin_firmware_%s_load")' % kind,
+        'mem.write_memory(low, b"\\xff" * (high - low))',
+        'end',
+        *(['break *_landin_firmware_image_copy', 'continue', 'delete breakpoints',
+           'python', 'gdb.execute("set $pc = %d" % v("&_landin_firmware_image_copied"))', 'end']
+          if skip else []),
+        'break *_landin_firmware_returned', 'break *_landin_firmware_unhandled', 'continue',
+        'python',
+        'json.dump({"pc": v("$pc"), "returned": v("&_landin_firmware_returned") & ~1,'
+        ' "low": low, "high": high, "load": load,'
+        ' "copied": mem.read_memory(low, high - low).tobytes()'
+        ' == mem.read_memory(load, high - low).tobytes(),'
+        ' "observed": v("*(unsigned*)&observed"),'
+        ' "written": v("*(unsigned*)&said_length"),'
+        ' "room": mem.read_memory(v("&said_room"), 48).tobytes().hex()}, open(%r, "w"))'
+        % str(seen),
+        'print("LANDIN_RAM_IMAGE_READ")', 'end', 'quit', '']))
+    qemu = (run.espressif / 'qemu-system-riscv32') if rv32 else (run.bin / 'qemu-system-arm')
+    argv = [str(qemu), '-M', machine, '-accel', 'tcg,thread=single', '-display', 'none',
+            '-monitor', 'none', '-serial', 'none', '-kernel', str(elf), '-S', *stub]
+    run.commands.append({'name': 'qemu-' + name, 'argv': argv})
+    with (run.out / ('qemu-' + name + '.log')).open('wb') as log:
+        with listener:
+            process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log,
+                                       stderr=log, start_new_session=True,
+                                       pass_fds=(listener.fileno(),))
+        try:
+            require(process.poll() is None, 'QEMU exited before connection')
+            oracle(run.debug('gdb-' + name, elf, script, timeout=30),
+                   'LANDIN_RAM_IMAGE_READ')
+        finally:
+            stop(process)
+    return json.loads(seen.read_text())
+
+
+def ram_faults(record):
+    """What of a RAM image's run is not what its program does: an empty
+    list for a run that returned with the copy made and the line written."""
+    room = bytes.fromhex(record['room'])
+    faults = []
+    if record['pc'] != record['returned']:
+        faults.append('it stopped at %#x, not at the return' % record['pc'])
+    if not record['copied']:
+        faults.append('RAM at %#x does not hold its load image' % record['low'])
+    if record['observed'] != 0x12345692:
+        faults.append('it observed %#x' % record['observed'])
+    if room[:record['written']] != RAM_SAID or record['written'] != len(RAM_SAID):
+        faults.append('it wrote %r' % room[:min(record['written'], 48)])
+    return faults
+
+
+def ram_image(run, refine, name):
+    """D1359: a flash image with its text or read-only data in RAM, linked
+    from a lane description, run from reset: reset, its copy and the
+    unhandled entry are where the table is, the copied section runs or is
+    read at its RAM address from a load image in flash, and the program
+    returns with its line written.  The same image with the copy left out
+    is refused by the same oracle."""
+    target, machine, kind = RAM_IMAGES[name]
+    rv32 = target == 'rv32'
+    image = compile_firmware(run, refine, RAM_PROGRAM.format(name=name),
+                             ['--level=rv32imac'] if rv32 else (), name='ram.elf',
+                             devices=HERE / 'lanes', rv32=rv32)
+    report = json.loads((run.out / 'ram.elf.json').read_text())['firmware']
+    regions = {r['name']: r for r in report['regions']}
+    flash = regions[report['placed']['vectors']]
+    ram = regions[report['placed'][kind]]
+
+    def inside(region, address):
+        return region['origin'] <= address < region['origin'] + region['length']
+    for symbol in ('_landin_firmware_reset', '_landin_firmware_image_copy',
+                   '_landin_firmware_unhandled', '_landin_firmware_%s_load' % kind):
+        require(inside(flash, image.symbols[symbol] & ~1),
+                '%s: %s at %#x is not in %s' % (name, symbol, image.symbols[symbol],
+                                                  flash['name']))
+    require(inside(ram, image.symbols['_landin_firmware_%s_start' % kind])
+            and image.symbols['_landin_firmware_%s_end' % kind]
+            > image.symbols['_landin_firmware_%s_start' % kind],
+            '%s: the %s is not in %s' % (name, kind, ram['name']))
+    if kind == 'text':
+        require(inside(ram, image.symbols['start'] & ~1),
+                '%s: start at %#x is not in %s' % (name, image.symbols['start'], ram['name']))
+    else:
+        require(inside(ram, image.symbols['table']),
+                '%s: the table at %#x is not in %s' % (name, image.symbols['table'],
+                                                      ram['name']))
+    copied = ram_session(run, run.out / 'ram.elf', machine, rv32, kind, skip=False)
+    faults = ram_faults(copied)
+    require(not faults, '%s from reset: %s' % (name, '; '.join(faults)))
+    try:
+        skipped = ram_session(run, run.out / 'ram.elf', machine, rv32, kind, skip=True)
+    except (CommandFailed, RuntimeError) as error:
+        left_out = ['the session did not end: %s' % str(error).splitlines()[0]]
+    else:
+        left_out = ram_faults(skipped)
+    require(left_out, '%s ran as it should with its copy left out' % name)
+    return {'description': name, 'machine': machine, 'copied': kind,
+            'left_out': left_out, 'status': 'passed'}
+
+
 def reset_stage(image, want, device, vectors):
     """D653: the reset vector enters the description's stage, which makes
     the device accesses recorded from the manual with no memory but the
@@ -901,25 +1048,28 @@ def contract(run, refine):
     (run.out / 'stack.ld').write_text(rule.replace(old, (
         '  .rodata _landin_firmware_stack_bottom : { *(.rodata .rodata.*) }'
         ' > SCRATCH_Y AT> FLASH\n')))
-    #  D1115: the STM32H753's ITCM begins at zero, and a datum placed there
-    #  without the derived script's eight unused bytes is at address zero.
+    #  D1115: the STM32H753's ITCM begins at zero, and its description
+    #  places text there (D1359): the derived script leaves the first eight
+    #  bytes of the text unused, before the datum placed after it, and a
+    #  script without them puts a routine at address zero.
     tightly = ('import descriptions/stm32h753\n'
                'link(region: "ITCM") mut first: u32 = 7\n'
                'mut counted: u32 = 1\n'
                'start: () -> none = counted += first end start\n')
     h7 = ['--level=armv7e-m']
     image = compile_firmware(run, refine, tightly, h7, name='tightly.elf')
-    require(image.symbols.get('first') == 8,
-            'the derived script does not keep the ITCM datum off address zero')
+    require(image.symbols.get('_landin_firmware_text_start') == 0
+            and image.symbols.get('start', 0) & ~1 == 8
+            and image.symbols.get('first', 0) >= 8,
+            'the derived script does not keep the ITCM\'s text and datum off address zero')
     rule = (run.out / 'tightly.elf.ld').read_text()
-    old = ('_landin_firmware_region_ITCM_data_start = .;'
+    old = ('_landin_firmware_text_start = .;'
            ' . = . + (ABSOLUTE(.) < 8 ? 8 - ABSOLUTE(.) : 0);')
     require(old in rule, 'the derived script lacks %r' % old)
-    (run.out / 'zero.ld').write_text(
-        rule.replace(old, '_landin_firmware_region_ITCM_data_start = .;'))
+    (run.out / 'zero.ld').write_text(rule.replace(old, '_landin_firmware_text_start = .;'))
     for name, program, extra, named in (
             ('stack', constants, [], 'clause 3, the stack: .rodata overlaps it'),
-            ('zero', tightly, h7, 'clause 5, address zero: first is at address zero')):
+            ('zero', tightly, h7, ' is at address zero, where a pointer is null')):
         said = compile_firmware(run, refine, program,
                                 extra + ['--linker-script=%s.ld' % name],
                                 name='%s.elf' % name, check=False)
@@ -978,6 +1128,12 @@ def execute_suite(parent, refine):
                              'machine': TRAP_MACHINES[device], 'status': 'passed'})
             print('description: %s recorded its trap on %s'
                   % (device, TRAP_MACHINES[device]), flush=True)
+    for name in RAM_IMAGES:
+        out = root / name
+        out.mkdir()
+        controls.append(ram_image(Run(out, parent.tools), refine, name))
+        print('description: %s ran from reset on %s, and failed with its copy left out'
+              % (name, RAM_IMAGES[name][1]), flush=True)
     out = root / 'contract'
     out.mkdir()
     contract(Run(out, parent.tools), refine)

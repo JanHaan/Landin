@@ -17,8 +17,10 @@ hub uhubctl can switch.  The steps, each recorded under NEW_DIRECTORY:
 
   1. build the image at --level=armv7e-m and check, from the ELF alone,
      its vector table at the boot address and the handlers at slots 27
-     and 55, and, from its disassembly, whether the float routines use the
-     float unit or software helpers;
+     and 55, its text in the ITCM with the supply stage, reset and the
+     copy in flash and the text's load image there (D1359), and, from its
+     disassembly, whether the float routines use the float unit or
+     software helpers;
   2. flash it with probe-rs, verify it, and, once the hub lists the
      ST-LINK again, read the vector table back;
   3. cut the board's power and restore it, after checking that the port
@@ -29,7 +31,8 @@ hub uhubctl can switch.  The steps, each recorded under NEW_DIRECTORY:
      byte, read the boot frame and drive the scenario, comparing every
      echoed byte and every frame with what the host sent and with RM0433;
   5. read the counters and the stream's configuration back over SWD and
-     compare them with the last frame and with RM0433.
+     compare them with the last frame and with RM0433, and read the ITCM,
+     which must hold the text's load image: only reset put it there.
 
 The oracle is written here, from what the host sends, from RM0433 Rev 9
 and from IEEE 754 as the host computes it, never from the firmware's own
@@ -90,6 +93,12 @@ CCR_CACHES = 0x00030000
 # which must be set for a stream that serves a USART; S0NDTR.
 DMA1_S0CR, DMA1_S0NDTR = 0x40020010, 0x40020014
 TRBUFF = 0x00100000
+# The flash's two banks, to FLASH_END, and the M7's 64 KiB ITCM at
+# D1_ITCMRAM_BASE, zero, as stm32h753xx.h gives them: the description
+# places a boot image's text there, and reset copies it from its load
+# image in flash (D1359).
+FLASH_END = 0x08200000
+ITCM = (0x00000000, 0x00010000)
 # What environments/cortex-m/driver.py feeds the synthetic application.
 SHARED = b'1A0'
 # The line exchange (D962): USART3 on its 64 MHz kernel clock, oversampling
@@ -310,9 +319,49 @@ def build(run, args):
     attributes = run.command('attributes', [args.readelf, '-A', elf])
     unit, helpers = float_unit(float_routines(listing, sizes))
     table = data[offset:offset + size]
-    return elf, table, names, dict(float_unit=unit, helpers=helpers,
-                                   fp_attributes=[l.strip() for l in attributes.splitlines()
-                                                  if 'FP' in l or 'VFP' in l])
+    image = dict(float_unit=unit, helpers=helpers,
+                 fp_attributes=[l.strip() for l in attributes.splitlines()
+                                if 'FP' in l or 'VFP' in l])
+    if getattr(args, 'mode', 'boot') == 'boot':
+        image['copied_text'] = copied_text(elf, names)
+    return elf, table, names, image
+
+
+def copied_text(elf, names):
+    """D1359: from the ELF alone, a boot image runs its text from the
+    ITCM: the supply stage, reset and its copy are in flash with the vector
+    table, the entry and both handlers in the ITCM, and the copy's source
+    the text's load image in flash.  Its bounds and the load image's hash."""
+    start, end, load = (names['_landin_firmware_text_' + part]
+                        for part in ('start', 'end', 'load'))
+    require(ITCM[0] <= start < end <= ITCM[1],
+            'the text is at %#x-%#x, not in the ITCM' % (start, end))
+    require(VECTORS <= load and load + (end - start) <= FLASH_END,
+            'the text\'s load image at %#x is not in flash' % load)
+    for symbol in ('_landin_firmware_reset_stage', '_landin_firmware_reset',
+                   '_landin_firmware_image_copy', '_landin_firmware_unhandled'):
+        require(VECTORS <= names[symbol] < FLASH_END,
+                '%s at %#x is not in flash, where reset finds it' % (symbol, names[symbol]))
+    for symbol in ('start', 'dma_irq', 'usart3_irq'):
+        require(start <= names[symbol] & ~1 < end,
+                '%s at %#x is not in the copied text' % (symbol, names[symbol]))
+    body = common.loaded(elf, load, end - start)
+    return dict(start=start, end=end, load=load, sha256=hashlib.sha256(body).hexdigest())
+
+
+def itcm_check(run, args, elf, text):
+    """D1359: the ITCM, read over SWD once the scenario has run from
+    power-on, holds the text's load image: probe-rs wrote only flash, and
+    power-on leaves the ITCM's contents undefined, so reset copied it."""
+    size = text['end'] - text['start']
+    words = probe(run, args).read_words('swd-itcm', text['start'], (size + 3) // 4)
+    read = struct.pack('<%dI' % len(words), *words)[:size]
+    body = common.loaded(elf, text['load'], size)
+    differs = next((at for at in range(size) if read[at] != body[at]), None)
+    require(differs is None, 'the ITCM differs from the text\'s load image at %#x: %#04x, not'
+            ' %#04x' % (text['start'] + differs, read[differs], body[differs])
+            if differs is not None else '')
+    return dict(start=text['start'], bytes=size, sha256=hashlib.sha256(read).hexdigest())
 
 
 def probe(run, args):
@@ -747,6 +796,9 @@ def main():
         require(len(console.received) == len(console.raw.received) - console.offset,
                 'incomplete UART frame at end of capture')
         result['swd'] = cross_check(run, args, names, last)
+        if args.mode == 'boot':
+            require('copied_text' in image, 'the boot image runs no text from the ITCM')
+            result['swd']['itcm'] = itcm_check(run, args, elf, image['copied_text'])
         boot = verdicts['boot']
         # The float unit is the M7's only once the image uses it, the
         # compiler-owned startup grants CP10 and CP11, and the square root
