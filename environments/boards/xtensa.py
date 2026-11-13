@@ -18,6 +18,10 @@ from common import require
 class Xtensa(esp.Chip):
     target = 'xtensa'
     vector_register = 'vecbase'
+    # The scenario's snapshots are the INTERRUPT register's pending bits,
+    # line 1 the UART's and line 23 the timer's, which others may join.
+    cause_register = 'INTERRUPT'
+    interrupt_keys = ('receive_pending', 'timer_pending')
     entry_at_origin = False
     uart_cause, timer_cause = 1 << 1, 1 << 23
     uart_cause_mask, timer_cause_mask = uart_cause, timer_cause

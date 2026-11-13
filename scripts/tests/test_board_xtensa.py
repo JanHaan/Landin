@@ -46,6 +46,35 @@ def ram_elf(chip):
     return data
 
 
+class InterruptSnapshots(unittest.TestCase):
+    """The scenario names its interrupt snapshots by the register they
+    read: Xtensa's INTERRUPT pending bits, and mcause on RISC-V."""
+
+    def test_xtensa_names_its_pending_bits(self):
+        for chip in (xtensa.ESP32(), xtensa.ESP32S3()):
+            frame = {'p': (1 << 1) | (1 << 5), 'q': 1 << 23}
+            self.assertEqual(esp.interrupts(chip, frame),
+                             {'receive_pending': '0x22', 'timer_pending': '0x800000'})
+            with self.assertRaisesRegex(common.Failed,
+                                        'the timer interrupt arrived with INTERRUPT 0x2'):
+                esp.interrupts(chip, {'p': 1 << 1, 'q': 1 << 1})
+
+    def test_riscv_names_mcause(self):
+        chip = load_c3()
+        frame = {'p': chip.uart_cause, 'q': chip.timer_cause}
+        self.assertEqual(sorted(esp.interrupts(chip, frame)), ['receive_mcause', 'timer_mcause'])
+        with self.assertRaisesRegex(common.Failed, 'the receive interrupt arrived with mcause'):
+            esp.interrupts(chip, {'p': 0, 'q': chip.timer_cause})
+
+
+def load_c3():
+    spec = importlib.util.spec_from_file_location(
+        'board_esp32c3_snapshots', ROOT / 'environments/boards/esp32c3/board.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.C3()
+
+
 class Image(unittest.TestCase):
     def test_each_ram_map_and_entry_accepts_only_its_own_elf(self):
         with tempfile.TemporaryDirectory() as directory:

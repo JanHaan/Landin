@@ -100,6 +100,10 @@ class Chip:
     target = 'rv32'
     tool_prefixes = ('riscv64-elf-', 'riscv64-unknown-elf-')
     vector_register = 'mtvec'
+    # What the scenario's interrupt snapshots read, and the keys the result
+    # gives them: mcause on RISC-V; Xtensa names its own.
+    cause_register = 'mcause'
+    interrupt_keys = ('receive_mcause', 'timer_mcause')
     entry_at_origin = True
     uart_cause_mask = timer_cause_mask = None
     power_on_names = ('POWERON',)
@@ -293,6 +297,18 @@ def report(console, count):
     return common.ask(console, REPORT, 't', count)
 
 
+def interrupts(chip, frame):
+    """The receive and timer interrupts' snapshots in a frame, `p` and
+    `q`, held to the chip's lines and named by the register they read."""
+    register = chip.cause_register
+    require(frame['p'] & (chip.uart_cause_mask or chip.cause_mask) == chip.uart_cause,
+            'the receive interrupt arrived with %s %#x' % (register, frame['p']))
+    require(frame['q'] & (chip.timer_cause_mask or chip.cause_mask) == chip.timer_cause,
+            'the timer interrupt arrived with %s %#x' % (register, frame['q']))
+    receive, timer = chip.interrupt_keys
+    return {receive: '%#x' % frame['p'], timer: '%#x' % frame['q']}
+
+
 def operands(rng):
     """Two printable bytes that are neither a command nor the indicator's."""
     choices = [b for b in range(0x20, 0x7f) if b not in (0x30, 0x31)]
@@ -336,11 +352,7 @@ def scenario(console, chip, seed, mode='boot'):
             'the shared scenario was not echoed')
     verdicts['shared'] = dict(input=SHARED.decode(), echo=SHARED.decode(),
                               indicator_after_1=high['g'], indicator_after_0=low['g'])
-    require(high['p'] & (chip.uart_cause_mask or chip.cause_mask) == chip.uart_cause,
-            'the receive interrupt arrived with mcause %#x' % high['p'])
-    require(high['q'] & (chip.timer_cause_mask or chip.cause_mask) == chip.timer_cause,
-            'the timer interrupt arrived with mcause %#x' % high['q'])
-    verdicts['interrupts'] = dict(receive_mcause='%#x' % high['p'], timer_mcause='%#x' % high['q'])
+    verdicts['interrupts'] = interrupts(chip, high)
     # The atomics, over two operands the host chose.
     x, y = operands(rng)
     console.send(bytes([x, y, ATOMICS]))
