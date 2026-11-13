@@ -158,8 +158,14 @@ def build(run, refine, inputs, chip, optimize='none', specialize='off', memory_p
     script = run.out / 'program.ld'
     run.command('derive', [*base, '--emit=linker-script', '-o', script])
     obj, elf = run.out / 'program.o', run.out / 'program.elf'
+    #  GNU as with --auto-litpools grows faster than the text it reads: the
+    #  corpus's largest program, runtime/r491-cleanup-verifier-storage,
+    #  is about 530,000 lines and takes 35 s on a quiet 32-core host,
+    #  past the default 60 s on a shared GitHub runner in three gate runs.
+    #  The budget is the assembler's, not the program's: a guest's time is
+    #  still held by its own limit.
     run.command('assemble', [tool + 'as', '--abi-windowed', '--auto-litpools',
-                            '--longcalls', '-o', obj, assembly])
+                            '--longcalls', '-o', obj, assembly], timeout=300)
     run.command('link', [tool + 'gcc', '-mabi=windowed', '-nostdlib',
                         '-Wl,-T,' + str(script) + ',--gc-sections,-Map,program.map',
                         '-o', elf, obj, '-lgcc'])
