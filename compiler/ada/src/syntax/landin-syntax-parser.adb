@@ -1,4 +1,5 @@
 with Ada.Containers.Hashed_Maps;
+with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
@@ -236,18 +237,40 @@ package body Landin.Syntax.Parser is
    --  would report, and handled in Parse: it never leaves this package.
    Refused_By_Grammar : exception;
 
+   --  What the readings of a file by the grammar alone learned of it: the
+   --  closing `end` of every top-level function one of them read to its
+   --  end, by the token its declaration begins at; the token the latest of
+   --  them refused at, past which none has read; and the function the
+   --  reading closed last.  D260's reading closes such a function where
+   --  the grammar did, so the layout of a routine the grammar derives
+   --  decides nothing even in a file with a mistake elsewhere.
+   package Closer_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Natural, Element_Type => Natural);
+
+   type Grammar_Facts is record
+      Closers : Closer_Maps.Map;
+      Stop    : Natural := 0;
+      Last_Closed : Natural := 0;
+   end record;
+
    --  One reading of a token stream.  By_Grammar reads what [1740]-[1830]
    --  derive and nothing else: a function has no fence, so its closer is
    --  the `end` its body leaves, and a bare block's `end` is its own
    --  whatever follows.  Such a reading reports nothing; at the first
-   --  mistake it raises Refused_By_Grammar with Report untouched.  The
-   --  other reading is D260's: it places closers by where they are
-   --  written, so that a mistake is reported once and where it is.
+   --  mistake it raises Refused_By_Grammar with Report untouched, having
+   --  noted in Facts where it stopped and how it closed each top-level
+   --  function it read to its end.  The other reading is D260's: it closes
+   --  those functions where the grammar did, and places the closers of
+   --  the others by where they are written, so that a mistake is reported
+   --  once and where it is.  Start is the token a reading begins at: the
+   --  first, or the first of a function no earlier reading reached.
    function Read
      (From       : Landin.Tokens.Token_Stream;
       Names      : in out Landin.Source.Names.Table;
       Report     : in out Landin.Diagnostics.Diagnostic_List;
-      By_Grammar : Boolean) return Tree
+      By_Grammar : Boolean;
+      Start      : Landin.Tokens.Token_Index;
+      Facts      : in out Grammar_Facts) return Tree
      with Post => Landin.Tokens.Source_Of (From) = Source_Of (Read'Result);
 
    --  D1074: a program the grammar derives is read by the grammar, and
@@ -257,18 +280,23 @@ package body Landin.Syntax.Parser is
      (From   : Landin.Tokens.Token_Stream;
       Names  : in out Landin.Source.Names.Table;
       Report : in out Landin.Diagnostics.Diagnostic_List) return Tree is
+      Facts : Grammar_Facts;
    begin
-      return Read (From, Names, Report, By_Grammar => True);
+      return Read (From, Names, Report, By_Grammar => True,
+                   Start => 1, Facts => Facts);
    exception
       when Refused_By_Grammar =>
-         return Read (From, Names, Report, By_Grammar => False);
+         return Read (From, Names, Report, By_Grammar => False,
+                      Start => 1, Facts => Facts);
    end Parse;
 
    function Read
      (From       : Landin.Tokens.Token_Stream;
       Names      : in out Landin.Source.Names.Table;
       Report     : in out Landin.Diagnostics.Diagnostic_List;
-      By_Grammar : Boolean) return Tree is
+      By_Grammar : Boolean;
+      Start      : Landin.Tokens.Token_Index;
+      Facts      : in out Grammar_Facts) return Tree is
    begin
       return Result : Tree do
          declare
@@ -276,7 +304,17 @@ package body Landin.Syntax.Parser is
               Tok.Source_Of (From);
             Last      : constant Tok.Token_Index := Tok.Count (From);
 
-            Index : Tok.Token_Index := 1;
+            Index : Tok.Token_Index := Start;
+            --  Whether the function being read is one a reading by the
+            --  grammar alone derived, so that D260's reading reads it as
+            --  that reading did.
+            Routine_Derived : Boolean := False;
+            --  Whether the top-level function read last was closed at the
+            --  closer its fence named.
+            Closed_At_Fence : Boolean := False;
+            --  The first token of the file's declaration being read: a
+            --  function, or the `fixed if` that holds one.
+            Program_Declaration : Tok.Token_Index := Start;
 
             --  How far the parse may read: the end of the file, or inside
             --  a function whose closer was found before its body, that
@@ -1341,10 +1379,61 @@ package body Landin.Syntax.Parser is
                end if;
             end Advance;
 
+            --  A reading by the grammar alone gives up at its first
+            --  mistake, saying where.  A refusal outside every body may be
+            --  what is left of the function closed last, closed early by a
+            --  stray `end` or a lost opener, so that function is not taken
+            --  as derived either.
+            procedure Refuse
+              with No_Return;
+
+            procedure Refuse is
+            begin
+               Facts.Stop := Natural (Index);
+               if Body_Level = 0 and then Facts.Last_Closed /= 0 then
+                  Facts.Closers.Exclude (Facts.Last_Closed);
+               end if;
+               raise Refused_By_Grammar;
+            end Refuse;
+
+            --  Whether a reading by the grammar alone closed a top-level
+            --  function that begins at Opened.  A function past every such
+            --  reading is read by the grammar from the first token of the
+            --  file's declaration that holds it, itself or a `fixed if`,
+            --  and that reading goes on past it to its own first mistake,
+            --  so the file is read so at most once more.
+            function Derived_At (Opened : Tok.Token_Index) return Boolean;
+
+            function Derived_At (Opened : Tok.Token_Index) return Boolean is
+            begin
+               if not Facts.Closers.Contains (Natural (Opened))
+                 and then Natural (Program_Declaration) > Facts.Stop
+               then
+                  declare
+                     Quiet : Landin.Diagnostics.Diagnostic_List;
+                  begin
+                     declare
+                        Probe : constant Tree :=
+                          Read (From, Names, Quiet,
+                                By_Grammar => True,
+                                Start => Program_Declaration,
+                                Facts => Facts);
+                        pragma Unreferenced (Probe);
+                     begin
+                        Facts.Stop := Natural'Last;
+                     end;
+                  exception
+                     when Refused_By_Grammar =>
+                        null;
+                  end;
+               end if;
+               return Facts.Closers.Contains (Natural (Opened));
+            end Derived_At;
+
             procedure Mark_Reported is
             begin
                if By_Grammar then
-                  raise Refused_By_Grammar;
+                  Refuse;
                end if;
                Reported := Natural'Max (Reported, Natural (Index));
                if Body_Level > 0 then
@@ -2139,7 +2228,7 @@ package body Landin.Syntax.Parser is
                --  Gated or not: a reading that had anything to say is not
                --  the grammar's.
                if By_Grammar then
-                  raise Refused_By_Grammar;
+                  Refuse;
                end if;
                if Nesting_Refused then
                   return;
@@ -2995,7 +3084,7 @@ package body Landin.Syntax.Parser is
             function Left_For_Outer return Boolean is
                Word : constant Tok.Token_Kind := Ahead (1);
             begin
-               if By_Grammar
+               if By_Grammar or else Routine_Derived
                  or else Word not in Tok.Kw_If | Tok.Kw_Match
                                      | Tok.Kw_Unchecked
                  or else Begins_Line (Index + 1)
@@ -3515,6 +3604,8 @@ package body Landin.Syntax.Parser is
                      Before : constant Tok.Token_Index := Index;
                      Reports_Before : constant Natural := Reported;
                   begin
+                     Closed_At_Fence := False;
+                     Program_Declaration := Index;
                      if Peek = Tok.Kw_Import then
                         Items.Append (Parse_Import (Late => True));
                      elsif Peek not in Tok.Kernel_Kind
@@ -3582,7 +3673,11 @@ package body Landin.Syntax.Parser is
                           with "the parser did not advance over a"
                                & " declaration";
                      end if;
-                     Declaration_Reported := Reported /= Reports_Before;
+                     --  A function closed at the closer it was fenced by
+                     --  left nothing behind, so what follows begins anew
+                     --  however deep it is written (D1362).
+                     Declaration_Reported := Reported /= Reports_Before
+                       and then not Closed_At_Fence;
                   end;
                   <<Next_Declaration>>
                end loop;
@@ -8328,6 +8423,30 @@ package body Landin.Syntax.Parser is
                Errors_Node  : Node_Id := No_Node;
                Body_Node    : Node_Id := No_Node;
                Context      : Frame;
+               Opened_At    : constant Tok.Token_Index := Declaration_First;
+               Saved_Derived : constant Boolean := Routine_Derived;
+               Closed_At     : Natural := 0;
+               Fenced_At     : Natural := 0;
+
+               --  The closer of a top-level function in D260's reading: the
+               --  `end` a reading by the grammar alone closed it with, when
+               --  one did (Derived_At); a function the grammar refused is
+               --  fenced by where it is written.
+               function Grammar_Fence
+                 (Named  : Landin.Source.Names.Name_Id;
+                  Opened : Tok.Token_Index) return Natural;
+
+               function Grammar_Fence
+                 (Named  : Landin.Source.Names.Name_Id;
+                  Opened : Tok.Token_Index) return Natural
+               is
+               begin
+                  if Body_Level = 0 and then Derived_At (Opened) then
+                     Routine_Derived := True;
+                     return Facts.Closers.Element (Natural (Opened));
+                  end if;
+                  return Fence_For (Named, Opened);
+               end Grammar_Fence;
                External     : Boolean := False;
                Variadic     : Boolean := False;
                Link_Name    : Landin.Source.Span := Landin.Source.Empty_Span;
@@ -8478,11 +8597,12 @@ package body Landin.Syntax.Parser is
                      Own : constant Closer :=
                        (Kind   => Function_Closer,
                         Fence  => (if By_Grammar then 0
-                                   else Fence_For
+                                   else Grammar_Fence
                                      (Named, Declaration_First)),
                         Indent => Line_Indent (Declaration_First),
                         others => <>);
                   begin
+                     Fenced_At := Own.Fence;
                      Push (Own);
                      Body_Level := Body_Level + 1;
                      Statement_Reported := False;
@@ -8562,6 +8682,7 @@ package body Landin.Syntax.Parser is
                if External then
                   null;
                elsif Peek = Tok.Kw_End then
+                  Closed_At := Natural (Index);
                   Advance;
 
                   --  [1800]: the repeated name is optional.  A matching
@@ -8603,6 +8724,16 @@ package body Landin.Syntax.Parser is
                      Because => "opened here",
                      Gate    => False);
                end if;
+               if Body_Level = 0 and then Opened_At = Program_Declaration then
+                  Closed_At_Fence :=
+                    Closed_At /= 0 and then Closed_At = Fenced_At;
+               end if;
+               if By_Grammar and then Body_Level = 0 and then Closed_At /= 0
+               then
+                  Facts.Closers.Include (Natural (Opened_At), Closed_At);
+                  Facts.Last_Closed := Natural (Opened_At);
+               end if;
+               Routine_Derived := Saved_Derived;
 
                declare
                   Head : constant Slot_List (1 .. 3) :=
@@ -13219,6 +13350,9 @@ package body Landin.Syntax.Parser is
 
          begin
             Result.Source := Origin_Of;
+            if By_Grammar then
+               Facts.Last_Closed := 0;
+            end if;
 
             if Parse_Program /= Root (Result) then
                raise Compiler_Defect

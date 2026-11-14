@@ -1,0 +1,34 @@
+error[L0101]: `:` does not belong here
+  --> ../tests/fixtures/negative/three-refused-lines-of-a-routine-are-each-restated/program.ldn:2:11
+  |
+2 |     count:: u32 = 41
+  |           ^
+  --> ../tests/fixtures/negative/three-refused-lines-of-a-routine-are-each-restated/program.ldn:2:5
+  |
+2 |     count:: u32 = 41
+  |     ^^^^^ declared here
+  = note: written as `count: u32 = 41` the line parses
+  = help: remove `:`
+error[L0102]: `+` does not belong here
+  --> ../tests/fixtures/negative/three-refused-lines-of-a-routine-are-each-restated/program.ldn:3:25
+  |
+3 |     next: u32 = count + + 1
+  |                         ^
+  --> ../tests/fixtures/negative/three-refused-lines-of-a-routine-are-each-restated/program.ldn:3:23
+  |
+3 |     next: u32 = count + + 1
+  |                       ^ the operator
+  = note: written as `next: u32 = count + 1` the line parses
+  = help (guess): remove `+`
+  = help (guess): write a value after `+`
+error[L0102]: `=` does not belong here
+  --> ../tests/fixtures/negative/three-refused-lines-of-a-routine-are-each-restated/program.ldn:4:12
+  |
+4 |     code = = i32(next) - 42
+  |            ^
+  --> ../tests/fixtures/negative/three-refused-lines-of-a-routine-are-each-restated/program.ldn:4:10
+  |
+4 |     code = = i32(next) - 42
+  |          ^ required by this
+  = note: written as `code = i32(next) - 42` the line parses
+  = help: remove `=`

@@ -1,0 +1,9 @@
+class: negative
+summary: [1810] a later refused line is tried with the earlier ones mended: an earlier report's own fix applied, a line with no repair blanked with the lines under it
+program: program.ldn
+codes: L0105, L0102, L0110, L0102
+constructs: 1810, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/a-later-refused-line-is-tried-as-the-earlier-are-mended/program.ldn
+status: 1

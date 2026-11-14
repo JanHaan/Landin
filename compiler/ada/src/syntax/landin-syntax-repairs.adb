@@ -1,4 +1,5 @@
 with Ada.Containers.Vectors;
+with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Fixes;
@@ -27,6 +28,7 @@ package body Landin.Syntax.Repairs is
    --  with its length, and a line that long is not one a person mistypes
    --  one token of.
    Token_Limit : constant := 40;
+
 
    --  The words a trial inserts where the parser asked for one, and the
    --  stand-ins it inserts where it asked for a name, a value or a type.
@@ -455,6 +457,72 @@ package body Landin.Syntax.Repairs is
       Source : constant Landin.Source.Source_Id := Landin.Source.Id (Snapshot);
       Result : Diag.Diagnostic_List;
       Last_Line : Natural := 0;
+
+      --  D1361: a later refused line of a routine is tried in the routine
+      --  as its earlier refused lines would be mended.  Each earlier one
+      --  stands as its first repair, or its report's own fix, or, with
+      --  neither, blanked with what D260 keeps quiet after it.  These are
+      --  those edits, in source order, for the routine that begins at
+      --  Edits_Routine.
+      type Edit is record
+         First, Last : Natural := 0;
+         Text : Ada.Strings.Unbounded.Unbounded_String;
+      end record;
+      package Edit_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Edit);
+      Edits : Edit_Vectors.Vector;
+      Edits_Routine : Natural := 0;
+      --  The repair the line just tried was restated as, if any.
+      Last_Repair : Edit;
+      --  How many refused lines of the routine were tried, which the
+      --  bound holds to Lines_Limit.
+      Tried_In_Routine : Natural := 0;
+
+      --  Starts the edits and the count afresh for the routine In_A_Body
+      --  found last.
+      procedure Enter_Routine;
+
+      procedure Enter_Routine is
+      begin
+         if Edits_Routine /= Routine_First then
+            Edits.Clear;
+            Edits_Routine := Routine_First;
+            Tried_In_Routine := 0;
+         end if;
+      end Enter_Routine;
+
+      --  The routine's bytes from its start to before Upto, with every
+      --  recorded edit applied.
+      function Edited (Upto : Natural) return String;
+
+      function Edited (Upto : Natural) return String is
+         use Ada.Strings.Unbounded;
+         Into : Unbounded_String;
+         From : Natural := Routine_First;
+      begin
+         for One of Edits loop
+            exit when One.First >= Upto;
+            if One.First >= From then
+               Append (Into, Bytes (From .. One.First - 1));
+               if One.Last < Upto then
+                  Append (Into, One.Text);
+                  From := One.Last + 1;
+               else
+                  From := One.First;
+                  exit;
+               end if;
+            end if;
+         end loop;
+         if From < Upto then
+            Append (Into, Bytes (From .. Upto - 1));
+         end if;
+         return To_String (Into);
+      end Edited;
+
+      --  The last byte of the refused line beginning at First together
+      --  with what D260 keeps quiet after it: the lines continuing it and
+      --  the lines indented deeper.
+      function Quiet_Last (First : Natural) return Natural;
 
       --  The tokens of the line holding byte Offset, from the line's own
       --  scan.  A line whose scan reports anything is not tried.
@@ -1052,6 +1120,67 @@ package body Landin.Syntax.Repairs is
          end;
       end Continues;
 
+      function Quiet_Last (First : Natural) return Natural is
+         --  How far the line beginning at At_Line is indented.
+         function Indent (At_Line : Natural) return Natural;
+
+         function Indent (At_Line : Natural) return Natural is
+            Position : Natural := At_Line;
+         begin
+            while Position <= Bytes'Last
+              and then Bytes (Position) in ' ' | ASCII.HT
+            loop
+               Position := Position + 1;
+            end loop;
+            return Position - At_Line;
+         end Indent;
+         Mine : constant Natural := Indent (First);
+         Last : Natural := Line_Stop (Bytes, First) - 1;
+         Opened : Boolean := False;
+      begin
+         loop
+            declare
+               Next : constant Natural :=
+                 (if Last + 1 > Bytes'Last then Bytes'Last + 1
+                  else After_Line_End (Bytes, Last + 1));
+            begin
+               exit when Next > Bytes'Last or else Next >= Routine_Last
+                 --  A line the parser reported on is a mistake of its own
+                 --  and is tried as one.
+                 or else Errors_Between
+                   (Next - 1, Line_Stop (Bytes, Next) - 2) > 0;
+               --  A line holding nothing is passed over with the rest.
+               if Line_Stop (Bytes, Next) = Next + Indent (Next) then
+                  Last := Line_Stop (Bytes, Next) - 1;
+               elsif Indent (Next) > Mine or else Continues (Next) then
+                  Last := Line_Stop (Bytes, Next) - 1;
+               elsif Opened
+                 and then Indent (Next) = Mine
+                 and then (Starts_With (Next + Mine, Bytes'Last, "else")
+                           or else Starts_With
+                             (Next + Mine, Bytes'Last, "elsif"))
+               then
+                  Last := Line_Stop (Bytes, Next) - 1;
+               elsif Opened
+                 and then Indent (Next) = Mine
+                 and then Starts_With (Next + Mine, Bytes'Last, "end")
+                 and then Next + Mine + 3 < Routine_Last
+               then
+                  --  The closer of the construct the refused line opened,
+                  --  which left behind would close a construct around it.
+                  Last := Line_Stop (Bytes, Next) - 1;
+                  exit;
+               else
+                  exit;
+               end if;
+               if Indent (Next) > Mine then
+                  Opened := True;
+               end if;
+            end;
+         end loop;
+         return Last;
+      end Quiet_Last;
+
       --  Whether the next line that holds anything begins with a word that
       --  ends a block, so the line ending at Last is its block's last.
       function Ends_Block (Last : Natural) return Boolean;
@@ -1375,18 +1504,20 @@ package body Landin.Syntax.Repairs is
             return;
          end if;
          --  D1076: a repair counts only when its routine then parses to
-         --  the end of the line, and a routine the parser refused before
-         --  this line is refused there with any change to this line: no
-         --  trial can count, so none is read.  One routine of many refused
-         --  lines is therefore tried for its first alone, which is what
-         --  D261 always answered, without reading the routine again for
-         --  every change to every later line.
-         if Line_First >= Routine_First + 2
+         --  the end of the line, so a later line is tried in the routine
+         --  with its earlier refused lines mended (Edits).  Every trial
+         --  reads the routine again, so a routine is tried for its first
+         --  Lines_Limit refused lines; a later one keeps the parser's own
+         --  report.
+         Enter_Routine;
+         if Tried_In_Routine >= Lines_Limit
+           and then Line_First >= Routine_First + 2
            and then Errors_Between (Routine_First - 1, Line_First - 2) > 0
          then
             Result.Append (Item);
             return;
          end if;
+         Tried_In_Routine := Tried_In_Routine + 1;
          --  `break` and `continue` parse only in a loop.
          for One of Pieces loop
             if One.Kind in Tok.Kw_Break | Tok.Kw_Continue then
@@ -1395,6 +1526,7 @@ package body Landin.Syntax.Repairs is
          end loop;
 
          declare
+            Prefix : constant String := Edited (Line_First);
             procedure Consider (One : Trial);
 
             --  Whether the token at Position is [0370]'s `lenof`.
@@ -1436,9 +1568,9 @@ package body Landin.Syntax.Repairs is
                if Squeezed (Written) /= ""
                  and then (Broken or else Parses (Written, Loops, Value))
                  and then Mends_File
-                   (Bytes (Routine_First .. Line_First - 1) & Written
+                   (Prefix & Written
                     & Bytes (Line_Last + 1 .. Routine_Last),
-                    Line_First - Routine_First + 1)
+                    Prefix'Length + 1)
                then
                   Found_Trials.Append (One);
                end if;
@@ -1670,6 +1802,10 @@ package body Landin.Syntax.Repairs is
                           Found_Trials (Position), Level));
             end loop;
             Result.Append (Restated_Report);
+            Last_Repair :=
+              (First => Line_First, Last => Line_Last,
+               Text  => Ada.Strings.Unbounded.To_Unbounded_String
+                          (Applied (Pieces, Line_First, Line_Last, Best)));
          end;
       end Try_Line;
    begin
@@ -1716,6 +1852,73 @@ package body Landin.Syntax.Repairs is
             else
                Try_Line (Item);
             end if;
+            --  What a trial of a later line of the routine reads in place
+            --  of this one: its first repair, or its report's own fix on
+            --  its line, or the line blanked with what D260 keeps quiet
+            --  after it.
+            if Line /= 0 and then Line /= Last_Line
+              and then Diag.Level (Item) = Diag.Error
+              and then In_A_Body (Where)
+            then
+               Enter_Routine;
+               declare
+                  At_Byte : constant Positive :=
+                    Natural'Min (Natural (Where.First) + 1, Bytes'Last);
+                  First : Natural := Line_Begin (Bytes, At_Byte);
+                  One : Edit;
+               begin
+                  if Last_Repair.First /= 0 then
+                     First := Last_Repair.First;
+                  end if;
+                  if Last_Repair.First /= 0 then
+                     One := Last_Repair;
+                  elsif Diag.Fix_Count (Item) > 0
+                    and then Diag.Edit_Count (Diag.Nth_Fix (Item, 1)) = 1
+                    and then Natural (Diag.Span_Of (Diag.Nth_Edit
+                      (Diag.Nth_Fix (Item, 1), 1)).First) + 1 >= First
+                    and then Natural (Diag.Span_Of (Diag.Nth_Edit
+                      (Diag.Nth_Fix (Item, 1), 1)).Last)
+                      < Line_Stop (Bytes, First)
+                  then
+                     --  The report's own fix, on its line.
+                     declare
+                        Change : constant Diag.Edit :=
+                          Diag.Nth_Edit (Diag.Nth_Fix (Item, 1), 1);
+                        Span : constant Landin.Source.Span :=
+                          Diag.Span_Of (Change);
+                        Stop : constant Natural := Line_Stop (Bytes, First);
+                     begin
+                        One.First := First;
+                        One.Last := Stop - 1;
+                        One.Text := Ada.Strings.Unbounded.To_Unbounded_String
+                          (Bytes (First .. Natural (Span.First))
+                           & Diag.Replacement (Change)
+                           & Bytes (Natural (Span.Last) + 1 .. Stop - 1));
+                     end;
+                  else
+                     --  Blanks keep every line where it was, so the
+                     --  reports after it keep their places.
+                     One.First := First;
+                     One.Last := Quiet_Last (First);
+                     declare
+                        Blank : String := Bytes (One.First .. One.Last);
+                     begin
+                        for Byte of Blank loop
+                           if not Ends_Line (Byte) then
+                              Byte := ' ';
+                           end if;
+                        end loop;
+                        One.Text :=
+                          Ada.Strings.Unbounded.To_Unbounded_String (Blank);
+                     end;
+                  end if;
+                  if Edits.Is_Empty or else One.First > Edits.Last_Element.Last
+                  then
+                     Edits.Append (One);
+                  end if;
+               end;
+            end if;
+            Last_Repair := (others => <>);
             if Line /= 0 then
                Last_Line := Line;
             end if;

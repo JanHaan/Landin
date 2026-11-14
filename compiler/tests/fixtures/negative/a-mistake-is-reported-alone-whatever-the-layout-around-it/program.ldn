@@ -1,0 +1,21 @@
+before: (x: i32) -> (r: i32) =
+    r = x
+    begin
+        r = r + 1
+end
+end
+
+public main: () -> (code: i32) =
+    total:: i32 = before(1) + after(2) - 5
+    code = total
+end main
+
+after: (x: i32) -> (r: i32) =
+    r = x
+    begin
+        r = r + 1
+end
+    if r > 2 then
+        r = r * 1
+end if
+  end

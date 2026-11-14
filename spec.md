@@ -20234,7 +20234,8 @@ positive programs, 596 gave one report on the changed line.
 
 **Chosen:** recovery keeps to the structure the program writes, and only after
 a mistake, so a program the parser accepts is read exactly as before. A
-function's closer is found before its body is read: the first `end name`
+function's closer is found before its body is read, where a reading by the
+grammar alone did not close it (D1362): the first `end name`
 after it that begins a line no deeper than the declaration's, or shares its
 line, or, for a body written deeper than its function and with no such
 `end name`, a bare `end` alone on the first line after the body's first that
@@ -20374,7 +20375,9 @@ nothing to report it is the parse, so in a program the grammar derives the
 place a line begins decides nothing, as [1750] says. When it has anything to
 report it is given up at that point, having reported nothing, and the file is
 read again with D260's recovery, which makes every report; a file with a
-mistake costs at most one more reading up to its first mistake.
+mistake costs at most one more reading up to its first mistake. That
+reading closes each function the grammar derived where the grammar did
+(D1362).
 
 Three things change in the recovering reading. A construct that closes
 with a bare `end` and meets the closer found for its function, in a body
@@ -20430,8 +20433,8 @@ other token or at the line's end; and last, any token removed. The ones that
 keep every token written come first, because they keep what the person wrote.
 A change counts when the line parses on its own as one statement, or as its
 block's value where it ends the block of a routine that returns one, and when
-the routine with it parses to the end of the line and reports no more after it
-than before. Changes that leave the same tokens are one repair. The report
+the routine with it, and with its earlier refused lines mended (D1361),
+parses to the end of the line and reports no more after it than before. Changes that leave the same tokens are one repair. The report
 moves to the token the first repair touches, says what the change is, gives the
 line as the source would read with only that edit, and offers up to three
 repairs. A deletion that leaves only a comment is not a repair: it erases
@@ -20606,6 +20609,11 @@ doubled `:` as exact.
 
 ### D1076 — The repair search reads a routine for its first refused line alone
 
+**Choice superseded by D1361.** Its measurement stands: a routine read again
+for every change to every refused line costs the square of its length. D1361
+restates every refused line within a bound instead, by the alternative
+recorded below. The reasoning is retained as history.
+
 **The discrepancy:** D261 tries the first error of every refused line of a
 routine, and a change that parses alone is read again inside its whole
 routine. A repair counts only when the routine then parses to the end of its
@@ -20627,8 +20635,115 @@ which the search stops, which bounds the cost by refusing work that could
 have counted, where this refuses only work that could not. A fixed number
 of repaired lines to a routine, which is that with another unit.
 
-**Pinned by** `parser/the repair search reads a routine once`, which holds
-the count of readings to the routines tried.
+**Pinned by** `parser/the repair search reads a routine once`, which held
+the count of readings to the routines tried, and was renamed
+`parser/the repair search is bounded by routine` by D1361.
+
+### D1361 — Each refused line of a routine is tried with the earlier ones mended
+
+**The discrepancy:** D261 restates a refused line as the smallest change
+that mends it, and counts a change only when its routine then parses to the
+end of the line. A routine refused earlier is refused there whatever is done
+to the line, so D1076 tried only a routine's first refused line, and every
+later one kept the parser's own report until the first was mended: three
+mistakes in one routine were one repair and two bare reports.
+
+**Chosen:** a refused line is tried in its routine as the routine's earlier
+refused lines would be mended. Each earlier line stands as its first repair
+when it was restated, as its report's own fix when that fix is one edit on
+its line, such as `==` for an `=` in a condition, and otherwise blanked. A
+blanked line takes with it what D260 keeps quiet after it: the lines
+continuing it, the lines indented deeper, and, when those are a body it
+opened, its `else` and `elsif` dividers and the `end` at its own depth, which
+left behind would close a construct around it. The blanking stops at a line
+the parser reported on, which is tried as a mistake of its own. What counts
+as a repair is otherwise D261's, so a repair is judged in the text the
+earlier fixes leave, and applying the first fix of each report leaves every
+one of those lines parsing.
+
+Every trial reads its routine again, a few times a line, so the search is
+bounded by the routine: the first sixteen refused lines of a routine are
+tried and a later one keeps the parser's own report. Across the mutation
+suite no line took more than five readings. The 1,500-line routine of `r = r
++ + 1` lines that D1076 measured took a minute with every line tried, and
+takes about two seconds with this bound, a debug build of the compiler
+against two thirds of a second when one line was tried.
+
+A blank can leave a closer where the layout misled it: a construct closed
+deeper or shallower than its opener keeps its `end`, which then closes a
+construct around it. The trial then reports before the line it tries, which
+cannot count, so the line keeps the parser's report. A blank never makes a
+repair count that the text could not.
+
+**The alternatives:** blanking every earlier refused line whatever was
+found for it, D1076's recorded alternative. It gave the same reports on
+every fixture tried, but judges each fix on its own, so the fixes offered
+for one routine need not apply together. Blanking only the refused line,
+which leaves its body and its closer to be read as statements and a stray
+`end`, so that no later line counts. A budget of bytes read again for a
+file, which bounds the cost evenly but makes which lines are restated
+depend on how long the file is. Eight lines to a routine, which costs a
+little less and leaves a ninth mistake bare.
+
+**Pinned by** `negative/two-refused-lines-of-a-routine-are-each-restated`
+and `negative/three-refused-lines-of-a-routine-are-each-restated`, whose
+recorded reports restate every line and whose fixes the `fixes` suite
+compiles clean; `negative/a-later-refused-line-is-tried-as-the-earlier-are-mended`,
+whose later lines are tried past an earlier report's own fix and past a line
+no change mends; `negative/a-nested-mistake-after-a-refused-statement-is-reported`,
+whose second report is now restated too; and `parser/the repair search is
+bounded by routine`, which holds the lines restated and the readings to the
+bound.
+
+### D1362 — A routine the grammar derives is read as derived beside a mistake
+
+**The discrepancy:** D1074 reads a file by the grammar alone first and,
+when that reading meets a mistake, reads the whole file again with D260's
+recovery, which places every function's closer by where it is written. So
+a correct routine laid out unusually, a bare block's `end` at the margin
+inside a routine closed by a bare `end`, took the block's `end` for its
+own, and the file gained a report of its own beside the real one,
+"this bare block is never closed", whether the routine came before the
+mistake or after it.
+
+**Chosen:** D260's reading closes a top-level function where a reading by
+the grammar alone closed it, when one did, and reads it as that reading did,
+so its layout decides nothing. The first reading by the grammar notes the
+closer of every function it reads to its end and the token it stops at.
+A function past the latest such stop is read by the grammar from the first
+token of the file's declaration that holds it, itself or the `fixed if`
+around it, and that reading goes on to its own first mistake, noting the
+same; a file is read so at most once more, beyond D1074's readings. Only a
+function the grammar refused is fenced by where its closers are written, as
+D260 has it. And D260 passes over the lines indented under a refused
+declaration as the body its header failed to open; after a function that
+was closed at the closer it was fenced by, nothing of it is left, so the
+next line begins anew however deep it is written. Without that, a routine
+whose header was written one column deeper than the refused routine's was
+passed over whole, and its body's lines were read as declarations. A function in which a mistake is
+written is refused by its own reading, so a file with mistakes in two
+routines reports each, once, in its own routine, and nothing in the others.
+
+A reading by the grammar that stops outside every body may have stopped at
+what is left of the function it closed last: a stray `end`, or an opener
+that was lost, closes the function early by the grammar, and its last lines
+are then read as declarations. That function is not taken as derived, and
+is fenced as before. Seven of the mutation suite's mutants do this.
+
+**The alternatives:** fencing by indentation only from the routine that
+holds the grammar's first mistake, since the routines before it are
+derived, which still adds a report to an unusual routine after the
+mistake. Reading every routine by the grammar alone as its own small file,
+which needs the boundaries D260's reading finds and reads every routine a
+second time. Trusting every function the grammar closed, which read the
+seven mutants' last lines as declarations outside their body.
+
+**Pinned by** `negative/a-mistake-is-reported-alone-whatever-the-layout-around-it`,
+whose routines before and after the mistake each gained a report on the
+base; `parser/indentation decides nothing`, which writes a routine with a
+mistake before and after every fixture program that parses, its lines moved
+as for its own check, and requires that mistake's report alone; and the
+`mutation` suite, whose share of one report on the changed line is unchanged.
 
 ### D264 — Hosted system identity selects libc records, independently of C transport
 

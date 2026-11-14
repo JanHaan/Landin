@@ -476,9 +476,12 @@ a fix: a token removed, written, swapped with its neighbour or moved to the
 statement's start, or a value written where a line break left one out. The
 fix is likely, a guess at what was meant, except removing one copy of a
 token written twice, which is exact unless the token is a bracket: a line
-with `))` may as well have lost its `(` (D1075). Only the first refused line
-of a routine can be restated, since a repair must leave the routine parsing
-up to its line, and the later ones are not searched (D1076). No change moves `lenof` or the operand
+with `))` may as well have lost its `(` (D1075). A repair must leave the
+routine parsing up to its line, so a later refused line of a routine is
+tried with the earlier ones as their fixes would leave them, or blanked
+where they have none, so applying the first fix each report offers leaves
+every one of those lines parsing. The first sixteen refused lines of a routine are tried; a later
+one keeps the parser's own report (D1361). No change moves `lenof` or the operand
 it measures, which would read the word as a name nobody declared (D864). A
 report stands on a token: a missing one at a line's end stands on the token
 it belongs after.

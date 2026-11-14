@@ -1,0 +1,11 @@
+error[L0101]: `:` does not belong here
+  --> ../tests/fixtures/negative/a-mistake-is-reported-alone-whatever-the-layout-around-it/program.ldn:9:11
+  |
+9 |     total:: i32 = before(1) + after(2) - 5
+  |           ^
+  --> ../tests/fixtures/negative/a-mistake-is-reported-alone-whatever-the-layout-around-it/program.ldn:9:5
+  |
+9 |     total:: i32 = before(1) + after(2) - 5
+  |     ^^^^^ declared here
+  = note: written as `total: i32 = before(1) + after(2) - 5` the line parses
+  = help: remove `:`

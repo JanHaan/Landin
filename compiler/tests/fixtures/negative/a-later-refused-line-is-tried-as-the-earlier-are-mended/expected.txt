@@ -1,0 +1,36 @@
+error[L0105]: assignment is a statement, never an expression
+  --> ../tests/fixtures/negative/a-later-refused-line-is-tried-as-the-earlier-are-mended/program.ldn:3:14
+  |
+3 |     if total = 1 then
+  |              ^
+  = note: [0390]: `==` compares; an assignment stands on its own
+  = help (guess): compare with `==`
+error[L0102]: `+` does not belong here
+  --> ../tests/fixtures/negative/a-later-refused-line-is-tried-as-the-earlier-are-mended/program.ldn:6:21
+  |
+6 |     total = total + + 40
+  |                     ^
+  --> ../tests/fixtures/negative/a-later-refused-line-is-tried-as-the-earlier-are-mended/program.ldn:6:19
+  |
+6 |     total = total + + 40
+  |                   ^ the operator
+  = note: written as `total = total + 40` the line parses
+  = help (guess): remove `+`
+  = help (guess): write a value after `+`
+error[L0110]: this does not continue the expression before it
+  --> ../tests/fixtures/negative/a-later-refused-line-is-tried-as-the-earlier-are-mended/program.ldn:7:22
+  |
+7 |     spare: i32 = 1 2 3
+  |                      ^
+  = note: [1820]: an expression continues only with an operator, a selection, an index or a call
+error[L0102]: `=` does not belong here
+  --> ../tests/fixtures/negative/a-later-refused-line-is-tried-as-the-earlier-are-mended/program.ldn:8:12
+  |
+8 |     code = = total - 40
+  |            ^
+  --> ../tests/fixtures/negative/a-later-refused-line-is-tried-as-the-earlier-are-mended/program.ldn:8:10
+  |
+8 |     code = = total - 40
+  |          ^ required by this
+  = note: written as `code = total - 40` the line parses
+  = help: remove `=`

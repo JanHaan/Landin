@@ -1,0 +1,9 @@
+public main: () -> (code: i32) =
+    mut total: i32 = 0
+    if total = 1 then
+        total = 2
+    end if
+    total = total + + 40
+    spare: i32 = 1 2 3
+    code = = total - 40
+end main

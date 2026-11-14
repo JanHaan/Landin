@@ -1488,15 +1488,15 @@ package body Landin.Tests.Parser_Suite is
       Probe ("addr", "L0100");
    end Measure_And_Address_Chains_Are_Bounded;
 
-   --  D1076: a repair counts only when its routine parses up to the line
-   --  it mends, so only the first refused line of a routine can be
-   --  restated, and the routine is read again only for that one.  It was
-   --  once read for every change to every refused line, the square of a
-   --  routine of systematic mistakes: 1,500 such lines took six minutes.
-   procedure The_Repair_Search_Reads_A_Routine_For_Its_First_Line
+   --  D1361: each refused line of a routine is tried with the earlier
+   --  ones mended, and a trial reads its routine again, so a routine is
+   --  tried for its first Lines_Limit refused lines alone.  Every line
+   --  tried once cost the square of a routine of systematic mistakes:
+   --  1,500 such lines took a minute, and six before D1076.
+   procedure The_Repair_Search_Is_Bounded_By_Routine
      (Item : in out Landin.Testing.Context);
 
-   procedure The_Repair_Search_Reads_A_Routine_For_Its_First_Line
+   procedure The_Repair_Search_Is_Bounded_By_Routine
      (Item : in out Landin.Testing.Context)
    is
       LF : constant Character := ASCII.LF;
@@ -1547,25 +1547,29 @@ package body Landin.Tests.Parser_Suite is
               (Item, Landin.Diagnostics.Count (Restated),
                Routines * Refused, "each refused line is one report");
             Landin.Testing.Check_Equal
-              (Item, Mended, Routines,
-               "the first refused line of each routine is restated");
+              (Item, Mended, Routines * Landin.Syntax.Repairs.Lines_Limit,
+               "the first refused lines of each routine, up to the bound,"
+               & " are restated");
             Landin.Testing.Check
-              (Item, Readings in 1 .. Routines * 16,
-               "a routine is read again for its first refused line alone:"
+              (Item, Readings in Routines * Landin.Syntax.Repairs.Lines_Limit
+                 .. Routines * Landin.Syntax.Repairs.Lines_Limit * 4,
+               "a routine is read again for the lines tried alone:"
                & Readings'Image & " readings for" & Natural'Image (Routines)
                & " routines of" & Natural'Image (Refused)
                & " refused lines");
          end;
       end;
-   end The_Repair_Search_Reads_A_Routine_For_Its_First_Line;
+   end The_Repair_Search_Is_Bounded_By_Routine;
 
    --  D1074: where a line begins decides nothing in a program the grammar
    --  derives.  Every fixture program that parses is read again with no
    --  indentation at all and with every line that begins with a token
    --  moved to a drawn depth, and parses as it did.  Lines inside a raw
    --  literal or a block comment begin with no token and are not moved:
-   --  their blanks are bytes of the literal [0280].  Deliberate real-host
-   --  exception: the corpus on disk is what is read.
+   --  their blanks are bytes of the literal [0280].  And beside a routine
+   --  with a mistake, written before the program's declarations or after
+   --  them, the program reports nothing of its own, moved or not.
+   --  Deliberate real-host exception: the corpus on disk is what is read.
    procedure Indentation_Decides_Nothing
      (Item : in out Landin.Testing.Context);
 
@@ -1578,6 +1582,8 @@ package body Landin.Tests.Parser_Suite is
       Programs  : Natural := 0;
       Refused   : Natural := 0;
       Examples  : Unbounded.Unbounded_String;
+      Not_Alone : Natural := 0;
+      Alone_Examples : Unbounded.Unbounded_String;
 
       function Errors (Text : String) return Natural;
 
@@ -1650,6 +1656,67 @@ package body Landin.Tests.Parser_Suite is
          end loop;
          return Unbounded.To_String (Result);
       end Moved;
+      --  D1362: the same program with a routine holding one mistake
+      --  written before its first declaration and after its last, and its
+      --  own lines moved as above, reports that mistake alone: its
+      --  routines are read as the grammar derives them however their
+      --  lines are laid out.
+      procedure Beside_A_Mistake (Text : String; Name : String);
+
+      procedure Beside_A_Mistake (Text : String; Name : String) is
+         Ended : constant String :=
+           (if Text (Text'Last) = ASCII.LF then Text else Text & ASCII.LF);
+         Mistake : constant String :=
+           "refused_beside: () -> (r: i32) =" & ASCII.LF
+           & "    r = 1 + + 1" & ASCII.LF
+           & "end refused_beside" & ASCII.LF;
+         --  The first line of a declaration: past the imports, the
+         --  comments and the blank lines before it.
+         First : Natural := Ended'First;
+      begin
+         while First <= Ended'Last loop
+            declare
+               Stop : Natural := First;
+            begin
+               while Ended (Stop) /= ASCII.LF loop
+                  Stop := Stop + 1;
+               end loop;
+               exit when Stop > First
+                 and then Ended (First) not in ' ' | ASCII.HT | '-'
+                 and then not (Stop - First >= 6
+                               and then Ended (First .. First + 5)
+                                 = "import");
+               First := Stop + 1;
+            end;
+         end loop;
+         for Depth_Limit in 0 .. 2 loop
+            declare
+               Depth : constant Natural :=
+                 (if Depth_Limit = 0 then 0 else 13);
+               Head : constant String := Ended (Ended'First .. First - 1);
+               Rest : constant String := Ended (First .. Ended'Last);
+               Moved_Rest : constant String :=
+                 (if Rest = "" then "" else Moved (Rest, Depth));
+            begin
+               for Placed in Boolean loop
+                  if Errors
+                       ((if Placed
+                         then Head & Mistake & Moved_Rest
+                         else Moved (Ended, Depth) & Mistake))
+                     /= 1
+                  then
+                     Not_Alone := Not_Alone + 1;
+                     if Not_Alone <= 5 then
+                        Unbounded.Append
+                          (Alone_Examples,
+                           " " & Name
+                           & (if Placed then " (before)" else " (after)"));
+                     end if;
+                  end if;
+               end loop;
+            end;
+         end loop;
+      end Beside_A_Mistake;
    begin
       Fixtures.Discover (Catalogue, Corpus, Host);
 
@@ -1690,6 +1757,8 @@ package body Landin.Tests.Parser_Suite is
                            end if;
                         end if;
                      end loop;
+                     Beside_A_Mistake (Unbounded.To_String (Content),
+                                       Fixtures.Name (Fixture));
                   end if;
                end;
             end if;
@@ -1703,6 +1772,11 @@ package body Landin.Tests.Parser_Suite is
         (Item, Refused, 0,
          "no program is refused for where its lines begin:"
          & Unbounded.To_String (Examples));
+      Landin.Testing.Check_Equal
+        (Item, Not_Alone, 0,
+         "a mistake beside a program's routines is reported alone,"
+         & " however their lines begin:"
+         & Unbounded.To_String (Alone_Examples));
    end Indentation_Decides_Nothing;
 
    --  A selector chain and a run of `ptr` are read iteratively, but every
@@ -5984,8 +6058,8 @@ package body Landin.Tests.Parser_Suite is
         (Into, "parser", "indentation decides nothing",
          Indentation_Decides_Nothing'Access);
       Landin.Testing.Register
-        (Into, "parser", "the repair search reads a routine once",
-         The_Repair_Search_Reads_A_Routine_For_Its_First_Line'Access);
+        (Into, "parser", "the repair search is bounded by routine",
+         The_Repair_Search_Is_Bounded_By_Routine'Access);
       Landin.Testing.Register
         (Into, "parser", "transfers preserve completion boundaries",
          Transfers_Preserve_Completion_Boundaries'Access);

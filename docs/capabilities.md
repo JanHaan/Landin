@@ -471,7 +471,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - A refused program gets a report with a span, a caret and a note, one per
   mistake and on the token it is about. What a mistake leaves behind is not
   reported again, and where one change of a token mends a line the report
-  says which change and offers it as a fix.
+  says which change and offers it as a fix, for each of the first sixteen
+  refused lines of a routine, each judged with the lines before it mended.
+  A routine the grammar reads without a mistake is read so however its
+  lines are laid out, so a mistake in another routine is reported alone.
 - When a refused form matches a spelling from another language, such as
   `elif`, `fn`, `x as i32`,
   `x++`, `x--`, prefix `!`, C-family comments, braces, semicolons, `*u8`,

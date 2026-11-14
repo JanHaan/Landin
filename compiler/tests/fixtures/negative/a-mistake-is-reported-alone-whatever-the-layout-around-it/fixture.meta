@@ -1,0 +1,10 @@
+class: negative
+summary: [1750] a mistake in one routine is its only report: the routines before and after it, which the grammar derives, are read as it derives them however their lines are laid out
+program: program.ldn
+codes: L0101
+fixed: program.fixed
+constructs: 1750, 1800, 1810
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/a-mistake-is-reported-alone-whatever-the-layout-around-it/program.ldn
+status: 1
