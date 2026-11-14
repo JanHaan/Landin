@@ -256,7 +256,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R11.27 — Recover from every refused line (planned).**
+**Next roadmap item: R13.90 — Supply a concept through a field (planned).**
 
 ## Versions
 
