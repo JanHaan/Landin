@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: 48 keys chosen to take slot 0 of a 64-slot map under a known seed cost 48 * 48 key comparisons to insert and find there, and under another seed spread so that the same work takes 95 and 143, as a simulation of the map's linear probe says
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0300, 0320, 0570, 1280, 1290, 1340
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

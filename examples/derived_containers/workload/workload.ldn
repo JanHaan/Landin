@@ -82,7 +82,7 @@ numbers_path: () -> (ok: bool) =
     --  R470_DEBUG_SORTED_LIST
     sorted: bool = count == 20 and first == 1 and last == 20
 
-    mut squares := map.new(key: u32, item: u32)
+    mut squares := map.new(key: u32, item: u32, seed: test_seed())
     for number in vec.used(numbers) do
         key: u32 = u32(number)
         square: u32 = key * key
@@ -160,7 +160,7 @@ node_pointer_equal: (left: ptr sample_node, right: ptr sample_node)
     same = usize(left) == usize(right)
 end node_pointer_equal
 
-node_pointer_hash: (value: ptr sample_node) -> (result: u64) =
+node_pointer_hash: (value: ptr sample_node, seed: cmp.hash_seed) -> (result: u64) =
     result = u64(usize(value))
 end node_pointer_hash
 
@@ -403,7 +403,7 @@ keys_equal: (left: collision_key, right: collision_key) -> (same: bool) =
     same = left.identity == right.identity
 end keys_equal
 
-key_hash: (value: collision_key) -> (result: u64) =
+key_hash: (value: collision_key, seed: cmp.hash_seed) -> (result: u64) =
     result = value.home
 end key_hash
 
@@ -451,7 +451,7 @@ reference_entry_enumeration: () -> (ok: bool) =
     discarded: map.entry(ptr sample_node, ptr sample_node) =
         (key: addr node_1, item: addr node_2)
     provider := heap.new()
-    mut value := map.new(key: ptr sample_node, item: ptr sample_node)
+    mut value := map.new(key: ptr sample_node, item: ptr sample_node, seed: test_seed())
     mut empty_cursor := map.entries()
     mut empty_seen: bool = false
     _ = map.next_entry(value, empty_cursor) else (problem)
@@ -518,7 +518,7 @@ map_operations: () -> (ok: bool) =
     mut bytes: [4096]u8 = zeroed
     mut space: arena.space = zeroed
     provider := arena.over_unchecked(space, addr bytes[0], lenof bytes)
-    mut value := map.new(key: collision_key, item: i32)
+    mut value := map.new(key: collision_key, item: i32, seed: test_seed())
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
     k3: collision_key = (identity: 3, home: 6)
@@ -644,7 +644,7 @@ map_operations: () -> (ok: bool) =
     --  Churn reaches the eight-slot pressure threshold with three live
     --  entries and three tombstones. The next absent insert reuses a dead
     --  bucket without allocating; enumeration still yields each survivor.
-    mut compact := map.new(key: collision_key, item: i32)
+    mut compact := map.new(key: collision_key, item: i32, seed: test_seed())
     map.insert(compact, provider, k1, 11) else (problem) _ = problem return end
     map.insert(compact, provider, k2, 22) else (problem) _ = problem return end
     map.insert(compact, provider, k3, 33) else (problem) _ = problem return end
@@ -760,7 +760,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     counted := fault.over
         (inner_provider: pool_provider, state: space, inner: inner,
          allowed_attempts: three)
-    mut value := map.new(key: collision_key, item: i32)
+    mut value := map.new(key: collision_key, item: i32, seed: test_seed())
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
     k3: collision_key = (identity: 3, home: 6)
@@ -1101,3 +1101,8 @@ public containers_run: () -> (ok: bool) =
          and map_second_failure_ok
          and map_third_failure_ok and tree_ok and drawables_ok
 end containers_run
+
+--  A constant seed: the same probes and rebuilds on every run.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed

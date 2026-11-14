@@ -1871,6 +1871,9 @@
     "runtime/cmp-bytes-ordered": {
       "mode": "execute"
     },
+    "runtime/cmp-siphash-vectors": {
+      "mode": "execute"
+    },
     "runtime/comparisons-exit-with-their-verdict": {
       "mode": "execute"
     },
@@ -3354,6 +3357,18 @@
     },
     "runtime/loop-values": {
       "mode": "execute"
+    },
+    "runtime/map-firmware-seed": {
+      "mode": "execute"
+    },
+    "runtime/map-seed-spreads-chosen-keys": {
+      "mode": "execute"
+    },
+    "runtime/map-seeded-from-entropy": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
     },
     "runtime/match-arm-names-several-cases": {
       "mode": "execute"

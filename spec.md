@@ -31108,9 +31108,10 @@ fixtures and the derived containers did.
 **Chosen:** `core/cmp` (D273) declares `equatable` and `hashable` for the ten
 integer scalars, `bool` and `[]u8`, and `ordered` for the ten integer scalars;
 `core/text` declares `utf8` as `equatable`, `hashable` and `ordered`,
-importing it. Scalar hashes are the two's-complement bits widened, computed
-without a narrowing conversion; byte slices and `utf8` use 64-bit FNV-1a, and
-`utf8` orders byte-wise, which for valid UTF-8 is scalar order. Floats are
+importing it. A scalar hashes its two's-complement bits widened, computed
+without a narrowing conversion, and byte slices and `utf8` their bytes; the
+hash was the bits themselves and 64-bit FNV-1a until D1360 keyed both with
+SipHash-1-3 under a seed. `utf8` orders byte-wise, which for valid UTF-8 is scalar order. Floats are
 excluded: IEEE equality is not reflexive for NaN, and hashing raw bits would
 give different hashes to equal signed zeros. There is one
 register and no override (retained position RP2), so a program that re-declares `u32 is
@@ -31347,9 +31348,9 @@ D270's collision.
 `instant` `equatable`, `hashable` and `ordered` as their counts compare,
 each hash the count as `u64`'s is. `core/net` declares `address`
 `equatable` by `same_address`, family, octets, port and zone, and
-`hashable` with 64-bit FNV-1a over the bytes that equality reads: a family
-byte, 4 or 6, the sixteen octets, the port high byte first and the sixteen
-zone bytes. An address has no order a program could rely on, so it is not
+`hashable` over the bytes that equality reads: a family byte, 4 or 6, the
+sixteen octets, the port high byte first and the sixteen zone bytes, with
+64-bit FNV-1a until D1360 made it `cmp.hash_bytes` under a seed. An address has no order a program could rely on, so it is not
 `ordered`. Each type's evidence is in its own module, as `utf8`'s is in
 `core/text` (D273), so a program that names the type has its evidence, and
 re-declaring any of it is D270's collision.
@@ -31366,6 +31367,70 @@ maps by instants and by addresses, a zone telling two apart;
 `runtime/library-shared-time` and `runtime/library-shared-net`, which
 reach the evidence through the concepts on every target, Cortex-M0
 included; and `negative/library-evidence-collision-time-net`.
+
+### D1360 — A map hashes its keys under a seed, and the shipped hashes are SipHash-1-3
+
+**The tour said** at [1280] that evidence is declared once, and nothing of
+what a hash may be keyed by. D270 hashed an integer as its own bits and
+bytes with 64-bit FNV-1a, and D198's map chose a slot from that hash
+alone, so whoever chose the keys of a map keyed by outside data could put
+them all in one probe chain and make each insertion and lookup take time
+in proportion to the map's size.
+
+**Chosen:** `cmp.hashable`'s entry is `hash: (value: item, seed:
+hash_seed) -> (result: u64)`, and equal items hash alike under one seed.
+`cmp.hash_seed` is 128 bits whose form is the module's own, made by
+`cmp.seed_from(first, second)`, SipHash's k0 and k1. `cmp.hash_bytes` is
+SipHash-1-3 (Aumasson and Bernstein, 2012) of a byte slice, and
+`cmp.hash_word` the same of a word's eight bytes, least significant
+first; every shipped conformance is one of them: an integer scalar
+`hash_word` of D270's widened bits, `bool` of 0 or 1, `[]u8` and `utf8`
+`hash_bytes`, `core/time`'s counts `hash_word` and `net.address`
+`hash_bytes` of the 35 bytes D1031's equality reads. The seed is a value,
+so `core/cmp` still imports nothing (D352). `map.new(key, item, seed)`
+requires one, the map keeps it across `release` and `clear`, and MurmurHash3's
+finalizer still spreads the keyed hash before a slot is chosen, for a
+program's own hash that is a key's value. `random.hash_seed(provider,
+host)` reads sixteen bytes of an `io.entropy` provider as two
+little-endian words, without a generator, so nothing drawn from one
+reveals it. A program without entropy gives `seed_from` two words of its
+own: a hardware random number or a device-unique ID where it has one, and
+a constant chosen for the build where it has not, which protects only
+while the image stays secret. There is no unseeded map. A walk follows
+insertion order, not slots, so a seed changes no walk and nothing a
+lookup finds; it changes which slots the keys take, and with them the
+probes and, after removals, whether a new key reuses a removed entry's
+slot or rebuilds the table, which `slots`, `removed` and `capacity` report
+and which allocations happen. A constant seed makes all of that
+reproducible.
+
+**The alternatives:** SipHash-2-4, the authors' default and the only
+SipHash in their `vectors.h`, measured at this item at about 40 per cent
+more than SipHash-1-3 for a 16-byte key on every target, 9,318 against
+6,670 instructions on Cortex-M0 and 239 against 169 cycles on x86-64,
+where 1-3 is what Rust's and CPython's tables use and no attack on table
+flooding is known; HalfSipHash-2-4, a variant with 32-bit words, which
+with this backend was slower than SipHash-1-3 on every target, 10,213
+instructions on Cortex-M0 and 471 cycles on x86-64, and has half the key;
+keeping the unkeyed hash and keying only the map's spreading of it,
+which keeps FNV-1a's collisions, found without the seed; a second concept
+beside `hashable`, which leaves two evidence sets and the unkeyed one
+with no consumer; a hasher the entry feeds, which suits a composite key
+but passes its state in memory, which this backend ran 1.5 to 2 times
+slower; an unseeded constructor with a library seed, which is public and
+so the quadratic case again; and a seed whose fields are public, which a
+module binding could construct, declined so that the key's form stays
+the module's own. The cost is real: an integer key's hash went from about
+300 instructions on Cortex-M0, the finalizer alone, to about 5,000.
+
+**Pinned by** `runtime/cmp-siphash-vectors`, the 64 values the authors'
+reference `siphash.c` prints at one compression and three finalization
+rounds for the inputs of their `vectors.h`, on every hosted target,
+Cortex-M0, RV32 and Xtensa; `runtime/map-seed-spreads-chosen-keys`, 48 keys
+chosen to share one probe chain under a known seed that spread under
+another; `runtime/map-seeded-from-entropy`, a hosted map seeded by
+`random.hash_seed`; `runtime/map-firmware-seed`, a map given its seed on
+the firmware corpus lanes; and `runtime/library-builtin-evidence`.
 
 ### D1032 — A handle that borrows nothing is `new`, and a second way to make one keeps `over`
 

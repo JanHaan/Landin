@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/cmp's hash_bytes is SipHash-1-3 and gives the 64 values the authors' reference siphash.c prints at one compression and three finalization rounds for the inputs of its vectors.h, hash_word and the integer scalars' hashes agree with it, and another seed gives another hash, the same on every target, Cortex-M0 included
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0300, 0320, 0570, 1290
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

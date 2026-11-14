@@ -1,8 +1,9 @@
+import core/cmp
 import core/map
 
 exercise: () -> (ok: bool) ! map.missing =
     ok = false
-    mut value := map.new(key: u32, item: i32)
+    mut value := map.new(key: u32, item: i32, seed: test_seed())
     return when map.length(value) <> 0 or map.capacity(value) <> 0
     return when map.contains(value, u32(42))
     mut refused: bool = false
@@ -24,3 +25,8 @@ public main: () -> (code: i32) =
         code = 42
     end if
 end main
+
+--  A constant seed: the same probes and rebuilds on every run.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed

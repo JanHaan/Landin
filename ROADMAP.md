@@ -3673,7 +3673,7 @@ the phase, so the R13 gate is claimed when they close.
 
 ### R13.80 — A seeded hash for maps
 
-Status: planned
+Status: complete
 Depends on: R13.79
 
 `core/map` hashes a key with the evidence `core/cmp` ships, 64-bit FNV-1a
@@ -3691,6 +3691,21 @@ target; a fixture whose chosen keys share one bucket under the unseeded
 hash and spread under a seed; a hosted map seeded from the system's entropy
 and a firmware map given its seed; and `docs/library.md`'s warning replaced
 by what the library does.
+
+Done: every hash `core/cmp` ships is SipHash-1-3 keyed by a
+`cmp.hash_seed`, which `cmp.seed_from` makes from two words, and
+`hashable`'s entry takes the seed; `cmp.hash_bytes` and `cmp.hash_word`
+are public for a key type's own hash. `map.new` requires a seed and the map
+keeps it, `random.hash_seed` draws one from an entropy provider, and a
+firmware program gives two words of its own. There is no unseeded map: the
+walk goes by insertion order, so a seed changes no order, only the probes
+and, after removals, when the table rebuilds, which a constant seed makes
+reproducible (D1360). The candidates were measured on the host, Cortex-M0,
+Armv8-M, RV32 and both Xtensa chips before SipHash-1-3 was chosen; its
+vectors come from the authors' reference code, built at one and three
+rounds, since their `vectors.h` has SipHash-2-4's alone. A populated map
+does not fit Cortex-M0's 32 KiB profile with any hash, so the firmware map
+runs on the M7 and Xtensa corpus lanes; SR-1109 is answered.
 
 ### R13.90 — Supply a concept through a field
 
@@ -4287,7 +4302,7 @@ SR-1090, SR-267, SR-802, SR-947, SR-288, SR-379, SR-526, SR-946, SR-1026,
 SR-33, SR-298, SR-975, SR-1140, SR-281, SR-316, SR-859, SR-867, SR-1015,
 SR-1035, SR-1051, SR-785, SR-555, SR-1230, SR-619, SR-645, SR-369, SR-610,
 SR-1100, SR-1103, SR-1115, SR-1116, SR-1212, SR-1231, SR-1114, SR-769, SR-1144,
-SR-1099.
+SR-1099, SR-1109.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -4580,7 +4595,6 @@ SR-1099.
 | SR-1080 | Usability | A `from` result that copies a reference out of a container, `vec.get` or `vec.last` of a list of pointers or slices, is a view of the container by its signature, so `vec.push(list, memory, vec.last(list) ...)` is L0315 for such items since D1084, inline, through a local, a struct field or a `from` helper alike; a list of scalars is accepted in every form. A copy of the list value is a way out, `snapshot := pointers` and then `vec.push(pointers, heap, try vec.last(snapshot))`, which is the aliasing D1084 refuses with one binding between, and for pointers so is a round trip through `usize`, which drops the origin. The maintainer left the row open. Met in R13.79. | The next change to `core/vec`'s signatures or to `from`. | A signature that tells a copied-out reference from a view of the container, or L0315's note naming the way out for a result whose type is a reference. | open |
 | SR-1082 | Release readiness | The review R13.79 answered reported a `noreturn` function field that does not end a path. It was not reproduced: `if c then r = 1 else o.stop() end if` is accepted by the reviewed compiler and the fixed one, and the review's retained program no longer holds the form. | A program that shows it. | The form reproduced and fixed, or the report withdrawn. | watch |
 | SR-1102 | Release readiness | The stack switch's masking of interrupts before it names its context is pinned by instruction order only, since no lane places an interrupt on a chosen instruction; the review's harness did, with `-icount shift=0 -accel tcg,one-insn-per-tb=on`. Since R13.79 the double exception handler records DEPC and `double-exception-control` raises a double exception. Met in R13.79. | The next change to the Xtensa vectors or to `environments/xtensa`'s controls; R13.79's DEPC and frame-layout changes are what this row records, and its later lane changes, running the emulator through `landin-fhs` and giving the assembler a budget of its own, added no control. | A control that interrupts the switch at each instruction. | open |
-| SR-1109 | Broader standard library | `core/map` has no seed and `core/cmp` ships no keyed hash, so a map keyed by outside data can be made quadratic by whoever chooses the keys. The review R13.79 answered reported it; `docs/library.md` now says so, and nothing else changed. | The next item that touches `core/map`'s hashing, or a hosted server keyed by request data. | A seeded map and a keyed hash among `core/cmp`'s evidence. | scheduled R13.80 |
 | SR-1110 | Broader standard library | An event loop on a worker thread cannot watch signals on Linux: since D1126, which the maintainer confirmed, only the process's first thread may `signal.watch`, a refusal on one system only, whose alternatives the decision's entry records. | A program that needs it, or a change to `hosted/thread`'s signal masks. | Signals watched from any one thread of a process. | open |
 | SR-1117 | Usability | Since D1253 an ESP run switches on its own port when its hub lists it off, and a power cycle whose off half or wait fails tries the "on" once more through the same pacing and says so; a hub that does not list is left alone. Both are held by script controls alone: only the rig can show that its hubs list a switched-off port as `off` without `power`, the form `ports_off` reads from uhubctl's documentation and one recorded listing, and that a board switched on at a run's start is ready within the settle wait a download's reset is given. The Pico and STM32 tools are unchanged. Met in R13.79. | The next rig session that may switch a port by hand; R12.80's re-recording ran the board tools alone, and every ESP port's hub listed it on. | Both seen on the rig: a port switched off by hand switched on by the next run, which passes, and a failed cycle's retry. | open |
 | SR-1118 | Usability | The gate's `editor-grammar` job has no Vim, Emacs, Neovim that reads the parser, or `highlight/textmate/node_modules`, so the TextMate tokenizer, the VS Code client test, the VSIX packaging and the Emacs and Neovim parser smokes run only on a developer's host; since R13.79 `./highlight/test.sh` names what did not run. | The next change to `gate.yml`'s `editor-grammar` job; R13.79 changed only the Xtensa job's list of controls and added the scripts job's actionlint step. | The job installing the editors and setting `LANDIN_HIGHLIGHT_REQUIRE`, so a smoke that cannot run fails. | open |
@@ -4630,6 +4644,10 @@ SR-1099.
 | SR-1262 | Release readiness | Main's push gate 43428233668 failed `board-stm32h753` once, its RAM run refusing "2 bytes had arrived when the boot frame was written; the host sent 1" after the tool logged "UART pre-boot bytes at offsets 0..0: ff": a 0xff reached the firmware's UART before the host's `S`, so it counted two. The image loads the bytes of one that had passed a rig session and a boards dispatch that day, and the rerun of the job passed. Met promoting R12.80. | Its next failure. | The stray byte's source named, the ST-LINK's console or the line's state at the RAM run's start, and removed or tolerated with the reason. | watch |
 | SR-1263 | Usability | `environments/cortex-m/descriptions.py` takes no `--case`, where `firmware.py` does, and `run.py --lane=descriptions` runs every device, the trap records, the RAM images, the contract and the stage refusals; trying R12.70's new RAM-image case alone took a scratch script importing the module and calling the case, and otherwise the whole lane, a minute and a half with `devices`. Met building R12.70. | The next change to the descriptions lane. | A `--case` selector, as `firmware.py`'s, whose run is FILTERED. | open |
 | SR-1264 | Usability | A positive fixture that places a vector slot, as `positive/description-copies-text-into-ram` does, has to be named by hand in `scripts/emit_manifest.py`'s `REFUSAL_PAIRS`, since the manifest emits positives without their `args` and a vector placement needs `--firmware-entry` (L0502); `compiler/tests/README.md` does not say so, and a fixture left out shows only as a refused emit in the manifest. Met adding R12.70's fixtures. | The next change to the emit manifest or to fixture metadata. | The manifest taking a positive's firmware request from its `args`, or the README naming the list. | open |
+| SR-1265 | Usability | `environments/xtensa/corpus.py` takes only an inventory `--fixture`, where `environments/cortex-m/backend_corpus.py` takes `--program PATH`, so running a program of one's own on either Xtensa chip took copying a fixture's retained `source` directory, its oracle wrapper and lane description, and replaying the compile, linker-script, assemble and link commands its `commands.json` records. Met measuring R13.80's hash candidates. | The next change to the Xtensa lane's options. | `--program` on the Xtensa corpus, as the Cortex-M corpus has it. | open |
+| SR-1266 | Usability | `environments/cortex-m/backend_corpus.py --level` is not repeatable: `--level rv32imc --level rv32imac` ran rv32imac alone and said nothing of the first, where `--profile` and `--program` repeat. Met in R13.80. | The next change to the corpus runner's options. | `--level` repeating as `--profile` does, or a second one refused. | open |
+| SR-1267 | Usability | Nothing reports what a routine costs on an emulator lane. Choosing R13.80's hash took a script that counts QEMU's `-d exec` lines at one instruction per block up to a completion label's address; RV32's lines carry no symbol for the start file, the Xtensa label is the link symbol `_landin_xtensa_fixture_stopped`, and the ESP32-S3's counts move between runs, so a difference of two iteration counts was the only per-call figure. | The next item that chooses between implementations by their cost on a firmware target. | `--program` reporting the instructions a run executed, per lane. | open |
+| SR-1268 | Competitive optimization | SipHash-1-3 of 16 bytes costs 169 cycles on Linux x86-64 at `--optimize speed`, where C takes about 35: each round's `u64` temporaries go through stack slots, about 90 instructions a round against 14, and each byte load keeps its overflow and range checks. On Cortex-M0 it is 6,670 instructions, and an unsigned `% 8` there calls `__aeabi_uidivmod` where a mask would do. Every map operation hashes its key once. Measured in R13.80. | The next optimization item on x86-64 register allocation, or a measured map-heavy benchmark. | The round's state in registers, and a remainder by a power of two as a mask. | open |
 
 ## Retained positions
 

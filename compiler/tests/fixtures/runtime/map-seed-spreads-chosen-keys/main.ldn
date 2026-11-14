@@ -1,0 +1,90 @@
+--  Keys chosen against a seed share one probe chain, and the same keys
+--  under a seed their chooser does not know spread over the table.  The
+--  48 keys below are the first from 1000 up whose slot in a 64-slot table
+--  is 0 under the seed with words 1 and 2: SipHash-1-3 of the key's word,
+--  spread as core/map spreads every hash, masked to six bits.  Under that
+--  seed each insertion compares with every key before it and each lookup
+--  with every key before its own and then its own, 48 * 48 comparisons in
+--  all.  Under the seed with words 3 and 4 no slot holds more than four of
+--  them, and a simulation of the map's linear probe gives 95 comparisons
+--  for the insertions and 143 for the lookups.  The comparisons are
+--  counted by the key's own equality.  Each check that fails returns its
+--  own code.
+import core/arena
+import core/cmp
+import core/map
+
+probe_key: type = distinct u64
+
+mut comparisons: usize = 0
+
+same_key: (left: probe_key, right: probe_key) -> (yes: bool) =
+    inc comparisons
+    yes = u64(left) == u64(right)
+end same_key
+
+key_hash: (value: probe_key, seed: cmp.hash_seed) -> (result: u64) =
+    result = cmp.hash_word(u64(value), seed)
+end key_hash
+
+probe_key is cmp.equatable (equal: same_key)
+probe_key is cmp.hashable (hash: key_hash)
+
+chosen: [48]u64 = [1004, 1081, 1207, 1311, 1361, 1381, 1393, 1486,
+                   1619, 1652, 1698, 1701, 1827, 1964, 1972, 2069,
+                   2110, 2186, 2225, 2318, 2378, 2392, 2453, 2687,
+                   2731, 2799, 2883, 2927, 2951, 3014, 3098, 3118,
+                   3156, 3187, 3205, 3270, 3358, 3367, 3501, 3542,
+                   3560, 3726, 3748, 3847, 3886, 3895, 3972, 4064]
+
+mut backing: [8192]u8 = zeroed
+
+--  How many comparisons inserting every chosen key and then finding each
+--  takes in a map seeded with FIRST and SECOND, reserved at 64 slots so
+--  that no insertion rebuilds it; zero if anything fails.
+cost: (first: u64, second: u64) -> (inserting: usize, finding: usize) =
+    inserting = 0
+    finding = 0
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], lenof backing)
+    mut table := map.new(key: probe_key, item: u32,
+                         seed: cmp.seed_from(first, second))
+    map.reserve(table, memory, usize(48)) else (problem)
+        _ = problem
+        return
+    end
+    return when map.slots(table) <> 64
+    comparisons = 0
+    mut item: u32 = 0
+    for key in chosen do
+        map.insert(table, memory, probe_key(key), item) else (problem)
+            _ = problem
+            return
+        end
+        inc item
+    end for
+    return when map.slots(table) <> 64 or map.length(table) <> 48
+    placed: usize = comparisons
+    comparisons = 0
+    item = 0
+    for key in chosen do
+        found: u32 = map.get(table, probe_key(key)) else (problem)
+            _ = problem
+            return
+        end
+        return when found <> item
+        inc item
+    end for
+    inserting = placed
+    finding = comparisons
+end cost
+
+public main: () -> (code: i32) =
+    code = 1
+    (inserting: known_inserting, finding: known_finding) := cost(1, 2)
+    return when known_inserting <> 1128 or known_finding <> 1176
+    code = 2
+    (inserting: other_inserting, finding: other_finding) := cost(3, 4)
+    return when other_inserting <> 95 or other_finding <> 143
+    code = 42
+end main

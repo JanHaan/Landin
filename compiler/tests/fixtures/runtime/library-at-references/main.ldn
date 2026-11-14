@@ -1,4 +1,5 @@
 import core/arena
+import core/cmp
 import core/map
 import core/mem
 import core/spill
@@ -45,7 +46,7 @@ exercise: () -> (ok: bool)
     spilled_value: i32 = try spill.get(addr few, usize(2))
     return when spilled_value <> 70 or spill.length(addr few) <> 3
 
-    mut table := map.new(key: u32, item: i32)
+    mut table := map.new(key: u32, item: i32, seed: test_seed())
     try map.reserve(table, memory, usize(10))
     reserved: usize = map.capacity(table)
     return when reserved < 10 or map.slots(table) <> 16
@@ -84,3 +85,8 @@ public main: () -> (code: i32) =
         code = 42
     end if
 end main
+
+--  A constant seed: the same probes and rebuilds on every run.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed

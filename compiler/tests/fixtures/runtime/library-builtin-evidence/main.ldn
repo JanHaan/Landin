@@ -3,7 +3,7 @@ import core/sort
 import core/text
 
 hash_of: (key: type is cmp.hashable, value: key) -> (result: u64) =
-    result = key.hash(value)
+    result = key.hash(value, test_seed())
 end hash_of
 
 equal: (key: type is cmp.equatable, left: key, right: key) -> (same: bool) =
@@ -15,24 +15,24 @@ end equal
 public main: () -> (code: i32) =
     code = 1
     maximum: u64 = 0 -% 1
-    return when hash_of(i8(-128)) <> maximum - 127
-      or hash_of(i16(-32768)) <> maximum - 32767
-      or hash_of(i32(-2147483647 - 1)) <> maximum - 2147483647
-      or hash_of(i64(-9223372036854775807 - 1)) <> 9223372036854775808
-      or hash_of(isize(-1)) <> maximum
-    return when hash_of(u8(255)) <> 255 or hash_of(u16(65535)) <> 65535
-      or hash_of(u32(4294967295)) <> 4294967295
-      or hash_of(maximum) <> maximum or hash_of(usize(42)) <> 42
-    return when hash_of(true) <> 1 or hash_of(false) <> 0
+    return when hash_of(i8(-128)) <> word(maximum - 127)
+      or hash_of(i16(-32768)) <> word(maximum - 32767)
+      or hash_of(i32(-2147483647 - 1)) <> word(maximum - 2147483647)
+      or hash_of(i64(-9223372036854775807 - 1)) <> word(9223372036854775808)
+      or hash_of(isize(-1)) <> word(maximum)
+    return when hash_of(u8(255)) <> word(255) or hash_of(u16(65535)) <> word(65535)
+      or hash_of(u32(4294967295)) <> word(4294967295)
+      or hash_of(maximum) <> word(maximum) or hash_of(usize(42)) <> word(42)
+    return when hash_of(true) <> word(1) or hash_of(false) <> word(0)
       or equal(true, false) or not equal(true, true)
 
     literal: []u8 = "abc"
     mut backing: [3]u8 = [97, 98, 99]
     copy: []u8 = backing[0..<3]
     return when not equal(literal, copy)
-      or hash_of(copy) <> 16654208175385433931
+      or hash_of(copy) <> 2873231128186165274
     empty: []u8 = ""
-    return when hash_of(empty) <> 14695981039346656037
+    return when hash_of(empty) <> 7760257379124798368
     word: utf8 = "abc"
     return when hash_of(word) <> hash_of(copy) or not equal(word, word)
     mut texts: [3]utf8 = ["pear", "apple", "fig"]
@@ -40,3 +40,14 @@ public main: () -> (code: i32) =
     return when not text.equal(texts[0], "apple") or not text.equal(texts[2], "pear")
     code = 42
 end main
+
+--  A scalar hashes as its bits widened to a word, under one constant seed.
+--  The byte hashes above are SipHash-1-3's under that seed, k0 1 and k1 2,
+--  as the authors' reference siphash.c built at one compression and three
+--  finalization rounds prints them for "abc" and for no bytes.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed
+word: (value: u64) -> (result: u64) =
+    result = cmp.hash_word(value, test_seed())
+end word

@@ -4027,8 +4027,9 @@ When you use the containers directly:
 
 - A map's key needs both an `equatable` and a `hashable` conformance;
   the combined one does not supply its parent ([1340]). Equality must be
-  an equivalence, equal keys must hash alike, and neither may change
-  while the key is stored, including through a pointer inside the key.
+  an equivalence, equal keys must hash alike under the seed the map is
+  given, and neither may change while the key is stored, including
+  through a pointer inside the key.
   The compiler does not check any of this.
 - A map's entry cursor is just a position. Start a new walk after any
   change to the map, and never resume one on a different map.

@@ -1,0 +1,94 @@
+--  A hosted map keyed by outside data seeded from the system's entropy:
+--  random.hash_seed reads sixteen bytes from the provider, so two seeds it
+--  draws hash the same bytes apart, and a map under one stores, finds and
+--  walks its keys as any map does.  Scripted entropy shows the bytes it
+--  reads, two little-endian words, and a dry source fails io_failed.
+--  Each check that fails returns its own code.
+import core/cmp
+import core/io
+import core/io/fake
+import core/map
+import core/random
+import hosted/blocking
+import hosted/heap
+
+--  Request paths, as a server keyed by what its clients send would see.
+paths: [5][]u8 = ["/", "/index.html", "/api/v1/items", "/favicon.ico",
+                  "/api/v1/items/7"]
+
+scripted: [16]u8 = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f]
+
+--  Whether a map under SEED stores, finds and walks every path.
+stores: (seed: cmp.hash_seed) -> (yes: bool) =
+    yes = false
+    memory := heap.new()
+    mut table := map.new(key: []u8, item: usize, seed: seed)
+    for index in usize(0)..<lenof paths do
+        map.insert(table, memory, paths[index], index) else (problem)
+            _ = problem
+            return
+        end
+    end for
+    for index in usize(0)..<lenof paths do
+        found: usize = map.get(table, paths[index]) else (problem)
+            _ = problem
+            return
+        end
+        return when found <> index
+    end for
+    mut walk := map.entries()
+    mut seen: usize = 0
+    loop do
+        next := map.next_entry(table, walk) else (problem)
+            _ = problem
+            break
+        end
+        return when next.item <> seen
+        inc seen
+    end loop
+    map.release(table, memory)
+    yes = seen == lenof paths
+end stores
+
+--  The seed scripted entropy gives is the authors' test key, 00 .. 0f.
+scripted_seed: () -> (yes: bool) ! ... =
+    yes = false
+    mut state: fake.entropy_space = zeroed
+    source := fake.entropy_over(state, scripted[0..<16])
+    seed := try random.hash_seed(source)
+    expected := cmp.seed_from(0x0706050403020100, 0x0f0e0d0c0b0a0908)
+    return when cmp.hash_bytes(paths[2], seed)
+      <> cmp.hash_bytes(paths[2], expected)
+    return when state.used <> 16 or state.requests <> 1
+    dry: cmp.hash_seed = random.hash_seed(source) else (problem)
+        yes = problem == io.io_failed
+        return
+    end
+    _ = dry
+end scripted_seed
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    first: cmp.hash_seed = random.hash_seed(host) else (problem)
+        _ = problem
+        return
+    end
+    second: cmp.hash_seed = random.hash_seed(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when cmp.hash_bytes(paths[1], first)
+      == cmp.hash_bytes(paths[1], second)
+    code = 3
+    return when not stores(first) or not stores(second)
+    code = 4
+    scripted_ok: bool = scripted_seed() else (problem)
+        _ = problem
+        return
+    end
+    return when not scripted_ok
+    code = 42
+end main

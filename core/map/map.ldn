@@ -31,6 +31,7 @@ map_value: type (key: type is cmp.hashable, item: type) = struct
     tombstones: usize
     first_used: usize
     last_used: usize
+    seed: cmp.hash_seed
 end map_value
 
 cursor_value: type = struct
@@ -43,12 +44,16 @@ end cursor_value
 --- module's own, so nothing outside `core/map` can break the invariants its
 --- operations keep.
 ---
---- The map has no seed, and a bucket follows from the key's `cmp.hashable`
---- hash alone. `core/cmp`'s hashes are fixed and public, so whoever chooses
---- the keys can put them all in one probe chain, and each insertion and
---- lookup then takes time in proportion to the map's size. Bound the keys
---- an outside party may add, or key by a `distinct` wrapper whose hash
---- is keyed by a secret, before keying a map by data from outside.
+--- A map hashes its keys under the seed it was made with, and the hashes
+--- `core/cmp` ships are SipHash-1-3 keyed by it, so whoever does not know
+--- the seed cannot choose keys that share one probe chain. Seed a map
+--- keyed by outside data from entropy, as `random.hash_seed` draws one;
+--- a program without entropy gives a value its adversary cannot read. The
+--- seed changes nothing a lookup finds and not the order of a walk, only
+--- which slots the keys take, and so how many probes an operation makes
+--- and, after removals, whether a new key reuses a removed entry's slot
+--- or rebuilds the table, which `slots`, `removed` and `capacity` then
+--- report. A constant seed makes all of that the same on every run.
 public map: type (key: type is cmp.hashable, item: type) =
     map_value(key, item)
 
@@ -73,15 +78,16 @@ empty_storage: (value: type) -> (result: mem.storage(value)) =
     result = mem.empty_storage(item: value)
 end empty_storage
 
---- Create an empty map without allocating backing.
-public new: (key: type is cmp.hashable, item: type)
+--- Create an empty map without allocating backing, hashing its keys
+--- under `seed`.
+public new: (key: type is cmp.hashable, item: type, seed: cmp.hash_seed)
             -> (result: map(key, item)) =
     empty_buckets := empty_storage(value: bucket)
     empty_keys := empty_storage(value: key)
     empty_values := empty_storage(value: item)
     result = (buckets: empty_buckets, keys: empty_keys,
               values: empty_values, count: 0, tombstones: 0,
-              first_used: 0, last_used: 0)
+              first_used: 0, last_used: 0, seed: seed)
 end new
 
 --- Return the number of live key/value entries.
@@ -167,15 +173,15 @@ replace_value: (value: type, inout storage: mem.storage(value),
     ok = true
 end replace_value
 
-index_of: (key: type is cmp.hashable, value: key, slots: usize)
-          -> (index: usize) =
-    --  The shipped integer hashes are the value itself, so keys sharing a
-    --  stride would share their low bits and one probe chain. MurmurHash3's
-    --  finalizer spreads every input bit over the word first. Every
+index_of: (key: type is cmp.hashable, value: key, slots: usize,
+           seed: cmp.hash_seed) -> (index: usize) =
+    --  A program's own hash may still be a key's value, so that keys
+    --  sharing a stride would share their low bits and one probe chain.
+    --  MurmurHash3's finalizer spreads every input bit over the word first. Every
     --  library-created nonempty table is a power of two; mask in u64 before
     --  narrowing, so the same full-width reduction applies on a 32-bit
     --  target. Publicly composed maps may have other sizes.
-    mut hash: u64 = key.hash(value)
+    mut hash: u64 = key.hash(value, seed)
     hash ^= hash >> 33
     hash *%= 18397679294719823053
     hash ^= hash >> 33
@@ -316,7 +322,7 @@ search_for_insert: (key: type is cmp.hashable, item: type,
         return
     end if
 
-    mut at: usize = index_of(wanted, slots)
+    mut at: usize = index_of(wanted, slots, value.seed)
     mut first_dead: usize = slots
     mut probed: usize = 0
     while probed < slots do
@@ -373,7 +379,7 @@ place_absent: (key: type is cmp.hashable, item: type,
         return
     end if
 
-    mut at: usize = index_of(added_key, slots)
+    mut at: usize = index_of(added_key, slots, value.seed)
     mut first_dead: usize = slots
     mut probed: usize = 0
     while probed < slots do
@@ -466,7 +472,7 @@ rehash: (key: type is cmp.hashable, item: type,
             _ = problem
             fail mem.out_of_memory
         end
-        mut target: usize = index_of(old_key, want)
+        mut target: usize = index_of(old_key, want, value.seed)
         mut searched: usize = 0
         while searched < want do
             target_bucket: bucket = mem.get(new_buckets, target)
@@ -586,7 +592,7 @@ locate: (key: type is cmp.hashable, item: type,
     fail missing when value.count == 0
     slots: usize = slots(value)
     fail missing when slots == 0
-    mut slot: usize = index_of(wanted, slots)
+    mut slot: usize = index_of(wanted, slots, value.seed)
     mut probed: usize = 0
     while probed < slots do
         record: bucket = mem.get(value.buckets, slot) else (problem)
@@ -656,7 +662,7 @@ public remove: (key: type is cmp.hashable, item: type,
     fail missing when value.count == 0
     slots: usize = slots(value)
     fail missing when slots == 0
-    mut at: usize = index_of(wanted, slots)
+    mut at: usize = index_of(wanted, slots, value.seed)
     mut probed: usize = 0
     while probed < slots do
         record: bucket = mem.get(value.buckets, at) else (problem)
@@ -721,8 +727,8 @@ public remove: (key: type is cmp.hashable, item: type,
 end remove
 
 --- Discard all entries, free the map's backing through its original provider
---- and reset it. Nested resources referred to by keys or values are not freed
---- automatically.
+--- and reset it, keeping its seed. Nested resources referred to by keys or
+--- values are not freed automatically.
 public release: (key: type is cmp.hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item),
@@ -730,7 +736,7 @@ public release: (key: type is cmp.hashable, item: type,
     mem.release_storage(value.values, memory)
     mem.release_storage(value.keys, memory)
     mem.release_storage(value.buckets, memory)
-    value = new(key: key, item: item)
+    value = new(key: key, item: item, seed: value.seed)
 end release
 
 --- Discard all entries and tombstones while keeping the allocations: every

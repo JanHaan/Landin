@@ -708,7 +708,10 @@ injector as arguments, as providers.
   allocator, not syntax (D212).
 - **Comparison.** The comparison concepts are a module of their own,
   `core/cmp`, with library-supplied evidence for integer keys and ordering,
-  Boolean and byte slice keys, and UTF-8 keys and ordering.
+  Boolean and byte slice keys, and UTF-8 keys and ordering. Every shipped
+  hash is SipHash-1-3 keyed by a seed, and a map hashes under the seed it
+  is made with: a hosted program draws one from its entropy, and firmware
+  gives one (D1360).
 - **Text.** Byte-oriented and validated text. Positions over `utf8` step
   a whole scalar and keep its byte offset, and searches for text or a
   scalar return where the match begins, so the parts around it are

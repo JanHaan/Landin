@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a map seeded with cmp.seed_from from two words a board supplies, as firmware without entropy does, stores twelve keys over an arena in static storage, misses an absent key, removes one and walks the rest in insertion order
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0300, 0570, 1290, 1410, 1420
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

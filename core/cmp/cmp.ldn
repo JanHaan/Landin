@@ -9,19 +9,42 @@ public equatable: type = concept (item: type)
     equal: (left: item, right: item) -> (yes: bool)
 end equatable
 
+seed_value: type = struct
+    first: u64
+    second: u64
+end seed_value
+
+--- The key of a keyed hash: 128 bits that choose which of SipHash's
+--- functions `hash_bytes` and `hash_word` compute.  Whoever does not know
+--- the seed cannot tell which keys will collide, so a map seeded from
+--- entropy cannot be filled with keys chosen to share one probe chain.
+--- Make one with `seed_from`; a hosted program draws one with
+--- `random.hash_seed`.
+public hash_seed: type = seed_value
+
+--- The seed whose SipHash key is `first` and then `second`, each as its
+--- eight little-endian bytes: SipHash's k0 and k1.  The same words give
+--- the same hashes on every target.
+public seed_from: (first: u64, second: u64) -> (seed: hash_seed) =
+    seed = (first: first, second: second)
+end seed_from
+
 --- Hash evidence, which composes `equatable`. Items that are `equal` must
---- have equal hashes, and both answers must stay stable while an item is
---- stored. Hashes are not cryptographic, and the ones this module ships
---- are not keyed: an integer hashes to itself and bytes with FNV-1a from
---- its standard basis, so anyone can compute them and choose items that
---- collide. `core/map` says what that means for a map of an outside
---- party's keys.
+--- have equal hashes under the same seed, and both answers must stay
+--- stable while an item is stored. A hash should depend on the seed as
+--- well as the item, so that one who does not know the seed cannot choose
+--- items that collide: the hashes this module ships are SipHash-1-3 keyed
+--- by it, and a composite key builds its hash from `hash_bytes` or
+--- `hash_word` with the seed it is given. They are not cryptographic
+--- digests, and the seed is a secret only as long as the program keeps
+--- it one.
 ---
 --- Although `hashable` composes `equatable`, [1340] still requires a
 --- concrete type to declare both conformances explicitly.
 public hashable: type = concept (item: type) is equatable
-    --- Return a stable hash; items `equal` to each other hash equally.
-    hash: (value: item) -> (result: u64)
+    --- Return a hash of `value` keyed by `seed`; items `equal` to each
+    --- other hash equally under one seed.
+    hash: (value: item, seed: hash_seed) -> (result: u64)
 end hashable
 
 --  The compiler does not prove the semantic laws: equal must be an
@@ -33,93 +56,94 @@ end hashable
 --  byte slices here, and utf8 in core/text. There is one register and no
 --  override [1280]; a program wanting another equality or hash for one of
 --  these wraps the type in a distinct type and declares evidence for that.
---  Signed hashes are the two's-complement bits widened, computed without
---  a narrowing conversion; byte slices use 64-bit FNV-1a.
+--  A scalar hashes as `hash_word` of its two's-complement bits widened,
+--  computed without a narrowing conversion, and a bool as the word 0 or 1;
+--  byte slices are `hash_bytes`.
 equal_u8: (left: u8, right: u8) -> (yes: bool) =
     yes = left == right
 end equal_u8
-hash_u8: (value: u8) -> (result: u64) =
-    result = u64(value)
+hash_u8: (value: u8, seed: hash_seed) -> (result: u64) =
+    result = hash_word(u64(value), seed)
 end hash_u8
 equal_u16: (left: u16, right: u16) -> (yes: bool) =
     yes = left == right
 end equal_u16
-hash_u16: (value: u16) -> (result: u64) =
-    result = u64(value)
+hash_u16: (value: u16, seed: hash_seed) -> (result: u64) =
+    result = hash_word(u64(value), seed)
 end hash_u16
 equal_u32: (left: u32, right: u32) -> (yes: bool) =
     yes = left == right
 end equal_u32
-hash_u32: (value: u32) -> (result: u64) =
-    result = u64(value)
+hash_u32: (value: u32, seed: hash_seed) -> (result: u64) =
+    result = hash_word(u64(value), seed)
 end hash_u32
 equal_u64: (left: u64, right: u64) -> (yes: bool) =
     yes = left == right
 end equal_u64
-hash_u64: (value: u64) -> (result: u64) =
-    result = u64(value)
+hash_u64: (value: u64, seed: hash_seed) -> (result: u64) =
+    result = hash_word(u64(value), seed)
 end hash_u64
 equal_usize: (left: usize, right: usize) -> (yes: bool) =
     yes = left == right
 end equal_usize
-hash_usize: (value: usize) -> (result: u64) =
-    result = u64(value)
+hash_usize: (value: usize, seed: hash_seed) -> (result: u64) =
+    result = hash_word(u64(value), seed)
 end hash_usize
 equal_i8: (left: i8, right: i8) -> (yes: bool) =
     yes = left == right
 end equal_i8
-hash_i8: (value: i8) -> (result: u64) =
+hash_i8: (value: i8, seed: hash_seed) -> (result: u64) =
     if value >= 0 then
-        result = u64(value)
+        result = hash_word(u64(value), seed)
     else
-        result = ~u64(0 - (value + 1))
+        result = hash_word(~u64(0 - (value + 1)), seed)
     end if
 end hash_i8
 equal_i16: (left: i16, right: i16) -> (yes: bool) =
     yes = left == right
 end equal_i16
-hash_i16: (value: i16) -> (result: u64) =
+hash_i16: (value: i16, seed: hash_seed) -> (result: u64) =
     if value >= 0 then
-        result = u64(value)
+        result = hash_word(u64(value), seed)
     else
-        result = ~u64(0 - (value + 1))
+        result = hash_word(~u64(0 - (value + 1)), seed)
     end if
 end hash_i16
 equal_i32: (left: i32, right: i32) -> (yes: bool) =
     yes = left == right
 end equal_i32
-hash_i32: (value: i32) -> (result: u64) =
+hash_i32: (value: i32, seed: hash_seed) -> (result: u64) =
     if value >= 0 then
-        result = u64(value)
+        result = hash_word(u64(value), seed)
     else
-        result = ~u64(0 - (value + 1))
+        result = hash_word(~u64(0 - (value + 1)), seed)
     end if
 end hash_i32
 equal_i64: (left: i64, right: i64) -> (yes: bool) =
     yes = left == right
 end equal_i64
-hash_i64: (value: i64) -> (result: u64) =
+hash_i64: (value: i64, seed: hash_seed) -> (result: u64) =
     if value >= 0 then
-        result = u64(value)
+        result = hash_word(u64(value), seed)
     else
-        result = ~u64(0 - (value + 1))
+        result = hash_word(~u64(0 - (value + 1)), seed)
     end if
 end hash_i64
 equal_isize: (left: isize, right: isize) -> (yes: bool) =
     yes = left == right
 end equal_isize
-hash_isize: (value: isize) -> (result: u64) =
+hash_isize: (value: isize, seed: hash_seed) -> (result: u64) =
     if value >= 0 then
-        result = u64(value)
+        result = hash_word(u64(value), seed)
     else
-        result = ~u64(0 - (value + 1))
+        result = hash_word(~u64(0 - (value + 1)), seed)
     end if
 end hash_isize
 equal_bool: (left: bool, right: bool) -> (yes: bool) =
     yes = left == right
 end equal_bool
-hash_bool: (value: bool) -> (result: u64) =
-    result = if value then 1 else 0 end if
+hash_bool: (value: bool, seed: hash_seed) -> (result: u64) =
+    result = hash_word(if value then 1 else 0 end if, seed)
 end hash_bool
 equal_bytes: (left: []u8, right: []u8) -> (yes: bool) =
     if lenof left <> lenof right then
@@ -136,15 +160,89 @@ equal_bytes: (left: []u8, right: []u8) -> (yes: bool) =
     end while
     yes = true
 end equal_bytes
-hash_bytes: (value: []u8) -> (result: u64) =
-    mut hash: u64 = 14695981039346656037
-    mut index: usize = 0
-    while index < lenof value do
-        hash = (hash ^ u64(value[index])) *% 1099511628211
-        inc index
-    end while
-    result = hash
+--- SipHash-1-3 of `value` keyed by `seed`: Aumasson and Bernstein's
+--- SipHash with one compression round per eight-byte word and three
+--- finalization rounds, the variant Rust's and CPython's hash tables use.
+--- It is `[]u8`'s hash, and `utf8`'s, and gives the same result on every
+--- target.  It is not a cryptographic digest.
+public hash_bytes: (value: []u8, seed: hash_seed) -> (result: u64) =
+    result = siphash(value, 0, false, seed)
 end hash_bytes
+
+--- SipHash-1-3 keyed by `seed` of `value`'s eight bytes, least significant
+--- first: what `hash_bytes` gives for those bytes, without storing them.
+--- Every integer scalar's hash is this word's.
+public hash_word: (value: u64, seed: hash_seed) -> (result: u64) =
+    result = siphash(no_bytes[0..<0], value, true, seed)
+end hash_word
+
+no_bytes: [1]u8 = [0]
+
+--  SipHash-1-3 (Aumasson and Bernstein, "SipHash: a fast short-input PRF",
+--  INDOCRYPT 2012) after the authors' reference siphash.c built with
+--  cROUNDS 1 and dROUNDS 3.  The message is VALUE's bytes, or WORD's eight
+--  when WHOLE.  Each eight-byte word, read least significant byte first,
+--  and then the last word, holding the bytes left over and the length's
+--  low byte at the top, takes one round; three finish.  The round and the
+--  byte loop are written once, so the code stays small on Cortex-M0.
+siphash: (value: []u8, word: u64, whole: bool, seed: hash_seed)
+         -> (result: u64) =
+    mut v0: u64 = seed.first ^ 0x736f6d6570736575
+    mut v1: u64 = seed.second ^ 0x646f72616e646f6d
+    mut v2: u64 = seed.first ^ 0x6c7967656e657261
+    mut v3: u64 = seed.second ^ 0x7465646279746573
+    length: usize = if whole then 8 else lenof value end if
+    mut at: usize = 0
+    mut m: u64 = 0
+    mut finishing: bool = false
+    loop do
+        mut rounds: usize = 1
+        if at <= length then
+            m = 0
+            mut shift: u64 = 0
+            if whole and at == 0 then
+                m = word
+                shift = 64
+                at = 8
+            end if
+            while shift < 64 and at < length do
+                m = m | (u64(value[at]) << shift)
+                shift += 8
+                inc at
+            end while
+            if shift < 64 then
+                --  The last word: fewer than eight bytes were left.
+                m = m | (u64(length & 255) << 56)
+                at = length + 1
+            end if
+            v3 ^= m
+        else
+            finishing = true
+            rounds = 3
+            v2 ^= 0xff
+        end if
+        while rounds > 0 do
+            v0 = v0 +% v1
+            v1 = (v1 << 13) | (v1 >> 51)
+            v1 ^= v0
+            v0 = (v0 << 32) | (v0 >> 32)
+            v2 = v2 +% v3
+            v3 = (v3 << 16) | (v3 >> 48)
+            v3 ^= v2
+            v0 = v0 +% v3
+            v3 = (v3 << 21) | (v3 >> 43)
+            v3 ^= v0
+            v2 = v2 +% v1
+            v1 = (v1 << 17) | (v1 >> 47)
+            v1 ^= v2
+            v2 = (v2 << 32) | (v2 >> 32)
+            dec rounds
+        end while
+        break when finishing
+        v0 ^= m
+    end loop
+    result = v0 ^ v1 ^ v2 ^ v3
+end siphash
 u8 is equatable (equal: equal_u8)
 u8 is hashable (hash: hash_u8)
 u16 is equatable (equal: equal_u16)

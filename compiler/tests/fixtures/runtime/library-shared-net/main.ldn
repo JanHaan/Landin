@@ -8,7 +8,7 @@ same: (item: type is cmp.equatable, left: item, right: item) -> (yes: bool) =
 end same
 
 digest: (item: type is cmp.hashable, value: item) -> (result: u64) =
-    result = item.hash(value)
+    result = item.hash(value, test_seed())
 end digest
 
 --  Loopback addresses of both families, a port put in place, which makes
@@ -42,3 +42,8 @@ public main: () -> (code: i32) =
         code = 42
     end if
 end main
+
+--  A constant seed, so that every run hashes alike.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed

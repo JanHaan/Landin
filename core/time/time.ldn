@@ -113,12 +113,12 @@ public in_milliseconds: (span: duration) -> (count: u64) =
 end in_milliseconds
 
 --  Spans and instants are equal, hash and order as their counts do: the
---  hash is the count, as `u64`'s is (D1031).
+--  hash is the count's, as `u64`'s is, `cmp.hash_word` (D1031).
 equal_duration: (left: duration, right: duration) -> (yes: bool) =
     yes = left == right
 end equal_duration
-hash_duration: (value: duration) -> (result: u64) =
-    result = u64(value)
+hash_duration: (value: duration, seed: cmp.hash_seed) -> (result: u64) =
+    result = cmp.hash_word(u64(value), seed)
 end hash_duration
 less_duration: (left: duration, right: duration) -> (yes: bool) =
     yes = left < right
@@ -126,8 +126,8 @@ end less_duration
 equal_instant: (left: instant, right: instant) -> (yes: bool) =
     yes = left == right
 end equal_instant
-hash_instant: (value: instant) -> (result: u64) =
-    result = u64(value)
+hash_instant: (value: instant, seed: cmp.hash_seed) -> (result: u64) =
+    result = cmp.hash_word(u64(value), seed)
 end hash_instant
 less_instant: (left: instant, right: instant) -> (yes: bool) =
     yes = left < right

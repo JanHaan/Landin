@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: random.hash_seed draws a map's seed from the hosted provider's entropy, two seeds hash the same bytes apart, a map of request paths under each stores, finds and walks them in insertion order, scripted entropy gives the seed of its sixteen bytes as two little-endian words and a dry source fails io_failed
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0650, 0940, 1030, 1290, 1660, 1680
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

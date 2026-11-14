@@ -10,7 +10,7 @@ longer_first: (left: time.duration, right: time.duration) -> (yes: bool) =
     yes = left > right
 end longer_first
 
-port_only: (value: net.address) -> (result: u64) =
+port_only: (value: net.address, seed: cmp.hash_seed) -> (result: u64) =
     result = u64(value.port)
 end port_only
 

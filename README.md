@@ -309,7 +309,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R13.80 — A seeded hash for maps (planned).**
+**Next roadmap item: R11.27 — Recover from every refused line (planned).**
 
 ## Questions, bugs and ideas
 

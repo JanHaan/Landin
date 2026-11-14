@@ -1,0 +1,67 @@
+--  core/cmp's keyed hash is SipHash-1-3, and gives what the authors'
+--  reference implementation gives on every target: 64-bit additions,
+--  rotations and exclusive ors on a 32-bit core as on a 64-bit host.  The
+--  expected values were printed by the authors' unmodified siphash.c, from
+--  https://github.com/veorq/SipHash at 32d067603b93, built with
+--  -DcROUNDS=1 -DdROUNDS=3, for the inputs of its vectors.h: the key
+--  00 01 .. 0f and the messages 00 01 .. n-1 for n from 0 to 63.  Each
+--  check that fails returns its own code.
+import core/cmp
+
+vectors: [64]u64 = [12370263754033579228, 14552427766023178899, 9424797079400076365,
+                    10085823154776569851, 14948950610250269480, 16067107544691325799,
+                    14199052826081960615, 15245385783003124032, 3931806377309739662,
+                    2712449776846519780, 8781603583133944191, 8124802424143463250,
+                    8692937602970737058, 3490138030451851175, 6943038873169124660,
+                    15213397504630561110, 14722228812742953830, 11309216583640668172,
+                    10375229887248328254, 17446837090697968924, 13897034530651168832,
+                    13371939351752472644, 9222944995288319790, 5934071401310241059,
+                    17610392524184394892, 5029774389061290361, 4196851155228758949,
+                    12186115305811884853, 18089812925126332429, 9860979604149363188,
+                    6057079635794323043, 2553784116283822524, 9301476309570401805,
+                    5572283034219051455, 8475513330862814526, 14889361882708732817,
+                    3239505212207161862, 13119016696876838999, 12967117417623467681,
+                    7091858058578527122, 13966284985387455793, 7384990322848880964,
+                    7309430150919325733, 2662331968129681830, 14036062997096990571,
+                    13985449241217343894, 11632407044475180579, 5330879445531170045,
+                    11471024462062111814, 14338809358086604467, 9128596131873425807,
+                    2086032310832541594, 14144171308190277394, 3961735597980589776,
+                    3571270170472135910, 11707880421842217344, 13023496269886942581,
+                    2592059436507272467, 10305185159464192520, 15608580093610881352,
+                    17795101726930781422, 12593642185768318962, 14101603954570204384,
+                    11320237892036178856]
+
+--  An item's shipped hash, reached through its evidence.
+hashed: (item: type is cmp.hashable, value: item, seed: cmp.hash_seed)
+        -> (result: u64) =
+    result = item.hash(value, seed)
+end hashed
+
+public main: () -> (code: i32) =
+    seed := cmp.seed_from(0x0706050403020100, 0x0f0e0d0c0b0a0908)
+    mut message: [64]u8 = zeroed
+    for index in usize(0)..<64 do
+        message[index] = u8(index)
+    end for
+    --  Every length, each in a word of its own beside the others.
+    for length in usize(0)..<64 do
+        code = 100 + i32(length)
+        return when cmp.hash_bytes(message[0..<length], seed) <> vectors[length]
+    end for
+    --  A word hashes as its eight bytes, least significant first: message
+    --  00 .. 07 is the word 0x0706050403020100.
+    code = 1
+    return when cmp.hash_word(0x0706050403020100, seed) <> vectors[8]
+    --  Integer keys hash as that word, a signed one as its bits widened.
+    code = 2
+    return when hashed(u64(0x0706050403020100), seed) <> vectors[8]
+    code = 3
+    return when hashed(i64(-1), seed) <> cmp.hash_word(0xffffffffffffffff, seed)
+    code = 4
+    return when hashed(u8(7), seed) <> cmp.hash_word(7, seed)
+    --  Another seed gives another hash of the same bytes.
+    code = 5
+    other := cmp.seed_from(0x0706050403020101, 0x0f0e0d0c0b0a0908)
+    return when cmp.hash_bytes(message[0..<15], other) == vectors[15]
+    code = 42
+end main

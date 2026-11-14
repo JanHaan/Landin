@@ -379,6 +379,23 @@ The three concepts ship for these types:
 | `net.address`, from `core/net` | yes, as `same_address`, zone included | yes | no |
 | floating-point types | no | no | no |
 
+Every hash is keyed by a `cmp.hash_seed`, made by `cmp.seed_from` from
+two `u64` words:
+
+| Call | What it does |
+|---|---|
+| `cmp.seed_from` | Make a seed from two words, SipHash's k0 and k1. |
+| `cmp.hash_bytes` | SipHash-1-3 of a byte slice under a seed. |
+| `cmp.hash_word` | The same of a `u64`'s eight bytes, least significant first. |
+
+The shipped hashes are these two. An integer hashes as `hash_word` of its
+bits widened to 64, a `bool` as the word 0 or 1, and `[]u8`, `utf8` and
+`net.address` as `hash_bytes` of the bytes their equality compares. They
+give the same result for a seed on every target, Cortex-M0 included.
+Whoever does not know the seed cannot tell which keys will collide. A key
+type of your own builds its hash from these with the seed it is given.
+SipHash is a keyed hash, not a cryptographic digest.
+
 `compare` orders two byte strings as `less`, `equal` or `greater`. The
 first differing byte decides, and a proper prefix comes first. This is
 C's `memcmp` with the lengths taken into account, and it is the order
@@ -392,7 +409,7 @@ way, put it in a `distinct` wrapper that has its own evidence. A
 The compiler does not prove the laws:
 
 - equality must be an equivalence;
-- equal keys must hash alike;
+- equal keys must hash alike under one seed;
 - `less` must be a strict weak ordering.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-cmp/main.ldn)
@@ -403,7 +420,7 @@ An insertion-ordered hash map with explicit entry walks.
 
 | Call | What it does |
 |---|---|
-| `map.new` | Start an empty map. |
+| `map.new` | Start an empty map that hashes its keys under a seed. |
 | `map.insert` | Add a key and its item, through the provider's handle. |
 | `map.get`, `map.at`, `map.contains` | Copy an item, lend a pointer to it, or ask whether a key is there. |
 | `map.remove` | Remove a key. |
@@ -417,14 +434,31 @@ policy.
 Keep keys and their backing stable while the map stores them, and
 restart cursors after any mutation.
 
-The map has no seed, and the hashes `core/cmp` ships are fixed and public:
-an integer hashes to itself and bytes with FNV-1a. Whoever chooses the keys
-can therefore choose keys that all land in one probe chain, and a map
-filled with them takes time in proportion to its size for each insertion
-and each lookup, where it otherwise takes a few probes. Bound how many
-keys an outside party may add, or key by a `distinct` wrapper whose hash
-is keyed by a secret of the program's, before keying a map by data from
-outside.
+A map hashes every key under the seed `map.new` is given, and keeps it
+through `release` and `clear`. A seed the key's chooser does not know
+keeps keys from being chosen to share one probe chain, where each
+insertion and lookup would take time in proportion to the map's size:
+
+- a hosted program keyed by outside data draws its seed with
+  `random.hash_seed` from its entropy provider;
+- firmware without entropy builds one with `cmp.seed_from` from two words
+  of its own: a hardware random number or a unique device ID where it has
+  one, and otherwise a constant chosen for the build, which protects the
+  map only while the image stays secret;
+- a test uses a constant, so that every run probes alike.
+
+The seed changes nothing a lookup finds and not the order of a walk. It
+changes which slots the keys take, and so the number of probes. After
+removals it also decides whether a new key reuses a removed entry's slot
+or rebuilds the table, which `slots`, `removed` and `capacity` report.
+A constant seed makes all of this the same on every run.
+
+[Keys chosen against a known seed](../compiler/tests/fixtures/runtime/map-seed-spreads-chosen-keys/main.ldn)
+share one probe chain and spread under another seed;
+[a hosted map](../compiler/tests/fixtures/runtime/map-seeded-from-entropy/main.ldn)
+draws its seed from the system's entropy, and
+[a firmware map](../compiler/tests/fixtures/runtime/map-firmware-seed/main.ldn)
+is given two words.
 
 A walk starts at `map.entries()` and calls `map.next_entry` until the
 call fails with `map.end_of_entries`. The executable example below walks
@@ -1689,6 +1723,7 @@ A deterministic generator of pseudorandom numbers, the same sequence for a seed 
 |---|---|
 | `random.new` | Seed a generator from a `u64`, through splitmix64, as its authors suggest. |
 | `random.from_entropy` | Seed one from 32 bytes of any `io.entropy` provider, the hosted system's or a test's scripted bytes. |
+| `random.hash_seed` | Draw a map's `cmp.hash_seed` from 16 bytes of an `io.entropy` provider, with no generator involved. |
 | `random.next` | Draw 64 bits. |
 | `random.next_u32` | Draw the upper 32. |
 | `random.below` | Draw a value under a bound, each equally likely. |

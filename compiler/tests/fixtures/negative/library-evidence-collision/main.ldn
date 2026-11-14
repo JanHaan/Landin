@@ -3,7 +3,7 @@ import core/cmp
 --  core/cmp already declares u32 is cmp.hashable. There is no override:
 --  a second declaration for the same key is a collision, and another hash
 --  belongs on a distinct wrapper.
-my_hash: (value: u32) -> (result: u64) =
+my_hash: (value: u32, seed: cmp.hash_seed) -> (result: u64) =
     result = u64(value) *% 31
 end my_hash
 

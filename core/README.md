@@ -96,7 +96,7 @@ Every module spells the same operations the same way (D269):
 
 | Operation | Spelling | Examples |
 |---|---|---|
-| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)`; a provider's handle that borrows nothing too, `heap.new()`, `system.new()`, `l1.new()` (D1032) |
+| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32, seed: seed)`, `diag.new(capacity: 4)`; a provider's handle that borrows nothing too, `heap.new()`, `system.new()`, `l1.new()` (D1032) |
 | View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `arena.over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `text.utf8_over(buffer)`, `io.buffered_over`, `io.lines_over`, `events.over(state, entries)`; a second way to make one keeps `over` and says what it adds, `fake.network_over_turns`, `fake.clock_over_beside` (D1032) |
 | A provider's caller-owned state | `space`, declared `zeroed` | `arena.space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
@@ -331,7 +331,9 @@ scalars, `bool` and `[]u8` and `ordered` for the integer scalars, and
 `time.duration` and `time.instant` and `core/net` `equatable` and
 `hashable` for `net.address` (D1031): a later key type declares its
 evidence in its own module; another reading goes on a `distinct`
-wrapper with its own evidence [1280]. A closed set of named values, such as
+wrapper with its own evidence [1280]. Every hash is keyed by a
+`cmp.hash_seed`, and the shipped ones are SipHash-1-3: `cmp.hash_bytes`
+and `cmp.hash_word` (D1360). A closed set of named values, such as
 `core/diag`'s severity, is an atom set rather than an integer (D272).
 
 ## Constrained Cortex-M0 consumers

@@ -27,7 +27,7 @@ unspread: (spread: u64) -> (hash: u64) =
     hash = value
 end unspread
 
-key_hash: (value: collision_key) -> (result: u64) =
+key_hash: (value: collision_key, seed: cmp.hash_seed) -> (result: u64) =
     inc hash_calls
     result = unspread(value.home)
 end key_hash
@@ -53,7 +53,7 @@ pointer_equal: (left: ptr node, right: ptr node) -> (same: bool) =
     same = usize(left) == usize(right)
 end pointer_equal
 
-pointer_hash: (value: ptr node) -> (result: u64) =
+pointer_hash: (value: ptr node, seed: cmp.hash_seed) -> (result: u64) =
     result = value.val.identity
 end pointer_hash
 
@@ -85,7 +85,7 @@ end missing_value
 
 tombstone_update: () -> (ok: bool) =
     provider := heap.new()
-    mut value := map.new(key: collision_key, item: i32)
+    mut value := map.new(key: collision_key, item: i32, seed: test_seed())
     a: collision_key = (identity: 1, home: 6)
     b: collision_key = (identity: 2, home: 6)
     map.insert(value, provider, a, 10) else none
@@ -110,7 +110,7 @@ end tombstone_update
 
 wrap_rehash_and_churn: () -> (ok: bool) =
     provider := heap.new()
-    mut value := map.new(key: collision_key, item: i32)
+    mut value := map.new(key: collision_key, item: i32, seed: test_seed())
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
     k3: collision_key = (identity: 3, home: 6)
@@ -166,7 +166,7 @@ end wrap_rehash_and_churn
 
 empty_tombstone_misses: () -> (ok: bool) =
     provider := heap.new()
-    mut value := map.new(key: collision_key, item: i32)
+    mut value := map.new(key: collision_key, item: i32, seed: test_seed())
     k1: collision_key = (identity: 1, home: 0)
     k2: collision_key = (identity: 2, home: 0)
     k3: collision_key = (identity: 3, home: 0)
@@ -207,7 +207,7 @@ end empty_tombstone_misses
 
 pointer_key_and_value: () -> (ok: bool) =
     provider := heap.new()
-    mut value := map.new(key: ptr node, item: ptr node)
+    mut value := map.new(key: ptr node, item: ptr node, seed: test_seed())
     map.insert(value, provider, addr n1, addr n2) else none
     map.insert(value, provider, addr n3, addr n4) else none
     map.insert(value, provider, addr n5, addr n6) else none
@@ -243,3 +243,8 @@ public main: () -> (code: i32) =
         code = 0
     end if
 end main
+
+--  A constant seed: the same probes and rebuilds on every run.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed

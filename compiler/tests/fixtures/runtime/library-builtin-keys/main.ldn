@@ -1,4 +1,5 @@
 import core/arena
+import core/cmp
 import core/map
 import core/mem
 import core/net
@@ -20,7 +21,7 @@ timed: (memory: arena.arena) -> (ok: bool)
       or spans[2] <> time.milliseconds(2) or spans[3] <> time.seconds(1)
 
     start: time.instant = time.instant(1000)
-    mut deadlines := map.new(key: time.instant, item: u8)
+    mut deadlines := map.new(key: time.instant, item: u8, seed: test_seed())
     try map.insert(deadlines, memory, start, u8(1))
     try map.insert(deadlines, memory, time.later(start, time.seconds(1)), u8(2))
     try map.insert(deadlines, memory, time.instant(1000), u8(3))
@@ -31,7 +32,7 @@ timed: (memory: arena.arena) -> (ok: bool)
 
     bare: net.address = net.ipv6_address([0xfe80, 0, 0, 0, 0, 0, 0, 1], 80)
     zoned: net.address = try net.with_zone(bare, "eth0")
-    mut peers := map.new(key: net.address, item: u8)
+    mut peers := map.new(key: net.address, item: u8, seed: test_seed())
     try map.insert(peers, memory, net.loopback(net.ipv4, 80), u8(4))
     try map.insert(peers, memory, bare, u8(6))
     try map.insert(peers, memory, zoned, u8(7))
@@ -53,7 +54,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
     memory := arena.over_unchecked(space, addr backing[0], lenof backing)
 
     least: i32 = (0 - 2147483647) - 1
-    mut signed := map.new(key: i32, item: u8)
+    mut signed := map.new(key: i32, item: u8, seed: test_seed())
     try map.insert(signed, memory, -1, u8(1))
     try map.insert(signed, memory, 0, u8(2))
     try map.insert(signed, memory, least, u8(3))
@@ -65,7 +66,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
 
     alpha: []u8 = "alpha"
     beta: []u8 = "beta"
-    mut names := map.new(key: []u8, item: u32)
+    mut names := map.new(key: []u8, item: u32, seed: test_seed())
     try map.insert(names, memory, alpha, u32(1))
     try map.insert(names, memory, beta, u32(2))
     mut spelled: [5]u8 = zeroed
@@ -79,7 +80,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
     found: u32 = try map.get(names, copied)
     return when found <> 1 or map.length(names) <> 2
 
-    mut words := map.new(key: utf8, item: u32)
+    mut words := map.new(key: utf8, item: u32, seed: test_seed())
     try map.insert(words, memory, "one", u32(1))
     try map.insert(words, memory, "two", u32(2))
     try map.insert(words, memory, "one", u32(10))
@@ -129,3 +130,8 @@ public main: () -> (code: i32) =
         code = 42
     end if
 end main
+
+--  A constant seed: the same probes and rebuilds on every run.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed

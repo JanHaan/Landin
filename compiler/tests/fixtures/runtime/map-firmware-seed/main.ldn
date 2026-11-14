@@ -1,0 +1,67 @@
+--  A firmware map given its seed.  A board without entropy builds its
+--  seed with cmp.seed_from from two words of its own, a hardware random
+--  number or its unique device ID where it has one and a constant chosen
+--  for the build where it has not; these two stand for them.  The map
+--  stores twelve keys over an arena in static storage, finds them,
+--  removes one and walks the rest in insertion order, as a map seeded
+--  from entropy does.  It returns 42 when every check holds.
+import core/arena
+import core/cmp
+import core/map
+
+device_words: [2]u64 = [0x5eed0001c0ffee00, 0x0123456789abcdef]
+
+mut backing: [1024]u8 = zeroed
+
+exercise: () -> (ok: bool) ! map.missing =
+    ok = false
+    mut value := map.new(key: u32, item: i32,
+                         seed: cmp.seed_from(device_words[0], device_words[1]))
+    return when map.length(value) <> 0 or map.capacity(value) <> 0
+    return when map.contains(value, u32(42))
+    mut refused: bool = false
+    _ = map.at(value, u32(42)) else (problem)
+        return when problem <> map.missing
+        refused = true
+    end
+    return when not refused
+    _ = map.get(value, u32(42)) else (problem)
+        return when problem <> map.missing
+    end
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], lenof backing)
+    for key in u32(0)..<12 do
+        map.insert(value, memory, key * 7, i32(key)) else (problem)
+            _ = problem
+            return
+        end
+    end for
+    map.remove(value, u32(14)) else (problem)
+        _ = problem
+        return
+    end
+    return when map.length(value) <> 11 or map.contains(value, u32(14))
+    mut walk := map.entries()
+    mut expected: i32 = 0
+    loop do
+        next := map.next_entry(value, walk) else (problem)
+            _ = problem
+            break
+        end
+        if expected == 2 then
+            expected = 3
+        end if
+        return when next.item <> expected or next.key <> u32(expected) * 7
+        inc expected
+    end loop
+    found: i32 = try map.get(value, u32(77))
+    ok = found == 11 and expected == 12
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

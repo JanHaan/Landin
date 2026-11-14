@@ -8,6 +8,7 @@
 --  sequence on every target, a 32-bit Cortex-M0 included, and its
 --  multiplications by 5 and 9 are a shift and an addition each.
 
+import core/cmp
 import core/io
 
 state_value: type = struct
@@ -66,6 +67,18 @@ public from_entropy: (provider: type is io.entropy, host: provider)
         result = new(0)
     end if
 end from_entropy
+
+--- A hash seed for a map keyed by outside data: 16 bytes of the
+--- provider's entropy, read as two little-endian `u64`s and given to
+--- `cmp.seed_from`.  No generator is involved, so nothing a program draws
+--- from one reveals it.  It fails as the provider fails.
+public hash_seed: (provider: type is io.entropy, host: provider)
+                  -> (seed: cmp.hash_seed) ! io.io_failed =
+    mut bytes: [16]u8 = zeroed
+    try io.fill_random(host, bytes[0..<16])
+    seed = cmp.seed_from(little_endian(bytes[0..<8]),
+                         little_endian(bytes[8..<16]))
+end hash_seed
 
 --  The eight bytes of `bytes`, least significant first.
 little_endian: (bytes: []u8) -> (value: u64) =

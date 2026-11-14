@@ -7,7 +7,7 @@ same: (item: type is cmp.equatable, left: item, right: item) -> (yes: bool) =
 end same
 
 digest: (item: type is cmp.hashable, value: item) -> (result: u64) =
-    result = item.hash(value)
+    result = item.hash(value, test_seed())
 end digest
 
 before: (item: type is cmp.ordered, left: item, right: item) -> (yes: bool) =
@@ -21,7 +21,7 @@ exercise: () -> (ok: bool) =
     other: []u8 = "ba"
     return when not same(u32(7), u32(7)) or same(true, false)
     return when not same(bytes, copy) or same(bytes, other)
-    return when digest(u16(9)) <> 9 or digest(bytes) == digest(other)
+    return when digest(u16(9)) <> cmp.hash_word(9, test_seed()) or digest(bytes) == digest(other)
     ok = before(i32(-1), i32(0)) and not before(u8(2), u8(2))
 end exercise
 
@@ -32,3 +32,8 @@ public main: () -> (code: i32) =
         code = 42
     end if
 end main
+
+--  A constant seed, so that every run hashes alike.
+test_seed: () -> (seed: cmp.hash_seed) =
+    seed = cmp.seed_from(1, 2)
+end test_seed
