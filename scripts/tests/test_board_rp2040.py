@@ -4,6 +4,7 @@ import importlib.util
 import contextlib
 import json
 import struct
+import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,8 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from expected_runs import expect  # noqa: E402
 SPEC = importlib.util.spec_from_file_location('board', ROOT / 'environments/boards/rp2040/board.py')
 BOARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BOARD)
@@ -290,7 +293,10 @@ class Oracle(unittest.TestCase):
             argv = ['board.py', '--refine=refine', '--ram-loader=loader', '--probe-rs=probe',
                     '--nm=nm', '--probehive=' + tmp, '--output=' + tmp + '/run', '--cascade=1-1']
             with mock.patch.object(BOARD.sys, 'argv', argv), \
-                    mock.patch.object(BOARD.common.subprocess, 'run', return_value=description), \
+                    mock.patch.object(BOARD.common.subprocess, 'run', side_effect=expect({
+                        'loader': description,
+                        #  The revision check (D1307) asks refine; this one is no compiler.
+                        'refine': SimpleNamespace(returncode=1, stdout=b'', stderr=b'')})), \
                     mock.patch.object(BOARD.common, 'place_hubs'), \
                     mock.patch.object(BOARD.common, 'Pace', return_value=pace), \
                     mock.patch.object(BOARD.common, 'rig_lock', return_value=lock), \

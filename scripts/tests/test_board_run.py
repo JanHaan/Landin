@@ -15,6 +15,8 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'environments/boards'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from expected_runs import expect  # noqa: E402
 import run as board_run
 
 
@@ -99,8 +101,8 @@ class Transfer(unittest.TestCase):
                 mock.patch.object(board_run.bundle, 'snapshot', side_effect=snapshot), \
                 mock.patch.object(board_run.build, 'prepare', side_effect=prepare), \
                 mock.patch.object(board_run, 'transport', side_effect=transport), \
-                mock.patch.object(subprocess, 'run', return_value=SimpleNamespace(
-                    returncode=0, stdout='/tmp/landin-board.ABC123\n', stderr='')):
+                mock.patch.object(subprocess, 'run', side_effect=expect({'ssh': SimpleNamespace(
+                    returncode=0, stdout='/tmp/landin-board.ABC123\n', stderr='')})):
             status = board_run.execute(self.args)
         transfer = json.loads((self.args.output / 'transfer.json').read_text())
         return status, transfer, calls
@@ -243,8 +245,8 @@ class Transfer(unittest.TestCase):
                 mock.patch.object(board_run.bundle, 'snapshot', side_effect=snapshot), \
                 mock.patch.object(board_run.build, 'prepare', side_effect=prepare), \
                 mock.patch.object(board_run, 'transport', side_effect=transport), \
-                mock.patch.object(subprocess, 'run', return_value=SimpleNamespace(
-                    returncode=0, stdout='/tmp/landin-board.ABC123\n', stderr='')) as process:
+                mock.patch.object(subprocess, 'run', side_effect=expect({'ssh': SimpleNamespace(
+                    returncode=0, stdout='/tmp/landin-board.ABC123\n', stderr='')})) as process:
             status = board_run.execute(self.args, ('--probehive', '/path with spaces'))
         self.assertEqual(status, 7)
         self.assertEqual(process.call_count, 1)  # remote mktemp only
@@ -262,8 +264,8 @@ class Transfer(unittest.TestCase):
                 mock.patch.object(board_run.bundle, 'snapshot', return_value={}), \
                 mock.patch.object(board_run.build, 'prepare'), \
                 mock.patch.object(board_run, 'transport') as copy, \
-                mock.patch.object(subprocess, 'run', return_value=SimpleNamespace(
-                    returncode=0, stdout='/tmp/evil; touch /tmp/injected\n', stderr='')):
+                mock.patch.object(subprocess, 'run', side_effect=expect({'ssh': SimpleNamespace(
+                    returncode=0, stdout='/tmp/evil; touch /tmp/injected\n', stderr='')})):
             with self.assertRaisesRegex(board_run.bundle.Invalid, 'remote staging failed'):
                 board_run.execute(self.args)
             copy.assert_not_called()
@@ -295,8 +297,8 @@ class Transfer(unittest.TestCase):
                 mock.patch.object(board_run.bundle, 'snapshot', side_effect=snapshot), \
                 mock.patch.object(board_run.build, 'prepare'), \
                 mock.patch.object(board_run, 'transport', side_effect=transport), \
-                mock.patch.object(subprocess, 'run', return_value=SimpleNamespace(
-                    returncode=0, stdout='/tmp/landin-board.ABC123\n', stderr='')), \
+                mock.patch.object(subprocess, 'run', side_effect=expect({'ssh': SimpleNamespace(
+                    returncode=0, stdout='/tmp/landin-board.ABC123\n', stderr='')})), \
                 contextlib.redirect_stdout(output):
             status = board_run.execute(self.args, ['--boot-transport=manual-uf2'])
         self.assertEqual(status, 7)
