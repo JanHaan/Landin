@@ -11,6 +11,7 @@
 --  an exhausted host, or a tool that could not be run at all.
 
 with Ada.Containers.Indefinite_Vectors;
+with Ada.Exceptions;
 with Ada.Strings.Unbounded;
 with Interfaces;
 
@@ -380,6 +381,21 @@ package Landin.Platform is
       Program   : String;
       Arguments : Path_List;
       Result    : out Program_Result) is abstract;
+
+   --  The whole reason for the External_Tool_Failed a runner raised last.
+   --  GNAT cuts an exception's message at 200 characters, and a reason
+   --  names paths that run longer, so a runner keeps the reason itself;
+   --  one that keeps none leaves Reason as it was.
+   procedure Get_Tool_Failure_Reason
+     (Host : Tool_Runner;
+      Reason : in out Ada.Strings.Unbounded.Unbounded_String) is null;
+
+   --  Why Failure, an External_Tool_Failed from Host, was raised: the
+   --  reason Host kept when the message is that reason or the start of it,
+   --  and the message otherwise.
+   function Tool_Failure_Reason
+     (Host : Tool_Runner'Class;
+      Failure : Ada.Exceptions.Exception_Occurrence) return String;
 
    --  Tell a test runner which output its next Run may create. Native tools
    --  use their -o argument; this seam keeps fake production inside Run.

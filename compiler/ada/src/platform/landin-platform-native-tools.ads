@@ -38,6 +38,10 @@ package Landin.Platform.Native.Tools is
    overriding function Available
      (Host : Native_Tool_Runner; Program : String) return Boolean;
 
+   overriding procedure Get_Tool_Failure_Reason
+     (Host : Native_Tool_Runner;
+      Reason : in out Ada.Strings.Unbounded.Unbounded_String);
+
    overriding function Resolve_Program
      (Host : Native_Tool_Runner; Program : String) return String;
 

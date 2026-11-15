@@ -1295,7 +1295,7 @@ package body Landin.Commands is
          when Failure : Landin.External_Tool_Failed =>
             Started := False;
             Why := US.To_Unbounded_String
-              (Ada.Exceptions.Exception_Message (Failure));
+              (Landin.Platform.Tool_Failure_Reason (Tools, Failure));
          when Failure : others =>
             Host.Remove_Tree (Directory, Removed);
             if Removed = Landin.Platform.Not_Removable then

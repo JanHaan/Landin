@@ -211,6 +211,8 @@ def host_controls(refine, root, env, source, driver):
         # build or not, removing a capture takes no descriptor the process
         # did not already hold, so none is left, nor a cleanup slot beside
         # it, and no refusal is of a capture that could not be released.
+        # A capture the limit stops being created is refused naming the
+        # shortage, as the separation refusals are.
         scratch = work / 'scratch'
         scratch.mkdir()
         seen = []
@@ -229,6 +231,9 @@ def host_controls(refine, root, env, source, driver):
             if (left or not readable(result.stderr)
                     or b'could not release temporary tool output'
                     in result.stderr
+                    or (b'could not create temporary tool' in result.stderr
+                        and os.strerror(errno.EMFILE).encode()
+                        not in result.stderr)
                     or (workspaces(work)
                         and b'publication' not in result.stderr)):
                 return seen
@@ -239,6 +244,35 @@ def host_controls(refine, root, env, source, driver):
         if (any(row['exit_status'] != 0 for row in seen)
                 and seen[-1]['exit_status'] == 0
                 and (work / ('linked-%d' % (count))).exists()):
+            return None
+        return seen
+
+    def replaced_capture(work):
+        # A tool that replaces its own capture directory leaves the
+        # replacement for the reader to inspect, and the refusal names it
+        # whole: a reason longer than GNAT's 200-character bound on an
+        # exception's message is not cut short of the entry it names.
+        scratch = work / ('deep-' * 32 + 'scratch')
+        scratch.mkdir()
+        wrapper = work / 'replacing-cc'
+        wrapper.write_text('#!/bin/sh\nfor d in "$TMPDIR"/landin-tool-*; do\n'
+                           '  mv "$d" "$d.moved" && mkdir "$d"\ndone\nexec '
+                           + shlex.quote(driver) + ' "$@"\n')
+        wrapper.chmod(0o700)
+        result = subprocess.run(
+            [str(refine), 'compile', str(source), '--toolchain=' + str(wrapper),
+             '-o', 'replaced'], cwd=work, env=dict(env, TMPDIR=str(scratch)),
+            capture_output=True, timeout=60)
+        kept = sorted(path.name for path in scratch.iterdir()
+                      if not path.name.endswith('.moved'))
+        seen = dict(exit_status=result.returncode, kept=kept,
+                    stderr=result.stderr.decode(errors='replace'))
+        if (result.returncode == 1 and b'L0501' in result.stderr
+                and len(kept) == 1 and readable(result.stderr)
+                and ('/%s/%s; replacement preserved; inspect the original'
+                     ' parent before cleanup' % (scratch.name, kept[0])).encode()
+                in result.stderr
+                and not (work / 'replaced').exists()):
             return None
         return seen
 
@@ -363,7 +397,7 @@ def host_controls(refine, root, env, source, driver):
     return [('host-' + control.__name__.replace('_', '-'), control)
             for control in (output_modes, unchanged_output_mode,
                             foreign_entries, refusal_reasons, descriptor_limit,
-                            descriptor_limit_link,
+                            descriptor_limit_link, replaced_capture,
                             closed_pipe_run, nul_in_path, tool_litter,
                             directory_for_a_file, removed_working_directory,
                             file_size_signal)]
