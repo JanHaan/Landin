@@ -256,7 +256,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R13.90 — Supply a concept through a field (planned).**
+**Next roadmap item: R16.10 — Measure generated code (planned).**
 
 ## Versions
 
