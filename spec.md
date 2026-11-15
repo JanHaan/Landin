@@ -28923,6 +28923,61 @@ cannot answer.
 **Pinned by** `scripts/tests/test_host_determinism.py`'s `OwnTarget`,
 and `scripts/tests/test_check_controls.py`'s `TargetLists`.
 
+### D1366 — The manifest compiles a fixture with the firmware entry its `args` request
+
+**The discrepancy:** the host manifest and the build-mode comparison took
+a fixture's `--target` and `--level` from its `args` and nothing else, so
+seven Cortex-M0 positives whose `args` name `--firmware-entry=start` were
+compiled as objects nothing starts. Two of them place a vector slot, which
+is refused without an entry (L0502), and each had to be listed by hand
+among the manifest's expected refusals, which only a refused entry in the
+manifest showed a fixture's writer; the other five were checked as a
+program the harness never compiles.
+
+**Chosen:** a fixture whose `args` choose a target and name a
+`--firmware-entry` is compiled for that target with that entry, as the
+harness compiles it, in both the manifest and the comparison; on any other
+target it is compiled without one, as its level is (D658). The two
+refusals listed for the entry are gone, and all seven are held to the
+image's assembly.
+
+**The alternatives:** naming the hand-kept list in the fixture guide, which
+leaves the image's assembly unchecked by either comparison; and passing
+every word of `args`, which a fixture of several targets would then give
+to targets it does not choose.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`'s `FirmwareEntry`.
+
+### D1365 — The build-mode comparison is dealt round shards, not split by target
+
+**The discrepancy:** the gate's `build-modes` jobs split the five mode
+targets by hand, one Linux target with firmware targets in each, as the
+host manifest's parts are (D658). The Xtensa configurations doubled one
+part's firmware requests, 17,176 against 8,964, and a GitHub-hosted runner
+of the same label took between 940 and 1,786 seconds over that part, so
+it ran 29.7 minutes of its 30 on 2026-11-15 and was cancelled at the limit
+once before, its comparison already clean.
+
+**Chosen:** `emit_manifest.py modes --shard=I/N` compares every I-th
+request of the list it builds, from the I-th, and the gate runs three jobs,
+`build-modes-1` to `build-modes-3`, each over every mode target. A shard is
+a third of the requests and of their kinds whatever target or level the
+corpus gains: on one 32-core host the three took 163, 166 and 164 seconds,
+and on the gate's runners about ten minutes on a fast one and eighteen on
+the slowest yet, under the same 30-minute limit.
+
+**The alternatives:** raising the limit, which leaves the next target to
+grow one part again, past whatever limit was chosen; three parts by
+target, one for each Linux target and one for the firmware, each of which
+would still take two-thirds of the limit on a slow runner and lean again
+when a target is added; and four shards, one more job beside the gate's
+others under the account's concurrent-job cap, for a margin three already
+give.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`: `BuildModes`, that
+the shards together are every request once, and `Workflows`, that the
+gate's jobs are shards 1 to N of `--shard=I/N` with no target list.
+
 ### D659 — The lowering record lowers a fixture where the harness compiles it
 
 **The tour said** nothing; `compiler/tests/lowering.ir` lowered every

@@ -151,6 +151,12 @@ Before an item closes:
    ```
 
    and `./scripts/scaling.sh`, alone on its host, since it measures time.
+   When the item's exit evidence is that firmware images are unchanged, or
+   changed only where it says, run the lanes once with the item's starting
+   compiler and once with its own, and compare the two output trees with
+   `scripts/compare_images.py`, as
+   [comparing the images two compilers link](#comparing-the-images-two-compilers-link)
+   shows.
 3. Write the `Done:` paragraph, remove the register rows the item settled
    and list their identities among the records that have left the
    register, as `ROADMAP.md`'s mechanics ask.
@@ -817,7 +823,7 @@ still succeed. The linked full run contains the target-test results.
 | `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, outside-user-stock, build-modes, Cortex-M and scaling jobs |
 | `release` | `ubuntu-24.04` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
 | `outside-user-stock` | `ubuntu-24.04` | the release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
-| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1: Linux x86-64 and RV32 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2`; `build-modes-1` also compares both Xtensa configurations |
+| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1, over Linux x86-64, Linux arm64, Cortex-M, RV32 and both Xtensa configurations; the requests are dealt round `build-modes-1` to `build-modes-3`, `emit_manifest.py modes --shard=I/3`, so each job is a third of the work whatever target grows (D1365) |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI, then the Neovim LSP preference smoke under the distribution's Neovim |
 | `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, the native and Pi board RAM helpers built (including native Rust controls), every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, a full-scope dispatch included (D585) |
@@ -1018,7 +1024,7 @@ environments/cortex-m/test.py`, which `check.py` runs.
 | `scripts/tests/test_gate_inputs.py` | `Workflow`: the reuse list is exactly the jobs the aggregate needs, every matrix leg by its rendered name. `Physical`: every job's condition follows the event's scope, a software lane skipping for a reused pass and a boards-only event and a board job running by the boards scope alone, the board matrix is every port once, and the aggregate keeps documents and scripts always. `Inventory`: this list names every test file that names the workflow. Its matrix reader takes axis lines or one `include:` list, never both. |
 | `scripts/tests/test_rv64_lanes.py` | the RV64 jobs: the two hardware jobs are suspended, by a `false` conjunct in their condition, and absent from the aggregate and the reuse list; the emulated job is not suspended, has both shards and its packages, and its evidence is packaged. It compares conditions by that conjunct alone, so a scope change does not concern it. |
 | `scripts/tests/test_build_inventory.py` | `BuildArchives`: the archives the build jobs hand to their consumers hold the executables and both stamps. |
-| `scripts/tests/test_host_determinism.py` | `Workflows`: the `build-modes` matrix compares every mode target once, and `determinism.yml`'s parts emit every target once on each host. |
+| `scripts/tests/test_host_determinism.py` | `Workflows`: the `build-modes` matrix's jobs are every shard of every mode target, numbered from one and dividing by their own count, and `determinism.yml`'s parts emit every target once on each host; `BuildModes`: the shards together are every request once. |
 | `environments/cortex-m/test.py` | the `cortex-m` job's `part` matrix is the runner's parts, and it passes `--part`. |
 | `scripts/tests/test_rig_runner_hook.py` | nothing of the jobs: it passes the workflow's path to the rig runner's hook. |
 | `scripts/tests/test_release.py` | nothing of the jobs: it names the workflow in the API path the release check asks for main's run. |
@@ -1140,6 +1146,42 @@ information names the directory a fixture was compiled in, which is why
 both runs take the same ROOT, and why the gate's cross-host manifest has no
 debug entries: two hosts' checkouts sit at different paths. An unexpected
 refusal is reported with the first diagnostic the compiler gave for it.
+
+### Comparing the images two compilers link
+
+The manifests compare assembly. A firmware lane also links, with the
+target's own linker and the startup and vectors refine writes, and keeps
+each image it built under its output directory; it keeps no image of a
+base, so a comparison of linked images runs the lane twice, once with each
+compiler and each into a directory of its own, and then compares the two
+trees with `scripts/compare_images.py`. For the Cortex-M lanes' programs
+part, with `$base`, `$new` and `$proof` as above and `$TOOLS` the root
+`environments/cortex-m/setup.py` installed:
+
+```sh
+python3 environments/cortex-m/run.py --part=programs --tools "$TOOLS" \
+    --refine "$base" --output "$proof/base-programs"
+python3 environments/cortex-m/run.py --part=programs --tools "$TOOLS" \
+    --refine "$new" --output "$proof/new-programs"
+python3 scripts/compare_images.py "$proof/base-programs" "$proof/new-programs"
+```
+
+It pairs every `*.elf` by its path below each directory, so the two runs
+must select the same lanes, parts or chip, and compares what each loads:
+the entry point, the `PT_LOAD` segments' addresses, sizes and flags, and
+their bytes. Debugging information and symbols are not compared, so an
+image whose only change is a path in its line table is the same image.
+For an image that differs it names the routines and data of another size,
+those of the same size whose bytes differ, those only in one image, those
+whose bytes are the same at another address, and the loaded bytes outside
+every named symbol, in the vectors for instance. A call or a literal
+reaching a routine that moved changes too, so the routines of another size
+and those in one image alone are usually the change, and the rest follow
+from it. Images in one tree alone are named, and the last line counts
+each kind; the status is 0 only when both trees hold the same images and
+each loads the same bytes. It lists twelve names of each kind, and
+`--names=N` lists N. The Xtensa corpus compares the same way, with its `--chip`,
+`--memory-profile` and `--all` given to both runs alike.
 
 ## Historical: choosing acceptance scope
 

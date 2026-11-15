@@ -278,6 +278,14 @@ records `part` and a scope naming the part and its lanes. `test.py` holds
 exactly those parts. Each lane's verdict in `result.json` gives the seconds
 it took, which is what to rebalance the parts by.
 
+Every image a lane links stays under its output directory, and a run keeps
+no image of another compiler's. To show which images a compiler change
+alters, run the same part or lanes once with the compiler built before it
+and once with the one after, into two directories, and compare them with
+`python3 scripts/compare_images.py BASE_DIR NEW_DIR`, which names each
+image whose loaded bytes differ and the routines and data that differ in
+it ([comparing the images two compilers link](../../docs/process.md#comparing-the-images-two-compilers-link)).
+
 ### Debugger sessions share a GDB per worker
 
 Every lane's debugger sessions go through `Run.debug`, which serves them

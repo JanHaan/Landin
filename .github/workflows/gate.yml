@@ -108,7 +108,7 @@ jobs:
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime-1 freebsd-arm64-runtime-2 \
             freebsd-arm64-debugger freebsd-arm64-abi build-modes-1 build-modes-2 \
-            rv64-qemu-1 rv64-qemu-2 outside-user-stock \
+            build-modes-3 rv64-qemu-1 rv64-qemu-2 outside-user-stock \
             'determinism / manifest (x86_64-linux 1)' \
             'determinism / manifest (x86_64-linux 2)' \
             'determinism / manifest (aarch64-linux 1)' \
@@ -493,8 +493,13 @@ jobs:
           PATH=/usr/bin:/bin python3 scripts/outside_user.py --stock \
             --prefix "$outside/prefix" --work "$outside/work"
 
+  #  Every mode target's requests, dealt round three shards (D1365).  Split
+  #  by target, one part took 29.7 minutes of its 30 on a slow runner,
+  #  twice the time the same part took on a fast one; a shard is a third of
+  #  the work, about ten minutes on a fast runner and eighteen on the
+  #  slowest yet.
   build-modes:
-    name: build-modes-${{ matrix.part }}
+    name: build-modes-${{ matrix.shard }}
     needs: [inputs, linux-debug-build, linux-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
@@ -502,13 +507,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          #  A Linux target takes the two compilers about seven times as
-          #  long as a firmware target, so each part has one of each (D658).
-          - part: 1
-            targets: linux-x86-64,rv32,xtensa
-          - part: 2
-            targets: linux-arm64,cortex-m0
+        shard: [1, 2, 3]
     env:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -538,12 +537,12 @@ jobs:
           ./scripts/build.sh -q
           LANDIN_BUILD_MODE=release ./scripts/build.sh -q
 
-      - name: Both builds emit the same bytes, part ${{ matrix.part }}
+      - name: Both builds emit the same bytes, shard ${{ matrix.shard }} of 3
         run: >-
           python3 scripts/emit_manifest.py modes
           compiler/ada/build/linux-amd64/debug/bin/refine
           compiler/ada/build/linux-amd64/release/bin/refine
-          . ${{ matrix.targets }}
+          . --shard=${{ matrix.shard }}/3
 
   #  refine bindings, with the debug compiler, against its pinned Clang,
   #  including the byte-for-byte regeneration of the committed fixture.

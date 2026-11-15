@@ -30,7 +30,8 @@ the compiler's.  So each fixture is compiled from its own directory under
 the bare spellings its `fixture.meta` names -- `program`, then `with` in the
 order written, or `--root` and the directory itself -- which are the same
 strings on every host.  The fixture record decides what is compiled, as it
-does for the harness; a fixture this check could not read would be a
+does for the harness, down to the `--level` and the `--firmware-entry` its
+`args` give the target they choose; a fixture this check could not read would be a
 fixture it silently stopped checking, which is how 27 of them went
 unexamined while the header said "every positive fixture".
 
@@ -50,6 +51,10 @@ standard profiles, and every result has to agree.
     emit REFINE ROOT OUT.json     write this host's manifest
     compare A.json B.json [...]   require every manifest to agree
     modes DEBUG RELEASE ROOT      require the two compiler builds to agree
+
+`modes --shard=I/N` compares the I-th of N shares of its requests, dealt
+round in the order they are listed; the gate's `build-modes` jobs are its N
+shards, which together are every request once.
 
 The same manifest is how a change that should alter no emitted byte is
 shown to: `emit` once with a compiler built before the change and once
@@ -186,10 +191,6 @@ REFUSAL_PAIRS = {
     ("from-c", "cortex-m0"),
     ("r630-memory-scalars", "cortex-m0"),
     ("r660-machine-directives", "cortex-m0"),
-    #  A vector placement needs --firmware-entry (L0502), which the
-    #  manifest's assembly, an object's, does not name.
-    ("firmware-image-from-a-handler", "cortex-m0"),
-    ("description-copies-text-into-ram", "cortex-m0"),
     #  rv32 has no enabled C ABI (D660, D920), so it refuses every C
     #  fixture cortex-m0 once refused, and r630-memory-scalars' read-modify-write at its
     #  default rv32imc (D690).  assembly-operand-forms has no rv32 arm, and
@@ -313,6 +314,32 @@ def levels(fixture):
     return {target[-1]: level[-1]} if target and level else {}
 
 
+def firmware_entries(fixture):
+    """{target: entry} for the firmware entry FIXTURE's `args` request.
+
+    A fixture whose `args` choose a target and name its `--firmware-entry`
+    is compiled there as the harness compiles it, an image's program with
+    that entry, rather than as an object nothing starts: a vector placement
+    is refused without one (L0502), and with one the assembly is the
+    image's.  Every other target compiles it without (D1366).
+    """
+    args = fixture_meta.read(fixture, strict=False).args
+    target = [a.split("=", 1)[1] for a in args if a.startswith("--target=")]
+    entry = [a.split("=", 1)[1] for a in args if a.startswith("--firmware-entry=")]
+    return {target[-1]: entry[-1]} if target and entry else {}
+
+
+def requested_entries(name, directory):
+    """`firmware_entries` of a corpus source NAME, `{}` for a counterpart."""
+    return (firmware_entries(directory)
+            if name.startswith(("positive/", "runtime/")) else {})
+
+
+def entry_options(requested, target):
+    """The `--firmware-entry` REQUESTED names for TARGET, if any."""
+    return ["--firmware-entry=" + requested[target]] if target in requested else []
+
+
 def own_target(fixture):
     """The one target FIXTURE is compiled for, or None (D740).
 
@@ -418,6 +445,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
             #  and compiled without it can be another program or none.
             link = (fixture_meta.read(directory, strict=False).get("link")
                     if name.startswith("runtime/") else None)
+            requested = requested_entries(name, directory)
             for target in wanted:
                 for selected_level in configured_levels(target, level.get(target)):
                     for debug in (None, debug_information(target)) if debug_info else (None,):
@@ -431,6 +459,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
                                 jobs.append((key, refine, directory,
                                              (["--link=" + link] if link and target
                                               not in FIRMWARE_TARGETS else [])
+                                             + entry_options(requested, target)
                                              + sources, target,
                                              selected_level, mode, optimize,
                                              specialize, debug, asm))
@@ -669,7 +698,14 @@ def mode_refusals(root, targets):
     return found
 
 
-def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
+def modes(debug, release, root, workers=None, targets=MODE_TARGETS, shard=(1, 1)):
+    """Both compilers over every request, or SHARD's share of them.
+
+    SHARD is (I, N): the requests are dealt round N shards in the order
+    they are listed, and the I-th is compared.  The N shards together are
+    every request once, each about an Nth of the work whatever targets
+    the corpus grows, which a split by target is not (D1365).
+    """
     for compiler in (debug, release):
         build_lock.reading(compiler)
     compilers = (Path(debug).resolve(), Path(release).resolve())
@@ -683,18 +719,25 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
         for name, directory, sources, wanted, level in entries:
             link = (fixture_meta.read(directory, strict=False).get("link")
                     if name.startswith("runtime/") else None)
+            requested = requested_entries(name, directory)
             for target in wanted:
                 for selected_level in configured_levels(target, level.get(target)):
                     for optimize, specialize in STANDARD_PROFILES:
                         key = (f"{name}|{target}|"
                                f"optimize={optimize}|specialize={specialize}"
                                + level_key(target, selected_level))
-                        scratch = Path(tmp) / str(len(jobs))
-                        scratch.mkdir()
-                        arguments = (["--link=" + link] if link and target
-                                     not in FIRMWARE_TARGETS else []) + sources
+                        arguments = ((["--link=" + link] if link and target
+                                      not in FIRMWARE_TARGETS else [])
+                                     + entry_options(requested, target)
+                                     + sources)
                         jobs.append((key, compilers, directory, arguments, target,
-                                     selected_level, optimize, specialize, scratch))
+                                     selected_level, optimize, specialize))
+        listed = len(jobs)
+        jobs = jobs[shard[0] - 1::shard[1]]
+        for index, job in enumerate(jobs):
+            scratch = Path(tmp) / str(index)
+            scratch.mkdir()
+            jobs[index] = job + (scratch,)
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             for key, (first, second) in pool.map(emit_both, jobs):
                 if first != second:
@@ -719,9 +762,11 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
                         refused += 1
                 else:
                     emitted += 1
-    print("sources %d  requests %d  emitted %d  refused as expected %d  "
+    print("%ssources %d  requests %d  emitted %d  refused as expected %d  "
           "unexpected %d  disagree %d"
-          % (len(entries), len(jobs), emitted, refused, len(unexpected),
+          % ("shard %d of %d, %d of %d requests: " % (shard + (len(jobs), listed))
+             if shard[1] > 1 else "",
+             len(entries), len(jobs), emitted, refused, len(unexpected),
              len(disagree)))
     faults = sorted(disagree) + sorted(unexpected)
     if not emitted:
@@ -759,6 +804,15 @@ def jobs(text):
     if count < 1:
         raise argparse.ArgumentTypeError("--jobs needs one or more")
     return count
+
+
+def shard_of(text):
+    """`I/N`, shard I of N, as (I, N), for argparse."""
+    match = re.fullmatch(r"([1-9][0-9]*)/([1-9][0-9]*)", text)
+    if not match or int(match.group(1)) > int(match.group(2)):
+        raise argparse.ArgumentTypeError(
+            "--shard needs I/N with 1 <= I <= N, such as 2/3")
+    return int(match.group(1)), int(match.group(2))
 
 
 def main(argv):
@@ -813,12 +867,13 @@ def main(argv):
         parser.add_argument("root")
         parser.add_argument("targets", nargs="?", default=",".join(MODE_TARGETS))
         parser.add_argument("--jobs", type=jobs)
+        parser.add_argument("--shard", type=shard_of, default=(1, 1))
         given = parser.parse_args(argv[2:])
         targets = target_list(given.targets, "modes")
         if targets is None:
             return 2
         return modes(given.debug, given.release, given.root, workers=given.jobs,
-                     targets=targets)
+                     targets=targets, shard=given.shard)
     if len(argv) >= 4 and argv[1] == "merge":
         return merge(argv[2], argv[3:])
     #  One manifest reaches compare() rather than the usage text, so that
@@ -833,8 +888,8 @@ def main(argv):
           "           [--debug-info] [--jobs=N]", file=sys.stderr)
     print("       emit_manifest.py merge OUT.json PART.json [...]", file=sys.stderr)
     print("       emit_manifest.py compare A.json B.json [...]", file=sys.stderr)
-    print("       emit_manifest.py modes DEBUG RELEASE ROOT [TARGET,...] [--jobs=N]",
-          file=sys.stderr)
+    print("       emit_manifest.py modes DEBUG RELEASE ROOT [TARGET,...] [--jobs=N]"
+          " [--shard=I/N]", file=sys.stderr)
     return 2
 
 

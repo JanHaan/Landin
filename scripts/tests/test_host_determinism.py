@@ -146,9 +146,23 @@ class Workflows(unittest.TestCase):
         #  Every host splits its targets alike, so a part is one comparison.
         self.assertEqual(len({json.dumps(parts) for parts in hosts.values()}), 1)
 
-    def test_the_build_modes_jobs_compare_every_mode_target_once(self):
-        self.assertPartition(self.parts("gate.yml", "build-modes")[""],
-                             self.check.MODE_TARGETS)
+    def test_the_build_modes_jobs_are_every_shard_of_every_mode_target(self):
+        #  Each job compares its shard of every mode target's requests
+        #  (D1365): the matrix numbers the shards from one, and the step
+        #  names no target list, so it compares MODE_TARGETS, and divides
+        #  by the matrix's own count.
+        text = (ROOT / ".github/workflows/gate.yml").read_text()
+        body = re.search(r"\n  build-modes:\n(.*?)(?=\n  [a-z-]+:\n)", text,
+                         re.S).group(1)
+        shards = re.search(r"\n        shard: \[([0-9, ]+)\]\n", body).group(1)
+        count = len(shards.split(","))
+        self.assertEqual([int(n) for n in shards.split(",")],
+                         list(range(1, count + 1)))
+        self.assertGreater(count, 1)
+        step = re.search(r"emit_manifest\.py modes\n(.*?)\n\n", body + "\n\n",
+                         re.S).group(1).splitlines()
+        self.assertEqual(step[-1].strip(), ". --shard=${{ matrix.shard }}/%d" % count)
+        self.assertNotIn("targets", body)
 
     def test_every_firmware_target_is_compared_in_both_build_modes(self):
         self.assertLessEqual(set(self.check.FIRMWARE_TARGETS),
@@ -573,6 +587,74 @@ class Levels(unittest.TestCase):
                 self.assertEqual(manifest[key], hashlib.sha256(said.encode()).hexdigest())
 
 
+class FirmwareEntry(unittest.TestCase):
+    """A fixture is compiled with the firmware entry its `args` request (D1366)."""
+
+    #  Refuses a firmware request without an entry, as L0502 refuses a
+    #  vector placement; writes the target and entry it was given.
+    STUB = ("said = [a for a in args if a.startswith(('--target=', '--firmware-entry='))]\n"
+            "if '--target=cortex-m0' in args and not any("
+            "a.startswith('--firmware-entry=') for a in args):\n"
+            "    sys.exit(1)\n"
+            "pathlib.Path(args[args.index('-o') + 1]).write_text(' '.join(said))\n")
+    META = ("program: main.ldn\ntargets: cortex-m0\n"
+            "args: --target=cortex-m0 --firmware-entry=start\n")
+
+    def area(self, tmp, meta):
+        area = Path(tmp)
+        fixture = area / "compiler/tests/fixtures/positive/example"
+        fixture.mkdir(parents=True)
+        (fixture / "fixture.meta").write_text(meta)
+        (area / "compiler/tests/fixtures/runtime").mkdir(parents=True)
+        refine = area / "refine"
+        refine.write_text("#!" + sys.executable + "\nimport pathlib, sys\n"
+                          "args = sys.argv[1:]\n" + self.STUB)
+        refine.chmod(0o755)
+        return area, refine
+
+    def test_the_manifest_emits_the_image_its_args_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area, refine = self.area(tmp, self.META)
+            out = area / "manifest.json"
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out)],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest = json.loads(out.read_text())
+        said = "--target=cortex-m0 --firmware-entry=start"
+        self.assertEqual(set(manifest.values()),
+                         {hashlib.sha256(said.encode()).hexdigest()})
+        self.assertEqual(len(manifest), 2 * 3 * 3)
+
+    def test_the_entry_applies_only_to_the_target_its_args_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area, refine = self.area(
+                tmp, "program: main.ldn\nargs: --target=cortex-m0 --firmware-entry=start\n")
+            out = area / "manifest.json"
+            subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out),
+                 "cortex-m0,rv32"], capture_output=True, text=True)
+            manifest = json.loads(out.read_text())
+        key = "example|%s|debug|optimize=none|specialize=off"
+        self.assertEqual(manifest[key % "rv32"],
+                         hashlib.sha256(b"--target=rv32").hexdigest())
+        self.assertEqual(manifest[key % "cortex-m0"],
+                         hashlib.sha256(b"--target=cortex-m0 --firmware-entry=start")
+                         .hexdigest())
+
+    def test_both_builds_are_given_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area, refine = self.area(tmp, self.META)
+            (area / "compiler/tests/cortex-m/cases").mkdir(parents=True)
+            (area / "compiler/tests/cortex-m/corpus.json").write_text(
+                json.dumps({"fixtures": {}}))
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "modes", str(refine), str(refine),
+                 str(area), "cortex-m0"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("requests 4  emitted 4", result.stdout)
+
+
 class OwnTarget(unittest.TestCase):
     """A fixture of one target is compiled for it alone (D740)."""
 
@@ -633,10 +715,11 @@ class OwnTarget(unittest.TestCase):
                           "positive/own": ("linux-arm64",)})
 
 
-def modes(debug_body, release_body, executed_row=None):
+def modes(debug_body, release_body, executed_row=None, options=()):
     """Run `modes` over a small corpus with two stub compilers.
 
-    EXECUTED_ROW adds to the inventory's row of `runtime/executed`."""
+    EXECUTED_ROW adds to the inventory's row of `runtime/executed`, and
+    OPTIONS follow the operands."""
     with tempfile.TemporaryDirectory() as tmp:
         area = Path(tmp)
         tests = area / "compiler/tests"
@@ -673,7 +756,8 @@ def modes(debug_body, release_body, executed_row=None):
             refine.chmod(0o755)
             stubs.append(str(refine))
         return subprocess.run(
-            [sys.executable, str(CHECK), "modes"] + stubs + [str(area)],
+            [sys.executable, str(CHECK), "modes"] + stubs + [str(area)]
+            + list(options),
             capture_output=True, text=True)
 
 
@@ -704,6 +788,43 @@ class BuildModes(unittest.TestCase):
             "where == 'executed' and '--target=rv32' in args) + "))
         self.assertEqual(result.returncode, 1)
         self.assertIn("runtime/executed|rv32|", result.stderr)
+
+    def test_the_shards_are_every_request_once(self):
+        #  The debug stub logs each request it is given, so a request two
+        #  shards both compared, or none did, shows.
+        def logged(log):
+            return ("open(%r, 'a').write(' '.join(args) + ' ' + where + '\\n')\n"
+                    % str(log)) + self.SAME
+
+        with tempfile.TemporaryDirectory() as tmp:
+            whole = Path(tmp) / "whole"
+            result = modes(logged(whole), self.SAME)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            said, dealt = [], []
+            for index in (1, 2, 3):
+                log = Path(tmp) / str(index)
+                result = modes(logged(log), self.SAME,
+                               options=["--shard=%d/3" % index])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                said.append(result.stdout)
+                dealt.append(log.read_text().splitlines())
+            requests = whole.read_text().splitlines()
+        #  Each request's scratch output path differs between runs.
+        strip = lambda lines: sorted(re.sub(r"-o \S+ ", "", l) for l in lines)
+        self.assertEqual(len(requests), 68)
+        self.assertEqual(len(set(strip(requests))), 68)
+        self.assertEqual(strip(requests), strip(sum(dealt, [])))
+        self.assertEqual([len(one) for one in dealt], [23, 23, 22])
+        self.assertIn("shard 2 of 3, 23 of 68 requests: sources 5  requests 23",
+                      said[1])
+
+    def test_a_shard_is_one_of_n(self):
+        for given in ("0/3", "4/3", "1/0", "1", "a/b"):
+            with self.subTest(shard=given):
+                result = modes(self.SAME, self.SAME,
+                               options=["--shard=" + given])
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("--shard needs I/N", result.stderr)
 
     def test_one_differing_emission_fails_and_is_named(self):
         result = modes(self.SAME, self.SAME.replace(
