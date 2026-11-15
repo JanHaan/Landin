@@ -17,6 +17,17 @@
       #  the pin is GNAT 16.1.0 with GPRbuild 26.0.0.
       pins = builtins.readFile ./environments/pins.sh;
 
+      #  Which checkout's shell this is: the first sixteen hex digits of
+      #  the sha256 of flake.nix, flake.lock and environments/pins.sh, in
+      #  that order, which is the key scripts/agent_env.sh names its
+      #  exports by.  The shell exports it, so the helper can tell this
+      #  checkout's environment on PATH from another checkout's.
+      environmentKey = builtins.substring 0 16 (
+        builtins.hashString "sha256" (
+          builtins.readFile ./flake.nix + builtins.readFile ./flake.lock + pins
+        )
+      );
+
       #  Only the platforms the pins carry a checksum for.  A system with
       #  no recorded checksum is a system this shell cannot honestly
       #  provide, so it is absent rather than broken.
@@ -859,6 +870,7 @@
               export LANDIN_GNAT_HOME="${gnat}"
               export LANDIN_GPRBUILD_HOME="${gprbuild}"
               export LANDIN_BUILD_TAG=nix-${system}
+              export LANDIN_ENV_KEY=${environmentKey}
               #  On standard error: `nix develop -c cmd > file` runs this hook
               #  too, and the banner written to standard output went into the
               #  file -- a source rewritten that way was silently corrupted.

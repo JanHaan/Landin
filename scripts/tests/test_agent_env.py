@@ -57,6 +57,86 @@ class AgentEnvTest(unittest.TestCase):
                     self.assertEqual(sourced.returncode, 0, sourced.stderr)
                     self.assertEqual(sourced.stdout, path)
 
+    def key(self):
+        """This checkout's key, as the helper and flake.nix compute it."""
+        import hashlib
+        digest = hashlib.sha256()
+        for name in ("flake.nix", "flake.lock", "environments/pins.sh"):
+            digest.update((ROOT / name).read_bytes())
+        return digest.hexdigest()[:16]
+
+    def test_this_checkouts_shell_is_left_as_it_is(self):
+        #  The flake's shell exports its key; the helper computes the same.
+        flake = (ROOT / "flake.nix").read_text(encoding="utf-8")
+        self.assertIn("export LANDIN_ENV_KEY=${environmentKey}", flake)
+        with tempfile.TemporaryDirectory() as scratch:
+            path = self.path_with(Path(scratch),
+                                  ("python3", "gprbuild", "nix"))
+            for tag in ("nix-x86_64-linux", ""):
+                with self.subTest(tag=tag):
+                    completed = subprocess.run(
+                        [str(SCRIPT)], env={"PATH": path,
+                                            "LANDIN_ENV_KEY": self.key(),
+                                            "LANDIN_BUILD_TAG": tag},
+                        capture_output=True, text=True, timeout=60,
+                        check=True)
+                    self.assertEqual(completed.stdout, "/dev/null\n")
+                    self.assertEqual(completed.stderr, "")
+
+    def test_another_checkouts_shell_gets_this_ones(self):
+        #  A session started in one checkout has that checkout's shell on
+        #  PATH in every worktree: the helper says so, and prints this
+        #  checkout's exports, every one of them, the build tag the other
+        #  shell set to the same value among them.
+        for caller in ({"LANDIN_BUILD_TAG": "nix-x86_64-linux"},
+                       {"LANDIN_BUILD_TAG": "nix-x86_64-linux",
+                        "LANDIN_ENV_KEY": "0123456789abcdef"}):
+            with self.subTest(caller=caller), \
+                    tempfile.TemporaryDirectory() as scratch:
+                scratch = Path(scratch)
+                tools = scratch / "bin"
+                store = scratch / "store/bin"
+                tools.mkdir()
+                store.mkdir(parents=True)
+                path = self.path_with(tools, ("python3", "gprbuild"))
+                for tool in ("env", "mkdir", "mktemp", "mv", "rm", "sed"):
+                    os.symlink(shutil.which(tool), tools / tool)
+                nix = tools / "nix"
+                nix.write_text(
+                    "#!/bin/sh\n"
+                    "cat <<'EOF'\n"
+                    "PATH=${PATH:-}\n"
+                    "nix_saved_PATH=\"$PATH\"\n"
+                    f"PATH='{store}'\n"
+                    "export PATH\n"
+                    "LANDIN_BUILD_TAG=nix-x86_64-linux\n"
+                    "export LANDIN_BUILD_TAG\n"
+                    f"LANDIN_ENV_KEY={self.key()}\n"
+                    "export LANDIN_ENV_KEY\n"
+                    "PATH=\"$PATH${nix_saved_PATH:+:$nix_saved_PATH}\"\n"
+                    "EOF\n")
+                nix.chmod(0o755)
+                completed = subprocess.run(
+                    [str(SCRIPT)],
+                    env={"PATH": path, "HOME": str(scratch),
+                         "XDG_CACHE_HOME": str(scratch / "cache"), **caller},
+                    capture_output=True, text=True, timeout=60)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertIn("the shell of another flake.nix, flake.lock or"
+                              " pins.sh", completed.stderr)
+                self.assertIn(self.key(), completed.stderr)
+                printed = Path(completed.stdout.strip())
+                self.assertEqual(printed.parent,
+                                 scratch / "cache/landin/agent-env")
+                sourced = subprocess.run(
+                    ["sh", "-c", '. "$0" && printf "%s %s %s" "$PATH"'
+                     ' "$LANDIN_BUILD_TAG" "$LANDIN_ENV_KEY"', str(printed)],
+                    env={"PATH": path, **caller}, capture_output=True,
+                    text=True, timeout=60)
+                self.assertEqual(sourced.returncode, 0, sourced.stderr)
+                self.assertEqual(sourced.stdout.split(" "), [
+                    f"{store}:{path}", "nix-x86_64-linux", self.key()])
+
 
 class SessionStartHookTest(unittest.TestCase):
     """The hook docs/process.md gives appends the environment once.
