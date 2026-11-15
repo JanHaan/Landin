@@ -11,18 +11,33 @@ selected levels describe the actual ESP32 and ESP32-S3 configurations.
 Build `refine` in the [pinned environment](../../docs/process.md#local-agent-feedback)
 and install the [shared cross-target tools](../cortex-m/README.md).
 `--tools DIRECTORY` names the installation and selects its QEMU and wrappers.
-Complete corpus lanes require that argument. The runner verifies the lock,
+A corpus run is `COMPLETE` only with that argument. The runner verifies the lock,
 archive pin, whole installation hashes before and after execution, binary
-versions and both configuration multilibs. Focused development runs may
+versions and both configuration multilibs. Other runs may
 instead pass `--qemu PATH` and use wrappers from `PATH`; they record those
-actual tool hashes and versions. Output directories must
+actual tool hashes and versions, and a whole corpus run that way reports
+`UNLOCKED` rather than `COMPLETE`. Output directories must
 be new; every command, assembly image, linker script, helper-library hash,
 disassembly, remote-protocol transcript and verdict stays in that directory.
 On NixOS, run them from `nix develop`: with `--tools`, a runner on
 NixOS's stub loader runs itself again inside the flake's `landin-fhs`, as
 the [Cortex-M lanes](../cortex-m/README.md#on-nixos) do, and QEMU loads the
-installation's runtime libraries there. A focused run with `--qemu` alone
-runs the QEMU it is given as it is.
+installation's runtime libraries there. A run with `--qemu` alone
+runs the QEMU it is given as it is, so on NixOS the installation's QEMU
+runs only under `landin-fhs`, with the installation's libraries named, as
+`--tools` would name them:
+
+```sh
+export PATH="$TOOLS/xtensa-esp-elf/bin:$PATH"
+export LD_LIBRARY_PATH="$TOOLS/root/usr/lib/x86_64-linux-gnu:$TOOLS/root/usr/lib/x86_64-linux-gnu/pulseaudio"
+landin-fhs python3 environments/xtensa/corpus.py \
+  --refine "$REFINE" --qemu "$TOOLS/qemu-xtensa/bin/qemu-system-xtensa" \
+  --output "$OUT/unlocked" --chip esp32 --all
+```
+
+A tool that cannot start is refused as one that did not run, naming that
+route when NixOS's stub loader refused it; one that runs and answers with
+another version is a version mismatch.
 
 Run selected native controls, including an independent nonzero-status
 control and an intentional trap control:
@@ -57,8 +72,15 @@ The corpus adapter reads the sole shared
 [inventory](../../compiler/tests/cortex-m/corpus.json) and its retained
 [counterparts](../../compiler/tests/cortex-m/counterparts.json). It executes
 four standard optimization/specialization profiles and the additional
-specialization profiles requested by fixture metadata. Exact focused runs
-report `FILTERED`:
+specialization profiles requested by fixture metadata. A run says its scope
+in its first and last lines and in `result.json`: `FILTERED` for exact
+`--fixture` or `--profile` selectors, which may be written `none/off` as
+the log prints them, `UNLOCKED` for every row without `--tools`, and
+`COMPLETE` for every row at every profile with the locked tools.
+`--memory-profile` defaults to `sim`, the profile the gate runs; with
+`chip` not every row fits the chips' own 128 KiB IRAM and DRAM,
+and a row that does not fit and records no limit fails saying which
+profile's map it overflowed and by how much, and that the gate runs `sim`:
 
 ```sh
 python3 environments/xtensa/corpus.py \
@@ -67,13 +89,21 @@ python3 environments/xtensa/corpus.py \
   --fixture runtime/fibre-join-first-failure --profile none-off
 ```
 
-A complete lane uses `--all` without fixture or profile selectors, and
-reports `COMPLETE`. Run both chips separately. Keep CPU headroom while the
+A complete lane uses `--all` and `--tools` without fixture or profile
+selectors, and reports `COMPLETE`. Run both chips separately. Keep CPU headroom while the
 complete corpus runs: the oracle has a 20-second wall-clock guard, and the
 exhaustive memory-alignment fixture can exceed it when CPU-heavy closing
 jobs saturate the host. Preserve default workers; schedule those jobs
-separately. A timeout retains its stop/register evidence and remains failed
-until investigated; it supplies no source or capacity exemption.
+separately. A guest that ran and did not stop within that guard is a
+`guest timed out` failure, which retains its stop/register evidence in
+`timeout-remote.json` and remains failed until investigated; it supplies no
+source or capacity exemption. A guest that never started, its PC and
+address registers still those it held at reset when the guard interrupted
+it, as on a host too loaded to schedule it, is started again once, each
+start's transcript and QEMU log kept as `not-started-N.json` and
+`qemu-N.log`; a run that started the second time records `"starts": 2` in
+its observation, and one that started neither time fails as `the guest
+never started`, which is the host's, not the program's.
 `result.json` contains the
 aggregate verdict; each selected case has `verdict.json` and its build and
 execution evidence. Source refusals require the inventory's exact diagnostic
@@ -98,6 +128,27 @@ rendered for the selected chip and memory profile and names
 python3 environments/xtensa/corpus.py \
   --refine "$REFINE" --tools "$TOOLS" --output "$OUT/corpus-esp32" \
   --chip esp32 --memory-profile=sim --all
+```
+
+`--program PATH` runs a program of your own instead of the corpus, a `.ldn`
+file or a module directory, with `--root DIR` for the roots it imports
+from, at the corpus's four profiles, or the `--profile`s named, as the
+[Cortex-M corpus's](../cortex-m/README.md) `--program` does. It is staged
+as a corpus fixture is, with the lane's description and the oracle
+wrapper, which calls its `main` for an `i32`, as a corpus fixture's
+`public main: () -> (code: i32)` is called, and each run prints
+what `main` returned or where the program trapped; no oracle is held. A
+program that does not fit the profile's map says by how much, and the run
+fails only when a profile could not be built or run. Repeat `--program` to
+run several; two that share a file name are told apart by their
+directories. Its runs are no corpus evidence:
+
+```sh
+python3 environments/xtensa/corpus.py \
+  --refine "$REFINE" --tools "$TOOLS" --output "$OUT/mine" --chip esp32s3 \
+  --profile none-off --program compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn
+Xtensa programs of your own on esp32s3 at sim memory: not corpus evidence
+Xtensa program: main.ldn none/off returned 42
 ```
 
 The SIM profile declares 64 MiB of emulator RAM, separate code/data regions

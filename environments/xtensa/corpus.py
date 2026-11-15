@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Execute the existing freestanding inventory on one pinned Xtensa configuration."""
+"""Execute the existing freestanding inventory on one pinned Xtensa configuration,
+or with --program a program of your own."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -14,12 +15,17 @@ sys.path.insert(0, str(HERE))
 from environments.xtensa.backend import (COUNTERPARTS, INVENTORY, PROFILES,
     SPECIALIZATION_PROFILES, CommandFailed, Run, build, configuration, disposition, execute,
     inventory, metadata, sha, workers)  # noqa: E402
+from environments.xtensa.remote import observe  # noqa: E402
 from environments.xtensa.tools import Tools  # noqa: E402
 
 
 #  D986: what may stop a restriction, the shared inventory's own list.
 sys.path.insert(0, str(ROOT / 'environments/cortex-m'))
-from backend_corpus import STOPS, hosted_oracle  # noqa: E402
+from backend_corpus import STOPS, hosted_oracle, profile_name, program_names  # noqa: E402
+
+#  The memory profile the gate's corpus runs at, and so the default: the
+#  chips' own 128 KiB maps hold too little of the corpus to be its lane.
+GATE_MEMORY_PROFILE = 'sim'
 
 #  This target's own independent C controls, which an explanation of a
 #  restriction or refusal points to rather than Cortex-M's.
@@ -295,6 +301,19 @@ def selected_image_limit(run, row, error, chip, memory_profile):
     return result
 
 
+def capacity_advice(log, memory_profile):
+    """What a capacity-only link failure with no recorded limit says: the
+    profile whose map it did not fit, and the gate's where that differs."""
+    if not capacity_only(log):
+        return ''
+    overflows = ', '.join('%s by %s bytes' % found for found in re.findall(
+        r"region `(\w+)' overflowed by (\d+) bytes", log)) or 'its stack reservation'
+    return ('; the image does not fit the %s memory profile\'s map: it overflows %s%s'
+            % (memory_profile, overflows,
+               '' if memory_profile == GATE_MEMORY_PROFILE else
+               '; the gate\'s corpus runs --memory-profile=' + GATE_MEMORY_PROFILE))
+
+
 def compile_advice(text):
     """What to do about an execute row refine did not compile, from its log.
 
@@ -320,13 +339,35 @@ def compile_advice(text):
             % (', '.join(codes) or 'no code', json.dumps(codes)))
 
 
-def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memory_profile='chip'):
+def scope_of(selected, profiles, locked):
+    """The run's scope, as its head and last lines and result.json give it:
+    COMPLETE only for every row and profile with the locked tools."""
+    if selected or profiles:
+        return 'FILTERED', 'FILTERED: %s%s' % (', '.join(
+            ['--fixture ' + one for one in selected] + ['--profile ' + one for one in profiles]),
+            '' if locked else ', with tools no --tools lock selected')
+    if not locked:
+        return 'UNLOCKED', ('UNLOCKED: every row, with tools no --tools lock selected;'
+                            ' not COMPLETE')
+    return 'COMPLETE', 'COMPLETE: every row at every profile, with the locked tools'
+
+
+def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(),
+                      memory_profile=GATE_MEMORY_PROFILE, locked=True):
     original = rows()
     if set(selected) - original.keys():
-        raise RuntimeError('unknown exact fixture: ' + ', '.join(set(selected) - original.keys()))
+        raise RuntimeError('unknown exact fixture: ' + ', '.join(sorted(
+            set(selected) - original.keys())) + '; a fixture is a directory under'
+            ' compiler/tests/fixtures with a row in ' + str(INVENTORY.relative_to(ROOT))
+            + ', such as runtime/word-count; to run a program of your own, pass'
+            ' --program PATH')
+    profiles = [profile_name(one) for one in profiles]
     known = {'-'.join(p): p for p in PROFILES + SPECIALIZATION_PROFILES}
     if set(profiles) - known.keys():
-        raise RuntimeError('unknown exact profile: ' + ', '.join(set(profiles) - known.keys()))
+        raise RuntimeError('unknown exact profile: ' + ', '.join(sorted(
+            set(profiles) - known.keys())) + '; the profiles are ' + ', '.join(known))
+    label, said = scope_of(selected, profiles, locked)
+    print('Xtensa corpus %s at %s memory: %s' % (chip, memory_profile, said), flush=True)
     output.mkdir(parents=True, exist_ok=False)
     work = []
     for name, shared in original.items():
@@ -380,6 +421,8 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memo
                     said = str(error)
                     if isinstance(error, CommandFailed) and error.name == 'compile':
                         said += compile_advice(Path(error.log).read_text())
+                    elif isinstance(error, CommandFailed) and error.name == 'link':
+                        said += capacity_advice(Path(error.log).read_text(), memory_profile)
                     record.update(status='failed', error=said)
                 else:
                     record.update(status='passed', **limit)
@@ -396,7 +439,7 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memo
             print('Xtensa corpus %s %s %s/%s %s' % (
                 chip, result['fixture'], result['optimize'], result['specialize'],
                 result.get('verdict', 'FAILED: ' + result.get('error', ''))), flush=True)
-    summary = {'scope': 'FILTERED' if selected or profiles else 'COMPLETE',
+    summary = {'scope': label, 'scope_detail': said, 'locked_tools': locked,
                'chip': chip, 'compiler_sha256': sha(refine),
                'configuration': configuration(chip, memory_profile),
                'memory_profile': memory_profile,
@@ -407,32 +450,145 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memo
                                   for kind in sorted({r.get('verdict', 'failed') for r in results})},
                'results': results}
     (output / 'result.json').write_text(json.dumps(summary, indent=2) + '\n')
+    failed = sum(r['status'] != 'passed' for r in results)
+    print('Xtensa corpus %s at %s memory %s%s: %s' % (
+        chip, memory_profile, summary['status'],
+        '' if not failed else ', %d of %d failed' % (failed, len(results)), said), flush=True)
+    return summary
+
+
+def describe_run(values):
+    """What a program of one's own did, from the cells the oracle read."""
+    if values.get('_landin_firmware_trap_count'):
+        return 'trapped: cause %d at %#x%s' % (
+            values['_landin_firmware_trap_cause'], values['_landin_firmware_trap_pc'],
+            ', an ILL trap' if values.get('trap_instruction') == '000000' else '')
+    status = values['_landin_xtensa_fixture_status']
+    return 'returned %d' % (status - (1 << 32) if status & 0x80000000 else status)
+
+
+def observe_programs(output, refine, qemu, chip, programs, profiles=(),
+                     memory_profile=GATE_MEMORY_PROFILE, roots=()):
+    """Run each of PROGRAMS, a source file or a module directory, at
+    PROFILES on CHIP and say what it returned or where it trapped, as the
+    Cortex-M corpus's --program does.
+
+    No oracle is held: the status is printed, so a measured value comes back
+    as a value; an image the profile's map cannot hold says by how much.
+    The run fails only when a profile could not be built or run.  Nothing
+    here is corpus evidence."""
+    profiles = [profile_name(one) for one in profiles]
+    known = {'-'.join(p): p for p in PROFILES + SPECIALIZATION_PROFILES}
+    if set(profiles) - known.keys():
+        raise RuntimeError('unknown profile: ' + ', '.join(sorted(
+            set(profiles) - known.keys())) + '; the profiles are ' + ', '.join(known))
+    paths = [Path(program).resolve(strict=True) for program in programs]
+    print('Xtensa programs of your own on %s at %s memory: not corpus evidence'
+          % (chip, memory_profile), flush=True)
+    output.mkdir(parents=True, exist_ok=False)
+    flags = ['--root=' + str(Path(root).resolve()) for root in roots]
+    results = []
+    for path, name in zip(paths, program_names(paths)):
+        shown = path.name if name == path.stem else name
+        for opt, spec in [known[one] for one in profiles] or PROFILES:
+            run = Run(output / (name + '--' + opt + '-' + spec))
+            result = {'program': str(path), 'name': shown, 'chip': chip, 'optimize': opt,
+                      'specialize': spec, 'memory_profile': memory_profile}
+            try:
+                try:
+                    elf, named = build(run, refine, [*flags, str(path)], chip, opt, spec,
+                                       memory_profile)
+                except CommandFailed as error:
+                    advice = (capacity_advice(Path(error.log).read_text(), memory_profile)
+                              if error.name == 'link' else '')
+                    if not advice:
+                        raise
+                    result.update(status='does not fit', limit=advice[2:])
+                    said = advice[2:].replace('the image ', '', 1)
+                else:
+                    seen = observe(qemu, chip, elf, named, run.out,
+                                   memory_profile=memory_profile)
+                    (run.out / 'observation.json').write_text(json.dumps(seen, indent=2) + '\n')
+                    result.update(status='ran', values=seen['values'], image_sha256=sha(elf))
+                    said = describe_run(seen['values'])
+            except Exception as error:
+                said = 'FAILED: ' + str(error)
+                if isinstance(error, CommandFailed) and error.name == 'compile':
+                    said += '; ' + next((line.strip() for line in Path(error.log).read_text()
+                                         .splitlines() if line.startswith('error')), '')
+                result.update(status='failed', error=said[len('FAILED: '):])
+            print('Xtensa program: %s %s/%s %s' % (shown, opt, spec, said), flush=True)
+            (run.out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+            results.append(result)
+    failed = [r for r in results if r['status'] == 'failed']
+    summary = {'scope': 'programs of your own, not corpus evidence', 'chip': chip,
+               'memory_profile': memory_profile,
+               'configuration': configuration(chip, memory_profile),
+               'compiler_sha256': sha(refine),
+               'status': 'failed' if failed else 'passed', 'results': results}
+    (output / 'result.json').write_text(json.dumps(summary, indent=2) + '\n')
+    if failed:
+        print('%d of the %d runs failed: %s' % (len(failed), len(results), ', '.join(
+            '%s %s/%s' % (r['name'], r['optimize'], r['specialize']) for r in failed)),
+            flush=True)
     return summary
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog='A run of every row at every profile with --tools is COMPLETE; one with'
+               ' --fixture or --profile is FILTERED, and one with --qemu and no --tools is'
+               ' UNLOCKED, each said in its first and last lines and in result.json.'
+               ' --program runs a source file or module directory of your own at the'
+               ' corpus\'s profiles, or the --profiles named, and prints what it returned'
+               ' or where it trapped; no oracle is held.')
     parser.add_argument('--refine', required=True, type=Path)
-    parser.add_argument('--qemu', type=Path)
-    parser.add_argument('--tools', type=Path)
+    parser.add_argument('--qemu', type=Path,
+                        help='the QEMU a run without --tools uses, its tools from PATH')
+    parser.add_argument('--tools', type=Path,
+                        help='the locked installation, which selects QEMU and the tools')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--chip', choices=('esp32', 'esp32s3'), required=True)
-    parser.add_argument('--memory-profile', choices=('chip', 'sim'), default='chip')
-    parser.add_argument('--fixture', action='append', default=[])
-    parser.add_argument('--profile', action='append', default=[])
-    parser.add_argument('--all', action='store_true')
+    parser.add_argument('--memory-profile', choices=('chip', 'sim'),
+                        default=GATE_MEMORY_PROFILE,
+                        help='sim, the default and the gate\'s, is the selected CPU with'
+                             ' virtual RAM; chip is the chip\'s own 128 KiB maps')
+    parser.add_argument('--fixture', action='append', default=[],
+                        help='a fixture directory under compiler/tests/fixtures with a row'
+                             ' in the inventory, such as runtime/word-count; repeat for more')
+    parser.add_argument('--profile', action='append', default=[],
+                        help='none-off, size-off, size-auto, speed-auto, none-all or'
+                             ' speed-all; none/off as the log prints it is the same profile;'
+                             ' repeat for more')
+    parser.add_argument('--all', action='store_true',
+                        help='every row of the inventory')
+    parser.add_argument('--program', type=Path, action='append', default=[],
+                        help='a .ldn file or module directory to run instead of the corpus;'
+                             ' repeat for more')
+    parser.add_argument('--root', action='append', default=[],
+                        help='a module root for --program, passed to refine')
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
     import refine_revision
     refine_revision.warn(args.refine)  # is it this checkout's?
-    if not args.all and not args.fixture:
-        parser.error('select exact --fixture names or request --all')
-    if args.all and not args.fixture and not args.profile and args.tools is None:
-        parser.error('a COMPLETE lane requires --tools DIRECTORY with its locked installation')
+    if args.program and (args.all or args.fixture):
+        parser.error('--program runs programs of your own; --fixture and --all select'
+                     ' corpus rows')
+    if args.root and not args.program:
+        parser.error('--root is a module root for --program; a corpus row names its own')
+    if not args.all and not args.fixture and not args.program:
+        parser.error('select exact --fixture names, request --all, or run --program PATH')
     tools = Tools(args.tools, args.qemu)
     try:
-        result = execute_inventory(args.output, args.refine.resolve(), tools.qemu,
-                                   args.chip, args.fixture, args.profile, args.memory_profile)
+        if args.program:
+            result = observe_programs(args.output, args.refine.resolve(), tools.qemu,
+                                      args.chip, args.program, args.profile,
+                                      args.memory_profile, args.root)
+        else:
+            result = execute_inventory(args.output, args.refine.resolve(), tools.qemu,
+                                       args.chip, args.fixture, args.profile,
+                                       args.memory_profile, locked=tools.root is not None)
     finally:
         if args.output.is_dir():
             tools.finish(args.output)

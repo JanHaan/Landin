@@ -59,8 +59,18 @@ class Tools:
 
     def check(self, name, path, arguments, expected):
         result = subprocess.run([str(path), *arguments], text=True, capture_output=True, timeout=30)
-        if result.returncode or expected not in result.stdout:
-            raise RuntimeError(name + ' version mismatch: ' + result.stdout + result.stderr)
+        said = (result.stdout + result.stderr).strip()
+        if result.returncode:
+            #  NixOS's stub loader refuses the locked Debian binaries; a run
+            #  with --tools runs itself again inside landin-fhs, and one with
+            #  --qemu alone runs the binary it is given as it is.
+            raise RuntimeError('%s did not run: %s exited %d: %s%s' % (
+                name, path, result.returncode, said,
+                '\nOn NixOS pass --tools DIRECTORY, whose run goes through landin-fhs, or'
+                ' run this command under landin-fhs' if 'stub-ld' in said else ''))
+        if expected not in result.stdout:
+            raise RuntimeError('%s version mismatch: %s says %r, and the pin is %s'
+                               % (name, path, said, expected))
         self.record['tools'][name] = {'path': str(path), 'sha256': sha(path),
                                       'version': result.stdout.strip()}
 

@@ -79,9 +79,65 @@ class Remote:
         return int.from_bytes(self.memory(address, 4), 'little')
 
 
+class NotStarted(RuntimeError):
+    """The guest executed nothing before the oracle's limit: its registers,
+    the PC included, are those it was given at reset."""
+
+
+#  How many times a guest that never started is started again before the
+#  run is failed as one that cannot start.
+STARTS = 2
+
+
+#  The bytes of the remote protocol's `g` packet that hold the PC and the
+#  64 physical address registers, ar0-ar63, which come first in both pinned
+#  core-esp32{,s3}/gdb-config.inc.c maps; the special registers after them
+#  are not judged.
+CORE_REGISTER_BYTES = 65 * 4
+
+
+def unstarted(initial, registers):
+    """Whether REGISTERS, the `g` packet read once the limit interrupted the
+    guest, holds the PC and address registers of INITIAL, the packet read
+    before it was continued: nothing ran.  A guest that hangs has left its
+    reset PC and set its stack, since the firmware entry sets up its window
+    and stack before it reaches any loop of its own."""
+    if not initial or not registers:
+        return False
+    before, after = bytes.fromhex(initial), bytes.fromhex(registers)
+    return (len(before) >= CORE_REGISTER_BYTES
+            and before[:CORE_REGISTER_BYTES] == after[:CORE_REGISTER_BYTES])
+
+
 def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
-            memory_profile='chip'):
-    """Stop at wrapper completion or firmware failure; read independent cells."""
+            memory_profile='chip', starts=STARTS):
+    """Stop at wrapper completion or firmware failure; read independent cells.
+
+    A guest that never started, on a host too loaded to schedule it before
+    the limit, is started again, up to STARTS times in all, each start's
+    evidence kept; one that started and did not stop is a guest timeout."""
+    for attempt in range(1, starts + 1):
+        try:
+            result = observe_once(qemu, chip, elf, symbols, output, timeout,
+                                  extra_breakpoint, memory_profile)
+        except NotStarted as error:
+            for name in ('qemu.log', 'not-started.json'):
+                if (output / name).exists():
+                    (output / name).rename(output / name.replace('.', '-%d.' % attempt, 1))
+            if attempt == starts:
+                raise RuntimeError(
+                    'the guest never started: %s, on each of %d starts; that is a host too'
+                    ' loaded to run it, not a guest that hangs; inspect %s'
+                    % (error, starts, ', '.join('not-started-%d.json' % one
+                                                for one in range(1, starts + 1)))) from None
+        else:
+            result['starts'] = attempt
+            return result
+
+
+def observe_once(qemu, chip, elf, symbols, output, timeout, extra_breakpoint,
+                 memory_profile):
+    """One start of `observe`'s guest; NotStarted when nothing ran."""
     listener = socket.socket()
     listener.bind(('127.0.0.1', 0))
     listener.listen(1)
@@ -103,6 +159,8 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
         listener.close()
         connection = None
         remote = None
+        initial = None
+        continued = False
         try:
             connection = socket.create_connection(('127.0.0.1', port), timeout=timeout)
             # RSP sends a one-byte ACK immediately before the next request.
@@ -112,6 +170,7 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
             remote = Remote(connection)
             remote.command('qSupported')
             startup = None
+            initial = remote.command('g')
             if memory_profile == 'sim':
                 # The generic loader selects e_entry on CPU reset; SIM's
                 # -kernel loader loses that selection to its later reset.
@@ -123,10 +182,10 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
                 entry = int.from_bytes(header[24:28], 'little')
                 if entry != symbols['_landin_firmware_entry']:
                     raise RuntimeError('SIM ELF entry differs from the emitted firmware entry')
-                initial = int.from_bytes(bytes.fromhex(remote.command('g'))[:4], 'little')
-                if initial != entry:
+                initial_pc = int.from_bytes(bytes.fromhex(initial)[:4], 'little')
+                if initial_pc != entry:
                     raise RuntimeError('the generic loader did not select the SIM ELF entry')
-                startup = {'initial_pc': initial, 'entry_pc': entry, 'selected_pc': initial,
+                startup = {'initial_pc': initial_pc, 'entry_pc': entry, 'selected_pc': initial_pc,
                            'method': 'generic ELF loader reset'}
             stop = symbols['_landin_firmware_stopped']
             if remote.command('Z0,%x,3' % stop) != 'OK':
@@ -141,6 +200,7 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
             guard = bytes.fromhex('3cc35aa5') * 4
             if remote.command('M%x,%x:%s' % (bottom, len(guard), guard.hex())) != 'OK':
                 raise RuntimeError('QEMU refused the stack guard write')
+            continued = True
             stopped = remote.command('c')
             if not stopped.startswith(('S05', 'T05')):
                 raise RuntimeError('QEMU stopped unexpectedly: ' + stopped)
@@ -179,13 +239,35 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
                 raise RuntimeError('unexpected guest stop PC: ' + hex(pc))
             return result
         except TimeoutError:
-            if remote is not None:
-                connection.sendall(b'\x03')
-                remote.reply('interrupt after timeout')
-                remote.command('g')
+            if remote is None:
+                raise RuntimeError('QEMU did not accept the remote-protocol connection in %d'
+                                   ' seconds; inspect qemu.log' % timeout) from None
+            if not continued:
                 (output / 'timeout-remote.json').write_text(
                     json.dumps(remote.transcript, indent=2) + '\n')
-            raise RuntimeError('guest timed out; inspect timeout-remote.json')
+                raise RuntimeError('QEMU did not answer the remote protocol in %d seconds'
+                                   ' before the guest was continued; inspect'
+                                   ' timeout-remote.json and qemu.log' % timeout) from None
+            try:
+                connection.sendall(b'\x03')
+                remote.reply('interrupt after timeout')
+                registers = remote.command('g')
+            except TimeoutError:
+                (output / 'timeout-remote.json').write_text(
+                    json.dumps(remote.transcript, indent=2) + '\n')
+                raise RuntimeError('QEMU answered neither the guest\'s stop nor an interrupt'
+                                   ' in %d seconds; inspect timeout-remote.json and qemu.log'
+                                   % timeout) from None
+            if not unstarted(initial, registers):
+                (output / 'timeout-remote.json').write_text(
+                    json.dumps(remote.transcript, indent=2) + '\n')
+                raise RuntimeError('guest timed out: it ran %d seconds without stopping;'
+                                   ' inspect timeout-remote.json' % timeout) from None
+            (output / 'not-started.json').write_text(
+                json.dumps(remote.transcript, indent=2) + '\n')
+            raise NotStarted('after %d seconds its PC is still its reset PC %#x and no'
+                             ' address register has changed'
+                             % (timeout, int.from_bytes(bytes.fromhex(initial)[:4], 'little')))
         finally:
             if connection is not None:
                 connection.close()
