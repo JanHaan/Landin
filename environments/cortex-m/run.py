@@ -529,6 +529,8 @@ def main():
     if args.part:
         record['part'] = args.part
     run = Run(out, tools)
+    #  The scope first, as the last line gives it too.
+    print('Cortex-M probes: ' + scope, flush=True)
     try:
         run.execute(args.refine, lanes)
         changed = changed_inputs(record['inputs'], probe_inputs(HERE))

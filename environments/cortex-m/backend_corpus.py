@@ -833,10 +833,11 @@ def program_names(programs):
             for index, name in enumerate(names, start=1)]
 
 
-def observe(output, tools, refine, programs, profiles, level='armv6-m', roots=(),
+def observe(output, tools, refine, programs, profiles, levels=('armv6-m',), roots=(),
             c_sources=()):
     """Run each of PROGRAMS, a source file or a module directory, at
-    PROFILES on the constrained reference and say what it returned or
+    PROFILES and at each of LEVELS, on that level's machine and map, the
+    constrained reference's for armv6-m, and say what it returned or
     where it trapped.
 
     No oracle is held: the status is printed, with the image against the
@@ -848,21 +849,32 @@ def observe(output, tools, refine, programs, profiles, level='armv6-m', roots=()
     """
     if isinstance(programs, (str, Path)):
         programs = [programs]
+    if isinstance(levels, str):
+        levels = [levels]
+    unknown = sorted(set(levels) - set(LEVELS))
+    require(not unknown, 'unknown level %s; the levels are %s'
+            % (', '.join(unknown), ', '.join(sorted(LEVELS))))
+    #  Each level once, in the order given.
+    levels = list(dict.fromkeys(levels))
     paths = [Path(program).resolve(strict=True) for program in programs]
     require(not c_sources or len(paths) == 1,
             '--c-source gives the C peers of one program; pass one --program with them')
     peers = ProgramPeers(c_sources) if c_sources else None
+    print('cortex programs of your own at %s: not corpus evidence' % ', '.join(levels),
+          flush=True)
     results = []
     for path, name in zip(paths, program_names(paths)):
-        results += observe_one(output, tools, refine, path, name, profiles, level, roots,
-                               peers)
+        for level in levels:
+            results += observe_one(output, tools, refine, path, name, profiles, level, roots,
+                                   peers)
     (output / 'result.json').write_text(json.dumps(
         {'scope': 'programs of your own, not corpus evidence', 'compiler_sha256': sha(refine),
          'results': results}, indent=2) + '\n')
     failed = [r for r in results if r['status'] == 'failed']
     require(not failed, '%d of the %d runs failed: %s' % (
         len(failed), len(results), ', '.join(
-            '%s %s/%s' % (r['name'], r['optimize'], r['specialize'])
+            '%s %s/%s%s' % (r['name'], r['optimize'], r['specialize'],
+                            '' if len(levels) == 1 else ' at ' + r['level'])
             for r in failed)))
     return results
 
@@ -874,6 +886,9 @@ def observe_one(output, tools, refine, path, name, profiles, level, roots, peers
     #  Its file name, or the run's own name where that is not the file's
     #  stem: two programs given at once that share one.
     shown = path.name if name == path.stem else name
+    #  A level other than the default is named in each line, as a corpus
+    #  line names it, so runs at several levels are told apart.
+    at = '' if level == 'armv6-m' else ' ' + level
     results = []
     for opt, spec in profiles:
         out = output / (name + '--' + opt + '-' + spec
@@ -893,7 +908,8 @@ def observe_one(output, tools, refine, path, name, profiles, level, roots, peers
                 limit = image_limit(run, {'profile_limit': 'selected-image'}, error,
                                     derived(run, refine, LEVELS[level]['profile']), level)
                 result.update(status='does not fit', limit=limit)
-                text = corpus_line(dict(limit, fixture=str(path), optimize=opt, specialize=spec))
+                text = corpus_line(dict(limit, fixture=str(path), optimize=opt, specialize=spec,
+                                        **({'level': level} if at else {})))
                 print(text.replace('cortex corpus: ', 'cortex program: ', 1), flush=True)
                 results.append(result)
                 continue
@@ -913,8 +929,8 @@ def observe_one(output, tools, refine, path, name, profiles, level, roots, peers
                 said = ('trapped: HardFault at %s%s' % (seen['stacked_pc'],
                         ', a udf #1 trap' if seen['udf_1'] else '')
                         if seen['trapped'] else 'returned %d (r12 %d)' % (seen['status'], seen['r12']))
-            print('cortex program: %s %s/%s %s: %s' % (
-                shown, opt, spec, said, '; '.join(
+            print('cortex program: %s %s/%s%s %s: %s' % (
+                shown, opt, spec, at, said, '; '.join(
                     clause for clause in (describe_sizes(result['image']),
                                           describe_stack(result.get('stack')),
                                           describe_routines(result['image']))
@@ -922,7 +938,7 @@ def observe_one(output, tools, refine, path, name, profiles, level, roots, peers
         except Exception as error:
             said = str(error)
             result.update(status='failed', error=said)
-            print('cortex program: %s %s/%s FAILED: %s' % (shown, opt, spec, said),
+            print('cortex program: %s %s/%s%s FAILED: %s' % (shown, opt, spec, at, said),
                   flush=True)
         results.append(result)
     return results
@@ -945,6 +961,10 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
     require(not unknown, 'unknown exact corpus case %s: a case is a fixture directory under'
             ' compiler/tests/fixtures with a row in %s, such as runtime/word-count; to run a'
             ' program of your own, pass --program PATH' % (', '.join(unknown), INVENTORY))
+    #  A run narrower than the default says so first, and again last.
+    narrowed = scope_line(selected, profiles, lane)
+    if narrowed:
+        print(narrowed, flush=True)
     #  Every profile the corpus links with, derived once by refine: the
     #  reference's, which the corpus executes, and each other described
     #  device's, which a limited verdict is linked again against.
@@ -1090,15 +1110,23 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
         '  %s %s/%s: %s' % (r['fixture'], r['optimize'], r['specialize'], r['error'])
         for r in failed)))
     require(not stale, 'Cortex corpus records image limits no profile met:\n' + '\n'.join(stale))
-    if selected or profiles:
-        print('FILTERED: this corpus run selected %s; it judges no stale limit and is not'
-              ' the complete inventory' % ', '.join(
-                  ['--case ' + one for one in selected] + ['--profile ' + one for one in profiles]),
-              flush=True)
-    elif lane is not None:
-        print('this corpus run is every row on the %s lane alone, at %s; the default run'
-              ' judges its image limits' % (lane, LANES[lane]), flush=True)
+    if narrowed:
+        print(narrowed, flush=True)
     return summary
+
+
+def scope_line(selected, profiles, lane):
+    """What a corpus run narrower than the default says first and last, or
+    None for the default run."""
+    if selected or profiles:
+        return ('FILTERED: this corpus run selected %s; it judges no stale limit and is not'
+                ' the complete inventory' % ', '.join(
+                    ['--case ' + one for one in selected]
+                    + ['--profile ' + one for one in profiles]))
+    if lane is not None:
+        return ('this corpus run is every row on the %s lane alone, at %s; the default run'
+                ' judges its image limits' % (lane, LANES[lane]))
+    return None
 
 
 def level_names():
@@ -1117,8 +1145,9 @@ def main():
                ' profiles on the constrained reference, or with --level on that level\'s'
                ' machine and map, and prints what it returned, or where it trapped, with its'
                ' image against the map and the stack its run was seen to use; no oracle is'
-               ' held. Repeat it to run several. --level takes the corpus\'s names, which'
-               ' are not all refine\'s: see --level.')
+               ' held. Repeat it to run several, and --level to run each at several'
+               ' levels. --level takes the corpus\'s names, which are not all refine\'s:'
+               ' see --level.')
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
@@ -1136,10 +1165,11 @@ def main():
     parser.add_argument('--c-source', type=Path, action='append', default=[],
                         help='a C source built by the corpus\'s C contract (D985) and linked'
                              ' with the one --program; repeat for more')
-    parser.add_argument('--level', default='armv6-m', choices=sorted(LEVELS),
-                        help='the level --program is built and run at, on that level\'s'
+    parser.add_argument('--level', action='append', default=[], choices=sorted(LEVELS),
+                        help='a level --program is built and run at, on that level\'s'
                              ' machine and map, by the corpus\'s name for it, which says'
-                             ' the lane\'s float unit too; refine compile --level= takes '
+                             ' the lane\'s float unit too; repeat for more, armv6-m when'
+                             ' none is given; refine compile --level= takes '
                              + level_names())
     parser.add_argument('--lane', choices=sorted(LANES),
                         help='run every inventory row alone on this emulator lane, at its'
@@ -1161,6 +1191,10 @@ def main():
     if args.program and args.lane:
         parser.error('--program runs programs of your own, at --level; --lane runs the'
                      ' inventory on a lane')
+    if args.level and not args.program:
+        parser.error('--level is the level --program runs at; the corpus runs each row at'
+                     ' armv6-m and at its fixture\'s levels:, and --lane runs every row on'
+                     ' one lane')
     if args.c_source and len(args.program) != 1:
         parser.error('--c-source gives the C peers of one program; pass exactly one --program'
                      ' with them')
@@ -1174,7 +1208,7 @@ def main():
         require(set(chosen) <= set(known), 'unknown profile %s; the profiles are %s'
                 % (', '.join(sorted(set(chosen) - set(known))), ', '.join(known)))
         observe(out, args.tools.resolve(), args.refine.resolve(), args.program,
-                [known[p] for p in chosen] or PROFILES, args.level or 'armv6-m', args.root,
+                [known[p] for p in chosen] or PROFILES, args.level or ['armv6-m'], args.root,
                 args.c_source)
         return
     execute(out, args.tools.resolve(), args.refine.resolve(), args.case, args.profile,

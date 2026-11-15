@@ -250,8 +250,8 @@ lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `rv32-controls`,
 `sifive-e`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`
 and `evidence`; `mps2-an505`, `mps2-an500`, `esp32c3` and `sifive-e` are the
 corpus again on those lanes, and the two RV32 ones need `rv32-controls`
-(see [RV32 lanes](#rv32-lanes)). A run that selects lanes says `FILTERED` in its last line
-and its `result.json`, and is not the gate's run.
+(see [RV32 lanes](#rv32-lanes)). A run that selects lanes says `FILTERED` in its first and
+last lines and its `result.json`, and is not the gate's run.
 
 A run records the SHA-256 of its inputs before its lanes and compares them
 after: when one changed meanwhile it fails with "probe inputs changed while
@@ -803,7 +803,7 @@ which the corpus checks rather than assumes; an image past the harness's
 
 `--profile` takes `none-off` or `none/off`, as the corpus line prints it.
 A filtered run judges no limit stale, because the profile that still
-overflows may be one it did not run, and says `FILTERED` last.
+overflows may be one it did not run, and says `FILTERED` first and last.
 
 `--lane mps2-an505` or `--lane mps2-an500` runs every row alone on that
 lane, at its level and on its map: each `execute` row at every profile,
@@ -837,9 +837,15 @@ several programs in one invocation; two that share a file name are told
 apart by their directories. `--c-source FILE`, repeated, gives one
 program's C peers, built by the corpus's C contract (D985) with the
 program's directory on the include path and linked with it, so a C peer
-can be tried without a fixture or an inventory row. `--level` takes the
-corpus's names, which say a lane's float unit: `armv7e-m+fpv5-d16` here is
-`refine compile --level=armv7e-m`, and the others are refine's own.
+can be tried without a fixture or an inventory row. `--level` runs the
+programs on that level's machine and map, and takes the corpus's names,
+which say a lane's float unit: `armv7e-m+fpv5-d16` here is
+`refine compile --level=armv7e-m`, and the others are refine's own. Repeat
+it to run each program at several levels, `--level rv32imc --level
+rv32imac` for both RV32 lanes, each line naming a level other than
+`armv6-m`. It belongs to `--program` and is refused without it: the
+corpus runs each row at `armv6-m` and at its fixture's `levels:`, and
+`--lane` runs every row on one lane.
 
 A program that traps says `trapped: HardFault at` the faulting routine and
 line, and whether it was the UDF #1 a check emits; one that does not fit
@@ -1203,7 +1209,8 @@ python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_D
 `cache-sequence` and `example` once, and `boot`, the
 cold-booted image built twice, `interrupts`, `fibre`, `dma`, `machine`,
 `veneers`, `fallthrough`, `images`, `hole` and `byte` at each profile. A
-selection is marked `FILTERED` in its last line and its `result.json`.
+selection is marked `FILTERED` in its first and last lines and its
+`result.json`.
 
 The contract was checked against Arm's [ARMv6-M Architecture Reference Manual DDI0419E](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),
 [Cortex-M0 Devices Generic User Guide](https://documentation-service.arm.com/static/5ea6ce5e9931941038def8c1),
@@ -1374,7 +1381,17 @@ budget (D537) is the selected profile's.
 
 ```sh
 python3 environments/cortex-m/descriptions.py --refine PATH_TO_REFINE --output NEW_DIRECTORY
+python3 environments/cortex-m/descriptions.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --case microbit_text_in_ram
 ```
+
+`--case`, repeated, runs only the cases named, each the directory its run
+writes: a device of `descriptions.json`, such as `rp2040` or `esp32-c3`; an
+RV32 device's trap record, `esp32-c3-trap` or `riscv-reference-trap`; a RAM
+image, such as `microbit_text_in_ram`; or one of the contract controls,
+`contract`, `block-contract`, `stage-refusals` and
+`larger-than-the-reference`. `--help` lists them all. A selection is marked
+`FILTERED` in its first and last lines and its `result.json`; `run.py
+--lane=descriptions` runs every case.
 
 The lanes that stage their own library, `devices.py`, `driver.py` and
 `freestanding.py`, stage `platform/cortex_m/reference` beside the modules

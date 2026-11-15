@@ -862,6 +862,66 @@ class ProbeFailures(unittest.TestCase):
             [sys.executable, str(Path(backend_corpus.__file__)), '--help'],
             capture_output=True, text=True, check=True).stdout.split()))
 
+    def test_a_level_repeats_and_needs_a_program(self):
+        import subprocess
+        from unittest.mock import patch
+        import backend_corpus
+        ran = []
+        with tempfile.TemporaryDirectory() as directory:
+            program = Path(directory) / 'one.ldn'
+            program.write_text('')
+            with patch.object(backend_corpus, 'observe_one', side_effect=lambda *args:
+                              ran.append((args[4], args[6])) or []):
+                backend_corpus.observe(Path(directory), None, program, [program],
+                                       [('none', 'off')],
+                                       levels=['rv32imc', 'rv32imac', 'rv32imc'])
+            #  Each level once, in the order given, rather than the last alone.
+            self.assertEqual(ran, [('one', 'rv32imc'), ('one', 'rv32imac')])
+            with self.assertRaisesRegex(RuntimeError, 'unknown level armv9; the levels are'):
+                backend_corpus.observe(Path(directory), None, None, [program],
+                                       [('none', 'off')], levels=['armv9'])
+            #  Without --program a level would be ignored, so it is refused.
+            said = subprocess.run(
+                [sys.executable, str(Path(backend_corpus.__file__)), '--refine', 'refine',
+                 '--output', str(Path(directory) / 'out'), '--level', 'rv32imc'],
+                capture_output=True, text=True)
+            self.assertEqual(said.returncode, 2)
+            self.assertIn('--level is the level --program runs at', said.stderr)
+            self.assertFalse((Path(directory) / 'out').exists())
+        self.assertIsNone(backend_corpus.scope_line([], [], None))
+        self.assertTrue(backend_corpus.scope_line(['runtime/x'], [], None).startswith(
+            'FILTERED: this corpus run selected --case runtime/x'))
+
+    def test_a_descriptions_case_is_its_output_directory_and_a_selection_is_filtered(self):
+        from contextlib import ExitStack
+        from unittest.mock import patch
+        import descriptions
+        self.assertEqual(len(descriptions.CASES), len(set(descriptions.CASES)))
+        self.assertTrue({'rp2040', 'esp32-c3-trap', 'microbit_text_in_ram', 'contract',
+                         'larger-than-the-reference'} <= set(descriptions.CASES))
+        ran = []
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory)
+            refine = root / 'refine'
+            refine.write_text('')
+            for name in ('select', 'select_rv32', 'trap_record', 'ram_image', 'contract',
+                         'block_contract', 'stage_refusals', 'larger_than_the_reference'):
+                stack.enter_context(patch.object(
+                    descriptions, name, side_effect=lambda run, *args, n=name:
+                    ran.append((n, run.out.name)) or {}))
+            #  The contract controls are looked up when the suite runs.
+            parent = Run(root, root)
+            record = descriptions.execute_suite(
+                parent, refine, ['riscv-reference-trap', 'microbit_text_in_ram', 'contract'])
+            self.assertEqual(ran, [('trap_record', 'riscv-reference-trap'),
+                                   ('ram_image', 'microbit_text_in_ram'),
+                                   ('contract', 'contract')])
+            self.assertEqual(record['scope'], 'FILTERED: riscv-reference-trap,'
+                             ' microbit_text_in_ram, contract')
+            with self.assertRaisesRegex(RuntimeError, 'unknown descriptions case nowhere;'
+                                        ' the cases are rp2040'):
+                descriptions.execute_suite(Run(root / 'again', root), refine, ['nowhere'])
+
     def test_the_corpus_gives_each_routine_size(self):
         from backend import describe_routines, routine_sizes
         from backend_corpus import corpus_line

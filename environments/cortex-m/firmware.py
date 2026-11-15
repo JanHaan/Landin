@@ -1315,6 +1315,9 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     record = {'status': 'failed', 'tools': before,
               'scope': 'development compiler-owned firmware; not acceptance'}
+    if args.case:
+        print('compiler firmware: FILTERED: the cases %s only' % ', '.join(args.case),
+              flush=True)
     try:
         record['firmware'] = execute_suite(Run(args.output, args.tools.resolve()),
             args.refine, PROFILES if args.all_profiles else PROFILES[:1], args.case)

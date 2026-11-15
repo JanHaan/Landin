@@ -1102,25 +1102,41 @@ def larger_than_the_reference(run, refine):
     require("region `RAM' overflowed" in said, 'the reference holds a 100,000-byte image')
 
 
-def execute_suite(parent, refine):
+#  Every case, each named as its output directory is: a device's selection,
+#  an RV32 device's trap record, a RAM image and the contract controls, in
+#  the order they run.
+CONTRACTS = ('contract', 'block-contract', 'stage-refusals', 'larger-than-the-reference')
+CASES = (tuple(EXPECTED)
+         + tuple(case for device in RV32_EXPECTED for case in (
+             (device, device + '-trap') if device in TRAP_MACHINES else (device,)))
+         + tuple(RAM_IMAGES) + CONTRACTS)
+
+
+def execute_suite(parent, refine, cases=None):
+    """Every case, or CASES; a selection is FILTERED."""
+    unknown = sorted(set(cases or ()) - set(CASES))
+    require(not unknown, 'unknown descriptions case %s; the cases are %s'
+            % (', '.join(unknown), ', '.join(CASES)))
+    chosen = set(cases or CASES)
     root = parent.out / 'descriptions'
     root.mkdir()
     refine = refine.resolve(strict=True)
     compiler_hash = sha(refine)
     controls = []
-    for device in EXPECTED:
+    for device in (device for device in EXPECTED if device in chosen):
         out = root / device
         out.mkdir()
         select(Run(out, parent.tools), refine, device)
         controls.append({'device': device, 'status': 'passed'})
         print('description: ' + device + ' selected and compared', flush=True)
     for device in RV32_EXPECTED:
-        out = root / device
-        out.mkdir()
-        select_rv32(Run(out, parent.tools), refine, device)
-        controls.append({'device': device, 'target': 'rv32', 'status': 'passed'})
-        print('description: ' + device + ' linked for rv32 and compared', flush=True)
-        if device in TRAP_MACHINES:
+        if device in chosen:
+            out = root / device
+            out.mkdir()
+            select_rv32(Run(out, parent.tools), refine, device)
+            controls.append({'device': device, 'target': 'rv32', 'status': 'passed'})
+            print('description: ' + device + ' linked for rv32 and compared', flush=True)
+        if device + '-trap' in chosen:
             out = root / (device + '-trap')
             out.mkdir()
             cells = trap_record(Run(out, parent.tools), refine, device)
@@ -1128,35 +1144,35 @@ def execute_suite(parent, refine):
                              'machine': TRAP_MACHINES[device], 'status': 'passed'})
             print('description: %s recorded its trap on %s'
                   % (device, TRAP_MACHINES[device]), flush=True)
-    for name in RAM_IMAGES:
+    for name in (name for name in RAM_IMAGES if name in chosen):
         out = root / name
         out.mkdir()
         controls.append(ram_image(Run(out, parent.tools), refine, name))
         print('description: %s ran from reset on %s, and failed with its copy left out'
               % (name, RAM_IMAGES[name][1]), flush=True)
-    out = root / 'contract'
-    out.mkdir()
-    contract(Run(out, parent.tools), refine)
-    controls.append({'contract': 'five clauses, the stage\'s checksum and an unknown region',
-                     'status': 'passed'})
-    out = root / 'block-contract'
-    out.mkdir()
-    block_contract(Run(out, parent.tools), refine)
-    controls.append({'contract': 'the image block moved past 4 KiB and its words changed',
-                     'status': 'passed'})
-    out = root / 'stage-refusals'
-    out.mkdir()
-    stage_refusals(Run(out, parent.tools), refine)
-    controls.append({'stage': 'an oversize and a relocated stage refused', 'status': 'passed'})
-    out = root / 'larger-than-the-reference'
-    out.mkdir()
-    larger_than_the_reference(Run(out, parent.tools), refine)
-    controls.append({'image': 'RP2040 holds what the reference cannot', 'status': 'passed'})
-    print('description: linker script contract held', flush=True)
+    said = {'contract': ('contract', 'five clauses, the stage\'s checksum and an unknown'
+                                     ' region'),
+            'block-contract': ('contract', 'the image block moved past 4 KiB and its words'
+                                           ' changed'),
+            'stage-refusals': ('stage', 'an oversize and a relocated stage refused'),
+            'larger-than-the-reference': ('image', 'RP2040 holds what the reference cannot')}
+    checks = {'contract': contract, 'block-contract': block_contract,
+              'stage-refusals': stage_refusals,
+              'larger-than-the-reference': larger_than_the_reference}
+    for name in (name for name in CONTRACTS if name in chosen):
+        out = root / name
+        out.mkdir()
+        checks[name](Run(out, parent.tools), refine)
+        controls.append({said[name][0]: said[name][1], 'status': 'passed'})
+    if chosen & set(CONTRACTS):
+        print('description: linker script contract held'
+              + ('' if set(CONTRACTS) <= chosen else ': ' + ', '.join(
+                  name for name in CONTRACTS if name in chosen)), flush=True)
     require(sha(refine) == compiler_hash, 'compiler changed')
     record = {'status': 'passed', 'compiler_sha256': compiler_hash, 'controls': controls,
-              'scope': 'compile and link; the C3\'s ROM boot and the RV32 trap records'
-                       ' on Espressif\'s QEMU'}
+              'scope': ('compile and link; the C3\'s ROM boot and the RV32 trap records'
+                        ' on Espressif\'s QEMU') if cases is None else 'FILTERED: ' + ', '.join(
+                            one for one in CASES if one in chosen)}
     (root / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
     return record
 
@@ -1166,6 +1182,11 @@ def main():
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
+    parser.add_argument('--case', action='append', choices=CASES, metavar='CASE',
+                        help='run only this case; repeat for more.  A case is a device of'
+                             ' descriptions.json, an RV32 device\'s trap record as'
+                             ' DEVICE-trap, a RAM image or a contract control: %s.  A'
+                             ' selection is FILTERED' % ', '.join(CASES))
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
     import refine_revision
@@ -1175,14 +1196,17 @@ def main():
     before = inventory(args.tools)
     args.output.mkdir(parents=True, exist_ok=False)
     record = {'status': 'failed', 'scope': 'development; not acceptance'}
+    if args.case:
+        print('descriptions: FILTERED: the cases %s only' % ', '.join(args.case), flush=True)
     try:
         record['descriptions'] = execute_suite(
-            Run(args.output.resolve(), args.tools.resolve()), args.refine)
+            Run(args.output.resolve(), args.tools.resolve()), args.refine, args.case)
         require(inventory(args.tools) == before, 'embedded tool drift')
         record['status'] = 'passed'
     finally:
         (args.output / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
-    print('descriptions ' + record['status'])
+    print('descriptions ' + record['status']
+          + ('' if not args.case else ' (FILTERED: the cases %s only)' % ', '.join(args.case)))
     return 0 if record['status'] == 'passed' else 1
 
 
