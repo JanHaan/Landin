@@ -259,6 +259,14 @@ the timer check line 23, and other pending bits may also be set; a refusal
 says `INTERRUPT` there. ESP32 and ESP32-S3 records made before 2026-11-13
 carry these bits under the RISC-V names; read them as pending bits.
 
+A probe read is not passive on a RISC-V core. `probe-rs read`, like every
+probe-rs access to a running RISC-V target here, halts the hart and
+single-steps it about five times before it resumes, where the Arm ports
+read their counters without halting the core. Code that a halt or a step
+can disturb sees it: the ESP32-C3 took a pending timer interrupt inside
+such a step, which is why its application parks before the probe reads
+its counters (D1254).
+
 The windowed Xtensa ports use their own bounded warm contract. CPU1 is
 hardware-stalled with code `0x86` before memory changes; each independent
 readback verifies that stall without applying it again. Only CPU0 is
