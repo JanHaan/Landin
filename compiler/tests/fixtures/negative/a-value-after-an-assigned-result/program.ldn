@@ -24,6 +24,6 @@ partial: (c: bool) -> (r: i32) =
     2
 end partial
 
-public main: () -> (code: i32) =
+uses: () -> (code: i32) =
     code = slip() + twice(1) + valued(false) + partial(true)
-end main
+end uses

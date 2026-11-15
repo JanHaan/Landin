@@ -2611,6 +2611,41 @@ file positive/external-scalar-c-boundary/program.ldn
 unit signatures 1 items 1
 signature 1 extern(c) (in i32, in usize, in usize) -> usize
 item 1 ROUTINE host_read result usize signature 1 extern(c) link host_read params 0 slots 0 blocks 0 values 0
+file positive/family-provider-held-by-pointer/program.ldn
+unit signatures 4 items 2
+signature 1 (in usize) -> [2]usize from 1
+signature 2 (in usize) -> i32
+signature 3 (in usize) -> i32
+signature 4 erased-self (in usize) -> i32
+evidence 1 concrete represents struct (u16)
+  entry 1 target 2 provider 2 dispatch 2
+evidence 2 erased represents struct (u16)
+  entry 1 target 2 provider 2 dispatch 4
+item 1 ROUTINE make result array signature 1 params 2 slots 3 blocks 1 values 5
+  elements 2 of usize
+  slot 1 make usize param 1
+  slot 2 p usize param 2
+  slot 3 d elements 2 of usize return
+  block 1 scope 9 SIGNATURE length 5
+    1 LOAD usize slot 2
+    2 EVIDENCE_ADDRESS usize evidence 2
+    3 STORE_FIELD slot 3 field 1 <- 1
+    4 STORE_FIELD slot 3 field 2 <- 2
+    5 LEAVE
+item 2 ROUTINE - result i32 signature 3 params 1 slots 3 blocks 1 values 9
+  slot 1 self usize param 1
+  slot 2 value i32 return
+  slot 3 - i32
+  block 1 scope 7 BLOCK length 9
+    1 NUMBER i32 40
+    2 STORE slot 3 <- 1
+    3 MEASURE_SIZE usize measured u16
+    4 CONVERSION i32 <- 3
+    5 LOAD i32 slot 3
+    6 ADD i32 <- 5 4
+    7 STORE slot 2 <- 6
+    8 LOAD i32 slot 2
+    9 LEAVE <- 8
 file positive/feature-level-selects-declarations/main.ldn
 unit signatures 0 items 1
 item 1 DATUM selected result i32 params 0 slots 0 blocks 1 values 2

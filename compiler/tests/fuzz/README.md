@@ -103,6 +103,16 @@ reproducer is reduced by hand rather than by `--reduce`, whose result
 imported the derived server's module: the server suite serves each
 reproducer with no import root, so it must stand alone.
 
+A later round met another program with no `main`, a
+truncation of `runtime/any-parameterized-provider-expression-result` that
+holds `box(u16)` only through a pointer. The `any` it makes instantiates the
+family conformance `(t: type) box(t) is display`, whose table holds its
+target's size and alignment, but nothing had laid `box(u16)` out, so the
+lowering raised a defect. The checker now lays out a family conformance's
+target where it instantiates the conformance. The fixture
+`positive/family-provider-held-by-pointer` pins it on the command line, and
+`min-501889.ldn`, the mutant as the fuzzer kept it, in the server.
+
 The first driver was a Perl mutator, `mutate.pl`, run by `fuzz.sh`, with a
 `reduce.sh` beside it. They made the two recorded runs below and are in the
 history, last at commit `bb04329d`; a seed in those logs names a mutant only
@@ -149,6 +159,7 @@ not a second copy of those tests:
 | `min-207711.ldn` | `positive/r720-labelled-bare-blocks` | 1 | L0332 |
 | `min-207836.ldn` | `positive/struct-array-field-element-zeroed` | 1 | L0201, L0302 |
 | `min-501824.ldn` | `runtime/derived-server-two-process` | 1 | L0102 |
+| `min-501889.ldn` | `runtime/any-parameterized-provider-expression-result` | 0 | none |
 
 ## What it is not
 

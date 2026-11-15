@@ -1756,6 +1756,7 @@ positive/distinct-declaration | linux-x86-64, linux-arm64, darwin-arm64, freebsd
 positive/divisor-is-not-known | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/else-none-ignores-a-failure | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/external-scalar-c-boundary | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+positive/family-provider-held-by-pointer | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/feature-level-selects-declarations | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/field-conformance | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/field-named-at | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

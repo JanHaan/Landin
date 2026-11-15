@@ -22316,6 +22316,22 @@ package body Landin.Stages.Checking is
                            Bindings, Syn.Source_Of (Candidate_Tree), Candidate,
                            Landin.Checking.Declared_Conformance);
 
+                        --  The instance's table holds its target's size and
+                        --  alignment (D144), so the target is laid out
+                        --  here, even where the program holds it only
+                        --  through a pointer and nothing else would.
+                        if Actual.Kind in Ty.Aggregate | Ty.Fixed_Array then
+                           declare
+                              Laid : constant Type_Descriptor :=
+                                Require_Value_Layout
+                                  (Actual, Candidate_Tree, Candidate,
+                                   Application);
+                              pragma Unreferenced (Laid);
+                           begin
+                              null;
+                           end;
+                        end if;
+
                         declare
                            Concept_Declaration : constant
                              Res.Declaration_Id :=
