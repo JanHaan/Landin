@@ -13,7 +13,6 @@
 
 with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
-with Ada.Strings.Unbounded;
 
 with Landin.Checking;
 with Landin.Configuration;
@@ -8064,17 +8063,27 @@ package body Landin.Tests.Lowering_Suite is
       return Built;
    end Corpus_Text;
 
-   procedure Record_Artefact (Path : String; Wrote : out Boolean) is
+   procedure Record_Artefact
+     (Path  : String;
+      Wrote : out Boolean;
+      Said  : out Ada.Strings.Unbounded.Unbounded_String)
+   is
       package Unbounded renames Ada.Strings.Unbounded;
       Host   : Landin.Platform.Native.Native_Filesystem;
       Built  : constant Corpus_Build := Corpus_Text (Host);
       Status : Landin.Platform.Write_Status;
    begin
-      --  Never replace a complete golden with a partial corpus.  The ordinary
-      --  test case renders Built.Problems; record mode reports failure through
-      --  its existing Wrote boundary.
+      Said := Unbounded.Null_Unbounded_String;
+
+      --  Never replace a complete golden with a partial corpus.  Say each
+      --  problem, as the ordinary test case does: "could not write" alone
+      --  reads as a filesystem fault when a fixture failed to lower.
       if not Built.Complete then
          Wrote := False;
+         Said := Unbounded.To_Unbounded_String
+           ("the positive corpus could not be lowered completely, so"
+            & " nothing was written:" & LF
+            & Unbounded.To_String (Built.Problems));
          return;
       end if;
 
@@ -8083,6 +8092,10 @@ package body Landin.Tests.Lowering_Suite is
       --  for ever.
       Host.Write_File (Path, Unbounded.To_String (Built.Text), Status);
       Wrote := Status = Landin.Platform.Write_Ok;
+      if not Wrote then
+         Said := Unbounded.To_Unbounded_String
+           ("the file system refused the write");
+      end if;
    end Record_Artefact;
 
    --  Which fixtures' sections of two renderings of the corpus differ,

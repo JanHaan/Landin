@@ -1,6 +1,7 @@
 """Source attachment, coverage and generated-link controls for library docs."""
 import contextlib
 import io
+import itertools
 import json
 from pathlib import Path
 import re
@@ -209,12 +210,24 @@ public after: atom
 
     def test_live_failure_reason_lists_every_atom(self):
         source = ROOT / 'core/failure/failure.ldn'
-        item = next(i for i in library.read_items(source.read_text(),
+        text = source.read_text()
+        item = next(i for i in library.read_items(text,
                                                   'core/failure/failure.ldn')
                     if i.name == 'reason')
-        self.assertIn('text.invalid_format', item.signature)
-        self.assertIn('line.unsupported_format', item.signature)
-        self.assertEqual(item.signature.count('|') + 1, 39)
+        #  The atoms as the library writes them: the declaration's line
+        #  and each `|` line under it.  Read here rather than counted by
+        #  hand, so a new failure atom needs no edit to this test.
+        lines = text.splitlines()
+        first = next(n for n, line in enumerate(lines)
+                     if line.startswith('public reason: type ='))
+        written = lines[first:first + 1] + list(itertools.takewhile(
+            lambda line: line.lstrip().startswith('|'), lines[first + 1:]))
+        atom = r'\b[a-z_]+\.[a-z_]+\b'
+        atoms = re.findall(atom, '\n'.join(written))
+        self.assertGreater(len(atoms), 1)
+        self.assertIn('line.unsupported_format', atoms)
+        self.assertEqual(re.findall(atom, item.signature), atoms)
+        self.assertEqual(item.signature.count('|') + 1, len(atoms))
 
     def test_unknown_public_form_and_unclosed_type_fail(self):
         with self.assertRaisesRegex(ValueError, 'unsupported public'):

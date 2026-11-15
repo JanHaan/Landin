@@ -1922,7 +1922,7 @@ class Transcriptions(unittest.TestCase):
                 "class: negative\nsummary: invented\nprogram: program.ldn\n"
                 "codes: L0110\nfixed: absent.fixed\n")
             said = [why for _, _, why in checker.fixture_sources()]
-        self.assertIn("`fixed` names absent.fixed, which is not here", said)
+        self.assertEqual(said, ["`fixed` names absent.fixed, which is not here"])
 
     def test_a_recording_numbering_a_library_line_is_reported(self):
         #  D1306: a recorded report writes `*` for a library line.
@@ -1930,13 +1930,13 @@ class Transcriptions(unittest.TestCase):
         with tree(copied=["compiler/tests/fixtures"]) as root:
             case = root / ("compiler/tests/fixtures/negative/"
                            "core-text-private-position")
-            self.assertFalse([why for _, _, why in checker.fixture_sources()
-                              if "library line" in why])
+            #  The copy holds the library the fixtures' `with` names, so
+            #  the unbroken tree is clean and the break is all there is.
+            self.assertEqual(checker.fixture_sources(), [])
             report = case / "expected.txt"
             report.write_text(report.read_text().replace(
                 "text.ldn:*:1\n  |\n* |", "text.ldn:10:1\n   |\n10 |"))
-            said = [why for _, _, why in checker.fixture_sources()
-                    if "library line" in why]
+            said = [why for _, _, why in checker.fixture_sources()]
         self.assertEqual(said, [
             "`expect` names expected.txt, which cites a library line by its"
             " number; ./scripts/dev-test.sh"

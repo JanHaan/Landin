@@ -26,17 +26,19 @@ power-on or boot-ROM behavior. `refine` defaults to the boot layout; the
 board tools default to `--mode=ram` and pass `--firmware-layout=ram`
 explicitly.
 
-On NixOS the foreign cross-toolchain archives need an FHS environment, as
-the [emulator recipe](../cortex-m/README.md#on-nixos) explains. Landin's
-pinned environment provides one: inside `nix develop`, `landin-fhs` with no
-command opens a shell in it, which keeps the host's `/tmp` and the pinned
-`PATH`. Run the Python commands below inside that shell:
+Run the Python commands below inside `nix develop`. It carries
+`arm-eabi-gcc`, `riscv64-elf-gcc` and the Xtensa compilers, patched to run
+from the store, and the build takes them from `PATH`, so on NixOS it needs
+no FHS environment. The Cortex-M tools directory's Xtensa compilers are the
+foreign archives, unpatched, and NixOS's stub loader refuses them, so keep
+its `bin` off `PATH` for a board build; the
+[emulator lanes](../cortex-m/README.md#on-nixos) are what need `landin-fhs`.
 
 ```sh
-nix develop -c landin-fhs
+nix develop
 ```
 
-The Pi consumes prepared bundles and needs no cross-toolchain or FHS shell.
+The Pi consumes prepared bundles and needs no cross-toolchain.
 
 ## Build without hardware
 

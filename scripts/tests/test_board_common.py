@@ -24,6 +24,8 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'environments/boards'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from expected_runs import expect  # noqa: E402
 SPEC = importlib.util.spec_from_file_location('common', ROOT / 'environments/boards/common.py')
 COMMON = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMMON)
@@ -410,6 +412,20 @@ class ResidentReadiness(unittest.TestCase):
             self.assertEqual(result['status'], 'failed')
 
 
+class ExpectedRuns(unittest.TestCase):
+    """The board tests' subprocess.run answers only the programs a test
+    names, and refuses another by name rather than answering it with a
+    reply meant for something else."""
+    def test_an_unexpected_program_is_refused_by_name(self):
+        reply = SimpleNamespace(returncode=0, stdout='/tmp/x\n', stderr='')
+        with mock.patch.object(COMMON.subprocess, 'run', side_effect=expect({'ssh': reply})):
+            self.assertIs(COMMON.subprocess.run(['ssh', 'host', 'mktemp']), reply)
+            with self.assertRaisesRegex(AssertionError,
+                    r"asked to run \['/bin/refine', 'version'\], and this test expects only ssh;"
+                    r" name 'refine'"):
+                COMMON.subprocess.run([Path('/bin/refine'), 'version'], capture_output=True)
+
+
 class HelperIdentity(unittest.TestCase):
     def identity(self):
         return dict(protocol_version=1,
@@ -419,7 +435,8 @@ class HelperIdentity(unittest.TestCase):
     def test_matching_helper_is_described_without_a_probe_or_plan(self):
         args = SimpleNamespace(ram_loader=Path('/helper with spaces'))
         reply = SimpleNamespace(returncode=0, stdout=json.dumps(self.identity()), stderr='')
-        with mock.patch.object(COMMON.subprocess, 'run', return_value=reply) as describe:
+        with mock.patch.object(COMMON.subprocess, 'run',
+                               side_effect=expect({'helper with spaces': reply})) as describe:
             self.assertEqual(COMMON.verify_ram_helper(args), self.identity())
         describe.assert_called_once_with(['/helper with spaces', '--describe'],
             capture_output=True, text=True, timeout=10)
@@ -432,8 +449,8 @@ class HelperIdentity(unittest.TestCase):
                 json.dumps(dict(valid, source_sha256='old source')),
                 json.dumps(dict(valid, probe_rs_revision='another fork'))):
             with self.subTest(metadata=broken), \
-                    mock.patch.object(COMMON.subprocess, 'run', return_value=SimpleNamespace(
-                        returncode=0, stdout=broken, stderr='')):
+                    mock.patch.object(COMMON.subprocess, 'run', side_effect=expect({
+                        'loader': SimpleNamespace(returncode=0, stdout=broken, stderr='')})):
                 with self.assertRaisesRegex(COMMON.Failed, r'nix build .*board-ram-run'):
                     COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
 
@@ -444,7 +461,7 @@ class HelperIdentity(unittest.TestCase):
                 with self.assertRaisesRegex(COMMON.Failed, 'cannot describe SRAM helper.*rebuild'):
                     COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
         reply = SimpleNamespace(returncode=2, stdout='', stderr='unknown option --describe')
-        with mock.patch.object(COMMON.subprocess, 'run', return_value=reply), \
+        with mock.patch.object(COMMON.subprocess, 'run', side_effect=expect({'loader': reply})), \
                 self.assertRaisesRegex(COMMON.Failed, 'unknown option.*rebuild'):
             COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
 
@@ -458,7 +475,8 @@ class HelperIdentity(unittest.TestCase):
                     args = SimpleNamespace(mode=mode, ram_loader='loader', bundle=None,
                         refine='refine', fixed_image=fixed, record=None)
                     with self.subTest(mode=mode, board=board), \
-                            mock.patch.object(COMMON.subprocess, 'run', return_value=reply) as describe, \
+                            mock.patch.object(COMMON.subprocess, 'run',
+                                              side_effect=expect({'loader': reply})) as describe, \
                             mock.patch.object(COMMON, 'validate_fixed_image'), \
                             mock.patch.object(COMMON, 'fixed_elf', return_value=fixed), \
                             mock.patch.object(COMMON, 'fixed_marker_address'):
@@ -1723,12 +1741,12 @@ class RamRuns(unittest.TestCase):
             self.assertRegex(text, COMMON.USB_TROUBLE)
         journal = SimpleNamespace(returncode=0, stderr='',
             stdout='1.0 brcmfmac: firmware error -2\n2.0 xhci_hcd: HC died\n')
-        with mock.patch.object(COMMON.subprocess, 'run', return_value=journal):
+        with mock.patch.object(COMMON.subprocess, 'run', side_effect=expect({'journalctl': journal})):
             self.assertEqual(COMMON.kernel_usb_lines(3), [(2.0, 'xhci_hcd: HC died')])
 
     def test_failed_kernel_reader_is_not_empty_usb_evidence(self):
         journal = SimpleNamespace(returncode=1, stderr='permission denied', stdout='')
-        with mock.patch.object(COMMON.subprocess, 'run', return_value=journal), \
+        with mock.patch.object(COMMON.subprocess, 'run', side_effect=expect({'journalctl': journal})), \
                 self.assertRaisesRegex(COMMON.Failed, 'kernel USB journal.*permission denied'):
             COMMON.kernel_usb_lines(3)
 
@@ -1978,7 +1996,7 @@ class Outcomes(unittest.TestCase):
             COMMON.verify_ram_helper(SimpleNamespace(ram_loader='/nonexistent/landin-ram-run'))
         stale = SimpleNamespace(returncode=0, stderr='', stdout=json.dumps(dict(
             protocol_version=1, source_sha256='0' * 64, probe_rs_revision=COMMON.HELPER_PROBE_REVISION)))
-        with mock.patch.object(COMMON.subprocess, 'run', return_value=stale), \
+        with mock.patch.object(COMMON.subprocess, 'run', side_effect=expect({'loader': stale})), \
                 self.assertRaises(COMMON.ToolMismatch):
             COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
 

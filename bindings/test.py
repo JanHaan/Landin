@@ -6,9 +6,13 @@
     python3 bindings/test.py --refine PATH --offline
     python3 bindings/test.py --refine PATH --write
 
-Every case runs the refine named, and the external Clang that $CLANG names
-(clang by default), on headers and policies written here; the cases that
-only a fake host reaches are the compiler's own, in its bindings suite.
+Every case runs the refine named, and the external Clang that $CLANG names,
+on headers and policies written here; the cases that only a fake host
+reaches are the compiler's own, in its bindings suite.  Without $CLANG it is
+clang-19, the pinned major, which the gate installs and the development
+shell carries; `clang` only where there is no clang-19.  The development
+shell's `clang` is Nix's compiler wrapper, which adds
+-fzero-call-used-regs, and a Thumb target refuses that.
 
 `--write` runs no case.  It regenerates every committed binding fixture
 from its pinned inputs, as the cases that compare them do, and writes each
@@ -148,12 +152,20 @@ STDLIB_H = ("#ifndef TEST_STDLIB_H\n#define TEST_STDLIB_H\n"
             "void *calloc(size_t, size_t);\nvoid free(void *);\n#endif\n")
 
 
+def requested_clang() -> str:
+    """The external Clang the cases run: $CLANG, else clang-19, else clang."""
+    if "CLANG" in os.environ:
+        return os.environ["CLANG"]
+    return "clang-19" if shutil.which("clang-19") else "clang"
+
+
 def clang_and_resources() -> tuple[pathlib.Path, pathlib.Path]:
     """The external Clang and its resource headers' directory."""
-    requested = os.environ.get("CLANG", "clang")
+    requested = requested_clang()
     clang = shutil.which(requested)
     if clang is None:
-        raise RuntimeError(f"external Clang {requested!r} is required")
+        raise RuntimeError(f"external Clang {requested!r} is required;"
+                           " name one with CLANG=")
     found = pathlib.Path(clang).resolve()
     process = subprocess.run([str(found), "-print-resource-dir"],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -447,9 +459,10 @@ class PolicyNameTests(unittest.TestCase):
     def test_supported_names_and_explicit_landin_names_still_load(self) -> None:
         """A name's Landin name, seen through the collision its selection
         meets with an earlier one that already took the expected name."""
-        clang = shutil.which(os.environ.get("CLANG", "clang"))
+        clang = shutil.which(requested_clang())
         if clang is None:
-            raise RuntimeError("an external Clang is required")
+            raise RuntimeError("an external Clang is required;"
+                               " name one with CLANG=")
         with tempfile.TemporaryDirectory(prefix="landin-policy-name-test-") as temporary:
             root = pathlib.Path(temporary)
             header = root / "api.h"

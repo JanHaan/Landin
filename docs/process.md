@@ -240,8 +240,12 @@ evaluates the flake before each one, about two seconds a command.
 `environments/pins.sh`, writes what the shell exports to a file under
 `~/.cache/landin/agent-env/`, and prints that file's path; sourcing it takes a
 few milliseconds and leaves `TMPDIR` alone. Where there is no nix, or the
-toolchain is already on `PATH`, it prints `/dev/null`, so
-`. "$(./scripts/agent_env.sh)"` holds in either shell. Claude Code takes the file
+toolchain on `PATH` is this checkout's shell or no flake's, it prints
+`/dev/null`, so `. "$(./scripts/agent_env.sh)"` holds in either shell. The
+flake's shell exports `LANDIN_ENV_KEY`, the key the helper computes; when
+the toolchain on `PATH` is another checkout's shell, whose flake or pins
+differ, the helper says so on standard error and prints this checkout's
+file, whose tools then come first on `PATH`. Claude Code takes the file
 through a SessionStart hook in `.claude/settings.local.json`, which then
 reaches every Bash command of the session and of its subagents:
 
@@ -257,8 +261,9 @@ environment's checksum and appends nothing when that line is already there:
 appending each time, six resumes took the file past 128 KiB, and every Bash
 command of the session then failed with E2BIG, "Argument list too long".
 `scripts/tests/test_agent_env.py` runs the command above as written here.
-The file is the environment of the checkout the session started in; a
-worktree whose flake or pins differ needs its own `nix develop`. The hook is
+The file is the environment of the checkout the session started in; in a
+worktree whose flake or pins differ, `. "$(./scripts/agent_env.sh)"` run
+there adds that worktree's. The hook is
 local to Claude Code and is not installed by cloning the repository. In
 Codex, whose commands may each start a fresh shell, source the helper's
 cached exports before commands that need the pinned tools:

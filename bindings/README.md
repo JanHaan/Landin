@@ -681,10 +681,14 @@ hosted fixture, by [one command](#regenerating-the-committed-fixtures).
 ## Tests
 
 ```sh
-CLANG=clang-19 python3 bindings/test.py --refine PATH
+python3 bindings/test.py --refine PATH
 ```
 
-`--refine`, or `$LANDIN_REFINE`, names the compiler under test. The
+`--refine`, or `$LANDIN_REFINE`, names the compiler under test, and
+`$CLANG` the external Clang, `clang-19` by default, or `clang` where there
+is no `clang-19`. The development shell's `clang` is Nix's compiler
+wrapper, which adds `-fzero-call-used-regs`, and the Cortex-M cases fail
+with it because a Thumb target refuses that option. The
 `bindings` suite (`./scripts/dev-test.sh --suite=bindings`) covers what needs
 only a fake Clang: the target rows, the refusal of another triple before any
 header work, a whole binding with every Clang run in its own environment,
@@ -743,14 +747,14 @@ of frame-origin arguments.
 
 Three fixtures hold generated files: `abi/r440-bindings-generated`,
 `abi/cortex-cmsis-bindings` and `abi/cortex-vfp-bindings`. One command
-regenerates all three from the repository root, with `CLANG` naming the
-desired frontend (the gate's `bindings` job uses Ubuntu 24.04's `clang-19`
-at the version `environments/pins.sh` names; `nix develop` provides a
-`clang-19` that `bindings/test.py` runs with, as the gate does) and a
-built refine:
+regenerates all three from the repository root with a built refine and,
+as the cases do, `$CLANG` or `clang-19` (the gate's `bindings` job uses
+Ubuntu 24.04's `clang-19` at the version `environments/pins.sh` names;
+`nix develop` provides a `clang-19` that `bindings/test.py` runs with, as
+the gate does):
 
 ```sh
-CLANG=clang-19 python3 bindings/test.py --refine PATH --write
+python3 bindings/test.py --refine PATH --write
 ```
 
 It generates each fixture into a temporary directory exactly as the cases

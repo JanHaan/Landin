@@ -199,8 +199,9 @@ and verifies copied artifacts byte for byte. If Pygments, tree-sitter, Vim,
 Neovim, Emacs, Lua or PowerShell are installed, it also runs their native
 smoke checks; absent optional tools are reported and skipped. Neovim's parser
 is compiled into a temporary directory rather than the product tree. With
-`npm install` run in `highlight/textmate`, the suite also tokenizes the fixture
-through VS Code's actual TextMate engine and builds a temporary valid VSIX.
+`npm ci` run in `highlight/textmate`, the suite also tokenizes the fixture
+through VS Code's actual TextMate engine and builds a temporary valid VSIX;
+without it the skip says so and names that command.
 The `--lsp-emacs` mode runs only the live editor-to-server smoke and fails if
 Emacs or the named compiler executable is absent; the compiler gate uses it
 after building `refine`.
