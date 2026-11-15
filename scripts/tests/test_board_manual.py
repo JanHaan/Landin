@@ -137,21 +137,33 @@ class Manual(ManualCase):
 
     def test_fragmented_ack_cannot_extend_the_phase_deadline(self):
         boot = self.boot()
-        self.args.manual_timeout = 0.05
-        notices = queue.Queue()
+        #  Long enough for the partial message to be accepted and read
+        #  before the deadline on a loaded runner; the wait for the
+        #  request is longer still.  A receive that borrowed a new timeout
+        #  for each piece would never end, which the wait catches.
+        self.args.manual_timeout = 1
+        notices, received = queue.Queue(), threading.Event()
+        original_recv = socket.socket.recv
+        def recv(connection, *args):
+            data = original_recv(connection, *args)
+            if data:
+                received.set()
+            return data
         with mock.patch('builtins.print', side_effect=lambda line, **_: notices.put(json.loads(line[7:]))), \
+                mock.patch.object(socket.socket, 'recv', new=recv), \
                 concurrent.futures.ThreadPoolExecutor(max_workers=1) as worker:
             future = worker.submit(boot.request, 'unplug', 'Unplug Pico')
-            request = notices.get(timeout=1)
+            request = notices.get(timeout=HANG)
             message = json.dumps(dict(action='ack', **{key: request[key]
                 for key in ('run', 'phase', 'token')})).encode() + b'\n'
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-                client.settimeout(1)
+                client.settimeout(5)
                 client.connect(str(boot.directory / 'control.sock'))
                 client.sendall(message[:len(message) // 2])
+                self.assertTrue(received.wait(1), 'the partial message was not read before the deadline')
                 # A retained partial message cannot borrow a new receive timeout.
                 with self.assertRaisesRegex(common.Failed, 'timed out'):
-                    future.result(timeout=0.5)
+                    future.result(timeout=10)
                 try:
                     client.sendall(message[len(message) // 2:])
                 except BrokenPipeError:
@@ -159,6 +171,33 @@ class Manual(ManualCase):
                 self.assertEqual(client.recv(4096), b'')
         self.assertTrue(boot.stopped)
         self.assertFalse(any(event['event'] == 'acknowledged' for event in boot.state['events']))
+
+    def test_a_connection_left_unaccepted_is_closed_when_the_request_gives_up(self):
+        boot = self.boot()
+        self.args.manual_timeout = 0.05
+        notices, connected = queue.Queue(), threading.Event()
+        def accept(server):
+            # A slow runner: the deadline passes before this connection's turn.
+            connected.wait(HANG)
+            raise socket.timeout
+        with mock.patch('builtins.print', side_effect=lambda line, **_: notices.put(json.loads(line[7:]))), \
+                mock.patch.object(socket.socket, 'accept', new=accept), \
+                concurrent.futures.ThreadPoolExecutor(max_workers=1) as worker:
+            future = worker.submit(boot.request, 'unplug', 'Unplug Pico')
+            notices.get(timeout=HANG)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(5)
+                client.connect(str(boot.directory / 'control.sock'))
+                client.sendall(b'{"action":')
+                connected.set()
+                with self.assertRaisesRegex(common.Failed, 'timed out'):
+                    future.result(timeout=10)
+                # Closed, not answered, and not left to the client's timeout.
+                try:
+                    self.assertEqual(client.recv(4096), b'')
+                except ConnectionResetError:
+                    pass
+        self.assertTrue(boot.stopped)
 
     def test_usb_trouble_during_fragmented_receive_stops_before_accepting_ack(self):
         boot = self.boot()

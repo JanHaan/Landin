@@ -31,11 +31,53 @@ package body Landin.Platform.Native.Tools is
      with Import, Convention => C,
        External_Name => "landin_cancellation_requested";
 
+   --  The whole reason for the last External_Tool_Failed raised here,
+   --  which GNAT cuts at 200 characters in the exception's message.  The
+   --  compiler runs its tools from one task.
+   Last_Reason : Unbounded.Unbounded_String;
+
+   procedure Fail (Reason : String) with No_Return;
+
+   procedure Fail (Reason : String) is
+   begin
+      Last_Reason := Unbounded.To_Unbounded_String (Reason);
+      raise External_Tool_Failed with Reason;
+   end Fail;
+
+   --  Occurrence's reason whole when it is a failure raised by Fail.
+   function Whole (Occurrence : Ada.Exceptions.Exception_Occurrence)
+     return String;
+
+   function Whole (Occurrence : Ada.Exceptions.Exception_Occurrence)
+     return String
+   is
+      use type Ada.Exceptions.Exception_Id;
+      Message : constant String :=
+        Ada.Exceptions.Exception_Message (Occurrence);
+      Reason : constant String := Unbounded.To_String (Last_Reason);
+   begin
+      return (if Ada.Exceptions.Exception_Identity (Occurrence)
+                 = External_Tool_Failed'Identity
+                and then Reason'Length >= Message'Length
+                and then Reason (Reason'First
+                                 .. Reason'First + Message'Length - 1)
+                         = Message
+              then Reason else Message);
+   end Whole;
+
+   overriding procedure Get_Tool_Failure_Reason
+     (Host : Native_Tool_Runner;
+      Reason : in out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host);
+   begin
+      Reason := Last_Reason;
+   end Get_Tool_Failure_Reason;
+
    procedure Begin_Invocation is
    begin
       if Begin_Cancellation /= 0 then
-         raise External_Tool_Failed
-           with "could not establish command cancellation";
+         Fail ("could not establish command cancellation");
       end if;
    end Begin_Invocation;
 
@@ -76,8 +118,9 @@ package body Landin.Platform.Native.Tools is
       use type C_Strings.chars_ptr;
       Reason : constant C_Strings.chars_ptr := Process_Start_Error (Error);
    begin
-      --  GNAT bounds exception messages. Put the corrective action before
-      --  any tool path that could consume that bound by itself.
+      --  The reason is kept whole, but the exception's message is cut at
+      --  GNAT's bound: the corrective action comes before a tool path
+      --  long enough to take that bound by itself.
       return (if Reason = C_Strings.Null_Ptr then Fallback
               else C_Strings.Value (Reason) & "; " & Fallback);
    end Start_Failure;
@@ -143,7 +186,7 @@ package body Landin.Platform.Native.Tools is
       Size : Interfaces.C.size_t;
    begin
       if Read_Capture (Interfaces.C.int (FD), Bytes, Size) /= 0 then
-         raise External_Tool_Failed with "could not read retained tool output";
+         Fail ("could not read retained tool output");
       end if;
       begin
          Content := Byte_Strings.Copy (Bytes, Size);
@@ -158,19 +201,23 @@ package body Landin.Platform.Native.Tools is
    --  Not GNAT.OS_Lib's temporary files: those are created relative to the
    --  current directory whatever TMPDIR says, so every capture landed beside
    --  the caller's sources and a read-only directory refused every tool.
+   --  Error is the host's errno when no file was created, and 0 otherwise.
    procedure Create_Capture_File
-     (FD   : out OS.File_Descriptor;
-      Name : out OS.String_Access);
+     (FD    : out OS.File_Descriptor;
+      Name  : out OS.String_Access;
+      Error : out Integer);
 
    procedure Create_Capture_File
-     (FD   : out OS.File_Descriptor;
-      Name : out OS.String_Access)
+     (FD    : out OS.File_Descriptor;
+      Name  : out OS.String_Access;
+      Error : out Integer)
    is
       Path   : Interfaces.C.char_array (0 .. 4095) :=
         [others => Interfaces.C.nul];
       Opened : constant Interfaces.C.int :=
         Create_Capture (Path, Path'Length);
    begin
+      Error := (if Opened < 0 then OS.Errno else 0);
       if Opened < 0 then
          FD := OS.Invalid_FD;
          Name := null;
@@ -229,9 +276,8 @@ package body Landin.Platform.Native.Tools is
    begin
       Result := (others => <>);
       if Private_Path_Current (Interfaces.C.To_C (Program)) = 0 then
-         raise External_Tool_Failed
-           with "private program directory changed before launch: " & Program
-             & "; rerun to compile in a fresh private directory";
+         Fail ("private program directory changed before launch: " & Program
+               & "; rerun to compile in a fresh private directory");
       end if;
       --  Execution is still pathname based after this observed-change
       --  refusal. It is not a pinned executable-object guarantee.
@@ -246,10 +292,9 @@ package body Landin.Platform.Native.Tools is
          C_Strings.Free (Item);
       end loop;
       if Error /= 0 then
-         raise External_Tool_Failed
-           with Start_Failure
-             (Error, (if Child = 0 then "cannot start "
-                      else "cannot wait for ") & Program);
+         Fail (Start_Failure
+                 (Error, (if Child = 0 then "cannot start "
+                          else "cannot wait for ") & Program));
       elsif Signal_Number /= 0 then
          Result.Ended := Signaled;
          Result.Signal := Natural (Signal_Number);
@@ -344,6 +389,7 @@ package body Landin.Platform.Native.Tools is
       Cancelled      : Boolean := False;
       Start_Error    : Interfaces.C.int;
       Child_Owned    : aliased Interfaces.C.int := 0;
+      Capture_Error  : Integer := 0;
 
 
       function Rebased (Argument : String) return String;
@@ -364,8 +410,7 @@ package body Landin.Platform.Native.Tools is
            (Text, Interfaces.C.int (Directory_FD), Buffer, Buffer'Length);
          C_Strings.Free (Text);
          if Answer /= 0 then
-            raise External_Tool_Failed
-              with "tool outputs span incompatible staging directories";
+            Fail ("tool outputs span incompatible staging directories");
          end if;
          Intermediate := C_Strings.New_String (Interfaces.C.To_Ada (Buffer));
          Answer := Rebase_Private
@@ -373,9 +418,8 @@ package body Landin.Platform.Native.Tools is
             Private_Buffer'Length);
          C_Strings.Free (Intermediate);
          if Answer /= 0 then
-            raise External_Tool_Failed
-              with "tool inputs span incompatible private directories;"
-                & " keep generated inputs in one private workspace";
+            Fail ("tool inputs span incompatible private directories;"
+                  & " keep generated inputs in one private workspace");
          end if;
          return Interfaces.C.To_Ada (Private_Buffer);
       end Rebased;
@@ -386,8 +430,7 @@ package body Landin.Platform.Native.Tools is
       begin
          if Pid > 0 then
             if Stop_Tool (Pid, Status'Access) /= Pid then
-               raise External_Tool_Failed
-                 with "could not stop tool process group: " & Program;
+               Fail ("could not stop tool process group: " & Program);
             end if;
             Pid := 0;
          end if;
@@ -428,8 +471,10 @@ package body Landin.Platform.Native.Tools is
                  (Interfaces.C.int (File), Message, Room) /= 0
                then
                   Clean := False;
-                  Unbounded.Append
-                    (Reason, Interfaces.C.To_Ada (Message) & "; ");
+                  if Unbounded.Length (Reason) > 0 then
+                     Unbounded.Append (Reason, "; ");
+                  end if;
+                  Unbounded.Append (Reason, Interfaces.C.To_Ada (Message));
                end if;
                File := OS.Invalid_FD;
             end if;
@@ -449,9 +494,8 @@ package body Landin.Platform.Native.Tools is
             Directory_FD := OS.Invalid_FD;
          end if;
          if not Clean then
-            raise External_Tool_Failed
-              with "could not release temporary tool output: "
-                & Unbounded.To_String (Reason);
+            Fail ("could not release temporary tool output: "
+                  & Unbounded.To_String (Reason));
          end if;
       end Cleanup_Capture;
 
@@ -476,15 +520,13 @@ package body Landin.Platform.Native.Tools is
         or else (for some Byte of Unbounded.To_String (Host.Input) =>
                    Byte = Character'Val (0))
       then
-         raise External_Tool_Failed
-           with "a tool argument holds a NUL byte, which no program can be"
-             & " given: " & Program;
+         Fail ("a tool argument holds a NUL byte, which no program can be"
+               & " given: " & Program);
       end if;
       Located := OS.Locate_Exec_On_Path (Program);
 
       if Located = null then
-         raise External_Tool_Failed
-           with "tool not found on PATH: " & Program;
+         Fail ("tool not found on PATH: " & Program);
       end if;
 
       for Argument of Arguments loop
@@ -499,8 +541,7 @@ package body Landin.Platform.Native.Tools is
             end if;
             C_Strings.Free (Text);
             if Selected = -2 then
-               raise External_Tool_Failed
-                 with "cannot pin tool output staging directory";
+               Fail ("cannot pin tool output staging directory");
             elsif Selected >= 0 then
                if Directory_FD = OS.Invalid_FD then
                   Directory_FD := OS.File_Descriptor (Selected);
@@ -508,8 +549,7 @@ package body Landin.Platform.Native.Tools is
                   Duplicate := OS.File_Descriptor (Selected);
                   OS.Close (Duplicate, Closed);
                   if not Closed then
-                     raise External_Tool_Failed
-                       with "cannot close output staging directory";
+                     Fail ("cannot close output staging directory");
                   end if;
                end if;
             end if;
@@ -540,18 +580,20 @@ package body Landin.Platform.Native.Tools is
       --  The adapter chooses a unique name and creates the file before
       --  returning. Pass that open descriptor to the spawn action, avoiding
       --  a second filename lookup before the child captures output.
-      Create_Capture_File (FD, Name);
+      Create_Capture_File (FD, Name, Capture_Error);
 
+      --  The host's reason names the shortage, a descriptor limit or a
+      --  full temporary directory, as the separation refusals do.
       if FD = OS.Invalid_FD or else Name = null then
-         raise External_Tool_Failed
-           with "could not create temporary tool output";
+         Fail ("could not create temporary tool output: "
+               & OS.Errno_Message (Capture_Error, "no reason given"));
       end if;
 
       if Capture = Output_Only then
-         Create_Capture_File (Error_FD, Error_Name);
+         Create_Capture_File (Error_FD, Error_Name, Capture_Error);
          if Error_FD = OS.Invalid_FD or else Error_Name = null then
-            raise External_Tool_Failed
-              with "could not create temporary tool error output";
+            Fail ("could not create temporary tool error output: "
+                  & OS.Errno_Message (Capture_Error, "no reason given"));
          end if;
       end if;
 
@@ -565,9 +607,8 @@ package body Landin.Platform.Native.Tools is
               (Unbounded.To_String (Host.Input), OS.Binary);
          end if;
          if Input_FD = OS.Invalid_FD then
-            raise External_Tool_Failed
-              with "could not open standard input: "
-                   & Unbounded.To_String (Host.Input);
+            Fail ("could not open standard input: "
+                  & Unbounded.To_String (Host.Input));
          end if;
       end if;
 
@@ -587,9 +628,8 @@ package body Landin.Platform.Native.Tools is
              else Interfaces.C.int (Directory_FD)),
             Pid'Access);
          if Start_Error /= 0 then
-            raise External_Tool_Failed
-              with Start_Failure
-                (Start_Error, "could not run tool: " & Program);
+            Fail (Start_Failure
+                    (Start_Error, "could not run tool: " & Program));
          end if;
 
          --  Keep both descriptors: captures are anonymous, and reading
@@ -606,8 +646,7 @@ package body Landin.Platform.Native.Tools is
                      Pid := 0;
                   end if;
                   if Stopped /= Expected then
-                     raise External_Tool_Failed
-                       with "could not stop cancelled tool: " & Program;
+                     Fail ("could not stop cancelled tool: " & Program);
                   end if;
                end;
                Pid := 0;
@@ -634,8 +673,7 @@ package body Landin.Platform.Native.Tools is
          end loop;
 
          if Reaped < 0 then
-            raise External_Tool_Failed
-              with "could not wait for tool: " & Program;
+            Fail ("could not wait for tool: " & Program);
          end if;
 
          Pid := 0;
@@ -683,28 +721,44 @@ package body Landin.Platform.Native.Tools is
    exception
       when Failure : others =>
          declare
+            use type Ada.Exceptions.Exception_Id;
+            --  Taken before cleanup, whose own failure replaces the
+            --  reason kept.
+            Reason : constant String := Whole (Failure);
             Notes : Unbounded.Unbounded_String;
+            procedure Note (Cleanup : Ada.Exceptions.Exception_Occurrence);
+            procedure Note (Cleanup : Ada.Exceptions.Exception_Occurrence) is
+            begin
+               if Unbounded.Length (Notes) > 0 then
+                  Unbounded.Append (Notes, "; ");
+               end if;
+               Unbounded.Append (Notes, Whole (Cleanup));
+            end Note;
          begin
             begin
                Stop_Child;
             exception
                when Cleanup : others =>
-                  Unbounded.Append
-                    (Notes, Ada.Exceptions.Exception_Message (Cleanup) & "; ");
+                  Note (Cleanup);
             end;
             begin
                Cleanup_Capture;
             exception
                when Cleanup : others =>
-                  Unbounded.Append
-                    (Notes, Ada.Exceptions.Exception_Message (Cleanup) & "; ");
+                  Note (Cleanup);
             end;
             Release_Arguments;
-            if Unbounded.Length (Notes) > 0 then
+            if Ada.Exceptions.Exception_Identity (Failure)
+              = External_Tool_Failed'Identity
+            then
+               Fail (Reason
+                     & (if Unbounded.Length (Notes) > 0
+                        then "; cleanup: " & Unbounded.To_String (Notes)
+                        else ""));
+            elsif Unbounded.Length (Notes) > 0 then
                Ada.Exceptions.Raise_Exception
                  (Ada.Exceptions.Exception_Identity (Failure),
-                  Ada.Exceptions.Exception_Message (Failure) & "; cleanup: "
-                  & Unbounded.To_String (Notes));
+                  Reason & "; cleanup: " & Unbounded.To_String (Notes));
             end if;
          end;
          raise;

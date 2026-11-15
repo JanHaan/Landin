@@ -4350,7 +4350,8 @@ package body Landin.Driver is
                      --  sent the reader to install one they had.
                      declare
                         Why : constant String :=
-                          Ada.Exceptions.Exception_Message (Failure);
+                          Landin.Platform.Tool_Failure_Reason
+                            (Tools, Failure);
                      begin
                         if Starts_With (Why, "tool not found") then
                            Note_Unavailable_Toolchain (Driver);
@@ -4503,7 +4504,8 @@ package body Landin.Driver is
                      when Failure : Landin.External_Tool_Failed =>
                         declare
                            Why : constant String :=
-                             Ada.Exceptions.Exception_Message (Failure);
+                             Landin.Platform.Tool_Failure_Reason
+                               (Tools, Failure);
                         begin
                            if Starts_With (Why, "tool not found") then
                               Note_Unavailable_Debug_Bundle;

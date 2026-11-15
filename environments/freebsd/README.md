@@ -3,10 +3,22 @@
 [`vm.py`](vm.py) verifies official release image and base-system archives
 against [`lock.json`](lock.json), extracts a private cross sysroot and boots
 an architecture-specific QEMU guest from a fresh overlay. It never modifies
-the downloaded disk image. The BASIC-CI image enables root SSH with an empty
-password; the supervisor exposes it only on a loopback port and tears down
-the VM on success or failure. This is test provisioning, outside the
+the downloaded disk image. This is test provisioning, outside the
 compiler's `Landin.Platform` host boundary.
+
+The BASIC-CI image admits root over SSH with an empty password, so the
+guest is admitted before any port reaches it. QEMU starts it with no
+forwarded port, its serial console and monitor on sockets in a directory
+only the caller can enter, outside the retained output. At the console's
+root login the supervisor installs a key made for this boot as root's only
+authorized key, turns the guest's password and empty-password logins off,
+checks what `sshd -T` then says, and reads the host key the guest made at
+its first boot. Only then does the monitor forward a loopback port, and the
+client logs in with that key alone and holds the guest to that host key, so
+another local user who takes the port or reaches it can neither enter the
+guest nor answer for it. The VM is torn down and the key deleted on success
+or failure; `console.log` keeps the console transcript, which holds only
+public keys.
 
 Each lane raises the guest's data-size ceiling to at least 4 GiB and lifts
 the process's soft data limit. The unchanged displacement-limit fixture declares

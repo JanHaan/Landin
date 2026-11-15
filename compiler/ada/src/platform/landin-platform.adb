@@ -15,6 +15,25 @@ package body Landin.Platform is
       return Unbounded.To_String (Reason);
    end Removal_Failure_Reason;
 
+   function Tool_Failure_Reason
+     (Host : Tool_Runner'Class;
+      Failure : Ada.Exceptions.Exception_Occurrence) return String
+   is
+      Message : constant String := Ada.Exceptions.Exception_Message (Failure);
+      Kept : Unbounded.Unbounded_String;
+   begin
+      Get_Tool_Failure_Reason (Host, Kept);
+      declare
+         Reason : constant String := Unbounded.To_String (Kept);
+      begin
+         return (if Reason'Length >= Message'Length
+                   and then Reason (Reason'First
+                                    .. Reason'First + Message'Length - 1)
+                            = Message
+                 then Reason else Message);
+      end;
+   end Tool_Failure_Reason;
+
    function No_Arguments return Path_List is
       Empty : Path_List;
    begin

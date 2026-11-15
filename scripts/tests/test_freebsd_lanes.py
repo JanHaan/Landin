@@ -2,9 +2,14 @@
 """Controls for FreeBSD corpus selection and checked release inputs."""
 import importlib.util
 import json
+import os
 from pathlib import Path
+import re
+import shutil
+import socket
 import sys
 import tempfile
+import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -384,6 +389,178 @@ class FreeBSDControls(unittest.TestCase):
                 'returncode': 2, 'stdout': b'no LSE', 'stderr': b''})()):
             with self.assertRaisesRegex(ValueError, 'guest command failed'):
                 guest.checked('processor')
+
+
+class FakeGuestConsole:
+    """A guest's serial console on a Unix socket: a login prompt, then a
+    shell answering each framed command the way the admitted guest does."""
+
+    HOST_KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFCXJa36qK58/EJzE8P+dBPHrAbaV/XYQQa/VVhzHMcd'
+
+    def __init__(self, path, settings):
+        self.settings, self.typed = settings, []
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server.bind(str(path))
+        self.server.listen(1)
+        self.thread = threading.Thread(target=self.serve, daemon=True)
+        self.thread.start()
+
+    def serve(self):
+        connection, _ = self.server.accept()
+        with connection:
+            connection.sendall(b'FreeBSD/amd64 (freebsd) (ttyu0)\r\n\r\nlogin: ')
+            pending = b''
+            while True:
+                piece = connection.recv(4096)
+                if not piece:
+                    return
+                pending += piece
+                while b'\r' in pending:
+                    line, pending = pending.split(b'\r', 1)
+                    self.typed.append(line.decode())
+                    connection.sendall(line + b'\r\n' + self.answer(line.decode()) + b'root@freebsd:~ # ')
+
+    def answer(self, line):
+        if line == 'root':
+            return b''
+        command = re.fullmatch(r"printf '%s-%s\\n' LANDIN BEGIN; (.*); printf '%s-%s %s\\n' LANDIN END \$\?",
+                               line).group(1)
+        output = ''
+        if command.startswith('sshd -T'):
+            output = ''.join(f'{key} {value}\r\n' for key, value in self.settings.items())
+        elif command.startswith('cat /etc/ssh/ssh_host_ed25519_key.pub'):
+            output = self.HOST_KEY + ' root@freebsd\r\n'
+        return f'LANDIN-BEGIN\r\n{output}LANDIN-END 0\r\n'.encode()
+
+    def close(self):
+        self.server.close()
+
+
+class FreeBSDGuestAdmission(unittest.TestCase):
+    """The lane's guest admits only the key made for its boot, and the
+    client holds the guest to the host key it reported on its console."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.alive = Mock()
+        self.alive.poll.return_value = None
+
+    def admitted(self, settings):
+        console_path = self.root / 'console.sock'
+        guest = FakeGuestConsole(console_path, settings)
+        self.addCleanup(guest.close)
+        console = vm.Console(console_path, self.alive, vm.time.monotonic() + 30)
+        try:
+            return guest, vm.admit(console, 'ssh-ed25519 AAAAexample landin-freebsd-lane')
+        finally:
+            console.close()
+
+    def test_a_booted_guest_is_reached_only_with_its_boot_key_and_host_key(self):
+        guest = vm.Guest(2222, identity=self.root / 'client', known_hosts=self.root / 'known_hosts')
+        options = [guest.ssh[i + 1] for i, word in enumerate(guest.ssh) if word == '-o']
+        self.assertIn('StrictHostKeyChecking=yes', options)
+        self.assertIn('UserKnownHostsFile=' + str(self.root / 'known_hosts'), options)
+        self.assertIn('IdentitiesOnly=yes', options)
+        self.assertIn('PreferredAuthentications=publickey', options)
+        self.assertEqual(guest.ssh[guest.ssh.index('-i') + 1], str(self.root / 'client'))
+        self.assertEqual(guest.ssh[guest.ssh.index('-F') + 1], 'none')
+        self.assertNotIn('StrictHostKeyChecking=no', options)
+        self.assertNotIn('UserKnownHostsFile=/dev/null', options)
+        self.assertEqual(guest.ssh[-3:], ['-p', '2222', 'root@127.0.0.1'])
+        # A development VM is the caller's: its identity and known hosts.
+        development = vm.Guest(2222)
+        self.assertFalse({'-F', '-i'} & set(development.ssh))
+        self.assertFalse(any('HostKeyChecking' in word or 'KnownHosts' in word for word in development.ssh))
+        with self.assertRaisesRegex(ValueError, 'unusable SSH key path'):
+            vm.Guest(2222, identity=self.root / 'a key', known_hosts=self.root / 'known_hosts')
+
+    @unittest.skipUnless(shutil.which('ssh-keygen'), 'needs OpenSSH ssh-keygen')
+    def test_each_boot_makes_its_own_private_client_key(self):
+        first, second = self.root / 'first', self.root / 'second'
+        first.mkdir()
+        second.mkdir()
+        key, public = vm.client_key(first)
+        _, other = vm.client_key(second)
+        self.assertNotEqual(public, other)
+        self.assertTrue(public.startswith('ssh-ed25519 '))
+        self.assertEqual(os.stat(key).st_mode & 0o077, 0)
+
+    def test_admission_replaces_the_empty_password_login_with_the_boot_key(self):
+        commands = vm.admission('ssh-ed25519 AAAAexample landin-freebsd-lane')
+        self.assertIn("printf '%s\\n' 'ssh-ed25519 AAAAexample landin-freebsd-lane'"
+                      ' > /root/.ssh/authorized_keys', commands)
+        removed = next(c for c in commands if c.startswith("sed -i '' -E"))
+        for setting in ('PermitRootLogin', 'PasswordAuthentication', 'PermitEmptyPasswords'):
+            self.assertIn(setting, removed)
+        added = ' '.join(c for c in commands if '>> /etc/ssh/sshd_config' in c)
+        for setting in ("'PermitEmptyPasswords no'", "'PasswordAuthentication no'",
+                        "'AuthenticationMethods publickey'", "'PermitRootLogin prohibit-password'"):
+            self.assertIn(setting, added)
+        self.assertLess(commands.index(removed), commands.index('sshd -t && service sshd restart'))
+        # Every framed line fits the guest's canonical input line.
+        real = ('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIGwO9Ma/0gN2Vas3XHyUd5ugh4lETuVModK+qLlwEma'
+                ' landin-freebsd-lane')
+        self.assertLess(max(len(vm.Console.frame(c)) for c in vm.admission(real)), vm.Console.LINE)
+
+    def test_the_console_admits_the_key_and_returns_the_reported_host_key(self):
+        settings = {key: values[0] for key, values in vm.ADMITTED.items()}
+        guest, host_key = self.admitted(settings)
+        self.assertEqual(host_key, FakeGuestConsole.HOST_KEY)
+        self.assertEqual(guest.typed[0], 'root')
+        self.assertEqual(len(guest.typed), 1 + len(vm.admission('ssh-ed25519 AAAAexample landin-freebsd-lane')))
+
+    def test_a_guest_still_admitting_empty_passwords_is_refused(self):
+        settings = {key: values[0] for key, values in vm.ADMITTED.items()}
+        settings['permitemptypasswords'] = 'yes'
+        with self.assertRaisesRegex(ValueError, 'still admits more than the boot key'):
+            self.admitted(settings)
+
+    def test_a_vm_that_exits_before_admission_is_reported(self):
+        self.alive.poll.return_value = 1
+        with self.assertRaisesRegex(ValueError, 'VM exited before it was admitted'):
+            vm.Console(self.root / 'never.sock', self.alive, vm.time.monotonic() + 30)
+
+    def test_the_guest_forwards_no_port_until_admission(self):
+        firmware = self.root / 'code.fd'
+        firmware.write_bytes(b'')
+        private = self.root / 'private'
+        with patch.dict(os.environ, {'LANDIN_FREEBSD_EFI': str(firmware)}):
+            argv = vm.qemu_argv('arm64', self.root / 'guest.qcow2', self.root, private)
+        self.assertFalse(any('hostfwd' in word for word in argv))
+        self.assertIn('user,id=net0', argv)
+        console = argv[argv.index('-chardev') + 1]
+        self.assertIn('path=' + str(private / 'console.sock'), console)
+        self.assertIn('logfile=' + str(self.root / 'console.log'), console)
+        self.assertEqual(argv[argv.index('-monitor') + 1],
+                         'unix:' + str(private / 'monitor.sock') + ',server=on,wait=off')
+
+    def test_a_forward_counts_only_once_the_monitor_lists_it(self):
+        def monitor(table):
+            path = self.root / ('monitor-%d.sock' % len(table))
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.bind(str(path))
+            server.listen(1)
+            self.addCleanup(server.close)
+            asked = []
+            def serve():
+                connection, _ = server.accept()
+                with connection, connection.makefile('rb') as lines:
+                    connection.sendall(b'QEMU monitor\r\n(qemu) ')
+                    for line in lines:
+                        asked.append(line.decode().strip())
+                        answer = table if line.startswith(b'info usernet') else b''
+                        connection.sendall(line.rstrip() + b'\r\n' + answer + b'(qemu) ')
+            threading.Thread(target=serve, daemon=True).start()
+            return path, asked
+        listed = (b'Hub -1 (net0):\r\n  Protocol[State]    FD  Source Address  Port   Dest. Address  Port RecvQ SendQ\r\n'
+                  b'  TCP[HOST_FORWARD]  13       127.0.0.1 40123       10.0.2.15    22     0     0\r\n')
+        path, asked = monitor(listed)
+        self.assertTrue(vm.forward(path, 40123))
+        self.assertEqual(asked, ['hostfwd_add net0 tcp:127.0.0.1:40123-:22', 'info usernet'])
+        path, _ = monitor(b"Could not set up host forwarding rule 'tcp:127.0.0.1:40124-:22'\r\n")
+        self.assertFalse(vm.forward(path, 40124))
 
 
 class ExpectedOutput(unittest.TestCase):

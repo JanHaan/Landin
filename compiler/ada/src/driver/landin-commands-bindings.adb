@@ -1,4 +1,3 @@
-with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with GNAT.SHA256;
 
@@ -736,7 +735,7 @@ package body Landin.Commands.Bindings is
          exception
             when Failure : External_Tool_Failed =>
                Report (Cat.Bindings_Clang_Refused,
-                       Ada.Exceptions.Exception_Message (Failure)
+                       Platform.Tool_Failure_Reason (Tools, Failure)
                        & "; cannot execute Clang " & US.To_String (Clang));
                return False;
          end;
