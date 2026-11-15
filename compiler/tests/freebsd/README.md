@@ -139,7 +139,8 @@ image on Linux without running it.
 
 Select `arm64`, `abi` or `debugger` for the other lanes. `--case=NAME` is exact
 and visibly filtered; `NAME` is the fixture directory's bare name, such as
-`network-connect-within`, without the class the other runners write before it. `--ssh-port=PORT` uses an existing development VM;
+`network-connect-within`, without the class the other runners write before it. `--ssh-port=PORT` uses an existing development VM, logging in as root
+at `127.0.0.1:PORT` with the caller's own SSH identity and known hosts;
 `--prepare-only` emits and inspects a payload without executing it.
 `--prepared=DIR --runner-ssh='ssh ... ci@freebsd-vm'` consumes it through the
 supplied VM transport, verifies payload and executable hashes and the CI
