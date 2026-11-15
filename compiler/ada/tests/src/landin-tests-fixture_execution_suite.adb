@@ -510,6 +510,39 @@ package body Landin.Tests.Fixture_Execution_Suite is
    function Label_Of (Item : Fixture) return String is
      (Class_Directory (Class (Item)) & "/" & Name (Item));
 
+   function Selection_Problem_With
+     (Path : String; Host : Landin.Platform.Filesystem'Class) return String;
+
+   function Selection_Problem_With
+     (Path : String; Host : Landin.Platform.Filesystem'Class) return String
+   is
+      Found : Catalogue;
+      Rule  : constant String :=
+        "a fixture selector names one fixture as CLASS/NAME, its"
+        & " directory under compiler/tests/fixtures, such as"
+        & " negative/variant-match-duplicate";
+   begin
+      Discover (Found, Fixture_Root, Host, Only => Path);
+      if Problem_Count (Found) /= 0
+        or else (Count (Found) = 1 and then Label_Of (Nth (Found, 1)) = Path)
+      then
+         return "";
+      end if;
+      for Kind in Fixture_Class loop
+         if Path = Class_Directory (Kind) then
+            return "--fixture=" & Path & " names a class, which selects"
+              & " nothing: " & Rule;
+         end if;
+      end loop;
+      return "--fixture=" & Path & " names no fixture: " & Rule;
+   end Selection_Problem_With;
+
+   function Selection_Problem (Path : String) return String is
+      Host : Landin.Platform.Native.Native_Filesystem;
+   begin
+      return Selection_Problem_With (Path, Host);
+   end Selection_Problem;
+
    --  A watchdog stops a child with a signal, but that intervention is not
    --  the trap a fixture promised to produce.  Keep the verdict on the typed
    --  outcome rather than on the adapter's explanatory output.
@@ -1037,6 +1070,50 @@ package body Landin.Tests.Fixture_Execution_Suite is
          "a selector that is not a code is refused: "
          & Unbounded.To_String (Problem));
    end A_Code_Selects_The_Reports_Carrying_It;
+
+   --  A fixture selector names one fixture, CLASS/NAME; a class alone,
+   --  or a name no fixture has, is refused with that form before
+   --  anything runs.
+   procedure A_Fixture_Selector_Names_One_Fixture
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Fixture_Selector_Names_One_Fixture
+     (Item : in out Landin.Testing.Context)
+   is
+      Host      : Landin.Testing.Fakes.Fake_Filesystem;
+      Directory : constant String := Fixture_Root & "/negative/sample";
+   begin
+      Host.Add_Directory (Fixture_Root);
+      Host.Add_Directory (Fixture_Root & "/negative");
+      Host.Add_Directory (Directory);
+      Host.Add_File
+        (Directory & "/fixture.meta",
+         "class: negative" & ASCII.LF
+         & "summary: a refusal a selector names" & ASCII.LF
+         & "program: program.ldn" & ASCII.LF
+         & "codes: L0100" & ASCII.LF
+         & "constructs: 0380" & ASCII.LF
+         & "targets: linux-x86-64" & ASCII.LF);
+      Host.Add_File (Directory & "/program.ldn", "x: u8 = (" & ASCII.LF);
+
+      Landin.Testing.Check_Equal
+        (Item, Selection_Problem_With ("negative/sample", Host), "",
+         "a selector naming one fixture is no problem");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Selection_Problem_With ("negative", Host),
+            "--fixture=negative names a class, which selects nothing: a"
+            & " fixture selector names one fixture as CLASS/NAME") > 0,
+         "a class alone is refused with the CLASS/NAME form: "
+         & Selection_Problem_With ("negative", Host));
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Selection_Problem_With ("negative/smaple", Host),
+            "--fixture=negative/smaple names no fixture: a fixture"
+            & " selector names one fixture as CLASS/NAME") > 0,
+         "a name no fixture has is refused with the same form: "
+         & Selection_Problem_With ("negative/smaple", Host));
+   end A_Fixture_Selector_Names_One_Fixture;
 
    --  A report re-recorded by name writes the bytes refine reports now,
    --  and only while its status and codes are still the ones pinned: a
@@ -5017,6 +5094,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a report is recorded by name",
          A_Report_Is_Recorded_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution", "a fixture selector names one fixture",
+         A_Fixture_Selector_Names_One_Fixture'Access);
       Landin.Testing.Register
         (Into, "fixture execution",
          "targets not emitting yet still refuse",

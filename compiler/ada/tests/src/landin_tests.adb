@@ -526,15 +526,19 @@ begin
          declare
             Wrote : Boolean := True;
 
-            procedure Wrote_Or_Not (Done : Boolean; Name : String);
+            procedure Wrote_Or_Not
+              (Done : Boolean; Name : String; Why : String := "");
 
-            procedure Wrote_Or_Not (Done : Boolean; Name : String) is
+            procedure Wrote_Or_Not
+              (Done : Boolean; Name : String; Why : String := "") is
             begin
                if Done then
                   Text_IO.Put_Line ("wrote " & Name);
                else
                   Text_IO.Put_Line
-                    (Text_IO.Standard_Error, "could not write " & Name);
+                    (Text_IO.Standard_Error,
+                     "could not write " & Name
+                     & (if Why = "" then "" else ": " & Why));
                   Wrote := False;
                end if;
             end Wrote_Or_Not;
@@ -543,9 +547,15 @@ begin
             --  rewrites the others; with nothing named, all three as
             --  before.  A failure is the run's, and the rest still record.
             if What = "" or else What = "lowering" then
-               Landin.Tests.Lowering_Suite.Record_Artefact
-                 ("../tests/lowering.ir", Wrote);
-               Wrote_Or_Not (Wrote, "compiler/tests/lowering.ir");
+               declare
+                  Said : Unbounded.Unbounded_String;
+               begin
+                  Landin.Tests.Lowering_Suite.Record_Artefact
+                    ("../tests/lowering.ir", Wrote, Said);
+                  Wrote_Or_Not
+                    (Wrote, "compiler/tests/lowering.ir",
+                     Unbounded.To_String (Said));
+               end;
             end if;
             if Wrote and then (What = "" or else What = "layout") then
                Landin.Tests.Targets_Suite.Record_Artefact
@@ -629,7 +639,27 @@ begin
    if Mode = Run_Fixture then
       declare
          Applicable : Landin.Platform.Path_List;
+         Refused    : Boolean := False;
       begin
+         --  A selector that names no fixture is refused before anything
+         --  runs, saying the CLASS/NAME form, as a case selector is.
+         for Path of Fixtures loop
+            declare
+               Problem : constant String :=
+                 Landin.Tests.Fixture_Execution_Suite.Selection_Problem
+                   (Path);
+            begin
+               if Problem /= "" then
+                  Text_IO.Put_Line
+                    (Text_IO.Standard_Error, "landin_tests: " & Problem);
+                  Refused := True;
+               end if;
+            end;
+         end loop;
+         if Refused then
+            Ada.Command_Line.Set_Exit_Status (2);
+            return;
+         end if;
          for Path of Fixtures loop
             Unbounded.Append (Fixture_Lines, "FILTERED fixture=" & Path
                               & ASCII.LF);

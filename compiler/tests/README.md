@@ -163,10 +163,14 @@ suite's. With `--host` it lists what a host-only run registers.
 ./scripts/dev-test.sh --cases='fixture execution'
 ```
 
-A fixture selector accepts `positive`, `negative`, `runtime`, `abi`, or any
-other discovered class whose fixture has a recorded `expect`. It invokes the
-real scanner-through-backend path appropriate to that class, including
-assembling, linking and executing a runtime or ABI fixture. Every selected
+A fixture selector names one fixture as `CLASS/NAME`, its directory under
+`compiler/tests/fixtures`, of class `positive`, `negative`, `runtime`, `abi`,
+or any other discovered class whose fixture has a recorded `expect`. A class
+alone, or a name no fixture has, is refused before anything runs, with that
+form; `--suite='fixture execution'` runs every class's fixtures on the lane.
+A selected fixture runs the real scanner-through-backend path appropriate to
+its class, including assembling, linking and executing a runtime or ABI
+fixture. Every selected
 transcript begins with `FILTERED`, and an unknown selection fails: focused
 feedback cannot look like the complete suite by accident.  A fixture this
 run's lane does not run, one whose `targets:` do not name the lane and

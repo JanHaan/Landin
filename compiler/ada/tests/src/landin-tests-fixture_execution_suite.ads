@@ -16,6 +16,13 @@ package Landin.Tests.Fixture_Execution_Suite is
    --  PATH selects no single well-formed fixture, which the run reports.
    function Lane_Note (Path : String) return String;
 
+   --  Why fixture selector PATH is refused before anything runs, or ""
+   --  when it names one fixture: a selector is CLASS/NAME, the fixture's
+   --  directory under compiler/tests/fixtures, and a class alone names
+   --  none.  A named fixture whose metadata is faulty is not refused
+   --  here; the case that runs it reports the fault.
+   function Selection_Problem (Path : String) return String;
+
    --  The command that runs fixture LABEL on the lane of TARGET, a name
    --  `targets:` may hold.
    function Lane_Command (Label, Target : String) return String;
