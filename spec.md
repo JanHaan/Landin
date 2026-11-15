@@ -28948,6 +28948,36 @@ to targets it does not choose.
 
 **Pinned by** `scripts/tests/test_host_determinism.py`'s `FirmwareEntry`.
 
+### D1365 — The build-mode comparison is dealt round shards, not split by target
+
+**The discrepancy:** the gate's `build-modes` jobs split the five mode
+targets by hand, one Linux target with firmware targets in each, as the
+host manifest's parts are (D658). The Xtensa configurations doubled one
+part's firmware requests, 17,176 against 8,964, and a GitHub-hosted runner
+of the same label took between 940 and 1,786 seconds over that part, so
+it ran 29.7 minutes of its 30 on 2026-11-15 and was cancelled at the limit
+once before, its comparison already clean.
+
+**Chosen:** `emit_manifest.py modes --shard=I/N` compares every I-th
+request of the list it builds, from the I-th, and the gate runs three jobs,
+`build-modes-1` to `build-modes-3`, each over every mode target. A shard is
+a third of the requests and of their kinds whatever target or level the
+corpus gains: on one 32-core host the three took 163, 166 and 164 seconds,
+and on the gate's runners about ten minutes on a fast one and eighteen on
+the slowest yet, under the same 30-minute limit.
+
+**The alternatives:** raising the limit, which leaves the next target to
+grow one part again, past whatever limit was chosen; three parts by
+target, one for each Linux target and one for the firmware, each of which
+would still take two-thirds of the limit on a slow runner and lean again
+when a target is added; and four shards, one more job beside the gate's
+others under the account's concurrent-job cap, for a margin three already
+give.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`: `BuildModes`, that
+the shards together are every request once, and `Workflows`, that the
+gate's jobs are shards 1 to N of `--shard=I/N` with no target list.
+
 ### D659 — The lowering record lowers a fixture where the harness compiles it
 
 **The tour said** nothing; `compiler/tests/lowering.ir` lowered every
