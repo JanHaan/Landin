@@ -11,6 +11,7 @@
       <context name="Normal" attribute="Normal Text" lineEndContext="#stay">
         <StringDetect String="--(" attribute="Comment" context="Block Comment"/>
         <Detect2Chars char="-" char1="-" attribute="Comment" context="Line Comment"/>
+        <RegExpr String="\bthrough(?=\s+[a-z_][a-z0-9_]*\s*(--.*)?$)" attribute="Keyword"/>
         <keyword String="keywords" attribute="Keyword"/>
         <keyword String="types" attribute="Data Type"/>
         <keyword String="constants" attribute="Constant"/>

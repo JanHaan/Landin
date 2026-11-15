@@ -14,3 +14,10 @@ public sample: () -> (result: u23) =
         return
     end if
 end sample
+
+host is io.files (close: events_close) through services -- supplied
+board is fibre.scheduler through runs
+
+through: (flag: bool) -> (code: i32) =
+    code = through_value(flag)
+end through

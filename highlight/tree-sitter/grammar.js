@@ -32,7 +32,7 @@ const PREC = {
 // declaration, a label or a parameter could begin, read as the name it is
 // everywhere else.
 function contextualName($) {
-  return alias(choice('distinct', 'link', 'option', 'as', 'caller'), $.identifier);
+  return alias(choice('distinct', 'link', 'option', 'as', 'caller', 'through'), $.identifier);
 }
 
 // A statement's label, as it is written, left and closed, which may be a
@@ -126,6 +126,9 @@ module.exports = grammar({
     // `link(` begins a link attribute or calls something named `link`; the
     // attribute's own labels decide.
     [$.link_symbol, $.indexed_expression],
+    // `through` after a conformance's list supplies its entries through a
+    // field, or names the declaration that follows; the next token decides.
+    [$.conformance_declaration],
   ],
 
   rules: {
@@ -232,6 +235,7 @@ module.exports = grammar({
       alias('link', $.identifier),
       alias('distinct', $.identifier),
       alias('caller', $.identifier),
+      alias('through', $.identifier),
     ),
 
     // D233: several names may share one binding, with one written type.
@@ -317,8 +321,18 @@ module.exports = grammar({
       field('target', $.conformance_target),
       'is',
       field('concept', $.declaration_reference),
-      '(', optional(commaSep1($.conformance_argument)), ')',
+      choice(
+        seq(
+          '(', optional(commaSep1($.conformance_argument)), ')',
+          optional($.conformance_field),
+        ),
+        $.conformance_field,
+      ),
     ),
+    // `through` is contextual: it names the field of the conforming struct
+    // whose provider supplies every entry the list does not name, and is
+    // an ordinary name everywhere else.
+    conformance_field: $ => seq('through', field('field', $.identifier)),
     conformance_target: $ => choice(
       $.array_type,
       $.pointer_type,

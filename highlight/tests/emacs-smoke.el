@@ -23,6 +23,9 @@
 (landin-test-face-at "documentation comment" 'font-lock-doc-face)
 (landin-test-face-at "nested block comment" 'font-lock-comment-face)
 (landin-test-face-at "escaped" 'font-lock-string-face)
+(landin-test-face-at "board is fibre.scheduler through" 'font-lock-keyword-face)
+(landin-test-face-at "\nthrough" 'font-lock-function-name-face)
+(landin-test-face-at "end through" nil)
 
 (dolist (width '(3 4 5))
   (with-temp-buffer

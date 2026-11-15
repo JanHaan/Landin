@@ -46,6 +46,16 @@ public main: () -> (code: i32) =
     end if
 end main
 
+-- A conformance's field supplies every entry its list leaves out; `through`
+-- remains an ordinary name everywhere else.
+host is io.environment through services
+host is io.files (close: events_close) through services
+host is io.world ()
+
+through: (flag: bool) -> (code: i32) =
+    code = add(i32(flag), 0)
+end through
+
 -- D228 packed image surface; raw bits are validated at field extraction.
 packed_idle: atom
 packed_busy: atom

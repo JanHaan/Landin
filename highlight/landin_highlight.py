@@ -61,6 +61,18 @@ WIDTH = re.compile(r"^[ui](?:[1-9][0-9]{0,2}|0)$")
 
 CONSTANTS = {"true", "false", "zeroed", "none", "noreturn"}
 
+#  Contextual words that are names everywhere but one position, where a
+#  line can still find them: `through` and the field after it end a
+#  conformance whose provider supplies the entries its list leaves out.
+#  Everywhere else `through` is the name of a local, a function or a field,
+#  and reads as one.  A rendering with no look-ahead, Nano's and Notepad++'s,
+#  cannot tell the two apart and colours the word as it colours `is`.
+POSITIONAL_KEYWORDS = {"through"}
+
+# `through services` ending a line, perhaps before a comment: the name is
+# group 1, the field whose provider supplies the remaining entries.
+CONFORMANCE_FIELD = re.compile(r"\s+([A-Za-z_]\w*)\s*(?:--.*)?$")
+
 # the three reserved toolchain modules of [1560]
 BUILTIN_MODULES = {"compiler", "assembler", "linker"}
 
@@ -98,7 +110,8 @@ CLASSES = {
     "v":  "atom or literal constant",
     "b":  "reserved toolchain module",
     "f":  "name in call position",
-    "s":  "name after a dot: a field or a module member",
+    "s":  "a field or module member: a name after a dot, or after a"
+          " conformance's `through`",
     "d":  "name being declared",
     "n":  "number literal",
     "q":  "string, character, or raw literal",
@@ -141,6 +154,11 @@ class Scanner:
     def word_class(self, word, text, start, end):
         if word in KEYWORDS:
             return "k"
+        if word == "through" and CONFORMANCE_FIELD.match(text, end):
+            return "k"
+        if (CONFORMANCE_FIELD.match(" " + text[start:])
+                and re.search(r"(?<![\w.])through\s+$", text[:start])):
+            return "s"
         if word in TYPES or WIDTH.match(word):
             return "t"
         if word in CONSTANTS:

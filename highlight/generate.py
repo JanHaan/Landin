@@ -9,7 +9,8 @@ import plistlib
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from landin_highlight import BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES
+from landin_highlight import (BUILTIN_MODULES, CONSTANTS, KEYWORDS,
+                              POSITIONAL_KEYWORDS, TYPES)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -35,6 +36,13 @@ def textmate() -> str:
             {"match": builtin_type, "name": "storage.type.builtin.landin"},
             {"match": constants, "name": "constant.language.landin"},
             {"match": modules, "name": "support.module.landin"},
+            {
+                "match": r"\b(through)\s+([a-z_][a-z0-9_]*)(?=\s*(?:--.*)?$)",
+                "captures": {
+                    "1": {"name": "keyword.control.landin"},
+                    "2": {"name": "variable.other.member.landin"},
+                },
+            },
             {"match": keyword, "name": "keyword.control.landin"},
             {
                 "match": r"\b([a-z_][a-z0-9_]*)(?=\s*:\s*(?:type|atom)\b)",
@@ -122,9 +130,11 @@ def vim() -> str:
             declarations("landinType", TYPES),
             declarations("landinConstant", CONSTANTS),
             declarations("landinBuiltinModule", BUILTIN_MODULES),
+            r"syntax match landinKeyword /\<through\ze\s\+[a-z_][a-z0-9_]*\s*\%(--.*\)\?$/",
             r"syntax match landinWidthType /\<[ui]\%(0\|[1-9][0-9]\{0,2}\)\>/",
             r"syntax match landinFunction /\<[a-z_][a-z0-9_]*\ze\s*(/",
             r"syntax match landinMember /\.\zs[a-z_][a-z0-9_]*/",
+            r"syntax match landinMember /\%(\<through\s\+\)\@<=[a-z_][a-z0-9_]*\ze\s*\%(--.*\)\?$/",
             r"syntax match landinOperator /\%(+%\|-%\|\*%\|:=\|->\|\.\.<\|\.\.\|<<\|>>\|==\|<>\|<=\|>=\|[-+*\/%<>=!&|^~]\)/",
             "syntax match landinLineComment /--.*$/ contains=landinTodo",
             "syntax match landinDocComment /---.*$/ contains=landinTodo",
@@ -157,7 +167,7 @@ def nano() -> str:
         [
             f"# {GENERATED}",
             'syntax "landin" "\\.ldn$"',
-            color("brightblue", KEYWORDS),
+            color("brightblue", KEYWORDS | POSITIONAL_KEYWORDS),
             color("brightgreen", TYPES),
             color("magenta", CONSTANTS),
             color("cyan", BUILTIN_MODULES),
@@ -188,6 +198,7 @@ def kate() -> str:
       <context name="Normal" attribute="Normal Text" lineEndContext="#stay">
         <StringDetect String="--(" attribute="Comment" context="Block Comment"/>
         <Detect2Chars char="-" char1="-" attribute="Comment" context="Line Comment"/>
+        <RegExpr String="\\bthrough(?=\\s+[a-z_][a-z0-9_]*\\s*(--.*)?$)" attribute="Keyword"/>
         <keyword String="keywords" attribute="Keyword"/>
         <keyword String="types" attribute="Data Type"/>
         <keyword String="constants" attribute="Constant"/>
@@ -234,7 +245,7 @@ def kate() -> str:
 
 
 def notepad_plus_plus() -> str:
-    keyword = " ".join(sorted(KEYWORDS))
+    keyword = " ".join(sorted(KEYWORDS | POSITIONAL_KEYWORDS))
     types = " ".join(sorted(TYPES))
     constants = " ".join(sorted(CONSTANTS | BUILTIN_MODULES))
     return f'''<?xml version="1.0" encoding="UTF-8"?>

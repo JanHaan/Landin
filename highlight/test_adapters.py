@@ -13,8 +13,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from grammar_pin import PATHS, last_grammar_commit, uncommitted_grammar
-from landin_highlight import (BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES,
-                              Scanner, collect_symbols, source_lines)
+from landin_highlight import (BUILTIN_MODULES, CONSTANTS, KEYWORDS,
+                              POSITIONAL_KEYWORDS, TYPES, Scanner,
+                              collect_symbols, source_lines)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -173,6 +174,11 @@ def scanner_smoke(source: str) -> None:
     for module in BUILTIN_MODULES:
         assert has("b", module), f"scanner omits builtin module {module}"
     assert has("s", "member")
+    assert has("k", "through")
+    assert has("s", "runs")
+    assert not any(kind == "k" and text == "through" and index + 1 < len(tokens)
+                   and tokens[index + 1][1] == ":"
+                   for index, (kind, text) in enumerate(tokens))
     assert has("n", "0x2a")
 
 
@@ -278,6 +284,85 @@ def withdrawn_word_smoke(grammar: dict[str, object], emacs: str) -> None:
         return
     assert not any(token in Keyword and text == "arena" for token, text
                    in LandinLexer().get_tokens("pool := arena.over(backing)\n"))
+
+
+#  A conformance's `through` and the field after it, as they end a line, and
+#  `through` as the ordinary name the corpus already uses it as.
+THROUGH_FIELDS = [
+    ("host is io.environment through services", "services"),
+    ("host is io.files (close: events_close) through services -- note",
+     "services"),
+    ("view is indexable (idx: usize, item_type: u32) through inner", "inner"),
+    (") through inner", "inner"),
+]
+THROUGH_NAMES = [
+    "through: (flag: bool) -> none ! refused = attempt",
+    "    through(flag) else none",
+    "mut through: [3]u16 = typed",
+    "      and through[0] == 0x123456789ABCDEF0",
+    "    item.kind = values(row: through.val)",
+    "    through := through + 1",
+    "end through",
+    "end through -- done",
+]
+
+
+def contextual_through_smoke(grammar: dict[str, object], emacs: str,
+                             kate: ET.ElementTree) -> None:
+    """`through` is a keyword only before the field that ends a conformance.
+
+    Everywhere else it is a name: existing programs have a local, a
+    function, a field and a module binding called `through`, and colouring
+    them as syntax would be the regression `arena` was.  Nano and
+    Notepad++ have no look-ahead and colour it as they colour `is`.
+    """
+    assert "through" in POSITIONAL_KEYWORDS and "through" not in KEYWORDS
+    for line, field in THROUGH_FIELDS:
+        scanned = list(Scanner().scan(line))
+        assert ("k", "through") in scanned, scanned
+        assert ("s", field) in scanned, scanned
+    for line in THROUGH_NAMES:
+        scanned = list(Scanner().scan(line))
+        assert ("k", "through") not in scanned, scanned
+        assert ("s", "through") not in scanned, scanned
+
+    (pattern,) = [entry["match"] for entry in grammar["patterns"]
+                  if "through" in entry.get("match", "")]
+    for line, field in THROUGH_FIELDS:
+        found = re.search(pattern, line)
+        assert found and found.group(1) == "through" and found.group(2) == field, line
+    for line in THROUGH_NAMES:
+        assert not re.search(pattern, line), f"TextMate colours {line!r}"
+
+    (rule,) = [rule for rule in kate.iter("RegExpr")
+               if "through" in rule.attrib["String"]]
+    assert rule.attrib["attribute"] == "Keyword"
+    for line, _ in THROUGH_FIELDS:
+        assert re.search(rule.attrib["String"], line), f"Kate misses {line!r}"
+    for line in THROUGH_NAMES:
+        assert not re.search(rule.attrib["String"], line), f"Kate colours {line!r}"
+
+    keywords = re.search(r"\(defconst landin-mode-keywords\s+'\(([^)]*)\)\)",
+                         emacs, re.S)
+    assert keywords and '"through"' not in keywords.group(1), (
+        "Emacs colours every through as a keyword")
+    assert '"\\\\_<\\\\(through\\\\)' in emacs, "Emacs has no rule for through"
+    vim = (ROOT / "vim/syntax/landin.vim").read_text(encoding="utf-8")
+    assert r"syntax match landinKeyword /\<through\ze" in vim
+    assert not re.search(r"syntax keyword landinKeyword .*\bthrough\b", vim)
+    for relative in ("nano/landin.nanorc", "notepad-plus-plus/Landin.xml"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        assert re.search(r"\bthrough\b", text), f"{relative} omits through"
+
+    try:
+        from pygments.token import Keyword, Name
+        from landin_pygments import LandinLexer
+    except ModuleNotFoundError:
+        return
+    tokens = list(LandinLexer().get_tokens(
+        "host is io.files () through services\nthrough: () -> none = end through\n"))
+    assert sum(token in Keyword and text == "through" for token, text in tokens) == 1
+    assert any(token in Name.Attribute and text == "services" for token, text in tokens)
 
 
 def pygments_smoke(source: str) -> None:
@@ -415,6 +500,7 @@ def main(argv: list[str]) -> int:
     if not argv:
         check_grammar_revision(helix, zed, emacs)
     withdrawn_word_smoke(grammar, emacs)
+    contextual_through_smoke(grammar, emacs, kate)
     for word in KEYWORDS | TYPES | CONSTANTS:
         assert f'"{word}"' in emacs, f"Emacs vocabulary omits {word}"
     modules = re.search(

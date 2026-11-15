@@ -24,6 +24,17 @@
       "name": "support.module.landin"
     },
     {
+      "match": "\\b(through)\\s+([a-z_][a-z0-9_]*)(?=\\s*(?:--.*)?$)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.landin"
+        },
+        "2": {
+          "name": "variable.other.member.landin"
+        }
+      }
+    },
+    {
       "match": "\\b(?:unchecked|complete|continue|distinct|escaping|offsetof|register|volatile|alignof|concept|variant|caller|extern|import|layout|little|option|public|return|sizeof|struct|uninit|align|begin|break|defer|elsif|fixed|inout|lenof|match|range|while|addr|atom|else|fail|from|into|link|loop|sink|then|type|undo|when|with|and|any|big|dec|end|for|inc|mut|not|ptr|set|soa|try|as|at|do|if|in|is|of|or)\\b",
       "name": "keyword.control.landin"
     },

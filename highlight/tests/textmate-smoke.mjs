@@ -39,7 +39,12 @@ const expectations = new Map([
   ["member", "variable.other.member.landin"],
   ["0x2a", "constant.numeric.landin"],
   ["true", "constant.language.landin"],
+  ["through runs", "keyword.control.landin"],
+  ["runs", "variable.other.member.landin"],
 ]);
+//  `through` is a keyword only before the field that ends a conformance;
+//  the function of that name stays a name.
+const names = [];
 const found = new Set();
 let stack = INITIAL;
 for (const line of fs.readFileSync(fixturePath, "utf8").split("\n")) {
@@ -53,6 +58,17 @@ for (const line of fs.readFileSync(fixturePath, "utf8").split("\n")) {
     );
     if (token?.scopes.includes(scope)) found.add(needle);
   }
+  for (const column of [line.indexOf("through:"), line.indexOf("end through")]) {
+    if (column < 0) continue;
+    const at = line.startsWith("end", column) ? column + 4 : column;
+    const token = result.tokens.find(
+      (candidate) => candidate.startIndex <= at && candidate.endIndex > at,
+    );
+    if (token?.scopes.includes("keyword.control.landin")) names.push(line);
+  }
+}
+if (names.length) {
+  throw new Error(`TextMate colours the name through as a keyword in: ${names.join("; ")}`);
 }
 
 const missing = [...expectations.keys()].filter((needle) => !found.has(needle));

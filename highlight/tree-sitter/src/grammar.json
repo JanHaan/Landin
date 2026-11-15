@@ -456,6 +456,10 @@
                                 {
                                   "type": "STRING",
                                   "value": "caller"
+                                },
+                                {
+                                  "type": "STRING",
+                                  "value": "through"
                                 }
                               ]
                             },
@@ -1000,6 +1004,15 @@
           "content": {
             "type": "STRING",
             "value": "caller"
+          },
+          "named": true,
+          "value": "identifier"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "STRING",
+            "value": "through"
           },
           "named": true,
           "value": "identifier"
@@ -1722,6 +1735,10 @@
                       {
                         "type": "STRING",
                         "value": "caller"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "through"
                       }
                     ]
                   },
@@ -1794,45 +1811,88 @@
           }
         },
         {
-          "type": "STRING",
-          "value": "("
-        },
-        {
           "type": "CHOICE",
           "members": [
             {
               "type": "SEQ",
               "members": [
                 {
-                  "type": "SYMBOL",
-                  "name": "conformance_argument"
+                  "type": "STRING",
+                  "value": "("
                 },
                 {
-                  "type": "REPEAT",
-                  "content": {
-                    "type": "SEQ",
-                    "members": [
-                      {
-                        "type": "STRING",
-                        "value": ","
-                      },
-                      {
-                        "type": "SYMBOL",
-                        "name": "conformance_argument"
-                      }
-                    ]
-                  }
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "conformance_argument"
+                        },
+                        {
+                          "type": "REPEAT",
+                          "content": {
+                            "type": "SEQ",
+                            "members": [
+                              {
+                                "type": "STRING",
+                                "value": ","
+                              },
+                              {
+                                "type": "SYMBOL",
+                                "name": "conformance_argument"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                },
+                {
+                  "type": "STRING",
+                  "value": ")"
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "conformance_field"
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
                 }
               ]
             },
             {
-              "type": "BLANK"
+              "type": "SYMBOL",
+              "name": "conformance_field"
             }
           ]
-        },
+        }
+      ]
+    },
+    "conformance_field": {
+      "type": "SEQ",
+      "members": [
         {
           "type": "STRING",
-          "value": ")"
+          "value": "through"
+        },
+        {
+          "type": "FIELD",
+          "name": "field",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
         }
       ]
     },
@@ -2532,6 +2592,10 @@
                       {
                         "type": "STRING",
                         "value": "caller"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "through"
                       }
                     ]
                   },
@@ -2702,6 +2766,10 @@
                         {
                           "type": "STRING",
                           "value": "caller"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "through"
                         }
                       ]
                     },
@@ -3668,6 +3736,10 @@
                         {
                           "type": "STRING",
                           "value": "caller"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "through"
                         }
                       ]
                     },
@@ -3739,6 +3811,10 @@
                         {
                           "type": "STRING",
                           "value": "caller"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "through"
                         }
                       ]
                     },
@@ -3866,6 +3942,10 @@
                         {
                           "type": "STRING",
                           "value": "caller"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "through"
                         }
                       ]
                     },
@@ -3978,6 +4058,10 @@
                         {
                           "type": "STRING",
                           "value": "caller"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "through"
                         }
                       ]
                     },
@@ -4113,6 +4197,10 @@
                         {
                           "type": "STRING",
                           "value": "caller"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "through"
                         }
                       ]
                     },
@@ -4233,6 +4321,10 @@
                         {
                           "type": "STRING",
                           "value": "caller"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "through"
                         }
                       ]
                     },
@@ -4381,6 +4473,10 @@
                           {
                             "type": "STRING",
                             "value": "caller"
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "through"
                           }
                         ]
                       },
@@ -4495,6 +4591,10 @@
                           {
                             "type": "STRING",
                             "value": "caller"
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "through"
                           }
                         ]
                       },
@@ -5397,6 +5497,10 @@
                       {
                         "type": "STRING",
                         "value": "caller"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "through"
                       }
                     ]
                   },
@@ -5464,6 +5568,10 @@
                       {
                         "type": "STRING",
                         "value": "caller"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "through"
                       }
                     ]
                   },
@@ -6863,6 +6971,10 @@
                     {
                       "type": "STRING",
                       "value": "caller"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "through"
                     }
                   ]
                 },
@@ -7637,6 +7749,9 @@
     [
       "link_symbol",
       "indexed_expression"
+    ],
+    [
+      "conformance_declaration"
     ]
   ],
   "precedences": [],

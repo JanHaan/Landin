@@ -10,9 +10,11 @@ syntax keyword landinKeyword addr align alignof and any as at atom begin big bre
 syntax keyword landinType bool cstring f16 f32 f64 i128 i16 i32 i64 i8 isize u128 u16 u32 u64 u8 usize utf16 utf8
 syntax keyword landinConstant false none noreturn true zeroed
 syntax keyword landinBuiltinModule assembler compiler linker
+syntax match landinKeyword /\<through\ze\s\+[a-z_][a-z0-9_]*\s*\%(--.*\)\?$/
 syntax match landinWidthType /\<[ui]\%(0\|[1-9][0-9]\{0,2}\)\>/
 syntax match landinFunction /\<[a-z_][a-z0-9_]*\ze\s*(/
 syntax match landinMember /\.\zs[a-z_][a-z0-9_]*/
+syntax match landinMember /\%(\<through\s\+\)\@<=[a-z_][a-z0-9_]*\ze\s*\%(--.*\)\?$/
 syntax match landinOperator /\%(+%\|-%\|\*%\|:=\|->\|\.\.<\|\.\.\|<<\|>>\|==\|<>\|<=\|>=\|[-+*\/%<>=!&|^~]\)/
 syntax match landinLineComment /--.*$/ contains=landinTodo
 syntax match landinDocComment /---.*$/ contains=landinTodo

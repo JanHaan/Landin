@@ -22,6 +22,10 @@ call s:AssertGroup('documentation comment', 'landinDocComment')
 call s:AssertGroup('nested block comment', 'landinBlockComment')
 call s:AssertGroup('escaped', 'landinString')
 call s:AssertGroup('raw$', 'landinRawString')
+call s:AssertGroup('through runs', 'landinKeyword')
+call s:AssertGroup('\<runs$', 'landinMember')
+call s:AssertGroup('^through:', '')
+call s:AssertGroup('end \zsthrough', '')
 
 enew
 setlocal shiftwidth=4 expandtab

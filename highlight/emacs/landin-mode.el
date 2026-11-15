@@ -125,6 +125,8 @@ Scan from a known code position so comment quotes cannot open a raw string."
   `((landin--match-block-comment (0 font-lock-comment-face t))
     (landin--match-raw-string (0 font-lock-string-face t))
     (,(regexp-opt landin-mode-keywords 'symbols) . font-lock-keyword-face)
+    ;; `through' is a name except before the field that ends a conformance.
+    ("\\_<\\(through\\)\\s-+[a-z_][a-z0-9_]*\\s-*\\(?:--.*\\)?$" 1 font-lock-keyword-face)
     (,(regexp-opt landin-mode-types 'symbols) . font-lock-type-face)
     (,(regexp-opt landin-mode-constants 'symbols) . font-lock-constant-face)
     (,(regexp-opt landin-mode-builtin-modules 'symbols) . font-lock-builtin-face)
@@ -161,8 +163,9 @@ Scan from a known code position so comment quotes cannot open a raw string."
                     "concept" "continue" "dec" "defer" "do" "else" "elsif" "end"
                     "escaping" "extern" "fail" "fixed" "for" "from" "if" "import"
                     "in" "inc" "inout" "into" "is" "loop" "match" "mut" "none" "option"
-                    "ptr" "public" "return" "sink" "sizeof" "struct" "then" "try"
-                    "type" "unchecked" "undo" "variant" "when" "while" "with"]
+                    "ptr" "public" "return" "sink" "sizeof" "struct" "then"
+                    "through" "try" "type" "unchecked" "undo" "variant" "when"
+                    "while" "with"]
                    @font-lock-keyword-face
                    (measurement_expression operator: (identifier) @font-lock-keyword-face
                                            (:match "\\`\\(?:len\\|offset\\)of\\'" @font-lock-keyword-face))

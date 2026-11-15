@@ -114,8 +114,12 @@ rather than a line.
 What it cannot do is tell the `set` of `[0410]` from a variable called
 `set`. The contextual words — `from`, `of`, `at`, `set`, `range`, `option`,
 `link`, `align` — are coloured by position, and some of them will be
-coloured wrongly. A regex cannot fix that. The tree-sitter grammar handles
-the enabled structural surface, including contextual `lenof` and `of`, the
+coloured wrongly. A regex cannot fix that. `through` is narrower: it is a
+keyword only before the field name that ends a conformance, as in
+`host is io.environment through services`, and a name everywhere else.
+The renderings that can look ahead colour it there alone; Nano and
+Notepad++ cannot, and colour it wherever it stands, as they colour `is`.
+The tree-sitter grammar handles the enabled structural surface, including contextual `lenof` and `of`, the
 `layout(c)`, `layout(optimal)`, `layout(packed, u32)`, packed positions,
 encoded unions and `link(symbol: ...)` annotations, and
 `extern(c)` function types, while `c`, `optimal`, `layout`, `link`, and `symbol`

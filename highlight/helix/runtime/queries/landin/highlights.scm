@@ -38,6 +38,7 @@
 (concept_entry name: (identifier) @function.method)
 (labeled_argument name: (identifier) @variable.parameter)
 (conformance_argument name: (identifier) @variable.parameter)
+(conformance_field field: (identifier) @property)
 (member_selection member: (identifier) @property)
 
 (call_expression function: (indexed_expression (identifier) @function.call))
@@ -52,7 +53,8 @@
   "continue" "dec" "defer" "do" "else" "elsif" "end" "escaping" "extern" "fail"
   "fixed" "for" "from" "if" "import" "in" "inc" "inout" "into" "is" "loop"
   "match" "mut" "none" "option" "ptr" "public" "return" "sink" "sizeof" "struct"
-  "then" "try" "type" "unchecked" "undo" "variant" "when" "while" "with"
+  "then" "through" "try" "type" "unchecked" "undo" "variant" "when" "while"
+  "with"
 ] @keyword
 
 (measurement_expression

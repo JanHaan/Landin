@@ -1,0 +1,225 @@
+==================
+A conformance supplies its other entries through a field
+==================
+
+host is io.environment through services
+host is io.files (close: events_close) through services
+(p: type is mem.allocator) counted(p) is mem.allocator (alloc: counted_alloc) through inner
+host is io.world ()
+
+---
+
+(source_file
+  (conformance_declaration
+    (conformance_target
+      (declaration_reference
+        (identifier)))
+    (declaration_reference
+      (identifier)
+      (member_selection
+        (identifier)))
+    (conformance_field
+      (identifier)))
+  (conformance_declaration
+    (conformance_target
+      (declaration_reference
+        (identifier)))
+    (declaration_reference
+      (identifier)
+      (member_selection
+        (identifier)))
+    (conformance_argument
+      (identifier)
+      (argument_rhs
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (indexed_expression
+                              (identifier))))))))))))))
+    (conformance_field
+      (identifier)))
+  (conformance_declaration
+    (type_formals
+      (type_formal
+        (identifier)
+        (declaration_reference
+          (identifier)
+          (member_selection
+            (identifier)))))
+    (conformance_target
+      (type_application
+        (declaration_reference
+          (identifier))
+        (type_argument
+          (declaration_reference
+            (identifier)))))
+    (declaration_reference
+      (identifier)
+      (member_selection
+        (identifier)))
+    (conformance_argument
+      (identifier)
+      (argument_rhs
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (indexed_expression
+                              (identifier))))))))))))))
+    (conformance_field
+      (identifier)))
+  (conformance_declaration
+    (conformance_target
+      (declaration_reference
+        (identifier)))
+    (declaration_reference
+      (identifier)
+      (member_selection
+        (identifier)))))
+
+==================
+Through names a function, a binding, an atom and an end
+==================
+
+host is io.world ()
+through: (flag: bool) -> none =
+    through(flag) else none
+    through := 1
+    code = through.val
+end through
+other is io.world () through via
+mut through: [3]u16 = typed
+through, beside: atom
+
+---
+
+(source_file
+  (conformance_declaration
+    (conformance_target
+      (declaration_reference
+        (identifier)))
+    (declaration_reference
+      (identifier)
+      (member_selection
+        (identifier))))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (scalar_type)))
+        (arrow)
+        (returns))
+      (block
+        (call_expression
+          (indexed_expression
+            (identifier))
+          (arguments
+            (logical_or_expression
+              (logical_and_expression
+                (comparison_expression
+                  (alternation_expression
+                    (exclusion_expression
+                      (conjunction_expression
+                        (shift_expression
+                          (sum_expression
+                            (product_expression
+                              (unary_expression
+                                (indexed_expression
+                                  (identifier)))))))))))))
+          (recovery_clause))
+        (binding
+          (identifier)
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (literal
+                                (integer_literal)))))))))))))
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (indexed_expression
+                                  (identifier))
+                                (member_selection
+                                  (identifier)))))))))))))))
+      (identifier)))
+  (conformance_declaration
+    (conformance_target
+      (declaration_reference
+        (identifier)))
+    (declaration_reference
+      (identifier)
+      (member_selection
+        (identifier)))
+    (conformance_field
+      (identifier)))
+  (public_declaration
+    (binding
+      (identifier_list
+        (identifier))
+      (array_type
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (literal
+                              (integer_literal))))))))))))
+        (scalar_type))
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (indexed_expression
+                            (identifier))))))))))))))
+  (public_declaration
+    (atom_declaration
+      (identifier_list
+        (identifier)
+        (identifier)))))
