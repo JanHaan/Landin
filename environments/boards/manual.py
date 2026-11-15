@@ -345,6 +345,10 @@ class Boot:
             self.state['status'] = 'stopped'
             self.state.pop('pending', None)
             self.event('stopped', phase=pending['phase'])
+            # Nothing accepts once stopped: closing the listener ends a
+            # connection still waiting in its backlog, rather than leave
+            # the operator's client waiting out its own timeout.
+            self.server.close()
             raise
 
     def wait(self, seconds, predicate=None):
