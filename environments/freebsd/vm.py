@@ -176,13 +176,17 @@ class Console:
     def __init__(self, path, process, deadline):
         self.process, self.deadline, self.received = process, deadline, bytearray()
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        while True:
-            self.alive()
-            try:
-                self.socket.connect(str(path))
-                break
-            except (FileNotFoundError, ConnectionRefusedError):
-                time.sleep(0.05)
+        try:
+            while True:
+                self.alive()
+                try:
+                    self.socket.connect(str(path))
+                    break
+                except (FileNotFoundError, ConnectionRefusedError):
+                    time.sleep(0.05)
+        except BaseException:
+            self.socket.close()
+            raise
 
     def alive(self):
         require(self.process.poll() is None, 'VM exited before it was admitted; see qemu.log')
