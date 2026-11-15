@@ -61,8 +61,10 @@ if test -d "$root/highlight/textmate/node_modules" && command -v node >/dev/null
     )
     test -s "$extension_tmp/landin-language.vsix"
     echo "TextMate tokenizer and VSIX packaging clean"
+elif ! command -v node >/dev/null 2>&1; then
+    skip textmate "Node.js absent; TextMate tokenizer smoke skipped (with node and npm on PATH, npm ci in highlight/textmate enables it)"
 else
-    skip textmate "TextMate test dependencies absent; tokenizer smoke skipped"
+    skip textmate "TextMate test dependencies absent; tokenizer smoke skipped (npm ci in highlight/textmate installs them)"
 fi
 
 #  The pinned CLI is the grammar package's own, as the gate installs it, or
