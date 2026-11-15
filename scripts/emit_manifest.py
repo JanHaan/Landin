@@ -30,7 +30,8 @@ the compiler's.  So each fixture is compiled from its own directory under
 the bare spellings its `fixture.meta` names -- `program`, then `with` in the
 order written, or `--root` and the directory itself -- which are the same
 strings on every host.  The fixture record decides what is compiled, as it
-does for the harness; a fixture this check could not read would be a
+does for the harness, down to the `--level` and the `--firmware-entry` its
+`args` give the target they choose; a fixture this check could not read would be a
 fixture it silently stopped checking, which is how 27 of them went
 unexamined while the header said "every positive fixture".
 
@@ -186,10 +187,6 @@ REFUSAL_PAIRS = {
     ("from-c", "cortex-m0"),
     ("r630-memory-scalars", "cortex-m0"),
     ("r660-machine-directives", "cortex-m0"),
-    #  A vector placement needs --firmware-entry (L0502), which the
-    #  manifest's assembly, an object's, does not name.
-    ("firmware-image-from-a-handler", "cortex-m0"),
-    ("description-copies-text-into-ram", "cortex-m0"),
     #  rv32 has no enabled C ABI (D660, D920), so it refuses every C
     #  fixture cortex-m0 once refused, and r630-memory-scalars' read-modify-write at its
     #  default rv32imc (D690).  assembly-operand-forms has no rv32 arm, and
@@ -313,6 +310,32 @@ def levels(fixture):
     return {target[-1]: level[-1]} if target and level else {}
 
 
+def firmware_entries(fixture):
+    """{target: entry} for the firmware entry FIXTURE's `args` request.
+
+    A fixture whose `args` choose a target and name its `--firmware-entry`
+    is compiled there as the harness compiles it, an image's program with
+    that entry, rather than as an object nothing starts: a vector placement
+    is refused without one (L0502), and with one the assembly is the
+    image's.  Every other target compiles it without (D1366).
+    """
+    args = fixture_meta.read(fixture, strict=False).args
+    target = [a.split("=", 1)[1] for a in args if a.startswith("--target=")]
+    entry = [a.split("=", 1)[1] for a in args if a.startswith("--firmware-entry=")]
+    return {target[-1]: entry[-1]} if target and entry else {}
+
+
+def requested_entries(name, directory):
+    """`firmware_entries` of a corpus source NAME, `{}` for a counterpart."""
+    return (firmware_entries(directory)
+            if name.startswith(("positive/", "runtime/")) else {})
+
+
+def entry_options(requested, target):
+    """The `--firmware-entry` REQUESTED names for TARGET, if any."""
+    return ["--firmware-entry=" + requested[target]] if target in requested else []
+
+
 def own_target(fixture):
     """The one target FIXTURE is compiled for, or None (D740).
 
@@ -418,6 +441,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
             #  and compiled without it can be another program or none.
             link = (fixture_meta.read(directory, strict=False).get("link")
                     if name.startswith("runtime/") else None)
+            requested = requested_entries(name, directory)
             for target in wanted:
                 for selected_level in configured_levels(target, level.get(target)):
                     for debug in (None, debug_information(target)) if debug_info else (None,):
@@ -431,6 +455,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
                                 jobs.append((key, refine, directory,
                                              (["--link=" + link] if link and target
                                               not in FIRMWARE_TARGETS else [])
+                                             + entry_options(requested, target)
                                              + sources, target,
                                              selected_level, mode, optimize,
                                              specialize, debug, asm))
@@ -683,6 +708,7 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
         for name, directory, sources, wanted, level in entries:
             link = (fixture_meta.read(directory, strict=False).get("link")
                     if name.startswith("runtime/") else None)
+            requested = requested_entries(name, directory)
             for target in wanted:
                 for selected_level in configured_levels(target, level.get(target)):
                     for optimize, specialize in STANDARD_PROFILES:
@@ -691,8 +717,10 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
                                + level_key(target, selected_level))
                         scratch = Path(tmp) / str(len(jobs))
                         scratch.mkdir()
-                        arguments = (["--link=" + link] if link and target
-                                     not in FIRMWARE_TARGETS else []) + sources
+                        arguments = ((["--link=" + link] if link and target
+                                      not in FIRMWARE_TARGETS else [])
+                                     + entry_options(requested, target)
+                                     + sources)
                         jobs.append((key, compilers, directory, arguments, target,
                                      selected_level, optimize, specialize, scratch))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:

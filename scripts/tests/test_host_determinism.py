@@ -573,6 +573,74 @@ class Levels(unittest.TestCase):
                 self.assertEqual(manifest[key], hashlib.sha256(said.encode()).hexdigest())
 
 
+class FirmwareEntry(unittest.TestCase):
+    """A fixture is compiled with the firmware entry its `args` request (D1366)."""
+
+    #  Refuses a firmware request without an entry, as L0502 refuses a
+    #  vector placement; writes the target and entry it was given.
+    STUB = ("said = [a for a in args if a.startswith(('--target=', '--firmware-entry='))]\n"
+            "if '--target=cortex-m0' in args and not any("
+            "a.startswith('--firmware-entry=') for a in args):\n"
+            "    sys.exit(1)\n"
+            "pathlib.Path(args[args.index('-o') + 1]).write_text(' '.join(said))\n")
+    META = ("program: main.ldn\ntargets: cortex-m0\n"
+            "args: --target=cortex-m0 --firmware-entry=start\n")
+
+    def area(self, tmp, meta):
+        area = Path(tmp)
+        fixture = area / "compiler/tests/fixtures/positive/example"
+        fixture.mkdir(parents=True)
+        (fixture / "fixture.meta").write_text(meta)
+        (area / "compiler/tests/fixtures/runtime").mkdir(parents=True)
+        refine = area / "refine"
+        refine.write_text("#!" + sys.executable + "\nimport pathlib, sys\n"
+                          "args = sys.argv[1:]\n" + self.STUB)
+        refine.chmod(0o755)
+        return area, refine
+
+    def test_the_manifest_emits_the_image_its_args_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area, refine = self.area(tmp, self.META)
+            out = area / "manifest.json"
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out)],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest = json.loads(out.read_text())
+        said = "--target=cortex-m0 --firmware-entry=start"
+        self.assertEqual(set(manifest.values()),
+                         {hashlib.sha256(said.encode()).hexdigest()})
+        self.assertEqual(len(manifest), 2 * 3 * 3)
+
+    def test_the_entry_applies_only_to_the_target_its_args_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area, refine = self.area(
+                tmp, "program: main.ldn\nargs: --target=cortex-m0 --firmware-entry=start\n")
+            out = area / "manifest.json"
+            subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out),
+                 "cortex-m0,rv32"], capture_output=True, text=True)
+            manifest = json.loads(out.read_text())
+        key = "example|%s|debug|optimize=none|specialize=off"
+        self.assertEqual(manifest[key % "rv32"],
+                         hashlib.sha256(b"--target=rv32").hexdigest())
+        self.assertEqual(manifest[key % "cortex-m0"],
+                         hashlib.sha256(b"--target=cortex-m0 --firmware-entry=start")
+                         .hexdigest())
+
+    def test_both_builds_are_given_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area, refine = self.area(tmp, self.META)
+            (area / "compiler/tests/cortex-m/cases").mkdir(parents=True)
+            (area / "compiler/tests/cortex-m/corpus.json").write_text(
+                json.dumps({"fixtures": {}}))
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "modes", str(refine), str(refine),
+                 str(area), "cortex-m0"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("requests 4  emitted 4", result.stdout)
+
+
 class OwnTarget(unittest.TestCase):
     """A fixture of one target is compiled for it alone (D740)."""
 

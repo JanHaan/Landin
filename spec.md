@@ -28923,6 +28923,31 @@ cannot answer.
 **Pinned by** `scripts/tests/test_host_determinism.py`'s `OwnTarget`,
 and `scripts/tests/test_check_controls.py`'s `TargetLists`.
 
+### D1366 — The manifest compiles a fixture with the firmware entry its `args` request
+
+**The discrepancy:** the host manifest and the build-mode comparison took
+a fixture's `--target` and `--level` from its `args` and nothing else, so
+seven Cortex-M0 positives whose `args` name `--firmware-entry=start` were
+compiled as objects nothing starts. Two of them place a vector slot, which
+is refused without an entry (L0502), and each had to be listed by hand
+among the manifest's expected refusals, which only a refused entry in the
+manifest showed a fixture's writer; the other five were checked as a
+program the harness never compiles.
+
+**Chosen:** a fixture whose `args` choose a target and name a
+`--firmware-entry` is compiled for that target with that entry, as the
+harness compiles it, in both the manifest and the comparison; on any other
+target it is compiled without one, as its level is (D658). The two
+refusals listed for the entry are gone, and all seven are held to the
+image's assembly.
+
+**The alternatives:** naming the hand-kept list in the fixture guide, which
+leaves the image's assembly unchecked by either comparison; and passing
+every word of `args`, which a fixture of several targets would then give
+to targets it does not choose.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`'s `FirmwareEntry`.
+
 ### D659 — The lowering record lowers a fixture where the harness compiles it
 
 **The tour said** nothing; `compiler/tests/lowering.ir` lowered every
