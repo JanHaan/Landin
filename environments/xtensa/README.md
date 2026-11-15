@@ -100,6 +100,12 @@ python3 environments/xtensa/corpus.py \
   --chip esp32 --memory-profile=sim --all
 ```
 
+Each case's image stays in its directory under `--output`, so two runs of
+one chip and profile, one with the compiler built before a change and one
+with the compiler after it, compare image by image with
+`python3 scripts/compare_images.py BASE_DIR NEW_DIR`
+([comparing the images two compilers link](../../docs/process.md#comparing-the-images-two-compilers-link)).
+
 The SIM profile declares 64 MiB of emulator RAM, separate code/data regions
 and an 8 MiB stack. It retains the selected chip's actual ISA configuration;
 it supplies no physical SRAM, PSRAM, cache or peripheral claim. Chip-machine

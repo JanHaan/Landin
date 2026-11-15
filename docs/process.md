@@ -151,6 +151,12 @@ Before an item closes:
    ```
 
    and `./scripts/scaling.sh`, alone on its host, since it measures time.
+   When the item's exit evidence is that firmware images are unchanged, or
+   changed only where it says, run the lanes once with the item's starting
+   compiler and once with its own, and compare the two output trees with
+   `scripts/compare_images.py`, as
+   [comparing the images two compilers link](#comparing-the-images-two-compilers-link)
+   shows.
 3. Write the `Done:` paragraph, remove the register rows the item settled
    and list their identities among the records that have left the
    register, as `ROADMAP.md`'s mechanics ask.
@@ -1135,6 +1141,42 @@ information names the directory a fixture was compiled in, which is why
 both runs take the same ROOT, and why the gate's cross-host manifest has no
 debug entries: two hosts' checkouts sit at different paths. An unexpected
 refusal is reported with the first diagnostic the compiler gave for it.
+
+### Comparing the images two compilers link
+
+The manifests compare assembly. A firmware lane also links, with the
+target's own linker and the startup and vectors refine writes, and keeps
+each image it built under its output directory; it keeps no image of a
+base, so a comparison of linked images runs the lane twice, once with each
+compiler and each into a directory of its own, and then compares the two
+trees with `scripts/compare_images.py`. For the Cortex-M lanes' programs
+part, with `$base`, `$new` and `$proof` as above and `$TOOLS` the root
+`environments/cortex-m/setup.py` installed:
+
+```sh
+python3 environments/cortex-m/run.py --part=programs --tools "$TOOLS" \
+    --refine "$base" --output "$proof/base-programs"
+python3 environments/cortex-m/run.py --part=programs --tools "$TOOLS" \
+    --refine "$new" --output "$proof/new-programs"
+python3 scripts/compare_images.py "$proof/base-programs" "$proof/new-programs"
+```
+
+It pairs every `*.elf` by its path below each directory, so the two runs
+must select the same lanes, parts or chip, and compares what each loads:
+the entry point, the `PT_LOAD` segments' addresses, sizes and flags, and
+their bytes. Debugging information and symbols are not compared, so an
+image whose only change is a path in its line table is the same image.
+For an image that differs it names the routines and data of another size,
+those of the same size whose bytes differ, those only in one image, those
+whose bytes are the same at another address, and the loaded bytes outside
+every named symbol, in the vectors for instance. A call or a literal
+reaching a routine that moved changes too, so the routines of another size
+and those in one image alone are usually the change, and the rest follow
+from it. Images in one tree alone are named, and the last line counts
+each kind; the status is 0 only when both trees hold the same images and
+each loads the same bytes. It lists twelve names of each kind, and
+`--names=N` lists N. The Xtensa corpus compares the same way, with its `--chip`,
+`--memory-profile` and `--all` given to both runs alike.
 
 ## Historical: choosing acceptance scope
 
