@@ -309,7 +309,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R13.91 — Say which instance, and which value (planned).**
+**Next roadmap item: R13.92 — What a container holds (planned).**
 
 ## Questions, bugs and ideas
 
