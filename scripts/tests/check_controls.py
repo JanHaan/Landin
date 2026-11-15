@@ -124,9 +124,36 @@ def _ignore(directory, names):
                   if os.path.normpath(os.path.join(here, name)) in ignored}
 
 
+FIXTURES = "compiler/tests/fixtures"
+
+
+def library_named_by_fixtures():
+    """The files outside the fixture tree a fixture's `with` names.
+
+    A rooted `with`, such as runtime/r420-vec-growth-boundary's
+    `../../../../../core/vec/growth.ldn`, reaches the library, which a
+    copied fixture tree would not hold: fixture_sources then called the
+    file missing, and every control over the copy filtered for its own
+    message.  `tree` copies these beside the fixtures."""
+    fixtures = ROOT / FIXTURES
+    out = set()
+    for meta in fixtures.glob("*/*/fixture.meta"):
+        for line in meta.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("with:"):
+                continue
+            for one in (part.strip() for part in line[5:].split(",")):
+                named = Path(os.path.normpath(meta.parent / one))
+                if one and fixtures not in named.parents:
+                    out.add(named.relative_to(ROOT).as_posix())
+    return sorted(out)
+
+
 @contextmanager
 def tree(written=None, copied=()):
-    """A throwaway repository: `written` from scratch, `copied` from here."""
+    """A throwaway repository: `written` from scratch, `copied` from here.
+
+    A copy of the fixture tree brings the library files its fixtures'
+    `with` names (library_named_by_fixtures), and no more of the library."""
     with tempfile.TemporaryDirectory() as raw:
         #  Resolved, because on macOS the temporary directory is reached
         #  through a symlink: /var is /private/var.  ROOT and the working
@@ -147,6 +174,13 @@ def tree(written=None, copied=()):
                                 symlinks=True, ignore=_ignore)
             else:
                 shutil.copy2(source, target)
+        if any(relative == FIXTURES or FIXTURES.startswith(relative + "/")
+               for relative in copied):
+            for relative in library_named_by_fixtures():
+                target = root / relative
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(ROOT / relative, target)
         for relative, content in (written or {}).items():
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
