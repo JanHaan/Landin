@@ -1,0 +1,9 @@
+class: negative
+summary: D1367 warns where a body ends with a value after its named result was assigned on every path to it, on one line and over two, and not where it only ends with its value or a path skips the assignment
+program: program.ldn
+codes: L0693, L0693
+status: 0
+constructs: 0880, 1080, 1750, 1910
+targets: linux-x86-64, synthetic-32
+args: ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn
+expect: expected.txt

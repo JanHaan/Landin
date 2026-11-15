@@ -63,6 +63,14 @@ A code whose diagnostic offers a fix says so. A fix is shown as a `help` line
 and handed to an editor as an edit; a likely fix is a guess, an exact one is
 what the rule itself requires.
 
+A report made while a generic routine's body is checked for one of its
+instances carries one note more, after the notes its section describes:
+`in the instance `made(t: pair)` the call at main.ldn:8:10 made`, which
+names the routine with each formal's actual and the first call that asked
+for the instance, and ends `, and 2 more instances` where the same report of
+other instances is folded into it (D1368). A code's section does not repeat
+this.
+
 A retired code is never raised. Its section says so and what retired it, so
 its number is never read as belonging to another rule.
 
@@ -1886,6 +1894,24 @@ invocation error.
 scale: (usize: i32) -> (r: i32) =
     r = usize * 2
 end scale
+```
+
+### L0693
+
+A body ends with a value after its named result was already given one on
+every path that reaches the value (D1367). The value is the body's result
+[0880], so it replaces what the assignment wrote: `code = 0 1` is two
+statements, `code = 0` and the value `1`, and returns 1. The program is
+accepted, since a body may end with its value, and only one that also
+assigned the result first is warned of. Keep the assignment or the value.
+A body that ends with its value without assigning the result first is not
+warned of, nor is one whose earlier assignment some path skips. `--allow=L0693`
+suppresses the warning; `--deny=L0693` makes it an invocation error.
+
+```landin
+public main: () -> (code: i32) =
+    code = 0 1
+end main
 ```
 
 ### L0350

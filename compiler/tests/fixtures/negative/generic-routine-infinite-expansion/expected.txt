@@ -8,3 +8,4 @@ error[L0340]: this recursive generic call expands the same template at a differe
 1 | expand: (t: type, value: t) -> (result: t) = expand(1) end expand
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the active generic template
   = note: D138: recursive same-key calls are finite; a different active tuple is not
+  = note: in the instance `expand(t: u8)` the call at ../tests/fixtures/negative/generic-routine-infinite-expansion/program.ldn:5:9 made

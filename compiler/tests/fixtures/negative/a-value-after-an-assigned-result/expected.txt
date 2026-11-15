@@ -1,0 +1,21 @@
+warning[L0693]: the body ends with a value, which replaces what `code` was given
+  --> ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn:6:14
+  |
+6 |     code = 0 1
+  |              ^
+  --> ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn:5:14
+  |
+5 | slip: () -> (code: i32) =
+  |              ^^^^^^^^^ the result it replaces
+  = note: D1367: a body's trailing value is its result [0880]; keep the assignment or the value, not both
+warning[L0693]: the body ends with a value, which replaces what `r` was given
+  --> ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn:11:5
+   |
+11 |     x
+   |     ^
+  --> ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn:9:21
+  |
+9 | twice: (x: i32) -> (r: i32) =
+  |                     ^^^^^^ the result it replaces
+  = note: D1367: a body's trailing value is its result [0880]; keep the assignment or the value, not both
+refine: checked ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn and wrote nothing; run it with `refine run ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn`, or build it with `refine compile ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn -o program`

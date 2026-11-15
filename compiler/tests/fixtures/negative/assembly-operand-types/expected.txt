@@ -58,3 +58,4 @@ error[L0330]: an assembly operand's type is written, not a type formal
 11 |     assembler.block("movs {v}, #1", in v: t at general = value)
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1990]: the register an operand needs is known where the block is written
+  = note: in the instance `generic(t: u32)` the call at ../tests/fixtures/negative/assembly-operand-types/program.ldn:15:5 made

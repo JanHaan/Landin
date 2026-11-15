@@ -1,0 +1,9 @@
+class: negative
+summary: D1368 names the instance and the call that made it on each report made in an instance, so two instances refused on one line are told apart, and a merged report says how many more it stands for
+program: program.ldn
+codes: L0301, L0301, L0301
+status: 1
+constructs: 1290, 1300
+targets: linux-x86-64, synthetic-32
+args: ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn
+expect: expected.txt

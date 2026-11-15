@@ -187,15 +187,60 @@ package body Landin.Stages.Checking is
         return Ada.Containers.Hash_Type
         is (Ada.Containers.Hash_Type (Index));
 
+      --  The instance a report was first made in, and the report's
+      --  position, so that a later instance's copy of it can be counted.
+      type Generic_Report is record
+         Instance : Landin.Checking.Routine_Instance_Id;
+         Position : Positive;
+      end record;
+
       package Generic_Report_Maps is new Ada.Containers.Hashed_Maps
         (Key_Type        => Generic_Report_Key,
-         Element_Type    => Landin.Checking.Routine_Instance_Id,
+         Element_Type    => Generic_Report,
          Hash            => Hash_Report,
          Equivalent_Keys => "=");
       package Index_Sets is new Ada.Containers.Hashed_Sets
         (Element_Type        => Positive,
          Hash                => Hash_Index,
          Equivalent_Elements => "=");
+
+      --  D1368: where each routine instance was first asked for, by the
+      --  call that made it, keyed by the instance's position.
+      package Instance_Site_Maps is new Ada.Containers.Hashed_Maps
+        (Key_Type        => Positive,
+         Element_Type    => Landin.Provenance.Origin,
+         Hash            => Hash_Index,
+         Equivalent_Keys => "=",
+         "="             => Landin.Provenance."=");
+      Instance_Sites : Instance_Site_Maps.Map;
+
+      --  D1368: the instance each report made in one was made in, by the
+      --  report's position, and how many other instances made the same
+      --  report, which one report stands for.
+      package Report_Instance_Maps is new Ada.Containers.Hashed_Maps
+        (Key_Type        => Positive,
+         Element_Type    => Landin.Checking.Routine_Instance_Id,
+         Hash            => Hash_Index,
+         Equivalent_Keys => "=",
+         "="             => Landin.Checking.Routine_Identities."=");
+      Report_Instances : Report_Instance_Maps.Map;
+      package Report_Count_Maps is new Ada.Containers.Hashed_Maps
+        (Key_Type        => Positive,
+         Element_Type    => Positive,
+         Hash            => Hash_Index,
+         Equivalent_Keys => "=");
+      Report_Repeats : Report_Count_Maps.Map;
+
+      procedure Note_Instance_Site
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         Site     : Landin.Provenance.Origin);
+
+      --  D1368: "in the instance `sum(t: pair(u8))` the call at
+      --  main.ldn:30:5 made, and 1 more instance", spelt for WITHIN.
+      function Instance_Note
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         More     : Natural;
+         Within   : Landin.Source.Source_Id) return String;
 
       --  Whether Selection is the callee of a call, which a selected
       --  entry must be.
@@ -242,18 +287,45 @@ package body Landin.Stages.Checking is
                   Previous : Generic_Report_Maps.Cursor;
                   Inserted : Boolean;
                begin
-                  Generic_Reports.Insert (Key, Instance, Previous, Inserted);
-                  if not Inserted
-                    and then Generic_Report_Maps.Element (Previous)
+                  Generic_Reports.Insert
+                    (Key, (Instance => Instance, Position => Position),
+                     Previous, Inserted);
+                  if Inserted then
+                     Report_Instances.Include (Position, Instance);
+                  elsif Generic_Report_Maps.Element (Previous).Instance
                       /= Instance
                   then
                      Repeated_Reports.Include (Position);
+                     declare
+                        First : constant Positive :=
+                          Generic_Report_Maps.Element (Previous).Position;
+                     begin
+                        if Report_Repeats.Contains (First) then
+                           Report_Repeats.Replace
+                             (First, Report_Repeats.Element (First) + 1);
+                        else
+                           Report_Repeats.Insert (First, 1);
+                        end if;
+                     end;
                   end if;
                end;
             end loop;
          end if;
          Attributed_Reports := Last;
       end Close_Report_View;
+
+      procedure Note_Instance_Site
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         Site     : Landin.Provenance.Origin)
+      is
+         Position : constant Positive :=
+           Landin.Checking.Routine_Identities.Position (Types.all, Instance);
+      begin
+         if not Instance_Sites.Contains (Position) then
+            Instance_Sites.Insert (Position, Site);
+         end if;
+      end Note_Instance_Site;
+
 
       procedure Activate_Routine_View
         (Instance : Landin.Checking.Routine_Instance_Id;
@@ -13941,6 +14013,9 @@ package body Landin.Stages.Checking is
                    (Types.all, Template, Key);
                Expected_Evidence : constant Natural := Evidence_Count;
             begin
+               --  D1368: the first call that asks for the instance names
+               --  it, whether or not its body checks.
+               Note_Instance_Site (Instance, Syn.Origin (Caller_Tree, Call));
                if Landin.Checking.Routine_Evidence_Count
                     (Types.all, Instance) = 0
                then
@@ -13982,6 +14057,8 @@ package body Landin.Stages.Checking is
                   if Record_Target then
                      Landin.Checking.Note_Routine_Target
                        (Types.all, Caller_Tree, Call, Instance);
+                     Note_Instance_Site
+                       (Instance, Syn.Origin (Caller_Tree, Call));
                      if Landin.Checking.Routine_Signature_Of
                        (Types.all, Instance) /= Landin.Checking.No_Signature
                      then
@@ -14338,6 +14415,8 @@ package body Landin.Stages.Checking is
                      if Record_Target then
                         Landin.Checking.Note_Routine_Target
                           (Types.all, Caller_Tree, Call, Instance);
+                        Note_Instance_Site
+                          (Instance, Syn.Origin (Caller_Tree, Call));
                         Landin.Checking.Note_Caller_Fills
                           (Types.all, Caller_Tree, Call, Signature);
                      end if;
@@ -23911,6 +23990,88 @@ package body Landin.Stages.Checking is
          end if;
          return Syn.No_Node;
       end Unreachable_Through;
+
+      function Instance_Note
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         More     : Natural;
+         Within   : Landin.Source.Source_Id) return String
+      is
+         Template : constant Res.Declaration_Id :=
+           Landin.Checking.Routine_Template_Of (Types.all, Instance);
+         Template_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Template));
+         Function_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Template);
+         Text : Ada.Strings.Unbounded.Unbounded_String;
+         Position : constant Positive :=
+           Landin.Checking.Routine_Identities.Position (Types.all, Instance);
+         use Ada.Strings.Unbounded;
+      begin
+         Append (Text, "in the instance `"
+                 & Spelled (Res.Name_Of (Meanings.all, Template)) & "(");
+         for Index in 1 .. Natural'Min
+           (Syn.Generic_Formal_Count (Template_Tree.all, Function_Node),
+            Landin.Checking.Routine_Actual_Count (Types.all, Instance))
+         loop
+            declare
+               Actual : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Nth_Routine_Actual
+                   (Types.all, Instance, Index);
+            begin
+               if Index > 1 then
+                  Append (Text, ", ");
+               end if;
+               Append
+                 (Text,
+                  Spelled
+                    (Syn.Name
+                       (Template_Tree.all,
+                        Syn.Nth_Generic_Formal
+                          (Template_Tree.all, Function_Node, Index)))
+                  & ": ");
+               if Landin.Checking."="
+                 (Landin.Checking.Actual_Kind_Of (Actual),
+                  Landin.Checking.Fixed_Actual_Kind)
+               then
+                  Append
+                    (Text,
+                     Ada.Strings.Fixed.Trim
+                       (Landin.Checking.Fixed_Magnitude_Of (Actual)'Image,
+                        Ada.Strings.Both));
+               else
+                  Append
+                    (Text, Type_Spelling (Descriptor_For (Actual), Within));
+               end if;
+            end;
+         end loop;
+         Append (Text, ")`");
+         if Instance_Sites.Contains (Position) then
+            declare
+               Site : constant Landin.Provenance.Origin :=
+                 Instance_Sites.Element (Position);
+               Snapshot : Landin.Source.Snapshot renames
+                 Source (Context, Site.Source);
+               At_Site : constant Landin.Source.Position :=
+                 Landin.Source.Position_Of (Snapshot, Site.Where.First);
+            begin
+               Append
+                 (Text, " the call at " & Landin.Source.Name (Snapshot) & ":"
+                  & Ada.Strings.Fixed.Trim
+                      (At_Site.Line'Image, Ada.Strings.Both)
+                  & ":"
+                  & Ada.Strings.Fixed.Trim
+                      (At_Site.Column'Image, Ada.Strings.Both)
+                  & " made");
+            end;
+         end if;
+         if More > 0 then
+            Append
+              (Text,
+               ", and" & More'Image & " more instance"
+               & (if More = 1 then "" else "s"));
+         end if;
+         return To_String (Text);
+      end Instance_Note;
 
       procedure Validate_Conformance_Entries is
          procedure Validate (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
@@ -46433,7 +46594,7 @@ package body Landin.Stages.Checking is
       declare
          Ordered : Landin.Diagnostics.Diagnostic_List;
       begin
-         if Repeated_Reports.Is_Empty then
+         if Repeated_Reports.Is_Empty and then Report_Instances.Is_Empty then
             Ordered := Landin.Diagnostics.Sorted (Found);
          else
             declare
@@ -46441,7 +46602,24 @@ package body Landin.Stages.Checking is
             begin
                for Position in 1 .. Landin.Diagnostics.Count (Found) loop
                   if not Repeated_Reports.Contains (Position) then
-                     Kept.Append (Landin.Diagnostics.Get (Found, Position));
+                     declare
+                        Item : Landin.Diagnostics.Diagnostic :=
+                          Landin.Diagnostics.Get (Found, Position);
+                     begin
+                        --  D1368: a report made in an instance names it.
+                        if Report_Instances.Contains (Position) then
+                           Landin.Diagnostics.Add_Note
+                             (Item,
+                              Instance_Note
+                                (Report_Instances.Element (Position),
+                                 (if Report_Repeats.Contains (Position)
+                                  then Report_Repeats.Element (Position)
+                                  else 0),
+                                 Landin.Diagnostics.Source_Of
+                                   (Landin.Diagnostics.Primary (Item))));
+                        end if;
+                        Kept.Append (Item);
+                     end;
                   end if;
                end loop;
                Ordered := Landin.Diagnostics.Sorted (Kept);

@@ -8,3 +8,4 @@ error[L0341]: this static entry name is declared more than once in its concept c
 14 | select: (t: type is both, x: t) -> (r: i32) = r = t.value(x) end select
    |                                                   ^ the constrained type formal
   = note: D221: a selected entry name is unique across the distinct concept closure
+  = note: in the instance `select(t: i32)` the call at ../tests/fixtures/negative/r491-static-entry-collision/program.ldn:15:31 made

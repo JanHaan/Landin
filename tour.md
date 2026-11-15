@@ -802,6 +802,11 @@ value fills the named result. The function still takes an `end`.
 triple_it: (x: i32) -> (r: i32) = x * 3 end
 ```
 
+A longer body may end with a value too ([1080]), and that value is the
+result, whatever the body assigned to it before: `code = 0 1` is two
+statements and returns 1. The compiler warns of a value written after the
+result was assigned (L0693).
+
 ### [0980] Calling: positional, then named
 
 A call gives its positional arguments first and its named arguments after

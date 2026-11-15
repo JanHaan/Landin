@@ -1689,6 +1689,19 @@ package body Landin.Diagnostics.Explanations is
                & "is already refused with L0338, whose note names it. `--a"
                & "llow=L0692` suppresses the warning; `--deny=L0692` makes"
                & " it an invocation error.",
+            when Catalogue.Body_Value_Replaces_Result =>
+               "A body ends with a value after its named result was alre"
+               & "ady given one on every path that reaches the value (D136"
+               & "7). The value is the body's result [0880], so it replace"
+               & "s what the assignment wrote: `code = 0 1` is two stateme"
+               & "nts, `code = 0` and the value `1`, and returns 1. The pr"
+               & "ogram is accepted, since a body may end with its value, "
+               & "and only one that also assigned the result first is warn"
+               & "ed of. Keep the assignment or the value. A body that end"
+               & "s with its value without assigning the result first is n"
+               & "ot warned of, nor is one whose earlier assignment some p"
+               & "ath skips. `--allow=L0693` suppresses the warning; `--de"
+               & "ny=L0693` makes it an invocation error.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -3216,6 +3229,13 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end scale"
                & LF,
+            when Catalogue.Body_Value_Replaces_Result =>
+               "public main: () -> (code: i32) ="
+               & LF
+               & "    code = 0 1"
+               & LF
+               & "end main"
+               & LF,
             when Catalogue.No_Toolchain =>
                "",
             when Catalogue.Toolchain_Failed =>
@@ -3547,6 +3567,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Unused_Else_Binding =>
                "",
             when Catalogue.Predeclared_Type_Name_Taken =>
+               "",
+            when Catalogue.Body_Value_Replaces_Result =>
                "",
             when Catalogue.No_Toolchain =>
                "",

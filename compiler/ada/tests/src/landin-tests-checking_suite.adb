@@ -14104,13 +14104,19 @@ package body Landin.Tests.Checking_Suite is
       Calls : constant String :=
         "use: () -> none = _ = g(1) _ = g(true) end use" & LF;
 
+      --  D1368: a report made in an instance carries one note more, its
+      --  instance's, and one that stands for others says how many.
       procedure Check
         (Label, Text : String; Expected : Positive;
-         Different_Messages : Boolean := False);
+         Different_Messages : Boolean := False;
+         In_Instance : Boolean := True;
+         More : String := "");
 
       procedure Check
         (Label, Text : String; Expected : Positive;
-         Different_Messages : Boolean := False)
+         Different_Messages : Boolean := False;
+         In_Instance : Boolean := True;
+         More : String := "")
       is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -14144,8 +14150,29 @@ package body Landin.Tests.Checking_Suite is
                      and then Landin.Diagnostics.Source_Of
                        (Landin.Diagnostics.Primary (Report)) = Src
                      and then Landin.Diagnostics.Label_Count (Report) = 1
-                     and then Landin.Diagnostics.Note_Count (Report) = 1,
+                     and then Landin.Diagnostics.Note_Count (Report)
+                       = (if In_Instance then 2 else 1),
                      Label & " retains code, source, related label and note");
+                  if In_Instance
+                    and then Landin.Diagnostics.Note_Count (Report) = 2
+                  then
+                     declare
+                        Note : constant String := Landin.Diagnostics.Nth_Note
+                          (Report, 2);
+                     begin
+                        Landin.Testing.Check
+                          (Item,
+                           Ada.Strings.Fixed.Index (Note, "in the instance `")
+                             = Note'First
+                           and then Ada.Strings.Fixed.Index
+                             (Note, " the call at generic-reports.ldn:") > 0
+                           and then (More = ""
+                                     or else Ada.Strings.Fixed.Index
+                                       (Note, More) > 0),
+                           Label & " names its instance and its call: "
+                           & Note);
+                     end;
+                  end if;
                end;
             end loop;
             if Different_Messages and then Landin.Diagnostics.Count
@@ -14164,7 +14191,8 @@ package body Landin.Tests.Checking_Suite is
    begin
       Check ("one template mistake",
          "g: (t: type, v: t) -> (out: t) =" & LF & Body_Text
-         & " out = v end g" & LF & Calls, 1);
+         & " out = v end g" & LF & Calls, 1,
+         More => ", and 1 more instance");
       Check ("two template locations",
          "g: (t: type, v: t) -> (out: t) =" & LF & Body_Text
          & " for j in start..<limit do end for" & LF
@@ -14176,7 +14204,7 @@ package body Landin.Tests.Checking_Suite is
          2, Different_Messages => True);
       Check ("ordinary routine control",
          "g: (v: i32) -> (out: i32) =" & LF & Body_Text
-         & " out = v end g" & LF, 1);
+         & " out = v end g" & LF, 1, In_Instance => False);
       Check ("independent templates",
          "g: (t: type, v: t) -> (out: t) =" & LF & Body_Text
          & " out = v end g" & LF

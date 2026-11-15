@@ -1,0 +1,29 @@
+--  D1367: a body that ends with a value after its result was assigned on
+--  every path to it is warned of, on one line and over two; a body that
+--  only ends with its value, or whose assignment a path skips, is not.
+
+slip: () -> (code: i32) =
+    code = 0 1
+end slip
+
+twice: (x: i32) -> (r: i32) =
+    r = x
+    x
+end twice
+
+valued: (fails: bool) -> (index: i32) =
+    if fails then
+        index = 1
+        return
+    end if
+    7
+end valued
+
+partial: (c: bool) -> (r: i32) =
+    if c then r = 1 end if
+    2
+end partial
+
+public main: () -> (code: i32) =
+    code = slip() + twice(1) + valued(false) + partial(true)
+end main

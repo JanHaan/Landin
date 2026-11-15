@@ -1,0 +1,25 @@
+--  D1368: a report made in an instance names the instance and the call
+--  that made it: two instances refused on one line are told apart, and a
+--  report that stands for others says how many.
+
+pair: type = struct
+    a: u8
+end pair
+
+other: type = struct
+    b: u8
+end other
+
+made: (t: type, value: u8) -> (r: t) =
+    r = t(value)
+end made
+
+shown: (t: type, value: t) -> (r: u8) =
+    r = u8(value)
+end shown
+
+public main: () -> (code: i32) =
+    p := made(t: pair, value: 1)
+    o := made(t: other, value: 2)
+    code = i32(shown(p)) + i32(shown(o))
+end main

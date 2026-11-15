@@ -280,6 +280,8 @@ package Landin.Diagnostics.Catalogue is
       Unused_Else_Binding,
       --  D1342: a declaration takes a predeclared type's name.
       Predeclared_Type_Name_Taken,
+      --  D1367: a body ends with a value after its result was assigned.
+      Body_Value_Replaces_Result,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -375,7 +377,10 @@ package Landin.Diagnostics.Catalogue is
       --  a new code whose interval is wider joins its list.
       Least    : Natural;
       Most     : Natural;
-      --  How many notes every occurrence carries.
+      --  How many notes every occurrence carries.  A report made in a
+      --  generic routine's instance carries one more, after all of these
+      --  and the route, naming the instance (D1368); the checker adds it
+      --  where it publishes, after the row has been held to the report.
       Notes    : Natural;
       --  Whether an occurrence may carry one note after those: the route,
       --  the form to write instead, which a code whose notes are fixed
@@ -1253,6 +1258,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D1342: a declaration that takes a predeclared type's"
                    & " name")),
+      Body_Value_Replaces_Result =>
+        (Code => "L0693", Level => Warning, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D1367: a body ends with a value after its named result"
+                   & " was assigned")),
       --  The backend's reports need not have a source. A missing entry uses an
       --  entry-module anchor when available, but permits a point in an empty
       --  file or a source-free fallback. L0500 is the one diagnostic here a

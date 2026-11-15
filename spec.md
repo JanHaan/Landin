@@ -14479,6 +14479,35 @@ takes `try` away from generic code and callbacks. It is declined.
 **Pinned by** `negative/selected-callee-keeps-its-error-set` and
 `runtime/selected-callee-keeps-its-error-set`.
 
+### D1367 — A value written after the result was assigned is warned of
+
+**The tour said** at [0880] that a body that is one expression fills the
+named result with it, and at [1080] that a block's value is its last
+expression; D124 made a routine's block body one of those blocks. It did not
+say that a body which assigns its result and then ends with a value gives
+the value, so a slip that writes a value twice, `code = 0 1`, two statements
+on one line by [1750], compiled without a word and returned 1, and `r = x`
+followed by `x` the same.
+
+**Chosen:** where a routine's block body ends with a value and every path
+that reaches the value has already assigned a named result, L0693, a
+warning, is reported at the value, naming the result, with a label at it.
+The program is accepted: the value is the result, as [1080] says. A body
+that ends with its value without assigning the result first, as
+`runtime/r491-callee-errors`' `pick` does, is not warned of, nor is one whose earlier
+assignment some path skips, since the value is then the only result on that
+path. The check is the definite-assignment walk's own [1910]: the state at
+the value, the one that decides whether the result is assigned at the end.
+`--allow` and `--deny` take it as any warning.
+
+**The alternatives:** a warning wherever a value follows a statement on its
+line, which misses the same slip over two lines and says nothing of what
+the value replaced; refusing the program, which would change what compiles
+today for a form that has a meaning; and a sentence in the tour alone, which
+the tour now carries as well. The maintainer chose the warning.
+
+**Pinned by** `negative/a-value-after-an-assigned-result`.
+
 ## DECISIONS: CONTROL FLOW
 
 Branches, loops, traversal, the cleanup an edge selects, and what the
@@ -17156,6 +17185,36 @@ and a concrete type's differ only in where the evidence comes from.
 `negative/type-name-entry-two-conformances`,
 `negative/type-name-entry-is-not-a-value` and
 `negative/type-parameter-entry-not-declared`.
+
+### D1368 — A report made in an instance names it
+
+**The tour said** at [1290] that a generic routine's body is checked for
+each instance a call makes, and that an error that depends on the instance
+is reported once a call picks it. The report named neither the instance's
+type arguments nor the call, so two instances refused on one line could not
+be told apart, and identical reports of several instances, which the
+checker merges into one, said nothing of the others.
+
+**Chosen:** every report made while an instance's body is checked carries
+one note more, after its others, written `in the instance
+`made(t: pair)` the call at main.ldn:8:10 made`: the routine, each type or
+fixed formal with its actual, spelt as the reported source would write it,
+and where the first call that asked for the instance stands. A report that
+stands for the same report of other instances ends `, and 2 more
+instances`. An instance no call asked for, a conformance's generic
+provider, is named without a call. The note is the catalogue's for every
+code, beside a row's own notes and its route (D761), so no row's label
+count changes, and `docs/diagnostics.md` says so once, above the codes'
+sections. The merge itself is
+unchanged: one report for one mistake in the template, however many
+instances meet it.
+
+**The alternatives:** a related label at the call, which would change the
+label contract of every code a generic body can raise; and one report per
+instance, which turns one mistake in a widely used routine into many
+reports. The maintainer chose the note.
+
+**Pinned by** `negative/instance-reports-name-their-instance`.
 
 ## DECISIONS: MODULES AND COMPILE TIME
 

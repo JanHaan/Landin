@@ -508,7 +508,12 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   block never reads `name`, names the forms that bind nothing and offers
   the exact rewrite to `else begin` (D1261, D1341), and L0692, which marks
   a declaration that takes a predeclared type's name, `u8` or `cstring`
-  (D1342), so `default` and `all` currently select the same warnings.
+  (D1342), and L0693, which marks a body that ends with a value after its
+  named result was assigned, `code = 0 1` (D1367), so `default` and `all`
+  currently select the same warnings.
+- A report made in a generic routine's instance names the instance and the
+  call that made it, and how many more instances made the same report
+  (D1368).
 - Unnecessary local declarations produce advisories even when comments or
   layout prevent a safe automatic repair; unused signed numeric literals are
   also covered. A warning can report an observation without an edit; exact

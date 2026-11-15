@@ -365,6 +365,34 @@ package body Landin.Stages.Checking.Flow is
         return not null access constant Syn.Tree
         is (Syn.Forest.Tree_Of (Trees.all, Id));
 
+      --  D1367: whether an error already stands on Where, so that the
+      --  value a refusal is about draws no warning beside it.
+      function Refused_At (Where : Landin.Source.Span) return Boolean;
+
+      function Refused_At (Where : Landin.Source.Span) return Boolean is
+         use type Landin.Diagnostics.Severity;
+      begin
+         for Index in 1 .. Landin.Diagnostics.Count (Into) loop
+            declare
+               Item : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Into, Index);
+               Primary : constant Landin.Diagnostics.Label :=
+                 Landin.Diagnostics.Primary (Item);
+            begin
+               if Landin.Diagnostics.Level (Item) = Landin.Diagnostics.Error
+                 and then Landin.Source."="
+                   (Landin.Diagnostics.Source_Of (Primary),
+                    Syn.Source_Of (Of_Tree))
+                 and then Landin.Source.Contains
+                   (Where, Landin.Diagnostics.Span_Of (Primary))
+               then
+                  return True;
+               end if;
+            end;
+         end loop;
+         return False;
+      end Refused_At;
+
       function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
 
@@ -4018,6 +4046,34 @@ package body Landin.Stages.Checking.Flow is
                         Returned : constant Syn.Node_Id :=
                           Syn.Nth_Return (Of_Tree, Function_Node, Which);
                      begin
+                        --  D1367: the value replaces what every path here
+                        --  already gave the result, which is a slip,
+                        --  `code = 0 1`, more often than a meaning.
+                        if Assigned_Everywhere
+                             (Declaration_At
+                                (Syn.Source_Of (Of_Tree), Returned), State)
+                          and then not Refused_At
+                            (Syn.Where
+                               (Of_Tree, Syn.Block_Value (Of_Tree, Block)))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Body_Value_Replaces_Result,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where
+                                (Of_Tree, Syn.Block_Value (Of_Tree, Block)),
+                              Message => "the body ends with a value, which"
+                                         & " replaces what `"
+                                         & Spelled (Syn.Name
+                                             (Of_Tree, Returned))
+                                         & "` was given",
+                              Note    => "D1367: a body's trailing value is"
+                                         & " its result [0880]; keep the"
+                                         & " assignment or the value, not"
+                                         & " both",
+                              Related => Syn.Origin (Of_Tree, Returned),
+                              Because => "the result it replaces",
+                              Into    => Sink.all);
+                        end if;
                         Mark (Returned);
                         Revive_Place (Of_Tree, Returned, State);
                      end;

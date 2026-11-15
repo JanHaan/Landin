@@ -1,0 +1,33 @@
+error[L0301]: `t` is `other` in this instance, which has no conversion from the supplied value
+  --> ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:14:9
+   |
+14 |     r = t(value)
+   |         ^^^^^^^^
+  --> ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:14:9
+   |
+14 |     r = t(value)
+   |         ^ the type parameter
+  = note: D1100: a type parameter applied to a value is the conversion its actual type has, and every instance's actual needs one from this value
+  = note: in the instance `made(t: other)` the call at ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:23:10 made
+error[L0301]: `t` is `pair` in this instance, which has no conversion from the supplied value
+  --> ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:14:9
+   |
+14 |     r = t(value)
+   |         ^^^^^^^^
+  --> ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:14:9
+   |
+14 |     r = t(value)
+   |         ^ the type parameter
+  = note: D1100: a type parameter applied to a value is the conversion its actual type has, and every instance's actual needs one from this value
+  = note: in the instance `made(t: pair)` the call at ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:22:10 made
+error[L0301]: this integer conversion requires a numeric, bool or pointer value
+  --> ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:18:12
+   |
+18 |     r = u8(value)
+   |            ^^^^^
+  --> ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:18:9
+   |
+18 |     r = u8(value)
+   |         ^^ the integer type applied here
+  = note: [0310]/[0470]: conversion is explicit and preserves its source class
+  = note: in the instance `shown(t: pair)` the call at ../tests/fixtures/negative/instance-reports-name-their-instance/program.ldn:24:16 made, and 1 more instance

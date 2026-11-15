@@ -8,3 +8,4 @@ error[L0301]: this is `usize` and `i32` belongs here
 4 |  for i in start..<limit do end for
   |           ^^^^^ the other endpoint of this range
   = note: [1890]: these types must agree, with no implicit conversion; [0310]: write T(value) where an explicit conversion exists
+  = note: in the instance `g(t: i32)` the call at ../tests/fixtures/negative/r491-generic-template-reports/main.ldn:7:23 made, and 1 more instance

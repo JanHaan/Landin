@@ -138,6 +138,7 @@ negative/a-predeclared-type-name-taken | linux-x86-64, synthetic-32
 negative/a-refused-write-still-assigns | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-text-literal-is-not-indexed | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-type-argument-is-offered-by-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-value-after-an-assigned-result | linux-x86-64, synthetic-32
 negative/addr-of-a-call-result-is-refused-there | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/addr-of-a-literal-is-refused-there | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/addr-of-a-measure-is-refused-there | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -711,6 +712,7 @@ negative/inout-pointer-match-payload-is-exact | linux-x86-64, linux-arm64, darwi
 negative/inout-pointer-through-function-value-is-exact | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/inout-same-place-twice | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/inout-slice-is-exact | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/instance-reports-name-their-instance | linux-x86-64, synthetic-32
 negative/integer-conversion-known-binding-out-of-range | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/integer-conversion-known-out-of-range | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/integer-literal-names-its-bool-context | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
