@@ -182,6 +182,39 @@ class GeneratedWrite(unittest.TestCase):
         self.assertEqual(output.getvalue(), "")
 
 
+class EditorArtifacts(unittest.TestCase):
+    """--generate says "unchanged" when the editor files' bytes are the
+    same, as it does for every other generated file, and names each file
+    it did write; it once said "wrote" whatever it had done."""
+
+    def test_unchanged_and_written_artifacts_are_told_apart(self):
+        import shutil
+        import tempfile
+        with tempfile.TemporaryDirectory() as raw:
+            root = os.path.realpath(raw)
+            shutil.copytree(ROOT / "highlight", Path(root) / "highlight",
+                            ignore=shutil.ignore_patterns(
+                                "node_modules", "__pycache__"))
+            vim = Path(root) / "highlight/vim/syntax/landin.vim"
+            os.utime(vim, ns=(1_000_000_000, 1_000_000_000))
+
+            def generate():
+                output = io.StringIO()
+                with patch.object(CHECK, "ROOT", root), \
+                        contextlib.redirect_stdout(output):
+                    status = CHECK.generate_highlighters()
+                return status, output.getvalue().splitlines()
+
+            self.assertEqual(generate(), (0, [
+                "unchanged the editor artifacts of highlight/generate.py"]))
+            self.assertEqual(vim.stat().st_mtime_ns, 1_000_000_000,
+                             "an unchanged artifact is not rewritten")
+            vim.write_text(vim.read_text(encoding="utf-8") + "\" drifted\n",
+                           encoding="utf-8")
+            self.assertEqual(generate(), (0, [
+                "wrote highlight/vim/syntax/landin.vim"]))
+
+
 class GeneratorRefusals(unittest.TestCase):
     """A generator that cannot generate prints what stopped it."""
 

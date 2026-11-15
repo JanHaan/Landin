@@ -11569,10 +11569,16 @@ def generate_highlighters():
     if not os.path.exists(generator):
         print("highlight/generate.py is missing")
         return 2
-    if subprocess.run([sys.executable, generator], cwd=ROOT).returncode:
+    #  The generator names each file it wrote and writes only those that
+    #  differ, so silence is "unchanged", as write_generated says it.
+    ran = subprocess.run([sys.executable, generator], cwd=ROOT,
+                         stdout=subprocess.PIPE, text=True)
+    sys.stdout.write(ran.stdout)
+    if ran.returncode:
         print("highlight/generate.py failed")
         return 2
-    print("wrote the editor artifacts of highlight/generate.py")
+    if not ran.stdout.strip():
+        print("unchanged the editor artifacts of highlight/generate.py")
     return 0
 
 

@@ -355,12 +355,16 @@ def main() -> int:
     args = parser.parse_args()
     stale: list[Path] = []
     for path, content in outputs().items():
+        current = path.exists() and path.read_text(encoding="utf-8") == content
         if args.check:
-            if not path.exists() or path.read_text(encoding="utf-8") != content:
+            if not current:
                 stale.append(path.relative_to(ROOT.parent))
-        else:
+        elif not current:
+            #  Only what differs is written, and each one named, so a run
+            #  that changed nothing says nothing and check.py can say so.
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
+            print(f"wrote {path.relative_to(ROOT.parent)}")
     if stale:
         for path in stale:
             print(f"stale generated highlighter: {path}")
