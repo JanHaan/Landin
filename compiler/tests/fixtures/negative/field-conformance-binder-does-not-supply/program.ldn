@@ -1,0 +1,17 @@
+counter: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+end counter
+
+labelled: type = concept (t: type)
+    label: (self: t) -> (n: u32)
+end labelled
+
+wrap: type (p: type is labelled) = struct
+    inner: p
+end wrap
+
+(p: type is labelled) wrap(p) is counter through inner
+
+public main: () -> (code: i32) =
+    code = 0
+end main

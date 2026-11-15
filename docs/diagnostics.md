@@ -945,7 +945,10 @@ b: type = a
 
 A field a struct, a variant case or a result was not declared with [0750]
 [0990]. When a declared field is near the written name, the diagnostic offers
-it as a likely fix.
+it as a likely fix. An entry called through a type names one its
+conformances declare: through a concrete type's name, one of the
+conformances of that type in the program's register, which the note lists,
+and through a type parameter, one its constraint declares (D1364).
 
 ```landin
 point: type = struct
@@ -1124,7 +1127,10 @@ The refusal names the type and the concept as the program writes them,
 the type does conform to. An `any C` provides C and every concept C
 refines, and no other (D492):
 erase the provider as an `any` of the wanted concept where it is made.
-Its address is not erased again; pass the `any C` itself.
+Its address is not erased again; pass the `any C` itself. A conformance
+that hands its entries on `through` a field, or a routine's result, needs
+that type to conform to the concept itself, and is refused at the name
+after `through` when it does not (D1363).
 
 ```landin
 cell: type (t: type is zeroable) = struct
@@ -1500,7 +1506,9 @@ end main
 
 A type position or type declaration is not well formed. A type position names
 a scalar type or a `type` declaration, and a type name is not a runtime value
-[1795]. A type alias is applied with its exact positional arguments [1350]. A
+[1795]: a concept's entry selected through a type, `box.count` or
+`t.count`, is called where it is selected, and the note says so (D1364).
+A type alias is applied with its exact positional arguments [1350]. A
 union holds atoms and at most one pointer type [0640]; a range subtype
 restricts an integer type [0660]; a fixed-array bound is an integer count
 (D136). Correct the declaration or name a type.
@@ -1558,7 +1566,15 @@ a use that needs it is not refused again for want of one. A parameter or local n
 and the diagnostic then names the parameter as the cause (D381). A binding
 that holds an anonymous function is a value, not a declared function, and
 supplies no entry; the diagnostic names the binding and says to declare it
-as a function.
+as a function. A conformance's `through` names a field of its target or a
+routine `(self: T) -> (r: F)` taking it, not both and not neither, and the
+field or result stands in for the target only where the concept takes the
+target as a parameter: a field by value, `inout` or through a pointer, a
+routine's copy by value alone, and never under a writable result `from` the
+target that the routine's result is not `from` (D1363). A family's field
+that holds one of its binders needs the binder constrained by the concept.
+Through a concrete type's name, an entry two of the type's conformances
+declare is refused, naming the second (D1364).
 
 ```landin
 left: type = concept (t: type) is right

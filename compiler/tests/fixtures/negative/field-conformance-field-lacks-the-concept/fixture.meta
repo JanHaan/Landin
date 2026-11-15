@@ -1,0 +1,6 @@
+class: negative
+summary: a field whose type has no conformance to the concept cannot supply it
+program: program.ldn
+codes: L0318
+constructs: 1240, 1280
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

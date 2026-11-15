@@ -69,7 +69,7 @@ enclosing production recognises. Thus 'of', 'lenof', 'offsetof', 'variant', 'cal
 'align', 'section', 'region', 'keep', 'thread', 'boot_stage', 'vector',
 'interrupt', 'naked',
 'noreturn',
-'distinct', 'out' and 'into' remain identifier tokens everywhere
+'distinct', 'out', 'into' and 'through' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
 production names contextual representation widths; it does not expand the
@@ -417,10 +417,13 @@ concept_body    ::= "concept" type_formals
                     concept_entry* "end" identifier?
 concept_entry   ::= identifier ":" signature
 conformance_declaration ::= type_formals? conformance_target "is"
-                            concept_reference "(" conformance_argument
-                            ("," conformance_argument)* ")"
-                          | type_formals? conformance_target "is"
-                            concept_reference "(" ")"
+                            concept_reference
+                            (conformance_entries conformance_field?
+                            | conformance_field)
+conformance_entries ::= "(" conformance_argument
+                        ("," conformance_argument)* ")"
+                      | "(" ")"
+conformance_field ::= "through" identifier
 conformance_target ::= array_type | pointer_type | slice_type | any_type
                      | type_application | declaration_reference
 conformance_argument ::= identifier ":" argument_rhs
@@ -979,7 +982,7 @@ an inner scope means nothing until the inner ones are named.
 | file imports | the final segment of a plain import, the written alias, or the public declarations named by a selected import in this file's prelude [1420]-[1450]. A namespace binding is not a declaration or value; a selected binding retains the imported declaration's identity. This scope encloses the module scope for lookups performed from that file. |
 | type declaration | D135's complete ordered formal list. The scope encloses the declaring file's imports and is visible in every fixed formal's declared type, direct concept constraint and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
 | concept declaration | D142's complete ordered type-formal list. It encloses the declaring file's imports and is visible in every direct constraint, parent name and entry signature. Entry parameter and result labels describe signature positions and declare nothing in this scope. |
-| conformance declaration | D142's optional complete type/fixed binder. It encloses the declaring file's imports and is visible in every binder constraint, the target type and every labelled input or function RHS. The conformance itself declares no module name. |
+| conformance declaration | D142's optional complete type/fixed binder. It encloses the declaring file's imports and is visible in every binder constraint, the target type, every labelled input or function RHS and the routine a `through` names (D1363). The conformance itself declares no module name. |
 | signature | a declared routine's type/fixed formals, runtime parameters and named returns [1800]. Every binder is collected before any signature type or direct concept constraint is resolved, so its source order has no visibility meaning. Named returns are places the body assigns [0930]; all three binder kinds share one namespace, but type/fixed formals are compile-time-only and have no storage. A declared function's signature encloses its file-import scope; a no-capture anonymous signature does the same rather than enclosing the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs; one for each arm of an `if` and its `else`; one for each loop body and `complete`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. D185's initialized condition binding shares the scope of the one `if`, `elsif`, or `while` body it guards; its initializer is resolved in the enclosing scope, and it is absent from later conditions, sibling arms, `else`, `complete`, and following statements. Match payload bindings and a recovery error name live only in their block. |
 
@@ -1616,7 +1619,11 @@ concept is visited once: a shared ancestor reached along two paths contributes
 one declaration, while different declaring concepts remain ambiguous even when
 their providers agree. Parent order and a direct child declaration grant no
 precedence. D221 records this selection rule; an unused colliding closure may
-still be declared and conformed to.
+still be declared and conformed to. Where T names a concrete type rather than
+a type parameter, the conformances of T in the program's register [1280]
+take the closure's place: the one whose concept declares the entry supplies
+it, and none or two is refused (D1364). Either selection is called where it
+is written.
 [0980] gives no source-written parameter a default value, so a call names every
 non-`caller` runtime parameter exactly once. A `caller` position is instead
 filled by the compiler with D192's three source coordinates, unless a named argument forwards
@@ -17006,6 +17013,149 @@ declined.
 
 **Pinned by** `negative/concept-entry-range-subtype-is-its-signature` and
 `runtime/concept-entry-range-subtype-is-checked`.
+
+### D1363 — A conformance may hand its entries to a field
+
+**The tour said** at [1240] that a conformance names the function that
+supplies each entry, and at [1250] that a family's supplying functions are
+generic. A provider built over another, which supplies a concept by handing
+every entry to a field's provider, therefore wrote one routine per entry,
+each with the entry's whole signature, failures and origins, and its only
+line called the same entry on the field: `hosted/blocking` handed 34
+entries of eight concepts to the `hosted/system` handle it holds,
+`hosted/events` copied 33 of them and handed `fibre.scheduler` to its
+round through generic helpers, and prototype 5's firmware board handed
+four to the `any fibre.turns` it lends. A concept that gained an entry had
+to be followed in each by hand.
+
+**Chosen:** a conformance may end with `through` and the name of a field of
+its target: `host is io.environment through services`. The name may instead
+name a routine `(self: T) -> (r: F)` that takes the target T by value, gives
+one result and cannot fail, when T has no field of that name: a provider whose
+inner handle is computed rather than kept, as `hosted/events`' system handle
+is, writes `host is io.environment through services` with `services` that
+routine. A name that is both a field and such a routine is L0341, and so is a
+target with neither. Its entry list becomes optional, `host is io.files (close:
+events_close) through services` names some entries and leaves the rest to
+the field, and a concept's other inputs [1270] are still labels:
+`view is indexable (idx: usize, item_type: u32) through inner`. `through`
+is a contextual word [1760], an ordinary name everywhere else.
+
+The field's type must itself conform to the concept, with the same inputs,
+as a constraint's type actual would [1290]: a declared conformance, a
+family's [1250], or an `any`'s own (D492), and so must a routine's result
+type. One that does not is refused as L0318 at the name, whose note says the
+type conforms to the concept itself, and names what it does conform to when
+that is a concept the wanted one refines. The conformance follows the
+field's type: change it, and the conformance is the new type's, or
+refused.
+
+Each entry the list does not name is the concept's entry as written, with
+the target in place of the represented type, as a written supplying
+function must have it [1240]: the field's provider has the same entry with
+the field's type there, and the concept fixes the failures for both
+[1260]. An origin keeps its meaning: `from self` is what the holder refers
+to, and the field's referents are among them, so the field provider's own
+`from self` neither widens nor narrows it. The field stands in for the
+holder wherever the concept takes the represented type as a parameter of
+it, `inout` or not, or as a pointer to it: `self.field`, `inout
+self.field`, `addr self.val.field`. An entry that takes the represented
+type anywhere else, a result, a `sink` parameter, an element of a slice or
+a field of a struct, cannot be handed to the field and is L0341 naming the
+entry; a routine in the list supplies it instead. A routine's result is a
+copy made for each call, so it stands in for the holder only where the
+concept takes the holder by value; a pointer or `inout` position is L0341.
+A routine whose result is not `from` its parameter gives storage
+independent of the holder, so through it an entry whose result is writable
+and `from` the holder is L0341, as D222 refuses such a result written by
+hand; a read-only one, as `io.variable_at`'s, is accepted. A family [1250]
+may take the field form: the field is looked up again in each instance, and
+a field whose type is one of the binders needs that binder constrained by
+the concept or one that refines it, or the declaration is L0341. A routine
+supplies a concrete target only.
+
+The table entry the field supplies is a routine the compiler makes, one
+per conformance entry the program reaches: it takes the holder's
+arguments, puts the field, or the routine's result, in the holder's place
+and calls that provider's entry, or, when it is an `any`, dispatches on that
+`any`'s table as an erased call does (D492). Through a generic table or an
+`any` of the holder, a call therefore makes one more direct call than to a
+provider written for the holder, and one more dispatch when the field is an
+`any`: the same as the routines it replaces. Specialization that proves the
+table calls the routine directly; it is not inlined, because a table holds
+its address. The routine carries the conformance's source position, so a
+debugger and a build report name the conformance.
+
+**The alternatives:** the field named alone inside the parentheses,
+`(services)`, which needs no new word but reads as a positional argument or
+an input type; and a field named entry by entry, `(variable_count:
+services, ...)`, which changes no grammar but still writes every entry, and
+a field and a routine of one name would make it ambiguous. A field alone,
+the form first chosen, would have given `hosted/events` a `services` field,
+which its `over` cannot fill: the system handle's cells are writable module
+storage, and a handle returned `from` the caller's state cannot also hold
+them (D222). D492 declined compiler-made forwarding routines
+for an `any`'s own conformance because that one needs none; a field's
+table has to hold an address that does the forwarding.
+
+**Pinned by** `runtime/field-conformance`, `positive/field-conformance`,
+`negative/field-conformance-names-no-field`,
+`negative/field-conformance-field-lacks-the-concept`,
+`negative/field-conformance-field-lacks-an-entry`,
+`negative/field-conformance-target-is-not-a-struct`,
+`negative/field-conformance-entry-a-field-cannot-supply`,
+`negative/field-conformance-binder-does-not-supply`,
+`negative/field-conformance-through-names-nothing`,
+`negative/field-conformance-field-and-routine`,
+`negative/field-conformance-routine-takes-more`,
+`negative/field-conformance-routine-cannot-reach-a-pointer` and
+`negative/field-conformance-routine-hides-storage`, and by
+`hosted/blocking`, `hosted/events` and the firmware counterpart, which
+hand every entry they only pass on through their fields.
+
+### D1364 — An entry is called through a concrete type's name
+
+**The tour said** at [1290] that a generic function calls a concept's
+entries through its type parameter, `t.less(...)`, and at [1280] that the
+program has one register of conformances. Through a concrete type's name
+the same call, `system.host.make_temporary(services, ...)`, was refused as
+L0338, a type name used as a value, whose note spoke of constructing a
+struct, so `hosted/blocking` kept a private generic routine whose only line
+was the call.
+
+**Chosen:** `T.entry(...)` where `T` names a concrete type, a declared one
+unqualified or through its module or a predeclared scalar, is a selection
+like `t.entry(...)`: of the
+conformances of T in the register, the one whose concept declares an entry
+of that name supplies it, and the call is a direct call of that
+conformance's function, a field's included (D1363). Only a concept's own
+entries count: each conformance supplies its concept's, and a parent's come
+from the parent's conformance, which is T's too. A family's conformance
+[1250] counts once a lookup has made it for T, which this one asks for. No
+conformance declaring the entry, T having none at all among them, is L0308
+naming the concepts T conforms to; two, two concepts or one concept twice
+with other inputs [1270], is L0341 naming the second, and a type parameter
+constrained by the one meant calls it unambiguously. The selection is
+called where it is written, as an erased one is (D146): `f := box.count`
+is L0338, whose note now says to call the entry. The call is checked
+against the concept's entry as written.
+
+The same selection through a type parameter whose constraint declares no
+such entry is now L0308 naming the constraint, where it was L0338 with a
+note about distinct types.
+
+**The alternative:** `core/io`'s `make_temporary` taking an
+`any io.entropy` as it is, which would answer one routine and make every
+caller erase its source. With D1363 the library has no consumer left of
+either, so the choice rests on the language: a type parameter's selection
+and a concrete type's differ only in where the evidence comes from.
+
+**Pinned by** `runtime/type-name-entry-call`,
+`negative/type-name-entry-has-no-conformance`,
+`negative/type-name-entry-no-conformance-declares`,
+`negative/type-name-entry-two-conformances`,
+`negative/type-name-entry-is-not-a-value` and
+`negative/type-parameter-entry-not-declared`.
 
 ## DECISIONS: MODULES AND COMPILE TIME
 

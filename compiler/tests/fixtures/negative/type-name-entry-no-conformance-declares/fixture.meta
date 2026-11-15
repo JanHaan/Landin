@@ -1,0 +1,6 @@
+class: negative
+summary: an entry no conformance of the named type declares
+program: program.ldn
+codes: L0308
+constructs: 1240, 1280
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

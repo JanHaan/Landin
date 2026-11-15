@@ -486,6 +486,18 @@ rewrite inside an existing instance counts no growth. An instance is not an
 export: a public template gives its instances no symbol of their own, so
 only a function value, an image or an evidence entry exposes one.
 
+Lowering makes two kinds of routine with no source of its own, and both
+are ordinary routine items. A table entry whose provider is generic gets a
+routine that binds the provider's evidence and calls it. An entry a
+conformance hands `through` a field or a routine (D1363) gets one that
+puts the field, or the routine's result, in the holder's place and calls
+that provider's entry, or dispatches on the `any` the field holds. Each is
+named after the declared routine it reaches, where there is one, carries
+its conformance's source
+position, and is filled after every declared routine, in the order it was
+made. Specialization that proves such an entry's table calls the routine
+directly; an evidence entry exposes its address, so it is not inlined.
+
 At `--optimize speed`, `Landin.IR.Inlining` then replaces a direct call
 to a small routine with a copy of its body (D339). The routine must have a
 body, no exposed address, the ordinary convention and Landin's own

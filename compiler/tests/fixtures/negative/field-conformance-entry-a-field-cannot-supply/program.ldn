@@ -1,0 +1,21 @@
+maker: type = concept (t: type)
+    make: (seed: u32) -> (made: t)
+end maker
+
+box: type = struct
+    n: u32
+end box
+
+box_make: (seed: u32) -> (made: box) = (n: seed) end box_make
+
+box is maker (make: box_make)
+
+holder: type = struct
+    inner: box
+end holder
+
+holder is maker through inner
+
+public main: () -> (code: i32) =
+    code = 0
+end main

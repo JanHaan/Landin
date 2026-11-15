@@ -1,0 +1,25 @@
+lending: type = concept (t: type)
+    cell: (self: t) -> (p: ptr mut u32 from self)
+end lending
+
+mut shared: u32 = 0
+
+store: type = struct
+    p: ptr mut u32
+end store
+
+store_cell: (self: store) -> (p: ptr mut u32 from self) = self.p end store_cell
+
+store is lending (cell: store_cell)
+
+holder: type = struct
+    n: u32
+end holder
+
+the_store: (self: holder) -> (made: store) = (p: addr shared) end the_store
+
+holder is lending through the_store
+
+public main: () -> (code: i32) =
+    code = 0
+end main

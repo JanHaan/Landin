@@ -93,6 +93,7 @@ package body Landin.Syntax is
             --  Return list, error set, then the parameter run.
             when Concept_Entry => 2,
             when Conformance_Entry => 1,
+            when Conformance_Field => 0,
             when Type_Formal => 1,
             when Return_Source => 0,
             when If_Arm | Match_Arm       => 2,
@@ -780,6 +781,20 @@ package body Landin.Syntax is
       end loop;
       return Count;
    end Conformance_Entry_Count;
+
+   function Conformance_Field_Of
+     (Of_Tree : Tree; Id : Node_Id) return Node_Id
+   is
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         if Kind (Of_Tree, Nth_Item (Of_Tree, Id, Position))
+              = Conformance_Field
+         then
+            return Nth_Item (Of_Tree, Id, Position);
+         end if;
+      end loop;
+      return No_Node;
+   end Conformance_Field_Of;
 
    function Nth_Conformance_Entry
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id

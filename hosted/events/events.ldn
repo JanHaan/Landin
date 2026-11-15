@@ -22,7 +22,6 @@ import core/fibre
 import core/fibre/stacks
 import core/io
 import core/mem
-import core/text
 import hosted/system
 import platform/kqueue
 import platform/libc
@@ -161,7 +160,9 @@ end over
 
 --  The hosted/system handle beneath: the process's, which borrows
 --  nothing, so a handle `from` its caller's state carries no storage of
---  the system's.
+--  the system's.  A field could not hold it, since the handle's cells
+--  are writable storage of the system's (D222); the conformances that
+--  hand it entries name this routine after `through` (D1363).
 services: (self: host) -> (handle: system.host) =
     _ = self
     handle = system.new()
@@ -349,7 +350,7 @@ park: (self: host, entry: ptr mut waiting) -> (answer: u8) ! posix.errno =
         fail problem
     end
     while entry.val.answer == pending do
-        turn(self.round)
+        fibre.yield(self.round)
     end while
     answer = entry.val.answer
 end park
@@ -374,7 +375,7 @@ park_either: (self: host, first: ptr mut waiting, second: ptr mut waiting)
         fail problem
     end
     while first.val.answer == pending and second.val.answer == pending do
-        turn(self.round)
+        fibre.yield(self.round)
     end while
     unlink(state, first)
     unlink(state, second)
@@ -550,107 +551,27 @@ events_write_some: (self: host, opened: io.file, bytes: []u8)
 end events_write_some
 
 --  What does not wait is the system's: its files, streams and arguments.
---  Closing a file wakes every fibre waiting on it first (D449).
-events_open_read: (self: host, path: text.host_string)
-                  -> (opened: io.file)
-                  ! io.not_found | io.no_access | io.is_a_directory
-                  | io.io_failed =
-    opened = try io.open_read(services(self), path)
-end events_open_read
-
-events_open_write: (self: host, path: text.host_string)
-                   -> (opened: io.file)
-                   ! io.not_found | io.no_access | io.is_a_directory
-                   | io.io_failed =
-    opened = try io.open_write(services(self), path)
-end events_open_write
-
-events_same_file: (self: host, left: text.host_string,
-                   right: text.host_string)
-                  -> (same: bool) ! io.io_failed =
-    same = try io.same_file(services(self), left, right)
-end events_same_file
-
+--  Closing a file wakes every fibre waiting on it first (D449), so that
+--  entry is this provider's own.
 events_close: (self: host, sink opened: io.file) -> none ! io.io_failed =
     forget(self, system.descriptor_of(opened))
     try io.close(services(self), opened)
 end events_close
 
-events_input: (self: host) -> (stream: io.file) =
-    stream = io.input(services(self))
-end events_input
-
-events_out: (self: host) -> (stream: io.file) =
-    stream = io.out(services(self))
-end events_out
-
-events_err: (self: host) -> (stream: io.file) =
-    stream = io.err(services(self))
-end events_err
-
-events_argument_count: (self: host) -> (count: usize) =
-    count = io.argument_count(services(self))
-end events_argument_count
-
-events_argument: (self: host, index: usize)
-                 -> (value: text.host_string from self) ! io.no_argument =
-    value = try io.argument_at(services(self), index)
-end events_argument
-
 host is io.reader (read: events_read)
 host is io.writer (write: events_write, write_some: events_write_some)
-host is io.files
-    (open_read: events_open_read, open_write: events_open_write,
-     same_file: events_same_file, close: events_close)
-host is io.process
-    (input: events_input, out: events_out, err: events_err,
-     argument_count: events_argument_count, argument: events_argument)
+host is io.files (close: events_close) through services
+host is io.process through services
 host is io.world ()
 
 --  The round's entries, with the loop told when a fibre takes a turn of
 --  its own, which keeps the next wait for events from sleeping.
---  The round's own entries, through its evidence: a round's
---  representation is core/fibre/stacks'.
-turn: (provider: type is fibre.turns, runs: provider) -> none =
-    provider.yield(runs)
-end turn
-
-started: (provider: type is fibre.turns, runs: provider,
-          escaping record: ptr mut fibre.space, escaping stack: []mut u8,
-          escaping work: any fibre.task) -> none ! mem.out_of_memory =
-    try provider.start(runs, record, stack, work)
-end started
-
-ended: (provider: type is fibre.turns, runs: provider, record: fibre.space)
-       -> (yes: bool) =
-    yes = provider.finished(runs, record)
-end ended
-
-waited_for: (provider: type is fibre.turns, runs: provider) -> none =
-    provider.wait(runs)
-end waited_for
-
-events_start: (self: host, escaping record: ptr mut fibre.space,
-               escaping stack: []mut u8, escaping work: any fibre.task)
-              -> none ! mem.out_of_memory =
-    try started(self.round, record, stack, work)
-end events_start
-
-events_finished: (self: host, record: fibre.space) -> (yes: bool) =
-    yes = ended(self.round, record)
-end events_finished
-
-events_wait: (self: host) -> none =
-    waited_for(self.round)
-end events_wait
-
 events_yield: (self: host) -> none =
     self.state.val.turned = true
-    turn(self.round)
+    fibre.yield(self.round)
 end events_yield
 
-host is fibre.scheduler (start: events_start, finished: events_finished,
-                         wait: events_wait)
+host is fibre.scheduler through round
 host is fibre.turns (yield: events_yield)
 
 --  Each system's event mechanism beneath the loop: epoll and a signalfd

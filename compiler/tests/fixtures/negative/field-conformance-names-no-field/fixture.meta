@@ -1,0 +1,6 @@
+class: negative
+summary: a conformance's through names a field its struct does not have
+program: program.ldn
+codes: L0341
+constructs: 1240
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

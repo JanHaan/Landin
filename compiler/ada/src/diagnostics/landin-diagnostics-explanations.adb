@@ -751,7 +751,11 @@ package body Landin.Diagnostics.Explanations is
                "A field a struct, a variant case or a result was not dec"
                & "lared with [0750] [0990]. When a declared field is near "
                & "the written name, the diagnostic offers it as a likely f"
-               & "ix.",
+               & "ix. An entry called through a type names one its conform"
+               & "ances declare: through a concrete type's name, one of th"
+               & "e conformances of that type in the program's register, w"
+               & "hich the note lists, and through a type parameter, one i"
+               & "ts constraint declares (D1364).",
             when Catalogue.Field_Named_Twice =>
                "A struct declaration [0670] or literal [0710] repeats a "
                & "field name, a variant case declaration [0680] (D74) repe"
@@ -848,7 +852,11 @@ package body Landin.Diagnostics.Explanations is
                & "type does conform to. An `any C` provides C and every co"
                & "ncept C refines, and no other (D492): erase the provider"
                & " as an `any` of the wanted concept where it is made. Its"
-               & " address is not erased again; pass the `any C` itself.",
+               & " address is not erased again; pass the `any C` itself. A"
+               & " conformance that hands its entries on `through` a field"
+               & ", or a routine's result, needs that type to conform to t"
+               & "he concept itself, and is refused at the name after `thr"
+               & "ough` when it does not (D1363).",
             when Catalogue.Compiler_Conformance_Reserved =>
                "The compiler owns `zeroable` and its conformances, and t"
                & "he conformance by which an `any C` provides C and the co"
@@ -1136,12 +1144,14 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Type_Declaration_Form =>
                "A type position or type declaration is not well formed. "
                & "A type position names a scalar type or a `type` declarat"
-               & "ion, and a type name is not a runtime value [1795]. A ty"
-               & "pe alias is applied with its exact positional arguments "
-               & "[1350]. A union holds atoms and at most one pointer type"
-               & " [0640]; a range subtype restricts an integer type [0660"
-               & "]; a fixed-array bound is an integer count (D136). Corre"
-               & "ct the declaration or name a type.",
+               & "ion, and a type name is not a runtime value [1795]: a co"
+               & "ncept's entry selected through a type, `box.count` or `t"
+               & ".count`, is called where it is selected, and the note sa"
+               & "ys so (D1364). A type alias is applied with its exact po"
+               & "sitional arguments [1350]. A union holds atoms and at mo"
+               & "st one pointer type [0640]; a range subtype restricts an"
+               & " integer type [0660]; a fixed-array bound is an integer "
+               & "count (D136). Correct the declaration or name a type.",
             when Catalogue.Signature_Form =>
                "A written signature is not well formed. A function type "
                & "gives each parameter a distinct label [0980] and each re"
@@ -1186,7 +1196,18 @@ package body Landin.Diagnostics.Explanations is
                & "arameter as the cause (D381). A binding that holds an an"
                & "onymous function is a value, not a declared function, an"
                & "d supplies no entry; the diagnostic names the binding an"
-               & "d says to declare it as a function.",
+               & "d says to declare it as a function. A conformance's `thr"
+               & "ough` names a field of its target or a routine `(self: T"
+               & ") -> (r: F)` taking it, not both and not neither, and th"
+               & "e field or result stands in for the target only where th"
+               & "e concept takes the target as a parameter: a field by va"
+               & "lue, `inout` or through a pointer, a routine's copy by v"
+               & "alue alone, and never under a writable result `from` the"
+               & " target that the routine's result is not `from` (D1363)."
+               & " A family's field that holds one of its binders needs th"
+               & "e binder constrained by the concept. Through a concrete "
+               & "type's name, an entry two of the type's conformances dec"
+               & "lare is refused, naming the second (D1364).",
             when Catalogue.Erased_Contract =>
                "An `any` value or its dispatch is used outside the erase"
                & "d contract [1370] [1380] [1390] (D145-D147). `any C` nam"

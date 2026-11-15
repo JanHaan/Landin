@@ -1,0 +1,6 @@
+class: negative
+summary: a routine's independent result cannot supply an entry whose writable result is from the conforming type
+program: program.ldn
+codes: L0341
+constructs: 1240, 0790
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

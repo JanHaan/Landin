@@ -1,0 +1,23 @@
+bumping: type = concept (t: type)
+    bump: (self: ptr mut t) -> none
+end bumping
+
+box: type = struct
+    n: u32
+end box
+
+box_bump: (self: ptr mut box) -> none = self.val.n = self.val.n + 1 end box_bump
+
+box is bumping (bump: box_bump)
+
+holder: type = struct
+    n: u32
+end holder
+
+as_box: (self: holder) -> (made: box) = (n: self.n) end as_box
+
+holder is bumping through as_box
+
+public main: () -> (code: i32) =
+    code = 0
+end main

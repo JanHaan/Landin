@@ -1,0 +1,18 @@
+counter: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+end counter
+
+box: type = struct
+    n: u32
+end box
+
+box_count: (self: box) -> (n: u32) = self.n end box_count
+
+box is counter (count: box_count)
+
+counted: (t: type is counter, x: t) -> (n: u32) = t.cuont(x) end counted
+
+public main: () -> (code: i32) =
+    b: box = (n: 1)
+    code = i32(counted(b))
+end main

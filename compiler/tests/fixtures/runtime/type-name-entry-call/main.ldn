@@ -1,0 +1,50 @@
+--  D1364: an entry is called through a concrete type's name, as through
+--  a type parameter: the one conformance of that type whose concept
+--  declares it supplies it, whether a routine it names, a field (D1363)
+--  or a family's generic provider [1250].
+
+counter: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+    scaled: (self: ptr t, by: u32) -> (n: u32)
+end counter
+
+box: type = struct
+    n: u32
+end box
+
+box_count: (self: box) -> (n: u32) = self.n end box_count
+box_scaled: (self: ptr box, by: u32) -> (n: u32) = self.val.n * by end box_scaled
+
+box is counter (count: box_count, scaled: box_scaled)
+
+holder: type = struct
+    inner: box
+end holder
+
+holder is counter through inner
+
+wrap: type (p: type is counter) = struct
+    extra: u32
+    inner: p
+end wrap
+
+wrap_count: (p: type is counter, self: wrap(p)) -> (n: u32) =
+    n = self.extra + p.count(self.inner)
+end wrap_count
+
+(p: type is counter) wrap(p) is counter (count: wrap_count) through inner
+
+wrapped: type = wrap(box)
+
+public main: () -> (code: i32) =
+    b: box = (n: 3)
+    h: holder = (inner: (n: 4))
+    w: wrapped = (extra: 10, inner: (n: 5))
+    code = 1
+    return when box.count(b) <> 3 or box.scaled(addr b, 2) <> 6
+    code = 2
+    return when holder.count(h) <> 4 or holder.scaled(addr h, 3) <> 12
+    code = 3
+    return when wrapped.count(w) <> 15 or wrapped.scaled(addr w, 4) <> 20
+    code = 0
+end main

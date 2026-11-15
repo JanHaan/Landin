@@ -305,6 +305,68 @@ package body Landin.Server.Navigation is
          end;
       end Struct_Of;
    begin
+      --  D1363: a conformance's `through` names a field of its target,
+      --  found by name in the body of the struct the target names.
+      if Syn.Kind (Of_Tree, Node) = Syn.Conformance_Field then
+         for Holder in Node + 1 .. Syn.Last_Node (Of_Tree) loop
+            if Syn.Kind (Of_Tree, Holder) = Syn.Conformance_Declaration
+              and then Syn.Conformance_Field_Of (Of_Tree, Holder) = Node
+            then
+               declare
+                  Target : constant Syn.Node_Id :=
+                    Syn.Conforming_Type (Of_Tree, Holder);
+                  Named_At : constant Syn.Node_Id :=
+                    (if Syn.Kind (Of_Tree, Target) = Syn.Type_Application
+                     then Syn.Applied_Type (Of_Tree, Target) else Target);
+                  Template : constant Res.Declaration_Id :=
+                    (if Res.Covers (Meanings.all, Of_Tree)
+                       and then Res.Verdict_Of (Meanings.all, Of_Tree,
+                                                Named_At) = Res.Bound
+                     then Res.Bound_To (Meanings.all, Of_Tree, Named_At)
+                     else Res.No_Declaration);
+               begin
+                  if Template = Res.No_Declaration
+                    or else Res."/="
+                      (Res.Sort_Of (Meanings.all, Template), Res.Module_Type)
+                  then
+                     return None;
+                  end if;
+                  declare
+                     Home : constant Landin.Source.Source_Id :=
+                       Res.Source_Of (Meanings.all, Template);
+                     Home_Tree : constant not null access constant Syn.Tree
+                       := Landin.Syntax.Forest.Tree_Of
+                         (Landin.Stages.Trees (Context).all, Home);
+                     Written : constant Syn.Node_Id := Syn.Declared_Type
+                       (Home_Tree.all, Res.Node_Of (Meanings.all, Template));
+                  begin
+                     if Written = Syn.No_Node
+                       or else Syn.Kind (Home_Tree.all, Written)
+                         /= Syn.Struct_Body
+                     then
+                        return None;
+                     end if;
+                     for Which in 1 .. Syn.Field_Count
+                       (Home_Tree.all, Written)
+                     loop
+                        if Landin.Source.Names."="
+                          (Syn.Name
+                             (Home_Tree.all,
+                              Syn.Nth_Field (Home_Tree.all, Written, Which)),
+                           Syn.Name (Of_Tree, Node))
+                        then
+                           return (Source => Home,
+                                   Field  => Syn.Nth_Field
+                                     (Home_Tree.all, Written, Which));
+                        end if;
+                     end loop;
+                     return None;
+                  end;
+               end;
+            end if;
+         end loop;
+         return None;
+      end if;
       if Syn.Kind (Of_Tree, Node) /= Syn.Member_Selection
         or else not Landin.Checking.Is_Prepared (Types.all)
         or else not Landin.Checking.Covers (Types.all, Of_Tree)

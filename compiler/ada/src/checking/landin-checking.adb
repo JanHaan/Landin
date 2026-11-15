@@ -891,8 +891,114 @@ package body Landin.Checking is
            "one evidence entry was assigned two providers";
       end if;
       Into.Conformance_Providers (Where) :=
-        (Declaration => Declaration, Instance => Instance);
+        (Declaration => Declaration, Instance => Instance, others => <>);
    end Note_Conformance_Provider;
+
+   procedure Note_Conformance_Through
+     (Into     : in out Table;
+      Id       : Conformance_Id;
+      Position : Positive;
+      Field    : Natural;
+      Through  : Conformance_Id;
+      Signature : Signature_Id;
+      Erased_Root : Concept_Id := No_Concept;
+      Erased_Entry : Natural := 0;
+      Accessor : Declaration_Id := No_Declaration)
+   is
+      Members : constant Run := Into.Conformances
+        (Conformance_Identities.Position (Into, Id)).Providers;
+      Where : constant Positive := Members.First + Position;
+   begin
+      if Into.Conformance_Providers (Where).Declaration /= No_Declaration
+        or else Into.Conformance_Providers (Where).Field /= 0
+        or else Into.Conformance_Providers (Where).Accessor /= No_Declaration
+      then
+         raise Landin.Compiler_Defect with
+           "one evidence entry was assigned two providers";
+      end if;
+      Into.Conformance_Providers (Where) :=
+        (Field => Field, Through => Through, Signature => Signature,
+         Erased_Root => Erased_Root, Erased_Entry => Erased_Entry,
+         Accessor => Accessor, others => <>);
+   end Note_Conformance_Through;
+
+   function Is_Supplied_Through
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Boolean
+   is
+      Members : constant Run := Of_Table.Conformances.Element
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+      Provider : constant Conformance_Provider :=
+        Of_Table.Conformance_Providers.Element (Members.First + Position);
+   begin
+      return Provider.Field /= 0 or else Provider.Accessor /= No_Declaration;
+   end Is_Supplied_Through;
+
+   function Conformance_Through_Accessor
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Declaration_Id
+   is
+      Members : constant Run := Of_Table.Conformances.Element
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers.Element
+        (Members.First + Position).Accessor;
+   end Conformance_Through_Accessor;
+
+   function Conformance_Through_Signature
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Signature_Id
+   is
+      Members : constant Run := Of_Table.Conformances.Element
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers.Element
+        (Members.First + Position).Signature;
+   end Conformance_Through_Signature;
+
+   function Conformance_Through_Erased_Root
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Concept_Id
+   is
+      Members : constant Run := Of_Table.Conformances.Element
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers.Element
+        (Members.First + Position).Erased_Root;
+   end Conformance_Through_Erased_Root;
+
+   function Conformance_Through_Erased_Entry
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Natural
+   is
+      Members : constant Run := Of_Table.Conformances.Element
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers.Element
+        (Members.First + Position).Erased_Entry;
+   end Conformance_Through_Erased_Entry;
+
+   function Conformance_Through_Field
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Natural
+   is
+      Members : constant Run := Of_Table.Conformances.Element
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers.Element
+        (Members.First + Position).Field;
+   end Conformance_Through_Field;
+
+   function Conformance_Through
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Conformance_Id
+   is
+      Members : constant Run := Of_Table.Conformances.Element
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers.Element
+        (Members.First + Position).Through;
+   end Conformance_Through;
 
    function Conformance_Provider_Declaration
      (Of_Table : Table; Id : Conformance_Id; Position : Positive)
@@ -4666,6 +4772,18 @@ package body Landin.Checking is
          end;
       end if;
    end Note_Any_Dispatch;
+
+   procedure Note_Direct_Entry
+     (Into      : in out Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Evidence  : Conformance_Id;
+      Which     : Positive) is
+   begin
+      --  The same facts an erased selection keeps, with no hidden table's
+      --  run position, which is what lowering tells the two apart by.
+      Note_Any_Dispatch (Into, Of_Tree, Node, Evidence, Which);
+   end Note_Direct_Entry;
 
    procedure Note_Evidence_Selection
      (Into      : in out Table;

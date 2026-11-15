@@ -1,0 +1,6 @@
+class: negative
+summary: a field whose type supplies only the concept's parent lacks the entries the concept adds
+program: program.ldn
+codes: L0318
+constructs: 1240, 1340
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

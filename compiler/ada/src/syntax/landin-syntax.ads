@@ -381,6 +381,10 @@ package Landin.Syntax is
       --  One labelled conformance RHS, retained neutrally until collection
       --  decides whether it denotes a type actual or a supplying function.
       Conformance_Entry,
+      --  D1363's `through` clause: the field of the conforming type whose
+      --  provider supplies every entry no label names.  Its name is a
+      --  label the checker looks up among the target's fields.
+      Conformance_Field,
       Parameter,
       Named_Return,
       --  One source named by [0790]'s `from` clause, or the parameter a
@@ -449,6 +453,7 @@ package Landin.Syntax is
                     | Type_Declaration | Concept_Declaration
                     | Type_Reference | Concept_Reference | Type_Formal
                     | Fixed_Formal | Concept_Entry | Conformance_Entry
+                    | Conformance_Field
                     | Field | Variant_Part | Variant_Case
                     | Destructured_Field
                     | Destructured_Name | Recovery_Clause | Match_Binding
@@ -1293,6 +1298,17 @@ package Landin.Syntax is
           Post => Contains (Of_Tree, Nth_Conformance_Entry'Result)
                   and then Kind (Of_Tree, Nth_Conformance_Entry'Result)
                              = Conformance_Entry;
+
+   --  D1363: the conformance's `through` field, or No_Node.
+   function Conformance_Field_Of
+     (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Conformance_Declaration,
+          Post => Conformance_Field_Of'Result = No_Node
+                  or else (Contains (Of_Tree, Conformance_Field_Of'Result)
+                           and then Kind
+                             (Of_Tree, Conformance_Field_Of'Result)
+                               = Conformance_Field);
 
    function Conformance_RHS (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

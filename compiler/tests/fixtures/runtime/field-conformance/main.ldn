@@ -1,0 +1,148 @@
+--  D1363: a conformance hands every entry its list does not name to a
+--  field's provider, which receives the field in the holder's place: by
+--  value, `inout` or through a pointer, with stored, several and failing
+--  results, along a chain of fields, through an `any` field, through
+--  a generic table and an erased one built over the holder.  A routine
+--  taking the holder may stand where the field does.
+
+pair: type = struct
+    a: u32
+    b: u32
+end pair
+
+oops: atom
+
+counter: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+    bump: (self: ptr mut t, by: u32) -> none
+    both: (self: t) -> (p: pair)
+    checked: (self: t, limit: u32) -> (n: u32) ! oops
+    two: (self: t) -> (x: u32, y: u32)
+end counter
+
+resettable: type = concept (t: type)
+    reset: (inout self: t) -> none
+end resettable
+
+box: type = struct
+    n: u32
+end box
+
+box_count: (self: box) -> (n: u32) = self.n end box_count
+
+box_bump: (self: ptr mut box, by: u32) -> none =
+    self.val.n = self.val.n + by
+end box_bump
+
+box_both: (self: box) -> (p: pair) = (a: self.n, b: self.n * 2) end box_both
+
+box_checked: (self: box, limit: u32) -> (n: u32) ! oops =
+    fail oops when self.n > limit
+    n = self.n
+end box_checked
+
+box_reset: (inout self: box) -> none = self.n = 0 end box_reset
+
+box_two: (self: box) -> (x: u32, y: u32) =
+    x = self.n
+    y = self.n + 1
+end box_two
+
+box is counter (count: box_count, bump: box_bump, both: box_both,
+                checked: box_checked, two: box_two)
+box is resettable (reset: box_reset)
+
+--  The holder names its own `count`; the field supplies the rest.
+holder: type = struct
+    tag: u8
+    inner: box
+end holder
+
+holder_count: (self: holder) -> (n: u32) = 100 + self.inner.n end holder_count
+
+holder is counter (count: holder_count) through inner
+holder is resettable through inner
+
+--  A field whose provider is itself supplied through a field.
+outer: type = struct
+    first: u64
+    held: holder
+end outer
+
+outer is counter through held
+outer is resettable through held
+
+--  A field holding an `any`, whose own table the call dispatches on.
+erased: type = struct
+    pad: u16
+    runs: any counter
+end erased
+
+erased is counter through runs
+
+--  A routine instead of a field: its result, made from the holder each
+--  call, takes the holder's place where the concept takes it by value.
+computed: type = struct
+    base: u32
+end computed
+
+as_box: (self: computed) -> (made: box) = (n: self.base * 10) end as_box
+
+reading: type = concept (t: type)
+    read: (self: t, offset: u32) -> (n: u32)
+    shown: (self: t) -> (p: pair)
+end reading
+
+box_read: (self: box, offset: u32) -> (n: u32) = self.n + offset end box_read
+box_shown: (self: box) -> (p: pair) = (a: self.n, b: 1) end box_shown
+
+box is reading (read: box_read, shown: box_shown)
+computed is reading through as_box
+
+read_twice: (t: type is reading, x: t) -> (n: u32) =
+    p := t.shown(x)
+    n = t.read(x, 1) + p.a
+end read_twice
+
+use: (t: type is counter, x: ptr mut t) -> (n: u32) =
+    t.bump(x, 2)
+    p := t.both(x.val)
+    c := t.checked(x.val, 50) else 7
+    d := t.checked(x.val, 1) else 7
+    (x: q, y: r) := t.two(x.val)
+    n = t.count(x.val) * 1000 + p.a * 100 + c + d + q + r
+end use
+
+clear: (t: type is resettable, x: ptr mut t) -> none =
+    t.reset(x.val)
+end clear
+
+public main: () -> (code: i32) =
+    mut h: holder = (tag: 1, inner: (n: 3))
+    mut o: outer = (first: 9, held: (tag: 2, inner: (n: 4)))
+    mut b: box = (n: 5)
+    mut e: erased = (pad: 1, runs: any(addr b))
+    code = 1
+    return when use(addr h) <> 105523
+    code = 2
+    return when use(addr o) <> 106626
+    code = 3
+    return when use(addr e) <> 7729
+    code = 4
+    return when b.n <> 7
+    clear(addr h)
+    clear(addr o)
+    code = 5
+    return when h.inner.n <> 0 or o.held.inner.n <> 0
+    --  An erased table over the holder: its entries are the forwarding
+    --  routines, and its `count` is the holder's own.
+    o.held.inner.n = 8
+    viewed: any counter = any(addr o)
+    viewed.bump(1)
+    code = 6
+    return when viewed.count() <> 109 or o.held.inner.n <> 9
+    code = 7
+    c: computed = (base: 4)
+    return when read_twice(c) <> 81 or computed.read(c, 2) <> 42
+    code = 0
+end main

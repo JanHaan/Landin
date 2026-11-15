@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: a conformance hands the entries its list does not name to a field's provider, by value, inout, through a pointer, along a chain and through an any
+program: main.ldn
+status: 0
+constructs: 1240, 1290, 1310, 1370
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

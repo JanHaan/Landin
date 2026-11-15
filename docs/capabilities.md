@@ -597,7 +597,12 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   only when their layouts and entries match, and an `any C` call no
   conformance of C answers builds as a trap no value reaches. An `any C`
   itself satisfies C and every concept C refines, so a generic routine can
-  take it and call each entry through its table (D492).
+  take it and call each entry through its table (D492). A conformance may
+  hand the entries its list does not name to a field, or a routine's
+  result, `through` it, its table holding a routine the compiler makes for
+  each (D1363), and an entry is called through a concrete type's name,
+  `box.count(b)`, by the one conformance of that type that declares it
+  (D1364).
 - **Pointers and slices** get local origin, borrow, `escaping`,
   `escaping into` (D445), `from` and consume checks. A view no name holds
   is in use until what took it is done, a `for` loop's source and a view

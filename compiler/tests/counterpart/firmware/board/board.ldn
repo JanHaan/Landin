@@ -3,9 +3,9 @@
 --  ticks have passed, in one handle, so a request's `time.sleep` is a
 --  switch point on this device and on no hosted blocking provider.  The
 --  round of fixed turns is the library's, `core/fibre/stacks`' `round`
---  (D444, V8); the board lends it and adds the clock.
+--  (D444, V8); the board lends it, handing both its concepts to the
+--  round through its field (D1363), and adds the clock.
 import core/fibre
-import core/mem
 import core/time
 import firmware/tick
 
@@ -23,27 +23,8 @@ public board: type = struct
     clock: ptr mut reading
 end board
 
-board_start: (self: board, escaping record: ptr mut fibre.space,
-              escaping stack: []mut u8, escaping work: any fibre.task)
-             -> none ! mem.out_of_memory =
-    try self.runs.start(record, stack, work)
-end board_start
-
-board_finished: (self: board, record: fibre.space) -> (yes: bool) =
-    yes = self.runs.finished(record)
-end board_finished
-
-board_wait: (self: board) -> none =
-    self.runs.wait()
-end board_wait
-
-board_yield: (self: board) -> none =
-    self.runs.yield()
-end board_yield
-
-board is fibre.scheduler (start: board_start, finished: board_finished,
-                          wait: board_wait)
-board is fibre.turns (yield: board_yield)
+board is fibre.scheduler through runs
+board is fibre.turns through runs
 
 --  The ticks since counting began, as 64 bits.  It is read at least once a wrap,
 --  every 49 days, by any fibre that sleeps or reads the clock; the

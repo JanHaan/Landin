@@ -9,7 +9,6 @@
 --  Import this module only at a hosted authority root.
 
 import core/io
-import core/text
 import hosted/system
 import platform/posix
 
@@ -151,60 +150,10 @@ blocking_write_some: (self: host, opened: io.file, bytes: []u8)
     end loop
 end blocking_write_some
 
---  What does not wait is the system's: its files, streams and arguments.
-blocking_open_read: (self: host, path: text.host_string)
-                    -> (opened: io.file)
-                    ! io.not_found | io.no_access | io.is_a_directory
-                    | io.io_failed =
-    opened = try io.open_read(self.services, path)
-end blocking_open_read
-
-blocking_open_write: (self: host, path: text.host_string)
-                     -> (opened: io.file)
-                     ! io.not_found | io.no_access | io.is_a_directory
-                     | io.io_failed =
-    opened = try io.open_write(self.services, path)
-end blocking_open_write
-
-blocking_same_file: (self: host, left: text.host_string,
-                     right: text.host_string)
-                    -> (same: bool) ! io.io_failed =
-    same = try io.same_file(self.services, left, right)
-end blocking_same_file
-
-blocking_close: (self: host, sink opened: io.file) -> none ! io.io_failed =
-    try io.close(self.services, opened)
-end blocking_close
-
-blocking_input: (self: host) -> (stream: io.file) =
-    stream = io.input(self.services)
-end blocking_input
-
-blocking_out: (self: host) -> (stream: io.file) =
-    stream = io.out(self.services)
-end blocking_out
-
-blocking_err: (self: host) -> (stream: io.file) =
-    stream = io.err(self.services)
-end blocking_err
-
-blocking_argument_count: (self: host) -> (count: usize) =
-    count = io.argument_count(self.services)
-end blocking_argument_count
-
-blocking_argument: (self: host, index: usize)
-                   -> (value: text.host_string from self) ! io.no_argument =
-    value = try io.argument_at(self.services, index)
-end blocking_argument
-
 host is io.reader (read: blocking_read)
 host is io.writer (write: blocking_write, write_some: blocking_write_some)
-host is io.files
-    (open_read: blocking_open_read, open_write: blocking_open_write,
-     same_file: blocking_same_file, close: blocking_close)
-host is io.process
-    (input: blocking_input, out: blocking_out, err: blocking_err,
-     argument_count: blocking_argument_count, argument: blocking_argument)
+host is io.files through services
+host is io.process through services
 host is io.world ()
 
 --- Return a handle to the hosted provider whose waits block the thread,

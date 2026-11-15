@@ -2323,7 +2323,11 @@ package Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin) return Slot_Id
      with Pre  => Holds (Into, Item)
-                  and then Declares /= No_Declaration
+                  and then (Declares /= No_Declaration
+                            --  D1363: a routine of the compiler's own has
+                            --  parameters no source declares.
+                            or else Landin.IR.Declares (Into, Item)
+                              = No_Declaration)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Holds (Into, Item, Add_Address_Parameter'Result)
                   and then Is_Address
@@ -2337,7 +2341,11 @@ package Landin.IR is
       Nominal  : Nominal_Type_Id) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
-                  and then Declares /= No_Declaration
+                  and then (Declares /= No_Declaration
+                            --  D1363: a routine of the compiler's own has
+                            --  parameters no source declares.
+                            or else Landin.IR.Declares (Into, Item)
+                              = No_Declaration)
                   and then Holds (Into, Nominal)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Parameter_Count (Into, Item)
@@ -2362,7 +2370,11 @@ package Landin.IR is
       Slice_Element : Pointee_Id := No_Pointee) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
-                  and then Declares /= No_Declaration
+                  and then (Declares /= No_Declaration
+                            --  D1363: a routine of the compiler's own has
+                            --  parameters no source declares.
+                            or else Landin.IR.Declares (Into, Item)
+                              = No_Declaration)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Parameter_Count (Into, Item)
                     = Parameter_Count (Into, Item)'Old + 1
@@ -2383,7 +2395,11 @@ package Landin.IR is
       Site     : Landin.Provenance.Origin) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
-                  and then Declares /= No_Declaration
+                  and then (Declares /= No_Declaration
+                            --  D1363: a routine of the compiler's own has
+                            --  parameters no source declares.
+                            or else Landin.IR.Declares (Into, Item)
+                              = No_Declaration)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Parameter_Count (Into, Item)
                     = Parameter_Count (Into, Item)'Old + 1

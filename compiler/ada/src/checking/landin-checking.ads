@@ -1604,6 +1604,72 @@ package Landin.Checking is
      with Pre => Holds (Of_Table, Id)
                  and then Position <= Conformance_Entry_Count (Of_Table, Id);
 
+   --  D1363: the entry at Position is supplied by the target's field at
+   --  layout position Field, whose type's conformance to the same concept
+   --  is Through.  Lowering gives the table a routine that hands the call
+   --  on to that conformance's entry with the field in place of the
+   --  target.
+   procedure Note_Conformance_Through
+     (Into     : in out Table;
+      Id       : Conformance_Id;
+      Position : Positive;
+      Field    : Natural;
+      Through  : Conformance_Id;
+      Signature : Signature_Id;
+      Erased_Root : Concept_Id := No_Concept;
+      Erased_Entry : Natural := 0;
+      Accessor : Declaration_Id := No_Declaration)
+     with Pre => Holds (Into, Id) and then Holds (Into, Through)
+                 and then Position <= Conformance_Entry_Count (Into, Id)
+                 and then (Field /= 0) /= (Accessor /= No_Declaration);
+
+   --  Whether a field or a routine of the target supplies the entry.
+   function Is_Supplied_Through
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Boolean
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
+   --  The routine supplying it, or No_Declaration for a field.
+   function Conformance_Through_Accessor
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Declaration_Id
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
+   --  The rest of what Note_Conformance_Through recorded.
+   function Conformance_Through_Signature
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Signature_Id
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
+   function Conformance_Through_Erased_Root
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Concept_Id
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
+   function Conformance_Through_Erased_Entry
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Natural
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
+   --  The layout position of the field supplying the entry, or 0.
+   function Conformance_Through_Field
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Natural
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
+   function Conformance_Through
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Conformance_Id
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id)
+                 and then Is_Supplied_Through (Of_Table, Id, Position);
+
    function Intern_Nominal_Instance
      (Into    : in out Table;
       Template : Declaration_Id;
@@ -1897,6 +1963,22 @@ package Landin.Checking is
                   and then Holds (Into, Conformance),
           Post => Evidence_Of (Into, Of_Tree, Node) = Conformance
                   and then Evidence_Entry_Of (Into, Of_Tree, Node) = 0;
+
+   --  D1364: a `T.entry` selection through a concrete type's name, which
+   --  names the entry Which of the one conformance Evidence of T whose
+   --  concept declares it.  Lowering calls that conformance's provider
+   --  directly; the selection has no hidden table.
+   procedure Note_Direct_Entry
+     (Into      : in out Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Evidence  : Conformance_Id;
+      Which     : Positive)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Evidence),
+          Post => Evidence_Of (Into, Of_Tree, Node) = Evidence;
 
    procedure Note_Any_Dispatch
      (Into      : in out Table;
@@ -2726,6 +2808,19 @@ private
    type Conformance_Provider is record
       Declaration : Declaration_Id := No_Declaration;
       Instance    : Routine_Instance_Id := No_Routine_Instance;
+      --  D1363: an entry the target's field supplies: that field's layout
+      --  position and the field type's conformance to the same concept.
+      Field       : Natural := 0;
+      Through     : Conformance_Id := No_Conformance;
+      --  Or the routine of the target whose result supplies it instead.
+      Accessor    : Declaration_Id := No_Declaration;
+      --  The entry's signature with the target in place of the concept's
+      --  represented type, which the forwarding routine has.
+      Signature   : Signature_Id := No_Signature;
+      --  When Through is an `any`'s own conformance (D492): the `any`'s
+      --  concept and the entry's position in its flattened table.
+      Erased_Root : Concept_Id := No_Concept;
+      Erased_Entry : Natural := 0;
    end record;
 
    package Conformance_Provider_Vectors is new Ada.Containers.Vectors

@@ -2662,6 +2662,9 @@
       "mode": "refuse",
       "reason": "runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0."
     },
+    "runtime/field-conformance": {
+      "mode": "execute"
+    },
     "runtime/file-system-firmware": {
       "mode": "execute"
     },
@@ -5148,6 +5151,9 @@
       "mode": "execute"
     },
     "runtime/try-nominal-inference": {
+      "mode": "execute"
+    },
+    "runtime/type-name-entry-call": {
       "mode": "execute"
     },
     "runtime/type-parameter-conversion-traps": {

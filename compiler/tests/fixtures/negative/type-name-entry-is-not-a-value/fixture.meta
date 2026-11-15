@@ -1,0 +1,6 @@
+class: negative
+summary: an entry selected through a type's name is called, not kept as a function value
+program: program.ldn
+codes: L0338
+constructs: 1240, 1010
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,6 @@
+class: negative
+summary: only a struct has fields to supply a concept through
+program: program.ldn
+codes: L0341
+constructs: 1240
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

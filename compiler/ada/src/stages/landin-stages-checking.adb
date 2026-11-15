@@ -197,6 +197,19 @@ package body Landin.Stages.Checking is
          Hash                => Hash_Index,
          Equivalent_Elements => "=");
 
+      --  Whether Selection is the callee of a call, which a selected
+      --  entry must be.
+      function Is_Called
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id) return Boolean;
+
+      --  D1364: the selection `T.entry` whose T is Node, naming a type
+      --  Means, when it names a concept entry T has and is not called, so
+      --  the type name's refusal as a value says to call it; else No_Node.
+      function Uncalled_Entry_Selection
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Means   : Res.Declaration_Id) return Syn.Node_Id;
+
       Generic_Reports : Generic_Report_Maps.Map;
       Repeated_Reports : Index_Sets.Set;
       Attributed_Reports : Natural := 0;
@@ -2502,6 +2515,11 @@ package body Landin.Stages.Checking is
       function Evidence_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
+      --  D1364: `T.entry` where T names a concrete type, resolved against
+      --  the conformances of T in the program's register [1280].
+      function Type_Name_Entry_Signature
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
+         return Landin.Checking.Signature_Id;
       function Source_Parameter
         (Of_Tree : Syn.Tree; Source : Syn.Node_Id) return Natural
         is (Res.Source_Parameter_Position
@@ -2567,7 +2585,53 @@ package body Landin.Stages.Checking is
          Inputs      : Landin.Checking.Actual_Tuple :=
            Landin.Checking.Empty_Actuals;
          Required_At : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin) return Boolean;
+           Landin.Provenance.No_Origin;
+         Through     : Boolean := False) return Boolean;
+      --  D1363: what a conformance's `through` names: a field of the
+      --  target, by layout position, or a routine taking the target, and
+      --  the type that supplies the concept, once it is known to conform
+      --  to Concept with Inputs.  Neither, reported, when it does not.
+      type Through_Choice is record
+         Field    : Natural := 0;
+         Accessor : Res.Declaration_Id := Res.No_Declaration;
+         Held     : Type_Descriptor := (Kind => Ty.Ill_Typed, others => <>);
+      end record;
+      function Chosen (Choice : Through_Choice) return Boolean
+        is (Choice.Field /= 0 or else Choice.Accessor /= Res.No_Declaration);
+      function Through_Of
+        (Of_Tree    : Syn.Tree;
+         Node       : Syn.Node_Id;
+         Field_Node : Syn.Node_Id;
+         Concept    : Landin.Checking.Concept_Id;
+         Target     : Type_Descriptor;
+         Inputs     : Landin.Checking.Actual_Tuple) return Through_Choice;
+      --  D1363: what a routine's result cannot stand in for: the concept
+      --  entry's parameter that takes the holder other than by value, or
+      --  a result `from` it with a writable reference the routine's own
+      --  result is not `from` (D222); No_Node when there is none.
+      function Accessor_Refusal
+        (Concept_Tree : Syn.Tree;
+         Requirement  : Syn.Node_Id;
+         Formal       : Res.Declaration_Id;
+         Conformance  : Landin.Checking.Conformance_Id;
+         Position     : Positive;
+         Accessor     : Res.Declaration_Id) return Syn.Node_Id;
+      --  D1363: the parameter or result of a concept entry that
+      --  mentions the represented formal where a field cannot stand in
+      --  for its holder, or No_Node when every mention is a parameter
+      --  of the formal itself or a pointer to it.
+      function Unreachable_Through
+        (Concept_Tree : Syn.Tree;
+         Requirement  : Syn.Node_Id;
+         Formal       : Res.Declaration_Id) return Syn.Node_Id;
+      --  D1363: record that the field at Field supplies the entry at
+      --  Position of Conformance, through Through, the field type's
+      --  conformance to the same concept.
+      procedure Note_Through
+        (Conformance : Landin.Checking.Conformance_Id;
+         Position    : Positive;
+         Choice      : Through_Choice;
+         Through     : Landin.Checking.Conformance_Id);
       function Select_Iterable_Conformance
         (Actual  : Type_Descriptor;
          Of_Tree : Syn.Tree;
@@ -18933,6 +18997,333 @@ package body Landin.Stages.Checking is
          return Signature;
       end Forwarded_Selection_Signature;
 
+      function Is_Called
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id) return Boolean is
+      begin
+         for Candidate in Selection + 1 .. Syn.Last_Node (Of_Tree) loop
+            if Syn.Kind (Of_Tree, Candidate)
+                 in Syn.Call | Syn.Labeled_Application
+              and then Syn.Callee_Of (Of_Tree, Candidate) = Selection
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Is_Called;
+
+      function Uncalled_Entry_Selection
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Means   : Res.Declaration_Id) return Syn.Node_Id
+      is
+         Selection : Syn.Node_Id := Syn.No_Node;
+         Named : Landin.Source.Names.Name_Id;
+
+         --  Whether Concept or a concept it refines declares Named.
+         function Declares (Concept : Landin.Checking.Concept_Id;
+                            Depth : Natural) return Boolean;
+
+         function Declares (Concept : Landin.Checking.Concept_Id;
+                            Depth : Natural) return Boolean is
+         begin
+            if Concept = Landin.Checking.No_Concept or else Depth > 32
+              or else Landin.Checking.Is_Compiler_Concept (Types.all, Concept)
+            then
+               return False;
+            end if;
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration (Types.all, Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+            begin
+               for Position in 1 .. Syn.Concept_Entry_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  if Syn.Name
+                    (Concept_Tree.all,
+                     Syn.Nth_Concept_Entry
+                       (Concept_Tree.all, Concept_Node, Position)) = Named
+                  then
+                     return True;
+                  end if;
+               end loop;
+               for Parent in 1 .. Syn.Concept_Parent_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  if Declares
+                    (Concept_For
+                       (Concept_Tree.all,
+                        Syn.Nth_Concept_Parent
+                          (Concept_Tree.all, Concept_Node, Parent)),
+                     Depth + 1)
+                  then
+                     return True;
+                  end if;
+               end loop;
+            end;
+            return False;
+         end Declares;
+      begin
+         for Candidate in Node + 1 .. Syn.Last_Node (Of_Tree) loop
+            if Syn.Kind (Of_Tree, Candidate) = Syn.Member_Selection
+              and then Syn.Target_Of (Of_Tree, Candidate) = Node
+            then
+               Selection := Candidate;
+               exit;
+            end if;
+         end loop;
+         if Selection = Syn.No_Node or else Is_Called (Of_Tree, Selection)
+         then
+            return Syn.No_Node;
+         end if;
+         Named := Syn.Name (Of_Tree, Selection);
+         if Res.Sort_Of (Meanings.all, Means) = Res.Type_Parameter then
+            declare
+               Formal_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Means));
+               Formal_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Means);
+            begin
+               if Syn.Kind (Formal_Tree.all, Formal_Node) = Syn.Type_Formal
+                 and then Syn.Constraint_Of (Formal_Tree.all, Formal_Node)
+                   /= Syn.No_Node
+                 and then Declares
+                   (Concept_For
+                      (Formal_Tree.all,
+                       Syn.Constraint_Of (Formal_Tree.all, Formal_Node)), 0)
+               then
+                  return Selection;
+               end if;
+            end;
+            return Syn.No_Node;
+         end if;
+         for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
+         loop
+            declare
+               Row : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Conformance_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Conformance_Origin_Of (Types.all, Row)
+                    = Landin.Checking.Declared_Conformance
+                 and then Landin.Checking.Type_Form_Of
+                   (Landin.Checking.Conformance_Target (Types.all, Row))
+                     = Landin.Checking.Nominal_Actual_Type
+                 and then Landin.Checking.Nominal_Of
+                   (Types.all,
+                    Landin.Checking.Conformance_Target (Types.all, Row))
+                     = Landin.Checking.Nominal_Of (Types.all, Means)
+                 and then Declares
+                   (Landin.Checking.Conformance_Concept (Types.all, Row), 0)
+               then
+                  return Selection;
+               end if;
+            end;
+         end loop;
+         return Syn.No_Node;
+      end Uncalled_Entry_Selection;
+
+      function Type_Name_Entry_Signature
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
+         return Landin.Checking.Signature_Id
+      is
+         From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Selection);
+         Reader : constant Landin.Source.Source_Id := Syn.Source_Of (Of_Tree);
+         Named : constant Landin.Source.Names.Name_Id :=
+           Syn.Name (Of_Tree, Selection);
+         Held : constant Type_Descriptor := Normalized_Type
+           (Of_Tree, From, Formal_Actual_Array'(1 .. 0 => (others => <>)),
+            Requirement => Identity_Only);
+         Found_Row : Landin.Checking.Conformance_Id :=
+           Landin.Checking.No_Conformance;
+         Found_Entry : Natural := 0;
+         Other_Row : Landin.Checking.Conformance_Id :=
+           Landin.Checking.No_Conformance;
+         Concepts : Ada.Strings.Unbounded.Unbounded_String;
+         Concept_Count : Natural := 0;
+
+         --  The entry of Row's own concept named as the selection is.
+         function Entry_In (Row : Landin.Checking.Conformance_Id)
+           return Natural;
+
+         function Entry_In (Row : Landin.Checking.Conformance_Id)
+           return Natural
+         is
+            Concept : constant Landin.Checking.Concept_Id :=
+              Landin.Checking.Conformance_Concept (Types.all, Row);
+         begin
+            if Landin.Checking.Is_Compiler_Concept (Types.all, Concept) then
+               return 0;
+            end if;
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration (Types.all, Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+            begin
+               for Position in 1 .. Syn.Concept_Entry_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  if Syn.Name
+                    (Concept_Tree.all,
+                     Syn.Nth_Concept_Entry
+                       (Concept_Tree.all, Concept_Node, Position)) = Named
+                  then
+                     return Position;
+                  end if;
+               end loop;
+            end;
+            return 0;
+         end Entry_In;
+
+         procedure Search;
+
+         procedure Search is
+         begin
+            Found_Row := Landin.Checking.No_Conformance;
+            Found_Entry := 0;
+            Other_Row := Landin.Checking.No_Conformance;
+            Concept_Count := 0;
+            Concepts := Ada.Strings.Unbounded.Null_Unbounded_String;
+            for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
+            loop
+               declare
+                  Row : constant Landin.Checking.Conformance_Id :=
+                    Landin.Checking.Conformance_Identities.Nth
+                      (Types.all, Position);
+               begin
+                  if Landin.Checking."="
+                       (Landin.Checking.Conformance_Target (Types.all, Row),
+                        Actual_For (Held))
+                    and then Landin.Checking.Conformance_Origin_Of
+                      (Types.all, Row)
+                        = Landin.Checking.Declared_Conformance
+                  then
+                     Concept_Count := Concept_Count + 1;
+                     Ada.Strings.Unbounded.Append
+                       (Concepts,
+                        (if Concept_Count = 1 then "" else ", ") & "`"
+                        & Concept_Spelling
+                            (Landin.Checking.Conformance_Concept
+                               (Types.all, Row), Reader)
+                        & "`");
+                     if Entry_In (Row) /= 0 then
+                        if Found_Row = Landin.Checking.No_Conformance then
+                           Found_Row := Row;
+                           Found_Entry := Entry_In (Row);
+                        elsif Other_Row = Landin.Checking.No_Conformance then
+                           Other_Row := Row;
+                        end if;
+                     end if;
+                  end if;
+               end;
+            end loop;
+         end Search;
+      begin
+         if Held.Kind = Ty.Ill_Typed then
+            return Landin.Checking.No_Signature;
+         end if;
+
+         --  The call is the entry's only use: a selection is not a bound
+         --  function value, as an erased one is not (D146).  The type name
+         --  is refused as a value, saying so.
+         if not Is_Called (Of_Tree, Selection) then
+            return Landin.Checking.No_Signature;
+         end if;
+
+         Search;
+         --  A family conformance [1250] holds for this type only once a
+         --  lookup asks for it, as a constraint's would.
+         if Found_Row = Landin.Checking.No_Conformance
+           and then Held.Kind = Ty.Aggregate
+         then
+            for Probe of Conformance_Probes loop
+               if Probe.Template = Landin.Checking.Template_Of
+                    (Types.all, Held.Nominal)
+               then
+                  declare
+                     Probe_Tree : constant not null access constant Syn.Tree
+                       := Tree_For (Probe.Source);
+                     Accepted : constant Boolean := Require_Conformance
+                       (Held,
+                        Syn.Conforming_Concept (Probe_Tree.all, Probe.Node),
+                        Probe_Tree.all, Syn.Origin (Of_Tree, Selection));
+                  begin
+                     pragma Unreferenced (Accepted);
+                  end;
+               end if;
+            end loop;
+            Search;
+         end if;
+
+         if Found_Row = Landin.Checking.No_Conformance then
+            Bad.Report
+              (Item    => Bad.Unresolved_Field,
+               Source  => Reader,
+               Where   => Syn.Anchor (Of_Tree, Selection),
+               Message => "no conformance of " & Named_Type (Held, Reader)
+                          & " supplies an entry called `" & Spelled (Named)
+                          & "`",
+               Note    => "D1364: an entry is called through a type's name"
+                          & " by the one conformance of that type whose"
+                          & " concept declares it"
+                          & (if Concept_Count = 0
+                             then "; " & Named_Type (Held, Reader)
+                                  & " has no conformance"
+                             else "; " & Named_Type (Held, Reader)
+                                  & " conforms to "
+                                  & Ada.Strings.Unbounded.To_String
+                                      (Concepts)),
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+            return Landin.Checking.No_Signature;
+         elsif Other_Row /= Landin.Checking.No_Conformance then
+            Bad.Report
+              (Item    => Bad.Conformance_Form,
+               Source  => Reader,
+               Where   => Syn.Anchor (Of_Tree, Selection),
+               Message => "more than one conformance of "
+                          & Named_Type (Held, Reader)
+                          & " supplies an entry called `" & Spelled (Named)
+                          & "`",
+               Note    => "D1364: the entry's name must pick one"
+                          & " conformance; call it through a type parameter"
+                          & " constrained by the one concept meant",
+               Related =>
+                 (Source => Landin.Checking.Conformance_Source
+                    (Types.all, Other_Row),
+                  Where  => Syn.Where
+                    (Tree_For (Landin.Checking.Conformance_Source
+                                 (Types.all, Other_Row)).all,
+                     Landin.Checking.Conformance_Node
+                       (Types.all, Other_Row))),
+               Because => "another conformance supplying it",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+            return Landin.Checking.No_Signature;
+         end if;
+
+         declare
+            Signature : constant Landin.Checking.Signature_Id :=
+              Exact_Concept_Entry_Signature
+                (Found_Row, Positive (Found_Entry));
+         begin
+            if Signature /= Landin.Checking.No_Signature then
+               Landin.Checking.Note_Direct_Entry
+                 (Types.all, Of_Tree, Selection, Found_Row,
+                  Positive (Found_Entry));
+               Landin.Checking.Note_Signature
+                 (Types.all, Of_Tree, Selection, Signature);
+            end if;
+            return Signature;
+         end;
+      end Type_Name_Entry_Signature;
+
       function Evidence_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id
@@ -18941,6 +19332,30 @@ package body Landin.Stages.Checking is
          Current : constant Landin.Checking.Routine_Instance_Id :=
            Landin.Checking.Current_Routine_View (Types.all);
       begin
+         --  D1364: a concrete type's name, rather than a type parameter:
+         --  a declared type, or a predeclared scalar nothing declares.
+         if (Syn.Kind (Of_Tree, From)
+               in Syn.Name_Reference | Syn.Member_Selection
+             and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
+               = Res.Bound
+             and then Res.Sort_Of
+               (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, From))
+                 = Res.Module_Type)
+           or else Syn.Kind (Of_Tree, From) = Syn.Type_Name
+         then
+            if Landin.Checking.Evidence_Of (Types.all, Of_Tree, Selection)
+                 /= Landin.Checking.No_Conformance
+            then
+               return Landin.Checking.Signature_Of
+                 (Types.all, Of_Tree, Selection);
+            elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Selection)
+              = Ty.Ill_Typed
+            then
+               return Landin.Checking.No_Signature;
+            end if;
+            return Type_Name_Entry_Signature (Of_Tree, Selection);
+         end if;
+
          if Current = Landin.Checking.No_Routine_Instance
            or else Syn.Kind (Of_Tree, From) /= Syn.Name_Reference
            or else Res.Verdict_Of (Meanings.all, Of_Tree, From) /= Res.Bound
@@ -19112,7 +19527,31 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
                      return Landin.Checking.No_Signature;
                   end if;
-                  if Declaring = Landin.Checking.No_Concept
+                  if (Declaring = Landin.Checking.No_Concept
+                      or else Direct_Entry = 0)
+                    and then Root /= Landin.Checking.No_Concept
+                    and then not Landin.Checking.Is_Compiler_Concept
+                      (Types.all, Root)
+                  then
+                     --  D1364: say what the constraint has, as the same
+                     --  selection through a type's name says.
+                     Bad.Report
+                       (Item    => Bad.Unresolved_Field,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor (Of_Tree, Selection),
+                        Message => "`"
+                          & Concept_Spelling (Root, Syn.Source_Of (Of_Tree))
+                          & "`, which constrains `"
+                          & Spelled (Syn.Name (Of_Tree, From))
+                          & "`, has no entry called `"
+                          & Spelled (Syn.Name (Of_Tree, Selection)) & "`",
+                        Note    => "[1290]: a type parameter's entries are"
+                                   & " its constraint's and the concepts it"
+                                   & " refines",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+                     return Landin.Checking.No_Signature;
+                  elsif Declaring = Landin.Checking.No_Concept
                     or else Direct_Entry = 0
                   then
                      return Landin.Checking.No_Signature;
@@ -20692,7 +21131,12 @@ package body Landin.Stages.Checking is
                                 Syn.Nth_Conformance_Entry
                                   (Of_Tree, Node, Given));
                         end loop;
+                        --  D1363: the field supplies every entry no label
+                        --  names, though never an input.
                         if not Seen
+                          and then (Position <= Input_Count
+                            or else Syn.Conformance_Field_Of (Of_Tree, Node)
+                              = Syn.No_Node)
                           and then (Unknown_Count /= 1
                             or else Suggestion_Count (Position) /= 1)
                         then
@@ -20819,6 +21263,133 @@ package body Landin.Stages.Checking is
                         if Valid and then Probe.Template /= Res.No_Declaration
                         then
                            Conformance_Probes.Append (Probe);
+                        end if;
+                     end;
+                  end if;
+
+                  --  D1363: a family's field whose type is one of its
+                  --  binders supplies the concept in every instance only
+                  --  when that binder's constraint does; any other field
+                  --  is looked up in each instance.
+                  if Valid
+                    and then Syn.Conformance_Binder_Count (Of_Tree, Node) > 0
+                    and then Syn.Conformance_Field_Of (Of_Tree, Node)
+                      /= Syn.No_Node
+                  then
+                     declare
+                        Field_Node : constant Syn.Node_Id :=
+                          Syn.Conformance_Field_Of (Of_Tree, Node);
+                        Template : constant Res.Declaration_Id :=
+                          Parameterized_Template;
+                        Template_Tree : constant
+                          not null access constant Syn.Tree :=
+                            Tree_For (Res.Source_Of (Meanings.all, Template));
+                        Template_Node : constant Syn.Node_Id :=
+                          Res.Node_Of (Meanings.all, Template);
+                        Written : constant Syn.Node_Id := Syn.Declared_Type
+                          (Template_Tree.all, Template_Node);
+                        Position : constant Natural := Field_Position
+                          (Template_Tree.all, Written,
+                           Syn.Name (Of_Tree, Field_Node));
+                     begin
+                        if Position = 0 then
+                           Bad.Report
+                             (Item    => Bad.Conformance_Form,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Field_Node),
+                              Message => "`"
+                                & Spelled
+                                    (Res.Name_Of (Meanings.all, Template))
+                                & "` has no field `"
+                                & Spelled (Syn.Name (Of_Tree, Field_Node))
+                                & "`",
+                              Note    => "D1363: a family's `through`"
+                                         & " names a field of its struct; a"
+                                         & " routine supplies a concrete"
+                                         & " type only",
+                              Related => Syn.Origin
+                                (Template_Tree.all, Template_Node),
+                              Because => "the type declared here",
+                              Into    => Found);
+                           Valid := False;
+                        else
+                           declare
+                              Field_Type : constant Syn.Node_Id :=
+                                Syn.Declared_Type
+                                  (Template_Tree.all,
+                                   Syn.Nth_Field
+                                     (Template_Tree.all, Written, Position));
+                           begin
+                              for Index in 1 .. Syn.Conformance_Binder_Count
+                                (Of_Tree, Node)
+                              loop
+                                 if Syn.Kind (Template_Tree.all, Field_Type)
+                                      in Syn.Type_Reference
+                                       | Syn.Name_Reference
+                                   and then Res.Verdict_Of
+                                     (Meanings.all, Template_Tree.all,
+                                      Field_Type) = Res.Bound
+                                   and then Res.Bound_To
+                                     (Meanings.all, Template_Tree.all,
+                                      Field_Type)
+                                       = Declaration_At
+                                         (Syn.Source_Of (Template_Tree.all),
+                                          Syn.Nth_Type_Formal
+                                            (Template_Tree.all,
+                                             Template_Node, Index))
+                                 then
+                                    declare
+                                       Binder : constant Syn.Node_Id :=
+                                         Syn.Nth_Conformance_Binder
+                                           (Of_Tree, Node, Index);
+                                       Constraint : constant Syn.Node_Id :=
+                                         (if Syn.Kind (Of_Tree, Binder)
+                                               = Syn.Type_Formal
+                                          then Syn.Constraint_Of
+                                            (Of_Tree, Binder)
+                                          else Syn.No_Node);
+                                    begin
+                                       if Constraint = Syn.No_Node
+                                         or else not Erased_Closure_Holds
+                                           (Concept_For (Of_Tree, Constraint),
+                                            Concept)
+                                       then
+                                          Bad.Report
+                                            (Item => Bad.Conformance_Form,
+                                             Source => Syn.Source_Of
+                                               (Of_Tree),
+                                             Where => Syn.Anchor
+                                               (Of_Tree, Field_Node),
+                                             Message => "the field holds `"
+                                               & Spelled
+                                                   (Syn.Name
+                                                      (Of_Tree, Binder))
+                                               & "`, whose constraint does"
+                                               & " not supply `"
+                                               & Concept_Spelling
+                                                   (Concept,
+                                                    Syn.Source_Of (Of_Tree))
+                                               & "`",
+                                             Note => "D1363: constrain `"
+                                               & Spelled
+                                                   (Syn.Name
+                                                      (Of_Tree, Binder))
+                                               & "` by `"
+                                               & Concept_Spelling
+                                                   (Concept,
+                                                    Syn.Source_Of (Of_Tree))
+                                               & "` or a concept that"
+                                               & " refines it",
+                                             Related => Syn.Origin
+                                               (Of_Tree, Binder),
+                                             Because => "the binder",
+                                             Into => Found);
+                                          Valid := False;
+                                       end if;
+                                    end;
+                                 end if;
+                              end loop;
+                           end;
                         end if;
                      end;
                   end if;
@@ -21026,7 +21597,8 @@ package body Landin.Stages.Checking is
          Inputs      : Landin.Checking.Actual_Tuple :=
            Landin.Checking.Empty_Actuals;
          Required_At : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin) return Boolean
+           Landin.Provenance.No_Origin;
+         Through     : Boolean := False) return Boolean
       is
          Concept : constant Landin.Checking.Concept_Id :=
            Concept_For (Of_Tree, Constraint);
@@ -21681,10 +22253,29 @@ package body Landin.Stages.Checking is
                            Count : constant Natural :=
                              Syn.Concept_Entry_Count
                                (Concept_Tree.all, Concept_Node);
+                           --  D1363: the family's `through` field, looked
+                           --  up again in this instance.
+                           Family_Field_Node : constant Syn.Node_Id :=
+                             Syn.Conformance_Field_Of
+                               (Candidate_Tree, Candidate);
+                           Family_Choice : Through_Choice;
+                           Family_Row : Landin.Checking.Conformance_Id :=
+                             Landin.Checking.No_Conformance;
                         begin
                            if Count > 0 then
                               Landin.Checking.Set_Conformance_Entry_Count
                                 (Types.all, Existing, Count);
+                           end if;
+                           if Family_Field_Node /= Syn.No_Node then
+                              Family_Choice := Through_Of
+                                (Candidate_Tree, Candidate, Family_Field_Node,
+                                 Concept, Actual, Inputs);
+                              if not Chosen (Family_Choice) then
+                                 return;
+                              end if;
+                              Family_Row := Landin.Checking.Find_Conformance
+                                (Types.all, Concept,
+                                 Actual_For (Family_Choice.Held), Inputs);
                            end if;
                            for Requirement in 1 .. Count loop
                               declare
@@ -21723,7 +22314,58 @@ package body Landin.Stages.Checking is
                                        end if;
                                     end;
                                  end loop;
-                                 if Implementation = Res.No_Declaration then
+                                 if Implementation = Res.No_Declaration
+                                   and then Family_Row
+                                     /= Landin.Checking.No_Conformance
+                                 then
+                                    declare
+                                       Offending : constant Syn.Node_Id :=
+                                         Unreachable_Through
+                                           (Concept_Tree.all,
+                                            Requirement_Node,
+                                            Declaration_At
+                                              (Syn.Source_Of
+                                                 (Concept_Tree.all),
+                                               Syn.Nth_Concept_Formal
+                                                 (Concept_Tree.all,
+                                                  Concept_Node, 1)));
+                                    begin
+                                       if Offending /= Syn.No_Node then
+                                          Bad.Report
+                                            (Item => Bad.Conformance_Form,
+                                             Source => Syn.Source_Of
+                                               (Candidate_Tree),
+                                             Where => Syn.Anchor
+                                               (Candidate_Tree,
+                                                Family_Field_Node),
+                                             Message => "the field cannot"
+                                               & " supply `"
+                                               & Spelled
+                                                   (Syn.Name
+                                                      (Concept_Tree.all,
+                                                       Requirement_Node))
+                                               & "`, which takes or gives"
+                                               & " the conforming type other"
+                                               & " than as a parameter of it"
+                                               & " or a pointer to it",
+                                             Note => "D1363: a field stands"
+                                               & " in for its holder only as"
+                                               & " a parameter `t`, `ptr t`"
+                                               & " or `ptr mut t`",
+                                             Related => Syn.Origin
+                                               (Concept_Tree.all, Offending),
+                                             Because =>
+                                               "the conforming type here",
+                                             Into => Found);
+                                          return;
+                                       end if;
+                                       Note_Through
+                                         (Existing, Requirement,
+                                          Family_Choice, Family_Row);
+                                    end;
+                                    goto Supplied;
+                                 elsif Implementation = Res.No_Declaration
+                                 then
                                     raise Landin.Compiler_Defect with
                                       "selected conformance lost a provider";
                                  end if;
@@ -22070,6 +22712,7 @@ package body Landin.Stages.Checking is
                                       (Types.all, Existing, Requirement,
                                        Implementation, Instance);
                                  end;
+                                 <<Supplied>>
                               end;
                            end loop;
                         end;
@@ -22235,6 +22878,10 @@ package body Landin.Stages.Checking is
                     & " closure; erase the provider as `any "
                     & Concept_Spelling (Concept, Reader)
                     & "` where it is made"
+               elsif Through
+               then "D1363: the field named after `through` supplies every"
+                    & " entry no label names, so its type conforms to the"
+                    & " concept itself" & Parents_Held
                else "[1290]: every constrained type actual must have one"
                     & " whole-program conformance" & Parents_Held),
             Related => (if Required_At.Source = Landin.Source.No_Source
@@ -22242,6 +22889,7 @@ package body Landin.Stages.Checking is
                               else Required_At),
             Because => (if Required_At.Source = Landin.Source.No_Source
                               then "the constraint declared here"
+                        elsif Through then "the field declared here"
                               else "the required type"),
             Into    => Found);
          return False;
@@ -22836,6 +23484,434 @@ package body Landin.Stages.Checking is
          end loop;
       end Validate_Composed_Conformances;
 
+      function Through_Of
+        (Of_Tree    : Syn.Tree;
+         Node       : Syn.Node_Id;
+         Field_Node : Syn.Node_Id;
+         Concept    : Landin.Checking.Concept_Id;
+         Target     : Type_Descriptor;
+         Inputs     : Landin.Checking.Actual_Tuple) return Through_Choice
+      is
+         Reader : constant Landin.Source.Source_Id := Syn.Source_Of (Of_Tree);
+         Name : constant Landin.Source.Names.Name_Id :=
+           Syn.Name (Of_Tree, Field_Node);
+         Named : constant String := Spelled (Name);
+         Struct : constant Boolean :=
+           Target.Kind = Ty.Aggregate
+           and then not Landin.Checking.Is_Distinct
+             (Types.all, Target.Nominal)
+           and then Landin.Checking.Template_Of (Types.all, Target.Nominal)
+             /= Res.No_Declaration;
+         Position : Natural := 0;
+         Written : Syn.Node_Id := Syn.No_Node;
+         Template : Res.Declaration_Id := Res.No_Declaration;
+         Visible : constant Res.Declaration_Id :=
+           Res.Visible
+             (Meanings.all, Res.Scope_At (Meanings.all, Of_Tree, Node), Name);
+         Routine : constant Boolean :=
+           Visible /= Res.No_Declaration
+           and then Res.Sort_Of (Meanings.all, Visible) = Res.Module_Function;
+         Accessor : Res.Declaration_Id := Res.No_Declaration;
+         Choice : Through_Choice;
+         None : constant Through_Choice := (others => <>);
+      begin
+         if Concept = Landin.Checking.No_Concept then
+            return None;
+         end if;
+         if Struct then
+            declare
+               Laid : constant Type_Descriptor := Require_Value_Layout
+                 (Target, Of_Tree, Syn.Conforming_Type (Of_Tree, Node),
+                  Syn.Origin (Of_Tree, Syn.Conforming_Type (Of_Tree, Node)));
+            begin
+               if Laid.Kind = Ty.Ill_Typed then
+                  return None;
+               end if;
+            end;
+            Template :=
+              Landin.Checking.Template_Of (Types.all, Target.Nominal);
+            Written := Syn.Declared_Type
+              (Tree_For (Res.Source_Of (Meanings.all, Template)).all,
+               Res.Node_Of (Meanings.all, Template));
+            Position := Field_At (Target.Nominal, Name);
+            if Position /= 0
+              and then Landin.Checking.Field_Shape_Of
+                (Types.all, Target.Nominal, Position).Kind
+                  = Landin.Checking.Variant_Field
+            then
+               Position := 0;
+            end if;
+         end if;
+
+         --  The routine form: one parameter, the target by value, one
+         --  result and no failure.
+         if Routine then
+            declare
+               Signature : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Signature_Of (Types.all, Visible);
+               Routine_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Visible));
+            begin
+               if Syn.Generic_Formal_Count
+                    (Routine_Tree.all, Res.Node_Of (Meanings.all, Visible)) = 0
+                 and then Signature /= Landin.Checking.No_Signature
+                 and then Landin.Checking.Signature_Parameter_Count
+                   (Types.all, Signature) = 1
+                 and then Landin.Checking.Signature_Result_Count
+                   (Types.all, Signature) = 1
+                 and then Landin.Checking."="
+                   (Landin.Checking.Signature_Error_Form
+                      (Types.all, Signature),
+                    Landin.Checking.Infallible)
+                 and then Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Signature, 1).Convention
+                     in Syn.Implicit_In | Syn.Explicit_In
+                 and then Type_Descriptors_Agree
+                   (Part_Descriptor
+                      (Landin.Checking.Nth_Signature_Parameter
+                         (Types.all, Signature, 1)),
+                    Target)
+               then
+                  Accessor := Visible;
+               end if;
+            end;
+         end if;
+
+         if Position /= 0 and then Accessor /= Res.No_Declaration then
+            Bad.Report
+              (Item    => Bad.Conformance_Form,
+               Source  => Reader,
+               Where   => Syn.Anchor (Of_Tree, Field_Node),
+               Message => "`" & Named & "` is both a field of "
+                          & Named_Type (Target, Reader)
+                          & " and a routine taking it",
+               Note    => "D1363: `through` names a field of the conforming"
+                          & " type or a routine taking it, and one name"
+                          & " cannot be both; rename one",
+               Related => Syn.Origin
+                 (Tree_For (Res.Source_Of (Meanings.all, Accessor)).all,
+                  Res.Node_Of (Meanings.all, Accessor)),
+               Because => "the routine declared here",
+               Into    => Found);
+            return None;
+         elsif Position = 0 and then Accessor = Res.No_Declaration then
+            Bad.Report
+              (Item    => Bad.Conformance_Form,
+               Source  => Reader,
+               Where   => Syn.Anchor (Of_Tree, Field_Node),
+               Message =>
+                 (if Routine
+                  then "`" & Named & "` does not take "
+                       & Named_Type (Target, Reader)
+                       & " alone and give one result"
+                  elsif Struct
+                  then Named_Type (Target, Reader) & " has no field `"
+                       & Named & "`, and no routine of that name takes it"
+                  else Named_Type (Target, Reader) & " is not a struct, so"
+                       & " it has no field `" & Named & "`, and no routine"
+                       & " of that name takes it"),
+               Note    => "D1363: `through` names a field of the conforming"
+                          & " type, or a routine `(self: T) -> (r: F)` that"
+                          & " takes it by value and cannot fail",
+               Related =>
+                 (if Routine
+                  then Syn.Origin
+                    (Tree_For (Res.Source_Of (Meanings.all, Visible)).all,
+                     Res.Node_Of (Meanings.all, Visible))
+                  elsif Struct
+                  then Syn.Origin
+                    (Tree_For (Res.Source_Of (Meanings.all, Template)).all,
+                     Res.Node_Of (Meanings.all, Template))
+                  else Syn.Origin
+                    (Of_Tree, Syn.Conforming_Type (Of_Tree, Node))),
+               Because =>
+                 (if Routine then "the routine declared here"
+                  elsif Struct then "the type declared here"
+                  else "the conforming type"),
+               Into    => Found);
+            return None;
+         end if;
+
+         Choice.Field := Position;
+         Choice.Accessor := Accessor;
+         Choice.Held :=
+           (if Position /= 0
+            then Shape_Descriptor
+              (Landin.Checking.Field_Shape_Of
+                 (Types.all, Target.Nominal, Position))
+            else Part_Descriptor
+              (Landin.Checking.Nth_Signature_Result
+                 (Types.all,
+                  Landin.Checking.Signature_Of (Types.all, Accessor), 1)));
+         if Require_Conformance
+           (Choice.Held, Syn.Conforming_Concept (Of_Tree, Node), Of_Tree,
+            Application => (Source => Reader,
+                            Where  => Syn.Anchor (Of_Tree, Field_Node)),
+            Inputs => Inputs,
+            Required_At =>
+              (if Position /= 0
+               then Syn.Origin
+                 (Tree_For (Res.Source_Of (Meanings.all, Template)).all,
+                  Syn.Nth_Field
+                    (Tree_For (Res.Source_Of (Meanings.all, Template)).all,
+                     Written, Position))
+               else Syn.Origin
+                 (Tree_For (Res.Source_Of (Meanings.all, Accessor)).all,
+                  Res.Node_Of (Meanings.all, Accessor))),
+            Through => True)
+         then
+            return Choice;
+         end if;
+         return None;
+      end Through_Of;
+
+      function Accessor_Refusal
+        (Concept_Tree : Syn.Tree;
+         Requirement  : Syn.Node_Id;
+         Formal       : Res.Declaration_Id;
+         Conformance  : Landin.Checking.Conformance_Id;
+         Position     : Positive;
+         Accessor     : Res.Declaration_Id) return Syn.Node_Id
+      is
+         Entry_Signature : constant Landin.Checking.Signature_Id :=
+           Exact_Concept_Entry_Signature (Conformance, Position);
+         Routine_Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Signature_Of (Types.all, Accessor);
+         Kept : Boolean := False;
+
+         function Names_Formal (Written : Syn.Node_Id) return Boolean
+           is (Written /= Syn.No_Node
+               and then Syn.Kind (Concept_Tree, Written)
+                 in Syn.Type_Reference | Syn.Name_Reference
+               and then Res.Verdict_Of
+                 (Meanings.all, Concept_Tree, Written) = Res.Bound
+               and then Res.Bound_To
+                 (Meanings.all, Concept_Tree, Written) = Formal);
+
+         function Takes_Holder (Which : Positive) return Boolean;
+
+         function Takes_Holder (Which : Positive) return Boolean is
+            Written : constant Syn.Node_Id :=
+              Syn.Declared_Type
+                (Concept_Tree,
+                 Syn.Nth_Parameter (Concept_Tree, Requirement, Which));
+         begin
+            return Names_Formal (Written)
+              or else (Syn.Kind (Concept_Tree, Written) = Syn.Pointer_Type
+                       and then Names_Formal
+                         (Syn.Referenced_Type (Concept_Tree, Written)));
+         end Takes_Holder;
+      begin
+         --  The routine's result `from` its one parameter keeps what the
+         --  holder refers to; one without `from` is independent storage.
+         Kept := Landin.Checking.Signature_Return_Source_Count
+           (Types.all, Routine_Signature, 1) > 0;
+         for Which in 1 .. Syn.Parameter_Count (Concept_Tree, Requirement)
+         loop
+            declare
+               Parameter : constant Syn.Node_Id :=
+                 Syn.Nth_Parameter (Concept_Tree, Requirement, Which);
+            begin
+               if Takes_Holder (Which)
+                 and then
+                   (not Names_Formal
+                      (Syn.Declared_Type (Concept_Tree, Parameter))
+                    or else Syn.Convention_Of (Concept_Tree, Parameter)
+                      = Syn.Inout_Convention)
+               then
+                  return Parameter;
+               end if;
+            end;
+         end loop;
+         if Kept or else Entry_Signature = Landin.Checking.No_Signature then
+            return Syn.No_Node;
+         end if;
+         for Result in 1 .. Landin.Checking.Signature_Result_Count
+           (Types.all, Entry_Signature)
+         loop
+            for Index in 1 .. Landin.Checking.Signature_Return_Source_Count
+              (Types.all, Entry_Signature, Result)
+            loop
+               if Takes_Holder
+                   (Landin.Checking.Nth_Signature_Return_Source
+                      (Types.all, Entry_Signature, Result, Index))
+                 and then Landin.Checking.Contains_Writable_References
+                   (Types.all,
+                    Landin.Checking.Nth_Signature_Result
+                      (Types.all, Entry_Signature, Result))
+               then
+                  return Syn.Nth_Return (Concept_Tree, Requirement, Result);
+               end if;
+            end loop;
+         end loop;
+         return Syn.No_Node;
+      end Accessor_Refusal;
+
+
+      procedure Note_Through
+        (Conformance : Landin.Checking.Conformance_Id;
+         Position    : Positive;
+         Choice      : Through_Choice;
+         Through     : Landin.Checking.Conformance_Id)
+      is
+         Signature : constant Landin.Checking.Signature_Id :=
+           Exact_Concept_Entry_Signature (Conformance, Position);
+         Root : Landin.Checking.Concept_Id := Landin.Checking.No_Concept;
+         Flat : Natural := 0;
+      begin
+         if Signature = Landin.Checking.No_Signature then
+            return;
+         end if;
+         if Landin.Checking.Conformance_Origin_Of (Types.all, Through)
+              = Landin.Checking.Compiler_Erased_Conformance
+         then
+            --  The entry's position in the `any`'s flattened table, in the
+            --  order Any_Selection_Signature counts it (D147).
+            Root := Choice.Held.Concept;
+            declare
+               Wanted : constant Landin.Checking.Concept_Id :=
+                 Landin.Checking.Conformance_Concept (Types.all, Conformance);
+               Cursor : Natural := 0;
+               Seen : array
+                 (1 .. Positive'Max
+                    (1, Landin.Checking.Concept_Count (Types.all)))
+                 of Boolean := [others => False];
+
+               procedure Visit (Concept : Landin.Checking.Concept_Id);
+
+               procedure Visit (Concept : Landin.Checking.Concept_Id) is
+               begin
+                  if Concept = Landin.Checking.No_Concept
+                    or else Landin.Checking.Is_Compiler_Concept
+                      (Types.all, Concept)
+                    or else Seen (Landin.Checking.Concept_Identities.Position
+                                    (Types.all, Concept))
+                  then
+                     return;
+                  end if;
+                  Seen (Landin.Checking.Concept_Identities.Position
+                          (Types.all, Concept)) := True;
+                  declare
+                     Declaration : constant Res.Declaration_Id :=
+                       Landin.Checking.Concept_Declaration
+                         (Types.all, Concept);
+                     Concept_Tree : constant
+                       not null access constant Syn.Tree :=
+                         Tree_For (Res.Source_Of (Meanings.all, Declaration));
+                     Concept_Node : constant Syn.Node_Id :=
+                       Res.Node_Of (Meanings.all, Declaration);
+                     Required : constant Syn.Node_Id :=
+                       Syn.Constraint_Of
+                         (Concept_Tree.all,
+                          Syn.Nth_Concept_Formal
+                            (Concept_Tree.all, Concept_Node, 1));
+                  begin
+                     for Index in 1 .. Syn.Concept_Entry_Count
+                       (Concept_Tree.all, Concept_Node)
+                     loop
+                        Cursor := Cursor + 1;
+                        if Concept = Wanted and then Index = Position then
+                           Flat := Cursor;
+                        end if;
+                     end loop;
+                     if Required /= Syn.No_Node then
+                        Visit (Concept_For (Concept_Tree.all, Required));
+                     end if;
+                     for Parent in 1 .. Syn.Concept_Parent_Count
+                       (Concept_Tree.all, Concept_Node)
+                     loop
+                        Visit
+                          (Concept_For
+                             (Concept_Tree.all,
+                              Syn.Nth_Concept_Parent
+                                (Concept_Tree.all, Concept_Node, Parent)));
+                     end loop;
+                  end;
+               end Visit;
+            begin
+               Visit (Root);
+            end;
+            if Flat = 0 then
+               raise Landin.Compiler_Defect with
+                 "an erased field's table lacks the entry it supplies";
+            end if;
+         end if;
+         Landin.Checking.Note_Conformance_Through
+           (Types.all, Conformance, Position, Choice.Field, Through,
+            Signature, Erased_Root => Root, Erased_Entry => Flat,
+            Accessor => Choice.Accessor);
+      end Note_Through;
+
+      function Unreachable_Through
+        (Concept_Tree : Syn.Tree;
+         Requirement  : Syn.Node_Id;
+         Formal       : Res.Declaration_Id) return Syn.Node_Id
+      is
+         function Names_Formal (Written : Syn.Node_Id) return Boolean
+           is (Written /= Syn.No_Node
+               and then Syn.Kind (Concept_Tree, Written)
+                 in Syn.Type_Reference | Syn.Name_Reference
+               and then Res.Verdict_Of
+                 (Meanings.all, Concept_Tree, Written) = Res.Bound
+               and then Res.Bound_To
+                 (Meanings.all, Concept_Tree, Written) = Formal);
+
+         function Mentions (Written : Syn.Node_Id) return Boolean;
+
+         function Mentions (Written : Syn.Node_Id) return Boolean is
+         begin
+            if Written = Syn.No_Node then
+               return False;
+            elsif Names_Formal (Written) then
+               return True;
+            end if;
+            for Index in 1 .. Syn.Slot_Count (Concept_Tree, Written) loop
+               if Mentions (Syn.Slot (Concept_Tree, Written, Index)) then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Mentions;
+      begin
+         for Position in 1 .. Syn.Parameter_Count
+           (Concept_Tree, Requirement)
+         loop
+            declare
+               Parameter : constant Syn.Node_Id :=
+                 Syn.Nth_Parameter (Concept_Tree, Requirement, Position);
+               Written : constant Syn.Node_Id :=
+                 Syn.Declared_Type (Concept_Tree, Parameter);
+            begin
+               if Mentions (Written)
+                 and then not
+                   ((Names_Formal (Written)
+                     and then Syn.Convention_Of (Concept_Tree, Parameter)
+                       /= Syn.Sink_Convention)
+                    or else
+                      (Syn.Kind (Concept_Tree, Written) = Syn.Pointer_Type
+                       and then Names_Formal
+                         (Syn.Referenced_Type (Concept_Tree, Written))))
+               then
+                  return Parameter;
+               end if;
+            end;
+         end loop;
+         for Position in 1 .. Syn.Return_Count (Concept_Tree, Requirement)
+         loop
+            if Mentions
+              (Syn.Declared_Type
+                 (Concept_Tree,
+                  Syn.Nth_Return (Concept_Tree, Requirement, Position)))
+            then
+               return Syn.Nth_Return (Concept_Tree, Requirement, Position);
+            end if;
+         end loop;
+         if Mentions (Syn.Error_Set_Of (Concept_Tree, Requirement)) then
+            return Requirement;
+         end if;
+         return Syn.No_Node;
+      end Unreachable_Through;
+
       procedure Validate_Conformance_Entries is
          procedure Validate (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
@@ -22989,6 +24065,13 @@ package body Landin.Stages.Checking is
                     Landin.Checking.Empty_Actuals;
                   Conformance : Landin.Checking.Conformance_Id :=
                     Landin.Checking.No_Conformance;
+                  --  D1363: the `through` field's layout position and its
+                  --  type's conformance to the same concept.
+                  Field_Node : constant Syn.Node_Id :=
+                    Syn.Conformance_Field_Of (Of_Tree, Node);
+                  Choice : Through_Choice;
+                  Through_Row : Landin.Checking.Conformance_Id :=
+                    Landin.Checking.No_Conformance;
                begin
                   if Target.Kind = Ty.Ill_Typed or else Formal_Count = 0 then
                      return;
@@ -23050,6 +24133,20 @@ package body Landin.Stages.Checking is
                        (Types.all, Conformance,
                         Syn.Concept_Entry_Count
                           (Concept_Tree.all, Concept_Node));
+                  end if;
+
+                  if Field_Node /= Syn.No_Node then
+                     Choice := Through_Of
+                       (Of_Tree, Node, Field_Node, Concept, Target, Inputs);
+                     if Chosen (Choice) then
+                        Through_Row := Landin.Checking.Find_Conformance
+                          (Types.all, Concept, Actual_For (Choice.Held),
+                           Inputs);
+                        if Through_Row = Landin.Checking.No_Conformance then
+                           raise Landin.Compiler_Defect with
+                             "a field's conformance was required and lost";
+                        end if;
+                     end if;
                   end if;
 
                   for Requirement_Index in 1 .. Syn.Concept_Entry_Count
@@ -23342,6 +24439,91 @@ package body Landin.Stages.Checking is
                                             Implementation);
                                     end if;
                                  end;
+                              end if;
+                           end;
+                        elsif Through_Row /= Landin.Checking.No_Conformance
+                        then
+                           declare
+                              Offending : constant Syn.Node_Id :=
+                                (if Unreachable_Through
+                                      (Concept_Tree.all, Requirement_Node,
+                                       Bound (1).Formal) /= Syn.No_Node
+                                   or else Choice.Accessor
+                                     = Res.No_Declaration
+                                 then Unreachable_Through
+                                   (Concept_Tree.all, Requirement_Node,
+                                    Bound (1).Formal)
+                                 else Accessor_Refusal
+                                   (Concept_Tree.all, Requirement_Node,
+                                    Bound (1).Formal, Conformance,
+                                    Requirement_Index, Choice.Accessor));
+                           begin
+                              if Offending /= Syn.No_Node then
+                                 declare
+                                    Entry_Name : constant String := Spelled
+                                      (Syn.Name
+                                         (Concept_Tree.all,
+                                          Requirement_Node));
+                                    Hides : constant Boolean :=
+                                      Choice.Accessor /= Res.No_Declaration
+                                      and then Syn.Kind
+                                        (Concept_Tree.all, Offending)
+                                          = Syn.Named_Return;
+                                 begin
+                                    Bad.Report
+                                      (Item    => Bad.Conformance_Form,
+                                       Source  => Syn.Source_Of (Of_Tree),
+                                       Where   => Syn.Anchor
+                                         (Of_Tree, Field_Node),
+                                       Message =>
+                                         (if Hides
+                                          then "the routine's result cannot"
+                                            & " supply `" & Entry_Name
+                                            & "`, whose writable result is"
+                                            & " `from` the conforming type"
+                                          elsif Choice.Accessor
+                                            /= Res.No_Declaration
+                                          then "the routine's result cannot"
+                                            & " supply `" & Entry_Name
+                                            & "`, which takes the conforming"
+                                            & " type other than by value"
+                                          else "the field cannot supply `"
+                                            & Entry_Name & "`, which takes"
+                                            & " or gives the conforming type"
+                                            & " other than as a parameter of"
+                                            & " it or a pointer to it"),
+                                       Note    =>
+                                         (if Hides
+                                          then "D1363/D222: a result the"
+                                            & " routine makes is not `from`"
+                                            & " the holder, so a writable"
+                                            & " result `from self` would"
+                                            & " hide where it points; name a"
+                                            & " routine for `" & Entry_Name
+                                            & "` in the conformance's list"
+                                          elsif Choice.Accessor
+                                            /= Res.No_Declaration
+                                          then "D1363: a routine's result is"
+                                            & " a copy, which stands in for"
+                                            & " its holder only as a"
+                                            & " parameter `t`; name a"
+                                            & " routine for `" & Entry_Name
+                                            & "` in the conformance's list"
+                                          else "D1363: a field stands in for"
+                                            & " its holder only as a"
+                                            & " parameter `t`, `ptr t` or"
+                                            & " `ptr mut t`; name a routine"
+                                            & " for `" & Entry_Name
+                                            & "` in the conformance's list"),
+                                       Related => Syn.Origin
+                                         (Concept_Tree.all, Offending),
+                                       Because => "the conforming type here",
+                                       Into    => Found);
+                                 end;
+                              else
+                                 Note_Through
+                                   (Conformance, Requirement_Index, Choice,
+                                    Through_Row);
                               end if;
                            end;
                         end if;
@@ -24417,6 +25599,8 @@ package body Landin.Stages.Checking is
                     and then not Landin.Checking.Is_Distinct
                       (Types.all,
                        Landin.Checking.Nominal_Of (Types.all, Means));
+                  Uncalled_Entry : constant Syn.Node_Id :=
+                    Uncalled_Entry_Selection (Of_Tree, Node, Means);
                begin
                   Bad.Report
                     (Item => Bad.Type_Declaration_Form,
@@ -24424,7 +25608,14 @@ package body Landin.Stages.Checking is
                      Where => Syn.Where (Of_Tree, Node),
                      Message => "a type name does not denote a runtime value",
                      Note =>
-                       (if Plain_Struct
+                       (if Uncalled_Entry /= Syn.No_Node
+                        then "D1364: a concept's entry selected through a"
+                             & " type is called where it is selected, as `"
+                             & Landin.Source.Slice
+                                 (Source (Context, Syn.Source_Of (Of_Tree)),
+                                  Syn.Where (Of_Tree, Uncalled_Entry))
+                             & "(...)`; it is not a function value"
+                        elsif Plain_Struct
                         then "[0700]: a struct value is constructed from its"
                              & " type, as in `name(field: value)`"
                         elsif Kind = Ty.Fixed_Array
@@ -25587,6 +26778,16 @@ package body Landin.Stages.Checking is
                        Syn.Target_Of (Of_Tree, Node);
                      Held : constant Ty.Type_Kind := Type_At (Of_Tree, From);
                   begin
+                     --  D1364: an entry of a conformance of the scalar.
+                     if Evidence_Selection_Signature (Of_Tree, Node)
+                          /= Landin.Checking.No_Signature
+                     then
+                        return Kept (Ty.Function_Value);
+                     elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                       = Ty.Ill_Typed
+                     then
+                        return Ty.Ill_Typed;
+                     end if;
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Of_Tree),

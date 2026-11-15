@@ -1,0 +1,26 @@
+counter: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+end counter
+
+box: type = struct
+    n: u32
+end box
+
+box_count: (self: box) -> (n: u32) = self.n end box_count
+
+box is counter (count: box_count)
+
+measured: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+end measured
+
+box is measured (count: box_count)
+
+counted: () -> (n: u32) =
+    b: box = (n: 1)
+    n = box.count(b)
+end counted
+
+public main: () -> (code: i32) =
+    code = 0
+end main

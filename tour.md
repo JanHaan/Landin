@@ -3572,6 +3572,39 @@ anonymous function, cannot supply an entry.
 There is no implicit conformance. A type with a matching `less` is still
 not `ordered` until a line like this one says so.
 
+A type built around another often supplies a concept by passing every
+entry on to a field. Name the field after `through`, and its type's
+conformance supplies each entry the list does not name:
+
+```landin
+holder: type = struct
+    tag: u8
+    inner: i32
+end holder
+
+holder is ordered through inner
+```
+
+`holder`'s `less` of `a` and `b` is then `i32`'s `less` of `a.inner` and
+`b.inner`. The field's type must conform to the concept itself, and the
+list may still name a function for an entry the holder supplies its own
+way: `holder is ordered (less: holder_less) through inner`. Where the
+concept takes its type as a parameter, by value, `inout` or through a
+pointer, the field is passed in the holder's place; an entry that returns
+the type, or takes it any other way, needs a function of its own in the
+list. A routine that takes the holder and returns the provider may stand
+where the field does, as `hosted/events` reaches the system handle it
+computes for each call; its result is a copy, so it stands in only where
+the concept takes the holder by value.
+
+An entry can also be called through the name of a type that conforms, as
+a generic function calls it through its type parameter ([1290]):
+`i32.less(1, 2)`, `holder.less(a, b)`. The conformance that supplies it is
+the one of that type whose concept declares the entry, out of the
+program's one register ([1280]). Where two of a type's conformances
+declare it, the call is an error; call it through a type parameter
+constrained by the concept you mean.
+
 ### [1290] Writing a generic function
 
 A generic function takes the type as an ordinary parameter, constrained
@@ -3811,7 +3844,10 @@ parameter may appear among them.
 
 The supplying functions are generic themselves. Instantiating the
 conformance gives them their type argument and leaves functions of
-exactly the concept's shape.
+exactly the concept's shape. A family may hand its entries to a field too,
+`(provider: type is mem.allocator) counted(provider) is mem.allocator
+(alloc: counted_alloc) through inner`, as long as a field that holds a type
+variable has it constrained by the concept.
 
 The target must be the whole generic type applied to the binder in
 order, each variable used once: one conformance covers the whole family

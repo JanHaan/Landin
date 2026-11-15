@@ -188,8 +188,9 @@ that begins its line [2000]. Over an expression, hover shows its type. A
 type is spelled as the hovered source would write it: another module's type
 by the name its import gives, `shapes.point`, and a private type by its
 public alias, the way a refusal in that source spells them. A
-field a selection names, `corner.x` or the `y` of `offsetof pair.y`, has its
-definition at the field in its struct's body, and where the selection has no
+field a selection names, `corner.x` or the `y` of `offsetof pair.y`, or a
+conformance's `through` names, has its definition at the field in its
+struct's body, and where the selection has no
 value of its own, as in a measurement, hover shows the field as that body
 declares it. Inside a routine body that does not parse, both answer nothing.
 

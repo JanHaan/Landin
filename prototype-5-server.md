@@ -37,7 +37,10 @@ and stopped cleanly by its signal waiter (D490); and over `core/io/fake`'s
 network on a round of turns in one process (D493). The firmware half is
 derived as `compiler/tests/counterpart`, whose `DERIVATION.md` maps
 `firmware/tick`, `firmware/board` and `firmware/app` to their sources and
-says where they depart from the sketch (D1034). It shares `app/protocol`
+says where they depart from the sketch (D1034): its board lends the
+library's round as an `any fibre.turns` and hands `fibre.scheduler` and
+`fibre.turns` to it through that field (D1363), where the sketch's board
+writes its own round. It shares `app/protocol`
 with the server unchanged and takes the same two requests on one serial
 line on QEMU's micro:bit, and its trace shows D448's single-core answer:
 `a` answered and then `b`, `b` taken while `a` slept and not begun before

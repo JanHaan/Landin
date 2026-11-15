@@ -473,6 +473,11 @@ package body Landin.Syntax.Parser is
             As_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "as");
 
+            --  D1363: a conformance's field, after its concept or its
+            --  entries; an ordinary identifier everywhere else.
+            Through_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "through");
+
             Option_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "option");
 
@@ -6532,6 +6537,20 @@ package body Landin.Syntax.Parser is
                Target   : Node_Id := No_Node;
                Concept  : Node_Id := No_Node;
                Entries  : Slot_Vectors.Vector;
+
+               --  D1363: `through` begins the conformance's field clause
+               --  unless what follows makes it the name of the next
+               --  declaration: `through: ...`, `through := ...`,
+               --  `through, ...`, `through(...)`, `through.x` or a
+               --  conformance of a type named `through`.
+               function At_Through return Boolean
+                 is (Peek = Tok.Identifier
+                     and then Named_Here = Through_Id
+                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
+                       | Tok.Comma | Tok.Left_Paren | Tok.Dot
+                       | Tok.Left_Bracket
+                     and then not (Ahead (1) = Tok.Identifier
+                                   and then Named_Ahead (1) = Is_Id));
             begin
                if Exported then
                   Complain
@@ -6587,7 +6606,10 @@ package body Landin.Syntax.Parser is
                   Concept := Add (Concept_Reference, After_Previous);
                end if;
 
-               if Expect
+               if At_Through then
+                  --  D1363: the field supplies every entry; no list.
+                  null;
+               elsif Expect
                  (Wanted  => Tok.Left_Paren,
                   Message => "a conformance opens its entries with `(`",
                   Note    => "[1240]: a conformance's entries are written in"
@@ -6655,6 +6677,33 @@ package body Landin.Syntax.Parser is
                   then
                      Resync_Declaration;
                   end if;
+               end if;
+
+               if At_Through then
+                  declare
+                     Through_At : constant Landin.Source.Span := Here;
+                  begin
+                     Advance;
+                     if Peek = Tok.Identifier then
+                        Entries.Append
+                          (Add
+                             (Of_Kind  => Conformance_Field,
+                              At_Token => Here,
+                              Extent   => Join (Through_At, Here),
+                              Named    => Named_Here));
+                        Advance;
+                     else
+                        Complain
+                          (Item    => Syn.Name_Expected,
+                           Where   => (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                           Message => "a conformance names its field after"
+                                      & " `through`",
+                           Note    => "D1363: `through` names the field of"
+                                      & " the conforming type whose provider"
+                                      & " supplies the concept");
+                     end if;
+                  end;
                end if;
 
                declare

@@ -1,0 +1,60 @@
+--  D1363's forms: a field supplying every entry, with no list; a list
+--  naming some entries and the field the rest; an empty list beside the
+--  field; a concept's other input still a label; a family over its binder;
+--  `through` still an ordinary name elsewhere.
+
+counter: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+    label: (self: t) -> (n: u32)
+end counter
+
+indexable: type = concept (t: type, idx: type, item_type: type)
+    get: (s: t, i: idx) -> (item: item_type)
+end indexable
+
+box: type = struct
+    n: u32
+end box
+
+box_count: (self: box) -> (n: u32) = self.n end box_count
+box_label: (self: box) -> (n: u32) = 1 end box_label
+box_get: (s: box, i: usize) -> (item: u32) = s.n + u32(i) end box_get
+
+box is counter (count: box_count, label: box_label)
+box is indexable (idx: usize, item_type: u32, get: box_get)
+
+whole: type = struct
+    inner: box
+end whole
+
+whole is counter through inner
+whole is indexable (idx: usize, item_type: u32) through inner
+
+partial: type = struct
+    through: u8
+    inner: box
+end partial
+
+partial_label: (self: partial) -> (n: u32) = u32(self.through) end partial_label
+
+partial is counter (label: partial_label) through inner
+
+listed: type = struct
+    inner: box
+end listed
+
+listed is counter () through inner
+
+wrap: type (p: type is counter) = struct
+    inner: p
+end wrap
+
+(p: type is counter) wrap(p) is counter through inner
+
+through: (through: u32) -> (n: u32) = through end through
+
+public main: () -> (code: i32) =
+    w: wrap(whole) = (inner: (inner: (n: 2)))
+    code = i32(through(0))
+    _ = w
+end main

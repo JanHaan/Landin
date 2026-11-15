@@ -1,0 +1,23 @@
+counter: type = concept (t: type)
+    count: (self: t) -> (n: u32)
+end counter
+
+box: type = struct
+    n: u32
+end box
+
+box_count: (self: box) -> (n: u32) = self.n end box_count
+
+box is counter (count: box_count)
+
+holder: type = struct
+    n: u32
+end holder
+
+as_box: (self: holder, scale: u32) -> (made: box) = (n: self.n * scale) end as_box
+
+holder is counter through as_box
+
+public main: () -> (code: i32) =
+    code = 0
+end main

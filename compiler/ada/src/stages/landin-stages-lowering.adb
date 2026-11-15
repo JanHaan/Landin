@@ -675,6 +675,74 @@ package body Landin.Stages.Lowering is
       Bound_Providers : Bound_Provider_Array;
       Bound_Provider_Count : Natural := 0;
 
+      --  D1363: an entry a field supplies is a routine of the compiler's
+      --  own, which hands the call on to the field's provider with the
+      --  field in the holder's place.  One per conformance entry, made
+      --  when its table or a call first names it and filled after every
+      --  declared routine.
+      type Through_Routine is record
+         Row      : Landin.Checking.Conformance_Id :=
+           Landin.Checking.No_Conformance;
+         Position : Positive := 1;
+         Item     : IR.Item_Id := IR.No_Item;
+      end record;
+      package Through_Routine_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Through_Routine);
+      Through_Routines : Through_Routine_Vectors.Vector;
+
+      --  The conformances whose `any` tables a forwarding routine
+      --  dispatches through, by position, chosen while the program's
+      --  reach is walked; their erased tables are built.
+      package Through_Root_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Positive);
+      Through_Roots : Through_Root_Vectors.Vector;
+
+      --  The first conformance with a table of its own of an `any`'s
+      --  concept, which dispatch through that `any` names as Any_Selection
+      --  does, or No_Conformance when the program has none.
+      function Erased_Root_Row
+        (Concept : Landin.Checking.Concept_Id)
+         return Landin.Checking.Conformance_Id;
+
+      function Erased_Root_Row
+        (Concept : Landin.Checking.Concept_Id)
+         return Landin.Checking.Conformance_Id is
+      begin
+         for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
+         loop
+            declare
+               Candidate : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Conformance_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Conformance_Concept (Types.all, Candidate)
+                    = Concept
+                 and then Landin.Checking."/="
+                   (Landin.Checking.Conformance_Origin_Of
+                      (Types.all, Candidate),
+                    Landin.Checking.Compiler_Erased_Conformance)
+               then
+                  return Candidate;
+               end if;
+            end;
+         end loop;
+         return Landin.Checking.No_Conformance;
+      end Erased_Root_Row;
+
+      --  The routine a conformance's table entry, or a call through a
+      --  type's name (D1364), reaches, and its signature: the declared
+      --  provider, the routine binding a generic provider's evidence, or
+      --  D1363's forwarding routine, made on first use.
+      function Provider_Entry_Signature
+        (Row      : Landin.Checking.Conformance_Id;
+         Position : Positive) return Landin.Checking.Signature_Id;
+
+      function Provider_Entry_Item
+        (Row      : Landin.Checking.Conformance_Id;
+         Position : Positive) return IR.Item_Id;
+
+      procedure Lower_Through (Made : Through_Routine);
+
       function Evidence_For
         (Source : Landin.Checking.Conformance_Id) return IR.Evidence_Id;
 
@@ -9963,6 +10031,17 @@ package body Landin.Stages.Lowering is
                      if Dynamic then
                         raise Landin.Compiler_Defect with
                           "a bound any entry escaped call lowering";
+                     elsif Run_Position = 0 then
+                        --  D1364: through a concrete type's name, the
+                        --  conformance's own routine.
+                        return IR.Emit_Function_Address
+                          (Unit.all, Filling,
+                           Provider_Entry_Item
+                             (Source,
+                              Positive
+                                (Landin.Checking.Evidence_Entry_Of
+                                   (Types.all, Of_Tree, Node))),
+                           Site);
                      elsif Slot = IR.No_Slot then
                         raise Landin.Compiler_Defect with
                           "an evidence selection has no hidden parameter";
@@ -16657,6 +16736,732 @@ package body Landin.Stages.Lowering is
          pragma Assert (Cleanup_Stack.Is_Empty);
       end Lower_Routine;
 
+      function Provider_Entry_Signature
+        (Row      : Landin.Checking.Conformance_Id;
+         Position : Positive) return Landin.Checking.Signature_Id
+      is
+         Provider_Instance : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Conformance_Provider_Instance
+             (Types.all, Row, Position);
+         Provider : constant Res.Declaration_Id :=
+           Landin.Checking.Conformance_Provider_Declaration
+             (Types.all, Row, Position);
+      begin
+         if Landin.Checking.Is_Supplied_Through
+              (Types.all, Row, Position)
+         then
+            return Landin.Checking.Conformance_Through_Signature
+              (Types.all, Row, Position);
+         elsif Provider_Instance /= Landin.Checking.No_Routine_Instance then
+            return Landin.Checking.Routine_Signature_Of
+              (Types.all, Provider_Instance);
+         elsif Provider /= Res.No_Declaration then
+            return Landin.Checking.Signature_Of (Types.all, Provider);
+         end if;
+         return Landin.Checking.No_Signature;
+      end Provider_Entry_Signature;
+
+      function Provider_Entry_Item
+        (Row      : Landin.Checking.Conformance_Id;
+         Position : Positive) return IR.Item_Id
+      is
+         Provider_Instance : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Conformance_Provider_Instance
+             (Types.all, Row, Position);
+         Provider : constant Res.Declaration_Id :=
+           Landin.Checking.Conformance_Provider_Declaration
+             (Types.all, Row, Position);
+         Signature : constant Landin.Checking.Signature_Id :=
+           Provider_Entry_Signature (Row, Position);
+      begin
+         if Signature = Landin.Checking.No_Signature then
+            raise Landin.Compiler_Defect with
+              "a selected evidence provider has no routine item";
+         end if;
+
+         --  D1363: the field's provider supplies it, through a routine of
+         --  the compiler's own made once per entry.
+         if Landin.Checking.Is_Supplied_Through
+              (Types.all, Row, Position)
+         then
+            for Made of Through_Routines loop
+               if Made.Row = Row
+                 and then Made.Position = Position
+               then
+                  return Made.Item;
+               end if;
+            end loop;
+            declare
+               Results : constant Natural :=
+                 Landin.Checking.Signature_Result_Count
+                   (Types.all, Signature);
+               Gives : constant Landin.Checking.Signature_Part :=
+                 (if Results = 1
+                  then Landin.Checking.Nth_Signature_Result
+                    (Types.all, Signature, 1)
+                  else (Kind => Ty.No_Value, others => <>));
+               Held : constant Ty.Type_Kind :=
+                 (if Results = 0 then Ty.No_Value
+                  elsif Results > 1 then Ty.Aggregate
+                  else Gives.Kind);
+               Source : constant Landin.Source.Source_Id :=
+                 Landin.Checking.Conformance_Source (Types.all, Row);
+               Site : constant Landin.Provenance.Origin :=
+                 Site_Of (Tree_For (Source).all,
+                          Landin.Checking.Conformance_Node (Types.all, Row));
+               Made : constant IR.Item_Id := IR.Add_Item
+                 (Unit.all, IR.Routine, Res.No_Declaration,
+                  (if Held in Ty.Function_Value | Ty.Pointer_Value
+                   then Ty.Usize
+                   elsif Held = Ty.Atom_Value then Ty.U32
+                   elsif Held in Ty.Slice_Value | Ty.Any_Value
+                   then Ty.Fixed_Array
+                   else Held),
+                  Site,
+                  Nominal =>
+                    (if Held = Ty.Aggregate and then Results = 1
+                     then Nominal_For (Gives.Nominal)
+                     else IR.No_Nominal_Type));
+            begin
+               if Held = Ty.Atom_Value then
+                  IR.Set_Atom_Set (Unit.all, Made, Atom_Set_For (Gives.Atoms));
+               elsif Held = Ty.Fixed_Array then
+                  IR.Set_Array
+                    (Unit.all, Made, Neutral_Element (Gives),
+                     IR.Element_Total (Gives.Length));
+               elsif Held in Ty.Slice_Value | Ty.Any_Value then
+                  IR.Set_Array
+                    (Unit.all, Made, Ty.Usize, 2,
+                     Slice_Element_For (Gives.Reference));
+               end if;
+               IR.Set_Signature (Unit.all, Made, Signature_For (Signature));
+               --  Named after the routine the chain of fields reaches,
+               --  as a binding routine is, so a profile shows whose
+               --  entry it hands on.
+               declare
+                  Along : Landin.Checking.Conformance_Id := Row;
+                  Named : Res.Declaration_Id := Res.No_Declaration;
+               begin
+                  for Step in 1 .. 64 loop
+                     exit when not Landin.Checking.Is_Supplied_Through
+                       (Types.all, Along, Position);
+                     exit when Landin.Checking.Conformance_Through_Erased_Root
+                       (Types.all, Along, Position)
+                         /= Landin.Checking.No_Concept;
+                     Along := Landin.Checking.Conformance_Through
+                       (Types.all, Along, Position);
+                  end loop;
+                  if not Landin.Checking.Is_Supplied_Through
+                    (Types.all, Along, Position)
+                  then
+                     Named := Landin.Checking.Conformance_Provider_Declaration
+                       (Types.all, Along, Position);
+                  end if;
+                  if Named /= Res.No_Declaration then
+                     IR.Set_Named_After (Unit.all, Made, Named);
+                  end if;
+               end;
+               Through_Routines.Append
+                 (Through_Routine'(Row => Row, Position => Position,
+                                   Item => Made));
+               return Made;
+            end;
+         end if;
+
+         declare
+            Target : constant IR.Item_Id :=
+              (if Provider_Instance /= Landin.Checking.No_Routine_Instance
+               then IR.Item_For_Instance
+                 (Unit.all,
+                  Landin.Checking.Routine_Identities.Position
+                    (Types.all, Provider_Instance))
+               elsif Provider /= Res.No_Declaration
+               then IR.Item_For (Unit.all, Provider)
+               else IR.No_Item);
+         begin
+            if Target = IR.No_Item then
+               raise Landin.Compiler_Defect with
+                 "a selected evidence provider has no routine item";
+            end if;
+            if Provider_Instance = Landin.Checking.No_Routine_Instance
+              or else Needed_Evidence_Count (Provider_Instance) = 0
+            then
+               return Target;
+            end if;
+            declare
+               Index : constant Positive :=
+                 Landin.Checking.Routine_Identities.Position
+                   (Types.all, Provider_Instance);
+            begin
+               if Provider_Items (Index) = IR.No_Item then
+                  declare
+                     Made : constant IR.Item_Id := IR.Add_Item
+                       (Unit.all, IR.Routine, Res.No_Declaration,
+                        IR.Result_Of (Unit.all, Target),
+                        IR.Origin_Of (Unit.all, Target),
+                        IR.Nominal_Of (Unit.all, Target));
+                  begin
+                     --  Named after the routine it binds, so a profile
+                     --  shows whose evidence it supplies.
+                     IR.Set_Named_After
+                       (Unit.all, Made,
+                        (if IR.Generic_Template_Of (Unit.all, Target)
+                              /= Res.No_Declaration
+                         then IR.Generic_Template_Of (Unit.all, Target)
+                         else IR.Declares (Unit.all, Target)));
+                     if IR.Atom_Set_Of (Unit.all, Target) /= IR.No_Atom_Set
+                     then
+                        IR.Set_Atom_Set
+                          (Unit.all, Made,
+                           IR.Atom_Set_Of (Unit.all, Target));
+                     elsif IR.Result_Of (Unit.all, Target) = Ty.Fixed_Array
+                     then
+                        IR.Set_Array
+                          (Unit.all, Made,
+                           IR.Array_Element_Shape (Unit.all, Target),
+                           IR.Array_Length (Unit.all, Target));
+                     end if;
+                     IR.Set_Signature
+                       (Unit.all, Made, Signature_For (Signature));
+                     Provider_Items (Index) := Made;
+                     Bound_Provider_Count := Bound_Provider_Count + 1;
+                     Bound_Providers (Bound_Provider_Count) :=
+                       (Source => Provider_Instance,
+                        Item => Made, Target => Target);
+                  end;
+               end if;
+               return Provider_Items (Index);
+            end;
+         end;
+      end Provider_Entry_Item;
+
+      --  D1363: fill a forwarding routine Provider_Entry_Item made.  It
+      --  takes the entry's signature with the holder in the represented
+      --  type's place and hands every argument on to the field's
+      --  provider: the holder's field where the concept takes the holder,
+      --  by value, as `inout` or through a pointer, and the rest as they
+      --  came.  Through an `any` field the call dispatches on its table.
+      procedure Lower_Through (Made : Through_Routine) is
+         Row : constant Landin.Checking.Conformance_Id := Made.Row;
+         Position : constant Positive := Made.Position;
+         Field : constant Natural :=
+           Landin.Checking.Conformance_Through_Field
+             (Types.all, Row, Position);
+         Accessor : constant Res.Declaration_Id :=
+           Landin.Checking.Conformance_Through_Accessor
+             (Types.all, Row, Position);
+         Inner : constant Landin.Checking.Conformance_Id :=
+           Landin.Checking.Conformance_Through (Types.all, Row, Position);
+         Root : constant Landin.Checking.Concept_Id :=
+           Landin.Checking.Conformance_Through_Erased_Root
+             (Types.all, Row, Position);
+         Flat : constant Natural :=
+           Landin.Checking.Conformance_Through_Erased_Entry
+             (Types.all, Row, Position);
+         Source_Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Conformance_Through_Signature
+             (Types.all, Row, Position);
+         Holder : constant Landin.Checking.Nominal_Type_Id :=
+           (if Landin.Checking."="
+                 (Landin.Checking.Type_Form_Of
+                    (Landin.Checking.Conformance_Target (Types.all, Row)),
+                  Landin.Checking.Nominal_Actual_Type)
+            then Landin.Checking.Nominal_Of
+              (Types.all, Landin.Checking.Conformance_Target (Types.all, Row))
+            else Landin.Checking.No_Nominal_Type);
+         Field_Shape : constant Landin.Checking.Field_Shape :=
+           (if Field = 0 then (others => <>)
+            else Landin.Checking.Field_Shape_Of (Types.all, Holder, Field));
+         Field_Stored : constant Boolean :=
+           Field /= 0
+           and then
+             (Field_Shape.Kind
+                in Landin.Checking.Aggregate_Field
+                 | Landin.Checking.Fixed_Array_Field
+              or else (Field_Shape.Kind = Landin.Checking.Reference_Field
+                       and then Landin.Checking.Descriptor_Of
+                         (Types.all, Field_Shape.Reference).Kind
+                           in Ty.Slice_Value | Ty.Any_Value));
+         Site : constant Landin.Provenance.Origin :=
+           IR.Origin_Of (Unit.all, Made.Item);
+         Count : constant Natural :=
+           Landin.Checking.Signature_Parameter_Count
+             (Types.all, Source_Signature);
+         Results : constant Natural :=
+           Landin.Checking.Signature_Result_Count
+             (Types.all, Source_Signature);
+         Gives : constant Landin.Checking.Signature_Part :=
+           (if Results = 1
+            then Landin.Checking.Nth_Signature_Result
+              (Types.all, Source_Signature, 1)
+            else (Kind => Ty.No_Value, others => <>));
+         Stored_Result : constant Boolean :=
+           Results > 1
+           or else Gives.Kind
+             in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+              | Ty.Any_Value;
+         Concept_Declaration : constant Res.Declaration_Id :=
+           Landin.Checking.Concept_Declaration
+             (Types.all, Landin.Checking.Conformance_Concept (Types.all, Row));
+         Concept_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Concept_Declaration));
+         Concept_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Concept_Declaration);
+         Requirement : constant Syn.Node_Id :=
+           Syn.Nth_Concept_Entry (Concept_Tree.all, Concept_Node, Position);
+         Formal : constant Res.Declaration_Id := Declaration_At
+           (Syn.Source_Of (Concept_Tree.all),
+            Syn.Nth_Concept_Formal (Concept_Tree.all, Concept_Node, 1));
+         type Slot_Array is array (Positive range <>) of IR.Slot_Id;
+         Params : Slot_Array (1 .. Count) := [others => IR.No_Slot];
+         type Value_Array is array (Positive range <>) of IR.Value_Id;
+         Arguments : Value_Array (1 .. Count + 1) := [others => IR.No_Value];
+         Argument_Count : Natural := 0;
+         Receiver : IR.Value_Id := IR.No_Value;
+         Receiver_At : Natural := 0;
+         Result : IR.Slot_Id := IR.No_Slot;
+         Failure : IR.Slot_Id := IR.No_Slot;
+         Errors : IR.Atom_Set_Id;
+         Call : IR.Value_Id;
+         Callee : IR.Value_Id := IR.No_Value;
+         Dispatch : IR.Evidence_Id := IR.No_Evidence;
+
+         --  Whether the concept takes the holder at this parameter: as the
+         --  represented type itself, or a pointer to it.
+         function Projected (Which : Positive) return Boolean;
+
+         function Projected (Which : Positive) return Boolean is
+            Written : constant Syn.Node_Id :=
+              Syn.Declared_Type
+                (Concept_Tree.all,
+                 Syn.Nth_Parameter (Concept_Tree.all, Requirement, Which));
+
+            function Names_Formal (Node : Syn.Node_Id) return Boolean
+              is (Node /= Syn.No_Node
+                  and then Syn.Kind (Concept_Tree.all, Node)
+                    in Syn.Type_Reference | Syn.Name_Reference
+                  and then Res.Verdict_Of
+                    (Meanings.all, Concept_Tree.all, Node) = Res.Bound
+                  and then Res.Bound_To
+                    (Meanings.all, Concept_Tree.all, Node) = Formal);
+         begin
+            return Names_Formal (Written)
+              or else
+                (Syn.Kind (Concept_Tree.all, Written) = Syn.Pointer_Type
+                 and then Names_Formal
+                   (Syn.Referenced_Type (Concept_Tree.all, Written)));
+         end Projected;
+
+         function Field_Scalar return Ty.Type_Kind
+           is (if Field_Shape.Kind = Landin.Checking.Reference_Field
+                 or else Field_Shape.Signature
+                   /= Landin.Checking.No_Signature
+               then Ty.Usize
+               elsif Field_Shape.Atoms /= Landin.Checking.No_Atom_Set
+               then Ty.U32
+               else Field_Shape.Element);
+
+         function Part_Parameter
+           (Part : Landin.Checking.Signature_Part;
+            Which : Positive) return IR.Slot_Id;
+
+         function Part_Parameter
+           (Part : Landin.Checking.Signature_Part;
+            Which : Positive) return IR.Slot_Id
+         is
+            pragma Unreferenced (Which);
+            Made_Slot : IR.Slot_Id;
+            --  No source declares a forwarding routine's parameters.
+            Declares : constant Res.Declaration_Id := Res.No_Declaration;
+         begin
+            if Part.Convention = Syn.Inout_Convention then
+               declare
+                  Shape : IR.Field_Shape;
+               begin
+                  if Part.Kind = Ty.Aggregate then
+                     Shape := Neutral_Body (Part.Nominal);
+                  elsif Part.Kind = Ty.Fixed_Array then
+                     Shape := IR.Make_Array_Shape
+                       (Unit.all, IR.Element_Total (Part.Length),
+                        Neutral_Element (Part));
+                  elsif Part.Kind in Ty.Slice_Value | Ty.Any_Value then
+                     Shape :=
+                       (Kind => IR.Array_Field_Shape,
+                        Element => Ty.Usize, Length => 2,
+                        Slice_Element => Slice_Element_For (Part.Reference),
+                        others => <>);
+                  else
+                     Shape :=
+                       (Kind => IR.Scalar_Field_Shape,
+                        Element =>
+                          (if Part.Kind in Ty.Function_Value
+                             | Ty.Pointer_Value
+                           then Ty.Usize
+                           elsif Part.Kind = Ty.Atom_Value then Ty.U32
+                           else Ty.Scalar_Name (Part.Kind)),
+                        Length => 1,
+                        Pointee =>
+                          (if Part.Kind = Ty.Pointer_Value
+                           then Pointee_For (Part.Reference)
+                           else IR.No_Pointee),
+                        Signature =>
+                          (if Part.Kind = Ty.Function_Value
+                           then Signature_For (Part.Signature)
+                           else IR.No_Signature),
+                        Atoms =>
+                          (if Part.Kind = Ty.Atom_Value
+                           then Atom_Set_For (Part.Atoms)
+                           else IR.No_Atom_Set),
+                        others => <>);
+                  end if;
+                  return IR.Add_Address_Parameter
+                    (Unit.all, Filling, Shape, Declares, Site);
+               end;
+            elsif Part.Kind in Ty.Slice_Value | Ty.Any_Value then
+               return IR.Add_Array_Parameter
+                 (Unit.all, Filling, Ty.Usize, 2, Declares, Site,
+                  Slice_Element_For (Part.Reference));
+            elsif Part.Kind = Ty.Aggregate then
+               Made_Slot := IR.Add_Aggregate_Parameter
+                 (Unit.all, Filling, Declares, Site,
+                  Nominal_For (Part.Nominal));
+               for Each in 1 .. Landin.Checking.Layout_Field_Count
+                 (Types.all, Part.Nominal)
+               loop
+                  Add_Stored_Field (Part.Nominal, Each, Slot => Made_Slot);
+               end loop;
+               return Made_Slot;
+            elsif Part.Kind = Ty.Fixed_Array then
+               return IR.Add_Array_Parameter
+                 (Unit.all, Filling, Neutral_Element (Part),
+                  IR.Element_Total (Part.Length), Declares, Site);
+            end if;
+            return IR.Add_Parameter
+              (Unit.all, Filling,
+               (if Part.Kind in Ty.Function_Value | Ty.Pointer_Value
+                then Ty.Usize
+                elsif Part.Kind = Ty.Atom_Value then Ty.U32
+                else Part.Kind),
+               Declares, Site,
+               Pointee =>
+                 (if Part.Kind = Ty.Pointer_Value
+                  then Pointee_For (Part.Reference) else IR.No_Pointee),
+               Signature =>
+                 (if Part.Kind = Ty.Function_Value
+                  then Signature_For (Part.Signature) else IR.No_Signature),
+               Atoms =>
+                 (if Part.Kind = Ty.Atom_Value
+                  then Atom_Set_For (Part.Atoms) else IR.No_Atom_Set));
+         end Part_Parameter;
+
+         function Part_Slot
+           (Part : Landin.Checking.Signature_Part) return IR.Slot_Id;
+
+         function Part_Slot
+           (Part : Landin.Checking.Signature_Part) return IR.Slot_Id
+         is
+            Made_Slot : IR.Slot_Id;
+         begin
+            if Part.Kind in Ty.Slice_Value | Ty.Any_Value then
+               return IR.Add_Array_Slot
+                 (Unit.all, Filling, Ty.Usize, 2, Res.No_Declaration, Site,
+                  Slice_Element_For (Part.Reference));
+            elsif Part.Kind = Ty.Fixed_Array then
+               return IR.Add_Array_Slot
+                 (Unit.all, Filling, Neutral_Element (Part),
+                  IR.Element_Total (Part.Length), Res.No_Declaration, Site);
+            elsif Part.Kind = Ty.Aggregate then
+               Made_Slot := IR.Add_Aggregate_Slot
+                 (Unit.all, Filling, Res.No_Declaration, Site,
+                  Nominal_For (Part.Nominal));
+               for Each in 1 .. Landin.Checking.Layout_Field_Count
+                 (Types.all, Part.Nominal)
+               loop
+                  Add_Stored_Field (Part.Nominal, Each, Slot => Made_Slot);
+               end loop;
+               return Made_Slot;
+            end if;
+            return IR.Add_Slot
+              (Unit.all, Filling,
+               (if Part.Kind in Ty.Function_Value | Ty.Pointer_Value
+                then Ty.Usize
+                elsif Part.Kind = Ty.Atom_Value then Ty.U32
+                else Part.Kind),
+               Res.No_Declaration, Site,
+               Atoms =>
+                 (if Part.Kind = Ty.Atom_Value
+                  then Atom_Set_For (Part.Atoms) else IR.No_Atom_Set));
+         end Part_Slot;
+
+         --  The holder's field where Slot holds the holder as the
+         --  parameter Part takes it.
+         function Projection
+           (Slot  : IR.Slot_Id;
+            Part  : Landin.Checking.Signature_Part;
+            Erase : Boolean) return IR.Value_Id;
+
+         function Projection
+           (Slot  : IR.Slot_Id;
+            Part  : Landin.Checking.Signature_Part;
+            Erase : Boolean) return IR.Value_Id
+         is
+            Place : IR.Storage;
+         begin
+            --  The routine's result, called on the holder by value.
+            if Accessor /= Res.No_Declaration then
+               declare
+                  Routine : constant Landin.Checking.Signature_Id :=
+                    Landin.Checking.Signature_Of (Types.all, Accessor);
+                  Gave : constant Landin.Checking.Signature_Part :=
+                    Landin.Checking.Nth_Signature_Result
+                      (Types.all, Routine, 1);
+                  Kept : constant IR.Slot_Id := Part_Slot (Gave);
+                  Stored : constant Boolean :=
+                    Gave.Kind in Ty.Aggregate | Ty.Fixed_Array
+                      | Ty.Slice_Value | Ty.Any_Value;
+                  Storage : constant IR.Value_Id :=
+                    (if Stored
+                     then IR.Emit_Storage_Address
+                       (Unit.all, Filling,
+                        (Kind => IR.Frame_Slot, Slot => Kept), Site)
+                     else IR.No_Value);
+                  Holder_Value : constant IR.Value_Id :=
+                    (if IR.Is_Aggregate (Unit.all, Filling, Slot)
+                       or else IR.Is_Array (Unit.all, Filling, Slot)
+                     then IR.Emit_Storage_Address
+                       (Unit.all, Filling,
+                        (Kind => IR.Frame_Slot, Slot => Slot), Site)
+                     else IR.Emit_Load (Unit.all, Filling, Slot, Site));
+                  Call : constant IR.Value_Id := IR.Emit_Call
+                    (Unit.all, Filling, IR.Item_For (Unit.all, Accessor),
+                     (if Stored then Ty.No_Value
+                      elsif Gave.Kind in Ty.Function_Value | Ty.Pointer_Value
+                      then Ty.Usize
+                      elsif Gave.Kind = Ty.Atom_Value then Ty.U32
+                      else Gave.Kind),
+                     Site);
+               begin
+                  if Stored then
+                     IR.Add_Argument (Unit.all, Filling, Call, Storage);
+                  end if;
+                  IR.Add_Argument (Unit.all, Filling, Call, Holder_Value);
+                  if Stored then
+                     return IR.Emit_Storage_Address
+                       (Unit.all, Filling,
+                        (Kind => IR.Frame_Slot, Slot => Kept), Site);
+                  end if;
+                  IR.Emit_Store (Unit.all, Filling, Kept, Call, Site);
+                  return IR.Emit_Load (Unit.all, Filling, Kept, Site);
+               end;
+            end if;
+            if Part.Kind = Ty.Pointer_Value then
+               declare
+                  Address : constant IR.Slot_Id := IR.Add_Address_Slot
+                    (Unit.all, Filling, Neutral_Body (Holder), Site);
+               begin
+                  IR.Emit_Store
+                    (Unit.all, Filling, Address,
+                     IR.Emit_Pointer_Address
+                       (Unit.all, Filling,
+                        IR.Emit_Load (Unit.all, Filling, Slot, Site), Site),
+                     Site);
+                  Place := (Kind => IR.Runtime_Address, Address => Address);
+               end;
+            elsif IR.Is_Address (Unit.all, Filling, Slot) then
+               Place := (Kind => IR.Runtime_Address, Address => Slot);
+            else
+               --  The holder by value: its field's storage, or its value.
+               if Erase or else Field_Stored then
+                  return IR.Emit_Storage_Address
+                    (Unit.all, Filling, (Kind => IR.Frame_Slot, Slot => Slot),
+                     Site, Field => Field);
+               end if;
+               return IR.Emit_Load_Slot_Field
+                 (Unit.all, Filling, Slot, IR.Part_Position (Field),
+                  Field_Scalar, Site,
+                  Signature =>
+                    (if Field_Shape.Signature /= Landin.Checking.No_Signature
+                     then Signature_For (Field_Shape.Signature)
+                     else IR.No_Signature));
+            end if;
+            if Erase then
+               return IR.Emit_Storage_Address
+                 (Unit.all, Filling, Place, Site, Field => Field);
+            end if;
+            return IR.Emit_Place_Address
+              (Unit.all, Filling, Place, Site, Field => Field);
+         end Projection;
+      begin
+         Filling := Made.Item;
+         Slots := No_Slots;
+         Evidence_Slots.Clear;
+         Cleanup_Stack.Clear;
+         if Stored_Result then
+            declare
+               Ignored : constant IR.Slot_Id := IR.Add_Parameter
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+            begin
+               pragma Unreferenced (Ignored);
+            end;
+         end if;
+         for Which in 1 .. Count loop
+            Params (Which) := Part_Parameter
+              (Landin.Checking.Nth_Signature_Parameter
+                 (Types.all, Source_Signature, Which), Which);
+         end loop;
+         if Results = 1 then
+            Result := Part_Slot (Gives);
+            IR.Set_Result_Slot (Unit.all, Filling, Result);
+         elsif Results > 1 then
+            Result := IR.Add_Aggregate_Slot
+              (Unit.all, Filling, Res.No_Declaration, Site);
+            Add_Result_Fields (Source_Signature, Slot => Result);
+            IR.Set_Result_Slot (Unit.all, Filling, Result);
+         end if;
+         Active_Result := Result;
+
+         Open (IR.Add_Block (Unit.all, Filling, Res.Program_Scope, Site));
+
+         --  D377: through an `any` of a concept the program never
+         --  conforms to, no value of the field exists to call through.
+         if Root /= Landin.Checking.No_Concept
+           and then Erased_Root_Row (Root) = Landin.Checking.No_Conformance
+         then
+            IR.Emit_Halt (Unit.all, Filling, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+            return;
+         end if;
+
+         for Which in 1 .. Count loop
+            declare
+               Part : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Source_Signature, Which);
+               Slot : constant IR.Slot_Id := Params (Which);
+            begin
+               Argument_Count := Argument_Count + 1;
+               if Projected (Which) then
+                  if Root /= Landin.Checking.No_Concept
+                    and then Receiver_At = 0
+                  then
+                     Receiver := Projection (Slot, Part, Erase => True);
+                     Receiver_At := Argument_Count;
+                  else
+                     Arguments (Argument_Count) :=
+                       Projection (Slot, Part, Erase => False);
+                     --  A pointer to the field is the field provider's
+                     --  pointer, as `addr self.val.field` would be.
+                     if Part.Kind = Ty.Pointer_Value then
+                        IR.Set_Pointee
+                          (Unit.all, Filling, Arguments (Argument_Count),
+                           Pointee_For
+                             (Landin.Checking.Nth_Signature_Parameter
+                                (Types.all,
+                                 Provider_Entry_Signature (Inner, Position),
+                                 Which).Reference));
+                     end if;
+                  end if;
+               elsif IR.Is_Address (Unit.all, Filling, Slot) then
+                  Arguments (Argument_Count) := IR.Emit_Place_Address
+                    (Unit.all, Filling,
+                     (Kind => IR.Runtime_Address, Address => Slot), Site);
+               elsif IR.Is_Aggregate (Unit.all, Filling, Slot)
+                 or else IR.Is_Array (Unit.all, Filling, Slot)
+               then
+                  Arguments (Argument_Count) := IR.Emit_Storage_Address
+                    (Unit.all, Filling,
+                     (Kind => IR.Frame_Slot, Slot => Slot), Site);
+               else
+                  Arguments (Argument_Count) :=
+                    IR.Emit_Load (Unit.all, Filling, Slot, Site);
+               end if;
+            end;
+         end loop;
+
+         Errors := IR.Signature_Errors
+           (Unit.all, Signature_For (Source_Signature));
+         if Errors /= IR.No_Atom_Set then
+            Failure := IR.Add_Slot
+              (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
+               Atoms => Errors);
+         end if;
+
+         declare
+            Hidden : constant IR.Value_Id :=
+              (if Stored_Result
+               then IR.Emit_Storage_Address
+                 (Unit.all, Filling,
+                  (Kind => IR.Frame_Slot, Slot => Result), Site)
+               else IR.No_Value);
+            Returned : constant Ty.Type_Kind :=
+              (if Stored_Result or else Results = 0 then Ty.No_Value
+               elsif Gives.Kind in Ty.Function_Value | Ty.Pointer_Value
+               then Ty.Usize
+               elsif Gives.Kind = Ty.Atom_Value then Ty.U32
+               else Gives.Kind);
+         begin
+            if Root /= Landin.Checking.No_Concept then
+               if Receiver_At = 0 then
+                  raise Landin.Compiler_Defect with
+                    "an erased field's entry has no receiver";
+               end if;
+               Dispatch := Any_Evidence_For
+                 (Witness_For (Erased_Root_Row (Root)));
+               Callee := IR.Emit_Erased_Evidence_Function
+                 (Unit.all, Filling, Receiver, Dispatch, Flat, Site);
+               Arguments (Receiver_At) := IR.Emit_Evidence_Self
+                 (Unit.all, Filling, Callee, Site);
+               Call := IR.Emit_Indirect_Call
+                 (Unit.all, Filling,
+                  IR.Evidence_Entry_Dispatch_Signature
+                    (Unit.all, Dispatch, Flat),
+                  Returned, Site, Failure => Failure);
+               IR.Add_Argument (Unit.all, Filling, Call, Callee);
+            else
+               Call := IR.Emit_Call
+                 (Unit.all, Filling, Provider_Entry_Item (Inner, Position),
+                  Returned, Site, Failure => Failure);
+            end if;
+            if Stored_Result then
+               IR.Add_Argument (Unit.all, Filling, Call, Hidden);
+            end if;
+            for Which in 1 .. Argument_Count loop
+               IR.Add_Argument (Unit.all, Filling, Call, Arguments (Which));
+            end loop;
+            if not Stored_Result and then Result /= IR.No_Slot then
+               IR.Emit_Store (Unit.all, Filling, Result, Call, Site);
+            end if;
+         end;
+
+         if Failure /= IR.No_Slot then
+            declare
+               Error : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Failure, Site);
+               Test : constant IR.Value_Id := IR.Emit_Failure_Test
+                 (Unit.all, Filling, Error, Site);
+               Failed : constant IR.Block_Id := IR.Add_Block
+                 (Unit.all, Filling, Res.Program_Scope, Site);
+               Succeeded : constant IR.Block_Id := IR.Add_Block
+                 (Unit.all, Filling, Res.Program_Scope, Site);
+            begin
+               IR.Emit_Branch
+                 (Unit.all, Filling, Test, Failed, Succeeded, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+               Open (Failed);
+               IR.Emit_Fail
+                 (Unit.all, Filling,
+                  IR.Emit_Load (Unit.all, Filling, Failure, Site), Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+               Open (Succeeded);
+            end;
+         end if;
+         Leave_With (Result, Site);
+      end Lower_Through;
+
+
       ------------------------------------------------------------
       --  [1940]: a module value
       ------------------------------------------------------------
@@ -17154,7 +17959,55 @@ package body Landin.Stages.Lowering is
                  Landin.Checking.Conformance_Provider_Instance
                    (Types.all, Row, Entry_Position);
             begin
-               if Provider /= Landin.Checking.No_Routine_Instance then
+               --  D1363: the field's provider supplies the entry: its own
+               --  entry, or the `any`'s table the field holds.
+               if Landin.Checking.Is_Supplied_Through
+                    (Types.all, Row, Entry_Position)
+               then
+                  declare
+                     Inner : constant Landin.Checking.Conformance_Id :=
+                       Landin.Checking.Conformance_Through
+                         (Types.all, Row, Entry_Position);
+                     Root : constant Landin.Checking.Concept_Id :=
+                       Landin.Checking.Conformance_Through_Erased_Root
+                         (Types.all, Row, Entry_Position);
+                  begin
+                     if Landin.Checking.Conformance_Through_Accessor
+                          (Types.all, Row, Entry_Position)
+                          /= Res.No_Declaration
+                     then
+                        Reach_Declaration
+                          (Landin.Checking.Conformance_Through_Accessor
+                             (Types.all, Row, Entry_Position));
+                     end if;
+                     if Root = Landin.Checking.No_Concept then
+                        Reach_Conformance
+                          (Inner, Erased => False, Which => Entry_Position);
+                     else
+                        declare
+                           Chosen : constant Landin.Checking.Conformance_Id
+                             := Erased_Root_Row (Root);
+                        begin
+                           if Chosen /= Landin.Checking.No_Conformance then
+                              declare
+                                 Position : constant Positive :=
+                                   Landin.Checking.Conformance_Identities
+                                     .Position (Types.all, Chosen);
+                              begin
+                                 if not Witnessed (Position) then
+                                    Witnessed (Position) := True;
+                                    Witnesses.Append (Position);
+                                 end if;
+                                 if not Through_Roots.Contains (Position)
+                                 then
+                                    Through_Roots.Append (Position);
+                                 end if;
+                              end;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               elsif Provider /= Landin.Checking.No_Routine_Instance then
                   Reach_Instance (Provider);
                else
                   Reach_Declaration
@@ -18230,91 +19083,11 @@ package body Landin.Stages.Lowering is
          procedure Add_Provider
            (To_Evidence : IR.Evidence_Id;
             Row         : Landin.Checking.Conformance_Id;
-            Position    : Positive)
-         is
-            Provider_Instance : constant
-              Landin.Checking.Routine_Instance_Id :=
-                Landin.Checking.Conformance_Provider_Instance
-                  (Types.all, Row, Position);
-            Provider : constant Res.Declaration_Id :=
-              Landin.Checking.Conformance_Provider_Declaration
-                (Types.all, Row, Position);
-            Target : constant IR.Item_Id :=
-              (if Provider_Instance /= Landin.Checking.No_Routine_Instance
-               then IR.Item_For_Instance
-                 (Unit.all,
-                  Landin.Checking.Routine_Identities.Position
-                    (Types.all, Provider_Instance))
-               elsif Provider /= Res.No_Declaration
-               then IR.Item_For (Unit.all, Provider)
-               else IR.No_Item);
-            Signature : constant Landin.Checking.Signature_Id :=
-              (if Provider_Instance /= Landin.Checking.No_Routine_Instance
-               then Landin.Checking.Routine_Signature_Of
-                 (Types.all, Provider_Instance)
-               elsif Provider /= Res.No_Declaration
-               then Landin.Checking.Signature_Of (Types.all, Provider)
-               else Landin.Checking.No_Signature);
+            Position    : Positive) is
          begin
-            if Target = IR.No_Item
-              or else Signature = Landin.Checking.No_Signature
-            then
-               raise Landin.Compiler_Defect with
-                 "a selected evidence provider has no routine item";
-            end if;
-            if Provider_Instance /= Landin.Checking.No_Routine_Instance
-              and then Needed_Evidence_Count (Provider_Instance) > 0
-            then
-               declare
-                  Index : constant Positive :=
-                    Landin.Checking.Routine_Identities.Position
-                      (Types.all, Provider_Instance);
-               begin
-                  if Provider_Items (Index) = IR.No_Item then
-                     declare
-                        Made : constant IR.Item_Id := IR.Add_Item
-                          (Unit.all, IR.Routine, Res.No_Declaration,
-                           IR.Result_Of (Unit.all, Target),
-                           IR.Origin_Of (Unit.all, Target),
-                           IR.Nominal_Of (Unit.all, Target));
-                     begin
-                        --  Named after the routine it binds, so a profile
-                        --  shows whose evidence it supplies.
-                        IR.Set_Named_After
-                          (Unit.all, Made,
-                           (if IR.Generic_Template_Of (Unit.all, Target)
-                                 /= Res.No_Declaration
-                            then IR.Generic_Template_Of (Unit.all, Target)
-                            else IR.Declares (Unit.all, Target)));
-                        if IR.Atom_Set_Of (Unit.all, Target) /= IR.No_Atom_Set
-                        then
-                           IR.Set_Atom_Set
-                             (Unit.all, Made,
-                              IR.Atom_Set_Of (Unit.all, Target));
-                        elsif IR.Result_Of (Unit.all, Target) = Ty.Fixed_Array
-                        then
-                           IR.Set_Array
-                             (Unit.all, Made,
-                              IR.Array_Element_Shape (Unit.all, Target),
-                              IR.Array_Length (Unit.all, Target));
-                        end if;
-                        IR.Set_Signature
-                          (Unit.all, Made, Signature_For (Signature));
-                        Provider_Items (Index) := Made;
-                        Bound_Provider_Count := Bound_Provider_Count + 1;
-                        Bound_Providers (Bound_Provider_Count) :=
-                          (Source => Provider_Instance,
-                           Item => Made, Target => Target);
-                     end;
-                  end if;
-                  IR.Add_Evidence_Entry
-                    (Unit.all, To_Evidence, Provider_Items (Index),
-                     Signature_For (Signature));
-               end;
-            else
-               IR.Add_Evidence_Entry
-                 (Unit.all, To_Evidence, Target, Signature_For (Signature));
-            end if;
+            IR.Add_Evidence_Entry
+              (Unit.all, To_Evidence, Provider_Entry_Item (Row, Position),
+               Signature_For (Provider_Entry_Signature (Row, Position)));
          end Add_Provider;
 
          procedure Add_Closure
@@ -18409,6 +19182,16 @@ package body Landin.Stages.Lowering is
                   end;
                end if;
             end;
+         end loop;
+
+         --  D1363: an `any` a field holds is dispatched through.
+         for Position of Through_Roots loop
+            Used_Any_Evidence
+              (Landin.Checking.Conformance_Identities.Position
+                 (Types.all,
+                  Witness_For
+                    (Landin.Checking.Conformance_Identities.Nth
+                       (Types.all, Position)))) := True;
          end loop;
 
          for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
@@ -21694,29 +22477,61 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
-      for Index in 1 .. Bound_Provider_Count loop
-         declare
-            Entry_Point : Bound_Provider renames Bound_Providers (Index);
-            Template : constant Res.Declaration_Id :=
-              Landin.Checking.Routine_Template_Of
-                (Types.all, Entry_Point.Source);
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Res.Source_Of (Meanings.all, Template));
-            Previous : Landin.Checking.Routine_Instance_Id;
-         begin
-            Landin.Checking.Activate_Routine_View
-              (Types.all, Entry_Point.Source, Previous);
-            Lower_Routine
-              (Of_Tree.all, Res.Node_Of (Meanings.all, Template),
-               Bound_Item => Entry_Point.Item,
-               Bound_Target => Entry_Point.Target);
-            Landin.Checking.Restore_Routine_View (Types.all, Previous);
-         exception
-            when others =>
-               Landin.Checking.Restore_Routine_View (Types.all, Previous);
-               raise;
-         end;
-      end loop;
+      --  The routines lowering made itself: D1363's forwarding routines
+      --  and the routines binding a generic provider's evidence.  Each is
+      --  filled in the order it was made, which is its item order, and
+      --  filling a forwarding routine may make the next one along a chain
+      --  of fields, or a binding routine, which comes later in that order.
+      declare
+         Through_Next : Positive := 1;
+         Bound_Next : Positive := 1;
+      begin
+         loop
+            declare
+               Through_Waits : constant Boolean :=
+                 Through_Next <= Natural (Through_Routines.Length);
+               Bound_Waits : constant Boolean :=
+                 Bound_Next <= Bound_Provider_Count;
+            begin
+               exit when not Through_Waits and then not Bound_Waits;
+               if Through_Waits
+                 and then (not Bound_Waits
+                           or else Positive
+                             (Through_Routines (Through_Next).Item)
+                             < Positive (Bound_Providers (Bound_Next).Item))
+               then
+                  Lower_Through (Through_Routines (Through_Next));
+                  Through_Next := Through_Next + 1;
+               else
+                  declare
+                     Entry_Point : Bound_Provider renames
+                       Bound_Providers (Bound_Next);
+                     Template : constant Res.Declaration_Id :=
+                       Landin.Checking.Routine_Template_Of
+                         (Types.all, Entry_Point.Source);
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Tree_For (Res.Source_Of (Meanings.all, Template));
+                     Previous : Landin.Checking.Routine_Instance_Id;
+                  begin
+                     Landin.Checking.Activate_Routine_View
+                       (Types.all, Entry_Point.Source, Previous);
+                     Lower_Routine
+                       (Of_Tree.all, Res.Node_Of (Meanings.all, Template),
+                        Bound_Item => Entry_Point.Item,
+                        Bound_Target => Entry_Point.Target);
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                  exception
+                     when others =>
+                        Landin.Checking.Restore_Routine_View
+                          (Types.all, Previous);
+                        raise;
+                  end;
+                  Bound_Next := Bound_Next + 1;
+               end if;
+            end;
+         end loop;
+      end;
 
       --  D1262: a trap compared its `caller` parameter with the calls
       --  the checker noted.  A call this stage filled and the checker did
