@@ -2895,6 +2895,12 @@
     "runtime/greatest-common-divisor": {
       "mode": "execute"
     },
+    "runtime/held-references-go-back": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/hosted-assembly-reaches-no-evidence-entry": {
       "mode": "execute",
       "lanes": {

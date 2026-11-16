@@ -839,11 +839,7 @@ package body Landin.Diagnostics.Explanations is
                & "te names the binding: module storage needs no `from`, so"
                & " return it in a result of its own, or read and write it "
                & "where it is chosen, and a result that derives from no pa"
-               & "rameter is declared without `from`. A source written `he"
-               & "ld p` is what `p` holds, read out of an element through "
-               & "a pointer or by an index; an address or range of that el"
-               & "ement, or `p`'s own storage, is a view, which a plain `f"
-               & "rom p` names (D1369).",
+               & "rameter is declared without `from`.",
             when Catalogue.Conformance_Collision =>
                "Two conformances of one type to one concept [1280]. The "
                & "whole program has one table of conformances; remove one,"
