@@ -91,7 +91,9 @@ session id and resume it with the native process continuation tool until it
 completes, keeping the turn open while the result is needed. Without either,
 use `python3 scripts/run_logged.py --wait DIR` with a wait shorter than the
 calling tool's timeout, repeated on exit 124; its 270-second default keeps
-a subagent inside its five-minute prompt cache. Never wait in a `sleep` loop, nor on
+a subagent inside its five-minute prompt cache. A run that must outlive a
+reopened session, a suite or a gate watch, is started with `--detach
+--limit SECONDS` and waited for the same way. Never wait in a `sleep` loop, nor on
 `pgrep -f`, whose pattern matches the waiting shell's own command line, so
 the wait never ends. Then inspect `result.json` and the retained log, and
 report the command's scope and status, `FILTERED` or `HOST-ONLY` included;

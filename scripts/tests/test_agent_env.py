@@ -184,6 +184,35 @@ class SessionStartHookTest(unittest.TestCase):
                 capture_output=True, text=True, timeout=60)
             self.assertEqual(sourced.stdout, "2", sourced.stderr)
 
+    def test_an_environment_that_would_pass_the_limit_is_refused_aloud(self):
+        command = session_start_command()
+        with tempfile.TemporaryDirectory() as scratch:
+            scratch = Path(scratch)
+            exports = scratch / "agent-env.sh"
+            exports.write_text("export LANDIN_HOOK_PROBE=1\n" + "#" * 40000 + "\n")
+            helper = scratch / "project/scripts/agent_env.sh"
+            helper.parent.mkdir(parents=True)
+            helper.write_text("#!/bin/sh\nprintf '%s\\n' '" + str(exports) + "'\n")
+            helper.chmod(0o755)
+            target = scratch / "claude-env"
+            environment = {"PATH": os.environ["PATH"],
+                           "CLAUDE_PROJECT_DIR": str(scratch / "project"),
+                           "CLAUDE_ENV_FILE": str(target)}
+            sizes = []
+            for generation in range(5):
+                exports.write_text("export LANDIN_HOOK_PROBE=%d\n" % generation
+                                   + "#" * 40000 + "\n")
+                completed = subprocess.run(
+                    ["sh", "-c", command], env=environment, stdin=subprocess.DEVNULL,
+                    capture_output=True, text=True, timeout=60)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                sizes.append((target.stat().st_size, completed.stderr))
+            #  Two environments of 40 KB fit under 96 KiB and a third would not.
+            self.assertEqual([size for size, _ in sizes[1:]], [sizes[1][0]] * 4)
+            self.assertLess(sizes[-1][0], 96 * 1024)
+            self.assertEqual(sizes[1][1], "")
+            self.assertIn("start a fresh session", sizes[2][1])
+
     def test_a_host_without_the_helper_is_left_alone(self):
         command = session_start_command()
         with tempfile.TemporaryDirectory() as scratch:

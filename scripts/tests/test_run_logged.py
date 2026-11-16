@@ -236,6 +236,90 @@ class LoggedCommands(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("holds no run_logged.py run", result.stderr)
 
+    def detached(self, *arguments):
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--output", str(self.output), "--detach",
+             *arguments], capture_output=True, text=True, timeout=HANG)
+
+        def cleanup():
+            subprocess.run([sys.executable, str(SCRIPT), "--stop", str(self.output)],
+                           capture_output=True, timeout=2 * HANG)
+
+        if completed.returncode == 0:
+            self.addCleanup(cleanup)
+        return completed
+
+    def test_a_detached_run_outlives_the_session_that_started_it(self):
+        #  The launcher runs in a session of its own, as a harness's
+        #  background command does, and that whole session is then ended.
+        marker = self.output.parent / "marker"
+        work = self.output.parent / "work.py"
+        work.write_text("import pathlib, time\ntime.sleep(2)\n"
+                        "pathlib.Path(%r).write_text('x')\n" % str(marker))
+        launcher = self.output.parent / "launcher.py"
+        launcher.write_text(
+            "import subprocess, sys, time\n"
+            "subprocess.run([sys.executable, %r, '--output', %r, '--detach',"
+            " '--limit', '%d', '--', sys.executable, %r], stdout=subprocess.DEVNULL)\n"
+            "print('launched', flush=True)\ntime.sleep(600)\n"
+            % (str(SCRIPT), str(self.output), HANG, str(work)))
+        harness = subprocess.Popen([sys.executable, str(launcher)], stdout=subprocess.PIPE,
+                                   text=True, start_new_session=True)
+        self.addCleanup(harness.wait, HANG)
+        self.assertEqual(harness.stdout.readline().strip(), "launched")
+        os.killpg(harness.pid, signal.SIGKILL)
+        harness.stdout.close()
+        result = self.wait("--timeout=%d" % HANG)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(marker.exists())
+        self.assertTrue(self.result()["detached"])
+        self.assertFalse(self.result()["limit_reached"])
+
+    def test_a_detached_run_past_its_limit_is_ended_and_says_so(self):
+        launched = self.detached("--limit", "1", "--", sys.executable, "-c",
+                                 "import time; time.sleep(600)")
+        self.assertEqual(launched.returncode, 0, launched.stderr)
+        self.assertIn("--wait " + str(self.output), launched.stdout)
+        result = self.wait("--timeout=%d" % HANG)
+        self.assertEqual(result.returncode, 128 + signal.SIGTERM, result.stdout)
+        self.assertTrue(self.result()["limit_reached"])
+        self.assertEqual(self.result()["interrupted_by"], signal.SIGTERM)
+
+    def test_stop_ends_a_detached_run_and_a_finished_one_is_left(self):
+        launched = self.detached("--limit", str(HANG), "--", sys.executable, "-c",
+                                 "import time; print('ready', flush=True); time.sleep(600)")
+        self.assertEqual(launched.returncode, 0, launched.stderr)
+        deadline = time.monotonic() + HANG
+        log = self.output / "command.log"
+        while not log.exists() or "ready" not in log.read_text():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        stop = [sys.executable, str(SCRIPT), "--stop", str(self.output)]
+        stopped = subprocess.run(stop, capture_output=True, text=True, timeout=2 * HANG)
+        self.assertEqual(stopped.returncode, 0, stopped.stdout + stopped.stderr)
+        self.assertEqual(self.result()["interrupted_by"], signal.SIGTERM)
+        self.assertFalse(self.result()["limit_reached"])
+        again = subprocess.run(stop, capture_output=True, text=True, timeout=HANG)
+        self.assertEqual(again.returncode, 0)
+        self.assertIn("already finished", again.stdout)
+
+    def test_detaching_needs_a_limit_and_a_new_directory(self):
+        refused = self.detached("--", sys.executable, "-c", "pass")
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("--detach needs --limit", refused.stderr)
+        self.assertFalse(self.output.exists())
+        self.output.mkdir()
+        refused = self.detached("--limit", "5", "--", sys.executable, "-c", "pass")
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("cannot create a new output directory", refused.stderr)
+        for arguments in (["--wait", str(self.output), "--limit", "5"],
+                          ["--stop", str(self.output), "--detach"],
+                          ["--output", str(self.output) + "2", "--limit", "0", "--", "true"]):
+            with self.subTest(arguments=arguments):
+                refused = subprocess.run([sys.executable, str(SCRIPT), *arguments],
+                                         capture_output=True, text=True, timeout=HANG)
+                self.assertEqual(refused.returncode, 2, refused.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

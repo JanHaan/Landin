@@ -252,13 +252,13 @@ flake's shell exports `LANDIN_ENV_KEY`, the key the helper computes; when
 the toolchain on `PATH` is another checkout's shell, whose flake or pins
 differ, the helper says so on standard error and prints this checkout's
 file, whose tools then come first on `PATH`. Claude Code takes the file
-through a SessionStart hook in `.claude/settings.local.json`, which then
+through a SessionStart hook in its settings, which then
 reaches every Bash command of the session and of its subagents:
 
 ```json
 {"hooks": {"SessionStart": [{"matcher": "", "hooks": [{"type": "command",
   "timeout": 180,
-  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && m=\"# landin agent_env $(cksum < \"$f\")\" && ! grep -qxF \"$m\" \"$CLAUDE_ENV_FILE\" 2>/dev/null && { echo \"$m\"; cat \"$f\"; } >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
+  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && m=\"# landin agent_env $(cksum < \"$f\")\" && ! grep -qxF \"$m\" \"$CLAUDE_ENV_FILE\" 2>/dev/null && { [ \"$(cat \"$CLAUDE_ENV_FILE\" \"$f\" 2>/dev/null | wc -c)\" -lt 98304 ] || { echo \"landin: $CLAUDE_ENV_FILE would pass 96 KiB, where commands stop starting: start a fresh session\" >&2; exit 0; }; } && { echo \"$m\"; cat \"$f\"; } >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
 ```
 
 The hook runs again on every resume of a session, which keeps its
@@ -266,7 +266,15 @@ The hook runs again on every resume of a session, which keeps its
 environment's checksum and appends nothing when that line is already there:
 appending each time, six resumes took the file past 128 KiB, and every Bash
 command of the session then failed with E2BIG, "Argument list too long".
-`scripts/tests/test_agent_env.py` runs the command above as written here.
+An environment that changes between resumes is appended again, so the
+command also refuses to take the file past 96 KiB and says to start a fresh
+session: a session that has passed the limit cannot run the command that
+would tell it so. `scripts/tests/test_agent_env.py` runs the command above as
+written here, and `python3 scripts/agent_hook.py --install` writes it into
+`~/.claude/settings.json`, where one copy serves every checkout and
+worktree and does nothing in a project without `scripts/agent_env.sh`;
+`--check` names a copy that is older than this one, the state that took a
+session's shell on 2026-11-16.
 The file is the environment of the checkout the session started in; in a
 worktree whose flake or pins differ, `. "$(./scripts/agent_env.sh)"` run
 there adds that worktree's. The hook is
@@ -308,7 +316,25 @@ the whole conversation again at full price, which
 calling tool's limit is shorter: a tool limited to 60 seconds can use
 `--timeout 45`. A tool that yields a process session can
 resume that session instead of opening another wait. Exit 124 means the
-logged command is still running, not that it failed. A run whose wrapper
+logged command is still running, not that it failed.
+
+A session that is reopened ends its background commands: a restart, a
+resume and a change of account each do it, and a suite an hour in is lost
+with nothing in the conversation saying so. Start a run that must outlive
+that with `--detach --limit SECONDS`:
+
+```sh
+python3 scripts/run_logged.py --output "$feedback_parent/full-suite" \
+  --detach --limit 7200 -- ./scripts/dev-test.sh
+python3 scripts/run_logged.py --wait "$feedback_parent/full-suite"
+```
+
+It returns at once and the run goes on in a session of its own, which
+`--wait` attaches to from the old session or a new one. Nothing ends such a
+run by accident, so the limit is required: past it the wrapper ends the
+command and `result.json` says `limit_reached`. `--stop DIRECTORY` ends it
+early. A detached run sends no completion notification; in a main session,
+put the `--wait` itself in the background to get one. A run whose wrapper
 died without a result exits 125 at once. Those two statuses are the wait's
 own: a finished run whose command itself exited 124 or 125, as `timeout`
 does, makes the wait exit 1 and say so, and the first line it prints is
