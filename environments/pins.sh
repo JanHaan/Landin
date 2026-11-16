@@ -153,19 +153,31 @@ landin_fetch() {
     Sha="$4"
     Directory="$5"
 
-    #  curl asks again, a bounded number of times, only where the server
-    #  said to wait (408, 429, 500, 502, 503, 504) or the connection
-    #  failed; a 404 ends at once.  A failure names the archive, its URL
-    #  and the status, so an upstream outage is told from a broken pin.
-    Status=$(curl -fsSL --retry "${LANDIN_FETCH_RETRIES:-3}" \
-        --retry-delay "${LANDIN_FETCH_RETRY_DELAY:-2}" -w '%{http_code}' \
-        -o "$Into/$Archive" "$From/$Archive") || {
-        echo "landin_fetch: $Archive: cannot fetch $From/$Archive:" \
-            "HTTP status ${Status:-none} after up to" \
-            "$((${LANDIN_FETCH_RETRIES:-3} + 1)) attempts" >&2
-        rm -f "$Into/$Archive"
-        return 1
-    }
+    #  curl asks again, a bounded number of times, where the server said
+    #  to wait (408, 429, 500, 502, 503, 504) or no connection was made;
+    #  a 404 ends at once.  curl does not ask again when a transfer it
+    #  began breaks off, a connection reset or a body cut short, which
+    #  failed a gate's toolchain fetch, so this asks again for every
+    #  failure but an HTTP status (curl's 22), as many times.  A failure
+    #  names the archive, its URL and the status, so an upstream outage is
+    #  told from a broken pin.
+    Attempt=0
+    while :; do
+        Status=$(curl -fsSL --retry "${LANDIN_FETCH_RETRIES:-3}" \
+            --retry-delay "${LANDIN_FETCH_RETRY_DELAY:-2}" \
+            -w '%{http_code}' -o "$Into/$Archive" "$From/$Archive") && break
+        Code=$?
+        Attempt=$((Attempt + 1))
+        if [ "$Code" -eq 22 ] \
+            || [ "$Attempt" -gt "${LANDIN_FETCH_RETRIES:-3}" ]; then
+            echo "landin_fetch: $Archive: cannot fetch $From/$Archive:" \
+                "HTTP status ${Status:-none} after up to" \
+                "$((${LANDIN_FETCH_RETRIES:-3} + 1)) attempts" >&2
+            rm -f "$Into/$Archive"
+            return 1
+        fi
+        sleep "${LANDIN_FETCH_RETRY_DELAY:-2}"
+    done
     #  Never asked again: the bytes arrived and are not the pinned ones.
     ( cd "$Into" && printf '%s  %s\n' "$Sha" "$Archive" | sha256sum -c - ) || {
         echo "landin_fetch: $Archive: $From/$Archive is not the pinned" \

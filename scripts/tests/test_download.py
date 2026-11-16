@@ -168,6 +168,15 @@ class Server:
             def do_GET(self):
                 outer.requests += 1
                 status = outer.statuses.pop(0) if outer.statuses else 200
+                if status == 'cut':
+                    #  A transfer that breaks off: the headers promise more
+                    #  than the body sends before the connection closes.
+                    self.send_response(200)
+                    self.send_header('Content-Length', str(len(outer.body) + 100))
+                    self.end_headers()
+                    self.wfile.write(outer.body[:10])
+                    self.close_connection = True
+                    return
                 self.send_response(status)
                 payload = outer.body if status == 200 else b'no'
                 self.send_header('Content-Length', str(len(payload)))
@@ -222,6 +231,17 @@ class LandinFetch(unittest.TestCase):
         self.assertEqual((done.returncode, server.requests), (1, 2))
         self.assertIn('landin_fetch: a.tar.gz: cannot fetch %s/a.tar.gz: HTTP status 504'
                       ' after up to 2 attempts' % server.url, done.stderr)
+        self.assertFalse((into / 'a.tar.gz').exists())
+
+    def test_a_transfer_cut_short_is_asked_again(self):
+        done, server, into = self.fetch(['cut'])
+        self.assertEqual((done.returncode, server.requests), (0, 2), done.stderr)
+        self.assertEqual((into / 'unpacked/hello').read_text(), 'hi\n')
+
+    def test_transfers_cut_short_are_asked_again_a_bounded_number_of_times(self):
+        done, server, into = self.fetch(['cut'] * 9, retries='1')
+        self.assertEqual((done.returncode, server.requests), (1, 2))
+        self.assertIn('after up to 2 attempts', done.stderr)
         self.assertFalse((into / 'a.tar.gz').exists())
 
     def test_a_missing_archive_ends_at_once(self):
