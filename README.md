@@ -309,7 +309,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R13.93 — Fields lent apart (planned).**
+**Next roadmap item: R16.10 — Measure generated code (planned).**
 
 ## Questions, bugs and ideas
 
