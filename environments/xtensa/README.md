@@ -90,7 +90,9 @@ python3 environments/xtensa/corpus.py \
 ```
 
 A complete lane uses `--all` and `--tools` without fixture or profile
-selectors, and reports `COMPLETE`. Run both chips separately. Keep CPU headroom while the
+selectors, and reports `COMPLETE`. With `--shard=I/N` it makes the I-th of N
+shares of those runs and reports `SHARD`: the N shards together are the
+complete run, which is how the gate's three jobs a chip divide it. Run both chips separately. Keep CPU headroom while the
 complete corpus runs: the oracle has a 20-second wall-clock guard, and the
 exhaustive memory-alignment fixture can exceed it when CPU-heavy closing
 jobs saturate the host. Preserve default workers; schedule those jobs

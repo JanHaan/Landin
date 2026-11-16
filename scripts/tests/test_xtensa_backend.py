@@ -282,7 +282,7 @@ class CorpusOptions(unittest.TestCase):
         status, called = self.main('--all', '--qemu', '/q')
         self.assertEqual(status, 0)
         args, kwargs = called['inventory']
-        self.assertEqual(kwargs, {'locked': False})
+        self.assertEqual(kwargs, {'locked': False, 'shard': (1, 1)})
         self.assertEqual(args[-1], 'sim')
         self.assertEqual(corpus.scope_of([], [], False)[0], 'UNLOCKED')
         self.assertIn('not COMPLETE', corpus.scope_of([], [], False)[1])
@@ -295,7 +295,39 @@ class CorpusOptions(unittest.TestCase):
     def test_a_locked_run_is_locked_and_defaults_to_the_gates_profile(self):
         _, called = self.main('--all', '--tools', '/t', root=Path('/t'))
         args, kwargs = called['inventory']
-        self.assertEqual((args[-1], kwargs), ('sim', {'locked': True}))
+        self.assertEqual((args[-1], kwargs), ('sim', {'locked': True, 'shard': (1, 1)}))
+
+    def test_a_shard_of_the_complete_run_is_not_complete_alone(self):
+        status, called = self.main('--all', '--shard=2/3', root=Path('/t'))
+        self.assertEqual(status, 0)
+        self.assertEqual(called['inventory'][1], {'locked': True, 'shard': (2, 3)})
+        label, said = corpus.scope_of([], [], True, (2, 3))
+        self.assertEqual(label, 'SHARD')
+        self.assertIn('SHARD 2 of 3', said)
+        self.assertIn('COMPLETE only with the other shards', said)
+        #  An unlocked or filtered run keeps its own name, whatever the shard.
+        self.assertEqual(corpus.scope_of([], [], False, (2, 3))[0], 'UNLOCKED')
+
+    def test_the_shards_together_are_every_run_once(self):
+        work = list(range(11))
+        shares = [corpus.dealt(work, (index, 3)) for index in (1, 2, 3)]
+        self.assertEqual(sorted(sum(shares, [])), work)
+        self.assertLessEqual(max(map(len, shares)) - min(map(len, shares)), 1)
+        self.assertEqual(corpus.dealt(work, (1, 1)), work)
+
+    def test_a_shard_needs_the_whole_corpus_and_a_real_index(self):
+        from contextlib import redirect_stderr
+        import io
+        for arguments in (('--fixture', 'runtime/x', '--shard=1/2'),
+                          ('--all', '--profile', 'none-off', '--shard=1/2'),
+                          ('--all', '--shard=3/2'), ('--all', '--shard=0/2'),
+                          ('--all', '--shard=two')):
+            with self.subTest(arguments=arguments):
+                stream = io.StringIO()
+                with redirect_stderr(stream), self.assertRaises(SystemExit) as refused:
+                    self.main(*arguments, root=Path('/t'))
+                self.assertEqual(refused.exception.code, 2)
+                self.assertIn('--shard', stream.getvalue())
 
     def test_a_program_of_ones_own_runs_apart_from_the_corpus(self):
         _, called = self.main('--program', '/p/one.ldn', '--root', '/lib', '--qemu', '/q',

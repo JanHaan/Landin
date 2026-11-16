@@ -102,7 +102,8 @@ jobs:
             documents scripts linux-debug-build compiler-1 compiler-2 compiler-3 \
             compiler-checks linux-release-build \
             release bindings editor-grammar flake cortex-m-programs cortex-m-corpus \
-            cortex-m-rv32 xtensa-esp32 xtensa-esp32s3 \
+            cortex-m-rv32 xtensa-esp32-1 xtensa-esp32-2 xtensa-esp32-3 \
+            xtensa-esp32s3-1 xtensa-esp32s3-2 xtensa-esp32s3-3 \
             scaling darwin-debug-build \
             darwin-release-build darwin-host-1 darwin-host-2 \
             darwin-host-release-1 darwin-host-release-2 \
@@ -947,8 +948,13 @@ jobs:
           retention-days: 14
 
   # Both configured Xtensa cores execute the sole freestanding inventory.
+  #  One job per chip ran its corpus for 23 minutes after a release build
+  #  every job here waits for, and ended every gate run.  The corpus is
+  #  dealt round three shards (corpus.py --shard), which together are every
+  #  run once and none of which is FILTERED; the first also runs the
+  #  controls, about two minutes.
   xtensa:
-    name: xtensa-${{ matrix.chip }}
+    name: xtensa-${{ matrix.chip }}-${{ matrix.shard }}
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
@@ -957,6 +963,7 @@ jobs:
       fail-fast: false
       matrix:
         chip: [esp32, esp32s3]
+        shard: [1, 2, 3]
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
@@ -976,7 +983,8 @@ jobs:
           ./scripts/build.sh -q
       - name: Install the locked embedded tools and both Xtensa configurations
         run: python3 environments/cortex-m/setup.py --tools "$RUNNER_TEMP/embedded"
-      - name: Native controls and the complete freestanding corpus
+      - name: Native controls
+        if: matrix.shard == 1
         run: |
           export PATH="$RUNNER_TEMP/embedded/xtensa-esp-elf/bin:$PATH"
           export LD_LIBRARY_PATH="$RUNNER_TEMP/embedded/root/usr/lib/x86_64-linux-gnu"
@@ -997,7 +1005,12 @@ jobs:
           python3 environments/xtensa/abi.py --tools "$RUNNER_TEMP/embedded" \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/xtensa-abi"
-          python3 environments/xtensa/corpus.py --all --tools "$RUNNER_TEMP/embedded" \
+      - name: One of three shards of the complete freestanding corpus
+        run: |
+          export PATH="$RUNNER_TEMP/embedded/xtensa-esp-elf/bin:$PATH"
+          export LD_LIBRARY_PATH="$RUNNER_TEMP/embedded/root/usr/lib/x86_64-linux-gnu"
+          python3 environments/xtensa/corpus.py --all --shard="${{ matrix.shard }}/3" \
+            --tools "$RUNNER_TEMP/embedded" \
             --memory-profile=sim \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --qemu "$RUNNER_TEMP/embedded/qemu-xtensa/bin/qemu-system-xtensa" \
@@ -1006,7 +1019,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: xtensa-evidence-${{ matrix.chip }}
+          name: xtensa-evidence-${{ matrix.chip }}-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/xtensa-controls
             ${{ runner.temp }}/xtensa-corpus

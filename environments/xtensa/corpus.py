@@ -339,9 +339,26 @@ def compile_advice(text):
             % (', '.join(codes) or 'no code', json.dumps(codes)))
 
 
-def scope_of(selected, profiles, locked):
+def shard_of(text):
+    """`I/N`, shard I of N, as (I, N), for argparse."""
+    try:
+        index, count = (int(part) for part in text.split('/'))
+    except ValueError:
+        index, count = 0, 0
+    if not 1 <= index <= count:
+        raise argparse.ArgumentTypeError('--shard needs I/N with 1 <= I <= N, such as 2/3')
+    return index, count
+
+
+def dealt(work, shard):
+    """The I-th of N shares of WORK, dealt round the shards in its order."""
+    return work[shard[0] - 1::shard[1]]
+
+
+def scope_of(selected, profiles, locked, shard=(1, 1)):
     """The run's scope, as its head and last lines and result.json give it:
-    COMPLETE only for every row and profile with the locked tools."""
+    COMPLETE only for every row and profile with the locked tools.  A shard
+    of such a run is SHARD, and the N shards together are the COMPLETE run."""
     if selected or profiles:
         return 'FILTERED', 'FILTERED: %s%s' % (', '.join(
             ['--fixture ' + one for one in selected] + ['--profile ' + one for one in profiles]),
@@ -349,11 +366,16 @@ def scope_of(selected, profiles, locked):
     if not locked:
         return 'UNLOCKED', ('UNLOCKED: every row, with tools no --tools lock selected;'
                             ' not COMPLETE')
+    if shard[1] > 1:
+        return 'SHARD', ('SHARD %d of %d: every row at every profile, with the locked tools,'
+                         ' is COMPLETE only with the other shards' % shard)
     return 'COMPLETE', 'COMPLETE: every row at every profile, with the locked tools'
 
 
 def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(),
-                      memory_profile=GATE_MEMORY_PROFILE, locked=True):
+                      memory_profile=GATE_MEMORY_PROFILE, locked=True, shard=(1, 1)):
+    """SHARD is (I, N): the runs are dealt round N shards in inventory order
+    and the I-th share is made, so the N shards together are every run once."""
     original = rows()
     if set(selected) - original.keys():
         raise RuntimeError('unknown exact fixture: ' + ', '.join(sorted(
@@ -366,7 +388,7 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(),
     if set(profiles) - known.keys():
         raise RuntimeError('unknown exact profile: ' + ', '.join(sorted(
             set(profiles) - known.keys())) + '; the profiles are ' + ', '.join(known))
-    label, said = scope_of(selected, profiles, locked)
+    label, said = scope_of(selected, profiles, locked, shard)
     print('Xtensa corpus %s at %s memory: %s' % (chip, memory_profile, said), flush=True)
     output.mkdir(parents=True, exist_ok=False)
     work = []
@@ -382,6 +404,8 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(),
         elif profiles:
             modes = [mode for mode in modes if '-'.join(mode) in profiles]
         work += [(name, row, meta, inputs, opt, spec) for opt, spec in modes]
+    listed = len(work)
+    work = dealt(work, shard)
 
     def one(item):
         name, row, meta, inputs, opt, spec = item
@@ -440,6 +464,7 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(),
                 chip, result['fixture'], result['optimize'], result['specialize'],
                 result.get('verdict', 'FAILED: ' + result.get('error', ''))), flush=True)
     summary = {'scope': label, 'scope_detail': said, 'locked_tools': locked,
+               'shard': list(shard), 'runs_listed': listed,
                'chip': chip, 'compiler_sha256': sha(refine),
                'configuration': configuration(chip, memory_profile),
                'memory_profile': memory_profile,
@@ -540,6 +565,7 @@ def main():
         epilog='A run of every row at every profile with --tools is COMPLETE; one with'
                ' --fixture or --profile is FILTERED, and one with --qemu and no --tools is'
                ' UNLOCKED, each said in its first and last lines and in result.json.'
+               ' --all --shard=I/N is SHARD, one of N shares that are COMPLETE together.'
                ' --program runs a source file or module directory of your own at the'
                ' corpus\'s profiles, or the --profiles named, and prints what it returned'
                ' or where it trapped; no oracle is held.')
@@ -563,6 +589,9 @@ def main():
                              ' repeat for more')
     parser.add_argument('--all', action='store_true',
                         help='every row of the inventory')
+    parser.add_argument('--shard', type=shard_of, default=(1, 1), metavar='I/N',
+                        help='with --all, the I-th of N shares of its runs, dealt in'
+                             ' inventory order; the N shards together are the complete run')
     parser.add_argument('--program', type=Path, action='append', default=[],
                         help='a .ldn file or module directory to run instead of the corpus;'
                              ' repeat for more')
@@ -577,6 +606,9 @@ def main():
                      ' corpus rows')
     if args.root and not args.program:
         parser.error('--root is a module root for --program; a corpus row names its own')
+    if args.shard[1] > 1 and (not args.all or args.fixture or args.profile):
+        parser.error('--shard divides the complete run: give it with --all and without'
+                     ' --fixture or --profile')
     if not args.all and not args.fixture and not args.program:
         parser.error('select exact --fixture names, request --all, or run --program PATH')
     tools = Tools(args.tools, args.qemu)
@@ -588,7 +620,8 @@ def main():
         else:
             result = execute_inventory(args.output, args.refine.resolve(), tools.qemu,
                                        args.chip, args.fixture, args.profile,
-                                       args.memory_profile, locked=tools.root is not None)
+                                       args.memory_profile, locked=tools.root is not None,
+                                       shard=args.shard)
     finally:
         if args.output.is_dir():
             tools.finish(args.output)
