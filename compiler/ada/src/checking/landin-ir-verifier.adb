@@ -3109,7 +3109,78 @@ package body Landin.IR.Verifier is
             --  its own block, the only read a path from entry can reach
             --  uninitialized.  A slot without one needs no trace at all.
             Entry_Read : Flags.Owner;
+            --  Each block's predecessors, as a list per block: the first
+            --  edge into it, and for each edge the block it leaves and the
+            --  next edge into the same block.
+            Pred_First, Pred_Next, Pred_Block : Indices.Owner;
             Tracked_Count, Use_Added : Natural := 0;
+
+            procedure Find_Predecessors;
+            procedure Find_Predecessors is
+               Edge : Natural := 0;
+            begin
+               Indices.Allocate (Pred_First, Blocks);
+               Indices.Allocate (Pred_Next, 2 * Blocks);
+               Indices.Allocate (Pred_Block, 2 * Blocks);
+               for B in 1 .. Blocks loop
+                  for Index in 1 .. 2 loop
+                     declare
+                        Next : constant Block_Id := Successor (B, Index);
+                     begin
+                        if Next /= No_Block then
+                           Edge := Edge + 1;
+                           Pred_Block.Data (Edge) := B;
+                           Pred_Next.Data (Edge) :=
+                             Pred_First.Data (Positive (Next));
+                           Pred_First.Data (Positive (Next)) := Edge;
+                        end if;
+                     end;
+                  end loop;
+               end loop;
+            end Find_Predecessors;
+
+            --  Whether a path from the routine's entry reaches the start of
+            --  block FROM through no block that stores the slot being
+            --  traced, Stores_In_Block's: the walk goes back from FROM and
+            --  stops at a storing block, so it costs the blocks between a
+            --  read and the stores before it, not every block from entry.
+            --  Live marks what this walk reached and is cleared again.
+            function Reaches_Entry (From : Positive) return Boolean;
+            function Reaches_Entry (From : Positive) return Boolean is
+               Used, Read_At : Natural := 0;
+               Found : Boolean := From = 1;
+               Current : Positive := From;
+            begin
+               while not Found loop
+                  declare
+                     Edge : Natural := Pred_First.Data (Current);
+                  begin
+                     while Edge /= 0 loop
+                        declare
+                           P : constant Positive := Pred_Block.Data (Edge);
+                        begin
+                           if not Live.Data (P)
+                             and then not Stores_In_Block.Data (P)
+                           then
+                              Live.Data (P) := True;
+                              Enqueue (Used, Block_Id (P));
+                              if P = 1 then
+                                 Found := True;
+                              end if;
+                           end if;
+                        end;
+                        Edge := Pred_Next.Data (Edge);
+                     end loop;
+                  end;
+                  exit when Found or else Read_At = Used;
+                  Read_At := Read_At + 1;
+                  Current := Queue.Data (Read_At);
+               end loop;
+               for Index in 1 .. Used loop
+                  Live.Data (Queue.Data (Index)) := False;
+               end loop;
+               return Found;
+            end Reaches_Entry;
 
             procedure Record_Use
               (Slot : Slot_Id; Block, Position : Positive);
@@ -3152,6 +3223,7 @@ package body Landin.IR.Verifier is
                Indices.Allocate (Queue, Blocks);
                Find_Successors;
             end if;
+            Find_Predecessors;
             for P in 1 .. Parameter_Count (Of_Unit, Item) loop
                declare
                   Slot : constant Slot_Id := Nth_Parameter (Of_Unit, Item, P);
@@ -3196,7 +3268,7 @@ package body Landin.IR.Verifier is
                   end;
                end loop;
             end loop;
-            --  Each trace below starts from nothing live and unmarks what
+            --  Each walk below starts from nothing live and unmarks what
             --  it marked; the reachability walk left every block live.
             for B in 1 .. Blocks loop
                Live.Data (B) := False;
@@ -3208,8 +3280,6 @@ package body Landin.IR.Verifier is
                then
                   declare
                      Store_Value : Natural := First_Store.Data (S);
-                     Read_At : Natural := 0;
-                     Used : Natural := 1;
                      Use_Index : Natural := First_Use.Data (S);
                   begin
                      while Store_Value /= 0 loop
@@ -3219,57 +3289,27 @@ package body Landin.IR.Verifier is
                             True;
                         Store_Value := Next_Store.Data (Store_Value);
                      end loop;
-                     Live.Data (1) := True;
-                     Queue.Data (1) := 1;
-                     while Read_At < Used loop
-                        Read_At := Read_At + 1;
-                        declare
-                           B : constant Positive := Queue.Data (Read_At);
-                        begin
-                           if not Stores_In_Block.Data (B) then
-                              for Index in 1 .. 2 loop
-                                 declare
-                                    Next : constant Block_Id :=
-                                      Successor (B, Index);
-                                 begin
-                                    if Next /= No_Block
-                                      and then not Live.Data (Positive (Next))
-                                    then
-                                       Live.Data (Positive (Next)) := True;
-                                       --  Mark before enqueueing: at most B
-                                       --  entries, even for cycles/duplicate
-                                       --  edges. Never increment past B.
-                                       Enqueue (Used, Next);
-                                    end if;
-                                 end;
-                              end loop;
-                           end if;
-                        end;
-                     end loop;
+                     --  A read before any store in its own block is reached
+                     --  uninitialized when a path from entry reaches its
+                     --  block through no storing block; the earliest such
+                     --  read is the one reported.
                      while Use_Index /= 0 loop
                         declare
                            Use_At : constant Use_Record :=
                              Reads.Data (Use_Index);
                         begin
                            if Use_At.Needs_Entry
-                             and then Live.Data (Use_At.Block)
                              and then (Failure_Block = 0
                                or else Use_At.Block < Failure_Block
                                or else (Use_At.Block = Failure_Block
                                  and then Use_At.Position < Failure_Position))
+                             and then Reaches_Entry (Use_At.Block)
                            then
                               Failure_Block := Use_At.Block;
                               Failure_Position := Use_At.Position;
                            end if;
                            Use_Index := Use_At.Next;
                         end;
-                     end loop;
-                     --  The queue holds exactly the blocks this trace
-                     --  marked live, and the store chain the blocks it
-                     --  marked as storing: unmark only those, so a trace
-                     --  costs what it reached rather than every block.
-                     for Index in 1 .. Used loop
-                        Live.Data (Queue.Data (Index)) := False;
                      end loop;
                      Store_Value := First_Store.Data (S);
                      while Store_Value /= 0 loop

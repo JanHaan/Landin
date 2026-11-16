@@ -939,6 +939,19 @@ package body Landin.IR.Simplification is
             elsif Code.Destination.Kind = Runtime_Address then
                Result := Result * 31 + Bits (Code.Destination.Address);
             end if;
+            --  Where an operation reads and which part of it: a routine
+            --  taking the address of each of a record's many fields made
+            --  operations that differ only here, one chain long.
+            if Code.Source.Kind = Frame_Slot then
+               Result := Result * 31 + Bits (Code.Source.Slot);
+            elsif Code.Source.Kind = Runtime_Address then
+               Result := Result * 31 + Bits (Code.Source.Address);
+            end if;
+            Result := Result * 31 + Bits (Code.Slot);
+            Result := Result * 31 + Bits (Code.Source_Field);
+            Result := Result * 31 + Bits (Code.Element_Field);
+            Result := Result * 31 + Bits (Code.Nested.First);
+            Result := Result * 31 + Bits (Code.Source_Nested.First);
             return Result;
          end Hash;
 
