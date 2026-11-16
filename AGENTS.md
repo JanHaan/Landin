@@ -90,8 +90,8 @@ until its completion notification. In Codex, keep a yielded command's
 session id and resume it with the native process continuation tool until it
 completes, keeping the turn open while the result is needed. Without either,
 use `python3 scripts/run_logged.py --wait DIR` with a wait shorter than the
-calling tool's timeout, repeated on exit 124; the recipe gives the default
-540-second wait and shorter limits. Never wait in a `sleep` loop, nor on
+calling tool's timeout, repeated on exit 124; its 270-second default keeps
+a subagent inside its five-minute prompt cache. Never wait in a `sleep` loop, nor on
 `pgrep -f`, whose pattern matches the waiting shell's own command line, so
 the wait never ends. Then inspect `result.json` and the retained log, and
 report the command's scope and status, `FILTERED` or `HOST-ONLY` included;

@@ -14,9 +14,12 @@ It does not select tests, enter an environment, or supply acceptance evidence.
 
 `--wait` is the blocking wait for an agent that receives no notification, a
 subagent among them: it returns the run's own summary and exit status once
-`result.json` exists, or after SECONDS (540 by default, inside a
-ten-minute tool call) exits 124 saying the run is still going, so the same
-call can simply be made again.  A run whose wrapper died before writing a
+`result.json` exists, or after SECONDS (270 by default) exits 124 saying
+the run is still going, so the same call can simply be made again.  The
+default stays under five minutes because a subagent's prompt cache lives
+that long: a call that returns inside it is answered from the cache, and one
+that outlasts it has the model read the whole conversation again at full
+price.  A run whose wrapper died before writing a
 result exits 125, rather than being waited for until the timeout.  It
 replaces sleep loops over the log and `pgrep -f`, whose pattern matches the
 polling shell's own command line, so that a wait on a process ending never
@@ -46,6 +49,9 @@ def timestamp():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+#  Under the five minutes a subagent's prompt cache lives, with room for the
+#  call's own round trip.
+DEFAULT_WAIT = 270
 STILL_RUNNING = 124
 NO_RESULT = 125
 #  What --wait exits with for a finished run whose own status is one of the
@@ -154,8 +160,9 @@ def main(argv=None):
                        help="new directory for command.log and result.json")
     which.add_argument("--wait", type=Path, metavar="DIRECTORY",
                        help="block until the run writing DIRECTORY ends")
-    parser.add_argument("--timeout", type=float, default=540,
-                        help="seconds --wait blocks before exiting 124")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_WAIT,
+                        help="seconds --wait blocks before exiting 124 (default %d,"
+                             " under a subagent's five-minute prompt cache)" % DEFAULT_WAIT)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.wait is not None:

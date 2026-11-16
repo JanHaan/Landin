@@ -299,10 +299,14 @@ python3 scripts/run_logged.py --wait "$feedback_parent/checking-and-lowering"
 ```
 
 It returns the run's summary and exit status once `result.json` exists. After
-540 seconds by default it exits 124 and prints the log's last line instead,
-so the same call is made again. Choose a timeout below the calling tool's
-limit: a 600-second tool call can use the default, while a tool limited to
-60 seconds can use `--timeout 45`. A tool that yields a process session can
+270 seconds by default it exits 124 and prints the log's last line instead,
+so the same call is made again. The default is under five minutes because
+that is how long a subagent's prompt cache lives: a wait that returns inside
+it costs a cached read of the conversation, and one that outlasts it costs
+the whole conversation again at full price, which
+`scripts/session_report.py` counts. Choose a shorter timeout where the
+calling tool's limit is shorter: a tool limited to 60 seconds can use
+`--timeout 45`. A tool that yields a process session can
 resume that session instead of opening another wait. Exit 124 means the
 logged command is still running, not that it failed. A run whose wrapper
 died without a result exits 125 at once. Those two statuses are the wait's
