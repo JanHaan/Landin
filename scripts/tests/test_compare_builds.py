@@ -176,6 +176,19 @@ class Workflow(unittest.TestCase):
             self.assertIn("needs: [inputs, linux-release-clean]",
                           self.jobs[name], name)
 
+    def test_no_shell_name_runs_into_an_expression(self):
+        #  `$prefix${{ github.run_id }}` reaches the shell as
+        #  `$prefix43940386551`, another and unset name: the cached build's
+        #  first gate run stopped there, and neither actionlint nor
+        #  shellcheck sees it, since the expression is expanded first.
+        import re
+        for workflow in sorted(GATE.parent.glob("*.yml")):
+            for number, line in enumerate(workflow.read_text().splitlines(), 1):
+                self.assertIsNone(
+                    re.search(r"\$[A-Za-z_][A-Za-z0-9_]*\$\{\{", line),
+                    "%s:%d: brace the shell name before the expression: %s"
+                    % (workflow.name, number, line.strip()))
+
     def test_the_clean_build_never_sees_the_cache(self):
         clean = self.jobs["linux-release-clean"]
         self.assertIn("run: ./scripts/build.sh -j4", clean)

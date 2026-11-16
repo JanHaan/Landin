@@ -362,7 +362,7 @@ jobs:
           set -eu
           prefix="linux-amd64-release-objects-$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}-"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
-          echo "key=$prefix${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+          echo "key=${prefix}${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
