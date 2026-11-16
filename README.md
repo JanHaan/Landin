@@ -309,7 +309,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R13.92 — What a container holds (planned).**
+**Next roadmap item: R13.93 — Fields lent apart (planned).**
 
 ## Questions, bugs and ideas
 
