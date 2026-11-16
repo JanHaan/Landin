@@ -187,6 +187,22 @@ def macho_sections(data):
     return found, order_of
 
 
+def stab_note(clean, cached):
+    """Which of two debug maps' entries differ, and the usual cause."""
+    if len(clean) != len(cached):
+        return "    the debug maps hold other objects\n"
+    entries = [(clean[at:at + 16], cached[at:at + 16])
+               for at in range(0, len(clean), 16)
+               if clean[at:at + 16] != cached[at:at + 16]]
+    times = sum(1 for a, b in entries
+                if a[4] == 0x66 and a[:8] == b[:8])     # N_OSO, n_value alone
+    note = "    %d of its %d entries differ" % (len(entries), len(clean) // 16)
+    if times == len(entries):
+        return (note + ", each an object's modification time (N_OSO):"
+                " Apple's ar and linker write 0 under ZERO_AR_DATE=1\n")
+    return note + ", %d of them an object's modification time alone\n" % times
+
+
 def debugging(name):
     return name.startswith(".debug_") or name in MACHO_DEBUGGING
 
@@ -216,6 +232,8 @@ def describe(clean_path, cached_path, clean, cached, out):
                   % (name, len(clean_bytes), len(cached_bytes),
                      "" if clean_fields[:3] == cached_fields[:3]
                      else "; its type, flags or address differ too"))
+        if name == "symbol table stabs":
+            out.write(stab_note(clean_bytes, cached_bytes))
     if (not only_clean and not only_cached
             and [n for n in clean_order if not debugging(n)]
             == [n for n in cached_order if not debugging(n)]

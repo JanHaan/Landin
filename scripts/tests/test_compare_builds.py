@@ -159,6 +159,9 @@ class CompareBuilds(unittest.TestCase):
         status, out, _ = self.run_compare(clean, cached)
         self.assertEqual(status, 1)
         self.assertIn("section symbol table stabs differs", out)
+        self.assertIn("1 of its 1 entries differ, each an object's modification"
+                      " time (N_OSO)", out)
+        self.assertIn("ZERO_AR_DATE=1", out)
         self.assertIn("section LC_UUID differs", out)
         self.assertIn("section LC_CODE_SIGNATURE data differs", out)
         self.assertNotIn("__TEXT,__text differs", out)
