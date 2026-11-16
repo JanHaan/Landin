@@ -1,7 +1,6 @@
 class: negative
 summary: D1371 lends together the parts of a binding that holds a reference into itself, whether the reference was stored in the body, by a call given the binding inout or by one given its address, so a view of a part that can hold the reference is refused beside the part it may refer into
-program: program.ldn
-args: ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn
+args: --root=../.. ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds
 expect: expected.txt
 codes: L0315, L0315, L0315, L0315
 constructs: 0800, 0830, 0840, 0900

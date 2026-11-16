@@ -1083,7 +1083,11 @@ Finish with the view first, or take it again after the change. An argument
 passed `inout` or `sink` counts as changed whether or not the routine writes
 it: the convention locks it, and the diagnostic names the parameter whose
 convention does, the view still in use, and, for `inout`, that a routine
-which only reads the parameter may take it without `inout`.
+which only reads the parameter may take it without `inout`. Fields of one
+binding are lent apart (D1371): when the view reaches a part of the
+binding other than the argument, the note names that part, or says that
+the view reaches all of the binding, or that a reference stored in the
+binding may point into the argument.
 
 ```landin
 mutate: (inout source: []mut u32) -> none =

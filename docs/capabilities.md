@@ -614,7 +614,12 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   passed as an argument among them (D1084). A result `from held p` is what
   `p` holds, read out of an element, and lends no view of `p`; the
   library's `get`, `last`, `pop` and `next_entry` say so, and its inserts
-  keep what they are given `escaping into` the container (D1369).
+  keep what they are given `escaping into` the container (D1369). A view
+  holds the field it was taken of and not its neighbours, so two handles
+  over different fields of one state are in use together; an element or
+  a step through a pointer stands for its field, and a record that holds
+  a reference into itself lends its reference-holding fields together
+  (D1371).
 - **Modules.** Directory modules have file-local imports, aliases, selected
   imports, typed global options and ordered roots. Option names collide with
   ordinary declarations/imports only in their declaring module; unrelated
@@ -812,7 +817,8 @@ process ignores SIGPIPE and gives its children the default back.
   supply the hosted heap, what the system offers that does not wait, the I/O
   provider that blocks the thread while it waits and the one that switches
   fibres, written once over `platform/posix` (D476, D478, D479).
-  `hosted/events` is one handle over state its caller declares; it supplies
+  `hosted/events` is one handle over state its caller declares, which
+  holds its last-error and last-signal cells too (D1372); it supplies
   every concept the blocking provider does, and `fibre.turns` and
   `signal.signals` beside them, on Linux over epoll and a signalfd and on
   Darwin and FreeBSD over kqueue. On Linux only the process's first thread

@@ -826,7 +826,12 @@ package body Landin.Diagnostics.Explanations is
                & "writes it: the convention locks it, and the diagnostic n"
                & "ames the parameter whose convention does, the view still"
                & " in use, and, for `inout`, that a routine which only rea"
-               & "ds the parameter may take it without `inout`.",
+               & "ds the parameter may take it without `inout`. Fields of "
+               & "one binding are lent apart (D1371): when the view reache"
+               & "s a part of the binding other than the argument, the not"
+               & "e names that part, or says that the view reaches all of "
+               & "the binding, or that a reference stored in the binding m"
+               & "ay point into the argument.",
             when Catalogue.Return_Sources_Disagree =>
                "A returned reference must derive from exactly the parame"
                & "ters its `from` names [0790]. Name the source, or return"

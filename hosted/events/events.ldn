@@ -91,7 +91,7 @@ end idle_value
 --- Caller-owned state of an event provider: the round of turns its
 --- fibres take, its event loop, and the last-error and last-signal cells
 --- its calls record into. Declare it `zeroed` and give it to `over`, which
---- fills it; it must outlive the handle.
+--- fills it and returns the handle; the state must outlive that handle.
 public space: type = struct
     round: stacks.round_space
     events: loop_state
@@ -120,9 +120,10 @@ end events_value
 --- them. `docs/library.md` lists its entries that may switch (D446).
 public host: type = events_value
 
---- Return errno captured for the terminal failing provider call, as
---- `hosted/system`'s `last_errno` does: the cell is the provider's own, in
---- the `space` it was made over, which every call through it records into.
+--- Return the errno captured for the provider's last failing call, as
+--- `hosted/system`'s `last_errno` does. The cell is the provider's own: it
+--- lies in the `space` the provider was made over, and every call through
+--- the provider records into it.
 public last_errno: (handle: host) -> (number: i32) =
     number = system.last_errno(handle.services)
 end last_errno

@@ -1,39 +1,39 @@
 error[L0315]: this argument is passed `inout`, so the call may change its storage while `held` still views it
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:37:10
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:37:10
    |
 37 |     grow(s.list) else begin return end -- error: `s.view` may refer into it
    |          ^^^^^^
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:36:5
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:36:5
    |
 36 |     held := addr s.view
    |     ^^^^^^^^^^^^^^^^^^^ the live derived view
-  = note: [0800]/[0830]: the `inout` parameter `l` locks its argument whether or not the routine writes it; finish with `held` before the call and take it again after, or, if the routine only reads it, declare `l` without `inout`; `held` reaches `s`, and what `s` holds may refer into `s.list`
+  = note: [0800]/[0830]: the `inout` parameter `l` locks its argument whether or not the routine writes it; finish with `held` before the call and take it again after, or, if the routine only reads it, declare `l` without `inout`; `held` reaches `s`, and a reference stored in `s` may point into `s.list`
 error[L0315]: this argument is passed `inout`, so the call may change its storage while `held` still views it
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:46:10
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:46:10
    |
 46 |     grow(s.list) else begin return end -- error: read out of `s`
    |          ^^^^^^
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:45:5
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:45:5
    |
 45 |     held := s.view
    |     ^^^^^^^^^^^^^^ the live derived view
   = note: [0800]/[0830]: the `inout` parameter `l` locks its argument whether or not the routine writes it; finish with `held` before the call and take it again after, or, if the routine only reads it, declare `l` without `inout`; `held` views all of `s`
 error[L0315]: this argument is passed `inout`, so the call may change its storage while `held` still views it
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:55:10
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:55:10
    |
 55 |     grow(s.list) else begin return end -- error: read out of `s`
    |          ^^^^^^
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:54:5
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:54:5
    |
 54 |     held := s.view
    |     ^^^^^^^^^^^^^^ the live derived view
   = note: [0800]/[0830]: the `inout` parameter `l` locks its argument whether or not the routine writes it; finish with `held` before the call and take it again after, or, if the routine only reads it, declare `l` without `inout`; `held` views all of `s`
 error[L0315]: this argument is passed `inout`, so the call may change its storage while `held` still views it
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:64:10
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:64:10
    |
 64 |     grow(s.list) else begin return end -- error: `other` could hold it
    |          ^^^^^^
-  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/program.ldn:63:5
+  --> ../tests/fixtures/negative/field-lent-beside-what-its-binding-holds/main.ldn:63:5
    |
 63 |     held := vec.used(s.other)
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view

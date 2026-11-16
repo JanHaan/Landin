@@ -4,7 +4,8 @@
 --  an `inout` parameter, chosen on a branch, as arguments of one call and
 --  beside a loop walking a third field; each writes only its own field.
 --  A field that can hold no reference stays apart even in a record that
---  holds a reference into itself.
+--  holds a reference into itself, and two lists of one record stay apart
+--  after a push into each.
 import core/mem
 import core/vec
 import hosted/heap
@@ -113,6 +114,25 @@ counted_apart: () -> (n: u32) =
     n = counted.val + s.view[0]
 end counted_apart
 
+lists: type = struct
+    names: vec.list(u32)
+    values: vec.list(u32)
+end lists
+
+--  What a push may have stored is in the list pushed into alone, so a
+--  view of the other is held across the next push.
+two_lists: () -> (n: u32) =
+    n = 0
+    memory := heap.new()
+    mut state: lists = (names: vec.new(item: u32), values: vec.new(item: u32))
+    vec.push(state.names, memory, 4) else begin return end
+    vec.push(state.values, memory, 1) else begin return end
+    names := vec.used(state.names)
+    vec.push(state.values, memory, 2) else begin return end
+    values := vec.used(state.values)
+    n = names[0] + values[1]
+end two_lists
+
 public main: () -> (code: i32) =
     mut state: space = zeroed
     state.items = [1, 1, 1]
@@ -126,5 +146,7 @@ public main: () -> (code: i32) =
     other := cells_over(local.cells)
     total6: u32 = held.at.val + other.at.val + state.nested.b.count -- 2 + 1 + 42
     total7: u32 = counted_apart() -- 3 + 7 = 10
-    code = i32(total + total2 + total3 + total4 + total5 + total6 + total7 - 50)
+    total8: u32 = two_lists() -- 4 + 2 = 6
+    code = i32(total + total2 + total3 + total4 + total5 + total6 + total7
+               + total8 - 56)
 end main

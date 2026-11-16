@@ -2,7 +2,8 @@
 """How the compiler's time and peak memory grow with program size.
 
 Each family below generates a program at 1,000, 2,000, 4,000, 8,000 and
-16,000 declarations, or for the fields family as many fields of one struct,
+16,000 declarations, or for the two fields families as many fields of one
+struct,
 and asks the compiler to check it and emit its assembly:
 scan, parse, resolve, type and flow checking and lowering to verified IR,
 which is the frontend, and then optimization and the backend, which is
@@ -77,7 +78,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 #  The first size is a thousand declarations and the last sixteen thousand;
 #  a family's size is its count of declarations, not of functions, except
-#  that the struct family's is its count of fields.
+#  that the two struct families' is their count of fields.
 SIZES = (1000, 2000, 4000, 8000, 16000)
 RUNS = 5
 LIMIT = 2.5
@@ -275,6 +276,40 @@ def fields(size: int) -> dict[str, str]:
             f"    code = b.f{size - 1}\nend main\n"}
 
 
+def inout_locals(size: int) -> dict[str, str]:
+    """One function holding every declaration as a local, each passed
+    `inout` once it is made: the borrow checks ask, at every such call,
+    only about the locals whose value may derive from the one passed."""
+    body = ["bump: (inout x: i32) -> none =\n    x += 1\nend bump\n\n"
+            "public main: () -> (code: i32) =\n    mut v0: i32 = 0\n"
+            "    bump(v0)\n"]
+    for index in range(1, size):
+        body.append(f"    mut v{index}: i32 = v{index - 1}\n"
+                    f"    bump(v{index})\n")
+    body.append(f"    code = v{size - 1} - v{size - 1} + 42\nend main\n")
+    return {"main.ldn": "".join(body)}
+
+
+def lent_fields(size: int) -> dict[str, str]:
+    """One struct with every declaration as a field, each lent `inout` to
+    a handle still in use when the next one is lent: D1371 holds the fields
+    apart, and each lending asks only about the locals that may view the
+    struct, not every local of the routine."""
+    body = ["cell: type = struct\n    v: u32\nend cell\n\n"
+            "handle: type = struct\n    at: ptr mut u32\nend handle\n\n"
+            "over: (inout c: cell) -> (h: handle from c) =\n"
+            "    h = (at: addr c.v)\nend over\n\n"
+            "big: type = struct\n"]
+    body += [f"    f{index}: cell\n" for index in range(size)]
+    body.append("end big\n\npublic main: () -> (code: i32) =\n"
+                "    mut b: big = zeroed\n")
+    body += [f"    h{index} := over(b.f{index})\n" for index in range(size)]
+    body.append("    mut total: u32 = 0\n")
+    body += [f"    total += h{index}.at.val\n" for index in range(size)]
+    body.append("    code = i32(total) + 42\nend main\n")
+    return {"main.ldn": "".join(body)}
+
+
 FAMILIES = (
     ("functions", functions),
     ("atoms", atoms),
@@ -283,7 +318,9 @@ FAMILIES = (
     ("constants", constants),
     ("locals", locals_),
     ("branches", branches),
+    ("inout locals", inout_locals),
     ("fields", fields),
+    ("lent fields", lent_fields),
 )
 
 

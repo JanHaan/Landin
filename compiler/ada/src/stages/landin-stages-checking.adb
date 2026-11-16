@@ -231,6 +231,34 @@ package body Landin.Stages.Checking is
          Equivalent_Keys => "=");
       Report_Repeats : Report_Count_Maps.Map;
 
+      --  A field of a struct body by its name: Field_Position reads a
+      --  large body's names into this once, so that a program selecting
+      --  each of a struct's N fields costs N lookups and not N squared
+      --  steps (D1371's family of many fields).  Small bodies are scanned.
+      type Field_Key is record
+         Source    : Landin.Source.Source_Id := 0;
+         Body_Node : Syn.Node_Id := Syn.No_Node;
+         Name      : Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.No_Name;
+      end record;
+
+      function Hash_Field (Key : Field_Key) return Ada.Containers.Hash_Type
+        is (Ada.Containers."xor"
+              (Landin.Source.Names.Hash (Key.Name),
+               Ada.Containers."xor"
+                 (Ada.Containers.Hash_Type (Key.Body_Node),
+                  Ada.Containers."*"
+                    (Ada.Containers.Hash_Type (Key.Source), 16#9E37#))));
+
+      package Field_Maps is new Ada.Containers.Hashed_Maps
+        (Key_Type        => Field_Key,
+         Element_Type    => Positive,
+         Hash            => Hash_Field,
+         Equivalent_Keys => "=");
+      Field_Indexes : Field_Maps.Map;
+      --  The bodies Field_Indexes holds every field of, keyed with no name.
+      Indexed_Bodies : Field_Maps.Map;
+
       procedure Note_Instance_Site
         (Instance : Landin.Checking.Routine_Instance_Id;
          Site     : Landin.Provenance.Origin);
@@ -17919,6 +17947,37 @@ package body Landin.Stages.Checking is
            or else Syn.Kind (Of_Tree, Written) /= Syn.Struct_Body
          then
             return 0;
+         end if;
+
+         if Syn.Field_Count (Of_Tree, Written) > 16 then
+            declare
+               Whole : constant Field_Key :=
+                 (Source => Syn.Source_Of (Of_Tree), Body_Node => Written,
+                  Name => Landin.Source.Names.No_Name);
+               Found : Field_Maps.Cursor;
+            begin
+               if not Indexed_Bodies.Contains (Whole) then
+                  Indexed_Bodies.Insert (Whole, 1);
+                  for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
+                     declare
+                        Key : constant Field_Key :=
+                          (Whole with delta Name =>
+                             Syn.Name
+                               (Of_Tree,
+                                Syn.Nth_Field (Of_Tree, Written, Index)));
+                     begin
+                        --  The first field of a name is the one the scan
+                        --  below would find.
+                        if not Field_Indexes.Contains (Key) then
+                           Field_Indexes.Insert (Key, Index);
+                        end if;
+                     end;
+                  end loop;
+               end if;
+               Found := Field_Indexes.Find ((Whole with delta Name => Named));
+               return (if Field_Maps.Has_Element (Found)
+                       then Field_Maps.Element (Found) else 0);
+            end;
          end if;
 
          for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop

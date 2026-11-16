@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D1371 lends disjoint fields of one state apart: two handles filled through inout from different fields, in either order, through nested fields, chosen on a branch, as one call's arguments and beside a loop walking a third field, and a field that holds no reference beside a list the record holds a view of
+summary: D1371 lends disjoint fields of one state apart: two handles filled through inout from different fields, in either order, through nested fields, chosen on a branch, as one call's arguments and beside a loop walking a third field, and a field that holds no reference beside a list the record holds a view of, and two lists of one record after a push into each
 program: main.ldn
 status: 42
 constructs: 0790, 0800, 0830, 0900, 1150

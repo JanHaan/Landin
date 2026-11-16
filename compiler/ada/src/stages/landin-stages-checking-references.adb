@@ -90,6 +90,9 @@ package body Landin.Stages.Checking.References is
       --  Whether the field's type can hold a reference, so that one the
       --  binding holds into itself may be stored in it.
       Holds  : Boolean := True;
+      --  The first place one field longer than this one, and the next
+      --  place beside this one under the same parent.
+      First_Child, Next_Sibling : Natural := 0;
    end record;
 
    package Field_Places is new Ada.Containers.Vectors
@@ -108,6 +111,10 @@ package body Landin.Stages.Checking.References is
 
    package Place_Maps is new Ada.Containers.Ordered_Maps
      (Key_Type => Place_Key, Element_Type => Positive);
+
+   --  An answer about a nominal type, by its position.
+   package Answer_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Positive, Element_Type => Boolean);
 
    --  Where the traversal is: the block being processed, the statement
    --  within it, and the loop whose body that block is, if any.  The
@@ -588,6 +595,24 @@ package body Landin.Stages.Checking.References is
       --  they are first met; Place_Numbers finds one by its key.
       Places : Field_Places.Vector;
       Place_Numbers : Place_Maps.Map;
+      --  Each local's first place of one field, linked through
+      --  Next_Sibling to the rest.
+      First_Place_Of : array (Local_Id) of Natural := [others => 0];
+
+      --  For each local, every local whose value some fact set here has
+      --  derived from it: by Holders_Whole when the fact reached the
+      --  whole binding, by Holders_At_Place at each place it reached it
+      --  through, and by Holders_Of either way.  Every table is made by
+      --  Set_Origin or joined from tables it made, and a join reaches no
+      --  place its parts did not, so these hold every local whose value may
+      --  derive from it on some path.  The borrow checks visit them alone
+      --  rather than every local at every call that lends one.
+      Holders_Of : array (Local_Id) of Local_Number_Sets.Set;
+      Holders_Whole : array (Local_Id) of Local_Number_Sets.Set;
+      package Holder_Set_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Local_Number_Sets.Set,
+         "=" => Local_Number_Sets."=");
+      Holders_At_Place : Holder_Set_Vectors.Vector;
 
       function Place_Root (Place : Positive) return Local_Id
         is (Places (Place).Root);
@@ -615,12 +640,22 @@ package body Landin.Stages.Checking.References is
             --  Read before the append, which may move the vector.
             Depth : constant Positive :=
               (if Parent = 0 then 1 else Places (Parent).Depth + 1);
+            Sibling : constant Natural :=
+              (if Parent = 0 then First_Place_Of (Local)
+               else Places (Parent).First_Child);
          begin
             Places.Append
               (Place_Entry'
                  (Root => Local, Parent => Parent, Field => Field,
-                  Name => Name, Depth => Depth, Holds => Holds));
+                  Name => Name, Depth => Depth, Holds => Holds,
+                  First_Child => 0, Next_Sibling => Sibling));
          end;
+         if Parent = 0 then
+            First_Place_Of (Local) := Places.Last_Index;
+         else
+            Places (Parent).First_Child := Places.Last_Index;
+         end if;
+         Holders_At_Place.Append (Local_Number_Sets.Empty_Set);
          Place_Numbers.Insert (Key, Places.Last_Index);
          return Places.Last_Index;
       end Interned;
@@ -643,6 +678,46 @@ package body Landin.Stages.Checking.References is
       --  other, or they are the same.
       function Overlaps (Left, Right : Positive) return Boolean
         is (Holds_Place (Left, Right) or else Holds_Place (Right, Left));
+
+      --  D1371: what a call given a place of a local to write may have
+      --  stored there: a reference derived from that same place.  Target
+      --  is the place written and Source the place the reference may
+      --  refer into, each a field place or zero for the whole binding.
+      --  Kept per local and not per path, and only added to, until the
+      --  local's declaration runs again: a read out of the target finds
+      --  the source, and so does a view of the target, through which the
+      --  stored reference can be read.
+      type Self_Store is record
+         Target, Source : Natural := 0;
+      end record;
+
+      package Self_Store_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Self_Store);
+
+      Self_Stores : array (Local_Id) of Self_Store_Vectors.Vector;
+
+      procedure Add_Self_Store (Local : Local_Id; Place : Natural);
+
+      procedure Add_Self_Store (Local : Local_Id; Place : Natural) is
+         Made : constant Self_Store := (Target => Place, Source => Place);
+      begin
+         if (Place = 0 or else Places (Place).Holds)
+           and then not Self_Stores (Local).Contains (Made)
+           and then not Self_Stores (Local).Contains ((0, 0))
+         then
+            Self_Stores (Local).Append (Made);
+         end if;
+      end Add_Self_Store;
+
+      --  Whether a part of one binding, or zero for all of it, overlaps
+      --  another.
+      function Meet (Left, Right : Natural) return Boolean
+        is (Left = 0 or else Right = 0 or else Overlaps (Left, Right));
+
+      --  Set while a selection evaluates its target, and taken by the
+      --  next evaluation: a name read for a selection is not read whole,
+      --  so it takes what was stored in it by the selected place alone.
+      Selecting : Boolean := False;
 
       --  Whether FACT reaches LOCAL through places alone.
       function Has_Parts
@@ -800,6 +875,32 @@ package body Landin.Stages.Checking.References is
             or else (for some Index in 1 .. Count (Fact.Parts)
                      => Place_Root (Nth (Fact.Parts, Index)) = Local
                         and then Places (Nth (Fact.Parts, Index)).Holds));
+
+      --  Whether FACT, which derives from LOCAL, reaches it at a part that
+      --  meets PLACE.
+      function Reaches_Part
+        (Fact : Reference_Fact; Local : Local_Id; Place : Natural)
+         return Boolean
+        is (not Has_Parts (Fact, Local)
+            or else (for some Index in 1 .. Count (Fact.Parts)
+                     => Place_Root (Nth (Fact.Parts, Index)) = Local
+                        and then Meet (Nth (Fact.Parts, Index), Place)));
+
+      --  FACT, read out of LOCAL at PLACE, also derives from what a call
+      --  may have stored at a place meeting it.
+      procedure Read_Stores
+        (Fact : in out Reference_Fact; Local : Local_Id; Place : Natural);
+
+      procedure Read_Stores
+        (Fact : in out Reference_Fact; Local : Local_Id; Place : Natural) is
+      begin
+         for Stored of Self_Stores (Local) loop
+            if Meet (Stored.Target, Place) then
+               Derive_Place (Fact, Local, Stored.Source, Interior => False);
+            end if;
+         end loop;
+      end Read_Stores;
+
 
       No_Reference : constant Reference_Fact := (others => <>);
 
@@ -1278,12 +1379,31 @@ package body Landin.Stages.Checking.References is
       function Origin (Local : Local_Id) return Origin_Fact
         is (Fact_At (Origins, Local).Fact);
 
+
       procedure Set_Origin (Local : Local_Id; Fact : Origin_Fact);
 
       procedure Set_Origin (Local : Local_Id; Fact : Origin_Fact) is
       begin
          if Fact_At (Origins, Local).Fact /= Fact then
             Origins := With_Fact (Origins, Local, Kept (Fact), Root_Span);
+            for Index in 1 .. Count (Fact.Value.Derives) loop
+               declare
+                  Held : constant Local_Id := Nth (Fact.Value.Derives, Index);
+               begin
+                  Holders_Of (Held).Include (Local);
+                  if Has_Parts (Fact.Value, Held) then
+                     for Part in 1 .. Count (Fact.Value.Parts) loop
+                        if Place_Root (Nth (Fact.Value.Parts, Part)) = Held
+                        then
+                           Holders_At_Place (Nth (Fact.Value.Parts, Part))
+                             .Include (Local);
+                        end if;
+                     end loop;
+                  else
+                     Holders_Whole (Held).Include (Local);
+                  end if;
+               end;
+            end loop;
          end if;
       end Set_Origin;
 
@@ -1300,6 +1420,8 @@ package body Landin.Stages.Checking.References is
             Drop_Local (Fact, Local);
          end Drop;
       begin
+         --  What calls stored in the earlier binding is not in this one.
+         Self_Stores (Local).Clear;
          if not Derived_From (Local) then
             return;
          end if;
@@ -1850,10 +1972,20 @@ package body Landin.Stages.Checking.References is
                  and then Landin.Checking.Field_Index (Types.all, Tree, Where)
                    > 0
                then
-                  Place := Interned
-                    (Local, Place,
-                     Landin.Checking.Field_Index (Types.all, Tree, Where),
-                     Syn.Name (Tree, Where), Has_References (Tree, Where));
+                  declare
+                     Field : constant Positive :=
+                       Landin.Checking.Field_Index (Types.all, Tree, Where);
+                     Found : constant Place_Maps.Cursor :=
+                       Place_Numbers.Find
+                         ((Root => Local, Parent => Place, Field => Field));
+                  begin
+                     Place :=
+                       (if Place_Maps.Has_Element (Found)
+                        then Place_Maps.Element (Found)
+                        else Interned
+                          (Local, Place, Field, Syn.Name (Tree, Where),
+                           Has_References (Tree, Where)));
+                  end;
                else
                   Open := False;
                end if;
@@ -1871,7 +2003,53 @@ package body Landin.Stages.Checking.References is
          end if;
       end Find_Place;
 
+      --  Has_References of each local, once asked: a large record's answer
+      --  walks every field, and the borrow checks ask it of a local at
+      --  every call that lends it.  0 not asked, 1 no, 2 yes.
+      Reference_Answers : array (Local_Id) of Natural range 0 .. 2 :=
+        [others => 0];
+
+      function Type_Has_References (Id : Res.Declaration_Id) return Boolean;
+
+      --  Whether a laid-out nominal record holds a reference, once asked:
+      --  the answer walks every field, and a selection asks it of its
+      --  target each time, so a routine selecting each of a record's N
+      --  fields asked it N times of N fields.
+      Nominal_Answers : Answer_Maps.Map;
+
+      function Nominal_References
+        (Nominal : Landin.Checking.Nominal_Type_Id) return Boolean;
+
+      function Nominal_References
+        (Nominal : Landin.Checking.Nominal_Type_Id) return Boolean
+      is
+         Key : constant Positive :=
+           Landin.Checking.Nominal_Identities.Position (Types.all, Nominal);
+         Found : constant Answer_Maps.Cursor := Nominal_Answers.Find (Key);
+         Answer : Boolean;
+      begin
+         if Answer_Maps.Has_Element (Found) then
+            return Answer_Maps.Element (Found);
+         end if;
+         Answer := Landin.Checking.Contains_References (Types.all, Nominal);
+         Nominal_Answers.Insert (Key, Answer);
+         return Answer;
+      end Nominal_References;
+
       function Has_References (Id : Res.Declaration_Id) return Boolean is
+         Local : constant Natural := Local_Of (Id);
+      begin
+         if Local = 0 then
+            return Type_Has_References (Id);
+         elsif Reference_Answers (Local) = 0 then
+            Reference_Answers (Local) :=
+              (if Type_Has_References (Id) then 2 else 1);
+         end if;
+         return Reference_Answers (Local) = 2;
+      end Has_References;
+
+      function Type_Has_References (Id : Res.Declaration_Id) return Boolean
+      is
          Kind : constant Ty.Type_Kind :=
            Landin.Checking.Type_Of (Types.all, Id);
       begin
@@ -1900,8 +2078,7 @@ package body Landin.Stages.Checking.References is
                end if;
                return Nominal /= Landin.Checking.No_Nominal_Type
                  and then Landin.Checking.Has_Layout (Types.all, Nominal)
-                 and then Landin.Checking.Contains_References
-                   (Types.all, Nominal);
+                 and then Nominal_References (Nominal);
             end;
          elsif Kind = Ty.Fixed_Array then
             return Landin.Checking.Array_Length (Types.all, Id) > 0
@@ -1910,7 +2087,7 @@ package body Landin.Stages.Checking.References is
                  Landin.Checking.Array_Element_Shape (Types.all, Id));
          end if;
          return False;
-      end Has_References;
+      end Type_Has_References;
 
       --  D375: whether NODE's value provably reaches no writable reference,
       --  through its own descriptor or any it reaches, as D222 counts them.
@@ -1991,8 +2168,7 @@ package body Landin.Stages.Checking.References is
                end if;
                return Nominal /= Landin.Checking.No_Nominal_Type
                  and then Landin.Checking.Has_Layout (Types.all, Nominal)
-                 and then Landin.Checking.Contains_References
-                   (Types.all, Nominal);
+                 and then Nominal_References (Nominal);
             end;
          elsif Kind = Ty.Fixed_Array then
             return Landin.Checking.Array_Length (Types.all, Tree, Node) > 0
@@ -2593,11 +2769,9 @@ package body Landin.Stages.Checking.References is
          procedure Store (Local : Local_Id; Place : Natural);
 
          procedure Store (Local : Local_Id; Place : Natural) is
-            Written : Origin_Fact := Origin (Local);
          begin
             if Has_References (Global (Local)) then
-               Derive_Place (Written.Value, Local, Place, Interior => False);
-               Set_Origin (Local, Written);
+               Add_Self_Store (Local, Place);
             end if;
          end Store;
       begin
@@ -3401,44 +3575,51 @@ package body Landin.Stages.Checking.References is
          Except   : Res.Declaration_Id := Res.No_Declaration)
          return Res.Declaration_Id
       is
-         Seen : Declaration_Bits := [others => False];
-         Grew : Boolean := True;
+         --  The borrower and every holder found, and those whose holders
+         --  are still to be looked for.
+         Seen : Local_Number_Sets.Set;
+         Pending : Local_Vectors.Vector;
       begin
          if Has_Future_Use (Borrower, After) then
             return Borrower;
          end if;
-         Seen (Local_Of (Borrower)) := True;
-         while Grew loop
-            Grew := False;
-            for Holder in Local_Id loop
-               if not Seen (Holder)
-                 and then Global (Holder) /= Except
-                 and then Has_References (Global (Holder))
-               then
-                  declare
-                     Holds : constant Local_Set :=
-                       Origin (Holder).Value.Derives;
-                  begin
-                     for Index in 1 .. Count (Holds) loop
-                        if Seen (Nth (Holds, Index)) then
-                           Seen (Holder) := True;
-                           Grew := True;
-                           exit;
-                        end if;
-                     end loop;
-                  end;
-               end if;
-            end loop;
+         Seen.Insert (Local_Of (Borrower));
+         Pending.Append (Borrower);
+         while not Pending.Is_Empty loop
+            declare
+               Held : constant Local_Id := Local_Of (Pending.Last_Element);
+            begin
+               Pending.Delete_Last;
+               for Holder of Holders_Of (Held) loop
+                  if not Seen.Contains (Holder)
+                    and then Global (Holder) /= Except
+                    and then Has_References (Global (Holder))
+                    and then Contains (Origin (Holder).Value.Derives, Held)
+                  then
+                     Seen.Insert (Holder);
+                     Pending.Append (Global (Holder));
+                  end if;
+               end loop;
+            end;
          end loop;
-         for Holder in Local_Id loop
-            if Seen (Holder)
-              and then Has_Future_Use (Global (Holder), After)
-            then
+         for Holder of Seen loop
+            if Has_Future_Use (Global (Holder), After) then
                return Global (Holder);
             end if;
          end loop;
          return Res.No_Declaration;
       end Live_Holder;
+
+      --  LOCAL and every local whose value may derive from it, in order.
+      function Holders_And (Local : Local_Id) return Local_Number_Sets.Set;
+
+      function Holders_And (Local : Local_Id) return Local_Number_Sets.Set
+      is
+         Result : Local_Number_Sets.Set := Holders_Of (Local);
+      begin
+         Result.Include (Local);
+         return Result;
+      end Holders_And;
 
       function Check_Payload_Borrows
         (Tree : Syn.Tree; Place : Syn.Node_Id;
@@ -3651,7 +3832,7 @@ package body Landin.Stages.Checking.References is
               and then (Replaces (Pattern_Subject_Of (Pattern_Local))
                         or else Replaces_Aliased_Storage (Pattern_Local))
             then
-               for Borrower_Local in Local_Id loop
+               for Borrower_Local of Holders_And (Pattern_Local) loop
                   if Borrower_Local = Pattern_Local
                     or else (Has_References (Global (Borrower_Local))
                              and then Contains
@@ -3737,6 +3918,76 @@ package body Landin.Stages.Checking.References is
                     (Origin (Local_Of (Mutated)).Value, Local_Of (Mutated),
                      Argument_Place));
                Through_Self : Boolean := False;
+               --  The place the part shown in the note may refer into.
+               Self_Shown : Natural := 0;
+
+               --  D1371: the place a reference a call stored in the
+               --  argument's binding may refer into, when it meets the
+               --  argument and FACT reaches the place it was stored at;
+               --  -1 for none.
+               function Reaches_Stored (Fact : Reference_Fact) return Integer;
+
+               function Reaches_Stored (Fact : Reference_Fact) return Integer
+               is
+               begin
+                  for Stored of Self_Stores (Local_Of (Mutated)) loop
+                     if Meet (Stored.Source, Argument_Place)
+                       and then Reaches_Part
+                         (Fact, Local_Of (Mutated), Stored.Target)
+                     then
+                        return Stored.Source;
+                     end if;
+                  end loop;
+                  return -1;
+               end Reaches_Stored;
+
+               --  Whether a call stored, in the argument's binding, a
+               --  reference that may refer into the argument.
+               function Stored_Into return Boolean
+                 is (Mutated /= Res.No_Declaration
+                     and then Local_Of (Mutated) /= 0
+                     and then (for some Stored of Self_Stores
+                                 (Local_Of (Mutated))
+                               => Meet (Stored.Source, Argument_Place)));
+
+               --  The locals whose value may reach the argument's place:
+               --  what reaches the binding whole and what reaches a place
+               --  holding the argument or lying in it, or, beside a
+               --  reference the binding holds into itself, everything
+               --  that reaches it.
+               function Candidates return Local_Number_Sets.Set;
+
+               function Candidates return Local_Number_Sets.Set is
+                  Local : constant Local_Id := Local_Of (Mutated);
+                  Result : Local_Number_Sets.Set;
+
+                  procedure Below (Place : Natural);
+
+                  procedure Below (Place : Natural) is
+                     Child : Natural := Places (Place).First_Child;
+                  begin
+                     while Child /= 0 loop
+                        Result.Union (Holders_At_Place (Child));
+                        Below (Child);
+                        Child := Places (Child).Next_Sibling;
+                     end loop;
+                  end Below;
+
+                  Above : Natural := Argument_Place;
+               begin
+                  if Self_Part >= 0 or else Argument_Place = 0
+                    or else Stored_Into
+                  then
+                     return Holders_Of (Local);
+                  end if;
+                  Result := Holders_Whole (Local);
+                  while Above /= 0 loop
+                     Result.Union (Holders_At_Place (Above));
+                     Above := Places (Above).Parent;
+                  end loop;
+                  Below (Argument_Place);
+                  return Result;
+               end Candidates;
 
                function Convention_Word return String
                  is (if Part.Convention = Syn.Sink_Convention
@@ -3775,10 +4026,10 @@ package body Landin.Stages.Checking.References is
                      return "";
                   elsif Through_Self then
                      return "; " & Who & " reaches `"
-                       & Spelled_Place (0) & "`, and what `"
-                       & Spelled_Place (0) & "` holds may refer into "
-                       & (if Self_Part = 0 then "any part of it"
-                          else "`" & Spelled_Place (Self_Part) & "`");
+                       & Spelled_Place (0) & "`, and a reference stored in `"
+                       & Spelled_Place (0) & "` may point into "
+                       & (if Self_Shown = 0 then "any part of it"
+                          else "`" & Spelled_Place (Self_Shown) & "`");
                   elsif Viewed_Part < 0 or else Viewed_Part = Argument_Place
                   then
                      return "";
@@ -3790,7 +4041,7 @@ package body Landin.Stages.Checking.References is
                   then
                      return "; " & Who & " views `"
                        & Spelled_Place (Viewed_Part)
-                       & "`, which holds the argument";
+                       & "`, which contains the argument";
                   else
                      return "; " & Who & " views `"
                        & Spelled_Place (Viewed_Part)
@@ -3847,7 +4098,7 @@ package body Landin.Stages.Checking.References is
                   --  [0830]: a borrow is a view.  A scalar computed from
                   --  one carries derivation facts for [0790]'s clauses but
                   --  holds no reference into the mutated storage.
-                  for Borrower_Local in Local_Id loop
+                  for Borrower_Local of Candidates loop
                      if Global (Borrower_Local) /= Mutated
                        and then Has_References (Global (Borrower_Local))
                        and then Derives
@@ -3860,7 +4111,9 @@ package body Landin.Stages.Checking.References is
                             (Self_Part >= 0
                              and then Reaches_Holding
                                (Origin (Borrower_Local).Value,
-                                Local_Of (Mutated))))
+                                Local_Of (Mutated)))
+                          or else Reaches_Stored
+                            (Origin (Borrower_Local).Value) >= 0)
                      then
                         Used := Live_Holder
                           (Global (Borrower_Local),
@@ -3871,6 +4124,15 @@ package body Landin.Stages.Checking.References is
                              (Origin (Borrower_Local).Value,
                               Local_Of (Mutated), Argument_Place);
                            Through_Self := Viewed_Part < 0;
+                           Self_Shown :=
+                             (if Self_Part >= 0
+                                and then Reaches_Holding
+                                  (Origin (Borrower_Local).Value,
+                                   Local_Of (Mutated))
+                              then Self_Part
+                              else Integer'Max
+                                (0, Reaches_Stored
+                                   (Origin (Borrower_Local).Value)));
                         end if;
                      end if;
                      if Used /= Res.No_Declaration then
@@ -4047,6 +4309,17 @@ package body Landin.Stages.Checking.References is
          return Result;
       end Named_Storage_Fact;
 
+      --  The fact of a selection's target, read for the selection.
+      function Selected_Fact (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Origin_Fact;
+
+      function Selected_Fact (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Origin_Fact is
+      begin
+         Selecting := True;
+         return Fact_Of (Tree, Node);
+      end Selected_Fact;
+
       function Fact_Of (Tree : Syn.Tree; Node : Syn.Node_Id)
         return Origin_Fact
       is
@@ -4103,6 +4376,7 @@ package body Landin.Stages.Checking.References is
         return Origin_Fact
       is
          Result : Origin_Fact := No_Origin;
+         Selected : constant Boolean := Selecting;
 
          procedure Normalize_Scalar_Result;
 
@@ -4120,6 +4394,7 @@ package body Landin.Stages.Checking.References is
             end if;
          end Normalize_Scalar_Result;
       begin
+         Selecting := False;
          if not Falls_Through then
             return No_Value_Edge;
          elsif Node = Syn.No_Node then
@@ -4161,6 +4436,9 @@ package body Landin.Stages.Checking.References is
                   begin
                      if Local_Of (Id) /= 0 then
                         Result := Origin (Local_Of (Id));
+                        if not Selected then
+                           Read_Stores (Result.Value, Local_Of (Id), 0);
+                        end if;
                         Result.Storage := Named_Storage_Fact (Tree, Node);
                         if Is_Exposed (Id)
                           or else Res.Sort_Of (Meanings.all, Id)
@@ -4261,7 +4539,8 @@ package body Landin.Stages.Checking.References is
                   Target : constant Syn.Node_Id := Syn.Target_Of (Tree, Node);
                   Target_Kind : constant Ty.Type_Kind :=
                     Landin.Checking.Type_Of (Types.all, Tree, Target);
-                  Target_Fact : constant Origin_Fact := Fact_Of (Tree, Target);
+                  Target_Fact : constant Origin_Fact :=
+                    Selected_Fact (Tree, Target);
                   Field : constant Natural :=
                     Landin.Checking.Field_Index (Types.all, Tree, Node);
                   Is_Slice : constant Boolean :=
@@ -4357,6 +4636,7 @@ package body Landin.Stages.Checking.References is
                      Derive_Place
                        (Result.Value, Local_Of (Id), Place,
                         Interior => False);
+                     Read_Stores (Result.Value, Local_Of (Id), Place);
                      if Parameter_Of (Id) > 0
                        and then Syn.Kind (Tree, Node)
                          in Syn.Member_Selection | Syn.Element_Index

@@ -1522,8 +1522,11 @@ no body inference is introduced. A source a generic instance asks nothing
 of under D290, one not passed `inout`, adds nothing to that
 reconstruction, so the result neither derives from its argument nor is a
 view of it (D1042). A live local view records the binding it
-derives from; an `inout` or `sink` use of that binding is refused when the view
-is read before being replaced. A view replaced by the result of the `inout`
+derives from and the fields it reached that binding through; an `inout` or
+`sink` use of that binding, or of a field of it that holds one of those
+fields or lies in one, is refused when the view is read before being
+replaced. A binding that holds a reference into its own storage lends the
+fields able to hold that reference together (D1371). A view replaced by the result of the `inout`
 call itself ends at that assignment, except where the call's recovery can
 `break` or `continue` past it (D291). A deferred call on a return or failure
 edge is checked against what is live on that edge, and no later statement is
@@ -8849,8 +8852,8 @@ array is passed whole.
 argument for an array parameter of its length and element type, under the
 rules every other `inout` place has: the root is writable [1900], D149
 refuses the same place given twice, [0830] and D1084 refuse the call while
-a view of the binding is in use, and a consumed field is assigned again
-first. Lowering passes the field's address, as it passes an element's.
+a view of the field, or of the binding or a field holding it, is in use
+(D1371), and a consumed field is assigned again first. Lowering passes the field's address, as it passes an element's.
 Nothing new is checked or stored: the gate was the one that typed the
 argument before its place was asked about.
 
@@ -12483,7 +12486,8 @@ result is used, though no reference in the result can reach it; dropping
 any source whose instance type holds no reference, typed by a formal or
 not, which no non-generic signature needs, since D290 keeps naming such a
 parameter there L0316; and relaxing the lock between disjoint fields of the state, a
-wider question this one does not need answered. All three are declined.
+wider question this one does not need answered, and which D1371 later
+answered. All three are declined.
 
 **Pinned by** `runtime/generic-from-reference-free-handle-beside-inout`,
 for a handle copied directly and through a local, and
@@ -12579,6 +12583,7 @@ it, whether or not a name holds it.
 
 [0830]'s rule for a view a name holds is unchanged, and still counts a
 reference read out of a field when the name is read after the call.
+D1371 later held a named view's fields apart as well.
 
 A result whose `from` names a container is a view of the container even
 when what it returns is a reference the container only stored: the
@@ -12719,6 +12724,85 @@ each pass's storage in an array declared outside it, and
 `negative/held-result-refusals`, where a view of this pass's binding still
 holds it; the derived hosted program's runtime fixtures run its
 `copy_arguments`.
+
+### D1371 — Disjoint fields of one binding are lent apart
+
+**The tour said** at [0830] that a view taken from a local holds the local
+still while the view is in use, and at [0800] that a result with `from`
+borrows its source as such a view does. It did not say whether a view of
+one field holds the others. The check took a view of any part of a binding
+to hold all of it, so once one field of a state was lent to a handle,
+`system.over(state.cells)`, lending another,
+`stacks.round_over(state.round, ...)`, was L0315 in either order, though the
+two never overlap, and the note said that fields are not tracked apart.
+D1084 had already held an unnamed view's field apart from its neighbours
+and declined to narrow the named rule to match. The limit shaped
+`hosted/events` twice: its error cell was the thread's, not one in its
+space (D485), and its handle reached the system's through a routine rather
+than a field (D1363).
+
+**Chosen:** a view, and a reference a binding holds, record the fields
+they reached the binding through, and an `inout` or `sink` argument is
+refused only beside a live one whose fields overlap it.
+
+- A field place is a run of fields selected from a binding, each out of a
+  record held in place: `state.nested.b`. An element index, a range or a
+  step through a pointer or a slice ends the run, and stands for the field
+  it was taken of, so `state.items[0]` and `state.items[1]` are one place,
+  `state.items`, and `state.shared.val.x` is `state.shared`. Two places of
+  one binding overlap when one is the other or holds it, and the binding
+  holds every place of it.
+- A view reaches the binding at the field it was taken of: an address or a
+  range of the field, an array field lent as a slice, a `for` walking an
+  array field, and a result whose `from` names an argument that is the
+  field, passed `inout`, or a record or an array given by value. A
+  reference read out of a field reaches the binding at that field, beside
+  whatever the binding is known to hold. A result `from held` (D1369) lends
+  no place of its argument, as before.
+- A binding may hold a reference into its own storage. A call given a
+  place of it to write, `inout` or as a reference into its storage, may
+  store there a reference derived from that same place, so a read out of
+  a place that meets the one written, or a view of one, also reaches the
+  place written; two lists of one record are still lent apart after a
+  push into either. A reference stored into the binding by an assignment
+  in the body is known only as one the binding holds, so a view of any of
+  its fields that can hold a reference reaches what it refers into: such a
+  binding lends those fields together, and a field whose type holds none
+  stays apart. What a parameter holds may refer anywhere in it, so a
+  reference read out of a parameter whose type holds references reaches
+  all of it.
+- An unnamed view (D1084) takes its places the same way, so a call's
+  result given as an argument is held apart from a later argument that is
+  another field, as an address of the field already was.
+- L0315's note says which part the view reaches when that is not the
+  argument itself: `` `first` views `state.round`, a part of the argument``,
+  `` `first` views `state.nested`, which contains the argument``,
+  `` `first` views all of `state` ``, or
+  `` `held` reaches `s`, and a reference stored in `s` may point into
+  `s.list` ``.
+
+**The alternatives:** keeping the whole binding, which refuses two handles
+over one state and shaped the library around it; telling elements of an
+array field apart by a constant index, which adds an index to every place
+for no design the library has, and which D1084's unnamed rule does not do;
+following a run of fields through a pointer, whose target is no storage of
+the binding's; and a fact per field of what the binding holds, which would
+keep apart the fields of a binding that holds a reference into itself but
+carries a second fact in every state, against the scaling bound, as D1369
+declined one per binding. All were declined.
+
+**Pinned by** `runtime/fields-lent-apart`, two handles from different
+fields of one state in either order, through nested fields, chosen on a
+branch, as arguments of one call, beside a loop walking a third field,
+beside a list the record holds a view of, and two lists of one record
+after a push into each;
+`negative/inout-field-beside-a-view-of-its-binding`, a field lent while its
+binding or a field holding it is, and the reverse, one alternative of a
+branch, two elements of one array field and two fields reached through one
+pointer; `negative/field-lent-beside-what-its-binding-holds`, a binding
+holding a view of its own list, stored in the body, by an `inout` call or
+through its address; and the scaling bound's family of many lent fields.
+`hosted/events` took its own cells and its handle a field (D1372).
 
 ### D433 — A pointer arm's binding may be `sink`, and consumes the matched place
 
@@ -17184,8 +17268,8 @@ its target: `host is io.environment through services`. The name may instead
 name a routine `(self: T) -> (r: F)` that takes the target T by value, gives
 one result and cannot fail, when T has no field of that name: a provider whose
 inner handle is computed rather than kept, as `hosted/events`' system handle
-is, writes `host is io.environment through services` with `services` that
-routine. A name that is both a field and such a routine is L0341, and so is a
+was until D1372, writes `host is io.environment through services` with
+`services` that routine. A name that is both a field and such a routine is L0341, and so is a
 target with neither. Its entry list becomes optional, `host is io.files (close:
 events_close) through services` names some entries and leaves the rest to
 the field, and a concept's other inputs [1270] are still labels:
@@ -17243,9 +17327,10 @@ an input type; and a field named entry by entry, `(variable_count:
 services, ...)`, which changes no grammar but still writes every entry, and
 a field and a routine of one name would make it ambiguous. A field alone,
 the form first chosen, would have given `hosted/events` a `services` field,
-which its `over` cannot fill: the system handle's cells are writable module
-storage, and a handle returned `from` the caller's state cannot also hold
-them (D222). D492 declined compiler-made forwarding routines
+which its `over` could not fill: the system handle's cells were writable
+module storage, and a handle returned `from` the caller's state cannot also
+hold them (D222). D1372 gave it that field, over cells in its space.
+D492 declined compiler-made forwarding routines
 for an `any`'s own conformance because that one needs none; a field's
 table has to hold an address that does the forwarding.
 
@@ -37659,8 +37744,9 @@ that waits fills a record on its own fibre's stack, links it into the loop's
 list and takes turns until the loop answers it: the fibre does not return
 from the call before then, so the list never holds a record whose frame has
 gone, and the provider needs no table of waits for the caller to size. The
-hosted/system handle beneath is the process's, `system.new()`, as
-`blocking.new()`'s is, so `last_errno` reads the process's cell. The queue
+hosted/system handle beneath was the process's, `system.new()`, as
+`blocking.new()`'s is, so `last_errno` read the process's cell, until
+D1372 gave the space cells of its own. The queue
 is closed on exec and stays open until the process ends; there is no call
 that closes it.
 
@@ -37669,7 +37755,8 @@ a second count to get right and a failure when it is full, for records
 whose lifetime is already the call's; the last-error cells in the space,
 over `system.over`, which a handle `from` the state cannot carry beside the
 round, since both are filled through `inout` from one state and the
-checker sees the second fill while the first handle views it; a round of
+checker sees the second fill while the first handle views it, and which
+D1372 took once D1371 lent the two fields apart; a round of
 the provider's own beside `stacks.round`, which duplicates the one the
 library carries; and a call that closes the queue, which nothing that ends
 with the process needs and a program could then call while a fibre waits.
@@ -37681,6 +37768,41 @@ exchanging over a loopback connection with their steps interleaved;
 source answered `b` before `a`; `runtime/events-stack-past-limit-traps`, a
 task that waited in the loop trapping `stack_exhausted` (D471); and the
 driver's namespace case, which refuses `hosted/events` on Cortex-M0.
+
+### D1372 — The event provider's space holds its own last-error cells
+
+**The tour said** nothing. D485 gave `hosted/events` the calling thread's
+last-error and last-signal cells, through `system.new()`, and declined
+cells in its space only because the check then held a state's fields
+together; D1363 then reached that handle through a routine, `services`,
+since a field holding it would have carried writable storage of the
+system's beside the caller's state (D222). D1371 lends the state's fields
+apart.
+
+**Chosen:** `events.space` gains a field `cells`, a `system.space`, and
+`events.over` fills it with `system.over(state.cells)` before
+`stacks.round_over(state.round, ...)`. The handle keeps that system handle
+as its field `services`, which the conformances that hand on what does not
+wait name after `through` (D1363), so the routine is gone. Every call
+through the handle records into the space's cells, which
+`events.last_errno` and `events.last_signal` read as before; a failure of
+the provider no longer shows in the calling thread's cell, which
+`system.last_errno(system.new())` reads, and two providers in one thread
+keep their failures apart, as two `system.over` handles do. A caller
+declares the space `zeroed` as before and writes nothing new.
+
+**The alternative:** keeping the thread's cell, now with the reason that
+the provider then shares it with every `system.new()` handle on its thread.
+Nothing in the library or the fixtures reads the provider's failures that
+way, and a provider whose state the caller declares is the kind
+`system.over` was made for. It was declined.
+
+**Pinned by** the `hosted/events` runtime fixtures, which read
+`events.last_errno` and `events.last_signal` after the provider's own
+failures: `runtime/events-child-wait`,
+`runtime/events-blocking-socket-write-refused`,
+`runtime/hosted-io-directory-as-file` and
+`runtime/thread-signal-watch-in-worker`.
 
 ### D486 — A wait is submitted and answered, and the loop sleeps only when every fibre waits
 
