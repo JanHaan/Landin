@@ -834,7 +834,7 @@ still succeed. The linked full run contains the target-test results.
 | `darwin-release-build` | `macos-26` | build the release executables once for the `darwin-host-release` and `darwin-parity` jobs |
 | `darwin-host` | `macos-26` | the debug compiler host suite, determinism, report identity and the scripted server sessions |
 | `darwin-host-release` | `macos-26` | the release compiler host suite and the same follow-on checks, then the LLDB sessions |
-| `darwin-parity` | `macos-26` | the hosted corpus executed natively, every Darwin source verdict and the bindings |
+| `darwin-parity` | `macos-26` | the parity harness's own tests (`test_darwin_assembly`), the hosted corpus executed natively, every Darwin source verdict and the bindings |
 | `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` shards, `arm64-compiler-checks` and the Linux arm64 determinism manifest |
 | `arm64-compiler` matrix | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane in two `--shard` jobs, `arm64-compiler-1` and `arm64-compiler-2` |
 | `arm64-compiler-checks` | `ubuntu-24.04-arm` | with the same debug compiler: representative verifier resources, the default target, the determinism closures, native report identity and the scripted server sessions |
