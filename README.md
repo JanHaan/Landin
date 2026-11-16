@@ -4,7 +4,7 @@
 > 32 TB*. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
 
-**Status: specification 0.2.9. Landin programs build and run on Linux,
+**Status: specification 0.2.10. Landin programs build and run on Linux,
 macOS and FreeBSD, and firmware builds for Cortex-M, RV32 and windowed Xtensa.**
 
 The language is pre-v1 and still growing. Its compiler, `refine`, runs
