@@ -455,10 +455,14 @@ runs first inside simplification, whose output verification covers both. It
 checks storage runs and identities before dereferencing them, then block structure,
 reachability, operand order, type agreement, signatures, shapes, paths,
 evidence and static images. Pointer-provenance verification indexes stores
-and reads, then follows the paths on which each read slot may be
-uninitialized, and keeps the first fault in block and instruction order. Its
-heap scratch grows with blocks, slots, values and pointer uses, and holds no
-table of blocks by slots.
+and reads, then, for each read that precedes every store to its slot in its
+own block, walks back from that block through predecessors until a block
+that stores the slot, and keeps the first read a path from entry reaches in
+block and instruction order. Walking back costs the blocks between a read
+and the stores before it, where a walk forward from entry for each slot
+cost every block up to the store, and grew with the square of a long
+routine. Its heap scratch grows with blocks, slots, values and pointer
+uses, and holds no table of blocks by slots.
 Successors come directly from validated terminators, so constructing a graph
 introduces no automatic queue or returned graph temporary. Array byte sizes
 and use counts are checked before allocation; partial allocations are released
@@ -579,7 +583,9 @@ outside these rewrites.
 
 Within a block, value numbering gives a later pure operation the value of an
 earlier identical one: the same opcode, type, flags and metadata over
-operands numbered the same, hashed so that the pass stays linear. That
+operands numbered the same, hashed so that the pass stays linear; the hash
+mixes in the storage an operation reads and the field it selects, which
+otherwise put the address of each of a record's fields in one chain. That
 includes checked operations, an index's bounds check among them. By [1960]
 a check that fails stops the program where it stands, so once the earlier
 operation completed, the later one cannot fail. Removing the later one is

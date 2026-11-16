@@ -3291,6 +3291,39 @@ to annotate.
 A binding declared in a loop's body is a new binding on each pass, so a
 view of the last pass's binding does not hold this pass's.
 
+Fields of one record are tracked apart. A view of one field holds that
+field, and with it the record and any field that contains it, but not its
+neighbours, so two handles can be filled from different fields of one
+state and used together:
+
+```landin
+counter: type = struct
+    hits: u32
+end counter
+
+traffic: type = struct
+    reads: counter
+    writes: counter
+end traffic
+
+slot: (inout c: counter) -> (p: ptr mut u32 from c) = p = addr c.hits end
+
+both: () -> (n: u32) =
+    mut t: traffic = zeroed
+    r := slot(t.reads)
+    w := slot(t.writes) -- fine: `r` holds `t.reads`, not `t.writes`
+    r.val += 1
+    w.val += 2
+    n = r.val + w.val
+end both
+```
+
+A field is as fine as the tracking goes: two elements of one array are one
+place, and so are two fields reached through one pointer. A record that
+holds a reference into its own storage lends together all its fields that
+could hold such a reference, since the check does not know which of them
+holds it.
+
 Only `inout` and `sink` trigger the check, since they are the two ways a
 call can change the storage itself. While the view lives, you may still
 read the local, pass it `in` or pass it by pointer.
@@ -5870,7 +5903,7 @@ README](README.md#current-compiler-capabilities) says what it does today.
 Production status, release versioning, package acquisition and
 self-hosting are not part of the current plan.
 
-Version 0.2.9 — what each version changed is in
+Version 0.2.10 — what each version changed is in
 [the handoff](handoff.md#versions).
 
 Warnings are the compiler's observations about legal source, never extra

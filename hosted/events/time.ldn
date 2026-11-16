@@ -39,7 +39,7 @@ deadline_after: (span: time.duration) -> (deadline: u64) =
 end deadline_after
 
 events_now: (self: host) -> (at: time.instant) =
-    _ = services(self)
+    _ = self
     at = time.instant(reading())
 end events_now
 

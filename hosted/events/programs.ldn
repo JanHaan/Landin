@@ -18,7 +18,7 @@ events_spawn: (self: host, path: text.host_string,
                streams: io.child_streams)
               -> (started: io.child)
               ! io.not_found | io.no_access | io.io_failed =
-    started = try system.start(services(self), path, arguments, environment,
+    started = try system.start(self.services, path, arguments, environment,
                                streams)
     --  A pipe the system leaves blocking stays as it is rather than fail
     --  the spawn, which would leave a started child to end and reap: a
@@ -188,7 +188,7 @@ events_wait_child: (self: host, sink started: io.child)
     child: posix.process_id = system.process_of(started)
     try child_ended(self, child)
     status: posix.child_status = try waited(self, child)
-    ended = system.ended(services(self), status)
+    ended = system.ended(self.services, status)
     fail io.io_failed when not closed
 end events_wait_child
 

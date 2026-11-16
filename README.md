@@ -4,7 +4,7 @@
 > 32 TB*. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
 
-**Status: specification 0.2.9. Landin programs build and run on Linux,
+**Status: specification 0.2.10. Landin programs build and run on Linux,
 macOS and FreeBSD, and firmware builds for Cortex-M, RV32 and windowed Xtensa.**
 
 The language is pre-v1 and still growing. Its compiler, `refine`, runs
@@ -58,8 +58,18 @@ directory. Unpack it into a directory of its own and put its `bin` on your
 `PATH`.
 
 A Linux archive's `refine` is linked against glibc and asks for the
-system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64. On
-NixOS or a musl distribution, install with nix or build from source.
+system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64 and
+`/lib/ld-linux-aarch64.so.1` on arm64. On NixOS or a musl distribution,
+install with nix or build from source.
+
+Each archive is attested: the release workflow built it from its tag. With
+the GitHub CLI, check a downloaded archive before you unpack it:
+
+```sh
+gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo JanHaan/Landin \
+  --signer-workflow JanHaan/Landin/.github/workflows/release.yml \
+  --source-ref refs/tags/vVERSION --deny-self-hosted-runners
+```
 
 The archive leaves the compiler's debug information out and publishes it
 beside it as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
@@ -309,7 +319,7 @@ run records and what the gate checks for each target.
   tool, package acquisition, release versioning and self-hosting stay
   outside it.
 
-**Next roadmap item: R13.93 — Fields lent apart (planned).**
+**Next roadmap item: R16.10 — Measure generated code (planned).**
 
 ## Questions, bugs and ideas
 

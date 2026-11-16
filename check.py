@@ -375,6 +375,12 @@ PROTOTYPE_SOURCES = {
     for letter, source in PROTOTYPE_FINDINGS.items()}
 #  Names that are deliberately not files here: an example in prose, a
 #  path inside a container, or a file a reader is told to create.
+#  The repository's GitHub name.  A command a document gives may name a
+#  file qualified by it, as `gh attestation verify --signer-workflow
+#  JanHaan/Landin/.github/workflows/release.yml` does, and that is the
+#  repository's own file.
+REPOSITORY_SLUG = "JanHaan/Landin"
+
 NAMED_FILE_ALLOWLIST = frozenset((
     "BACKLOG.md",              # the retired work authority, named to refuse it
     "unit/stray.txt",          # a harness case named relative to its own tree
@@ -9913,6 +9919,8 @@ def check_named_files(full_run):
     def resolves(target, path):
         if target in NAMED_FILE_ALLOWLIST or present(target):
             return True
+        if target.startswith(REPOSITORY_SLUG + "/"):
+            return present(target[len(REPOSITORY_SLUG) + 1:])
         #  A bare name may sit next to the file that mentions it, or
         #  anywhere in the tree: a document may name Ada units by their
         #  file name and not by their path.

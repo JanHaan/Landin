@@ -1,19 +1,112 @@
-table: type = struct
+--  D1371: a field is lent apart from its neighbours, never from the
+--  binding or the field that holds it.  Passing a field `inout` while a
+--  view of its holder is in use is refused, and so is the reverse, a
+--  field held by a branch's alternative, and two elements of one array
+--  field, or two fields reached through one pointer, which are one place.
+cells: type = struct
     slots: [4]u32
-end table
+end cells
 
-state: type = struct
-    cells: table
-    round: table
-end state
+round: type = struct
+    count: u32
+end round
 
-reset: (inout round: table) -> none =
-    round.slots = [0, 0, 0, 0]
-end reset
+inner: type = struct
+    a: cells
+    b: round
+end inner
 
-both: () -> (n: u32) =
-    mut held: state = zeroed
-    services := held.cells.slots[0..<2]
-    reset(held.round)
-    n = services[0]
-end both
+pair: type = struct
+    x: round
+    y: round
+end pair
+
+space: type = struct
+    cells: cells
+    round: round
+    nested: inner
+    items: [3]u32
+end space
+
+--  A record that reaches its pair through a pointer.
+via: type = struct
+    shared: ptr mut pair
+end via
+
+handle: type = struct
+    at: ptr mut u32
+end handle
+
+whole_over: (inout state: space) -> (h: handle from state) =
+    h = (at: addr state.round.count)
+end whole_over
+
+inner_over: (inout state: inner) -> (h: handle from state) =
+    h = (at: addr state.b.count)
+end inner_over
+
+round_over: (inout state: round) -> (h: handle from state) =
+    h = (at: addr state.count)
+end round_over
+
+cells_over: (inout state: cells) -> (h: handle from state) =
+    h = (at: addr state.slots[0])
+end cells_over
+
+bump: (inout value: u32) -> none =
+    value += 1
+end bump
+
+holder_then_field: (inout state: space) -> (n: u32) =
+    first := whole_over(state)
+    second := round_over(state.round) -- error: `first` views all of `state`
+    n = first.at.val + second.at.val
+end holder_then_field
+
+field_then_holder: (inout state: space) -> (n: u32) =
+    first := round_over(state.round)
+    second := whole_over(state) -- error: `first` views a part of it
+    n = first.at.val + second.at.val
+end field_then_holder
+
+enclosing_then_inner: (inout state: space) -> (n: u32) =
+    first := inner_over(state.nested)
+    second := round_over(state.nested.b) -- error: `first` holds it
+    n = first.at.val + second.at.val
+end enclosing_then_inner
+
+inner_then_enclosing: (inout state: space) -> (n: u32) =
+    first := round_over(state.nested.b)
+    second := inner_over(state.nested) -- error: `first` views a part of it
+    n = first.at.val + second.at.val
+end inner_then_enclosing
+
+on_a_branch: (inout state: space, which: bool) -> (n: u32) =
+    first := if which then cells_over(state.cells)
+             else cells_over(state.nested.a) end if
+    second := inner_over(state.nested) -- error: one alternative views it
+    n = first.at.val + second.at.val
+end on_a_branch
+
+elements: (inout state: space) -> (n: u32) =
+    first := addr state.items[0]
+    bump(state.items[1]) -- error: an element is its whole array
+    n = first.val
+end elements
+
+through_a_pointer: (inout state: via) -> (n: u32) =
+    first := round_over(state.shared.val.x)
+    second := round_over(state.shared.val.y) -- error: one place
+    n = first.at.val + second.at.val
+end through_a_pointer
+
+mut spare: pair = zeroed
+
+public main: () -> (code: i32) =
+    mut state: space = zeroed
+    mut reached: via = (shared: addr spare)
+    code = i32(holder_then_field(state) + field_then_holder(state)
+               + enclosing_then_inner(state) + inner_then_enclosing(state)
+               + on_a_branch(state, true) + elements(state)
+               + through_a_pointer(reached))
+end main

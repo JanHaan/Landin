@@ -2665,6 +2665,12 @@
     "runtime/field-conformance": {
       "mode": "execute"
     },
+    "runtime/fields-lent-apart": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/file-system-firmware": {
       "mode": "execute"
     },

@@ -357,7 +357,7 @@ on arm64 hardware. That job is the whole of Nix CI.
 Both packages install the standard library beside the compiler, as
 `lib/landin/{core,hosted,platform}` next to `bin/refine`, and `refine` finds
 it there from its own executable, so a program anywhere imports it with no
-option. `.#refine-bin` fetches 0.2.9. Archives hold the library from 0.2.8
+option. `.#refine-bin` fetches 0.2.10. Archives hold the library from 0.2.8
 on; an archive from 0.2.7 or earlier holds `refine` alone.
 
 The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
