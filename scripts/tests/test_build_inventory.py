@@ -1099,12 +1099,14 @@ class BuildArchives(unittest.TestCase):
         #  so they carry the test program and its stamp as release does.
         members = ("bin", "bin/refine", "bin/landin_tests",
                    "source-manifest.txt", "tests-manifest.txt")
-        #  Linux x86-64's release executables are built and packaged twice,
-        #  over the cache and from clean, from one build directory.
+        #  Linux x86-64's and Darwin's release executables are built and
+        #  packaged twice, over the cache and from clean, from one build
+        #  directory.
         expected = {
             "linux-release": "compiler/ada/build/linux-amd64/release",
             "linux-release-clean": "compiler/ada/build/linux-amd64/release",
             "darwin-release": "compiler/ada/build/darwin-arm64/release",
+            "darwin-release-clean": "compiler/ada/build/darwin-arm64/release",
             "linux-amd64-debug": "compiler/ada/build/linux-amd64/debug",
             "linux-arm64-debug": "compiler/ada/build/linux-arm64/debug",
             "darwin-arm64-debug": "compiler/ada/build/darwin-arm64/debug",

@@ -52,6 +52,40 @@ def elf(text=b"\x90" * 16, data=b"\x01\x02", debug=b"GNU Ada 16.1.0\0"):
     return bytes(body)
 
 
+def macho(text=b"\x1f\x20\x03\xd5" * 4, oso_time=0, uuid=bytes(16),
+          signature=b"\xfa\xde\x0c\xc0"):
+    """A thin arm64 executable: __TEXT,__text, __LINKEDIT holding a symbol
+    table of one N_OSO stab (an object's path and time) and one symbol, its
+    strings and a signature blob, and LC_UUID."""
+    strings = b"\0/w/obj/landin.o\0_main\0"
+    stab = struct.pack("<IBBHQ", 1, 0x66, 0, 1, oso_time)       # N_OSO
+    symbol = struct.pack("<IBBHQ", 17, 0x0F, 1, 0, 0x100000000)
+    commands = []
+    #  The offsets are filled in once the commands' size is known.
+    size = 72 + 80 + 72 + 24 + 24 + 16
+    text_offset = 32 + size
+    linkedit = text_offset + len(text)
+    symoff, stroff = linkedit, linkedit + 32
+    sigoff = stroff + len(strings)
+    commands.append(struct.pack("<II16sQQQQIIII", 0x19, 152, b"__TEXT",
+                                0x100000000, 0x4000, 0, linkedit, 5, 5, 1, 0)
+                    + struct.pack("<16s16sQQIIIIIIII", b"__text", b"__TEXT",
+                                  0x100000000 + text_offset, len(text),
+                                  text_offset, 2, 0, 0, 0x80000400, 0, 0, 0))
+    commands.append(struct.pack("<II16sQQQQIIII", 0x19, 72, b"__LINKEDIT",
+                                0x100004000, 0x4000, linkedit,
+                                sigoff + len(signature) - linkedit, 1, 1, 0, 0))
+    commands.append(struct.pack("<IIIIII", 0x2, 24, symoff, 2, stroff,
+                                len(strings)))
+    commands.append(struct.pack("<II", 0x1B, 24) + uuid)
+    commands.append(struct.pack("<IIII", 0x1D, 16, sigoff, len(signature)))
+    body = b"".join(commands)
+    assert len(body) == size
+    header = struct.pack("<8I", 0xFEEDFACF, 0x0100000C, 0, 2, len(commands),
+                         size, 0, 0)
+    return header + body + text + stab + symbol + strings + signature
+
+
 class CompareBuilds(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp(prefix="landin-compare-builds-"))
@@ -118,11 +152,44 @@ class CompareBuilds(unittest.TestCase):
         status, out, _ = self.run_compare(self.build("clean"), cached)
         self.assertEqual(status, 0, out)
 
+    def test_a_mach_o_debug_map_alone_still_fails_and_names_it(self):
+        clean = self.build("clean", refine=macho())
+        cached = self.build("cached", refine=macho(
+            oso_time=1763300000, uuid=b"\x01" * 16, signature=b"\xfa\xde\x0c\xc1"))
+        status, out, _ = self.run_compare(clean, cached)
+        self.assertEqual(status, 1)
+        self.assertIn("section symbol table stabs differs", out)
+        self.assertIn("section LC_UUID differs", out)
+        self.assertIn("section LC_CODE_SIGNATURE data differs", out)
+        self.assertNotIn("__TEXT,__text differs", out)
+        self.assertIn("only the debugging information differs", out)
+
+    def test_a_mach_o_difference_in_code_names_the_section(self):
+        clean = self.build("clean", refine=macho())
+        cached = self.build("cached", refine=macho(text=b"\x1f\x20\x03\xd5" * 3
+                                                    + b"\xc0\x03\x5f\xd6"))
+        status, out, _ = self.run_compare(clean, cached)
+        self.assertEqual(status, 1)
+        self.assertIn("section __TEXT,__text differs", out)
+        self.assertNotIn("only the debugging information differs", out)
+
+    def test_the_same_mach_o_files_are_the_same_build(self):
+        status, out, _ = self.run_compare(self.build("clean", refine=macho()),
+                                          self.build("cached", refine=macho()))
+        self.assertEqual(status, 0, out)
+
+    def test_a_truncated_mach_o_is_reported_and_fails(self):
+        clean = self.build("clean", refine=macho())
+        cached = self.build("cached", refine=macho()[:200])
+        status, out, _ = self.run_compare(clean, cached)
+        self.assertEqual(status, 1)
+        self.assertIn("cannot read the sections: truncated or malformed Mach-O", out)
+
     def test_a_file_that_is_no_elf_is_reported_and_fails(self):
         cached = self.build("cached", refine=b"#!/bin/sh\nexit 0\n")
         status, out, _ = self.run_compare(self.build("clean"), cached)
         self.assertEqual(status, 1)
-        self.assertIn("cannot read the sections: not an ELF file", out)
+        self.assertIn("cannot read the sections: neither an ELF nor a 64-bit Mach-O file", out)
 
     def test_a_missing_executable_or_manifest_is_an_error(self):
         clean, cached = self.build("clean"), self.build("cached")
@@ -217,6 +284,58 @@ class Workflow(unittest.TestCase):
         needs = re.search(r"needs: \[([^]]*)\]", self.jobs["gate"]).group(1)
         self.assertIn("linux-release-compare",
                       [name.strip() for name in needs.split(",")])
+
+
+class DarwinWorkflow(unittest.TestCase):
+    """gate.yml's two Darwin release builds, held to each other as Linux
+    x86-64's are."""
+
+    def setUp(self):
+        self.jobs = jobs(GATE.read_text())
+
+    def test_only_the_comparison_takes_the_clean_build(self):
+        clean = {name for name, text in self.jobs.items()
+                 if "darwin-release-clean" in takes(text)}
+        self.assertEqual(clean, {"darwin-release-compare"})
+        cached = {name for name, text in self.jobs.items()
+                  if "darwin-release" in takes(text)}
+        self.assertEqual(cached, {"darwin-host-release", "darwin-parity",
+                                  "darwin-release-compare"})
+
+    def test_both_builds_write_no_dates_and_only_one_sees_the_cache(self):
+        for name in ("darwin-release-build", "darwin-release-clean"):
+            self.assertIn("ZERO_AR_DATE: '1'", self.jobs[name], name)
+        clean = self.jobs["darwin-release-clean"]
+        self.assertIn("run: ./scripts/build.sh -j3", clean)
+        self.assertNotIn("actions/cache", clean)
+        self.assertNotIn("dev-build", clean)
+        self.assertIn("run: ./scripts/dev-build.sh -j3",
+                      self.jobs["darwin-release-build"])
+
+    def test_only_a_compared_tree_is_saved_to_the_cache(self):
+        saving = {name for name, text in self.jobs.items()
+                  if "actions/cache/save@" in text
+                  and "compiler/ada/build/darwin-arm64/release" in text}
+        self.assertEqual(saving, {"darwin-release-cache"})
+        self.assertIn("needs: [inputs, darwin-release-build, darwin-release-compare]",
+                      self.jobs["darwin-release-cache"])
+        self.assertIn("$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}",
+                      self.jobs["darwin-release-build"])
+
+    def test_the_comparison_compares_both_archives_and_the_gate_needs_it(self):
+        compare = self.jobs["darwin-release-compare"]
+        self.assertIn("needs: [inputs, darwin-release-build, darwin-release-clean]",
+                      compare)
+        self.assertEqual(takes(compare), {"darwin-release", "darwin-release-clean"})
+        self.assertRegex(compare, r"compare_builds\.py \"\$RUNNER_TEMP/clean\""
+                                  r" \"\$RUNNER_TEMP/cached\" \\\n\s+refine landin_tests\n")
+        needs = re.search(r"needs: \[([^]]*)\]", self.jobs["gate"]).group(1)
+        self.assertIn("darwin-release-compare",
+                      [name.strip() for name in needs.split(",")])
+
+    def test_the_release_lanes_wait_for_the_debug_build_too(self):
+        self.assertIn("needs: [inputs, darwin-release-build, darwin-debug-build]",
+                      self.jobs["darwin-host-release"])
 
 
 if __name__ == "__main__":

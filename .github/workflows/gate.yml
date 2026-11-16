@@ -105,7 +105,8 @@ jobs:
             cortex-m-rv32 xtensa-esp32-1 xtensa-esp32-2 xtensa-esp32-3 \
             xtensa-esp32s3-1 xtensa-esp32s3-2 xtensa-esp32s3-3 \
             scaling darwin-debug-build \
-            darwin-release-build darwin-host-1 darwin-host-2 \
+            darwin-release-build darwin-release-clean darwin-release-compare \
+            darwin-host-1 darwin-host-2 \
             darwin-host-release-1 darwin-host-release-2 \
             darwin-parity-1 darwin-parity-2 darwin-parity-3 \
             arm64-debug-build arm64-compiler-1 arm64-compiler-2 \
@@ -1064,8 +1065,26 @@ jobs:
       - name: The scaling benchmark
         run: ./scripts/scaling.sh
 
-  #  Compile the Darwin release executables once for the host suite,
-  #  hosted parity and LLDB lanes.
+  #  The Darwin release executables are built twice, as Linux x86-64's
+  #  are: this job over the object tree an earlier run left in the cache
+  #  (scripts/dev-build.sh), for darwin-host-release and darwin-parity,
+  #  and darwin-release-clean from clean beside it; darwin-release-compare
+  #  requires the two builds' executables to be the same files, byte for
+  #  byte, and `gate` needs all three.
+  #
+  #  Apple's ar writes each member's modification time into the archive
+  #  and Apple's linker writes each object's, or that archive date, into
+  #  the executable's debug map (N_OSO stabs), and the ad hoc signature
+  #  hashes those pages; nothing else differs between two builds of one
+  #  tree, the LC_UUID included.  ZERO_AR_DATE=1 has both write 0, so both
+  #  builds set it.  LLDB still reads the debug map; with a time of 0 it
+  #  no longer refuses an object rebuilt since the link, which on a
+  #  runner, where the objects never outlive the job, it cannot meet.
+  #
+  #  The cache is keyed and saved as linux-release-build's is, and its
+  #  entry saved by darwin-release-cache only once the comparison passed.
+  #  Nothing saves one for main: main's own runs reuse the candidate's
+  #  pass and build nothing, so a new branch's first run builds from clean.
   darwin-release-build:
     needs: inputs
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
@@ -1074,6 +1093,9 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
+      ZERO_AR_DATE: '1'
+    outputs:
+      key: ${{ steps.objects.outputs.key }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1082,8 +1104,25 @@ jobs:
         with:
           platform: aarch64-darwin
 
-      - name: Build release executables
-        run: ./scripts/build.sh -j3
+      - name: Name the cache entry by runner image and toolchain pins
+        id: objects
+        run: |
+          set -eu
+          prefix="darwin-arm64-release-objects-$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}-"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/darwin-arm64/release
+            !compiler/ada/build/darwin-arm64/release/bin
+            !compiler/ada/build/darwin-arm64/release/link
+          key: ${{ steps.objects.outputs.key }}
+          restore-keys: ${{ steps.objects.outputs.prefix }}
+
+      - name: Build release executables over the restored objects
+        run: ./scripts/dev-build.sh -j3
 
       - name: Package release executables and both build manifests
         run: >-
@@ -1095,6 +1134,114 @@ jobs:
           name: darwin-release
           path: ${{ runner.temp }}/darwin-release.tar.gz
           retention-days: 1
+
+      #  The tree for the next run, which darwin-release-cache saves only
+      #  once darwin-release-compare has passed.
+      - name: Package the objects, without the executables
+        if: github.event_name == 'push'
+        run: >-
+          tar -cf "$RUNNER_TEMP/darwin-release-objects.tar"
+          --exclude=./bin --exclude=./link
+          -C compiler/ada/build/darwin-arm64/release .
+
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: darwin-release-objects
+          path: ${{ runner.temp }}/darwin-release-objects.tar
+          retention-days: 1
+
+  #  The same executables from clean, which never sees the cache, for
+  #  darwin-release-compare alone; no lane waits for it.
+  darwin-release-clean:
+    needs: inputs
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      LANDIN_BUILD_MODE: release
+      ZERO_AR_DATE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - name: Build release executables from clean
+        run: ./scripts/build.sh -j3
+
+      - name: Package release executables and both build manifests
+        run: >-
+          tar -czf "$RUNNER_TEMP/darwin-release-clean.tar.gz"
+          -C compiler/ada/build/darwin-arm64/release bin source-manifest.txt tests-manifest.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: darwin-release-clean
+          path: ${{ runner.temp }}/darwin-release-clean.tar.gz
+          retention-days: 1
+
+  #  The comparison reads files alone, so it takes no macOS runner.
+  darwin-release-compare:
+    needs: [inputs, darwin-release-build, darwin-release-clean]
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: darwin-release
+          path: ${{ runner.temp }}/darwin-release
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: darwin-release-clean
+          path: ${{ runner.temp }}/darwin-release-clean
+
+      - name: The cached build is the clean build
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/cached" "$RUNNER_TEMP/clean"
+          tar -xzf "$RUNNER_TEMP/darwin-release/darwin-release.tar.gz" -C "$RUNNER_TEMP/cached"
+          tar -xzf "$RUNNER_TEMP/darwin-release-clean/darwin-release-clean.tar.gz" -C "$RUNNER_TEMP/clean"
+          python3 scripts/compare_builds.py "$RUNNER_TEMP/clean" "$RUNNER_TEMP/cached" \
+            refine landin_tests
+
+  #  As linux-release-cache, on a Linux runner so as to take no macOS one:
+  #  actions/cache names an entry by its paths and compression, not by the
+  #  system that wrote it, so macOS restores what Linux saved.
+  darwin-release-cache:
+    needs: [inputs, darwin-release-build, darwin-release-compare]
+    if: >-
+      github.event_name == 'push' && needs.inputs.outputs.software == 'true'
+      && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: darwin-release-objects
+          path: ${{ runner.temp }}/darwin-release-objects
+
+      - name: Unpack the object tree where darwin-release-build restores it
+        run: |
+          set -eu
+          mkdir -p compiler/ada/build/darwin-arm64/release
+          tar -xf "$RUNNER_TEMP/darwin-release-objects/darwin-release-objects.tar" \
+            -C compiler/ada/build/darwin-arm64/release
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/darwin-arm64/release
+            !compiler/ada/build/darwin-arm64/release/bin
+            !compiler/ada/build/darwin-arm64/release/link
+          key: ${{ needs.darwin-release-build.outputs.key }}
 
   #  Compile the Darwin debug executables once for the host suite and
   #  determinism, which then need not wait for the suite.
@@ -1226,9 +1373,15 @@ jobs:
   #  shards divided as darwin-host's are; the installed toolchain goes with
   #  the first and the LLDB sessions with the second, whose checks are the
   #  shorter.  Both are required.
+  #
+  #  They also wait for the debug build, which needs them not: a cached
+  #  release build can end before it, and then these two long jobs and
+  #  the parity shards would take the macOS runners darwin-host needs at
+  #  that build's end, whose two shards are the longest path
+  #  (docs/process.md).
   darwin-host-release:
     name: darwin-host-release-${{ matrix.shard }}
-    needs: [inputs, darwin-release-build]
+    needs: [inputs, darwin-release-build, darwin-debug-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
@@ -2177,7 +2330,8 @@ jobs:
             linux-release-compare, release,
             outside-user-stock, build-modes,
             bindings, editor-grammar, flake, cortex-m, xtensa, scaling, darwin-debug-build,
-            darwin-release-build, darwin-host, darwin-host-release,
+            darwin-release-build, darwin-release-clean, darwin-release-compare,
+            darwin-host, darwin-host-release,
             darwin-parity, arm64-debug-build, arm64-compiler,
             arm64-compiler-checks, arm64-release, freebsd, rv64-qemu,
             determinism, board-bundles, board]

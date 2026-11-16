@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Require two builds of one tree to have produced the same executables.
 
-The gate builds the Linux x86-64 release executables twice: from clean, and
-incrementally over the object tree a previous run left in the cache, so
-that the lanes waiting for a compiler can start sooner.  The lanes take the
+The gate builds the Linux x86-64 and the Darwin release executables twice:
+from clean, and incrementally over the object tree a previous run left in
+the cache, so that the lanes waiting for a compiler can start sooner.  The lanes take the
 incremental build; this holds it to the clean one:
 
     compare_builds.py CLEAN_DIR CACHED_DIR NAME...
@@ -17,17 +17,23 @@ information included, so a lane that ran the cached build ran the very file
 the clean build made.
 
 When an executable differs the report says how, to find the cause: the
-sizes and digests, the ELF sections whose contents differ or that one
-file lacks, whether anything but the debugging information (`.debug_*`)
-differs, and when loaded bytes differ, the routines and data that do
-(scripts/compare_images.py's report).  A difference confined to the
+sizes and digests, the sections whose contents differ or that one file
+lacks, whether anything but the debugging information differs, and for
+ELF, when loaded bytes differ, the routines and data that do
+(scripts/compare_images.py's report).  An ELF file's debugging information
+is its `.debug_*` sections; a Mach-O file's, whose DWARF stays in the
+object files, is its debug map (the symbol table's stabs, naming each
+object file and its modification time), its LC_UUID and its ad hoc
+signature, which hashes every other page.  A Mach-O file's load commands
+are reported by name beside its sections, and its symbol table as its
+stabs, its other symbols and its strings.  A difference confined to the
 debugging information still fails: the clean build is what the lanes'
 evidence must stand on, and an incremental build that differs from it in
 any byte has shown that it is not a clean build's equal.
 
 The exit status is 0 when every NAME is the same and the manifests agree,
-1 when anything differs, and 2 when a file is missing or an executable is
-no ELF file this reads.  Standard-library Python, reading the files alone.
+1 when anything differs, an executable this cannot read among them, and 2
+when a file is missing.  Standard-library Python, reading the files alone.
 """
 
 from __future__ import annotations
@@ -52,11 +58,32 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+#  Mach-O load commands this names; any other is named by its number.
+LOAD_COMMANDS = {0x2: "LC_SYMTAB", 0xB: "LC_DYSYMTAB", 0xC: "LC_LOAD_DYLIB",
+                 0xE: "LC_LOAD_DYLINKER", 0x1B: "LC_UUID",
+                 0x1D: "LC_CODE_SIGNATURE", 0x26: "LC_FUNCTION_STARTS",
+                 0x29: "LC_DATA_IN_CODE", 0x2A: "LC_SOURCE_VERSION",
+                 0x32: "LC_BUILD_VERSION", 0x80000028: "LC_MAIN",
+                 0x80000033: "LC_DYLD_EXPORTS_TRIE",
+                 0x80000034: "LC_DYLD_CHAINED_FIXUPS"}
+#  Load commands whose payload is a (file offset, size) range of
+#  __LINKEDIT, linkedit_data_command.
+LINKEDIT_DATA = {0x1D, 0x1E, 0x26, 0x29, 0x2B, 0x80000033, 0x80000034}
+#  The parts of a Mach-O executable the linker derives from its other
+#  bytes or that only a debugger reads: the debug map, the stabs naming each
+#  object file and its time, the UUID and the ad hoc signature hashing the
+#  rest.
+MACHO_DEBUGGING = ("symbol table stabs", "LC_UUID", "LC_CODE_SIGNATURE",
+                   "LC_CODE_SIGNATURE data")
+
+
 def sections(data):
-    """{name: (header fields but the file offset, contents)} of an ELF file,
-    and the names in file order."""
+    """{name: (header fields but the file offset, contents)} of an ELF or a
+    64-bit Mach-O file, and the names in file order."""
+    if data[:4] == b"\xcf\xfa\xed\xfe":
+        return macho_sections(data)
     if len(data) < 52 or data[:4] != b"\x7fELF":
-        raise Unreadable("not an ELF file")
+        raise Unreadable("neither an ELF nor a 64-bit Mach-O file")
     if data[4] not in (1, 2) or data[5] not in (1, 2):
         raise Unreadable("unknown ELF class %d or byte order %d"
                          % (data[4], data[5]))
@@ -95,8 +122,73 @@ def sections(data):
     return found, order_of
 
 
+def macho_sections(data):
+    """The sections of a little-endian 64-bit Mach-O file named
+    `SEGMENT,section`, each load command but the segments by its name, the
+    data a linkedit_data_command names as `NAME data`, and the symbol table
+    as its stabs (the debug map), its other symbols and its strings."""
+    found, order_of = {}, []
+
+    def add(label, fields, contents):
+        while label in found:
+            label += "'"
+        found[label] = (fields, contents)
+        order_of.append(label)
+
+    try:
+        _, cpu, _, kind, count, size, _, _ = struct.unpack_from("<8I", data)
+        cursor, end = 32, 32 + size
+        if end > len(data):
+            raise ValueError("load commands run past the end")
+        for _ in range(count):
+            command, length = struct.unpack_from("<II", data, cursor)
+            if length < 8 or cursor + length > end:
+                raise ValueError("load command %#x has size %d" % (command, length))
+            if command == 0x19:
+                segment = data[cursor + 8:cursor + 24].rstrip(b"\0").decode()
+                vmaddr, vmsize, _, filesize = struct.unpack_from(
+                    "<4Q", data, cursor + 24)
+                nsects, = struct.unpack_from("<I", data, cursor + 64)
+                add("segment " + segment, (vmaddr, vmsize, filesize), b"")
+                for index in range(nsects):
+                    at = cursor + 72 + 80 * index
+                    name = data[at:at + 16].rstrip(b"\0").decode()
+                    address, extent, offset, align, _, _, flags = \
+                        struct.unpack_from("<QQIIIII", data, at + 32)
+                    #  Zero-fill sections occupy no file bytes.
+                    zerofill = (flags & 0xFF) in (1, 0xC, 0x12)
+                    contents = b"" if zerofill else data[offset:offset + extent]
+                    if not zerofill and len(contents) != extent:
+                        raise ValueError("section %s runs past the end" % name)
+                    add(segment + "," + name, (address, extent, align, flags),
+                        contents)
+            else:
+                name = LOAD_COMMANDS.get(command, "load command %#x" % command)
+                add(name, (command,), data[cursor:cursor + length])
+                if command in LINKEDIT_DATA:
+                    offset, extent = struct.unpack_from("<II", data, cursor + 8)
+                    add(name + " data", (), data[offset:offset + extent])
+                elif command == 0x2:
+                    symoff, nsyms, stroff, strsize = struct.unpack_from(
+                        "<4I", data, cursor + 8)
+                    stabs, symbols = [], []
+                    for index in range(nsyms):
+                        entry = data[symoff + 16 * index:symoff + 16 * index + 16]
+                        if len(entry) != 16:
+                            raise ValueError("the symbol table runs past the end")
+                        #  N_STAB bits: a debugger's entry, such as N_OSO.
+                        (stabs if entry[4] & 0xE0 else symbols).append(entry)
+                    add("symbol table stabs", (), b"".join(stabs))
+                    add("symbol table symbols", (), b"".join(symbols))
+                    add("string table", (), data[stroff:stroff + strsize])
+            cursor += length
+    except (struct.error, ValueError, UnicodeDecodeError) as error:
+        raise Unreadable("truncated or malformed Mach-O: %s" % error) from None
+    return found, order_of
+
+
 def debugging(name):
-    return name.startswith(".debug_")
+    return name.startswith(".debug_") or name in MACHO_DEBUGGING
 
 
 def describe(clean_path, cached_path, clean, cached, out):
@@ -133,6 +225,9 @@ def describe(clean_path, cached_path, clean, cached, out):
         return
     if clean_order != cached_order and not only_clean and not only_cached:
         out.write("  the sections are in another order\n")
+    if clean[:4] == b"\xcf\xfa\xed\xfe":
+        #  compare_images reads ELF alone; the sections above are the report.
+        return
     try:
         clean_image = compare_images.Image(clean_path)
         cached_image = compare_images.Image(cached_path)
