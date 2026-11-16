@@ -1,10 +1,10 @@
-error[L0314]: this frame-origin reference cannot be retained beyond the call
-  --> ../tests/fixtures/negative/core-map-key-frame-escape/main.ldn:26:37
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/core-map-key-frame-escape/main.ldn:27:14
    |
-26 |     try map.insert(value, provider, local_key, item)
-   |                                     ^^^^^^^^^
+27 |     result = value
+   |              ^^^^^
   --> ../tests/fixtures/negative/core-map-key-frame-escape/main.ldn:22:5
    |
 22 |     mut local: node = (value: 7)
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter

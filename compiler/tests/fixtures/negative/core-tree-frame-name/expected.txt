@@ -1,4 +1,4 @@
-error[L0314]: this parameter is non-escaping, so its reference cannot be retained by the called function
+error[L0314]: this parameter is non-escaping, so its reference cannot be kept in another parameter's storage
   --> ../tests/fixtures/negative/core-tree-frame-name/main.ldn:6:37
   |
 6 |     _ = tree.add_leaf(value, state, text) else (problem)

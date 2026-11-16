@@ -73,7 +73,7 @@ it cannot be transferred between maps, and any mutation invalidates it.
 | Z2 — constrained and fixed parameters on types | `map.map(collision_key, i32)` selects a constrained key parameter, while `spill.list(i32, 2)` selects a fixed inline bound. Both execute, rather than serving only as type-checking examples. |
 | Z3 — pointer/slice system primitives | D151's private raw-storage operations are used through `mem.storage_over`/`used`; the rejected general `slice_from`, `base_of`, and public pointer-arithmetic sketch is not duplicated. |
 | Z4 — size and alignment in evidence | Constrained allocation runs through map and every generic provider wrapper. Pool slot alignment and exact extents are checked by their existing target-width-aware APIs; no specialization-time host constant is assumed. |
-| Z5 — accessor results retain their source | `vec.used`, `spill.used`, and `mem.used` views are consumed inside scopes that end before growth or release. Pointer-bearing `map.next_entry` results likewise retain the map while used. `negative/r470-container-entry-live-map` proves that keeping such an entry live blocks both insertion and release. |
+| Z5 — accessor results retain their source | `vec.used`, `spill.used`, and `mem.used` views are consumed inside scopes that end before growth or release. A `map.at` slot likewise retains the map while used, and `negative/r470-container-entry-live-map` proves that keeping one live blocks both insertion and release. A pointer-bearing `map.next_entry` entry is a copy of what the map held, `from held` since D1369, and retains no view of the map. |
 | Z6 — `escaping` on a generic value | Pointer vectors, map entries, tree names, and erased drawable pairs all cross generic retaining operations. Reference-free scalar cases use the same APIs without a special convention. |
 | Z7 — variant pattern binding aliases payload storage | This derivative no longer exercises variant pattern binding through `core/spill`: its private inline array and separate spill descriptor replaced the two variant arms. The spill-list path still checks publication after prefix transfer and preservation of inline values after failure; Z7's aliasing rule needs its dedicated variant fixtures. |
 | Z8 — honest uninitialized storage | D151/D198 representations are used exactly: initialized prefixes for vec/raw K/V values, a private initialized prefix with unwritten spare slots in `core/spill`, and fully initialized map buckets. Neither pointer nor erased values need a zero image, and no capacity slice claims uninitialized objects exist. |
@@ -96,8 +96,9 @@ enumeration surface:
 
 - `negative/r470-container-missing-order-evidence` calls `evidence_less` with a
   type that has no `cmp.ordered` conformance (`L0318`).
-- `negative/r470-container-entry-live-map` keeps a pointer-bearing entry live
-  across both `insert` and `release`; each mutation is refused (`L0315`).
+- `negative/r470-container-entry-live-map` keeps a `map.at` slot live across
+  both `insert` and `release`; each mutation is refused (`L0315`). An entry
+  copied out by `next_entry` held no view of the map until D1369 said so.
 - `negative/r470-container-entry-wrong-from` extracts a pointer item returned
   by `next_entry(source, cursor)` but claims `from wrong`; exact source matching
   rejects it (`L0316`).

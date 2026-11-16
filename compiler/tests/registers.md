@@ -301,7 +301,7 @@ fixture's own record rather than asserted here.
 | `runtime/diagnostic-loggers-dispatch` | P2 | Y1 | recoverable diagnostics use a bounded or streaming capability without becoming parser failure |
 | `runtime/derived-parser` | P2 | Y1, Y4, Y5, Y6, Y7 | a complete recursive parser builds an arena AST, logs and recovers from syntax faults, and propagates allocation or diagnostic-delivery failure through shared erased evidence |
 | `runtime/derived-containers` | P3 | Z1, Z2, Z3, Z4, Z5, Z6, Z7, Z8, Z9, Z10, Z11, Z12, Z13, Z14, Z15, Z16, Z17, Z18, Z19 | the complete client composes initialized containers, explicit and failing providers, sorting, tree and heterogeneous evidence; its derivation manifest distinguishes executable resolutions from preserved no-gap or superseded sketches |
-| `negative/r470-container-entry-live-map` | P3 | Z5, Z16 | a pointer-bearing enumerated entry keeps its map live across insertion and release |
+| `negative/r470-container-entry-live-map` | P3 | Z5, Z16 | a live slot into the map's storage keeps its map live across insertion and release; an entry copied out is what the map held (D1369) |
 | `negative/r470-container-entry-wrong-from` | P3 | Z5 | entry extraction retains the exact map origin |
 | `negative/r470-container-missing-order-evidence` | P3 | Z2 | a constrained generic application call requires its concrete ordering conformance |
 | `runtime/parameterized-struct-values` | P3 | Z2 | type and fixed parameters on nominal values |

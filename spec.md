@@ -12673,7 +12673,17 @@ slices back through `get`, `last` and `pop`, inline, through a local, a
 field and a helper of the program's own, into a caller's list, and through
 `core/map` and `core/spill`; and `negative/held-result-refusals`, for a
 `held` result that is a view, a view held across a push, a frame address
-read back out of a list and a function value differing in `held`.
+read back out of a list and a function value differing in `held`. A
+`next_entry` entry kept across an insert, which
+`negative/r470-container-entry-live-map` refused, is now accepted, and that
+control holds a `map.at` slot instead; `negative/core-map-key-frame-escape`
+and `negative/core-map-value-frame-escape` refuse their frame key and item
+where the map is returned rather than at the insert.
+`negative/core-mem-admit-frame-pointer`,
+`negative/core-mem-replace-frame-any` and `negative/core-tree-frame-name`
+refuse in the same place in the words of an `escaping into` parameter, and
+`negative/core-tree-node-escape` names the parameter a `held` result came
+from as the shorter-lived source.
 
 ### D1370 — A declaration that runs again makes a new binding
 

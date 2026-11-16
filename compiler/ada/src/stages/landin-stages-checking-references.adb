@@ -1096,6 +1096,11 @@ package body Landin.Stages.Checking.References is
       --  D445: the parameter whose storage each one may be kept in, or 0.
       Parameter_Into : array (1 .. Parameters) of Natural :=
         [others => 0];
+      --  The declaration of each parameter, for a report whose fact
+      --  names a parameter's origin and no local it was derived through,
+      --  as a `from held` result is (D1369).
+      Parameter_Declaration : array (1 .. Parameters) of Res.Declaration_Id
+        := [others => Res.No_Declaration];
 
       --  The side tables read by a program identity.  A declaration this
       --  function cannot name has none of these facts, which is what the
@@ -1974,6 +1979,23 @@ package body Landin.Stages.Checking.References is
          if Count (Fact.Derives) > 0 then
             return Global (Nth (Fact.Derives, 1));
          end if;
+         --  D1369: a result `from held p` derives from no local, and the
+         --  source is the parameter whose origin it carries, a
+         --  non-escaping one first, since that is what a refusal names.
+         for Source in Fact.From'Range loop
+            if Fact.From (Source) and then not Parameter_Escapes (Source)
+              and then Parameter_Declaration (Source) /= Res.No_Declaration
+            then
+               return Parameter_Declaration (Source);
+            end if;
+         end loop;
+         for Source in Fact.From'Range loop
+            if Fact.From (Source)
+              and then Parameter_Declaration (Source) /= Res.No_Declaration
+            then
+               return Parameter_Declaration (Source);
+            end if;
+         end loop;
          return Res.No_Declaration;
       end First_Derivation;
 
@@ -5666,6 +5688,7 @@ package body Landin.Stages.Checking.References is
          begin
             if Id /= Res.No_Declaration then
                Parameter_Of_Local (Local_Of (Id)) := Position;
+               Parameter_Declaration (Position) := Id;
                Exposed (Local_Of (Id)) := Exposed (Local_Of (Id))
                  or else Syn.Convention_Of (Of_Tree, Node)
                    = Syn.Inout_Convention;

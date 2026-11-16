@@ -56,7 +56,8 @@ total: (list: vec.list(ptr node)) -> (sum: i32) =
 end total
 
 run: () -> (n: i32)
-     ! mem.out_of_memory | mem.empty | mem.out_of_bounds | mem.full | map.missing =
+     ! mem.out_of_memory | mem.empty | mem.out_of_bounds | mem.full | map.missing
+     | map.end_of_entries =
     memory := heap.new()
     one: node = (v: 1)
     first: ptr node = try mem.new(memory, one)
@@ -91,6 +92,11 @@ run: () -> (n: i32)
     try map.insert(table, memory, 8, try map.get(table, 7))
     found := try map.get(table, 8)
     n += found.val.v
+    --  An entry copied out is what the map held: it lives across an insert.
+    mut position := map.entries()
+    entry := try map.next_entry(table, position)
+    try map.insert(table, memory, 9, entry.item)
+    n += entry.item.val.v
 
     mut few := spill.new(item: ptr node, inline_slots: 2)
     defer spill.release(few, memory)
@@ -100,7 +106,7 @@ run: () -> (n: i32)
     try spill.push(few, memory, try spill.get(addr few, 0))
     n += i32(spill.length(addr few))
     n += i32(try pieces())
-    n += 42 - 7 - 4 - 1 - 3 - 4
+    n += 42 - 7 - 4 - 1 - 1 - 3 - 4
 end run
 
 public main: () -> (code: i32) =

@@ -1,4 +1,4 @@
-error[L0314]: this frame-origin reference cannot be retained beyond the call
+error[L0314]: this frame-origin reference cannot be kept in storage that outlives this frame
   --> ../tests/fixtures/negative/core-mem-admit-frame-pointer/main.ldn:8:28
   |
 8 |     _ = mem.admit(storage, addr local) else zero

@@ -1,5 +1,5 @@
 class: negative
-summary: a live reference-bearing map entry blocks insert and release until its last use
+summary: a live slot into a map's storage blocks insert and release until its last use, where an entry copied out is what the map held (D1369)
 program: main.ldn
 root: ../../../../..
 status: 1
