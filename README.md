@@ -58,8 +58,18 @@ directory. Unpack it into a directory of its own and put its `bin` on your
 `PATH`.
 
 A Linux archive's `refine` is linked against glibc and asks for the
-system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64. On
-NixOS or a musl distribution, install with nix or build from source.
+system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64 and
+`/lib/ld-linux-aarch64.so.1` on arm64. On NixOS or a musl distribution,
+install with nix or build from source.
+
+Each archive is attested: the release workflow built it from its tag. With
+the GitHub CLI, check a downloaded archive before you unpack it:
+
+```sh
+gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo JanHaan/Landin \
+  --signer-workflow JanHaan/Landin/.github/workflows/release.yml \
+  --source-ref refs/tags/vVERSION --deny-self-hosted-runners
+```
 
 The archive leaves the compiler's debug information out and publishes it
 beside it as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
