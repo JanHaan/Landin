@@ -1106,7 +1106,10 @@ borrows nothing, and [0810]'s conversion says so (D440). When the
 alternative that derives from no named parameter is a module binding's
 storage, the note names the binding: module storage needs no `from`, so
 return it in a result of its own, or read and write it where it is chosen,
-and a result that derives from no parameter is declared without `from`.
+and a result that derives from no parameter is declared without `from`. A
+source written `held p` is what `p` holds, read out of an element through a
+pointer or by an index; an address or range of that element, or `p`'s own
+storage, is a view, which a plain `from p` names (D1369).
 
 ```landin
 bad: (source: ptr u32) -> (pointer: ptr u32) =
