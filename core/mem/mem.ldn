@@ -367,7 +367,7 @@ end admit_copy
 --- Append a complete value into a spare slot and return its index. Reports
 --- `full` without publishing a new prefix when no slot is available.
 public admit: (item: type, inout store: storage(item),
-              escaping into store value: item)
+               escaping into store value: item)
               -> (index: usize) ! full =
     index = length(store)
     fail full when index >= store.capacity_count

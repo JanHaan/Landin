@@ -1,0 +1,108 @@
+--  D1369: a reference read out of a container is what the container
+--  holds, not a view of its storage, so it goes back into the container
+--  through `get`, `last` and `pop`, inline, through a local, a field and
+--  a `from held` helper of the program's own; and a list keeps what it is
+--  given in its own storage, so a caller's list takes its own item back.
+import core/cmp
+import core/mem
+import core/vec
+import core/map
+import core/spill
+import hosted/heap
+
+node: type = struct
+    v: i32
+end node
+
+carrier: type = struct
+    item: ptr node
+end carrier
+
+--  The program's own accessor, read through the list it is given.
+newest: (list: vec.list(ptr node)) -> (p: ptr node from held list) ! mem.empty =
+    p = try vec.last(list)
+end newest
+
+--  A caller's list takes its own items back: `push` keeps `added` in the
+--  list's storage and nowhere else.
+again: (inout list: vec.list(ptr node)) -> none ! mem.out_of_memory | mem.empty =
+    memory := heap.new()
+    try vec.push(list, memory, try vec.last(list))
+    p := try vec.pop(list)
+    try vec.push(list, memory, p)
+    try vec.push(list, memory, p)
+end again
+
+--  D1370: each pass declares a new `owner`, so the views of earlier
+--  passes that `parts` keeps do not hold this pass's.
+pieces: () -> (n: usize) ! mem.out_of_memory | mem.full =
+    memory := heap.new()
+    mut parts: [2][]u8 = [[], []]
+    for at in usize(0)..<2 do
+        block: ptr mut u8 = try mem.allocate(memory, 4, alignof u8)
+        mut owner := mem.storage_over(item: u8, base: block, slots: 4)
+        _ = try mem.admit(owner, 1)
+        _ = try mem.admit(owner, 2)
+        parts[at] = mem.used(owner)
+    end for
+    n = lenof parts[0] + lenof parts[1]
+end pieces
+
+total: (list: vec.list(ptr node)) -> (sum: i32) =
+    sum = 0
+    for p in vec.used(list) do
+        sum += p.val.v
+    end for
+end total
+
+run: () -> (n: i32)
+     ! mem.out_of_memory | mem.empty | mem.out_of_bounds | mem.full | map.missing =
+    memory := heap.new()
+    one: node = (v: 1)
+    first: ptr node = try mem.new(memory, one)
+    mut pointers := vec.new(item: ptr node)
+    defer vec.release(pointers, memory)
+    try vec.push(pointers, memory, first)
+    try vec.push(pointers, memory, try vec.last(pointers))
+    try vec.push(pointers, memory, try vec.get(pointers, 0))
+    late := try vec.last(pointers)
+    try vec.push(pointers, memory, late)
+    kept: carrier = (item: try vec.pop(pointers))
+    try vec.push(pointers, memory, kept.item)
+    try vec.push(pointers, memory, try newest(pointers))
+    try again(pointers)
+    --  Four items, the fourth taken and given back, the helper's fifth and
+    --  two more of again's: seven items of 1.
+    n = total(pointers)
+
+    word: [4]u8 = [1, 2, 3, 4]
+    mut slices := vec.new(item: []u8)
+    defer vec.release(slices, memory)
+    try vec.push(slices, memory, word[0..<2])
+    try vec.push(slices, memory, try vec.pop(slices))
+    try vec.push(slices, memory, try vec.last(slices))
+    for s in vec.used(slices) do
+        n += i32(s[1])
+    end for
+
+    mut table := map.new(key: u32, item: ptr node, seed: cmp.seed_from(1, 2))
+    defer map.release(table, memory)
+    try map.insert(table, memory, 7, first)
+    try map.insert(table, memory, 8, try map.get(table, 7))
+    found := try map.get(table, 8)
+    n += found.val.v
+
+    mut few := spill.new(item: ptr node, inline_slots: 2)
+    defer spill.release(few, memory)
+    try spill.push(few, memory, first)
+    try spill.push(few, memory, try spill.pop(few))
+    try spill.push(few, memory, try spill.last(addr few))
+    try spill.push(few, memory, try spill.get(addr few, 0))
+    n += i32(spill.length(addr few))
+    n += i32(try pieces())
+    n += 42 - 7 - 4 - 1 - 3 - 4
+end run
+
+public main: () -> (code: i32) =
+    code = run() else 1
+end main

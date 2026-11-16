@@ -1,0 +1,8 @@
+class: negative
+summary: D1369 a held result that is a view, a view held across a push, a frame address read back out of a list, a function value differing in held; D1370 a view of this pass's binding still holds it
+codes: L0316, L0316, L0315, L0314, L0315, L0301
+constructs: 0790, 0800, 0830, 1000, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/held-result-refusals
+status: 1

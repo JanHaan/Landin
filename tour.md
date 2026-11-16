@@ -3288,6 +3288,9 @@ The fix is always nearby: finish with the view before the call, or take
 it again after. The check looks at one function body, so there is nothing
 to annotate.
 
+A binding declared in a loop's body is a new binding on each pass, so a
+view of the last pass's binding does not hold this pass's.
+
 Only `inout` and `sink` trigger the check, since they are the two ways a
 call can change the storage itself. While the view lives, you may still
 read the local, pass it `in` or pass it by pointer.

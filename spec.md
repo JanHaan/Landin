@@ -12675,6 +12675,41 @@ field and a helper of the program's own, into a caller's list, and through
 `held` result that is a view, a view held across a push, a frame address
 read back out of a list and a function value differing in `held`.
 
+### D1370 — A declaration that runs again makes a new binding
+
+**The tour said** at [0830] that a view taken from a local holds the local
+still while the view is in use. It did not say which binding a view holds
+when the local's declaration is in a loop's body and runs on every pass.
+The check read the declaration as one binding for the whole loop, so a
+view of the last pass's binding, kept in a binding declared outside the
+loop, held this pass's: `parts[at] = mem.used(owner)` in a loop that
+declares `mut owner := mem.storage_over(...)` was L0315 at the next pass's
+`mem.admit(owner, 1)`. D1369's `escaping into` inserts met it in the
+derived hosted program, whose `copy_arguments` pushes a slice of each
+argument's own storage into the list it returns.
+
+**Chosen:** a binding or destructuring statement makes a new binding each
+time it runs, and a view of the binding it made before does not hold the
+new one against `inout` and `sink`. A view of this pass's binding holds it
+as before. A view of the earlier binding's frame storage still refers to
+the same storage, which the new binding now occupies, so it reads what the
+new binding holds; that is no dangling reference, since a frame's storage
+lasts as long as its routine, and it is a stated non-guarantee [1720].
+Origins and escape are unchanged: a reference into frame storage is frame
+whichever pass made it.
+
+**The alternatives:** keeping one binding for the loop, which refuses every
+loop that keeps a view of storage it declares on each pass; and having an
+`escaping into` holder take the kept reference's origin but not the views
+it came from, as `escaping` did, which leaves the array form refused and a
+list blind to what its items view. Both were declined.
+
+**Pinned by** `runtime/held-references-go-back`, whose loop keeps a view of
+each pass's storage in an array declared outside it, and
+`negative/held-result-refusals`, where a view of this pass's binding still
+holds it; the derived hosted program's runtime fixtures run its
+`copy_arguments`.
+
 ### D433 — A pointer arm's binding may be `sink`, and consumes the matched place
 
 **The tour said** at [1220] that a pattern binding carries a parameter

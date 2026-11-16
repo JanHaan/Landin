@@ -541,6 +541,11 @@ package body Landin.Stages.Checking.References is
          Presence   : Value_Fact := Unknown_Value;
       end record;
 
+      --  The locals some fact has been made to derive from, which a
+      --  declaration that runs again must look for (D1370); a bit for
+      --  every local, held once.
+      Derived_From : Declaration_Bits := [others => False];
+
       --  Record that a fact derives from LOCAL.  Every local Derives
       --  gains is added here, or joined from another fact's.
       procedure Derive (Fact : in out Reference_Fact; Local : Local_Id);
@@ -548,6 +553,7 @@ package body Landin.Stages.Checking.References is
       procedure Derive (Fact : in out Reference_Fact; Local : Local_Id) is
       begin
          Include (Fact.Derives, Local);
+         Derived_From (Local) := True;
       end Derive;
 
       --  Record that a fact may point into LOCAL's storage.
@@ -559,6 +565,7 @@ package body Landin.Stages.Checking.References is
       begin
          Include (Fact.Derives, Local);
          Include (Fact.Interior, Local);
+         Derived_From (Local) := True;
       end Derive_Interior;
 
       No_Reference : constant Reference_Fact := (others => <>);
@@ -1013,6 +1020,48 @@ package body Landin.Stages.Checking.References is
             Origins := With_Fact (Origins, Local, Kept (Fact), Root_Span);
          end if;
       end Set_Origin;
+
+      --  D1370: a declaration that runs again makes a new binding, so no
+      --  fact derives from the one it made before: a view of the earlier
+      --  binding does not lock this one.
+      procedure Forget_Earlier (Local : Local_Id);
+
+      procedure Forget_Earlier (Local : Local_Id) is
+         procedure Drop (Fact : in out Reference_Fact);
+
+         procedure Drop (Fact : in out Reference_Fact) is
+         begin
+            Exclude (Fact.Derives, Local);
+            Exclude (Fact.Interior, Local);
+         end Drop;
+      begin
+         if not Derived_From (Local) then
+            return;
+         end if;
+         for Other in Local_Id loop
+            declare
+               Fact : Origin_Fact := Origin (Other);
+            begin
+               if Contains (Fact.Value.Derives, Local)
+                 or else Contains (Fact.Storage.Derives, Local)
+                 or else (for some Part of Fact.Results =>
+                            Contains (Part.Derives, Local))
+               then
+                  Drop (Fact.Value);
+                  Drop (Fact.Storage);
+                  for Position in 1 .. Fact.Results.Last_Index loop
+                     declare
+                        Part : Reference_Fact := Fact.Results (Position);
+                     begin
+                        Drop (Part);
+                        Fact.Results.Replace_Element (Position, Part);
+                     end;
+                  end loop;
+                  Set_Origin (Other, Fact);
+               end if;
+            end;
+         end loop;
+      end Forget_Earlier;
       --  Match and collection bindings keep their captured backing apart
       --  from origins carried by the value. Runtime address aliases retain
       --  that backing beneath computed selectors; copied subjects do not.
@@ -4528,9 +4577,10 @@ package body Landin.Stages.Checking.References is
                                       & " not something `" & Named
                                       & "` holds",
                                     Note    => "D1369: `from held "
-                                      & Named & "` is a reference read"
-                                      & " through one `" & Named
-                                      & "` carries; write `from " & Named
+                                      & Named & "` is read out of an"
+                                      & " element `" & Named & "` holds,"
+                                      & " through a pointer or by an"
+                                      & " index; write `from " & Named
                                       & "` for a view of its storage",
                                     Related => Part.Site,
                                     Because => "the named return and its"
@@ -4833,6 +4883,7 @@ package body Landin.Stages.Checking.References is
                      --  The fixed point may retain the previous loop
                      --  iteration's value. It is not in scope while this
                      --  fresh declaration evaluates its initializer.
+                     Forget_Earlier (Local_Of (Id));
                      Set_Origin (Local_Of (Id), No_Origin);
                      Set_Origin
                        (Local_Of (Id),
@@ -4863,6 +4914,7 @@ package body Landin.Stages.Checking.References is
                               if Id /= Res.No_Declaration
                                 and then Local_Of (Id) /= 0
                               then
+                                 Forget_Earlier (Local_Of (Id));
                                  Set_Origin
                                    (Local_Of (Id),
                                     (if not Has_References (Id)

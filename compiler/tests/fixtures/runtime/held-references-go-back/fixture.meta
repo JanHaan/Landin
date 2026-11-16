@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1369 a pointer or slice read out of a list, map or spill list goes back into it through get, last and pop; D1370 a loop's binding is new on each pass
+program: main.ldn
+status: 42
+constructs: 0780, 0790, 0800, 0830, 1150, 1360, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
