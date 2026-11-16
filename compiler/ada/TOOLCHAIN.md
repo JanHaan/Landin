@@ -233,6 +233,7 @@ Set once, in `compiler/ada/landin_common.gpr`, and inherited by every project:
 | `-gnatyy` | standard style checks, including the 79-column limit |
 | `-gnatW8` | sources are UTF-8 |
 | `-fno-common` | no tentative definitions |
+| `-gno-record-gcc-switches` | no command line in each unit's debugging information: GPRbuild passes every compilation the names of temporary files under `/tmp/GPR.PID/`, so two builds of one tree differed there, and the gate requires its cached release build to be the clean one's byte for byte (docs/process.md) |
 
 Debug mode adds `-O0 -g -gnata -gnatVa -fstack-check`: assertions, contracts
 and validity checks are on while the compiler is being written. Release mode
@@ -261,7 +262,8 @@ The shared library also compiles `src/platform/landin_file_identity.c`,
 and `src/platform/landin_channel.c` with the pinned toolchain's host C compiler and the host's system headers. These small POSIX adapters keep host-specific
 structures and wait/signal constants out of Ada; they do not inspect Landin
 target layout. Their switches are
-`-std=c11 -Wall -Wextra -Werror -pedantic -fno-common -O2 -g` in both modes:
+`-std=c11 -Wall -Wextra -Werror -pedantic -fno-common -O2 -g
+-gno-record-gcc-switches` in both modes:
 C warnings are errors too. The library project's `Languages` include C, so
 its C sources and headers are in the same source-checksum manifest as Ada,
 and editing an adapter cannot reuse stale objects. The adapters use only the host C runtime, already a

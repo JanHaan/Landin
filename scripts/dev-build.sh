@@ -1,6 +1,7 @@
 #!/bin/sh
 #  Fast checksum-safe developer compilation.  The ordinary build remains the
-#  clean-on-change gate; use it before making a claim about the tree.
+#  clean-on-change build; use it before making a claim about the tree.  The
+#  gate's one use of this build is held to a clean one (docs/process.md).
 
 set -eu
 

@@ -1097,18 +1097,26 @@ class BuildArchives(unittest.TestCase):
                     if command.startswith("tar -czf ")]
         #  Debug builds supply their host's suite as well as determinism,
         #  so they carry the test program and its stamp as release does.
-        build = ("bin", "bin/refine", "bin/landin_tests",
-                 "source-manifest.txt", "tests-manifest.txt")
+        members = ("bin", "bin/refine", "bin/landin_tests",
+                   "source-manifest.txt", "tests-manifest.txt")
+        #  Linux x86-64's release executables are built and packaged twice,
+        #  over the cache and from clean, from one build directory.
         expected = {
-            "compiler/ada/build/linux-amd64/release": build,
-            "compiler/ada/build/darwin-arm64/release": build,
-            "compiler/ada/build/linux-amd64/debug": build,
-            "compiler/ada/build/linux-arm64/debug": build,
-            "compiler/ada/build/darwin-arm64/debug": build,
+            "linux-release": "compiler/ada/build/linux-amd64/release",
+            "linux-release-clean": "compiler/ada/build/linux-amd64/release",
+            "darwin-release": "compiler/ada/build/darwin-arm64/release",
+            "linux-amd64-debug": "compiler/ada/build/linux-amd64/debug",
+            "linux-arm64-debug": "compiler/ada/build/linux-arm64/debug",
+            "darwin-arm64-debug": "compiler/ada/build/darwin-arm64/debug",
         }
+
+        def archive_name(command):
+            return Path(shlex.split(command)[2]).name.removesuffix(".tar.gz")
+
         self.assertEqual(len(packages), len(expected))
-        self.assertEqual({shlex.split(command)[shlex.split(command).index("-C") + 1]
-                          for command in packages}, set(expected))
+        self.assertEqual({archive_name(command): shlex.split(command)[
+                              shlex.split(command).index("-C") + 1]
+                          for command in packages}, expected)
         for command in packages:
             with self.subTest(command=command):
                 with tempfile.TemporaryDirectory(prefix="landin-archive-") as tmp:
@@ -1135,8 +1143,8 @@ class BuildArchives(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     archive_path = Path(words[2].replace("$RUNNER_TEMP", tmp))
                     with tarfile.open(archive_path) as archive:
-                        self.assertEqual(set(archive.getnames()), set(expected[build_path]))
-                        for name in expected[build_path]:
+                        self.assertEqual(set(archive.getnames()), set(members))
+                        for name in members:
                             if name == "bin":
                                 self.assertTrue(archive.getmember(name).isdir())
                             elif name.endswith("manifest.txt"):

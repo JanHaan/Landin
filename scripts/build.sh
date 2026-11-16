@@ -1,10 +1,12 @@
 #!/bin/sh
 #  Build `refine` and the test program, or only `refine` with --compiler-only.
 #
-#  Staleness is decided by content, not by timestamps.  The ordinary gate
+#  Staleness is decided by content, not by timestamps.  The ordinary build
 #  rebuilds from clean when content changes.  scripts/dev-build.sh selects
 #  GPRbuild's checksum-based minimum recompilation instead; it is feedback,
-#  never a substitute for the ordinary clean debug and release gates.
+#  never a substitute for a clean build.  The gate builds Linux x86-64's
+#  release executables both ways and counts the faster build only when its
+#  executables are the clean build's, byte for byte (docs/process.md).
 #
 #  Two rules from a review repair.  One build per tag and mode at a time: an OS lock
 #  beside the build tree serialises concurrent runs, because two

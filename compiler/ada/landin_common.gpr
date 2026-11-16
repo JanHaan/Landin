@@ -25,8 +25,12 @@ abstract project Landin_Common is
 
    --  Ada 2022, every warning on, warnings are errors, standard style
    --  checks.  A compiler that tolerates its own warnings teaches nobody.
+   --  No switches in the debugging information: GPRbuild passes each
+   --  compilation the names of temporary files under /tmp/GPR.PID/, which
+   --  would make two builds of one tree differ (TOOLCHAIN.md).
    Common_Switches :=
-     ("-gnat2022", "-gnatwa", "-gnatwe", "-gnatyy", "-gnatW8", "-fno-common");
+     ("-gnat2022", "-gnatwa", "-gnatwe", "-gnatyy", "-gnatW8", "-fno-common",
+      "-gno-record-gcc-switches");
 
    Debug_Switches   := ("-O0", "-g", "-gnata", "-gnatVa", "-fstack-check");
    Release_Switches := ("-O2", "-g", "-gnatn");
@@ -47,7 +51,7 @@ abstract project Landin_Common is
       --  headers; all compiler stages and emitted-code decisions remain Ada.
       for Default_Switches ("C") use
         ("-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic",
-         "-fno-common", "-O2", "-g");
+         "-fno-common", "-O2", "-g", "-gno-record-gcc-switches");
    end Compiler;
 
    package Builder is

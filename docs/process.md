@@ -820,9 +820,12 @@ still succeed. The linked full run contains the target-test results.
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
 | `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
-| `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, outside-user-stock, build-modes, Cortex-M and scaling jobs |
-| `release` | `ubuntu-24.04` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
-| `outside-user-stock` | `ubuntu-24.04` | the release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
+| `linux-release-build` | `ubuntu-24.04` | build the release executables over the object tree an earlier run left in the cache, for the `build-modes`, Cortex-M, Xtensa, `scaling`, FreeBSD and RV64 jobs |
+| `linux-release-clean` | `ubuntu-24.04` | build the release executables from clean, for the `release` and `outside-user-stock` jobs |
+| `linux-release-compare` | `ubuntu-24.04` | require the two release builds' `refine` and `landin_tests` to be the same files, byte for byte, and their manifests to record the same inputs (`scripts/compare_builds.py`) |
+| `linux-release-cache` | `ubuntu-24.04` | on a push, once `linux-release-compare` has passed, save `linux-release-build`'s object tree to the cache for the next run; `gate` does not need it |
+| `release` | `ubuntu-24.04` | with the clean release compiler: the whole test program, the determinism closures, native report identity and the scripted server sessions, the compiler packaged and used outside the checkout, then object quality and the GDB sessions |
+| `outside-user-stock` | `ubuntu-24.04` | the clean release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1, over Linux x86-64, Linux arm64, Cortex-M, RV32 and both Xtensa configurations; the requests are dealt round `build-modes-1` to `build-modes-3`, `emit_manifest.py modes --shard=I/3`, so each job is a third of the work whatever target grows (D1365) |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI, then the Neovim LSP preference smoke under the distribution's Neovim |
@@ -845,7 +848,7 @@ still succeed. The linked full run contains the target-test results.
 | `rv64-qemu` matrix | `ubuntu-24.04` | the release compiler's whole test program on the Linux RV64 lane in two `--shard` jobs, `rv64-qemu-1` and `rv64-qemu-2`, linked by Ubuntu's riscv64 cross driver and run under the flake's pinned `qemu-riscv64`, its CPU's every level confirmed, with that emulator registered as the riscv64 binfmt_misc handler so a program that starts itself again runs (D1037); the emulator's own failures listed in `compiler/tests/cross-lanes.json` are reported and not counted; the first shard also runs the RV64 GDB sessions, the stack switch's among them, under the same emulator's GDB stub |
 | `rv64-emit` matrix | `ubuntu-24.04` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads for RISE; source/hash checks, invalid IR register regression and instruction inspection |
 | `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
-| `board-bundles` | `ubuntu-24.04` | on a board-scope event only, whatever the software lanes reuse: the release compiler built from the commit, every board's boot and RAM bundles by `environments/boards/build.py --mode=both --records=strict`, so drift from a hardware record fails before a board runs, and one 14-day artifact with `provenance.json` and `files.sha256`; never reused |
+| `board-bundles` | `ubuntu-24.04` | on a board-scope event only, whatever the software lanes reuse: the release compiler built from the commit, every board's boot and RAM bundles by `environments/boards/build.py --mode=both --records=strict`, so drift from a hardware record fails before a board runs, and one 14-day artifact with `provenance.json` and `files.sha256`; on `main` it also saves its build's objects to the cache `linux-release-build` restores from; never reused |
 | `board` matrix | `[landin-rig]`, the rig's self-hosted runner | `board-rp2040`, `board-pico2`, `board-stm32h753`, `board-esp32c3`, `board-esp32c5`, `board-esp32` and `board-esp32s3`, one at a time on the rig's one runner: a sparse checkout of the exact commit, the bundles downloaded by artifact id against their digest, their file list and provenance checked, then `environments/boards/gate.py --lock-wait=1200`, each port's RAM run and then its boot check; 50 minutes a leg, 70 for the Pico 2's four steps; each leg's evidence, `board-evidence-PORT-ATTEMPT`, one per run attempt, kept 90 days, also after a failure or a cancellation, and the aggregate judges each port by its latest attempt; never reused |
 | `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest for all nine targets on each host in two jobs of four and five targets, including both Xtensa levels, joins each host's parts and compares the three, starting once the three debug builds succeed rather than after their suites |
 
@@ -855,6 +858,51 @@ the registered runners measured slower and are no longer selected. The
 board legs alone run on the self-hosted rig runner described below. The
 FreeBSD lanes boot their VMs inside the hosted job, arm64 under emulation
 because GitHub's arm64 images offer no KVM. See [the runner environment requirements](environments.md#github-actions-runners).
+
+The gate's evidence used to come only from compilers built from clean.
+The rule is now that every verdict the gate counts was made with
+executables a clean build of the tree produced: built from clean, or the
+same files, byte for byte, as the clean build's. Linux x86-64's release
+executables are the one case that uses the second form. `linux-release-clean` builds them
+from clean, as every other build job does. `linux-release-build` builds
+them with `scripts/dev-build.sh` over the object tree an earlier run left in
+the cache, recompiling by checksum what changed, so the jobs waiting for a
+compiler start sooner. The jobs that use `refine` as a tool to make their
+evidence take that build: `build-modes`, `cortex-m`, `xtensa`, `scaling`,
+`freebsd` and `rv64-qemu`. The jobs whose claim is about the built
+executable itself take the clean one: `release`, whose test program run is
+the release evidence and which packages the compiler, and
+`outside-user-stock`, which packages it for a stock system.
+`linux-release-compare` requires the two builds' `refine` and
+`landin_tests` to be the same files, debugging information included, and
+their manifests to record the same inputs, and `gate` needs it. A stale,
+damaged or planted cache entry can make the cached build fail or differ;
+either fails the gate, so no lane's verdict counts on executables the clean
+build did not also produce. With no usable entry the cached build is a
+clean build and takes as long as one.
+
+The comparison can be of whole files because the build records no compiler
+switches in its debugging information (`-gno-record-gcc-switches` in
+`compiler/ada/landin_common.gpr`). GPRbuild hands each compilation
+temporary files under `/tmp/GPR.PID/`, and GCC wrote their names into each
+unit's `DW_AT_producer` string, so two builds of one tree run by different
+GPRbuild processes differed in `.debug_str`, and in `.debug_info`'s
+references into it, and nowhere else. The cache entry is the build tree
+without `bin/` and `link/`, about 120 MB compressed. Its key names the runner
+image, whose headers the C adapters compile against, and the digest of
+`environments/pins.sh`. A run restores the newest entry of its own branch
+or, failing that, of `main`, and `build.sh` still rebuilds from clean when
+the source inventory, a project file, the switches or the toolchain differ
+from what the restored tree records. A push saves its tree once the
+comparison has passed, so no entry is the tree of a build that differed,
+and `board-bundles` saves its clean build's on `main`, so a new branch's
+first run starts from `main`; a pull request saves nothing, since no other
+ref could restore its entry. GitHub evicts an entry unused for seven days, and
+the least recently used once the repository's entries pass 10 GB. If the
+cached build fails where the clean one passes, the entry it restored, named
+in its log, can be removed with `gh cache delete KEY`; the next run then
+restores an older entry or builds from clean.
+Darwin's and Linux arm64's release executables are built from clean only.
 
 A compile error surfaces in its host's debug or release build job; Linux
 arm64's release lane still builds its own. In
@@ -1015,8 +1063,8 @@ build's readers lock (`scripts/build_lock.py`). A compiler-only build records `r
 A change to a gate job's name, matrix, condition or needs is held by
 controls in several files. Read this list before the change, and run them
 together afterwards: `python3 scripts/script_tests.py test_gate_inputs
-test_rv64_lanes test_build_inventory test_host_determinism
-test_rig_runner_hook test_release`, and `python3
+test_rv64_lanes test_build_inventory test_compare_builds
+test_host_determinism test_rig_runner_hook test_release`, and `python3
 environments/cortex-m/test.py`, which `check.py` runs.
 
 | file | what it holds of `gate.yml` |
@@ -1024,6 +1072,7 @@ environments/cortex-m/test.py`, which `check.py` runs.
 | `scripts/tests/test_gate_inputs.py` | `Workflow`: the reuse list is exactly the jobs the aggregate needs, every matrix leg by its rendered name. `Physical`: every job's condition follows the event's scope, a software lane skipping for a reused pass and a boards-only event and a board job running by the boards scope alone, the board matrix is every port once, and the aggregate keeps documents and scripts always. `Inventory`: this list names every test file that names the workflow. Its matrix reader takes axis lines or one `include:` list, never both. |
 | `scripts/tests/test_rv64_lanes.py` | the RV64 jobs: the two hardware jobs are suspended, by a `false` conjunct in their condition, and absent from the aggregate and the reuse list; the emulated job is not suspended, has both shards and its packages, and its evidence is packaged. It compares conditions by that conjunct alone, so a scope change does not concern it. |
 | `scripts/tests/test_build_inventory.py` | `BuildArchives`: the archives the build jobs hand to their consumers hold the executables and both stamps. |
+| `scripts/tests/test_compare_builds.py` | `Workflow`: `release` and `outside-user-stock` take Linux x86-64's clean release build and no other, the clean build never touches the cache, `linux-release-compare` compares both builds' `refine` and `landin_tests` and is among the jobs `gate` needs, and only `linux-release-cache`, after the comparison, and `board-bundles` save a release object tree. |
 | `scripts/tests/test_host_determinism.py` | `Workflows`: the `build-modes` matrix's jobs are every shard of every mode target, numbered from one and dividing by their own count, and `determinism.yml`'s parts emit every target once on each host; `BuildModes`: the shards together are every request once. |
 | `environments/cortex-m/test.py` | the `cortex-m` job's `part` matrix is the runner's parts, and it passes `--part`. |
 | `scripts/tests/test_rig_runner_hook.py` | nothing of the jobs: it passes the workflow's path to the rig runner's hook. |

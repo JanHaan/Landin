@@ -6,8 +6,10 @@
 #  Verification lanes have separate verdicts.  Debug and release build jobs
 #  supply artifacts to their same-host lanes (Linux arm64's release lane
 #  builds its own); consumers check the source and toolchain manifests
-#  before use.  A compile error surfaces in the build job, and `gate` needs
-#  every job so any failure fails the gate.
+#  before use.  Linux x86-64's release executables are built twice, from
+#  clean and over a cached object tree, and must be the same files (see
+#  linux-release-build).  A compile error surfaces in the build job, and
+#  `gate` needs every job so any failure fails the gate.
 #
 #  Linux and Darwin jobs run on GitHub-hosted images, the same for every
 #  event: the registered runners took 22 to 24 minutes for gates the hosted
@@ -109,6 +111,7 @@ jobs:
             freebsd-arm64-runtime-1 freebsd-arm64-runtime-2 \
             freebsd-arm64-debugger freebsd-arm64-abi build-modes-1 build-modes-2 \
             build-modes-3 rv64-qemu-1 rv64-qemu-2 outside-user-stock \
+            linux-release-clean linux-release-compare \
             'determinism / manifest (x86_64-linux 1)' \
             'determinism / manifest (x86_64-linux 2)' \
             'determinism / manifest (aarch64-linux 1)' \
@@ -314,8 +317,27 @@ jobs:
           --refine "$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
           --out "$RUNNER_TEMP/fuzz"
 
-  #  Compile the release executables once on Linux for the corpus,
-  #  build-modes, Cortex-M and scaling lanes.  The archive preserves executable permissions.
+  #  The Linux x86-64 release executables are built twice.  This job
+  #  builds them over the object tree an earlier run left in the cache,
+  #  recompiling by checksum only what changed (scripts/dev-build.sh), and
+  #  its archive is the compiler the lanes below take.  linux-release-clean
+  #  builds them from clean beside it, for the jobs whose claim is about
+  #  the built executable itself, and linux-release-compare requires the two
+  #  builds' executables to be the same files, byte for byte; `gate` needs
+  #  all three, so no lane's verdict counts on executables the clean build
+  #  did not also produce.  With no usable cache entry this is a clean
+  #  build, as long as linux-release-clean takes.
+  #
+  #  The cache holds the build tree without bin/ and link/: the objects,
+  #  the library and the manifests.  It is restored from the newest entry
+  #  of this branch, or of main, for the same runner image, whose headers
+  #  the C adapters compile against, and the same toolchain pins; build.sh
+  #  still rebuilds from clean when the source inventory, a project file,
+  #  the switches or the toolchain differ from what the restored tree
+  #  records.  A push saves this run's tree for the next one
+  #  once the comparison has passed (linux-release-cache), and board-bundles
+  #  saves main's clean tree; a pull request's entry could serve no other
+  #  ref, so it saves none.
   linux-release-build:
     needs: inputs
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
@@ -323,14 +345,33 @@ jobs:
     timeout-minutes: 30
     env:
       LANDIN_BUILD_MODE: release
+    outputs:
+      key: ${{ steps.objects.outputs.key }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
-      - name: Build release executables
-        run: ./scripts/build.sh -j4
+      - name: Name the cache entry by runner image and toolchain pins
+        id: objects
+        run: |
+          set -eu
+          prefix="linux-amd64-release-objects-$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}-"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/linux-amd64/release
+            !compiler/ada/build/linux-amd64/release/bin
+            !compiler/ada/build/linux-amd64/release/link
+          key: ${{ steps.objects.outputs.key }}
+          restore-keys: ${{ steps.objects.outputs.prefix }}
+
+      - name: Build release executables over the restored objects
+        run: ./scripts/dev-build.sh -j4
 
       - name: Package release executables and both build manifests
         run: >-
@@ -343,13 +384,121 @@ jobs:
           path: ${{ runner.temp }}/linux-release.tar.gz
           retention-days: 1
 
+      #  The tree for the next run, which linux-release-cache saves only
+      #  once linux-release-compare has passed.
+      - name: Package the objects, without the executables
+        if: github.event_name == 'push'
+        run: >-
+          tar -cf "$RUNNER_TEMP/linux-release-objects.tar"
+          --exclude=./bin --exclude=./link
+          -C compiler/ada/build/linux-amd64/release .
+
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-release-objects
+          path: ${{ runner.temp }}/linux-release-objects.tar
+          retention-days: 1
+
+  #  The same executables from clean, which never sees the cache: the
+  #  compiler the release and outside-user-stock jobs test and package,
+  #  and the one linux-release-compare holds the cached build to.
+  linux-release-clean:
+    needs: inputs
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - name: Build release executables from clean
+        run: ./scripts/build.sh -j4
+
+      - name: Package release executables and both build manifests
+        run: >-
+          tar -czf "$RUNNER_TEMP/linux-release-clean.tar.gz"
+          -C compiler/ada/build/linux-amd64/release bin source-manifest.txt tests-manifest.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-release-clean
+          path: ${{ runner.temp }}/linux-release-clean.tar.gz
+          retention-days: 1
+
+  #  The cached build's executables must be the clean build's, byte for byte,
+  #  and record the same inputs (scripts/compare_builds.py); the report
+  #  says what differs when they are not.
+  linux-release-compare:
+    needs: [inputs, linux-release-build, linux-release-clean]
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release-clean
+          path: ${{ runner.temp }}/linux-release-clean
+
+      - name: The cached build is the clean build
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/cached" "$RUNNER_TEMP/clean"
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" -C "$RUNNER_TEMP/cached"
+          tar -xzf "$RUNNER_TEMP/linux-release-clean/linux-release-clean.tar.gz" -C "$RUNNER_TEMP/clean"
+          python3 scripts/compare_builds.py "$RUNNER_TEMP/clean" "$RUNNER_TEMP/cached" \
+            refine landin_tests
+
+  #  A push's object tree goes to the cache only once its build has been
+  #  shown to be the clean build, so no entry is the tree of a build that
+  #  differed.  `gate` does not need this job: a pull request runs none,
+  #  and a cache that could not be written costs the next run time alone.
+  linux-release-cache:
+    needs: [inputs, linux-release-build, linux-release-compare]
+    if: >-
+      github.event_name == 'push' && needs.inputs.outputs.software == 'true'
+      && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release-objects
+          path: ${{ runner.temp }}/linux-release-objects
+
+      - name: Unpack the object tree where linux-release-build restores it
+        run: |
+          set -eu
+          mkdir -p compiler/ada/build/linux-amd64/release
+          tar -xf "$RUNNER_TEMP/linux-release-objects/linux-release-objects.tar" \
+            -C compiler/ada/build/linux-amd64/release
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/linux-amd64/release
+            !compiler/ada/build/linux-amd64/release/bin
+            !compiler/ada/build/linux-amd64/release/link
+          key: ${{ needs.linux-release-build.outputs.key }}
+
   #  The same corpus with the release compiler, which is the one people run,
   #  and the lanes that measure or debug what it emits: object quality and
   #  the GDB sessions.  Release only, because the debug compiler's checks
   #  make those five times slower and add no coverage of their own.
   #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
   release:
-    needs: [inputs, linux-release-build]
+    needs: [inputs, linux-release-clean]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -364,13 +513,13 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: linux-release
-          path: ${{ runner.temp }}/linux-release
+          name: linux-release-clean
+          path: ${{ runner.temp }}/linux-release-clean
 
       - name: Restore and verify release executables
         run: |
           mkdir -p compiler/ada/build/linux-amd64/release
-          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
+          tar -xzf "$RUNNER_TEMP/linux-release-clean/linux-release-clean.tar.gz" \
             -C compiler/ada/build/linux-amd64/release
           ./scripts/build.sh -q
 
@@ -450,7 +599,7 @@ jobs:
   #  job refuses to run if one is reachable, since then it would prove
   #  nothing a stock system can do.
   outside-user-stock:
-    needs: [inputs, linux-release-build]
+    needs: [inputs, linux-release-clean]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -459,8 +608,8 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: linux-release
-          path: ${{ runner.temp }}/linux-release
+          name: linux-release-clean
+          path: ${{ runner.temp }}/linux-release-clean
 
       - name: The distribution's compiler and no other
         run: |
@@ -487,7 +636,7 @@ jobs:
           outside="$RUNNER_TEMP/outside"
           rm -rf "$outside"
           mkdir -p "$outside/release" "$outside/prefix"
-          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" -C "$outside/release"
+          tar -xzf "$RUNNER_TEMP/linux-release-clean/linux-release-clean.tar.gz" -C "$outside/release"
           ./scripts/package.sh --debug "$outside/landin-debug.tar.gz" "$outside/release/bin/refine" "$outside/landin.tar.gz"
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           PATH=/usr/bin:/bin python3 scripts/outside_user.py --stock \
@@ -1802,6 +1951,25 @@ jobs:
           include-hidden-files: true
           retention-days: 14
 
+      #  On main this clean build's objects also go to the cache, as a
+      #  linux-release-build would save them, so that the first run on a new
+      #  branch, which reads its own entries and main's, starts from main.
+      - name: Name the cache entry by runner image and toolchain pins
+        if: github.ref == 'refs/heads/main'
+        id: objects
+        run: |
+          set -eu
+          echo "key=linux-amd64-release-objects-$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}-boards" >> "$GITHUB_OUTPUT"
+
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/linux-amd64/release
+            !compiler/ada/build/linux-amd64/release/bin
+            !compiler/ada/build/linux-amd64/release/link
+          key: ${{ steps.objects.outputs.key }}
+
   #  One leg per port on the rig's one runner, one at a time; each leg is
   #  self-contained, RAM then boot, so legs of two runs may interleave.
   #  The checkout is exactly this commit, sparse to the bundle's source
@@ -1927,7 +2095,8 @@ jobs:
   gate:
     if: always()
     needs: [inputs, documents, scripts, linux-debug-build, compiler,
-            compiler-checks, linux-release-build, release,
+            compiler-checks, linux-release-build, linux-release-clean,
+            linux-release-compare, release,
             outside-user-stock, build-modes,
             bindings, editor-grammar, flake, cortex-m, xtensa, scaling, darwin-debug-build,
             darwin-release-build, darwin-host, darwin-host-release,
