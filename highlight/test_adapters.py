@@ -179,6 +179,10 @@ def scanner_smoke(source: str) -> None:
     assert not any(kind == "k" and text == "through" and index + 1 < len(tokens)
                    and tokens[index + 1][1] == ":"
                    for index, (kind, text) in enumerate(tokens))
+    assert has("k", "held")
+    assert not any(kind == "k" and text == "held" and index + 1 < len(tokens)
+                   and tokens[index + 1][1] in (":", ")", ".")
+                   for index, (kind, text) in enumerate(tokens))
     assert has("n", "0x2a")
 
 
@@ -365,6 +369,83 @@ def contextual_through_smoke(grammar: dict[str, object], emacs: str,
     assert any(token in Name.Attribute and text == "services" for token, text in tokens)
 
 
+#  A named return's `held` before its source (D1369), and `held` as the
+#  ordinary name the library and the corpus already use it as.
+HELD_SOURCES = [
+    "-> (result: item from held value) ! mem.out_of_bounds =",
+    "-> (r: ptr u8 from a, held b)",
+    "-> (r: item from held held, s: u8) =",
+    "            -> (result: entry(key, item) from held value,",
+]
+HELD_NAMES = [
+    "-> (r: ptr u8 from held)",
+    "-> (r: ptr u8 from held, other) =",
+    "attempt: (host: events.host, at: net.address, inout held: kept)",
+    "    held.files[held.count] = made",
+    "    grown = ends <= where.held or extend_mapping(where, ends)",
+    "    return when text.length(line) <> held",
+    "    for at in usize(0)..<held + 5 do",
+    "held: (other: items) -> none =",
+    "end held",
+    "    x := f(held)",
+]
+
+
+def contextual_held_smoke(grammar: dict[str, object], emacs: str,
+                          kate: ET.ElementTree) -> None:
+    """`held` is a keyword only before a source of a named return.
+
+    Everywhere else it is a name: the library and the corpus have locals,
+    parameters and fields called `held`, and a named return may still say
+    `from held` of a parameter of that name.  Nano and Notepad++ have no
+    look-ahead and colour it as they colour `is`.
+    """
+    assert "held" in POSITIONAL_KEYWORDS and "held" not in KEYWORDS
+    for line in HELD_SOURCES:
+        scanned = list(Scanner().scan(line))
+        assert ("k", "held") in scanned, scanned
+    for line in HELD_NAMES:
+        scanned = list(Scanner().scan(line))
+        assert ("k", "held") not in scanned, scanned
+
+    (pattern,) = [entry["match"] for entry in grammar["patterns"]
+                  if "held" in entry.get("match", "")]
+    for line in HELD_SOURCES:
+        assert re.search(pattern, line), f"TextMate misses {line!r}"
+    for line in HELD_NAMES:
+        assert not re.search(pattern, line), f"TextMate colours {line!r}"
+
+    (rule,) = [rule for rule in kate.iter("RegExpr")
+               if "held" in rule.attrib["String"]]
+    assert rule.attrib["attribute"] == "Keyword"
+    for line in HELD_SOURCES:
+        assert re.search(rule.attrib["String"], line), f"Kate misses {line!r}"
+    for line in HELD_NAMES:
+        assert not re.search(rule.attrib["String"], line), f"Kate colours {line!r}"
+
+    keywords = re.search(r"\(defconst landin-mode-keywords\s+'\(([^)]*)\)\)",
+                         emacs, re.S)
+    assert keywords and '"held"' not in keywords.group(1), (
+        "Emacs colours every held as a keyword")
+    assert '"\\\\_<\\\\(held\\\\)' in emacs, "Emacs has no rule for held"
+    vim = (ROOT / "vim/syntax/landin.vim").read_text(encoding="utf-8")
+    assert r"syntax match landinKeyword /\.\@<!\<held\ze" in vim
+    assert not re.search(r"syntax keyword landinKeyword .*\bheld\b", vim)
+    for relative in ("nano/landin.nanorc", "notepad-plus-plus/Landin.xml"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        assert re.search(r"\bheld\b", text), f"{relative} omits held"
+
+    try:
+        from pygments.token import Keyword
+        from landin_pygments import LandinLexer
+    except ModuleNotFoundError:
+        return
+    tokens = list(LandinLexer().get_tokens(
+        "get: (held: list) -> (r: item from held held, s: item from held) =\n"
+        "    r = held.val\nend get\n"))
+    assert sum(token in Keyword and text == "held" for token, text in tokens) == 1
+
+
 def pygments_smoke(source: str) -> None:
     try:
         from pygments.token import Comment, Keyword, Name, Number, String
@@ -501,6 +582,7 @@ def main(argv: list[str]) -> int:
         check_grammar_revision(helix, zed, emacs)
     withdrawn_word_smoke(grammar, emacs)
     contextual_through_smoke(grammar, emacs, kate)
+    contextual_held_smoke(grammar, emacs, kate)
     for word in KEYWORDS | TYPES | CONSTANTS:
         assert f'"{word}"' in emacs, f"Emacs vocabulary omits {word}"
     modules = re.search(

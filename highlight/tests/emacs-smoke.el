@@ -26,6 +26,9 @@
 (landin-test-face-at "board is fibre.scheduler through" 'font-lock-keyword-face)
 (landin-test-face-at "\nthrough" 'font-lock-function-name-face)
 (landin-test-face-at "end through" nil)
+(landin-test-face-at "from held" 'font-lock-keyword-face)
+(landin-test-face-at "spare: item from held" nil)
+(landin-test-face-at "[held" nil)
 
 (dolist (width '(3 4 5))
   (with-temp-buffer

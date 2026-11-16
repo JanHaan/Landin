@@ -21,3 +21,7 @@ board is fibre.scheduler through runs
 through: (flag: bool) -> (code: i32) =
     code = through_value(flag)
 end through
+
+first: (in value: items, held: items) -> (result: item from held value, spare: item from held) =
+    result = value.items[held.count]
+end first

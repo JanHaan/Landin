@@ -28,6 +28,8 @@
 (landin-test-treesit-face "i32" 'font-lock-builtin-face)
 (landin-test-treesit-face "through services" 'font-lock-keyword-face)
 (landin-test-treesit-face "through: (flag" 'font-lock-function-name-face)
+(landin-test-treesit-face "held value" 'font-lock-keyword-face)
+(landin-test-treesit-face "held: (other" 'font-lock-function-name-face)
 (with-temp-buffer
   (insert "sample: () -> () =\n    raw: utf8 = \"\"\"raw text\"\"\"\nend sample\n")
   (landin-ts-mode)

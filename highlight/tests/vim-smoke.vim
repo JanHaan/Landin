@@ -26,6 +26,9 @@ call s:AssertGroup('through runs', 'landinKeyword')
 call s:AssertGroup('\<runs$', 'landinMember')
 call s:AssertGroup('^through:', '')
 call s:AssertGroup('end \zsthrough', '')
+call s:AssertGroup('from \zsheld value', 'landinKeyword')
+call s:AssertGroup('from \zsheld)', '')
+call s:AssertGroup('\[\zsheld\.', '')
 
 enew
 setlocal shiftwidth=4 expandtab

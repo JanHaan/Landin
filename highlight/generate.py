@@ -43,6 +43,10 @@ def textmate() -> str:
                     "2": {"name": "variable.other.member.landin"},
                 },
             },
+            {
+                "match": r"(?<!\.)\b(held)(?=\s+[a-z_][a-z0-9_]*\s*[,)])",
+                "captures": {"1": {"name": "keyword.control.landin"}},
+            },
             {"match": keyword, "name": "keyword.control.landin"},
             {
                 "match": r"\b([a-z_][a-z0-9_]*)(?=\s*:\s*(?:type|atom)\b)",
@@ -131,6 +135,7 @@ def vim() -> str:
             declarations("landinConstant", CONSTANTS),
             declarations("landinBuiltinModule", BUILTIN_MODULES),
             r"syntax match landinKeyword /\<through\ze\s\+[a-z_][a-z0-9_]*\s*\%(--.*\)\?$/",
+            r"syntax match landinKeyword /\.\@<!\<held\ze\s\+[a-z_][a-z0-9_]*\s*[,)]/",
             r"syntax match landinWidthType /\<[ui]\%(0\|[1-9][0-9]\{0,2}\)\>/",
             r"syntax match landinFunction /\<[a-z_][a-z0-9_]*\ze\s*(/",
             r"syntax match landinMember /\.\zs[a-z_][a-z0-9_]*/",
@@ -199,6 +204,7 @@ def kate() -> str:
         <StringDetect String="--(" attribute="Comment" context="Block Comment"/>
         <Detect2Chars char="-" char1="-" attribute="Comment" context="Line Comment"/>
         <RegExpr String="\\bthrough(?=\\s+[a-z_][a-z0-9_]*\\s*(--.*)?$)" attribute="Keyword"/>
+        <RegExpr String="(?&lt;!\\.)\\bheld(?=\\s+[a-z_][a-z0-9_]*\\s*[,)])" attribute="Keyword"/>
         <keyword String="keywords" attribute="Keyword"/>
         <keyword String="types" attribute="Data Type"/>
         <keyword String="constants" attribute="Constant"/>
