@@ -460,6 +460,10 @@
                                 {
                                   "type": "STRING",
                                   "value": "through"
+                                },
+                                {
+                                  "type": "STRING",
+                                  "value": "held"
                                 }
                               ]
                             },
@@ -1013,6 +1017,15 @@
           "content": {
             "type": "STRING",
             "value": "through"
+          },
+          "named": true,
+          "value": "identifier"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "STRING",
+            "value": "held"
           },
           "named": true,
           "value": "identifier"
@@ -1739,6 +1752,10 @@
                       {
                         "type": "STRING",
                         "value": "through"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "held"
                       }
                     ]
                   },
@@ -2596,6 +2613,10 @@
                       {
                         "type": "STRING",
                         "value": "through"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "held"
                       }
                     ]
                   },
@@ -2770,6 +2791,10 @@
                         {
                           "type": "STRING",
                           "value": "through"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "held"
                         }
                       ]
                     },
@@ -3441,7 +3466,7 @@
                   "members": [
                     {
                       "type": "SYMBOL",
-                      "name": "identifier"
+                      "name": "_return_source"
                     },
                     {
                       "type": "REPEAT",
@@ -3454,7 +3479,7 @@
                           },
                           {
                             "type": "SYMBOL",
-                            "name": "identifier"
+                            "name": "_return_source"
                           }
                         ]
                       }
@@ -3467,6 +3492,45 @@
               "type": "BLANK"
             }
           ]
+        }
+      ]
+    },
+    "_return_source": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "identifier"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "STRING",
+            "value": "held"
+          },
+          "named": true,
+          "value": "identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "held_source"
+        }
+      ]
+    },
+    "held_source": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "held"
+        },
+        {
+          "type": "FIELD",
+          "name": "source",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
         }
       ]
     },
@@ -3740,6 +3804,10 @@
                         {
                           "type": "STRING",
                           "value": "through"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "held"
                         }
                       ]
                     },
@@ -3815,6 +3883,10 @@
                         {
                           "type": "STRING",
                           "value": "through"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "held"
                         }
                       ]
                     },
@@ -3946,6 +4018,10 @@
                         {
                           "type": "STRING",
                           "value": "through"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "held"
                         }
                       ]
                     },
@@ -4062,6 +4138,10 @@
                         {
                           "type": "STRING",
                           "value": "through"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "held"
                         }
                       ]
                     },
@@ -4201,6 +4281,10 @@
                         {
                           "type": "STRING",
                           "value": "through"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "held"
                         }
                       ]
                     },
@@ -4325,6 +4409,10 @@
                         {
                           "type": "STRING",
                           "value": "through"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "held"
                         }
                       ]
                     },
@@ -4477,6 +4565,10 @@
                           {
                             "type": "STRING",
                             "value": "through"
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "held"
                           }
                         ]
                       },
@@ -4595,6 +4687,10 @@
                           {
                             "type": "STRING",
                             "value": "through"
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "held"
                           }
                         ]
                       },
@@ -5501,6 +5597,10 @@
                       {
                         "type": "STRING",
                         "value": "through"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "held"
                       }
                     ]
                   },
@@ -5572,6 +5672,10 @@
                       {
                         "type": "STRING",
                         "value": "through"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "held"
                       }
                     ]
                   },
@@ -6975,6 +7079,10 @@
                     {
                       "type": "STRING",
                       "value": "through"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "held"
                     }
                   ]
                 },

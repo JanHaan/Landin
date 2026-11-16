@@ -63,15 +63,22 @@ CONSTANTS = {"true", "false", "zeroed", "none", "noreturn"}
 
 #  Contextual words that are names everywhere but one position, where a
 #  line can still find them: `through` and the field after it end a
-#  conformance whose provider supplies the entries its list leaves out.
-#  Everywhere else `through` is the name of a local, a function or a field,
-#  and reads as one.  A rendering with no look-ahead, Nano's and Notepad++'s,
-#  cannot tell the two apart and colours the word as it colours `is`.
-POSITIONAL_KEYWORDS = {"through"}
+#  conformance whose provider supplies the entries its list leaves out, and
+#  `held` before a source of a named return's `from` list says the result is
+#  what that parameter holds (D1369).  Everywhere else each is the name of a
+#  local, a parameter, a function or a field, and reads as one.  A rendering
+#  with no look-ahead, Nano's and Notepad++'s, cannot tell the two apart and
+#  colours the word as it colours `is`.
+POSITIONAL_KEYWORDS = {"through", "held"}
 
 # `through services` ending a line, perhaps before a comment: the name is
 # group 1, the field whose provider supplies the remaining entries.
 CONFORMANCE_FIELD = re.compile(r"\s+([A-Za-z_]\w*)\s*(?:--.*)?$")
+
+# `held value` followed by a comma or the closing parenthesis of the
+# returns: the only place a name directly follows `held`.  `from held` and
+# `from held, other` name a parameter called held, and no name follows it.
+HELD_SOURCE = re.compile(r"\s+[A-Za-z_]\w*\s*[,)]")
 
 # the three reserved toolchain modules of [1560]
 BUILTIN_MODULES = {"compiler", "assembler", "linker"}
@@ -159,6 +166,9 @@ class Scanner:
         if (CONFORMANCE_FIELD.match(" " + text[start:])
                 and re.search(r"(?<![\w.])through\s+$", text[:start])):
             return "s"
+        if (word == "held" and HELD_SOURCE.match(text, end)
+                and not text[:start].rstrip().endswith(".")):
+            return "k"
         if word in TYPES or WIDTH.match(word):
             return "t"
         if word in CONSTANTS:

@@ -32,7 +32,7 @@ const PREC = {
 // declaration, a label or a parameter could begin, read as the name it is
 // everywhere else.
 function contextualName($) {
-  return alias(choice('distinct', 'link', 'option', 'as', 'caller', 'through'), $.identifier);
+  return alias(choice('distinct', 'link', 'option', 'as', 'caller', 'through', 'held'), $.identifier);
 }
 
 // A statement's label, as it is written, left and closed, which may be a
@@ -236,6 +236,7 @@ module.exports = grammar({
       alias('distinct', $.identifier),
       alias('caller', $.identifier),
       alias('through', $.identifier),
+      alias('held', $.identifier),
     ),
 
     // D233: several names may share one binding, with one written type.
@@ -478,8 +479,17 @@ module.exports = grammar({
     // instead starts the next named return rather than extending `from`.
     named_return: $ => seq(
       field('name', $.identifier_list), ':', field('type', $._declared_type),
-      optional(seq('from', commaSep1($.identifier))),
+      optional(seq('from', commaSep1($._return_source))),
     ),
+    // D1369: `held p` says the result is what `p` holds rather than a view
+    // of it.  `held` is the word only when a name follows it, so in
+    // `from held` and `from held, other` it is the parameter's name.
+    _return_source: $ => choice(
+      $.identifier,
+      alias('held', $.identifier),
+      $.held_source,
+    ),
+    held_source: $ => seq('held', field('source', $.identifier)),
     errors: $ => prec.right(seq(
       '!',
       choice('...', seq($.declaration_reference, repeat(seq('|', $.declaration_reference)))),

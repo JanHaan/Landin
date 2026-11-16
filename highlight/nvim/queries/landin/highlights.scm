@@ -51,10 +51,10 @@
 [
   "addr" "alignof" "any" "as" "atom" "begin" "break" "complete" "concept"
   "continue" "dec" "defer" "do" "else" "elsif" "end" "escaping" "extern" "fail"
-  "fixed" "for" "from" "if" "import" "in" "inc" "inout" "into" "is" "loop"
-  "match" "mut" "none" "option" "ptr" "public" "return" "sink" "sizeof" "struct"
-  "then" "through" "try" "type" "unchecked" "undo" "variant" "when" "while"
-  "with"
+  "fixed" "for" "from" "held" "if" "import" "in" "inc" "inout" "into" "is"
+  "loop" "match" "mut" "none" "option" "ptr" "public" "return" "sink" "sizeof"
+  "struct" "then" "through" "try" "type" "unchecked" "undo" "variant" "when"
+  "while" "with"
 ] @keyword
 
 (measurement_expression

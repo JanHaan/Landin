@@ -1,0 +1,287 @@
+==================
+A result is what its source holds
+==================
+
+get: (in value: list, at: usize) -> (result: item from held value) =
+    result = value
+end get
+pair: (a: list, b: list) -> (r: item from a, held b) =
+    r = a
+end pair
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (parameter_convention)
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier)))
+          (parameter
+            (identifier_list
+              (identifier))
+            (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))
+            (held_source
+              (identifier)))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
+      (identifier)))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier)))
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))
+            (identifier)
+            (held_source
+              (identifier)))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
+      (identifier))))
+
+==================
+Held names a parameter, a source, a binding, a field and an end
+==================
+
+named: (held: list) -> (r: item from held) =
+    r = held.val
+end named
+both: (held: list, other: list) -> (r: item from held, other) =
+    held := 1
+end both
+twice: (held: list) -> (r: item from held held, s: u8) =
+    r = held(held)
+end twice
+held: (a: list) -> none =
+    a.held = 1
+end held
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))
+            (identifier))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (indexed_expression
+                                  (identifier))
+                                (member_selection
+                                  (identifier)))))))))))))))
+      (identifier)))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier)))
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))
+            (identifier)
+            (identifier))))
+      (block
+        (binding
+          (identifier)
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (literal
+                                (integer_literal))))))))))))))
+      (identifier)))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))
+            (held_source
+              (identifier)))
+          (named_return
+            (identifier_list
+              (identifier))
+            (scalar_type))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (call_expression
+                                (indexed_expression
+                                  (identifier))
+                                (arguments
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (indexed_expression
+                                                        (identifier))))))))))))))))))))))))))
+      (identifier)))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (indexed_expression
+                (identifier))
+              (member_selection
+                (identifier))))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (literal
+                                (integer_literal))))))))))))))
+      (identifier))))

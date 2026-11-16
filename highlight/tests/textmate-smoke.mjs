@@ -41,9 +41,18 @@ const expectations = new Map([
   ["true", "constant.language.landin"],
   ["through runs", "keyword.control.landin"],
   ["runs", "variable.other.member.landin"],
+  ["held value", "keyword.control.landin"],
 ]);
-//  `through` is a keyword only before the field that ends a conformance;
-//  the function of that name stays a name.
+//  `through` is a keyword only before the field that ends a conformance,
+//  and `held` only before a source of a named return (D1369); the function,
+//  the parameter and the binding of those names stay names.  Each needle
+//  is found with the offset of the name within it.
+const nameNeedles = [
+  ["through:", 0],
+  ["end through", 4],
+  ["from held)", 5],
+  ["[held.", 1],
+];
 const names = [];
 const found = new Set();
 let stack = INITIAL;
@@ -58,9 +67,10 @@ for (const line of fs.readFileSync(fixturePath, "utf8").split("\n")) {
     );
     if (token?.scopes.includes(scope)) found.add(needle);
   }
-  for (const column of [line.indexOf("through:"), line.indexOf("end through")]) {
+  for (const [needle, offset] of nameNeedles) {
+    const column = line.indexOf(needle);
     if (column < 0) continue;
-    const at = line.startsWith("end", column) ? column + 4 : column;
+    const at = column + offset;
     const token = result.tokens.find(
       (candidate) => candidate.startIndex <= at && candidate.endIndex > at,
     );
@@ -68,7 +78,7 @@ for (const line of fs.readFileSync(fixturePath, "utf8").split("\n")) {
   }
 }
 if (names.length) {
-  throw new Error(`TextMate colours the name through as a keyword in: ${names.join("; ")}`);
+  throw new Error(`TextMate colours the name through or held as a keyword in: ${names.join("; ")}`);
 }
 
 const missing = [...expectations.keys()].filter((needle) => !found.has(needle));

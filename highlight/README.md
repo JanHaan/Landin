@@ -117,8 +117,13 @@ What it cannot do is tell the `set` of `[0410]` from a variable called
 coloured wrongly. A regex cannot fix that. `through` is narrower: it is a
 keyword only before the field name that ends a conformance, as in
 `host is io.environment through services`, and a name everywhere else.
-The renderings that can look ahead colour it there alone; Nano and
-Notepad++ cannot, and colour it wherever it stands, as they colour `is`.
+`held` is the same kind of word: it is a keyword only before a source of
+a named return's `from` list, as in `-> (result: item from held value)`,
+and a name everywhere else, including `from held` of a parameter called
+held. The renderings that can look ahead colour each word there alone,
+`held` where a name and then a comma or a closing parenthesis follow it;
+Nano and Notepad++ cannot, and colour both wherever they stand, as they
+colour `is`.
 The tree-sitter grammar handles the enabled structural surface, including contextual `lenof` and `of`, the
 `layout(c)`, `layout(optimal)`, `layout(packed, u32)`, packed positions,
 encoded unions and `link(symbol: ...)` annotations, and

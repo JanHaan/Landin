@@ -56,6 +56,16 @@ through: (flag: bool) -> (code: i32) =
     code = add(i32(flag), 0)
 end through
 
+-- D1369: the result is what its source holds; `held` is the word only before
+-- a name, and remains an ordinary name everywhere else.
+first: (in value: items, held: items) -> (result: item from held value, spare: item from held) =
+    result = value
+end first
+
+held: (other: items) -> (result: item from other, held other) =
+    result = other
+end held
+
 -- D228 packed image surface; raw bits are validated at field extraction.
 packed_idle: atom
 packed_busy: atom

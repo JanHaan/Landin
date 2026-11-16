@@ -8,11 +8,12 @@ useful; its C-boundary rules keep `c`, `layout`, `link`, and `symbol` as
 identifiers outside their annotated positions. Where the lexer may offer a
 contextual word as its own token, because a declaration, a label or a
 parameter list could begin there, `distinct`, `link`, `option`, `as`,
-`caller` and `through` are still read as names: in an expression, as a
+`caller`, `through` and `held` are still read as names: in an expression, as a
 declaration's name, as a statement's label, after `end` and as a field's or
 an argument's label. `through` is a keyword only between a conformance's
 concept or entry list and the field whose provider supplies its other
-entries. The language reserves
+entries, and `held` only before a source in a named return's `from` list,
+so `from held` still names a parameter called held. The language reserves
 only the words [1760] lists. The compiler and normative grammar decide legality.
 
 With the pinned CLI on the path, which `nix develop` puts there:
