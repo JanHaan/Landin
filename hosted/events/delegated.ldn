@@ -1,5 +1,5 @@
 --  What does not wait, handed to the hosted/system handle this provider
---  is built over, which events.ldn's `services` gives (D1363): the
+--  is built over, the handle's `services` field (D1363): the
 --  environment, directories, the rest of the file system and terminals,
 --  entropy and the wall clock.  Each entry is the system's, so a program
 --  over this provider meets the same behaviour, errno and all, as one

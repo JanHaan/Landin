@@ -77,6 +77,38 @@ package body Landin.Stages.Checking.References is
    package Cleanup_Entries is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Cleanup_Entry);
 
+   --  D1371: a field place of a routine's binding, a run of fields
+   --  selected from it, each out of a record held in place.  Parent is
+   --  the place one field shorter, or zero for a field of the binding
+   --  itself; a parent is always numbered before its fields.
+   type Place_Entry is record
+      Root   : Positive := 1;
+      Parent : Natural := 0;
+      Field  : Positive := 1;
+      Name   : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
+      Depth  : Positive := 1;
+      --  Whether the field's type can hold a reference, so that one the
+      --  binding holds into itself may be stored in it.
+      Holds  : Boolean := True;
+   end record;
+
+   package Field_Places is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Place_Entry);
+
+   type Place_Key is record
+      Root, Parent, Field : Natural := 0;
+   end record;
+
+   function "<" (Left, Right : Place_Key) return Boolean
+     is (Left.Root < Right.Root
+         or else (Left.Root = Right.Root
+                  and then (Left.Parent < Right.Parent
+                            or else (Left.Parent = Right.Parent
+                                     and then Left.Field < Right.Field))));
+
+   package Place_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Place_Key, Element_Type => Positive);
+
    --  Where the traversal is: the block being processed, the statement
    --  within it, and the loop whose body that block is, if any.  The
    --  borrow check reads the continuation of a call off this stack.
@@ -245,7 +277,9 @@ package body Landin.Stages.Checking.References is
       --  made, so copying a fact copies an access and facts may share one
       --  list; equality compares what the lists hold, as it compared the
       --  bits.
-      type Local_List is array (Positive range <>) of Local_Id;
+      --  A list holds local numbers, or, in a fact's Parts, the numbers
+      --  of field places (D1371); both are positive and kept apart.
+      type Local_List is array (Positive range <>) of Positive;
       type Derived_Node;
       type Derived_Access is access Derived_Node;
       type Derived_Node (Length : Positive) is record
@@ -301,14 +335,14 @@ package body Landin.Stages.Checking.References is
         is (if Set.List = null then 0 else Set.List.Length);
 
       --  The set's Index'th local in ascending order, 1 .. Count (Set).
-      function Nth (Set : Local_Set; Index : Positive) return Local_Id
+      function Nth (Set : Local_Set; Index : Positive) return Positive
         is (Set.List.Items (Index));
 
       --  The position of the first local of Set not below Local, which
       --  is Count (Set) + 1 when every one is below it.
-      function Place_Of (Set : Local_Set; Local : Local_Id) return Positive;
+      function Place_Of (Set : Local_Set; Local : Positive) return Positive;
 
-      function Place_Of (Set : Local_Set; Local : Local_Id) return Positive
+      function Place_Of (Set : Local_Set; Local : Positive) return Positive
       is
          Low : Positive := 1;
          High : Positive := Count (Set) + 1;
@@ -325,7 +359,7 @@ package body Landin.Stages.Checking.References is
          return Low;
       end Place_Of;
 
-      function Contains (Set : Local_Set; Local : Local_Id) return Boolean
+      function Contains (Set : Local_Set; Local : Positive) return Boolean
         is (Place_Of (Set, Local) <= Count (Set)
             and then Set.List.Items (Place_Of (Set, Local)) = Local);
 
@@ -345,9 +379,9 @@ package body Landin.Stages.Checking.References is
          return Made;
       end Allocated;
 
-      procedure Include (Set : in out Local_Set; Local : Local_Id);
+      procedure Include (Set : in out Local_Set; Local : Positive);
 
-      procedure Include (Set : in out Local_Set; Local : Local_Id) is
+      procedure Include (Set : in out Local_Set; Local : Positive) is
          Length : constant Natural := Count (Set);
          Place : constant Positive := Place_Of (Set, Local);
          Made : Derived_Access;
@@ -366,9 +400,9 @@ package body Landin.Stages.Checking.References is
       end Include;
 
       --  Set loses Local, when it holds it.
-      procedure Exclude (Set : in out Local_Set; Local : Local_Id);
+      procedure Exclude (Set : in out Local_Set; Local : Positive);
 
-      procedure Exclude (Set : in out Local_Set; Local : Local_Id) is
+      procedure Exclude (Set : in out Local_Set; Local : Positive) is
          Length : constant Natural := Count (Set);
          Place : constant Positive := Place_Of (Set, Local);
          Made : Derived_Access;
@@ -538,6 +572,10 @@ package body Landin.Stages.Checking.References is
          --  rest of Derives are locals a reference was only read out of,
          --  which leaves other storage under it.
          Interior   : Local_Set;
+         --  D1371: field places of locals in Derives.  A local with a
+         --  place here is reached only through its places, by Interior's
+         --  view or by a read alike; a local with none is reached whole.
+         Parts      : Local_Set;
          Presence   : Value_Fact := Unknown_Value;
       end record;
 
@@ -546,27 +584,222 @@ package body Landin.Stages.Checking.References is
       --  every local, held once.
       Derived_From : Declaration_Bits := [others => False];
 
-      --  Record that a fact derives from LOCAL.  Every local Derives
-      --  gains is added here, or joined from another fact's.
+      --  D1371: the field places this routine's facts name, numbered as
+      --  they are first met; Place_Numbers finds one by its key.
+      Places : Field_Places.Vector;
+      Place_Numbers : Place_Maps.Map;
+
+      function Place_Root (Place : Positive) return Local_Id
+        is (Places (Place).Root);
+
+      --  The place one field longer than PARENT, of LOCAL, made when it
+      --  is first asked for.
+      function Interned
+        (Local : Local_Id; Parent : Natural; Field : Positive;
+         Name : Landin.Source.Names.Name_Id; Holds : Boolean)
+         return Positive;
+
+      function Interned
+        (Local : Local_Id; Parent : Natural; Field : Positive;
+         Name : Landin.Source.Names.Name_Id; Holds : Boolean)
+         return Positive
+      is
+         Key : constant Place_Key :=
+           (Root => Local, Parent => Parent, Field => Field);
+         Found : constant Place_Maps.Cursor := Place_Numbers.Find (Key);
+      begin
+         if Place_Maps.Has_Element (Found) then
+            return Place_Maps.Element (Found);
+         end if;
+         declare
+            --  Read before the append, which may move the vector.
+            Depth : constant Positive :=
+              (if Parent = 0 then 1 else Places (Parent).Depth + 1);
+         begin
+            Places.Append
+              (Place_Entry'
+                 (Root => Local, Parent => Parent, Field => Field,
+                  Name => Name, Depth => Depth, Holds => Holds));
+         end;
+         Place_Numbers.Insert (Key, Places.Last_Index);
+         return Places.Last_Index;
+      end Interned;
+
+      --  Whether ABOVE is PLACE or a place that holds it.
+      function Holds_Place (Above, Place : Positive) return Boolean;
+
+      function Holds_Place (Above, Place : Positive) return Boolean is
+         Current : Natural := Place;
+      begin
+         while Current /= 0
+           and then Places (Current).Depth > Places (Above).Depth
+         loop
+            Current := Places (Current).Parent;
+         end loop;
+         return Current = Above;
+      end Holds_Place;
+
+      --  Whether two places of one binding share storage: one holds the
+      --  other, or they are the same.
+      function Overlaps (Left, Right : Positive) return Boolean
+        is (Holds_Place (Left, Right) or else Holds_Place (Right, Left));
+
+      --  Whether FACT reaches LOCAL through places alone.
+      function Has_Parts
+        (Fact : Reference_Fact; Local : Local_Id) return Boolean
+        is (for some Index in 1 .. Count (Fact.Parts)
+            => Place_Root (Nth (Fact.Parts, Index)) = Local);
+
+      --  FACT keeps none of LOCAL's places.
+      procedure Remove_Parts
+        (Fact : in out Reference_Fact; Local : Local_Id);
+
+      procedure Remove_Parts
+        (Fact : in out Reference_Fact; Local : Local_Id)
+      is
+         Kept : Natural := 0;
+      begin
+         for Index in 1 .. Count (Fact.Parts) loop
+            if Place_Root (Nth (Fact.Parts, Index)) /= Local then
+               Kept := Kept + 1;
+            end if;
+         end loop;
+         if Kept = Count (Fact.Parts) then
+            return;
+         elsif Kept = 0 then
+            Fact.Parts := (List => null);
+            return;
+         end if;
+         declare
+            Made : constant Derived_Access := Allocated (Kept);
+            Next : Positive := 1;
+         begin
+            for Index in 1 .. Count (Fact.Parts) loop
+               if Place_Root (Nth (Fact.Parts, Index)) /= Local then
+                  Made.Items (Next) := Nth (Fact.Parts, Index);
+                  Next := Next + 1;
+               end if;
+            end loop;
+            Fact.Parts := (List => Made);
+         end;
+      end Remove_Parts;
+
+      --  Record that a fact derives from LOCAL, the whole of it.  Every
+      --  local Derives gains is added here, or joined from another fact's.
       procedure Derive (Fact : in out Reference_Fact; Local : Local_Id);
 
       procedure Derive (Fact : in out Reference_Fact; Local : Local_Id) is
       begin
          Include (Fact.Derives, Local);
+         Remove_Parts (Fact, Local);
          Derived_From (Local) := True;
       end Derive;
 
-      --  Record that a fact may point into LOCAL's storage.
+      --  Record that a fact may point into LOCAL's storage, any of it.
       procedure Derive_Interior
         (Fact : in out Reference_Fact; Local : Local_Id);
 
       procedure Derive_Interior
         (Fact : in out Reference_Fact; Local : Local_Id) is
       begin
-         Include (Fact.Derives, Local);
+         Derive (Fact, Local);
          Include (Fact.Interior, Local);
-         Derived_From (Local) := True;
       end Derive_Interior;
+
+      --  D1371: record that a fact derives from LOCAL at PLACE, one of its
+      --  field places, or the whole of it for zero.  A fact that reaches
+      --  the binding whole already keeps doing so.
+      procedure Derive_Place
+        (Fact : in out Reference_Fact; Local : Local_Id; Place : Natural;
+         Interior : Boolean);
+
+      procedure Derive_Place
+        (Fact : in out Reference_Fact; Local : Local_Id; Place : Natural;
+         Interior : Boolean) is
+      begin
+         if Place = 0 then
+            Derive (Fact, Local);
+         elsif not Contains (Fact.Derives, Local) then
+            Include (Fact.Derives, Local);
+            Include (Fact.Parts, Place);
+            Derived_From (Local) := True;
+         elsif Has_Parts (Fact, Local) then
+            declare
+               Above : Natural := Place;
+            begin
+               while Above /= 0 and then not Contains (Fact.Parts, Above) loop
+                  Above := Places (Above).Parent;
+               end loop;
+               if Above = 0 then
+                  Include (Fact.Parts, Place);
+               end if;
+            end;
+         end if;
+         if Interior then
+            Include (Fact.Interior, Local);
+         end if;
+      end Derive_Place;
+
+      --  D1371: a fact that reaches LOCAL's storage as a whole is reached
+      --  at PLACE alone: the storage of a field selected in place.
+      procedure Narrow
+        (Fact : in out Reference_Fact; Local : Local_Id; Place : Positive);
+
+      procedure Narrow
+        (Fact : in out Reference_Fact; Local : Local_Id; Place : Positive) is
+      begin
+         if Contains (Fact.Derives, Local) then
+            Remove_Parts (Fact, Local);
+            Include (Fact.Parts, Place);
+         end if;
+      end Narrow;
+
+      --  The fact no longer derives from LOCAL at all.
+      procedure Drop_Local (Fact : in out Reference_Fact; Local : Local_Id);
+
+      procedure Drop_Local (Fact : in out Reference_Fact; Local : Local_Id)
+      is
+      begin
+         Exclude (Fact.Derives, Local);
+         Exclude (Fact.Interior, Local);
+         Remove_Parts (Fact, Local);
+      end Drop_Local;
+
+      --  D1371: how FACT, which derives from LOCAL, reaches LOCAL's storage
+      --  at PLACE, a field place or zero for the whole binding: -1 when
+      --  its places all lie apart from PLACE, 0 when it reaches the whole
+      --  binding, or else the first of its places that overlaps PLACE.
+      function Lent_Part
+        (Fact : Reference_Fact; Local : Local_Id; Place : Natural)
+         return Integer;
+
+      function Lent_Part
+        (Fact : Reference_Fact; Local : Local_Id; Place : Natural)
+         return Integer is
+      begin
+         for Index in 1 .. Count (Fact.Parts) loop
+            declare
+               Part : constant Positive := Nth (Fact.Parts, Index);
+            begin
+               if Place_Root (Part) = Local
+                 and then (Place = 0 or else Overlaps (Part, Place))
+               then
+                  return Part;
+               end if;
+            end;
+         end loop;
+         return (if Has_Parts (Fact, Local) then -1 else 0);
+      end Lent_Part;
+
+      --  Whether FACT, which derives from LOCAL, reaches a part of it that
+      --  can hold a reference: the whole binding, or a field whose type
+      --  can.  A reference LOCAL holds into itself may be stored there.
+      function Reaches_Holding
+        (Fact : Reference_Fact; Local : Local_Id) return Boolean
+        is (not Has_Parts (Fact, Local)
+            or else (for some Index in 1 .. Count (Fact.Parts)
+                     => Place_Root (Nth (Fact.Parts, Index)) = Local
+                        and then Places (Nth (Fact.Parts, Index)).Holds));
 
       No_Reference : constant Reference_Fact := (others => <>);
 
@@ -660,6 +893,39 @@ package body Landin.Stages.Checking.References is
                Into_Fact.Untracked := False;
             end if;
          end loop;
+         --  D1371: a local stays reached through its places alone where
+         --  every alternative that reaches it does so.
+         if Into_Fact.Parts /= Other.Parts then
+            declare
+               function Filtered (Parts : Local_Set; Against : Reference_Fact)
+                 return Local_Set;
+
+               function Filtered (Parts : Local_Set; Against : Reference_Fact)
+                 return Local_Set
+               is
+                  Result : Local_Set := Parts;
+               begin
+                  for Index in 1 .. Count (Parts) loop
+                     declare
+                        Root : constant Local_Id :=
+                          Place_Root (Nth (Parts, Index));
+                     begin
+                        if Contains (Against.Derives, Root)
+                          and then not Has_Parts (Against, Root)
+                        then
+                           Exclude (Result, Nth (Parts, Index));
+                        end if;
+                     end;
+                  end loop;
+                  return Result;
+               end Filtered;
+
+               Mine : Local_Set := Filtered (Into_Fact.Parts, Other);
+            begin
+               Union (Mine, Filtered (Other.Parts, Into_Fact));
+               Into_Fact.Parts := Mine;
+            end;
+         end if;
          Union (Into_Fact.Derives, Other.Derives);
          Union (Into_Fact.Interior, Other.Interior);
       end Join;
@@ -1031,8 +1297,7 @@ package body Landin.Stages.Checking.References is
 
          procedure Drop (Fact : in out Reference_Fact) is
          begin
-            Exclude (Fact.Derives, Local);
-            Exclude (Fact.Interior, Local);
+            Drop_Local (Fact, Local);
          end Drop;
       begin
          if not Derived_From (Local) then
@@ -1270,6 +1535,10 @@ package body Landin.Stages.Checking.References is
       function Declaration_At
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id;
 
+      function Field_Place (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Natural;
+      function Exact_Field_Place (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Natural;
       function Root_Declaration
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id;
 
@@ -1388,6 +1657,8 @@ package body Landin.Stages.Checking.References is
       --  `escaping into` argument kept there.
       procedure Keep_Into_Holders
         (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
+      procedure Note_Self_Stores
+        (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
 
       procedure Check_Escaping_Arguments
         (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
@@ -1417,7 +1688,8 @@ package body Landin.Stages.Checking.References is
       --  Whether a view may point into ID's storage, or into storage a
       --  call's `from` lent it out of ID.
       function Views
-        (Fact : Reference_Fact; Id : Res.Declaration_Id) return Boolean;
+        (Fact : Reference_Fact; Id : Res.Declaration_Id; Place : Natural)
+         return Boolean;
 
       --  Whether VIEW is an address or a range taken of a field of the
       --  binding LENT is in other than the field LENT is, so that nothing
@@ -1517,6 +1789,87 @@ package body Landin.Stages.Checking.References is
          end if;
          return Res.No_Declaration;
       end Root_Declaration;
+
+      --  D1371: the field place NODE names, of the local it is rooted in:
+      --  the fields selected from that binding, each out of a record held
+      --  in place, up to the first element, range or reference read
+      --  through, which stands for the field it is taken of.  Zero when
+      --  no field is selected that way, the whole binding or none.
+      procedure Find_Place
+        (Tree : Syn.Tree; Node : Syn.Node_Id;
+         Place : out Natural; Exact : out Boolean);
+
+      function Field_Place (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Natural
+      is
+         Place : Natural;
+         Exact : Boolean;
+      begin
+         Find_Place (Tree, Node, Place, Exact);
+         return Place;
+      end Field_Place;
+
+      --  The field place NODE names when it is selected by fields alone,
+      --  so that its storage is that place's; zero otherwise.
+      function Exact_Field_Place (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Natural
+      is
+         Place : Natural;
+         Exact : Boolean;
+      begin
+         Find_Place (Tree, Node, Place, Exact);
+         return (if Exact then Place else 0);
+      end Exact_Field_Place;
+
+      procedure Find_Place
+        (Tree : Syn.Tree; Node : Syn.Node_Id;
+         Place : out Natural; Exact : out Boolean)
+      is
+         Root : constant Res.Declaration_Id := Root_Declaration (Tree, Node);
+         Local : constant Natural :=
+           (if Root = Res.No_Declaration then 0 else Local_Of (Root));
+
+         --  The place of Where, and whether a field may still extend it.
+         procedure Locate
+           (Where : Syn.Node_Id; Place : out Natural; Open : out Boolean);
+
+         procedure Locate
+           (Where : Syn.Node_Id; Place : out Natural; Open : out Boolean) is
+         begin
+            if Syn.Kind (Tree, Where)
+                 in Syn.Member_Selection | Syn.Element_Index
+                  | Syn.Inclusive_Slice | Syn.Half_Open_Slice
+              and then not Names_Module_Binding (Tree, Where)
+            then
+               Locate (Syn.Target_Of (Tree, Where), Place, Open);
+               if Open
+                 and then Syn.Kind (Tree, Where) = Syn.Member_Selection
+                 and then Landin.Checking.Type_Of
+                   (Types.all, Tree, Syn.Target_Of (Tree, Where))
+                     = Ty.Aggregate
+                 and then Landin.Checking.Field_Index (Types.all, Tree, Where)
+                   > 0
+               then
+                  Place := Interned
+                    (Local, Place,
+                     Landin.Checking.Field_Index (Types.all, Tree, Where),
+                     Syn.Name (Tree, Where), Has_References (Tree, Where));
+               else
+                  Open := False;
+               end if;
+            else
+               Place := 0;
+               Open := True;
+            end if;
+         end Locate;
+
+      begin
+         Place := 0;
+         Exact := False;
+         if Local /= 0 then
+            Locate (Node, Place, Exact);
+         end if;
+      end Find_Place;
 
       function Has_References (Id : Res.Declaration_Id) return Boolean is
          Kind : constant Ty.Type_Kind :=
@@ -2226,6 +2579,81 @@ package body Landin.Stages.Checking.References is
          return "";
       end Kept_Into_Refusal;
 
+      --  D1371: a call may store, into a place it is given to write,
+      --  references derived from that same place: an `inout` argument, or
+      --  the storage a reference argument points into.  What a local
+      --  holds then derives from the local at that place, which
+      --  Check_Borrows reads as a reference the local holds into itself.
+      procedure Note_Self_Stores
+        (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts)
+      is
+         Called : constant Landin.Checking.Signature_Id :=
+           Call_Signature (Tree, Call);
+
+         procedure Store (Local : Local_Id; Place : Natural);
+
+         procedure Store (Local : Local_Id; Place : Natural) is
+            Written : Origin_Fact := Origin (Local);
+         begin
+            if Has_References (Global (Local)) then
+               Derive_Place (Written.Value, Local, Place, Interior => False);
+               Set_Origin (Local, Written);
+            end if;
+         end Store;
+      begin
+         if not Landin.Checking.Holds (Types.all, Called) then
+            return;
+         end if;
+         for Position in 1 .. Landin.Checking.Signature_Parameter_Count
+           (Types.all, Called)
+         loop
+            declare
+               Convention : constant Syn.Parameter_Convention :=
+                 Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Called, Position).Convention;
+               Argument : constant Syn.Node_Id :=
+                 Runtime_Argument (Tree, Call, Position);
+               Id : constant Res.Declaration_Id :=
+                 (if Argument = Syn.No_Node then Res.No_Declaration
+                  else Root_Declaration (Tree, Argument));
+            begin
+               if Argument = Syn.No_Node
+                 or else Convention = Syn.Sink_Convention
+               then
+                  null;
+               elsif Convention = Syn.Inout_Convention then
+                  if Id /= Res.No_Declaration and then Local_Of (Id) /= 0 then
+                     Store (Local_Of (Id), Field_Place (Tree, Argument));
+                  end if;
+               elsif Has_References (Tree, Argument) then
+                  declare
+                     Given : constant Reference_Fact :=
+                       Known_Fact (Tree, Known, Argument).Value;
+                  begin
+                     for Index in 1 .. Count (Given.Interior) loop
+                        declare
+                           Local : constant Local_Id :=
+                             Nth (Given.Interior, Index);
+                        begin
+                           if not Has_Parts (Given, Local) then
+                              Store (Local, 0);
+                           else
+                              for Part in 1 .. Count (Given.Parts) loop
+                                 if Place_Root (Nth (Given.Parts, Part))
+                                   = Local
+                                 then
+                                    Store (Local, Nth (Given.Parts, Part));
+                                 end if;
+                              end loop;
+                           end if;
+                        end;
+                     end loop;
+                  end;
+               end if;
+            end;
+         end loop;
+      end Note_Self_Stores;
+
       procedure Keep_Into_Holders
         (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts)
       is
@@ -2299,10 +2727,14 @@ package body Landin.Stages.Checking.References is
                       or else Landin.Checking.Is_Lent_Array
                         (Types.all, Tree, Node)));
 
+      --  Whether FACT views ID's storage at PLACE, a field place of it or
+      --  zero for the whole binding (D1371).
       function Views
-        (Fact : Reference_Fact; Id : Res.Declaration_Id) return Boolean
+        (Fact : Reference_Fact; Id : Res.Declaration_Id; Place : Natural)
+         return Boolean
         is (Local_Of (Id) /= 0
-            and then Contains (Fact.Interior, Local_Of (Id)));
+            and then Contains (Fact.Interior, Local_Of (Id))
+            and then Lent_Part (Fact, Local_Of (Id), Place) >= 0);
 
       function Views_Another_Field
         (Tree : Syn.Tree; Lent, View : Syn.Node_Id) return Boolean
@@ -3279,6 +3711,32 @@ package body Landin.Stages.Checking.References is
                   else Root_Declaration (Tree, Argument));
                Used : Res.Declaration_Id := Res.No_Declaration;
                Unnamed : Boolean := False;
+               --  D1371: the field place of the binding the argument is,
+               --  or zero for the whole of it.
+               Argument_Place : constant Natural :=
+                 (if Mutated = Res.No_Declaration then 0
+                  else Field_Place (Tree, Argument));
+               --  The binding whose view of the argument's storage is in
+               --  use, and the place of it that the view holds, as
+               --  Lent_Part answers.
+               Viewing : Res.Declaration_Id := Res.No_Declaration;
+               Viewed_Part : Integer := -1;
+               --  D1371: the part of the argument's binding a reference it
+               --  holds into itself may refer to and that the argument
+               --  overlaps, as Lent_Part answers, or -1.  A view reaching a
+               --  part that can hold that reference reaches what it refers
+               --  to.
+               Self_Part : constant Integer :=
+                 (if Mutated = Res.No_Declaration
+                    or else Local_Of (Mutated) = 0
+                    or else not Contains
+                      (Origin (Local_Of (Mutated)).Value.Derives,
+                       Local_Of (Mutated))
+                  then -1
+                  else Lent_Part
+                    (Origin (Local_Of (Mutated)).Value, Local_Of (Mutated),
+                     Argument_Place));
+               Through_Self : Boolean := False;
 
                function Convention_Word return String
                  is (if Part.Convention = Syn.Sink_Convention
@@ -3286,44 +3744,64 @@ package body Landin.Stages.Checking.References is
 
                --  Viewer says what still views the argument's storage and
                --  Way_Out how to be done with that view first.
-               --  Whether the argument selects a field or an element of
-               --  the binding it is rooted in, and not that binding whole,
-               --  which `module.name` spells too.
-               function Selects_Part return Boolean;
+               procedure Report
+                 (Viewer, Way_Out : String;
+                  Related : Landin.Provenance.Origin;
+                  Because : String);
 
-               function Selects_Part return Boolean is
-                  Where : Syn.Node_Id := Argument;
+               --  The binding and field path a place names, `held.round`.
+               function Spelled_Place (Place : Natural) return String;
+
+               function Spelled_Place (Place : Natural) return String is
                begin
-                  if Syn.Kind (Tree, Where)
-                    not in Syn.Member_Selection | Syn.Element_Index
-                  then
-                     return False;
+                  if Place = 0 then
+                     return Spelled (Res.Name_Of (Meanings.all, Mutated));
                   end if;
-                  while Syn.Kind (Tree, Where)
-                    in Syn.Member_Selection | Syn.Element_Index
-                  loop
-                     Where := Syn.Target_Of (Tree, Where);
-                  end loop;
-                  return Syn.Kind (Tree, Where) = Syn.Name_Reference
-                    and then Res.Verdict_Of (Meanings.all, Tree, Where)
-                      = Res.Bound
-                    and then Res.Bound_To (Meanings.all, Tree, Where)
-                      = Mutated;
-               end Selects_Part;
+                  return Spelled_Place (Places (Place).Parent) & "."
+                    & Spelled (Places (Place).Name);
+               end Spelled_Place;
 
-               --  Whole_Binding: the view is a binding's, which holds the
-               --  argument's whole root binding and not one field of it.
+               --  D1371: which part of the argument's binding a view a
+               --  binding holds reaches, when that is not the argument.
+               function Part_Clause return String;
+
+               function Part_Clause return String is
+                  Who : constant String :=
+                    (if Viewing = Res.No_Declaration then ""
+                     else "`" & Spelled (Res.Name_Of (Meanings.all, Viewing))
+                          & "`");
+               begin
+                  if Viewing = Res.No_Declaration then
+                     return "";
+                  elsif Through_Self then
+                     return "; " & Who & " reaches `"
+                       & Spelled_Place (0) & "`, and what `"
+                       & Spelled_Place (0) & "` holds may refer into "
+                       & (if Self_Part = 0 then "any part of it"
+                          else "`" & Spelled_Place (Self_Part) & "`");
+                  elsif Viewed_Part < 0 or else Viewed_Part = Argument_Place
+                  then
+                     return "";
+                  elsif Viewed_Part = 0 then
+                     return "; " & Who & " views all of `"
+                       & Spelled_Place (0) & "`";
+                  elsif Argument_Place /= 0
+                    and then Holds_Place (Viewed_Part, Argument_Place)
+                  then
+                     return "; " & Who & " views `"
+                       & Spelled_Place (Viewed_Part)
+                       & "`, which holds the argument";
+                  else
+                     return "; " & Who & " views `"
+                       & Spelled_Place (Viewed_Part)
+                       & "`, a part of the argument";
+                  end if;
+               end Part_Clause;
+
                procedure Report
                  (Viewer, Way_Out : String;
                   Related : Landin.Provenance.Origin;
-                  Because : String;
-                  Whole_Binding : Boolean := False);
-
-               procedure Report
-                 (Viewer, Way_Out : String;
-                  Related : Landin.Provenance.Origin;
-                  Because : String;
-                  Whole_Binding : Boolean := False) is
+                  Because : String) is
                begin
                   Bad.Report
                     (Item    => Bad.Borrowed_Place,
@@ -3353,19 +3831,7 @@ package body Landin.Stages.Checking.References is
                                         & " reads it, declare `"
                                         & Spelled (Part.Name)
                                         & "` without `inout`")
-                                & (if Whole_Binding and then Selects_Part
-                                   then "; the argument is a part of `"
-                                        & Spelled
-                                            (Res.Name_Of
-                                               (Meanings.all, Mutated))
-                                        & "`, and a view held in a binding"
-                                        & " holds all of `"
-                                        & Spelled
-                                            (Res.Name_Of
-                                               (Meanings.all, Mutated))
-                                        & "`: its fields are not tracked"
-                                        & " apart"
-                                   else ""),
+                                & Part_Clause,
                      Related => Related,
                      Because => Because,
                      Into    => Sink.all);
@@ -3386,10 +3852,26 @@ package body Landin.Stages.Checking.References is
                        and then Has_References (Global (Borrower_Local))
                        and then Derives
                          (Origin (Borrower_Local).Value, Mutated)
+                       and then
+                         (Lent_Part
+                            (Origin (Borrower_Local).Value,
+                             Local_Of (Mutated), Argument_Place) >= 0
+                          or else
+                            (Self_Part >= 0
+                             and then Reaches_Holding
+                               (Origin (Borrower_Local).Value,
+                                Local_Of (Mutated))))
                      then
                         Used := Live_Holder
                           (Global (Borrower_Local),
                            Syn.Where (Tree, Call).Last, Mutated);
+                        if Used /= Res.No_Declaration then
+                           Viewing := Global (Borrower_Local);
+                           Viewed_Part := Lent_Part
+                             (Origin (Borrower_Local).Value,
+                              Local_Of (Mutated), Argument_Place);
+                           Through_Self := Viewed_Part < 0;
+                        end if;
                      end if;
                      if Used /= Res.No_Declaration then
                         declare
@@ -3415,8 +3897,7 @@ package body Landin.Stages.Checking.References is
                               Related => Syn.Origin
                                 (Used_Tree.all,
                                  Res.Node_Of (Meanings.all, Used)),
-                              Because => "the live derived view",
-                              Whole_Binding => True);
+                              Because => "the live derived view");
                         end;
                         exit;
                      end if;
@@ -3442,7 +3923,7 @@ package body Landin.Stages.Checking.References is
                              and then Is_View (Tree, Beside)
                              and then Views
                                (Known_Fact (Tree, Known, Beside).Value,
-                                Mutated)
+                                Mutated, Argument_Place)
                              and then not Views_Another_Field
                                (Tree, Argument, Beside)
                            then
@@ -3466,7 +3947,7 @@ package body Landin.Stages.Checking.References is
                   --  call is walking.
                   if Used = Res.No_Declaration and then not Unnamed then
                      for Held of reverse Unnamed_Views loop
-                        if Views (Held.Fact, Mutated)
+                        if Views (Held.Fact, Mutated, Argument_Place)
                           and then not Views_Another_Field
                             (Tree, Argument, Held.Node)
                         then
@@ -3849,9 +4330,21 @@ package body Landin.Stages.Checking.References is
                declare
                   Id : constant Res.Declaration_Id :=
                     Root_Declaration (Tree, Node);
+                  Place : constant Natural :=
+                    (if Id = Res.No_Declaration then 0
+                     else Field_Place (Tree, Node));
                begin
                   if Id /= Res.No_Declaration then
-                     Derive (Result.Storage, Local_Of (Id));
+                     --  D1371: a field selected in place is stored in
+                     --  that field of the binding and in no other.
+                     if Place /= 0
+                       and then Exact_Field_Place (Tree, Node) = Place
+                     then
+                        Narrow (Result.Storage, Local_Of (Id), Place);
+                     end if;
+                     Derive_Place
+                       (Result.Storage, Local_Of (Id), Place,
+                        Interior => False);
                   end if;
                   if Syn.Kind (Tree, Node)
                        in Syn.Member_Selection | Syn.Element_Index
@@ -3861,7 +4354,9 @@ package body Landin.Stages.Checking.References is
                      Result.Value := No_Reference;
                      Result.Results.Clear;
                   elsif Id /= Res.No_Declaration then
-                     Derive (Result.Value, Local_Of (Id));
+                     Derive_Place
+                       (Result.Value, Local_Of (Id), Place,
+                        Interior => False);
                      if Parameter_Of (Id) > 0
                        and then Syn.Kind (Tree, Node)
                          in Syn.Member_Selection | Syn.Element_Index
@@ -3996,6 +4491,7 @@ package body Landin.Stages.Checking.References is
                      Check_Escaping_Arguments (Tree, Node, Known);
                      Check_Borrows (Tree, Node, Known);
                      Keep_Into_Holders (Tree, Node, Known);
+                     Note_Self_Stores (Tree, Node, Known);
                      if Landin.Checking.Signature_Never_Returns
                        (Types.all, Called)
                        or else Landin.Configuration.Unreachable_Call
@@ -4100,12 +4596,8 @@ package body Landin.Stages.Checking.References is
                                                      (Pointee_Local
                                                         (Tree, Argument))
                                                        .Value;
-                                                   Exclude
-                                                     (Held_Fact.Derives,
-                                                      Pointee_Local
-                                                        (Tree, Argument));
-                                                   Exclude
-                                                     (Held_Fact.Interior,
+                                                   Drop_Local
+                                                     (Held_Fact,
                                                       Pointee_Local
                                                         (Tree, Argument));
                                                 end if;
@@ -4114,11 +4606,8 @@ package body Landin.Stages.Checking.References is
                                                 if Id /= Res.No_Declaration
                                                   and then Local_Of (Id) /= 0
                                                 then
-                                                   Exclude
-                                                     (Held_Fact.Derives,
-                                                      Local_Of (Id));
-                                                   Exclude
-                                                     (Held_Fact.Interior,
+                                                   Drop_Local
+                                                     (Held_Fact,
                                                       Local_Of (Id));
                                                 end if;
                                                 Join (Part, Held_Fact);
@@ -4157,10 +4646,17 @@ package body Landin.Stages.Checking.References is
                                                   | Ty.Slice_Value
                                                   | Ty.Any_Value
                                              then
-                                                Derive (Part, Local_Of (Id));
+                                                Derive_Place
+                                                  (Part, Local_Of (Id),
+                                                   Field_Place
+                                                     (Tree, Argument),
+                                                   Interior => False);
                                              else
-                                                Derive_Interior
-                                                  (Part, Local_Of (Id));
+                                                Derive_Place
+                                                  (Part, Local_Of (Id),
+                                                   Field_Place
+                                                     (Tree, Argument),
+                                                   Interior => True);
                                              end if;
                                           end;
                                        end if;
@@ -4337,7 +4833,9 @@ package body Landin.Stages.Checking.References is
                  Root_Declaration (Tree, Node);
             begin
                if Id /= Res.No_Declaration and then Local_Of (Id) /= 0 then
-                  Derive (Result.Value, Local_Of (Id));
+                  Derive_Place
+                    (Result.Value, Local_Of (Id), Field_Place (Tree, Node),
+                     Interior => False);
                end if;
             end;
          end if;
@@ -5400,7 +5898,10 @@ package body Landin.Stages.Checking.References is
                                  if Root /= Res.No_Declaration
                                    and then Local_Of (Root) /= 0
                                  then
-                                    Derive (Walked, Local_Of (Root));
+                                    Derive_Place
+                                      (Walked, Local_Of (Root),
+                                       Field_Place (Tree, Source_Node),
+                                       Interior => False);
                                  end if;
                               end if;
                               if Count (Walked.Interior) > 0 then

@@ -1,9 +1,9 @@
 class: negative
-summary: an `inout` field of a binding is refused while a binding views another field of it, and the note says that the view holds the whole binding because fields are not tracked apart
+summary: D1371 refuses a field passed inout while a view of the binding or field holding it is in use, and the reverse, a field one alternative of a branch views, two elements of one array field and two fields reached through one pointer, and the note names the part the view holds
 program: program.ldn
 args: ../tests/fixtures/negative/inout-field-beside-a-view-of-its-binding/program.ldn
 expect: expected.txt
-codes: L0315
-constructs: 0800, 0830
+codes: L0315, L0315, L0315, L0315, L0315, L0315, L0315
+constructs: 0800, 0830, 0900
 targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 status: 1

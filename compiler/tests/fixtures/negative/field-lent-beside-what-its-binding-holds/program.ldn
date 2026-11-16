@@ -1,0 +1,71 @@
+--  D1371: a binding that holds a reference into itself lends its parts
+--  that can hold one together.  Whether the reference was stored in this
+--  body, by a call given the binding `inout` or by one given its address,
+--  a view of such a part holds the part the reference refers into.
+import core/mem
+import core/vec
+import hosted/heap
+
+state: type = struct
+    list: vec.list(u32)
+    view: []u32
+    other: vec.list(u32)
+end state
+
+fill: (inout s: state) -> none =
+    s.view = vec.used(s.list)
+end fill
+
+fill_at: (p: ptr mut state) -> none =
+    p.val.view = vec.used(p.val.list)
+end fill_at
+
+grow: (inout l: vec.list(u32)) -> none ! mem.out_of_memory =
+    memory := heap.new()
+    try vec.push(l, memory, 7)
+end grow
+
+made: () -> (s: state) =
+    s = (list: vec.new(item: u32), view: [], other: vec.new(item: u32))
+end made
+
+stored_here: () -> (n: usize) =
+    n = 0
+    mut s: state = made()
+    s.view = vec.used(s.list)
+    held := addr s.view
+    grow(s.list) else begin return end -- error: `s.view` may refer into it
+    n = lenof held.val
+end stored_here
+
+stored_by_inout: () -> (n: usize) =
+    n = 0
+    mut s: state = made()
+    fill(s)
+    held := s.view
+    grow(s.list) else begin return end -- error: read out of `s`
+    n = lenof held
+end stored_by_inout
+
+stored_through_address: () -> (n: usize) =
+    n = 0
+    mut s: state = made()
+    fill_at(addr s)
+    held := s.view
+    grow(s.list) else begin return end -- error: read out of `s`
+    n = lenof held
+end stored_through_address
+
+another_holder: () -> (n: usize) =
+    n = 0
+    mut s: state = made()
+    s.view = vec.used(s.list)
+    held := vec.used(s.other)
+    grow(s.list) else begin return end -- error: `other` could hold it
+    n = lenof held
+end another_holder
+
+public main: () -> (code: i32) =
+    code = i32(stored_here() + stored_by_inout() + stored_through_address()
+               + another_holder())
+end main

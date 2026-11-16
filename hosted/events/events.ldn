@@ -89,17 +89,23 @@ idle_value: type = struct
 end idle_value
 
 --- Caller-owned state of an event provider: the round of turns its
---- fibres take, and its event loop. Declare it `zeroed` and give it to
---- `over`, which fills it; it must outlive the handle.
+--- fibres take, its event loop, and the last-error and last-signal cells
+--- its calls record into. Declare it `zeroed` and give it to `over`, which
+--- fills it; it must outlive the handle.
 public space: type = struct
     round: stacks.round_space
     events: loop_state
     idling: idle_value
+    cells: system.space
 end space
 
+--  The handle: the loop's state, the round, and the hosted/system handle
+--  over the space's own cells, to which the conformances below hand what
+--  does not wait (D1363).
 events_value: type = struct
     state: ptr mut loop_state
     round: stacks.round
+    services: system.host
 end events_value
 
 --- The hosted provider whose waiting operations switch fibres. It implements
@@ -115,32 +121,32 @@ end events_value
 public host: type = events_value
 
 --- Return errno captured for the terminal failing provider call, as
---- `hosted/system`'s `last_errno` does: the cell is the process's, which
---- this provider's own calls report through too.
+--- `hosted/system`'s `last_errno` does: the cell is the provider's own, in
+--- the `space` it was made over, which every call through it records into.
 public last_errno: (handle: host) -> (number: i32) =
-    number = system.last_errno(services(handle))
+    number = system.last_errno(handle.services)
 end last_errno
 
 --- Return the number of the signal that ended the child this handle last
 --- saw end through `io.wait`, as `hosted/system`'s `last_signal` does.
 public last_signal: (handle: host) -> (number: i32) =
-    number = system.last_signal(services(handle))
+    number = system.last_signal(handle.services)
 end last_signal
 
 --- Fill `state` and return a handle to the event provider over it and over
 --- `entries`. The provider is made of a round of turns over `entries`, the
 --- table of the fibres that may be unfinished at once, one more than a
---- group's count; an event queue, closed on exec; and the `hosted/system`
---- handle `system.new` gives, which reports through the calling thread's
---- last-error and last-signal cells. It fails `mem.out_of_memory` when
---- `entries` holds fewer than two, and `io.io_failed` when the system makes
---- no queue, with its errno in the calling thread's cell. Calling this before
---- the hosted entry has established the process's arguments traps, as
---- `hosted/system`'s `new` does. The queue stays open until the process ends.
+--- group's count; an event queue, closed on exec; and a `hosted/system`
+--- handle over the space's own last-error and last-signal cells, which
+--- `system.over` fills. It fails `mem.out_of_memory` when `entries` holds
+--- fewer than two, and `io.io_failed` when the system makes no queue, with
+--- its errno in the space's cell. Calling this before the hosted entry has
+--- established the process's arguments traps, as `hosted/system`'s `over`
+--- does. The queue stays open until the process ends.
 public over: (inout state: space, entries: []mut usize)
              -> (handle: host from state, entries)
              ! mem.out_of_memory | io.io_failed =
-    system.clear_errno(system.new())
+    services: system.host = system.over(state.cells)
     state.events.queue = -1
     state.events.first = 0
     state.events.turned = false
@@ -152,30 +158,20 @@ public over: (inout state: space, entries: []mut usize)
     round: stacks.round =
         try stacks.round_over(state.round, entries, any(addr state.idling))
     state.events.queue = made_queue() else (problem)
-        system.record_errno(system.new(), problem)
+        system.record_errno(services, problem)
         fail io.io_failed
     end
-    handle = (state: addr state.events, round: round)
+    handle = (state: addr state.events, round: round, services: services)
 end over
-
---  The hosted/system handle beneath: the process's, which borrows
---  nothing, so a handle `from` its caller's state carries no storage of
---  the system's.  A field could not hold it, since the handle's cells
---  are writable storage of the system's (D222); the conformances that
---  hand it entries name this routine after `through` (D1363).
-services: (self: host) -> (handle: system.host) =
-    _ = self
-    handle = system.new()
-end services
 
 --  Keep a failure's errno in the system handle's cell.
 record: (self: host, problem: posix.errno) -> none =
-    system.record_errno(services(self), problem)
+    system.record_errno(self.services, problem)
 end record
 
 --  Clear the cell before a call asks the system.
 cleared: (self: host) -> none =
-    system.clear_errno(services(self))
+    system.clear_errno(self.services)
 end cleared
 
 --  The waiting record at `address`.
@@ -555,7 +551,7 @@ end events_write_some
 --  entry is this provider's own.
 events_close: (self: host, sink opened: io.file) -> none ! io.io_failed =
     forget(self, system.descriptor_of(opened))
-    try io.close(services(self), opened)
+    try io.close(self.services, opened)
 end events_close
 
 host is io.reader (read: events_read)

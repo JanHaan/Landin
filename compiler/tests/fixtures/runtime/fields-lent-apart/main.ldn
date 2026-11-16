@@ -1,0 +1,130 @@
+--  D1371: disjoint fields of one binding are lent apart.  Two handles
+--  filled through `inout` from different fields of one state are both in
+--  use at once, in either order, through nested fields, from a local or
+--  an `inout` parameter, chosen on a branch, as arguments of one call and
+--  beside a loop walking a third field; each writes only its own field.
+--  A field that can hold no reference stays apart even in a record that
+--  holds a reference into itself.
+import core/mem
+import core/vec
+import hosted/heap
+
+cells: type = struct
+    slots: [4]u32
+end cells
+
+round: type = struct
+    count: u32
+end round
+
+inner: type = struct
+    a: cells
+    b: round
+end inner
+
+space: type = struct
+    cells: cells
+    round: round
+    nested: inner
+    items: [3]u32
+end space
+
+handle: type = struct
+    at: ptr mut u32
+end handle
+
+cells_over: (inout state: cells) -> (h: handle from state) =
+    state.slots[0] = 1
+    h = (at: addr state.slots[0])
+end cells_over
+
+round_over: (inout state: round) -> (h: handle from state) =
+    state.count = 2
+    h = (at: addr state.count)
+end round_over
+
+bump: (inout state: round) -> none =
+    state.count += 10
+end bump
+
+sum: (left: handle, right: handle) -> (n: u32) =
+    n = left.at.val + right.at.val
+end sum
+
+--  Cells first, then the round, through an `inout` parameter.
+in_order: (inout state: space) -> (n: u32) =
+    first := cells_over(state.cells)
+    second := round_over(state.round)
+    first.at.val += 4
+    second.at.val += 4
+    n = first.at.val + second.at.val
+end in_order
+
+--  The round first, then the cells.
+reversed: (inout state: space) -> (n: u32) =
+    second := round_over(state.round)
+    first := cells_over(state.cells)
+    n = first.at.val + second.at.val
+end reversed
+
+--  Fields of a field, beside a field of the state itself.
+nested: (inout state: space) -> (n: u32) =
+    first := cells_over(state.nested.a)
+    second := round_over(state.nested.b)
+    third := cells_over(state.cells)
+    n = first.at.val + second.at.val + third.at.val
+end nested
+
+--  A handle chosen on a branch holds both of its alternatives' fields and
+--  no other.
+chosen: (inout state: space, which: bool) -> (n: u32) =
+    first := if which then cells_over(state.cells)
+             else cells_over(state.nested.a) end if
+    bump(state.round)
+    bump(state.nested.b)
+    n = first.at.val + state.round.count
+end chosen
+
+--  Both handles as arguments of one call, and a third field walked by a
+--  loop while a fourth is passed `inout`.
+together: (inout state: space) -> (n: u32) =
+    n = sum(cells_over(state.cells), round_over(state.round))
+    for item in state.items do
+        bump(state.nested.b)
+        n += item
+    end for
+end together
+
+listed: type = struct
+    list: vec.list(u32)
+    view: []u32
+    count: u32
+end listed
+
+--  `view` refers into `list`, and `count` is still apart from both.
+counted_apart: () -> (n: u32) =
+    n = 0
+    mut s: listed = (list: vec.new(item: u32), view: [], count: 3)
+    s.view = vec.used(s.list)
+    counted := addr s.count
+    memory := heap.new()
+    vec.push(s.list, memory, 7) else begin return end
+    s.view = vec.used(s.list)
+    n = counted.val + s.view[0]
+end counted_apart
+
+public main: () -> (code: i32) =
+    mut state: space = zeroed
+    state.items = [1, 1, 1]
+    total: u32 = in_order(state) -- 5 + 6 = 11
+    total2: u32 = reversed(state) -- 1 + 2 = 3
+    total3: u32 = nested(state) -- 1 + 2 + 1 = 4
+    total4: u32 = chosen(state, true) -- 1 + 12 = 13
+    total5: u32 = together(state) -- 1 + 2 + 3 = 6, nested.b 42
+    mut local: space = zeroed
+    held := round_over(local.round)
+    other := cells_over(local.cells)
+    total6: u32 = held.at.val + other.at.val + state.nested.b.count -- 2 + 1 + 42
+    total7: u32 = counted_apart() -- 3 + 7 = 10
+    code = i32(total + total2 + total3 + total4 + total5 + total6 + total7 - 50)
+end main
