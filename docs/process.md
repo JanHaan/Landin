@@ -835,9 +835,9 @@ still succeed. The linked full run contains the target-test results.
 | `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
 | `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
 | `darwin-release-build` | `macos-26` | build the release executables once for the `darwin-host-release` and `darwin-parity` jobs |
-| `darwin-host` | `macos-26` | the debug compiler host suite, determinism, report identity and the scripted server sessions |
-| `darwin-host-release` | `macos-26` | the release compiler host suite and the same follow-on checks, then the LLDB sessions |
-| `darwin-parity` | `macos-26` | the hosted corpus executed natively, every Darwin source verdict and the bindings |
+| `darwin-host` matrix | `macos-26` | the debug compiler host suite in two `--host --shard` jobs, `darwin-host-1` and `darwin-host-2`, which together are the complete host run; the first also runs the verifier observations, the determinism closures, report identity and the native C controls, the second compile publication, tool cancellation and the scripted server sessions |
+| `darwin-host-release` matrix | `macos-26` | the release compiler host suite in two shards, `darwin-host-release-1` and `darwin-host-release-2`, with the same follow-on checks divided the same way; the first also uses the installed toolchain outside the checkout, the second runs the LLDB sessions |
+| `darwin-parity` matrix | `macos-26` | the hosted corpus executed natively with the release compiler, its fixtures dealt round `darwin-parity-1` to `darwin-parity-3` by `compiler/tests/darwin/check.py --parity --shard=I/3`, so the three are every case once; every Darwin source verdict in the first and the bindings in the second |
 | `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` shards, `arm64-compiler-checks` and the Linux arm64 determinism manifest |
 | `arm64-compiler` matrix | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane in two `--shard` jobs, `arm64-compiler-1` and `arm64-compiler-2` |
 | `arm64-compiler-checks` | `ubuntu-24.04-arm` | with the same debug compiler: representative verifier resources, the default target, the determinism closures, native report identity and the scripted server sessions |
@@ -903,6 +903,27 @@ cached build fails where the clean one passes, the entry it restored, named
 in its log, can be removed with `gh cache delete KEY`; the next run then
 restores an older entry or builds from clean.
 Darwin's and Linux arm64's release executables are built from clean only.
+
+The Darwin jobs are arranged for GitHub's limit of five macOS jobs at once
+per account, which holds on every plan below Enterprise. In the runs of
+2026-11-15 and 11-16 the seven Darwin jobs took about 100 job-minutes:
+the debug build ended about 8 minutes after the run was created and the
+release build, twelve minutes of compilation, about 15; `darwin-host` ran
+25 to 31 minutes on one runner, and `darwin-parity` waited for the release
+build and then for a free macOS runner, ending 36 to 41 minutes in. A
+macOS job's setup, checkout, toolchain and artifact restore take under a
+minute, so the long jobs run as shards: `darwin-host` in two,
+`darwin-host-release` in two and `darwin-parity` in three, each division
+holding every case once. With both Darwin determinism manifests that is
+eleven macOS jobs, about 110 job-minutes, and the arrangement was modelled
+to end about 30 minutes after the run is created, 31 on the slower of the
+two runs; the five runners then sit idle only while the debug build is the
+one job ready. What remains above the Linux lanes' end is the release
+build's twelve minutes before `darwin-parity` and `darwin-host-release`
+can start: only a shorter Darwin release build moves that, and the cached
+build Linux x86-64 uses is not applied to Darwin, whose linker writes
+object paths, times and an `LC_UUID` into each executable. The first gate
+runs of the arrangement give its real times.
 
 A compile error surfaces in its host's debug or release build job; Linux
 arm64's release lane still builds its own. In

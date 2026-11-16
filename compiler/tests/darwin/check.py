@@ -179,6 +179,21 @@ def workers():
     return int(value)
 
 
+def shard_of(text):
+    """`I/N`, shard I of N, as (I, N), for argparse."""
+    index, _, count = text.partition("/")
+    if not (index.isdigit() and count.isdigit() and 1 <= int(index) <= int(count)):
+        raise argparse.ArgumentTypeError("--shard needs I/N with 1 <= I <= N, such as 2/3")
+    return int(index), int(count)
+
+
+def share(items, shard):
+    """Shard (I, N)'s share of ITEMS: dealt round N shards in listed order,
+    so the N shares are disjoint and together are every item once."""
+    index, count = shard
+    return items[index - 1::count]
+
+
 def standard_input(base, meta):
     """The file a fixture's `stdin:` names below BASE, or an empty input."""
     return as_meta(meta).standard_input(base)
@@ -248,7 +263,12 @@ def main(argv=None):
     parser.add_argument("--case", action="append", help="exact name; development only")
     parser.add_argument("--profile", choices=["none", "size", "speed"], help="development only")
     parser.add_argument("--parity", action="store_true", help="complete shared hosted corpus")
+    parser.add_argument("--shard", type=shard_of, default=(1, 1), metavar="I/N",
+                        help="with --parity alone: the I-th of N shares of the corpus;"
+                             " only all N together are the complete parity run")
     args = parser.parse_args(argv)
+    if args.shard[1] > 1 and (not args.parity or args.case or args.profile):
+        parser.error("--shard divides the complete --parity run and takes no --case or --profile")
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
     import refine_revision
     refine_revision.warn(args.refine)  # is it this checkout's?
@@ -259,7 +279,10 @@ def main(argv=None):
     directory.mkdir(parents=True, exist_ok=False)
     refine = args.refine.resolve()
     run = Run(directory)
-    summary = {"schema": 1, "scope": "filtered" if args.case or args.profile else "parity" if args.parity else "selected",
+    sharded = args.shard[1] > 1
+    summary = {"schema": 1, "scope": "filtered" if args.case or args.profile else
+               "parity shard %d of %d" % args.shard if sharded else
+               "parity" if args.parity else "selected",
                "refine_sha256": hash_file(refine), "cases_sha256": hash_file(HERE / "cases.json"),
                "results": [], "status": "failed"}
     try:
@@ -421,6 +444,13 @@ def main(argv=None):
             return results, labels
 
         selected = [c for c in candidates if not args.case or c[0] in args.case]
+        if sharded:
+            #  The shares partition the complete schedule; each shard's
+            #  summary names its cases, and the gate requires all N.
+            summary["shard"] = {"index": args.shard[0], "count": args.shard[1],
+                                "complete": len(selected)}
+            selected = share(selected, args.shard)
+            summary["shard"]["cases"] = [name for name, _, _ in selected]
         #  Every fixture has its own labelled files; results report in the
         #  sequential order whatever order the workers finished in.
         with ThreadPoolExecutor(max_workers=workers()) as pool:

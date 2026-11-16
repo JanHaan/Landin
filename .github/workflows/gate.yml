@@ -104,7 +104,9 @@ jobs:
             release bindings editor-grammar flake cortex-m-programs cortex-m-corpus \
             cortex-m-rv32 xtensa-esp32 xtensa-esp32s3 \
             scaling darwin-debug-build \
-            darwin-release-build darwin-host darwin-host-release darwin-parity \
+            darwin-release-build darwin-host-1 darwin-host-2 \
+            darwin-host-release-1 darwin-host-release-2 \
+            darwin-parity-1 darwin-parity-2 darwin-parity-3 \
             arm64-debug-build arm64-compiler-1 arm64-compiler-2 \
             arm64-compiler-checks arm64-release \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
@@ -1116,11 +1118,26 @@ jobs:
   #  The debug compiler as a native Darwin host: every compiler case,
   #  without the two that execute Linux programs, then determinism closures,
   #  native report identity and the server.
+  #
+  #  The Darwin jobs share the five macOS runners an account may hold at
+  #  once, and on one runner this took 25 to 31 minutes, 19 to 24 of them
+  #  the host suite.  So the suite runs as two `--shard` jobs, which together
+  #  are the complete --host run as the `compiler` shards are the complete
+  #  run, and the checks after it are divided between them by their
+  #  measured cost: the verifier observations and the closures up to the
+  #  native C controls in the first, about three minutes, publication,
+  #  cancellation and the server sessions in the second, about two and a
+  #  half.  Both are required.
   darwin-host:
+    name: darwin-host-${{ matrix.shard }}
     needs: [inputs, darwin-debug-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: debug
@@ -1147,26 +1164,30 @@ jobs:
 
       #  The host suite's shared verdicts are Linux x86-64's; a Mac's own
       #  compiler defaults to darwin-arm64 (D257), so the lane is named.
-      - name: The compiler host suite
-        run: ./scripts/test.sh --host --target=linux-x86-64
+      - name: The compiler host suite, shard ${{ matrix.shard }} of 2
+        run: >-
+          LANDIN_TEST_TIMINGS=1
+          ./scripts/test.sh --host --target=linux-x86-64 --shard=${{ matrix.shard }}/2
 
       # Representative process measurements; low-stack outcomes are recorded,
       # not required thresholds. The full scaling verdict has its own job.
       - name: Representative verifier resource observations
+        if: matrix.shard == 1
         run: >-
           python3 scripts/verifier_resources.py
           --refine "$PWD/compiler/ada/build/darwin-arm64/${{ env.LANDIN_BUILD_MODE }}/bin/refine"
           --output "$RUNNER_TEMP/verifier-resources"
 
       - name: Keep representative resource observations
-        if: always()
+        if: always() && matrix.shard == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: verifier-resources-darwin-host-${{ env.LANDIN_BUILD_MODE }}
           path: ${{ runner.temp }}/verifier-resources
           retention-days: 14
 
-      - name: Determinism closures, native report identity and the server
+      - name: Determinism closures, native report identity and the native C controls
+        if: matrix.shard == 1
         run: |
           set -eu
           refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
@@ -1177,17 +1198,31 @@ jobs:
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
           python3 compiler/tests/test_native_registry_threads.py
+
+      - name: Compile publication, tool cancellation and the server
+        if: matrix.shard == 2
+        run: |
+          set -eu
+          refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  The same native host checks with the release compiler, using the
-  #  checked artifact from this revision's Darwin release build.
+  #  checked artifact from this revision's Darwin release build, in two
+  #  shards divided as darwin-host's are; the installed toolchain goes with
+  #  the first and the LLDB sessions with the second, whose checks are the
+  #  shorter.  Both are required.
   darwin-host-release:
+    name: darwin-host-release-${{ matrix.shard }}
     needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
@@ -1212,26 +1247,30 @@ jobs:
             -C compiler/ada/build/darwin-arm64/release
           ./scripts/build.sh -q
 
-      - name: The compiler host suite
-        run: ./scripts/test.sh --host --target=linux-x86-64
+      - name: The compiler host suite, shard ${{ matrix.shard }} of 2
+        run: >-
+          LANDIN_TEST_TIMINGS=1
+          ./scripts/test.sh --host --target=linux-x86-64 --shard=${{ matrix.shard }}/2
 
       # Representative process measurements; low-stack outcomes are recorded,
       # not required thresholds. The full scaling verdict has its own job.
       - name: Representative verifier resource observations
+        if: matrix.shard == 1
         run: >-
           python3 scripts/verifier_resources.py
           --refine "$PWD/compiler/ada/build/darwin-arm64/${{ env.LANDIN_BUILD_MODE }}/bin/refine"
           --output "$RUNNER_TEMP/verifier-resources"
 
       - name: Keep representative resource observations
-        if: always()
+        if: always() && matrix.shard == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: verifier-resources-darwin-host-${{ env.LANDIN_BUILD_MODE }}
           path: ${{ runner.temp }}/verifier-resources
           retention-days: 14
 
-      - name: Determinism closures, native report identity and the server
+      - name: Determinism closures, native report identity and the native C controls
+        if: matrix.shard == 1
         run: |
           set -eu
           refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
@@ -1242,6 +1281,12 @@ jobs:
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
           python3 compiler/tests/test_native_registry_threads.py
+
+      - name: Compile publication, tool cancellation and the server
+        if: matrix.shard == 2
+        run: |
+          set -eu
+          refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
@@ -1254,6 +1299,7 @@ jobs:
       #  refine tries first; `outside-user-stock` runs it on Linux with the
       #  distribution's driver alone.
       - name: An installed toolchain outside the checkout
+        if: matrix.shard == 1
         run: |
           set -eu
           outside="$RUNNER_TEMP/outside"
@@ -1270,6 +1316,7 @@ jobs:
       #  their own they took five minutes and one of the five macOS runners
       #  the account may hold at once, for which darwin-parity then queued.
       - name: LLDB source debugging
+        if: matrix.shard == 2
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
 
   #  The shared hosted corpus executed natively, every source verdict with
@@ -1280,13 +1327,21 @@ jobs:
   #  macOS vets each newly linked
   #  program on its first launch and admits roughly one at a time, so on an
   #  eight-core Mac this lane took 1,465 s at one worker and 755 s at four
-  #  and at eight alike.  On the hosted image the whole job took fourteen
-  #  minutes.
+  #  and at eight alike.  On the hosted image hosted parity alone took 17
+  #  to 18 minutes, after the release build's twelve, so it runs as three
+  #  shards, `check.py --parity --shard=I/3`: its fixtures are dealt round
+  #  them, so the three are every case once.  The source verdicts go with
+  #  the first and the bindings with the second.  All three are required.
   darwin-parity:
+    name: darwin-parity-${{ matrix.shard }}
     needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
@@ -1311,19 +1366,22 @@ jobs:
             -C compiler/ada/build/darwin-arm64/release
           ./scripts/build.sh -q
 
-      - name: Hosted parity
+      - name: Hosted parity, shard ${{ matrix.shard }} of 3
         run: |
           LANDIN_DARWIN_JOBS=3 python3 compiler/tests/darwin/check.py --parity \
+            --shard=${{ matrix.shard }}/3 \
             --refine "$PWD/compiler/ada/build/darwin-arm64/release/bin/refine" \
             --output "$RUNNER_TEMP/parity"
 
       - name: Source verdicts
+        if: matrix.shard == 1
         run: |
           python3 compiler/tests/darwin/diagnostics.py \
             --refine "$PWD/compiler/ada/build/darwin-arm64/release/bin/refine" \
             --output "$RUNNER_TEMP/diagnostics"
 
       - name: Bindings and archives
+        if: matrix.shard == 2
         run: |
           python3 compiler/tests/darwin/bindings.py --parity \
             --refine "$PWD/compiler/ada/build/darwin-arm64/release/bin/refine" \

@@ -16,17 +16,23 @@ python3 compiler/tests/darwin/check.py --parity \
 The complete contract runs in the gate's Darwin jobs on `macos-26`:
 
 - `darwin-host` and `darwin-host-release`: the compiler host suite,
-  `test.sh --host`, in each compiler mode.
+  `test.sh --host`, in each compiler mode, each as two `--shard=I/2` jobs
+  that together are the complete host run.
 - `darwin-parity`, with the release compiler: every shared runtime and ABI
-  case through `check.py --parity`, at the four standard profiles or, for a
-  fixture that asks, all six specialization profiles, with the native
+  case through `check.py --parity`, as three jobs, `--shard=1/3` to
+  `--shard=3/3`, among which the cases are dealt so that together they are
+  every case once; a shard's `summary.json` names its scope as
+  `parity shard I of N` and lists its cases. Each case runs at the four
+  standard profiles or, for a fixture that asks, all six specialization
+  profiles, with the native
   counterparts at the four; every applicable positive and negative source
   verdict with Darwin selected, ordered diagnostic codes and exact
   diagnostic files included, through `diagnostics.py`; and the regenerated
   bindings and archives through `bindings.py --parity`.
-- The last step of `darwin-host-release`: the complete parser, containers
-  and hosted application under native LLDB at none/off, size/auto and
-  size/all, followed by the full macOS source-debugging contract, through
+- The last step of `darwin-host-release`'s second shard: the complete
+  parser, containers and hosted application under native LLDB at
+  none/off, size/auto and size/all, followed by the full macOS
+  source-debugging contract, through
   `scripts/debug.sh --target=darwin-arm64 --parity`.
 
 `check.py --parity` derives its schedule from shared metadata. `parity.json`

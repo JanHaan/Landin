@@ -79,11 +79,13 @@ class DarwinAssemblyTests(unittest.TestCase):
 class DarwinRuntimeArtifactTests(unittest.TestCase):
     """An ordinary native build retains assembly, never its private object."""
 
-    def run_lane(self, base, parity, *, assemble_object=True):
+    def run_lane(self, base, parity, *, assemble_object=True,
+                 fixtures=("runtime/any-argument-save",), extra=()):
         repository = base / "repository"
-        fixture = "runtime/any-argument-save"
-        shutil.copytree(ROOT / "compiler/tests/fixtures" / fixture,
-                        repository / "compiler/tests/fixtures" / fixture)
+        fixture = fixtures[0]
+        for one in fixtures:
+            shutil.copytree(ROOT / "compiler/tests/fixtures" / one,
+                            repository / "compiler/tests/fixtures" / one)
         (repository / "compiler/ada").mkdir()
         refine = base / "refine"
         refine.write_bytes(b"mock compiler")
@@ -120,6 +122,7 @@ class DarwinRuntimeArtifactTests(unittest.TestCase):
         arguments = ["--refine", str(refine), "--output", str(output)]
         if parity:
             arguments.append("--parity")
+        arguments += list(extra)
         with mock.patch.object(CHECK, "ROOT", repository), \
                 mock.patch.object(CHECK, "PROFILES", {**CHECK.PROFILES, "fixtures": [fixture], "darwin": []}), \
                 mock.patch.object(CHECK.platform, "system", return_value="Darwin"), \
@@ -150,6 +153,61 @@ class DarwinRuntimeArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, \
                 self.assertRaisesRegex(ValueError, "Apple-assembled object was not produced"):
             self.run_lane(Path(temporary), True, assemble_object=False)
+
+
+class DarwinShardTests(unittest.TestCase):
+    """The gate runs parity as shards; together they must be every case once."""
+
+    FIXTURES = ("runtime/any-argument-save", "runtime/add-exits-with-its-sum",
+                "runtime/aggregate-results-across-branches")
+
+    def test_shares_partition_any_schedule(self):
+        for length in range(0, 12):
+            items = list(range(length))
+            for count in range(1, 6):
+                with self.subTest(length=length, count=count):
+                    shares = [CHECK.share(items, (index, count))
+                              for index in range(1, count + 1)]
+                    self.assertEqual(sorted(sum(shares, [])), items)
+                    self.assertLessEqual(max(map(len, shares)) - min(map(len, shares)), 1)
+
+    def test_malformed_shards_are_refused(self):
+        for text in ("0/3", "4/3", "3", "a/b", "1/0", "-1/2", ""):
+            with self.subTest(text=text), self.assertRaises(CHECK.argparse.ArgumentTypeError):
+                CHECK.shard_of(text)
+        self.assertEqual(CHECK.shard_of("2/3"), (2, 3))
+
+    def test_a_shard_divides_only_the_complete_parity_run(self):
+        for extra in (["--shard=1/2"],
+                      ["--parity", "--shard=1/2", "--case", "runtime/hello"],
+                      ["--parity", "--shard=1/2", "--profile", "none"]):
+            with self.subTest(extra=extra), mock.patch("sys.stderr"), \
+                    self.assertRaises(SystemExit) as raised:
+                CHECK.main(["--refine", "refine", "--output", "out", *extra])
+            self.assertEqual(raised.exception.code, 2)
+
+    def test_the_shards_of_a_run_are_its_cases_once(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            (base / "whole").mkdir()
+            output, _ = DarwinRuntimeArtifactTests.run_lane(
+                self, base / "whole", True, fixtures=self.FIXTURES)
+            whole = json.loads((output / "summary.json").read_text())
+            self.assertEqual(whole["scope"], "parity")
+            seen, results = [], []
+            for index in (1, 2):
+                (base / str(index)).mkdir()
+                output, _ = DarwinRuntimeArtifactTests.run_lane(
+                    self, base / str(index), True, fixtures=self.FIXTURES,
+                    extra=["--shard=%d/2" % index])
+                summary = json.loads((output / "summary.json").read_text())
+                self.assertEqual(summary["scope"], "parity shard %d of 2" % index)
+                self.assertEqual(summary["shard"]["complete"], len(self.FIXTURES))
+                seen += summary["shard"]["cases"]
+                results += summary["results"]
+        self.assertEqual(sorted(seen), sorted(self.FIXTURES))
+        key = lambda result: json.dumps(result, sort_keys=True)
+        self.assertEqual(sorted(map(key, results)), sorted(map(key, whole["results"])))
 
 
 class DarwinLargeImageTests(unittest.TestCase):
