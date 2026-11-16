@@ -80,6 +80,11 @@ class DarwinRuntimeArtifactTests(unittest.TestCase):
     """An ordinary native build retains assembly, never its private object."""
 
     def run_lane(self, base, parity, *, assemble_object=True):
+        #  check.py resolves --refine and --output, as it should, so the
+        #  fake must know them by their resolved names: on macOS the
+        #  temporary directory is below /var, a link to /private/var, and
+        #  an unresolved name matched none of the commands check.py ran.
+        base = base.resolve()
         repository = base / "repository"
         fixture = "runtime/any-argument-save"
         shutil.copytree(ROOT / "compiler/tests/fixtures" / fixture,
@@ -113,8 +118,12 @@ class DarwinRuntimeArtifactTests(unittest.TestCase):
                     obj.write_bytes(b"Apple assembled object")
             elif argv[0] == "/usr/bin/file":
                 return 0, b"Mach-O 64-bit executable arm64", b""
+            elif Path(argv[0]).parent == output:
+                return 42, b"", b""  # the program, as fixture.meta expects
             else:
-                return 42, b"", b""
+                #  The fake replaces Run.command, status check and all, so
+                #  a command it does not model must fail here, by name.
+                self.fail("unmodelled command: " + " ".join(argv))
             return 0, b"", b""
 
         arguments = ["--refine", str(refine), "--output", str(output)]
