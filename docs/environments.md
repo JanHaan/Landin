@@ -49,7 +49,10 @@ Linux and Darwin jobs run on GitHub-hosted images for every event, in the
 gate, the called determinism workflow and the links, Pages and release
 workflows: `ubuntu-24.04` for Linux x86-64, `ubuntu-24.04-arm` for Linux
 arm64 and `macos-26` with `DEVELOPER_DIR` set to Xcode 26.6 for Darwin,
-which `environments/macos-arm64/policy.json` records. The repository is
+which `environments/macos-arm64/policy.json` records; a Mac of one's own
+needs tools that policy admits, and the
+[macOS guide](../environments/macos-arm64/README.md#reproduce) says what
+happens with a newer Xcode. The repository is
 public, so these minutes are free. The one exception is the gate's
 physical board legs, which run on the self-hosted `landin-rig` runner on
 the rig host for a push to `main`, the weekly schedule and a manual

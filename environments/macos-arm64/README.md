@@ -28,6 +28,18 @@ No package manager or CI provider is required. Python 3 uses only its standard
 library. The command rejects a translated process, a different Ada version,
 or Apple tools outside `policy.json` before building.
 
+Select tools `policy.json` admits, not whatever Xcode is installed. With
+Xcode 27.2 selected the pinned GNAT cannot link anything: its linker call
+still passes `-macos_version_min`, and that Xcode's SDK lists an
+architecture in `libSystem.tbd` the call cannot read, so every link fails
+before the policy check has a build to reject. Met on 2026-11-16 on a Mac
+that also had the Command Line Tools with `ld-1267` and the 26.5 SDK, which
+link as the gate's Xcode 26.6 does:
+
+```sh
+export DEVELOPER_DIR=/Library/Developer/CommandLineTools
+```
+
 ```sh
 export LANDIN_GNAT_HOME=/path/to/gnat-16.1.0-1
 export LANDIN_GPRBUILD_HOME=/path/to/gprbuild-26.0.0-1
