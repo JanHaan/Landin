@@ -703,6 +703,13 @@ package Landin.Syntax is
                   or else Kind (Of_Tree, Escaping_Target'Result)
                             = Return_Source;
 
+   --  D1369's `from held p`: the result is what `p` holds, read through
+   --  a reference `p` carries, rather than a view of `p`'s storage.  A
+   --  D445 `escaping into` target is never held.
+   function Is_Held (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Return_Source;
+
    --  D186's compiler-filled call-site parameter.  It remains an ordinary
    --  runtime parameter in the callee and in the internal ABI; only source
    --  call matching omits it or accepts a named forward from another caller
@@ -1802,6 +1809,7 @@ private
       Caller     : Boolean := False;
       Shares     : Boolean := False;
       Unchecked  : Boolean := False;
+      Held       : Boolean := False;
       Convention : Parameter_Convention := Implicit_In;
       Direction  : Operand_Direction := Input_Operand;
       Fill       : Boolean := False;

@@ -42,7 +42,7 @@ end reserve
 --- views into the previous allocation.
 public push: (item: type, provider: type is mem.allocator,
               inout value: list(item), memory: provider,
-              escaping added: item) -> none ! mem.out_of_memory =
+              escaping into value added: item) -> none ! mem.out_of_memory =
     if length(value) == capacity(value) then
         next: usize = grown(capacity(value)) else (problem)
             _ = problem
@@ -63,7 +63,7 @@ end push
 --- Copy the indexed item, preserving origins of references it contains.
 --- Reports `mem.out_of_bounds` outside the initialized prefix.
 public get: (item: type, value: list(item), index: usize)
-            -> (result: item from value) ! mem.out_of_bounds =
+            -> (result: item from held value) ! mem.out_of_bounds =
     result = try mem.get(value.values, index)
 end get
 
@@ -81,7 +81,7 @@ end at
 --- Copy the last item without removing it. Reports `mem.empty` for an empty
 --- list.
 public last: (item: type, value: list(item))
-             -> (result: item from value) ! mem.empty =
+             -> (result: item from held value) ! mem.empty =
     count: usize = length(value)
     fail mem.empty when count == 0
     result = mem.get(value.values, count - 1) else (problem)
@@ -93,7 +93,7 @@ end last
 --- Remove and return the last item. Reports `mem.empty` without mutation when
 --- empty; retains capacity.
 public pop: (item: type, inout value: list(item))
-            -> (result: item from value) ! mem.empty =
+            -> (result: item from held value) ! mem.empty =
     result = try mem.withdraw(value.values)
 end pop
 

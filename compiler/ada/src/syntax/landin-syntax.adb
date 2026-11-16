@@ -255,6 +255,9 @@ package body Landin.Syntax is
      is (if Run_Length (Of_Tree, Id) = 0 then No_Node
          else Nth_Item (Of_Tree, Id, 1));
 
+   function Is_Held (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Held);
+
    function Is_Caller (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Caller);
 

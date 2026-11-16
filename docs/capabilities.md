@@ -611,7 +611,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - **Pointers and slices** get local origin, borrow, `escaping`,
   `escaping into` (D445), `from` and consume checks. A view no name holds
   is in use until what took it is done, a `for` loop's source and a view
-  passed as an argument among them (D1084).
+  passed as an argument among them (D1084). A result `from held p` is what
+  `p` holds, read out of an element, and lends no view of `p`; the
+  library's `get`, `last`, `pop` and `next_entry` say so, and its inserts
+  keep what they are given `escaping into` the container (D1369).
 - **Modules.** Directory modules have file-local imports, aliases, selected
   imports, typed global options and ordered roots. Option names collide with
   ordinary declarations/imports only in their declaring module; unrelated

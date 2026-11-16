@@ -5988,7 +5988,7 @@ package body Landin.Stages.Checking is
                Sources : Landin.Checking.Return_Source_Array
                  (1 .. Positive'Max
                    (1, Written_Return_Sources (Of_Tree, Written))) :=
-                   [others => (others => 1)];
+                   [others => <>];
                Source_Count : Natural := 0;
                Errors : Landin.Checking.Atom_Set_Id :=
                  Landin.Checking.No_Atom_Set;
@@ -6090,7 +6090,8 @@ package body Landin.Stages.Checking is
                            else
                               Source_Count := Source_Count + 1;
                               Sources (Source_Count) :=
-                                (Result => Index, Parameter => Position);
+                                (Result => Index, Parameter => Position,
+                                 Held => Syn.Is_Held (Of_Tree, Source));
                            end if;
                         end;
                      end loop;
@@ -10190,7 +10191,7 @@ package body Landin.Stages.Checking is
          Sources : Landin.Checking.Return_Source_Array
            (1 .. Positive'Max
              (1, Written_Return_Sources (Of_Tree, Node))) :=
-             [others => (others => 1)];
+             [others => <>];
          Source_Nodes : array (Sources'Range) of Syn.Node_Id :=
            [others => Syn.No_Node];
          Source_Count : Natural := 0;
@@ -10480,7 +10481,8 @@ package body Landin.Stages.Checking is
                         else
                            Source_Count := Source_Count + 1;
                            Sources (Source_Count) :=
-                             (Result => Index, Parameter => Position);
+                             (Result => Index, Parameter => Position,
+                              Held => Syn.Is_Held (Of_Tree, Source));
                            Source_Nodes (Source_Count) := Source;
                         end if;
                      end if;
@@ -14139,7 +14141,7 @@ package body Landin.Stages.Checking is
                     (1 .. Positive'Max
                       (1, Written_Return_Sources
                         (Template_Tree.all, Function_Node))) :=
-                        [others => (others => 1)];
+                        [others => <>];
                   Source_Count : Natural := 0;
                   Valid : Boolean := True;
                   Errors : Landin.Checking.Atom_Set_Id :=
@@ -14226,7 +14228,9 @@ package body Landin.Stages.Checking is
                                  Source_Count := Source_Count + 1;
                                  Sources (Source_Count) :=
                                    (Result => Index,
-                                    Parameter => Position);
+                                    Parameter => Position,
+                                    Held => Syn.Is_Held
+                                      (Template_Tree.all, Source));
                               end if;
                            end;
                         end loop;
@@ -19766,7 +19770,7 @@ package body Landin.Stages.Checking is
                  then Syn.Nth_Concept_Entry
                    (Concept_Tree.all, Concept_Node, Position)
                  else Syn.No_Node)))) :=
-             [others => (others => 1)];
+             [others => <>];
          Source_Count : Natural := 0;
          Errors : Landin.Checking.Atom_Set_Id :=
            Landin.Checking.No_Atom_Set;
@@ -19866,7 +19870,8 @@ package body Landin.Stages.Checking is
                      else
                         Source_Count := Source_Count + 1;
                         Sources (Source_Count) :=
-                          (Result => Index, Parameter => Parameter);
+                          (Result => Index, Parameter => Parameter,
+                           Held => Syn.Is_Held (Concept_Tree.all, Source));
                      end if;
                   end;
                end loop;
@@ -22564,7 +22569,7 @@ package body Landin.Stages.Checking is
                                              (1, Written_Return_Sources
                                                (Concept_Tree.all,
                                                 Requirement_Node))) :=
-                                             [others => (others => 1)];
+                                             [others => <>];
                                        Source_Count : Natural := 0;
                                        Errors : Landin.Checking.Atom_Set_Id :=
                                          Landin.Checking.No_Atom_Set;
@@ -22719,7 +22724,12 @@ package body Landin.Stages.Checking is
                                                         (Source_Count) :=
                                                           (Result => Position,
                                                            Parameter =>
-                                                             Parameter);
+                                                             Parameter,
+                                                           Held =>
+                                                             Syn.Is_Held
+                                                               (Concept_Tree
+                                                                  .all,
+                                                                Source));
                                                    end if;
                                                 end;
                                              end loop;
@@ -24181,6 +24191,9 @@ package body Landin.Stages.Checking is
                   loop
                      U.Append
                        (Text, (if Source = 1 then " from " else ", ")
+                        & (if Landin.Checking.Nth_Signature_Return_Source_Held
+                             (Types.all, Signature, Index, Source)
+                           then "held " else "")
                         & Spelled (Landin.Checking.Nth_Signature_Parameter
                           (Types.all, Signature,
                            Landin.Checking.Nth_Signature_Return_Source
@@ -24377,7 +24390,7 @@ package body Landin.Stages.Checking is
                                   (1, Written_Return_Sources
                                     (Concept_Tree.all,
                                      Requirement_Node))) :=
-                                    [others => (others => 1)];
+                                    [others => <>];
                               Source_Count : Natural := 0;
                               Errors : Landin.Checking.Atom_Set_Id :=
                                 Landin.Checking.No_Atom_Set;
@@ -24481,7 +24494,10 @@ package body Landin.Stages.Checking is
                                              Source_Count := Source_Count + 1;
                                              Sources (Source_Count) :=
                                                (Result => Position,
-                                                Parameter => Parameter);
+                                                Parameter => Parameter,
+                                                Held => Syn.Is_Held
+                                                  (Concept_Tree.all,
+                                                   Source));
                                           end if;
                                        end;
                                     end loop;

@@ -513,6 +513,12 @@ package body Landin.Syntax.Parser is
             Into_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "into");
 
+            --  D1369's `from held p`, decided as `into` is: only `held`
+            --  followed by a second name is the word, so a parameter
+            --  spelled `held` keeps its ordinary meaning in a clause.
+            Held_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "held");
+
             --  D188's [0660] range subtype.  It is recognized only after a
             --  parsed base type at a type declaration's right-hand side, so
             --  a binding, parameter or label named `range` keeps its
@@ -627,6 +633,7 @@ package body Landin.Syntax.Parser is
                Escapes   : Boolean := False;
                Caller    : Boolean := False;
                Unchecked : Boolean := False;
+               Held      : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Direction : Operand_Direction := Input_Operand;
                Fills     : Boolean := False;
@@ -1500,6 +1507,7 @@ package body Landin.Syntax.Parser is
                Escapes   : Boolean := False;
                Caller    : Boolean := False;
                Unchecked : Boolean := False;
+               Held      : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Direction : Operand_Direction := Input_Operand;
                Fills     : Boolean := False;
@@ -1595,6 +1603,7 @@ package body Landin.Syntax.Parser is
                    Caller     => Caller,
                    Shares     => Shares,
                    Unchecked  => Unchecked,
+                   Held       => Held,
                    Convention => Convention,
                    Direction  => Direction,
                    Fill       => Fills,
@@ -7909,7 +7918,8 @@ package body Landin.Syntax.Parser is
             --  returns ::= "(" named_return ("," named_return)* ")"
             --              | "none"                              [1800]
             --  named_return ::= identifiers ":" type
-            --                   ("from" identifier ("," identifier)*)?
+            --                   ("from" return_source ("," return_source)*)?
+            --  return_source ::= "held"? identifier            [D1369]
             --
             --  [0100]: shared names are one Named_Return per name, in
             --  order, each with the one written type and `from` list.
@@ -8048,14 +8058,30 @@ package body Landin.Syntax.Parser is
                            end if;
 
                            declare
-                              Source_At : constant Landin.Source.Span := Here;
-                              Source_Name : constant
-                                Landin.Source.Names.Name_Id := Named_Here;
+                              Holds_It : constant Boolean :=
+                                Named_Here = Held_Id
+                                and then Ahead (1) = Tok.Identifier;
+                              Word_At : constant Landin.Source.Span := Here;
                            begin
-                              Advance;
-                              Sources.Append
-                                (Add (Return_Source, Source_At,
-                                      Named => Source_Name));
+                              if Holds_It then
+                                 Advance;
+                              end if;
+                              declare
+                                 Source_At : constant Landin.Source.Span :=
+                                   Here;
+                                 Source_Name : constant
+                                   Landin.Source.Names.Name_Id := Named_Here;
+                              begin
+                                 Advance;
+                                 Sources.Append
+                                   (Add (Return_Source, Source_At,
+                                         Extent => (if Holds_It
+                                                    then Join (Word_At,
+                                                               Source_At)
+                                                    else Source_At),
+                                         Named => Source_Name,
+                                         Held  => Holds_It));
+                              end;
                            end;
 
                            --  A comma followed by names that reach `:`

@@ -69,7 +69,7 @@ enclosing production recognises. Thus 'of', 'lenof', 'offsetof', 'variant', 'cal
 'align', 'section', 'region', 'keep', 'thread', 'boot_stage', 'vector',
 'interrupt', 'naked',
 'noreturn',
-'distinct', 'out', 'into' and 'through' remain identifier tokens everywhere
+'distinct', 'out', 'into', 'held' and 'through' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
 production names contextual representation widths; it does not expand the
@@ -480,7 +480,9 @@ with a runtime parameter position as a `from` name is, and the parameter it
 names may stand earlier or later in the list (D455). An omitted
 convention and explicit `in` have the same language meaning but remain distinct
 syntax facts. Each `from` name is retained in written order and associated with
-the correspondingly labelled runtime parameter position. For every returning
+the correspondingly labelled runtime parameter position. A name written `held
+p` says the result is what `p` holds rather than a view of it (D1369); `held`
+is contextual in the same way, the word only when a second name follows it. For every returning
 edge that actually carries a tracked reference, the reference-origin pass checks
 its source set against exactly that ordered list; [0480]'s provably empty
 optional arm has no reference or origin to compare. Unknown, duplicate, missing
@@ -552,7 +554,8 @@ parameter          ::= "caller" identifiers ":" declared_type
 parameter_convention ::= "in" | "inout" | "sink"
 returns     ::= "(" named_return ("," named_return)* ")" | "none" | "noreturn"
 named_return ::= identifiers ":" declared_type
-                 ("from" identifier ("," identifier)*)?
+                 ("from" return_source ("," return_source)*)?
+return_source ::= "held"? identifier
 body        ::= block
 block       ::= statement* | value_statement* expression
 value_statement ::= binding | destructuring_binding | assignment
@@ -12578,9 +12581,10 @@ it, whether or not a name holds it.
 reference read out of a field when the name is read after the call.
 
 A result whose `from` names a container is a view of the container even
-when what it returns is a reference the container only stored, as
-`vec.get` of a list of pointers returns: the signature says so and the
-caller is held to it.
+when what it returns is a reference the container only stored: the
+signature says so and the caller is held to it. A signature that writes
+`from held` says otherwise, as `vec.get` of a list of pointers does since
+D1369.
 
 **The alternatives:** keeping the rule to named views, which leaves the
 traversal the tour teaches unchecked; holding a loop's source on every
@@ -12597,6 +12601,79 @@ passed beside the address of its neighbour. All five are declined.
 `negative/view-argument-beside-its-source` and
 `negative/qualified-module-binding-is-one-place`, with
 `runtime/unnamed-view-finished-or-apart` for what is accepted.
+
+### D1369 — A result may be what its source holds, apart from a view of it
+
+**The tour said** at [0790] that `from` names the parameters a returned
+reference derives from, and at [0800] that such a result borrows its
+source as a view does. D1084 made a result whose `from` names a record or
+an array a view of the binding the argument is rooted in, "even when what
+it returns is a reference the container only stored, as `vec.get` of a
+list of pointers returns". So `vec.push(list, memory, try vec.last(list))`
+of a list of pointers or slices was L0315, inline, through a local, a
+field or a helper alike, and a popped reference could not be pushed back:
+`pop`'s result counted as a view of the list's place, which is frame for a
+local list (L0314), and `push`'s `escaping added` refused an item that came
+from a caller's non-escaping list (L0314). The ways round it were a copy of
+the list value, which D1084 refuses with no binding between, and a round
+trip through `usize`.
+
+**Chosen:** a `from` name may be written `held p`, and says that the result
+is what `p` holds rather than a view of `p`'s storage.
+
+- In the body, a reference reaches `p` held when it was read out of an
+  element: through a pointer `p` carries (`.val`), by an index into a
+  slice it carries, or by an index into an array it holds in place, with
+  any fields of what was read. The address or range of such an element,
+  and `p`'s own fields read as they are, reach `p` itself. A result whose
+  every edge that reaches `p` reaches it held satisfies `held p`; one that
+  reaches it otherwise is L0316, naming the view. A plain `from p` accepts
+  both.
+- At a call, the result takes what the argument's value refers to,
+  including what earlier stores and `escaping into` kept in it [1910]; for
+  `addr x`, what `x`'s value refers to. It lends no view of the binding or
+  place the argument was read from, `inout` or not, so it neither locks
+  that binding against `inout` and `sink` nor counts as its frame.
+- `held` is part of the function's type, so a function value, a concept
+  entry and a generic instance carry it, and two types that differ in it
+  do not agree.
+
+`core/mem`'s `get` and `withdraw`, `core/vec`'s `get`, `last` and `pop`,
+`core/spill`'s `get`, `last` and `pop`, `core/map`'s `get` and
+`next_entry` and `core/tree`'s `get` say `held`; `used` and `at`, which lend
+the container's storage, keep `from value`. Every container insert keeps
+what it is given in the container's own storage and nowhere else, so its
+parameter is `escaping into` the container (D445) rather than `escaping`:
+an item read out of a caller's list goes back into it as the same origin,
+and a frame node declared before a frame list may go into it, what is read
+back carrying its frame origin.
+
+What a container holds is the author's claim about which of its storage it
+owns: an element read through its references is taken not to be storage
+it releases or moves. A list made to hold a view of its own block, by
+writing one through an `at` slot, is read back with no lock on the list,
+and this is a stated non-guarantee [1720], not a hole a later check is
+expected to close. A copy of a list's value, `snapshot := pointers`, still
+lends a view of the block both share with no lock on `pointers` (D1084);
+what is read out of it is now held, as from the list itself.
+
+**The alternatives:** an independent result for what a container holds,
+since `push` admitted only `escaping` items, which is wrong for a list
+filled through an `at` slot or through `escaping into`; a second fact per
+binding for what calls kept in it, more precise but a second fact in every
+state, against the scaling bound, for the answers this one gives in every
+case the library has; a clause of its own, `held by value`, beside `from`,
+which a result could need both of; and keeping `escaping added`, which
+leaves an item of a caller's list refused on its way back, or a rule at the
+call for an argument the same call's `inout` argument held, which holds
+for that one shape. All were declined.
+
+**Pinned by** `runtime/held-references-go-back`, which pushes pointers and
+slices back through `get`, `last` and `pop`, inline, through a local, a
+field and a helper of the program's own, into a caller's list, and through
+`core/map` and `core/spill`; and `negative/held-result-refusals`, for a
+`held` result that is a view, a view held across a push, a frame address
+read back out of a list and a function value differing in `held`.
 
 ### D433 — A pointer arm's binding may be `sink`, and consumes the matched place
 

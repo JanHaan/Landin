@@ -3376,6 +3376,29 @@ Nothing is written at the call. The convention lives in the declaration,
 and a caller that misuses the result is told at its next use, just as
 with `escaping`.
 
+A container's own storage and what it holds are different things.
+`vec.used` lends the list's storage, which a push may move. `vec.last` of
+a list of pointers copies out a pointer the list held, which a push leaves
+where it was. Its result is declared `from held value`, so it borrows
+nothing of the list:
+
+```landin
+import core/mem
+import core/vec
+import hosted/heap
+
+again: (inout nodes: vec.list(ptr u32)) -> none ! mem.out_of_memory | mem.empty =
+    memory := heap.new()
+    try vec.push(nodes, memory, try vec.last(nodes)) -- fine: what it held
+end again
+```
+
+A result `from held p` is read out of an element: through a pointer `p`
+carries, or by an index into a slice or array it holds. The address of
+that element is a view of `p` and needs a plain `from p`. `push` keeps the
+pointer it is given in the list's own storage (`escaping into`, [0780]),
+so an item of the caller's list goes straight back into it.
+
 ### [0840] Mixed origins count as the shortest-lived
 
 When a value combines origins, it takes the most restrictive one. A struct

@@ -981,9 +981,13 @@ package Landin.Checking is
      (Into : in out Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id; Conversion : Nominal_Type_Id);
 
+   --  Held is D1369's `from held p`: the result is what the parameter
+   --  holds, read through a reference it carries, and lends no view of
+   --  its storage.
    type Return_Source_Association is record
       Result    : Positive := 1;
       Parameter : Positive := 1;
+      Held      : Boolean := False;
    end record;
 
    type Return_Source_Array is
@@ -1209,6 +1213,18 @@ package Landin.Checking is
       Signature : Signature_Id;
       Result    : Positive;
       Index     : Positive) return Positive
+     with Pre => Holds (Of_Table, Signature)
+                 and then Result <= Signature_Result_Count
+                                      (Of_Table, Signature)
+                 and then Index <= Signature_Return_Source_Count
+                   (Of_Table, Signature, Result);
+
+   --  Whether the Index-th source of Result is written `held` (D1369).
+   function Nth_Signature_Return_Source_Held
+     (Of_Table : Table;
+      Signature : Signature_Id;
+      Result    : Positive;
+      Index     : Positive) return Boolean
      with Pre => Holds (Of_Table, Signature)
                  and then Result <= Signature_Result_Count
                                       (Of_Table, Signature)

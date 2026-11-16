@@ -366,7 +366,8 @@ end admit_copy
 
 --- Append a complete value into a spare slot and return its index. Reports
 --- `full` without publishing a new prefix when no slot is available.
-public admit: (item: type, inout store: storage(item), escaping value: item)
+public admit: (item: type, inout store: storage(item),
+              escaping into store value: item)
               -> (index: usize) ! full =
     index = length(store)
     fail full when index >= store.capacity_count
@@ -391,7 +392,7 @@ end admit
 --- Copy the item at `index`. Reports `out_of_bounds` before reading outside
 --- the initialized prefix; references inside the copy retain their origin.
 public get: (item: type, store: storage(item), index: usize)
-            -> (value: item from store) ! out_of_bounds =
+            -> (value: item from held store) ! out_of_bounds =
     fail out_of_bounds when index >= length(store)
     value = store.prefix[index]
 end get
@@ -399,7 +400,7 @@ end get
 --- Overwrite an initialized item. Reports `out_of_bounds` before mutation;
 --- the caller handles resources held by the replaced value.
 public replace: (item: type, inout store: storage(item), index: usize,
-                 escaping value: item) -> none ! out_of_bounds =
+                 escaping into store value: item) -> none ! out_of_bounds =
     fail out_of_bounds when index >= length(store)
     store.prefix[index] = value
 end replace
@@ -494,7 +495,7 @@ end transfer_prefix
 --- Remove and return the last initialized item, the raw pop. Reports `empty`
 --- when the prefix is empty; backing and capacity remain available.
 public withdraw: (item: type, inout store: storage(item))
-                 -> (value: item from store) ! empty =
+                 -> (value: item from held store) ! empty =
     count: usize = length(store)
     fail empty when count == 0
     tail: usize = count - 1

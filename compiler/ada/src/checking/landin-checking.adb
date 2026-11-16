@@ -1262,6 +1262,9 @@ package body Landin.Checking is
             Result := Mix (Result, Ada.Containers.Hash_Type'Mod
               (Nth_Signature_Return_Source
                 (Of_Table, Id, Index, Source)));
+            Result := Mix (Result, Boolean'Pos
+              (Nth_Signature_Return_Source_Held
+                (Of_Table, Id, Index, Source)));
          end loop;
       end loop;
       return Result;
@@ -3987,6 +3990,33 @@ package body Landin.Checking is
         "a return source index escaped its checked bound";
    end Nth_Signature_Return_Source;
 
+   function Nth_Signature_Return_Source_Held
+     (Of_Table : Table;
+      Signature : Signature_Id;
+      Result    : Positive;
+      Index     : Positive) return Boolean
+   is
+      Sources : constant Run :=
+        Of_Table.Signatures.Element (Positive (Signature)).Sources;
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Sources.Count loop
+         declare
+            Source : constant Return_Source_Association :=
+              Of_Table.Return_Sources.Element (Sources.First + Position);
+         begin
+            if Source.Result = Result then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Source.Held;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Landin.Compiler_Defect with
+        "a return source index escaped its checked bound";
+   end Nth_Signature_Return_Source_Held;
+
    function Signature_Result
      (Of_Table : Table; Signature : Signature_Id) return Signature_Part
    is
@@ -4178,6 +4208,10 @@ package body Landin.Checking is
             if Nth_Signature_Return_Source
                  (Of_Table, Left, Index, Source)
               /= Nth_Signature_Return_Source
+                   (Of_Table, Right, Index, Source)
+              or else Nth_Signature_Return_Source_Held
+                 (Of_Table, Left, Index, Source)
+              /= Nth_Signature_Return_Source_Held
                    (Of_Table, Right, Index, Source)
             then
                return False;
@@ -4434,6 +4468,9 @@ package body Landin.Checking is
                Put (Landin.Packed.Image
                       (Nth_Signature_Return_Source
                          (Of_Table, Signature, Index, Source)));
+               Put (Landin.Packed.Image
+                      (Boolean'Pos (Nth_Signature_Return_Source_Held
+                         (Of_Table, Signature, Index, Source))));
             end loop;
          end loop;
       end Put_Signature;

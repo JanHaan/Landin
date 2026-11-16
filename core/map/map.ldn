@@ -133,11 +133,11 @@ end entries
 ---
 --- Each call follows one live link. Across an unmodified walk, every live
 --- entry is returned once in insertion order and the walk costs O(count),
---- including the exhausted call. The result retains `from value` because K
---- or V may hold references into the map's initialized storage.
+--- including the exhausted call. The result is what the map holds, a copy
+--- of its key and item, and no view of the map's storage.
 public next_entry: (key: type is cmp.hashable, item: type,
                     value: map(key, item), inout position: cursor)
-                   -> (result: entry(key, item) from value) ! end_of_entries =
+                   -> (result: entry(key, item) from held value) ! end_of_entries =
     slots: usize = slots(value)
     if position.next_slot == 0 -% 1 then
         position.next_slot = value.first_used
@@ -164,7 +164,8 @@ public next_entry: (key: type is cmp.hashable, item: type,
 end next_entry
 
 replace_value: (value: type, inout storage: mem.storage(value),
-                index: usize, escaping replacement: value) -> (ok: bool) =
+                index: usize, escaping into storage replacement: value)
+               -> (ok: bool) =
     mem.replace(storage, index, replacement) else (problem)
         _ = problem
         ok = false
@@ -231,7 +232,8 @@ end crowding_threshold
 
 install_at: (key: type is cmp.hashable, item: type,
              inout value: map(key, item), at: usize, was_dead: bool,
-             escaping added_key: key, escaping added_item: item)
+             escaping into value added_key: key,
+             escaping into value added_item: item)
             -> (placed: bool) =
     slots: usize = slots(value)
     mut dense: usize = 0
@@ -314,7 +316,7 @@ end insert_search
 
 search_for_insert: (key: type is cmp.hashable, item: type,
                     inout value: map(key, item), wanted: key,
-                    escaping replacement: item)
+                    escaping into value replacement: item)
                    -> (result: insert_search) ! mem.out_of_memory =
     slots: usize = slots(value)
     if slots == 0 then
@@ -371,7 +373,8 @@ end search_for_insert
 --  search has reached a free bucket or exhausted the table.
 place_absent: (key: type is cmp.hashable, item: type,
                inout value: map(key, item),
-               escaping added_key: key, escaping added_item: item)
+               escaping into value added_key: key,
+               escaping into value added_item: item)
               -> (placed: bool) =
     slots: usize = slots(value)
     if slots == 0 then
@@ -544,7 +547,8 @@ end rehash
 public insert: (key: type is cmp.hashable, item: type,
                 provider: type is mem.allocator,
                 inout value: map(key, item), memory: provider,
-                escaping added_key: key, escaping added_item: item)
+                escaping into value added_key: key,
+                escaping into value added_item: item)
                -> none ! mem.out_of_memory =
     position: insert_search = try search_for_insert
         (value, added_key, added_item)
@@ -621,7 +625,7 @@ end locate
 --- references inside the copy retain their origin.
 public get: (key: type is cmp.hashable, item: type,
              value: map(key, item), wanted: key)
-            -> (result: item from value) ! missing =
+            -> (result: item from held value) ! missing =
     found: location = try locate(value, wanted)
     result = mem.get(value.values, found.dense) else (problem)
         _ = problem

@@ -12263,7 +12263,8 @@ package body Landin.Tests.Checking_Suite is
                   C_ABI => True);
                Borrowed : constant C.Signature_Id := C.Add_Signature
                  (Types.all, [Pointer_Part], Pointer_Part, Site,
-                  Sources => [(Result => 1, Parameter => 1)], C_ABI => True);
+                  Sources => [(Result => 1, Parameter => 1, Held => False)],
+                  C_ABI => True);
                Retaining, Moving : C.Signature_Id;
                Bad_Carrier : C.Field_Shape := Callback;
             begin

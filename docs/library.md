@@ -329,12 +329,14 @@ A growable contiguous list with explicit allocation and rollback on failed growt
 |---|---|
 | `vec.new` | Start an empty list; nothing is allocated. |
 | `vec.reserve`, `vec.push` | Grow the list, through the provider's handle. |
-| `vec.get` | Copy an item out. |
+| `vec.get`, `vec.last`, `vec.pop` | Copy an item out; what it refers to is what the list held, not a view of the list. |
 | `vec.at` | Lend a writable pointer to an item. |
 | `vec.used` | Lend the initialized slice. |
 
 End views before relocation or release. Clearing or releasing a container
-never frees the resources that its items refer to.
+never frees the resources that its items refer to. So an item copied out
+of a list is no view of it: a pointer read with `vec.last` goes back in
+with `vec.push` while nothing else views the list (D1369).
 
 A list of bytes is the growable byte container:
 

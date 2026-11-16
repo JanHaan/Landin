@@ -365,6 +365,27 @@ package body Landin.Stages.Checking.References is
          Set := (List => Made);
       end Include;
 
+      --  Set loses Local, when it holds it.
+      procedure Exclude (Set : in out Local_Set; Local : Local_Id);
+
+      procedure Exclude (Set : in out Local_Set; Local : Local_Id) is
+         Length : constant Natural := Count (Set);
+         Place : constant Positive := Place_Of (Set, Local);
+         Made : Derived_Access;
+      begin
+         if Place > Length or else Set.List.Items (Place) /= Local then
+            return;
+         elsif Length = 1 then
+            Set := (List => null);
+            return;
+         end if;
+         Made := Allocated (Length - 1);
+         Made.Items (1 .. Place - 1) := Set.List.Items (1 .. Place - 1);
+         Made.Items (Place .. Length - 1) :=
+           Set.List.Items (Place + 1 .. Length);
+         Set := (List => Made);
+      end Exclude;
+
       --  Into gains every local of Other.  A union that adds nothing
       --  keeps Into's list, and one that adds all of Other's takes
       --  Other's, so a join that changes nothing allocates nothing.
@@ -502,6 +523,13 @@ package body Landin.Stages.Checking.References is
          --  Keep that diagnostic state distinct from raw address origins.
          Invalid    : Boolean := False;
          From       : Parameter_Bits := [others => False];
+         --  D1369: the parameters of From this reference reaches only
+         --  through a reference read out of them, an element of a slice
+         --  or the target of a pointer they carry, and never as their own
+         --  storage or the storage their references point at.  It is
+         --  what a `from held` source accepts; a bit set here is set in
+         --  From too.
+         Held_Only  : Parameter_Bits := [others => False];
          Derives    : Local_Set;
          --  D1084: the locals of Derives whose own storage the reference
          --  may point into, or whose storage a call's `from` lent it: an
@@ -611,6 +639,14 @@ package body Landin.Stages.Checking.References is
             Into_Fact.Untracked := False;
          end if;
          for Position in Into_Fact.From'Range loop
+            --  Held only where every alternative that reaches the
+            --  parameter reaches it held.
+            Into_Fact.Held_Only (Position) :=
+              (Into_Fact.From (Position) or else Other.From (Position))
+              and then (Into_Fact.Held_Only (Position)
+                        or else not Into_Fact.From (Position))
+              and then (Other.Held_Only (Position)
+                        or else not Other.From (Position));
             Into_Fact.From (Position) :=
               Into_Fact.From (Position) or Other.From (Position);
             if Into_Fact.From (Position) then
@@ -2296,6 +2332,32 @@ package body Landin.Stages.Checking.References is
              /= Landin.Checking.Field_Index (Types.all, Tree, Right_Parts);
       end Views_Another_Field;
 
+      --  D1369: the local whose place `addr` names, when the operand is
+      --  rooted in one by fields and fixed indexes alone, or zero.
+      function Pointee_Local (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Natural;
+
+      function Pointee_Local (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Natural
+      is
+         Current : Syn.Node_Id := Syn.Operand_Of (Tree, Node);
+      begin
+         while Syn.Kind (Tree, Current)
+           in Syn.Member_Selection | Syn.Element_Index
+         loop
+            exit when Landin.Checking.Type_Of
+              (Types.all, Tree, Syn.Target_Of (Tree, Current))
+                in Ty.Pointer_Value | Ty.Slice_Value;
+            Current := Syn.Target_Of (Tree, Current);
+         end loop;
+         if Syn.Kind (Tree, Current) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Tree, Current) = Res.Bound
+         then
+            return Local_Of (Res.Bound_To (Meanings.all, Tree, Current));
+         end if;
+         return 0;
+      end Pointee_Local;
+
       procedure Hold_View
         (Tree : Syn.Tree; Node : Syn.Node_Id; Fact : Reference_Fact) is
       begin
@@ -3653,6 +3715,17 @@ package body Landin.Stages.Checking.References is
                   Is_Slice : constant Boolean :=
                     Syn.Kind (Tree, Node)
                       in Syn.Inclusive_Slice | Syn.Half_Open_Slice;
+                  --  The selection reads through the reference its target
+                  --  is, rather than selecting a part of the target.
+                  Loads : constant Boolean :=
+                    (Syn.Kind (Tree, Node) = Syn.Member_Selection
+                     and then Target_Kind = Ty.Pointer_Value)
+                    or else (Syn.Kind (Tree, Node) = Syn.Element_Index
+                             and then Target_Kind = Ty.Slice_Value);
+                  Reads_Element : constant Boolean :=
+                    Loads
+                    or else (Syn.Kind (Tree, Node) = Syn.Element_Index
+                             and then Target_Kind = Ty.Fixed_Array);
                begin
                   Result := Target_Fact;
                   if Syn.Kind (Tree, Node) = Syn.Member_Selection
@@ -3667,12 +3740,14 @@ package body Landin.Stages.Checking.References is
                   end if;
                   if Is_Slice and then Target_Kind = Ty.Fixed_Array then
                      Result.Value := Target_Fact.Storage;
-                  elsif (Syn.Kind (Tree, Node) = Syn.Member_Selection
-                         and then Target_Kind = Ty.Pointer_Value)
-                    or else (Syn.Kind (Tree, Node) = Syn.Element_Index
-                             and then Target_Kind = Ty.Slice_Value)
-                  then
+                  elsif Loads then
                      Result.Storage := Target_Fact.Value;
+                  end if;
+                  --  D1369: an element read through a reference a
+                  --  parameter carries, or out of an array it holds in
+                  --  place, is what the parameter holds.
+                  if Reads_Element then
+                     Result.Value.Held_Only := Result.Value.From;
                   end if;
                   --  Capture the base before the selectors run: an index
                   --  can replace that base while its old address is in use.
@@ -3723,6 +3798,21 @@ package body Landin.Stages.Checking.References is
                          (Types.all, Tree, Node)
                            in Ty.Pointer_Value | Ty.Slice_Value
                      then
+                        --  A part of what was held is held still, and
+                        --  what is read through a reference is held.
+                        if not Result.Value.From (Parameter_Of (Id)) then
+                           Result.Value.Held_Only (Parameter_Of (Id)) :=
+                             (Syn.Kind (Tree, Node) = Syn.Member_Selection
+                              and then Landin.Checking.Type_Of
+                                (Types.all, Tree, Syn.Target_Of (Tree, Node))
+                                  = Ty.Pointer_Value)
+                             or else
+                               (Syn.Kind (Tree, Node) = Syn.Element_Index
+                                and then Landin.Checking.Type_Of
+                                  (Types.all, Tree,
+                                   Syn.Target_Of (Tree, Node))
+                                    in Ty.Slice_Value | Ty.Fixed_Array);
+                        end if;
                         Result.Value.From (Parameter_Of (Id)) := True;
                      end if;
                   end if;
@@ -3890,6 +3980,11 @@ package body Landin.Stages.Checking.References is
                                               Returned, Source);
                                        Argument : constant Syn.Node_Id :=
                                          Runtime_Argument (Tree, Node, Formal);
+                                       Held_Source : constant Boolean :=
+                                         Landin.Checking
+                                           .Nth_Signature_Return_Source_Held
+                                             (Types.all, Called,
+                                              Returned, Source);
                                     begin
                                        --  D1042: a source D290 asks nothing
                                        --  of in this instance lends the
@@ -3909,7 +4004,55 @@ package body Landin.Stages.Checking.References is
                                                Res.Declaration_Id :=
                                                  Root_Declaration
                                                    (Tree, Argument);
+                                             Held_Fact : Reference_Fact :=
+                                               Fact.Value;
                                           begin
+                                             --  D1369: a result the
+                                             --  argument held refers to
+                                             --  what the argument's value
+                                             --  refers to, stores into it
+                                             --  joined, and lends no view
+                                             --  of the binding or place
+                                             --  the argument was read
+                                             --  from, `inout` or not.
+                                             if Held_Source then
+                                                --  What a pointer to a
+                                                --  place holds is what
+                                                --  the place's value
+                                                --  refers to.
+                                                if Syn.Kind (Tree, Argument)
+                                                  = Syn.Address_Of
+                                                  and then Pointee_Local
+                                                    (Tree, Argument) /= 0
+                                                then
+                                                   Held_Fact := Origin
+                                                     (Pointee_Local
+                                                        (Tree, Argument))
+                                                       .Value;
+                                                   Exclude
+                                                     (Held_Fact.Derives,
+                                                      Pointee_Local
+                                                        (Tree, Argument));
+                                                   Exclude
+                                                     (Held_Fact.Interior,
+                                                      Pointee_Local
+                                                        (Tree, Argument));
+                                                end if;
+                                                Held_Fact.Held_Only :=
+                                                  Held_Fact.From;
+                                                if Id /= Res.No_Declaration
+                                                  and then Local_Of (Id) /= 0
+                                                then
+                                                   Exclude
+                                                     (Held_Fact.Derives,
+                                                      Local_Of (Id));
+                                                   Exclude
+                                                     (Held_Fact.Interior,
+                                                      Local_Of (Id));
+                                                end if;
+                                                Join (Part, Held_Fact);
+                                                goto Next_Source;
+                                             end if;
                                              --  Both the value and backing
                                              --  were captured at this actual's
                                              --  evaluation, not replayed after
@@ -3951,6 +4094,7 @@ package body Landin.Stages.Checking.References is
                                           end;
                                        end if;
                                     end;
+                                    <<Next_Source>>
                                  end loop;
                                  --  D375: a writable result may reach its
                                  --  sources' independent storage through
@@ -4348,6 +4492,55 @@ package body Landin.Stages.Checking.References is
                                       & " sources",
                            Into    => Sink.all);
                      end;
+                  else
+                     --  D1369: a source written `held` is reached only
+                     --  through a reference it carries; a view of its own
+                     --  storage, or of the storage its references point
+                     --  at, is what a plain `from` names.
+                     for Source in
+                       1 .. Landin.Checking.Signature_Return_Source_Count
+                         (Types.all, Signature, Position)
+                     loop
+                        declare
+                           Formal : constant Positive :=
+                             Landin.Checking.Nth_Signature_Return_Source
+                               (Types.all, Signature, Position, Source);
+                        begin
+                           if Landin.Checking
+                               .Nth_Signature_Return_Source_Held
+                                 (Types.all, Signature, Position, Source)
+                             and then Formal <= Syn.Parameter_Count
+                               (Of_Tree, Function_Node)
+                             and then Fact.From (Formal)
+                             and then not Fact.Held_Only (Formal)
+                           then
+                              declare
+                                 Named : constant String := Spelled
+                                   (Syn.Name (Of_Tree, Syn.Nth_Parameter
+                                     (Of_Tree, Function_Node, Formal)));
+                              begin
+                                 Bad.Report
+                                   (Item    => Bad.Return_Sources_Disagree,
+                                    Source  => Syn.Source_Of (Tree),
+                                    Where   => Syn.Where (Tree, At_Node),
+                                    Message => "the returned reference"
+                                      & " views `" & Named & "`'s storage,"
+                                      & " not something `" & Named
+                                      & "` holds",
+                                    Note    => "D1369: `from held "
+                                      & Named & "` is a reference read"
+                                      & " through one `" & Named
+                                      & "` carries; write `from " & Named
+                                      & "` for a view of its storage",
+                                    Related => Part.Site,
+                                    Because => "the named return and its"
+                                               & " declared sources",
+                                    Into    => Sink.all);
+                              end;
+                              exit;
+                           end if;
+                        end;
+                     end loop;
                   end if;
                end if;
                <<Next_Return>>

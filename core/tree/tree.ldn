@@ -67,7 +67,7 @@ end next_id
 --- Append a named leaf and return its identifier. Retains the name's backing;
 --- allocation or identifier exhaustion leaves existing nodes unchanged.
 public add_leaf: (provider: type is mem.allocator, inout value: tree,
-                  memory: provider, escaping name: utf8)
+                  memory: provider, escaping into value name: utf8)
                  -> (id: node_id) ! mem.out_of_memory | too_many_nodes =
     id = try next_id(length(value))
     mut previous_low: usize = 0
@@ -98,7 +98,7 @@ end add_leaf
 --- Shared children count once for each incoming path, as recursive counting
 --- would. An empty child interval has total zero.
 public add_branch: (provider: type is mem.allocator, inout value: tree,
-                    memory: provider, escaping name: utf8,
+                    memory: provider, escaping into value name: utf8,
                     first: node_id, count: usize)
                    -> (id: node_id)
                    ! mem.out_of_memory | too_many_nodes
@@ -153,7 +153,7 @@ end add_branch
 --- Copy the node selected by an identifier. Reports `no_such_node` if absent;
 --- the name remains borrowed from its original backing.
 public get: (value: tree, id: node_id)
-            -> (result: node from value) ! no_such_node =
+            -> (result: node from held value) ! no_such_node =
     result = vec.get(value.nodes, usize(id)) else (problem)
         _ = problem
         fail no_such_node

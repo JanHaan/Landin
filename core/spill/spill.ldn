@@ -62,7 +62,7 @@ end first_capacity
 public push: (item: type, fixed inline_slots: usize,
               provider: type is mem.allocator,
               escaping inout value: list(item, inline_slots),
-              memory: provider, escaping added: item)
+              memory: provider, escaping into value added: item)
              -> none ! mem.out_of_memory =
     if value.spilled then
         try vec.push(value.spill, memory, added)
@@ -110,7 +110,7 @@ end used
 --- `mem.out_of_bounds` outside its initialized prefix.
 public get: (item: type, fixed inline_slots: usize,
              value: ptr list(item, inline_slots), index: usize)
-            -> (result: item from value) ! mem.out_of_bounds =
+            -> (result: item from held value) ! mem.out_of_bounds =
     if value.val.spilled then
         result = try vec.get(value.val.spill, index)
     else
@@ -134,7 +134,7 @@ end at
 --- `mem.empty` when empty; popping does not switch back to inline storage.
 public pop: (item: type, fixed inline_slots: usize,
              inout value: list(item, inline_slots))
-            -> (removed: item from value) ! mem.empty =
+            -> (removed: item from held value) ! mem.empty =
     fail mem.empty when value.count == 0
     if value.spilled then
         removed = try vec.pop(value.spill)
@@ -172,7 +172,7 @@ end clear
 --- Copy the last item. Reports `mem.empty` when there is none.
 public last: (item: type, fixed inline_slots: usize,
               value: ptr list(item, inline_slots))
-             -> (result: item from value) ! mem.empty =
+             -> (result: item from held value) ! mem.empty =
     fail mem.empty when value.val.count == 0
     result = get(value, value.val.count - 1) else (problem)
         _ = problem
