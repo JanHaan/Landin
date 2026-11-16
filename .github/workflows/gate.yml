@@ -1379,6 +1379,13 @@ jobs:
             -C compiler/ada/build/darwin-arm64/release
           ./scripts/build.sh -q
 
+      #  The scripts job runs every scripts/tests module on Linux; this
+      #  one tests the harness below with fakes and is run here as well,
+      #  since its paths read differently on macOS (/var is /private/var).
+      - name: The parity harness's own tests
+        if: matrix.shard == 1
+        run: python3 scripts/script_tests.py test_darwin_assembly
+
       - name: Hosted parity, shard ${{ matrix.shard }} of 3
         run: |
           LANDIN_DARWIN_JOBS=3 python3 compiler/tests/darwin/check.py --parity \
