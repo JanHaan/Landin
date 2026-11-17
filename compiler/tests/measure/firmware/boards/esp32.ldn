@@ -1,0 +1,7 @@
+--  The ESP32's Xtensa LX6 counts its cycles in CCOUNT.
+import descriptions/esp32
+import platform/xtensa
+
+counted: () -> (count: u32) =
+    count = xtensa.cycles()
+end counted

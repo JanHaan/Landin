@@ -1,0 +1,8 @@
+--  The RP2040's Cortex-M0+ has no cycle counter: its timer's raw low
+--  word, TIMERAWL, counts microseconds of the 12 MHz crystal's tick.
+import descriptions/rp2040
+
+counted: () -> (count: u32) =
+    port: ptr u32 = ptr(usize(0x40054028))
+    count = compiler.register_read(port, compiler.normal_read)
+end counted

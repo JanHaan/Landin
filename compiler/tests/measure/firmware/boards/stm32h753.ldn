@@ -1,0 +1,7 @@
+--  The STM32H753's Cortex-M7 counts its cycles in DWT CYCCNT.
+import descriptions/stm32h753
+
+counted: () -> (count: u32) =
+    port: ptr u32 = ptr(usize(0xe0001004))
+    count = compiler.register_read(port, compiler.normal_read)
+end counted

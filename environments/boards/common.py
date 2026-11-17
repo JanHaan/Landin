@@ -1091,6 +1091,11 @@ def validate_ram_image(elf, board):
     loads = [program for program in programs if program[0] == 1]
     require(any(p[4] for p in loads), 'RAM image has no loadable bytes')
     for _, offset, vaddr, paddr, filesz, memsz, _, _ in loads:
+        # An empty segment occupies nothing and the helper loads nothing of
+        # it; the Xtensa link leaves one at address 0 when its RAM text is
+        # empty, as a workload with no RAM routine's is.
+        if not memsz:
+            continue
         require(in_ram(vaddr, memsz),
                 'image memory exceeds SRAM; use --mode=boot for the boot check')
         require(vaddr == paddr, 'RAM ELF has a relocated load address; rebuild with --firmware-layout=ram')
