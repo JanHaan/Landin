@@ -131,10 +131,24 @@ sweep before it has just reviewed every live row; for a new row, from its
 filing.
 
 **Questions.** A decision only the maintainer can take is a question, one
-file under `roadmap/questions/`, Q-1 onward: the question, the options, the
-recommendation, and the default taken if no answer comes. `check.py`
-validates them. A question is never a register row. It closes with the
-answer recorded and, where the answer is a rule, a decision in `spec.md`.
+file under `roadmap/questions/`, Q-1 onward, never a register row and never
+a question asked only in a report or a chat. The file begins with the
+question as its heading, `# Q-7 — ...?`, and the line `Asked by R17.50 on
+2026-11-17.`, then what the maintainer needs to decide it, and four
+paragraphs each opening with its label in bold: `Options:`, a list
+numbered from 1 with at least two; `Recommendation:`; `Default until
+answered:`, which says what the default is in words and not by its option
+number alone; and `What waits on the answer:`, the work it holds up or
+`nothing`. The asker carries on with the default and with everything the
+answer cannot change. A question closes with one paragraph,
+`**Answer (YYYY-MM-DD, the maintainer):**`, and, where the answer is a
+rule, a decision in `spec.md`; a decision reopened is a new question.
+`check.py` refuses a file without these parts, a question cited that has
+no file, and a question's identity outside the roadmap's files, and the
+generated `roadmap/register.md` lists the open ones with their defaults
+and what waits, the table a report to the maintainer quotes. A decision an
+item's text gives to its own run, as R18.10 answers the command
+inventory's questions, becomes questions when that item starts.
 
 The gate is a safety net rather than a verdict: green says a tree passed
 there, and no item claims more.
@@ -295,13 +309,24 @@ fixes merged. The retired rows' standing facts moved to
 
 ### R17.20 — The question queue
 
-Status: planned
+Status: complete
 Depends on: R17.10
 
 `roadmap/questions/`, its checks and the open maintainer decisions moved
 into it.
 Exit evidence: every open maintainer decision a `Q-n` file; `check.py`
 refusing a question without options, default or what waits on it.
+
+Done: the Mechanics give a question its form, and `check.py` refuses a
+question without its heading, asker, options, recommendation, default,
+what waits on it or a well-formed answer, a default given by its option
+number alone, a `TODO`, a question cited without its file, and a question
+identity outside the roadmap's files, each in a control.
+`roadmap/register.md` lists the open questions with their defaults and
+what waits. `scripts/register_next.py --question --file` allocates and
+writes the next one. Q-1 to Q-6 gained their `What waits on the answer:`
+paragraphs, and the one open decision held outside the queue, the Darwin
+determinism manifests' compiler, is Q-7.
 
 ### R17.30 — Lanes and standing authority in the checks
 

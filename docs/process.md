@@ -172,7 +172,9 @@ Before an item closes:
    maintainer enough rows. It also refuses an open row that has stood
    through more than ten completed items since it was filed or last kept:
    schedule it on an item whose text names it, put its retirement to the
-   maintainer as a question under `roadmap/questions/`, or keep it with a
+   maintainer as a question under `roadmap/questions/` (`python3
+   scripts/register_next.py --question --file --asked-by ITEM` writes
+   one with the parts to fill in), or keep it with a
    body line `Kept: ` and one sentence saying why, which restarts its
    count. The age is read from Git's history and is not checked in a
    shallow clone; the gate's `documents` job fetches the whole history

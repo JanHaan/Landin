@@ -51,7 +51,11 @@ Promote to main when the complete software gate passed, a `scope=boards`
 dispatch passed on the identical tree unless the edit is declared
 `Gate: explanatory`, and the promoted tree is the tested tree; then follow
 main's own push gate, with its fresh boards, to its end. If main advanced, integrate first and obtain evidence for
-the resulting tree. Let independent work continue while a question is open.
+the resulting tree. A decision only the maintainer can take is a question
+file, never only a line in a report: `python3 scripts/register_next.py
+--question --file --asked-by ITEM` writes the next one with the parts
+`ROADMAP.md`'s Mechanics require. Carry on with its default and with the
+work its answer cannot change, and name the question in the report.
 
 Return what changed, the check scope and result, retained evidence, findings,
 and any pending work. State whether the candidate is local, pushed or on
