@@ -1,6 +1,8 @@
 """The bounded QEMU remote-protocol oracle; no guest instructions are changed."""
 import json
 import os
+from pathlib import Path
+import select
 import socket
 import subprocess
 import time
@@ -35,6 +37,7 @@ class Remote:
     def __init__(self, connection):
         self.socket = connection
         self.transcript = []
+        self.clock = None
 
     def byte(self):
         result = self.socket.recv(1)
@@ -87,6 +90,90 @@ class NotStarted(RuntimeError):
 #  How many times a guest that never started is started again before the
 #  run is failed as one that cannot start.
 STARTS = 2
+
+
+#  A guest's time is the wall time since it was continued less the time the
+#  host kept QEMU waiting to run: the most any one of its threads spent
+#  runnable but not running, from Linux's /proc/PID/task/TID/schedstat.  A
+#  20-second wall guard failed a guest that needs 11 CPU seconds alone and
+#  16 beside 64 or 128 busy threads on 32 hardware threads, since it then
+#  took 32 and 70 wall seconds; its time on this clock stays at
+#  its CPU time.  A guest waiting for an interrupt that never comes uses
+#  no CPU but is not kept waiting, so it is still bounded.  On a host
+#  without schedstat the clock is the wall clock, and the observation says
+#  which it was.
+CLOCK_POLL = 0.25
+
+
+def waits(pid):
+    """{TID: nanoseconds runnable but not running} for PID's threads, or None."""
+    try:
+        tasks = list(Path('/proc/%d/task' % pid).iterdir())
+    except OSError:
+        return None
+    found = {}
+    for task in tasks:
+        try:
+            found[task.name] = int((task / 'schedstat').read_text().split()[1])
+        except (OSError, IndexError, ValueError):
+            continue
+    return found or None
+
+
+class GuestClock:
+    """The time PROCESS's guest has had since `start`, on the clock above."""
+
+    def __init__(self, process):
+        self.process = process
+        self.start = time.monotonic()
+        self.base = waits(process.pid)
+        self.kind = 'wall less run-queue wait' if self.base is not None else 'wall'
+        self.waited = 0.0
+
+    def seconds(self):
+        now = waits(self.process.pid) if self.base is not None else None
+        if now is not None:
+            self.waited = max([self.waited] + [(delay - self.base.get(tid, 0)) / 1e9
+                                               for tid, delay in now.items()])
+        return self.wall() - self.waited
+
+    def wall(self):
+        return time.monotonic() - self.start
+
+
+#  However the host schedules it, a guest is interrupted after this many
+#  times its limit in wall time: past that the run says the host starved it.
+STARVED = 10
+
+
+class Starved(RuntimeError):
+    """The host kept the guest from running for STARVED times its limit."""
+
+
+def stopped_after(remote, process, timeout):
+    """Continue the guest and wait for its stop on the guest clock.
+
+    TimeoutError when the guest's own time reaches TIMEOUT, Starved when the
+    wall time reaches STARVED times it first."""
+    clock = GuestClock(process)
+    remote.clock = clock
+    payload = b'c'
+    remote.socket.sendall(b'$c#%02x' % (sum(payload) & 255))
+    while True:
+        ready, _, _ = select.select([remote.socket], [], [], CLOCK_POLL)
+        if ready:
+            #  QEMU acknowledges `c` at once and stops later: an
+            #  acknowledgement is consumed here, so the wait stays on the
+            #  guest clock.  A stop packet arrives whole; reading it is
+            #  bounded by the connection's own timeout, as every reply is.
+            if remote.socket.recv(1, socket.MSG_PEEK) == b'+':
+                remote.socket.recv(1)
+                continue
+            return remote.reply('c')
+        if clock.seconds() >= timeout:
+            raise TimeoutError('guest time')
+        if clock.wall() >= STARVED * timeout:
+            raise Starved('guest time')
 
 
 #  The bytes of the remote protocol's `g` packet that hold the PC and the
@@ -201,7 +288,7 @@ def observe_once(qemu, chip, elf, symbols, output, timeout, extra_breakpoint,
             if remote.command('M%x,%x:%s' % (bottom, len(guard), guard.hex())) != 'OK':
                 raise RuntimeError('QEMU refused the stack guard write')
             continued = True
-            stopped = remote.command('c')
+            stopped = stopped_after(remote, process, timeout)
             if not stopped.startswith(('S05', 'T05')):
                 raise RuntimeError('QEMU stopped unexpectedly: ' + stopped)
             # Both pinned core-esp32{,s3}/gdb-config.inc.c maps put the
@@ -228,7 +315,11 @@ def observe_once(qemu, chip, elf, symbols, output, timeout, extra_breakpoint,
                       'startup': startup,
                       'expected_stops': {'firmware': stop, 'completion': completed},
                       'remote': remote.transcript, 'qemu_command': command,
-                      'elapsed_seconds': time.monotonic() - tick}
+                      'elapsed_seconds': time.monotonic() - tick,
+                      'guest_clock': {'kind': remote.clock.kind,
+                                      'seconds': round(remote.clock.seconds(), 2),
+                                      'wall_seconds': round(remote.clock.wall(), 2),
+                                      'limit_seconds': timeout}}
             premature = (pc == stop and completed is not None
                          and not values['_landin_firmware_trap_count'])
             if premature or (pc != stop and (completed is None or pc != completed)):
@@ -238,7 +329,8 @@ def observe_once(qemu, chip, elf, symbols, output, timeout, extra_breakpoint,
                     raise RuntimeError('firmware stopped before fixture completion without a trap')
                 raise RuntimeError('unexpected guest stop PC: ' + hex(pc))
             return result
-        except TimeoutError:
+        except (TimeoutError, Starved) as error:
+            starved = isinstance(error, Starved)
             if remote is None:
                 raise RuntimeError('QEMU did not accept the remote-protocol connection in %d'
                                    ' seconds; inspect qemu.log' % timeout) from None
@@ -258,16 +350,24 @@ def observe_once(qemu, chip, elf, symbols, output, timeout, extra_breakpoint,
                 raise RuntimeError('QEMU answered neither the guest\'s stop nor an interrupt'
                                    ' in %d seconds; inspect timeout-remote.json and qemu.log'
                                    % timeout) from None
+            clock = remote.clock
             if not unstarted(initial, registers):
                 (output / 'timeout-remote.json').write_text(
                     json.dumps(remote.transcript, indent=2) + '\n')
+                if starved:
+                    raise RuntimeError(
+                        'the host starved the guest: it had %.1f of its %d seconds in %.0f'
+                        ' wall seconds, the rest waiting to run; that is a host too loaded'
+                        ' to judge it, not a guest that hangs; inspect timeout-remote.json'
+                        % (clock.seconds(), timeout, clock.wall())) from None
                 raise RuntimeError('guest timed out: it ran %d seconds without stopping;'
                                    ' inspect timeout-remote.json' % timeout) from None
             (output / 'not-started.json').write_text(
                 json.dumps(remote.transcript, indent=2) + '\n')
             raise NotStarted('after %d seconds its PC is still its reset PC %#x and no'
                              ' address register has changed'
-                             % (timeout, int.from_bytes(bytes.fromhex(initial)[:4], 'little')))
+                             % (timeout if not starved else clock.wall(),
+                                int.from_bytes(bytes.fromhex(initial)[:4], 'little')))
         finally:
             if connection is not None:
                 connection.close()

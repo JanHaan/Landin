@@ -163,9 +163,9 @@ stop = int(os.environ['FAKE_QEMU_STOP'], 16)
 registers = [0x40000400] + [0] * 156
 memory = {}
 
-def send(text):
+def send(text, ack=True):
     data = text.encode()
-    connection.sendall(b'+$' + data + b'#%02x' % (sum(data) & 255))
+    connection.sendall((b'+' if ack else b'') + b'$' + data + b'#%02x' % (sum(data) & 255))
 
 def packet():
     while True:
@@ -197,10 +197,12 @@ while True:
         address, length = (int(part, 16) for part in text[1:].split(','))
         send(memory.get(address, '00' * length))
     elif text == 'c':
+        #  QEMU acknowledges `c` at once, before the guest stops.
+        connection.sendall(b'+')
         if runs:
             registers[0], registers[2] = (stop if stops else 0x40000440), 0x3ffe0000
         if stops:
-            send('T05thread:01;')
+            send('T05thread:01;', ack=False)
     elif text == '\x03':
         send('T02thread:01;')
 """
@@ -249,6 +251,31 @@ class GuestStarts(unittest.TestCase):
         self.assertIn('guest timed out: it ran 1 seconds without stopping', str(error))
         self.assertTrue((output / 'timeout-remote.json').is_file())
         self.assertFalse((output / 'not-started-1.json').exists())
+
+    def test_a_guest_the_host_kept_waiting_is_starved_not_timed_out(self):
+        from unittest.mock import patch
+        with patch.object(remote.GuestClock, 'seconds', lambda clock: 0.0), \
+                patch.object(remote, 'STARVED', 2):
+            error, output = self.observe('hang')
+        self.assertIsInstance(error, RuntimeError)
+        self.assertIn('the host starved the guest: it had 0.0 of its 1 seconds in 2 wall'
+                      ' seconds', str(error))
+        self.assertNotIn('timed out', str(error))
+        self.assertTrue((output / 'timeout-remote.json').is_file())
+
+    def test_the_guest_clock_does_not_count_the_time_qemu_waited_to_run(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        samples = iter([{'1': 0, '2': 5 * 10**9}, {'1': 3 * 10**9, '2': 6 * 10**9, '3': 10**9}])
+        times = iter([100.0, 110.0, 110.0])
+        with patch.object(remote, 'waits', lambda pid: next(samples)), \
+                patch.object(remote.time, 'monotonic', lambda: next(times)):
+            clock = remote.GuestClock(SimpleNamespace(pid=1))
+            #  Ten wall seconds, of which thread 1 waited three to run.
+            self.assertEqual(clock.seconds(), 7.0)
+        self.assertEqual(clock.kind, 'wall less run-queue wait')
+        with patch.object(remote, 'waits', lambda pid: None):
+            self.assertEqual(remote.GuestClock(SimpleNamespace(pid=1)).kind, 'wall')
 
     def test_only_the_pc_and_address_registers_are_judged(self):
         initial = (0x40000400).to_bytes(4, 'little').hex() + '00' * 4 * 156

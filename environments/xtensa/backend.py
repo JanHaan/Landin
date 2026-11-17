@@ -205,6 +205,40 @@ def execute(run, refine, qemu, inputs, chip, expected=0, traps=False,
     return result
 
 
+#  The nonterminating control's limit: long enough that QEMU's start and
+#  the guest's own time are both measured, short beside the corpus's 20.
+NONTERMINATING_LIMIT = 3
+
+
+def nonterminating(run, refine, qemu, source, chip, memory_profile):
+    """A guest that branches to itself must end as a guest timeout."""
+    elf, named = build(run, refine, [source], chip, memory_profile=memory_profile)
+    changed, count = re.subn(r'(?m)^nop$', '1: j 1b', (run.out / 'program.s').read_text())
+    if count != 1:
+        raise RuntimeError('nonterminating-control requires exactly one source NOP')
+    negative = run.out / 'spin-program.s'
+    negative.write_text(changed)
+    prefix = 'xtensa-' + chip + '-elf-'
+    obj, elf = run.out / 'spin-program.o', run.out / 'spin-program.elf'
+    run.command('spin-program-assemble', [prefix + 'as', '--abi-windowed', '--auto-litpools',
+                                          '--longcalls', '-o', obj, negative])
+    run.command('spin-program-link', [prefix + 'gcc', '-mabi=windowed', '-nostdlib',
+                                      '-Wl,-T,' + str(run.out / 'program.ld') + ',--gc-sections',
+                                      '-o', elf, obj, '-lgcc'])
+    run.command('spin-program-disassembly', [prefix + 'objdump', '-dr', elf])
+    named = symbols(run, prefix, elf)
+    try:
+        observe(qemu, chip, elf, named, run.out, timeout=NONTERMINATING_LIMIT,
+                memory_profile=memory_profile)
+    except RuntimeError as error:
+        if not str(error).startswith('guest timed out: it ran %d seconds'
+                                     % NONTERMINATING_LIMIT):
+            raise
+        return {'status': 'passed', 'negative_oracle': str(error),
+                'limit_seconds': NONTERMINATING_LIMIT}
+    raise RuntimeError('a guest that branches to itself stopped')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refine', required=True, type=Path)
@@ -246,6 +280,11 @@ def main():
                                 'observation': record})
             else:
                 raise RuntimeError('a breakpoint before completion was accepted')
+            print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' rejected', flush=True)
+            continue
+        if name == 'nonterminating-control':
+            results.append(nonterminating(run, args.refine.resolve(), tools.qemu, known[name],
+                                          args.chip, args.memory_profile))
             print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' rejected', flush=True)
             continue
         if name in ('break-control', 'premature-stop-control'):

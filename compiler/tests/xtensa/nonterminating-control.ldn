@@ -1,0 +1,9 @@
+--  The guest that never stops. The negative runner replaces this unique NOP
+--  in a separately retained image with a branch to itself, runs it under a
+--  three-second limit and requires the oracle to end it as a guest timeout:
+--  however the host schedules QEMU, a guest that spins is still bounded.
+main: () -> (code: i32) =
+    landin_xtensa_fixture_status = 0
+    assembler.block("nop")
+    code = 0
+end main

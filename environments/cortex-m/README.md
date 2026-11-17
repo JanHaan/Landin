@@ -297,8 +297,17 @@ alone with `--lane` never meets. Before each session the server restores
 the Python namespace, deletes every breakpoint and watchpoint the last
 session made, the internal ones a script makes from Python among them,
 disconnects, unsets the target description the last target reported, sets
-the architecture back to `auto` and loads the session's executable. A
-failure that names an architecture the session's own executable does not
+the architecture back to `auto`, sets `remotetimeout` to the session's own
+limit and loads the session's executable. GDB's default `remotetimeout`
+waits two seconds for each reply of the remote protocol, three times, and
+then carries on as if the reply had been empty, so an emulator stalled
+longer on a loaded host had its late reply read as the answer to the next
+request: "Remote replied unexpectedly to 'vMustReplyEmpty':
+vCont;c;C;s;S". With the session's limit a slow emulator is waited for,
+and one that never answers ends the session as a timeout. The `cpu` lane
+serves a session against a stub that holds `vCont?` for seven seconds,
+once under the default, which must fail that way, and once as served,
+which must pass. A failure that names an architecture the session's own executable does not
 have, or a stop the session's script never asked for, is one session
 seeing another's state: run the lanes that preceded it on the same worker
 to reproduce it. The `rv32-controls` lane's `shared-debugger` control

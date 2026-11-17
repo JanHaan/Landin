@@ -44,6 +44,8 @@ class ProbeFailures(unittest.TestCase):
             stack.enter_context(patch('run.inventory',return_value={}))
             stack.enter_context(patch.object(Run,'command',return_value=VERSIONS))
             stack.enter_context(patch.object(Run,'qemu',side_effect=lambda:calls.append('qemu')))
+            stack.enter_context(patch.object(Run,'stalled_stub',
+                                             side_effect=lambda:calls.append('stalled_stub')))
             stack.enter_context(patch.object(Run,'peripheral',side_effect=lambda:calls.append('peripheral')))
             #  Each corpus lane is execute_lane given its own name.
             for name, entry in lanes:
@@ -54,7 +56,7 @@ class ProbeFailures(unittest.TestCase):
         from backend_corpus import LANES as CORPUS_LANES
         names = [n for n,_ in lanes]
         at = names.index('backend_acceptance') + 1
-        self.assertEqual(calls, ['qemu','peripheral'] + names[:at]
+        self.assertEqual(calls, ['qemu','stalled_stub','peripheral'] + names[:at]
                          + ['mps2-an505', 'mps2-an500', 'esp32c3', 'sifive-e'] + names[at+1:])
         self.assertEqual(sorted(CORPUS_LANES), ['esp32c3', 'mps2-an500', 'mps2-an505', 'sifive-e'])
         self.assertTrue(set(CORPUS_LANES) <= set(__import__('run').LANES))
@@ -1226,6 +1228,21 @@ class ProbeFailures(unittest.TestCase):
                 record = json.loads((root / 'commands.json').read_text())
                 self.assertEqual([r.get('exit') for r in record if r['name'] == 'gdb-bad'][:2], [1, 1])
                 self.assertTrue(any(r.get('timed_out') for r in record))
+                run_module.SERVERS.server.stop()
+
+    def test_each_session_waits_for_replies_as_long_as_its_limit(self):
+        # GDB's default two seconds per reply desynchronised a session on a
+        # loaded host; a script's own setting must not outlive it.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, stack = self.server_run(root)
+            with stack:
+                import run as run_module
+                probe = self.script(root, 'probe.gdb', 'python', 'import gdb',
+                                    'print("REMOTE", gdb.remotetimeout)',
+                                    'gdb.remotetimeout = 2', 'end')
+                self.assertIn('REMOTE 7', run.debug('gdb-a', 'x.elf', probe, timeout=6.5))
+                self.assertIn('REMOTE 20', run.debug('gdb-b', 'x.elf', probe))
                 run_module.SERVERS.server.stop()
 
     def test_concurrent_workers_each_have_their_own_debugger(self):
