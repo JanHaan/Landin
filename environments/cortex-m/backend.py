@@ -555,12 +555,14 @@ def rv32_session(run, port, expected, traps, before=(), profile=None):
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
 
 
-def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None):
+def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None,
+            plugin=()):
     """Run ELF under QEMU and hold it to its oracle; see `session`.
 
     PROFILE is the one the image was linked for, which must be the level's
     own: QEMU's machines have the reference's map or a lane profile's, not
-    a chip's.
+    a chip's.  PLUGIN is QEMU's `-plugin` argument and its value, the
+    instruction counter's (scripts/measure_count.py), or nothing.
     """
     machine = LEVELS[level]['profile']
     require(profile is None or profile['device'] == machine,
@@ -580,7 +582,7 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None)
     cpu = ['-cpu', LEVELS[level]['cpu']] if 'cpu' in LEVELS[level] else []
     argv = [str(emulator), '-M', LEVELS[level]['machine'], *cpu, '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
-            '-serial', 'none', '-kernel', str(elf), '-S', *stub]
+            '-serial', 'none', '-kernel', str(elf), '-S', *stub, *plugin]
     record = {'name': 'qemu-backend', 'argv': argv, 'timeout_seconds': 25}
     run.commands.append(record)
     tick = time.monotonic()

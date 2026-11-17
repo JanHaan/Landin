@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: the Benchmark Game Mandelbrot workload as firmware plots a 32 by 32 image at fifty iterations in IEEE double arithmetic with no arguments or output, folds every packed byte of the bitmap into an FNV-1a hash left in a module-level word, and returns 42 when it is the hosted port's at that size
+constructs: 0170, 0210, 0290, 0300, 0310, 0320, 0330, 0350, 0390, 0400, 0520, 0540, 0570, 1140, 1150, 1460, 1800, 1810, 1820, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

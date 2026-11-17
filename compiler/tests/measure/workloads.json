@@ -79,6 +79,16 @@
   {
    "name": "cmp-siphash-vectors",
    "fixture": "runtime/cmp-siphash-vectors"
+  },
+  {
+   "name": "fannkuch-redux",
+   "fixture": "runtime/firmware-fannkuch-redux",
+   "checksum": "checksum"
+  },
+  {
+   "name": "mandelbrot",
+   "fixture": "runtime/firmware-mandelbrot",
+   "checksum": "checksum"
   }
  ]
 }

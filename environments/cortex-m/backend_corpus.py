@@ -19,6 +19,8 @@ from backend import (HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      hard_float, lane_inputs, lane_of, level_flags, levels_of, link,
                      flash_region, measure_overflow, metadata, refine_level, region, target)
 from run import CommandFailed, Run, require, workers
+sys.path.insert(0, str(ROOT / 'scripts'))
+import measure_count  # noqa: E402
 from setup import DEFAULT, installed_tools, sha, supported_host
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
@@ -879,6 +881,22 @@ def observe(output, tools, refine, programs, profiles, levels=('armv6-m',), root
     return results
 
 
+def counting(run, elf, level):
+    """QEMU's arguments for counting the instructions ELF's program executes,
+    from `main` to the harness's `backend_done` (scripts/measure_count.py),
+    and the file the count is written to; none on the RV32 levels, whose
+    Espressif QEMU is built without plugins."""
+    if LEVELS[level].get('arch') == 'rv32':
+        return (), None
+    image = measure_count.Image(elf)
+    plugin = measure_count.plugin_for(
+        (str(run.bin / 'qemu-system-arm'), '-M', 'none', '-display', 'none'),
+        tuple(sorted(run.env.items())))
+    out = run.out / 'count.txt'
+    return ('-plugin', measure_count.plugin_argument(plugin, image, out,
+                                                     image.address('main'))), out
+
+
 def observe_one(output, tools, refine, path, name, profiles, level, roots, peers):
     """`observe` for one program, whose runs go under OUTPUT/NAME--PROFILE."""
     inputs = [*('--root=' + str(Path(root).resolve()) for root in roots)]
@@ -915,9 +933,12 @@ def observe_one(output, tools, refine, path, name, profiles, level, roots, peers
                 continue
             result['image'] = {key: json.loads((out / 'image.json').read_text())[key]
                                for key in ('regions', 'sections', 'routines')}
-            qemu(run, elf, None, False, level=level)
+            plugin, counted = counting(run, elf, level)
+            qemu(run, elf, None, False, level=level, plugin=plugin)
             seen = json.loads((out / 'observed.json').read_text())
             result.update(seen, status='ran')
+            if counted:
+                result['instructions'] = measure_count.read_count(counted)['instructions']
             stack = observed_stack(out)
             if stack:
                 result['stack'] = stack
@@ -929,6 +950,8 @@ def observe_one(output, tools, refine, path, name, profiles, level, roots, peers
                 said = ('trapped: HardFault at %s%s' % (seen['stacked_pc'],
                         ', a udf #1 trap' if seen['udf_1'] else '')
                         if seen['trapped'] else 'returned %d (r12 %d)' % (seen['status'], seen['r12']))
+            if 'instructions' in result:
+                said += ', %d instructions from main' % result['instructions']
             print('cortex program: %s %s/%s%s %s: %s' % (
                 shown, opt, spec, at, said, '; '.join(
                     clause for clause in (describe_sizes(result['image']),

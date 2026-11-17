@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: the Benchmark Game fannkuch-redux workload as firmware enumerates every permutation of order seven with no arguments or output, folds each flip count and the maximum into an FNV-1a hash left in a module-level word, and returns 42 when it, the checksum 228 and the maximum 16 are order seven's
+constructs: 0290, 0300, 0310, 0330, 0350, 0390, 0400, 0520, 0540, 0670, 0900, 1130, 1140, 1150, 1460, 1800, 1810, 1820, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

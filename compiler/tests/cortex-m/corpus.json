@@ -2674,6 +2674,12 @@
     "runtime/file-system-firmware": {
       "mode": "execute"
     },
+    "runtime/firmware-fannkuch-redux": {
+      "mode": "execute"
+    },
+    "runtime/firmware-mandelbrot": {
+      "mode": "execute"
+    },
     "runtime/first-program": {
       "codes": [
         "L0015"
