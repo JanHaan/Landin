@@ -4,9 +4,10 @@
 #      scripts/apt_install.sh [APT-GET INSTALL OPTION...] PACKAGE...
 #
 #  The arguments go to `apt-get install -y` as they are.  The image lists
-#  Azure's Ubuntu mirror first (/etc/apt/apt-mirrors.txt); it has taken
-#  eighteen minutes to deliver one 57.5 MB archive, and the stock-user job
-#  spent its whole budget there before any compiler check ran.  So each
+#  its cloud's Ubuntu mirror first (/etc/apt/apt-mirrors.txt), Azure's on
+#  2026-11-04 and an EC2 one on 2026-11-17; Azure's took eighteen minutes
+#  to deliver one 57.5 MB archive, and the stock-user job spent its whole
+#  budget there before any compiler check ran.  So each
 #  attempt is bounded: the index update by LANDIN_APT_UPDATE_LIMIT seconds,
 #  120 by default, and the installation by LANDIN_APT_LIMIT, 360 by
 #  default.  The first attempt uses the image's mirrors; when it fails or
