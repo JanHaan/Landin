@@ -182,7 +182,8 @@ class Resume(Clone):
         self.assertEqual(status, 0, out)
         self.assertIn("uncommitted changes", out)
         self.assertIn("halfway through", out)
-        self.assertIn("next: continue the work", out)
+        self.assertIn("next: the uncommitted changes listed above", out)
+        self.assertIn("then continue the work", out)
 
     def test_a_running_run_is_the_next_step_and_a_lost_one_is_named(self):
         self.item("start", FIRST)
@@ -193,7 +194,9 @@ class Resume(Clone):
         state["runs"].append({"name": "suite", "directory": str(going),
                               "command": "x", "started": item.stamp()})
         item.save(state)
-        self.assertIn("wait for run suite", item.next_step(item.load(FIRST)))
+        step = item.next_step(item.load(FIRST))
+        self.assertIn("wait for run suite", step)
+        self.assertIn("; then continue the work", step)
         (going / "result.json").write_text(json.dumps({"exit_status": 0}))
         self.assertEqual(item.run_state(going), "finished, exit 0")
 
@@ -269,6 +272,16 @@ class Promote(Clone):
         later = self.commit("more work")
         self.state["gates"].append(self.gate(later, "software"))
         self.assertEqual(len(self.problems(later)), 1)
+
+    def test_passed_runs_move_the_phase_on(self):
+        head = self.commit("work")
+        self.state["gates"].append(self.gate(head, "software"))
+        item.advance(self.state, head)
+        self.assertEqual(self.state["phase"], "gate-passed")
+        self.state["gates"].append(self.gate(head, "boards"))
+        item.advance(self.state, head)
+        self.assertEqual(self.state["phase"], "boards-passed")
+        self.assertIn("promote", item.phase_step(self.state))
 
     def test_a_maintainer_item_is_not_promoted(self):
         self.item("start", SECOND)

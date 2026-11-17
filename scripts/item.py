@@ -518,6 +518,7 @@ def gate(arguments):
         if state["phase"] == "started":
             state["phase"] = "pushed"
     record_gates(state, commit)
+    advance(state, commit, arguments.main)
     save(state)
     shown = [entry for entry in state["gates"] if entry["commit"] == commit]
     for entry in shown:
@@ -541,6 +542,22 @@ def gate(arguments):
                              "--branch", branch]
         return run(arguments)
     return 0
+
+
+def advance(state, commit, main=False):
+    """Move the phase on as far as COMMIT's passed runs take it."""
+    passed = {entry["kind"] for entry in state["gates"]
+              if entry["commit"] == commit
+              and entry.get("conclusion") == "success"}
+    if main:
+        if "main" in passed:
+            state["phase"] = "main-passed"
+        return
+    if state["phase"] in ("started", "pushed", "gate-passed") and \
+            "software" in passed:
+        state["phase"] = "gate-passed"
+    if state["phase"] == "gate-passed" and "boards" in passed:
+        state["phase"] = "boards-passed"
 
 
 def boards(arguments):
@@ -761,12 +778,29 @@ def describe(state, full=False):
 
 
 def next_step(state):
+    """What the item does next, after any run still going and any edit
+    not yet committed."""
     item = state["item"]
+    first = []
     running = [entry for entry in state["runs"]
                if run_state(entry["directory"]) == "running"]
     if running:
-        return ("wait for run %s: python3 scripts/run_logged.py --wait %s"
-                % (running[0]["name"], running[0]["directory"]))
+        first.append("wait for run %s: python3 scripts/run_logged.py --wait"
+                     " %s, with --timeout under the calling tool's limit;"
+                     " exit 124 means wait again"
+                     % (running[0]["name"], running[0]["directory"]))
+    worktree = Path(state["worktree"])
+    if worktree.exists() and git("status", "--porcelain", cwd=worktree,
+                                 check=False):
+        first.append("the uncommitted changes listed above are the item's"
+                     " work in progress: read them against the journal,"
+                     " then finish and commit them; a push supersedes a"
+                     " gate run still going")
+    return "; then ".join(first + [phase_step(state)])
+
+
+def phase_step(state):
+    item = state["item"]
     lost = [entry for entry in state["runs"]
             if run_state(entry["directory"]).startswith("lost")]
     if lost:
@@ -783,6 +817,8 @@ def next_step(state):
     if phase == "promoted":
         return "`item.py gate %s --main --watch`, then `item.py finish %s`" \
             % (item, item)
+    if phase == "main-passed":
+        return "`item.py finish %s`, then `item.py report %s`" % (item, item)
     return "`item.py report %s`" % item
 
 
