@@ -233,12 +233,12 @@ The build report (D791) and `scripts/quality.sh` are the starting point; the
 new parts are time, the matrix and the baselines. A report format change here
 also says where a program's compile time goes among its sources, and gives
 the build and depth reports one name for each frame quantity. A measured code-quality cost attributable to
-assembly's fixed memory effect is recorded against SR-09 before any narrower
+assembly's fixed memory effect is recorded against `SR-09` before any narrower
 effect is proposed. Its ranked list answers the activations of SR-231,
 SR-387, SR-596, SR-869 and SR-1023, and measures x86-64's two-instruction
 reach of a thread instance. This takes on SR-996 and SR-275, and carries the
 fresh-copy requirement. The instruction count under emulation is the
-per-routine cost report SR-1267 asks for.
+per-routine cost report `SR-1267` asked for.
 
 Exit evidence: the contract, the runner table and committed baselines for the
 whole matrix; the gate failing a deliberately larger image and a deliberately
@@ -264,7 +264,16 @@ split where this work meets it. The other costs the ranked list puts first,
 among them the bounds check an indexed increment keeps and the atomic and
 barrier lowering R551-12 records as baseline, are taken here or recorded with
 their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024,
-and SR-1178, a test of the Xtensa outgoing area D1110 counts.
+and SR-1178, a test of the Xtensa outgoing area D1110 counts; SR-596's
+float selection and SR-869's short `u64` routines on armv6-m with
+Cortex-M's allocation, and with it SR-231's atom `match` arms, SR-996's
+counterpart against 32 KiB, SR-577's float saves beside an assembly block
+and SR-583's Thumb-2 bitfield forms; SR-1268's SipHash round state with
+x86-64's remaining cases. R16.10's ranked list (`compiler/tests/measure/findings.md`)
+orders the work by measured gain: arm64's existing allocator at `size`,
+RV64's near jumps within a routine and then its allocation, Cortex-M's
+stack homes addressed from `sp` and then allocation through r0 to r7,
+then RV32 and Xtensa.
 Where it meets the backends' shared code it answers R551-16's activation and
 splits that code; the row stays open for the stage closures. Where it is the
 sensible cut, a backend is split off as a continuous item of its own and
