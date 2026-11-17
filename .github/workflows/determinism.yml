@@ -31,49 +31,58 @@ permissions:
 
 jobs:
   manifest:
-    name: manifest (${{ matrix.platform }} ${{ matrix.part }})
+    name: manifest (${{ matrix.platform }} ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
         #  The gate's images and Xcode, so its debug builds can be reused.
-        #  Each host emits its targets in two parts, beside each other on
-        #  two runners; `agree` joins them before comparing whole manifests.
-        #  A Linux target's every request also compiles platform/linux, so
-        #  the debug compiler emits for each of the three about fifteen
-        #  times as long as for any other target: each part holds one or two
-        #  of them, and four targets (D658).
+        #  Each host emits its requests in shards, beside each other on
+        #  separate runners: `emit --shard=I/N` deals the requests round N
+        #  shards, so each is about an Nth of the work whatever the targets
+        #  cost, and `agree` joins a host's shards before comparing whole
+        #  manifests.  A split by target was not: a Linux target's every
+        #  request also compiles platform/linux, about fifteen times the
+        #  work of any other target's, and x86-64's longer part, 23.7
+        #  minutes in run 44052328931, was the gate's last job.  Linux
+        #  x86-64 takes three shards, its runners being plentiful; the
+        #  macOS runners are not, so Darwin keeps two.
         include:
           - runner: ubuntu-24.04
             platform: x86_64-linux
             build: linux-amd64
-            part: 1
-            targets: linux-x86-64,darwin-arm64,freebsd-arm64,linux-rv64
+            shard: 1
+            shards: 3
           - runner: ubuntu-24.04
             platform: x86_64-linux
             build: linux-amd64
-            part: 2
-            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32,xtensa
+            shard: 2
+            shards: 3
+          - runner: ubuntu-24.04
+            platform: x86_64-linux
+            build: linux-amd64
+            shard: 3
+            shards: 3
           - runner: ubuntu-24.04-arm
             platform: aarch64-linux
             build: linux-arm64
-            part: 1
-            targets: linux-x86-64,darwin-arm64,freebsd-arm64,linux-rv64
+            shard: 1
+            shards: 2
           - runner: ubuntu-24.04-arm
             platform: aarch64-linux
             build: linux-arm64
-            part: 2
-            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32,xtensa
+            shard: 2
+            shards: 2
           - runner: macos-26
             platform: aarch64-darwin
             build: darwin-arm64
-            part: 1
-            targets: linux-x86-64,darwin-arm64,freebsd-arm64,linux-rv64
+            shard: 1
+            shards: 2
             developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
           - runner: macos-26
             platform: aarch64-darwin
             build: darwin-arm64
-            part: 2
-            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32,xtensa
+            shard: 2
+            shards: 2
             developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
     runs-on: ${{ matrix.runner }}
     env:
@@ -105,17 +114,17 @@ jobs:
             -C compiler/ada/build/${{ matrix.build }}/debug
           LANDIN_BUILD_REUSE=yes ./scripts/build.sh --compiler-only -q
 
-      - name: Emit this host's manifest, part ${{ matrix.part }}
+      - name: Emit this host's manifest, shard ${{ matrix.shard }} of ${{ matrix.shards }}
         run: |
           python3 scripts/emit_manifest.py emit \
             compiler/ada/build/${{ matrix.build }}/debug/bin/refine \
-            . manifest-${{ matrix.platform }}-${{ matrix.part }}.json \
-            ${{ matrix.targets }}
+            . manifest-${{ matrix.platform }}-${{ matrix.shard }}.json \
+            --shard=${{ matrix.shard }}/${{ matrix.shards }}
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: manifest-${{ matrix.platform }}-${{ matrix.part }}
-          path: manifest-${{ matrix.platform }}-${{ matrix.part }}.json
+          name: manifest-${{ matrix.platform }}-${{ matrix.shard }}
+          path: manifest-${{ matrix.platform }}-${{ matrix.shard }}.json
 
   agree:
     needs: manifest
@@ -134,6 +143,6 @@ jobs:
           mkdir whole
           for platform in x86_64-linux aarch64-linux aarch64-darwin; do
             python3 scripts/emit_manifest.py merge "whole/$platform.json" \
-              "manifests/manifest-$platform-1.json" "manifests/manifest-$platform-2.json"
+              manifests/manifest-"$platform"-*.json
           done
           python3 scripts/emit_manifest.py compare whole/*.json

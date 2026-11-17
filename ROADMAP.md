@@ -289,9 +289,9 @@ Done: every moved row typed, the rows-to-be filed as SR-1282 to SR-1298,
 register over its cap or a row past its age in controls. The maintainer's
 answers to Q-1 to Q-5 retired 43 rows and scheduled SR-195 and SR-768 on
 R17.50, SR-1178 on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
-rooting the GPIO shell retired one more, leaving 58 open. The retired
-rows' standing facts moved to `docs/capabilities.md`, `docs/targets.md`
-and `devices/README.md`.
+rooting the GPIO shell retired one more, leaving 57 open with R17.50's
+fixes merged. The retired rows' standing facts moved to
+`docs/capabilities.md`, `docs/targets.md` and `devices/README.md`.
 
 ### R17.20 — The question queue
 
@@ -337,19 +337,19 @@ Status: planned
 Depends on: none
 
 The gate's wall time cut: Xtensa shards, release build and queueing,
-against a measured baseline. It takes on SR-775, the stock-user job's
-unbounded package downloads, and SR-1276, `emit_manifest.py modes` printing
+against a measured baseline. It takes on `SR-775`, the stock-user job's
+unbounded package downloads, and `SR-1276`, `emit_manifest.py modes` printing
 no progress, each a gate-time failure it meets, and two rows-to-be of
 `roadmap/inputs/rows-to-be.md`:
 
-- The release-build cache mostly misses (SR-1296). Its key names the runner image
+- The release-build cache mostly misses (`SR-1296`). Its key names the runner image
   version, and GitHub serves two image versions within one run, so a job
   restores an entry only when it shares an image with the job that saved
   it: on run 44030898347 main's entry was saved on image 20261111.127.1,
   `linux-release-build` ran on 20261111.370.1, found none and took as long
   as the clean build. The key names what the C adapters compile against,
   the C library headers' and the C compiler's versions, instead.
-- The cached Darwin release build (SR-1297), prepared on the local branch
+- The cached Darwin release build (`SR-1297`), prepared on the local branch
   `ci-darwin-cached-release`: whole-file identity through `ZERO_AR_DATE=1`,
   a modelled Darwin end of 25 to 30 minutes by kind of change. It is
   rebased onto main, given the cache key's brace fix its Linux sibling
@@ -363,6 +363,28 @@ the second roadmap's last CI rework and 31.1 minutes on run 44030898347
 after it, with `flake` (31.0) and the last Darwin job (28.3) last.
 Exit evidence: the baseline and the new wall time of the complete gate,
 each over several runs.
+
+Evidence, its work on main and its status left until the register is
+under its cap, which waits for the maintainer's answers to Q-1 to Q-5, since
+no item closes over it and the serial lane has R17.10 active: the gate alone ends 30.3 to 30.5 minutes after its creation (runs
+44076856511 and 44082338698, both complete passes; the latter on the
+promoted tree, with boards dispatch 44087207692), against 31.1 on both
+baseline runs, 44030898347 and 44052328931. Its Linux lanes now end about
+21 minutes in rather than 26 to 31, and its end is the account's five
+macOS runners, about 115 job-minutes of Darwin work; Q-6 asks about more
+macOS capacity. Beside another item's gate the cap is shared: run
+44062808053 took 51 minutes. The cache key names the C headers and
+compiler (`SR-1296`), and the cache now saves time when it hits: GPRbuild
+recompiled every unit whose source's time stamp a checkout had renewed, so
+a restored tree saved nothing, and the sources' times now travel with it;
+the cached Linux and Darwin builds take 1.6 and 2.1 minutes against 8 and
+12 from clean. The Darwin cached build is on main (`SR-1297`), with
+main's own entry and its release lanes ordered after the comparison. The
+determinism manifests and `modes` deal requests to shards by key digest
+(D1374), and `modes` reports progress (`SR-1276`); the flake builds in
+three jobs; the stock-user downloads are bounded with an official-mirror
+fallback (`SR-775`); and the `documents` job reads full history for the
+register's age rule (`SR-1299`).
 
 ### R17 gate
 The third roadmap's checks pass on the live file; one item run start to
