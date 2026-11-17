@@ -9,6 +9,7 @@ items' identities are built at run time, so this file names none.
 import contextlib
 import io
 import json
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -272,6 +273,31 @@ class Promote(Clone):
         later = self.commit("more work")
         self.state["gates"].append(self.gate(later, "software"))
         self.assertEqual(len(self.problems(later)), 1)
+
+    def test_a_boards_run_still_going_is_named_not_dispatched_again(self):
+        head = self.commit("work")
+        going = dict(self.gate(head, "boards"), status="in_progress",
+                     conclusion="")
+        self.state["gates"] += [self.gate(head, "software"), going]
+        problems = self.problems(head)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("has not finished", problems[0])
+
+    def test_run_takes_its_options_before_the_command(self):
+        status, out = self.item("run", FIRST, "echo", "--limit", "60", "--",
+                                sys.executable, "-c", "print('ran')",
+                                "--limit")
+        self.assertEqual(status, 0, out)
+        directory = item.item_directory(FIRST) / "runs" / "echo"
+        waited = subprocess.run(
+            [sys.executable, str(item.ROOT / "scripts/run_logged.py"),
+             "--wait", str(directory), "--timeout", "60"],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.assertEqual(waited.returncode, 0, waited.stdout)
+        self.assertIn("ran", (directory / "command.log").read_text())
+        self.assertEqual(item.load(FIRST)["runs"][0]["command"],
+                         shlex.join([sys.executable, "-c", "print('ran')",
+                                     "--limit"]))
 
     def test_passed_runs_move_the_phase_on(self):
         head = self.commit("work")

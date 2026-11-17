@@ -432,8 +432,7 @@ def run_state(directory):
 def run(arguments):
     item = arguments.item
     state = load(item)
-    command = arguments.command[1:] if arguments.command[:1] == ["--"] \
-        else arguments.command
+    command = arguments.command
     if not command:
         raise Refused("name the command after --")
     directory = item_directory(item) / "runs" / arguments.name
@@ -622,12 +621,18 @@ def evidence(state, commit):
     passed_boards = [entry for entry in state["gates"]
                      if entry["kind"] == "boards"
                      and entry["conclusion"] == "success"]
+    going = [entry for entry in state["gates"] if entry["kind"] == "boards"
+             and entry["tree"] == tree and entry.get("status") != "completed"]
     if not any(entry["tree"] == tree or (
             git("merge-base", "--is-ancestor", entry["commit"], commit,
                 cwd=worktree, check=False) is not None
             and explanatory_since(worktree, entry["commit"], commit))
                for entry in passed_boards):
-        if not (passed_boards == [] and explanatory_since(
+        if going:
+            problems.append("boards run %s on this tree has not finished:"
+                            " `item.py gate %s` refreshes it"
+                            % (going[-1]["run"], state["item"]))
+        elif not (passed_boards == [] and explanatory_since(
                 worktree, state["base"], commit)):
             problems.append("no passed boards dispatch on this tree, nor on"
                             " a commit after which every commit says `%s`:"
@@ -1012,7 +1017,7 @@ def main(argv=None):
     sub.add_argument("name")
     sub.add_argument("--limit", type=int, required=True,
                      help="seconds after which the run is ended")
-    sub.add_argument("command", nargs=argparse.REMAINDER)
+    sub.add_argument("command", nargs="*", help="after --, the command")
     sub.set_defaults(handler=run)
 
     sub = commands.add_parser("gate", help="record and show the gate runs of"
