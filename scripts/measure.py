@@ -504,6 +504,10 @@ def measure_time(args) -> int:
                                   / candidate, 4)}
         first_key = key(level, profile, workload["name"])
         figures[first_key] = figure
+        print(f"  {first_key}: {candidate:.4f} s against {base:.4f} s,"
+              f" ratio {figure['ratio']}, spread {figure['spread']:.2%}"
+              + (f", {len(members) - 1} more the same" if len(members) > 1 else ""),
+              flush=True)
         for (other_level, other_profile, _), _ in members[1:]:
             figures[key(other_level, other_profile, workload["name"])] = {
                 "same_as": first_key}
@@ -659,6 +663,10 @@ def record(args) -> int:
             current = read_baseline(target, None) or {
                 "schema": 1, "target": target, "entries": {}}
             current["environment"] = measured["environments"][target]
+            if not wanted:
+                #  A whole record is the target's whole baseline: a key no
+                #  workload measures any more goes with it.
+                current["entries"] = {}
             for name, figure in figures.items():
                 if wanted and f"{target} {name}" not in wanted:
                     continue

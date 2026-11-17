@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: a timing workload of docs/measurement.md: two fibres of one round of turns take turns the argument's number of times each, walking an eight-call chain of checked prologues between turns, and print the checksum the walks leave
+program: main.ldn
+root: ../../../../..
+run_args: 1000
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

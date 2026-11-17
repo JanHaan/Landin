@@ -3398,6 +3398,18 @@
     "runtime/match-sink-binding": {
       "mode": "execute"
     },
+    "runtime/measure-fibre-switches": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/measure-thread-switches": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/measurements-answer-for-the-target": {
       "counterpart": "measurements-answer-for-the-target",
       "mode": "execute",

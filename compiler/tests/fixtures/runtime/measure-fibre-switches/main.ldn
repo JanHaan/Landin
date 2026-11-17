@@ -1,0 +1,93 @@
+--  A timing workload of docs/measurement.md: two fibres of one round take
+--  turns N times each, N the program's argument, and between turns each
+--  walks a chain of calls whose every prologue checks the stack, so the
+--  time it takes is the switch's and the stack check's.  It prints the
+--  checksum the walks leave, which every configuration must agree on.
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/text
+import hosted/blocking
+
+mut checksum: u64 = 0
+
+walker: type = struct
+    runs: any fibre.turns
+    seed: u64
+    turns: usize
+end walker
+
+walker_of: (runs: any fibre.turns, seed: u64, turns: usize)
+           -> (made: walker from runs) =
+    made = (runs: runs, seed: seed, turns: turns)
+end walker_of
+
+--  Eight calls deep, each mixing its value once.
+chain: (value: u64, depth: u32) -> (mixed: u64) =
+    if depth == 0 then
+        mixed = value
+        return
+    end if
+    mixed = chain(value *% 6364136223846793005 +% 1442695040888963407,
+                  depth - 1) ^ value
+end chain
+
+walk: (inout state: walker) -> none ! failure.reason =
+    for turn in usize(0)..<state.turns do
+        state.seed = chain(state.seed +% u64(turn), 8)
+        checksum = checksum +% state.seed
+        state.runs.yield()
+    end for
+end walk
+
+both: (runs: any fibre.turns, turns: usize) -> none ! failure.reason =
+    mut stacks: [2 * 8192]u8 = zeroed
+    mut tasks := try fibre.turns_over(runs, stacks, 2)
+    defer fibre.join(tasks) else none
+    a := walker_of(runs, 1, turns)
+    try fibre.admit(tasks, walk, a)
+    b := walker_of(runs, 2, turns)
+    try fibre.admit(tasks, walk, b)
+    try fibre.join(tasks)
+end both
+
+turns_asked: (host: blocking.host)
+             -> (turns: usize)
+             ! io.no_argument | text.invalid_number | text.number_overflow =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    turns = try text.parse_usize(text.host_bytes(argument))
+end turns_asked
+
+report: (host: blocking.host) -> none
+        ! io.io_failed | text.no_space | text.invalid_format =
+    mut storage: [64]u8 = zeroed
+    mut line := text.over(storage)
+    try text.format(line, "{}\n", [any(addr checksum)])
+    try io.write(host, io.out(host), text.used(line))
+end report
+
+public main: () -> (code: i32) =
+    code = 1
+    host := blocking.new()
+    turns := turns_asked(host) else begin
+        io.write(host, io.err(host), "usage: measure-fibre-switches TURNS\n") else none
+        return
+    end
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    both(any(addr round), turns) else (problem)
+        _ = problem
+        return
+    end
+    report(host) else begin
+        return
+    end
+    code = 0
+end main

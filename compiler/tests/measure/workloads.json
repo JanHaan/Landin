@@ -46,13 +46,21 @@
   },
   {
    "name": "fibre",
-   "fixture": "runtime/fibre-turns-interleave",
-   "timing": {}
+   "fixture": "runtime/measure-fibre-switches",
+   "timing": {
+    "args": [
+     "2000000"
+    ]
+   }
   },
   {
    "name": "thread",
-   "fixture": "runtime/thread-runs-fibres",
-   "timing": {}
+   "fixture": "runtime/measure-thread-switches",
+   "timing": {
+    "args": [
+     "2000000"
+    ]
+   }
   }
  ],
  "firmware": [

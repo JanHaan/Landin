@@ -23,14 +23,23 @@ failed measurement, never a figure.
 
 | set | workloads | runs on |
 |---|---|---|
-| hosted | the five Benchmark Game ports of [`docs/benchmarks.md`](benchmarks.md); a fibre program and a thread program, which pay the prologue's stack check on every call | every hosted target |
-| firmware | `sieve-of-eratosthenes`, `merge-sort`, `binary-search` and `cmp-siphash-vectors`, which the firmware lanes already execute; and firmware forms of fannkuch-redux and mandelbrot, new fixtures, each fitting the constrained 32 KiB reference | every firmware target and level, on the constrained reference where the level's lane runs it and otherwise on the one profile that lane uses: `mps2-an505` for armv8-m.main, the AN500's description for armv7e-m, and the ESP chips' own for rv32 and Xtensa |
+| hosted | the five Benchmark Game ports of [`docs/benchmarks.md`](benchmarks.md); `measure-fibre-switches` and `measure-thread-switches`, two fibres taking turns through a chain of calls, on the main stack and on a started thread's, which pay the prologue's stack check on every call | every hosted target |
+| firmware | `sieve-of-eratosthenes`, `merge-sort`, `binary-search` and `cmp-siphash-vectors`, which the firmware lanes already execute; and firmware forms of fannkuch-redux and mandelbrot, new fixtures, each fitting the constrained 32 KiB reference | every firmware target and level |
 | counterpart | prototype 5's firmware counterpart, which does not fit 32 KiB | `cortex-m0`, on the 256 KiB description its lane uses (D1036) |
 
 `compiler/tests/measure/workloads.json` names each workload, its fixture and
 the set it is in. An existing fixture keeps the oracle it has: its status,
 and its output where it has one. A new one brings its own, held by the
 test program like any fixture's.
+
+A firmware workload's size is measured on the image `refine` itself links,
+with the entry `compiler/tests/measure/entry.ldn` that runs the fixture's
+`main` and keeps its status: at the target's reference profile, the one a
+program importing no description gets, except on Xtensa, whose reference
+gives initialized data no load address at boot, so its workloads link
+against the ESP32's and the ESP32-S3's own descriptions, the boards'. Its
+time is measured on the image the timing lane runs: an emulator lane's own
+profile, or a board's RAM layout.
 
 A hosted workload's **timing run** uses arguments large enough to be timed,
 named in the same file. Its output is not the fixture's, so the output's
@@ -45,12 +54,9 @@ checksum in a named word that the emulator and the probe read after the run.
 Size is the byte count of each allocated section of the linked image, read
 from the image by `scripts/measure.py`'s own ELF and Mach-O readers. Debug
 sections, symbol and string tables, `.comment` and notes are not allocated
-and not counted. For a Cortex-M image the build report's `firmware` totals
-are compared too: its `flash_used` is the load segments' extent, which
-equals the allocated flash sections' sum plus their alignment padding, and
-the script checks that relation. The report's routine counters count
-emission sites, not bytes, and are kept beside the size as evidence, not
-compared.
+and not counted. For a firmware image the build report's `flash_used`, the
+load segments' extent, is kept beside the sections. The report's routine
+counters count emission sites, not bytes, and are not compared.
 
 The linker is part of the image. Each size baseline records its
 **environment**, the linker's own version line and the pinned environment's

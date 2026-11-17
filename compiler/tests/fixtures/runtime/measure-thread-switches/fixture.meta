@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: a timing workload of docs/measurement.md: measure-fibre-switches' round of two fibres, run by a task of a hosted/thread group on the thread's own stack, prints the same checksum for the same number of turns
+program: main.ldn
+root: ../../../../..
+run_args: 1000
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
