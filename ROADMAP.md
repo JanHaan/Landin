@@ -105,9 +105,11 @@ A row moved from the second roadmap keeps its identity, SR-n, R551-n or
 another. A new row takes the next SR number from the allocation script
 R17.10 provides; two branches that take the same number collide as an
 add/add conflict on the file, which is the detection, and the integrator
-renumbers the later one. A retired or completed row has no file: it is
-deleted in the commit that says why, and the history keeps it. There is no
-departures list, and the second roadmap's retired rows were not migrated.
+renumbers the later one. The script is `scripts/register_next.py`;
+`--file` writes the row with its keys to fill in. A retired or completed
+row has no file: it is deleted in the commit that says why, and the
+history keeps it. There is no departures list, and the second roadmap's
+retired rows were not migrated.
 
 A moved row's `opened` is the date it first appeared, which the migration
 script takes from the history.
@@ -120,7 +122,8 @@ waits for the maintainer.
 The register holds at most 60 open rows; a scheduled row does not count,
 and a row may be scheduled only on an item whose text names it. A row that has stood through ten
 completed items without being scheduled is reviewed at the next item's
-close: scheduled, retired, or kept with one sentence saying why. At the cap,
+close: scheduled, retired, or kept with one sentence saying why, a body
+line beginning `Kept:`, which restarts its count. At the cap,
 an item cannot close until it has brought the count under it.
 
 For a moved row the ten completed items count from the exchange, since the
@@ -208,7 +211,8 @@ assembly's fixed memory effect is recorded against SR-09 before any narrower
 effect is proposed. Its ranked list answers the activations of SR-231,
 SR-387, SR-596, SR-869 and SR-1023, and measures x86-64's two-instruction
 reach of a thread instance. This takes on SR-996 and SR-275, and carries the
-fresh-copy requirement.
+fresh-copy requirement. The instruction count under emulation is the
+per-routine cost report SR-1267 asks for.
 
 Exit evidence: the contract, the runner table and committed baselines for the
 whole matrix; the gate failing a deliberately larger image and a deliberately
@@ -264,7 +268,7 @@ The move's own debt; first in the serial lane.
 
 ### R17.10 — The register reviewed and typed
 
-Status: planned
+Status: active
 Depends on: none
 
 The first item, on a tree `check.py` already accepts: the exchange has moved
@@ -295,7 +299,10 @@ Status: planned
 Depends on: R17.10
 
 `check.py`, the site's progress track and the status pointers read lanes,
-continuous items and the promotion opt-out.
+continuous items and the promotion opt-out. It takes three rows-to-be:
+the phase rule the Mechanics do not state (SR-1282), the progress track
+that fails on a second active item (SR-1283), and a reference before a
+full stop that is never resolved (SR-1295).
 Exit evidence: the front page showing the serial item beside two active
 continuous items in a control; the pointers naming the serial lane's item.
 
@@ -325,14 +332,14 @@ unbounded package downloads, and SR-1276, `emit_manifest.py modes` printing
 no progress, each a gate-time failure it meets, and two rows-to-be of
 `roadmap/inputs/rows-to-be.md`:
 
-- The release-build cache mostly misses. Its key names the runner image
+- The release-build cache mostly misses (SR-1296). Its key names the runner image
   version, and GitHub serves two image versions within one run, so a job
   restores an entry only when it shares an image with the job that saved
   it: on run 44030898347 main's entry was saved on image 20261111.127.1,
   `linux-release-build` ran on 20261111.370.1, found none and took as long
   as the clean build. The key names what the C adapters compile against,
   the C library headers' and the C compiler's versions, instead.
-- The cached Darwin release build, prepared on the local branch
+- The cached Darwin release build (SR-1297), prepared on the local branch
   `ci-darwin-cached-release`: whole-file identity through `ZERO_AR_DATE=1`,
   a modelled Darwin end of 25 to 30 minutes by kind of change. It is
   rebased onto main, given the cache key's brace fix its Linux sibling
@@ -393,12 +400,13 @@ Status: planned
 Depends on: R18.10
 
 The disagreements the inventory found, each fixed on whichever side is
-wrong: `refine targets --identify` against `docs/capabilities.md`; L0004,
-L0009 and `docs/targets.md` sending the reader to `refine --identify`;
-README's command table missing `targets`, `completion` and `help`; the
-`Explain_Command` and `Format_Command` comments; and a check that holds
+wrong: `refine targets --identify` against `docs/capabilities.md`
+(SR-1289); L0004, L0009 and `docs/targets.md` sending the reader to
+`refine --identify` (SR-1290); README's command table missing `targets`,
+`completion` and `help` (SR-1291); the `Explain_Command` and
+`Format_Command` comments (SR-1292, SR-1293); and a check that holds
 `refine help reference` to the documents, which nothing outside the
-`commands` suite does today.
+`commands` suite does today (SR-1294).
 Exit evidence: each row-to-be of `roadmap/inputs/rows-to-be.md` it names
 closed; the new check refuses a command or flag the documents do not name.
 
@@ -475,7 +483,8 @@ group's items added here, and each answer recorded as a decision in
 `spec.md`. Range subtypes (SC-16) are already decided: the maintainer
 removed them on 2026-11-16, replaced by a `distinct` type with a checking
 constructor, and R19.10 records that and groups it. The candidates that
-wait on R20 (SC-17, SC-18) are recorded as such, not forced.
+wait on R20 (SC-17, SC-18) are recorded as such, not forced. The answers
+on labels, `break with` and `complete` (SC-01, SC-02) settle E1.
 
 ### R19.20 — How far the checker folds
 
@@ -675,7 +684,7 @@ consumer outside its fixtures.
 Status: planned
 Depends on: R20
 
-`core/math`: the elementary functions over `f32` and `f64`, written in
+`core/math`, SR-96: the elementary functions over `f32` and `f64`, written in
 Landin so results agree across targets, with `sqrt` and `fma` as
 instructions where IEEE makes them exact. From R20: the naming of its
 module and routines, and whether floats get ordering evidence.
@@ -688,7 +697,7 @@ Status: planned
 Depends on: R20
 
 Shortest round-trip printing and correctly rounded parsing of `f32` and
-`f64` in `core/text`, with floats made `formattable`; it uses hexadecimal
+`f64` in `core/text`, SR-97, with floats made `formattable`; it uses hexadecimal
 float literals as R19.10 left them (SC-29). From R20: the byte-sink shape
 `formattable` writes to and the names of its failures.
 Exit evidence: every `f32` round-tripped exhaustively and `f64` against
@@ -700,7 +709,7 @@ Status: planned
 Depends on: R20
 
 Character properties, case, normalisation and segmentation over `utf8`,
-from a generated UCD table. Settles how a large constant table is laid
+from a generated UCD table: SR-98's Unicode half. Settles how a large constant table is laid
 out and what it costs a firmware image. From R20: where it lives, the
 sink it writes to, the end-of-iteration form segmentation uses, and
 whether it iterates through `iterable`.
@@ -726,8 +735,9 @@ Depends on: R22.20, R22.30
 
 Numbers and text formatted for a locale, an explicit value from a BCP 47
 identifier and never global state, from generated CLDR data a program
-uses in part. From R20: the answer on a locale as an explicit value, and
-how formatting evidence takes one.
+uses in part: SR-98's locale half, and SR-285's width, padding and radix
+in a template, whose spelling is decided here. From R20: the answer on a
+locale as an explicit value, and how formatting evidence takes one.
 Exit evidence: CLDR's own test data pass for the locales generated; a
 program that uses one locale carries only its data.
 
@@ -736,7 +746,7 @@ program that uses one locale carries only its data.
 Status: planned
 Depends on: R22.30
 
-`core/regex`: patterns compiled at run time with the caller's allocator,
+`core/regex`, SR-100: patterns compiled at run time with the caller's allocator,
 matched in linear time, no backreferences; Unicode classes from R22.30's
 tables. From R20: the allocator and capability shape, and how a match
 position is named.

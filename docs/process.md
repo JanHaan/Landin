@@ -162,8 +162,21 @@ Before an item closes:
 3. Write the `Done:` paragraph, naming in it and in the commit message the
    findings the item fixed rather than filing them. Delete the file of each
    register row the item settled, saying why in the commit message, and file
-   only what outlives the item, as `ROADMAP.md`'s mechanics ask; then run
+   only what outlives the item, as `ROADMAP.md`'s mechanics ask: `python3
+   scripts/register_next.py --file` writes a new row under the next free
+   SR number, with its keys to fill in. Then run
    `python3 check.py --register` for the generated `roadmap/register.md`.
+
+   `python3 check.py` refuses a register over its cap of 60 open rows, so
+   an item that would close over it first schedules, settles or puts to the
+   maintainer enough rows. It also refuses an open row that has stood
+   through more than ten completed items since it was filed or last kept:
+   schedule it on an item whose text names it, put its retirement to the
+   maintainer as a question under `roadmap/questions/`, or keep it with a
+   body line `Kept: ` and one sentence saying why, which restarts its
+   count. The age is read from Git's history and is not checked in a
+   shallow clone, the gate's among them, so run the check in a full
+   checkout before closing.
 
    Update the pointer in `README.md` and `handoff.md` too. Substitute the
    item identity and title in these exact forms. Use the current form for
