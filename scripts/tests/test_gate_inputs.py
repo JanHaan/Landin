@@ -1506,6 +1506,7 @@ READERS = {
     "scripts/activations.py": "a developer tool for closing an item; its test is in scripts/tests",
     "scripts/roadmap_register.py": "the register's one-time move into files, run by hand; its test is in scripts/tests",
     "scripts/register_next.py": "allocates register identities, run by hand when a row is filed; its test is in scripts/tests",
+    "scripts/item.py": "runs a roadmap item's steps by hand, reading ROADMAP.md and the pointers; its test is in scripts/tests",
     "scripts/gate_inputs.py": "the inputs job",
     #  The gate's flake job builds it, skipped with the other lanes under
     #  reuse; README.md's status line gives the package only its version

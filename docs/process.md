@@ -14,6 +14,7 @@ they cost. `D586` names a decision recorded in `spec.md`, and
 
 | stage | command | what it says |
 |---|---|---|
+| starting a roadmap item | `python3 scripts/item.py start ITEM` from the clone's main checkout | the item's worktree and branch from `origin/main`, its reserved identities, its status made active and the brief; [running an item](#running-an-item) says the rest |
 | edit/test loop | `./scripts/dev-test.sh` with the affected exact `--suite`, `--case` and `--fixture` selectors in one invocation | checksum-safe feedback; the transcript says `FILTERED` |
 | Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
 | another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64` with the affected selectors, inside `nix develop` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's. The development shell has the cross driver under the name `refine` asks for; elsewhere `--toolchain=` names it, as [the lanes](../compiler/tests/README.md#lanes) say |
@@ -96,6 +97,26 @@ whose meter fails that check refuse with the launcher route. The initial build
 retains its inherited allocator settings; test subprocesses inherit the
 prepared test setting. Ordinary `refine` invocations keep their defaults. The
 worker comparison records the effective setting alongside each command.
+
+## Running an item
+
+`scripts/item.py` takes a roadmap item through the steps that need no
+agent, and keeps its state where a reopened session finds it: under the
+clone's common Git directory, `landin-items/ITEM/`, shared by every worktree
+of the clone. The [landin-change skill](../.agents/skills/landin-change/SKILL.md)
+puts the steps in order:
+
+| step | command | what it does |
+|---|---|---|
+| start | `item.py start ITEM` | refuses a complete item or one with an incomplete dependency; makes `../Landin-ITEM` and its branch from `origin/main`; reserves blocks of decision, row and question numbers no other running item of the clone holds, which `register_next.py` then gives out first; marks the item active, moves a pointer naming it, commits that as `Gate: explanatory`; writes `brief.md` |
+| after a reopen | `item.py resume [ITEM]` | the worktree, every recorded run as running, finished or lost, the gate runs, the journal's last lines and the next step |
+| along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state |
+| gate | `item.py gate ITEM [--main] [--watch]` | records the pushed head's runs, or main's after promotion, and follows them with `gate_watch.py --all` in a detached run |
+| boards | `item.py boards ITEM` | dispatches `scope=boards` on the pushed head and records the run |
+| promotion | `item.py promote ITEM [--dry-run] [--partial]` | pushes the head to main only as the [promotion rule](#physical-boards-and-promotion) allows: a passed push gate on it with its whole job listing, boards on its tree or before only explanatory commits, main its ancestor, the item complete; refuses an item that says `Promotion: maintainer` |
+| finish | `item.py finish ITEM` | once main's gate on the promoted commit passed: removes the worktree and the local and remote branch, keeps the state under `landin-items/done/` |
+| watching items | `item.py status`, `item.py stalled` | every running item; those nothing has moved for an hour, exit 1 |
+| report | `item.py report ITEM` | a draft of [the report](../.agents/skills/landin-change/report.md), ending with the open questions the item asked and their defaults |
 
 ## Closing an item
 

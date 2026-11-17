@@ -25,6 +25,11 @@ that take the same number collide as an add/add conflict on the file when
 they meet: that is the detection, and the integrator renumbers the later
 one.  The numbers are only proposed; a number becomes taken when its file
 is committed.
+
+Items started with `scripts/item.py start` reserve blocks of numbers, kept
+in the clone's item state.  Run from a running item's worktree, this gives
+out that item's own block first; from anywhere it skips every other running
+item's block, so two items of one clone do not propose the same number.
 """
 import argparse
 import datetime
@@ -105,11 +110,37 @@ def taken(root, question=False):
     return used
 
 
+def blocks(root, question=False):
+    """The reserved blocks: the running item's own, and every other's.
+
+    Each is a list of (low, high).  Outside a Git clone, or with no item
+    running, both are empty.
+    """
+    kind = "Q" if question else "SR"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import item
+    try:
+        mine = item.item_of_branch(root)
+        own, others = [], []
+        for state in item.running_states(root):
+            low, high = state.get("reserved", {}).get(kind, (None, None))
+            if low is not None:
+                (own if state["item"] == mine else others).append((low, high))
+        return own, others
+    except (OSError, ValueError, item.Refused):
+        return [], []
+
+
 def allocate(root, count, question=False):
-    """The next COUNT identities, in order."""
-    start = max(taken(root, question)) + 1
-    return [("Q-%d" if question else "SR-%d") % n
-            for n in range(start, start + count)]
+    """The next COUNT identities, in order: the running item's reserved
+    block first, then past every number used or reserved."""
+    used = taken(root, question)
+    own, others = blocks(root, question)
+    numbers = [n for low, high in own for n in range(low, high + 1)
+               if n not in used][:count]
+    start = max(used | {high for _, high in own + others}) + 1
+    numbers += range(start, start + count - len(numbers))
+    return [("Q-%d" if question else "SR-%d") % n for n in numbers]
 
 
 def main(argv=None):

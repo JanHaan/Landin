@@ -21,8 +21,9 @@ loaded guidance when changing a host's agent configuration.
 
 For implementing or preparing a candidate, the
 [landin-change skill](.agents/skills/landin-change/SKILL.md) connects the
-current recipes. Its source is shared with Claude Code through a project
-skill alias. The rules here also apply when no skill is selected.
+current recipes, and `scripts/item.py` runs its mechanical steps and keeps
+an item's state on disk for a reopened session. Its source is shared with
+Claude Code through a project skill alias. The rules here also apply when no skill is selected.
 
 ## Repository state
 
@@ -58,6 +59,7 @@ python3 check.py
 ./scripts/dev-test.sh --help
 ./scripts/dev-test.sh --case='harness/filters select exact cases'
 python3 scripts/gate_watch.py --all
+python3 scripts/item.py resume ITEM
 ```
 
 Choose the exact suites, cases and fixtures for the change, combining the
