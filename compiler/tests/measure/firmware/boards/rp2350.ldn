@@ -1,0 +1,7 @@
+--  The RP2350's Cortex-M33 counts its cycles in DWT CYCCNT.
+import descriptions/rp2350
+
+counted: () -> (count: u32) =
+    port: ptr u32 = ptr(usize(0xe0001004))
+    count = compiler.register_read(port, compiler.normal_read)
+end counted

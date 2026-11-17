@@ -1,0 +1,7 @@
+--  The ESP32-C3 counts its cycles in its vendor counter mpccr, CSR
+--  0x7e2, once mpcer selects cycles and mpcmr enables it.
+import descriptions/esp32c3
+
+counted: () -> (count: u32) =
+    count = assembler.block("csrr {value}, 0x7e2", out value: u32 at general)
+end counted

@@ -1,0 +1,7 @@
+--  The ESP32-C5 counts its cycles in mcycle, which ESP-IDF reads there
+--  (its soc_caps.h gives the C5 no SOC_CPU_HAS_CSR_PC).
+import descriptions/esp32c5
+
+counted: () -> (count: u32) =
+    count = assembler.block("csrr {value}, mcycle", out value: u32 at general)
+end counted

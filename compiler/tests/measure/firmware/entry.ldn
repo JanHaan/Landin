@@ -1,0 +1,19 @@
+--  The firmware entry the board timing runs enter a workload through
+--  (docs/measurement.md, "Time").  The workload's own `main` is its
+--  program, unchanged.  This file joins its module with one of boards/,
+--  which imports the board's description and reads its core's counter as
+--  `counted`, the probe having started that counter before the entry.
+--  The counter is read just before `main` is called and just after it
+--  returns, and the probe reads the three words below once the entry has
+--  returned to compiler-owned startup.  A counter the program reads keeps
+--  the probe's own latency out of the figure: some counters run on while
+--  their core is halted for the debugger.
+mut measured_status: i32 = -1
+mut measured_before: u32 = 0
+mut measured_after: u32 = 0
+
+start: () -> none =
+    measured_before = counted()
+    measured_status = main()
+    measured_after = counted()
+end start

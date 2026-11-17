@@ -1,0 +1,919 @@
+{
+ "schema": 1,
+ "kind": "cycles",
+ "runner": "rig",
+ "note": "Each port's firmware workloads at size-auto, the compiler's default profile, ten timing runs of each on the rig on 2026-11-18, with environments/boards/timing.py and the SRAM helper as this record's commit has them but for the helper's tests; each board names the compiler that built its images. The RP2350's Arm runs came between its rp2350 and rp2350_hazard3 boot checks. On the STM32H753 the first run after each load is 76 to 181 cycles slower and the nine after it are equal; the ESP32-C5 alternates between two counts.",
+ "boards": {
+  "esp32": {
+   "target": "xtensa",
+   "level": "xtensa-esp32",
+   "counter": "CCOUNT",
+   "unit": "cycles",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 39.195,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "159d94412b465197e224f235e4eeda3cc72e09d7bd3bbafdeaf9da0db33763ce",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 65656,
+     "minimum": 65656,
+     "maximum": 65656,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      65656,
+      65656,
+      65656,
+      65656,
+      65656,
+      65656,
+      65656,
+      65656,
+      65656,
+      65656
+     ]
+    },
+    "merge-sort": {
+     "digest": "6e267ab429b49173957fe6a091dc6f64f55e8eedabed79e487afcaca5ea29873",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 26405,
+     "minimum": 26405,
+     "maximum": 26405,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      26405,
+      26405,
+      26405,
+      26405,
+      26405,
+      26405,
+      26405,
+      26405,
+      26405,
+      26405
+     ]
+    },
+    "binary-search": {
+     "digest": "cb8807de4ba29a17d447de294f47351d83a45d95f38b2fae1cb1c00dcb73ffa8",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 9388,
+     "minimum": 9388,
+     "maximum": 9388,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      9388,
+      9388,
+      9388,
+      9388,
+      9388,
+      9388,
+      9388,
+      9388,
+      9388,
+      9388
+     ]
+    },
+    "cmp-siphash-vectors": {
+     "digest": "8e1ac97af34609f49c9e564cfb48d00f330b07b545b3cd086a869f9907e6022b",
+     "profiles": [
+      "size-off",
+      "size-auto"
+     ],
+     "runs": 10,
+     "median": 1950196,
+     "minimum": 1950196,
+     "maximum": 1950196,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      1950196,
+      1950196,
+      1950196,
+      1950196,
+      1950196,
+      1950196,
+      1950196,
+      1950196,
+      1950196,
+      1950196
+     ]
+    }
+   },
+   "largest_relative_spread": 0.0
+  },
+  "esp32c3": {
+   "target": "rv32",
+   "level": "rv32imc",
+   "counter": "mpccr",
+   "unit": "cycles",
+   "clock": "xtal-20000000hz",
+   "placement": "text:iram,data:dram,stack:dram",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 17.065,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "8d76d9dd540e64112155f950b7d256d2be9253dea903622f8a653508e46e8c4e",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 30860,
+     "minimum": 30860,
+     "maximum": 30860,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      30860,
+      30860,
+      30860,
+      30860,
+      30860,
+      30860,
+      30860,
+      30860,
+      30860,
+      30860
+     ]
+    },
+    "merge-sort": {
+     "digest": "fc69386d82ec1ad8c1d4eb59615c1c2c8b5cb81f67872a7471cc28679c2aec6e",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 12560,
+     "minimum": 12560,
+     "maximum": 12560,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      12560,
+      12560,
+      12560,
+      12560,
+      12560,
+      12560,
+      12560,
+      12560,
+      12560,
+      12560
+     ]
+    },
+    "binary-search": {
+     "digest": "bc6fddc316498be28bc2404bc58540b0b291b5b398e82974a46b4097c3a367e2",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 4605,
+     "minimum": 4605,
+     "maximum": 4605,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      4605,
+      4605,
+      4605,
+      4605,
+      4605,
+      4605,
+      4605,
+      4605,
+      4605,
+      4605
+     ]
+    }
+   },
+   "largest_relative_spread": 0.0
+  },
+  "esp32c5": {
+   "target": "rv32",
+   "level": "rv32imac",
+   "counter": "mcycle",
+   "unit": "cycles",
+   "clock": "xtal-48000000hz",
+   "placement": "text:hp-sram,data:hp-sram,stack:hp-sram",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 136.54,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "9efddb2a4d807c6991d6492df0dce39034e366396dddbf55972a64d9ac59e5e6",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 28998,
+     "minimum": 28998,
+     "maximum": 29002,
+     "spread": 4,
+     "relative_spread": 0.000138,
+     "counts": [
+      28999,
+      28998,
+      29002,
+      28998,
+      29002,
+      28998,
+      29002,
+      28998,
+      29002,
+      28998
+     ]
+    },
+    "merge-sort": {
+     "digest": "19f8bef14b22535db58788803be74c2e18cdd03ed6f85839c7217946a6130661",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 12250,
+     "minimum": 12246,
+     "maximum": 12250,
+     "spread": 4,
+     "relative_spread": 0.000327,
+     "counts": [
+      12246,
+      12250,
+      12250,
+      12250,
+      12250,
+      12250,
+      12250,
+      12250,
+      12250,
+      12250
+     ]
+    },
+    "binary-search": {
+     "digest": "c61d23f4cfc368b10262f39d42d53a68dce181d775accccf606b96b33cb1f0aa",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 4145,
+     "minimum": 4145,
+     "maximum": 4158,
+     "spread": 13,
+     "relative_spread": 0.003136,
+     "counts": [
+      4158,
+      4145,
+      4149,
+      4145,
+      4149,
+      4145,
+      4149,
+      4145,
+      4149,
+      4145
+     ]
+    },
+    "cmp-siphash-vectors": {
+     "digest": "005be50176802f939391a007c504d7f761350b5eb3d8b1dfa7ea7ee5f6e1db43",
+     "profiles": [
+      "size-off",
+      "size-auto"
+     ],
+     "runs": 10,
+     "median": 830660,
+     "minimum": 830660,
+     "maximum": 830664,
+     "spread": 4,
+     "relative_spread": 5e-06,
+     "counts": [
+      830664,
+      830660,
+      830660,
+      830660,
+      830660,
+      830660,
+      830660,
+      830660,
+      830660,
+      830660
+     ]
+    }
+   },
+   "largest_relative_spread": 0.003136
+  },
+  "esp32s3": {
+   "target": "xtensa",
+   "level": "xtensa-esp32s3",
+   "counter": "CCOUNT",
+   "unit": "cycles",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram,data:dram,stack:dram",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 33.762,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "a18f42aa852c9ce34e31d79d013c996ba787623f917047b6c2d5664435acd4ff",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 57556,
+     "minimum": 57556,
+     "maximum": 57556,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      57556,
+      57556,
+      57556,
+      57556,
+      57556,
+      57556,
+      57556,
+      57556,
+      57556,
+      57556
+     ]
+    },
+    "merge-sort": {
+     "digest": "d83ed879091f482ce91732c8826a9b1573686efc9b145454d43d7ec96bc6a5d4",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 23342,
+     "minimum": 23342,
+     "maximum": 23342,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      23342,
+      23342,
+      23342,
+      23342,
+      23342,
+      23342,
+      23342,
+      23342,
+      23342,
+      23342
+     ]
+    },
+    "binary-search": {
+     "digest": "cad18610cd0f262933f3a01ac2f2204e3432b048014736aaa21510dd75bd74f3",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 8381,
+     "minimum": 8381,
+     "maximum": 8381,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      8381,
+      8381,
+      8381,
+      8381,
+      8381,
+      8381,
+      8381,
+      8381,
+      8381,
+      8381
+     ]
+    },
+    "cmp-siphash-vectors": {
+     "digest": "2f8413dca88e0c85c644fabfff21e9df6525fd34e74f9ecdbcde4b123b3afb06",
+     "profiles": [
+      "size-off",
+      "size-auto"
+     ],
+     "runs": 10,
+     "median": 1738603,
+     "minimum": 1738603,
+     "maximum": 1738603,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      1738603,
+      1738603,
+      1738603,
+      1738603,
+      1738603,
+      1738603,
+      1738603,
+      1738603,
+      1738603,
+      1738603
+     ]
+    }
+   },
+   "largest_relative_spread": 0.0
+  },
+  "rp2040": {
+   "target": "cortex-m0",
+   "level": null,
+   "counter": "TIMERAWL",
+   "unit": "microseconds",
+   "clock": "xosc-12000000hz",
+   "placement": "text:sram,data:sram,stack:sram",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 30.314,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "40416a145265de1fafd3e6bdfff67d43dab56fc73c66a37c09937396b38f6e0b",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 3985,
+     "minimum": 3984,
+     "maximum": 3985,
+     "spread": 1,
+     "relative_spread": 0.000251,
+     "counts": [
+      3985,
+      3985,
+      3984,
+      3985,
+      3985,
+      3985,
+      3985,
+      3985,
+      3985,
+      3984
+     ]
+    },
+    "merge-sort": {
+     "digest": "4ee5c300be069d11bb3a824f384779d76ef6b35ca43e7b2bae612b8df6f3128e",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 1799,
+     "minimum": 1799,
+     "maximum": 1800,
+     "spread": 1,
+     "relative_spread": 0.000556,
+     "counts": [
+      1799,
+      1799,
+      1800,
+      1799,
+      1799,
+      1799,
+      1799,
+      1799,
+      1799,
+      1799
+     ]
+    },
+    "binary-search": {
+     "digest": "245be27bcaa16922b25bc7129366c9e45bfce505872c68480a5ec9116296ea1a",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 512,
+     "minimum": 511,
+     "maximum": 512,
+     "spread": 1,
+     "relative_spread": 0.001953,
+     "counts": [
+      511,
+      512,
+      512,
+      512,
+      512,
+      512,
+      512,
+      511,
+      511,
+      511
+     ]
+    },
+    "cmp-siphash-vectors": {
+     "digest": "de5e07e43bbd7a93fcc71124560d23db8018b0dc3701834bead97d1223611b56",
+     "profiles": [
+      "size-off",
+      "size-auto"
+     ],
+     "runs": 10,
+     "median": 109459,
+     "minimum": 109459,
+     "maximum": 109459,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      109459,
+      109459,
+      109459,
+      109459,
+      109459,
+      109459,
+      109459,
+      109459,
+      109459,
+      109459
+     ]
+    }
+   },
+   "largest_relative_spread": 0.001953
+  },
+  "rp2350": {
+   "target": "cortex-m0",
+   "level": "armv8-m.main",
+   "counter": "DWT_CYCCNT",
+   "unit": "cycles",
+   "clock": "xosc-12000000hz",
+   "placement": "text:sram,data:sram,stack:sram",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 29.884,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "a4c0d0cbf6c22d213112367ac2156a05c87fce25dfa5f86e955407c7c68eaf89",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 38177,
+     "minimum": 38175,
+     "maximum": 38179,
+     "spread": 4,
+     "relative_spread": 0.000105,
+     "counts": [
+      38175,
+      38177,
+      38178,
+      38178,
+      38179,
+      38177,
+      38177,
+      38179,
+      38177,
+      38176
+     ]
+    },
+    "merge-sort": {
+     "digest": "0d7f6881de9556a4b57ae70f5fcf214abd6ece3a39aceb2c24f4af51d24a5aec",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 16197,
+     "minimum": 16196,
+     "maximum": 16198,
+     "spread": 2,
+     "relative_spread": 0.000123,
+     "counts": [
+      16196,
+      16197,
+      16198,
+      16198,
+      16198,
+      16198,
+      16197,
+      16198,
+      16197,
+      16196
+     ]
+    },
+    "binary-search": {
+     "digest": "8c1325d24a15b944ec03f5e9618b26fa4d26fa3ba13c2b7a5e31980fd170d44c",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 4628,
+     "minimum": 4628,
+     "maximum": 4630,
+     "spread": 2,
+     "relative_spread": 0.000432,
+     "counts": [
+      4630,
+      4628,
+      4628,
+      4628,
+      4629,
+      4629,
+      4629,
+      4630,
+      4628,
+      4628
+     ]
+    },
+    "cmp-siphash-vectors": {
+     "digest": "7999455338d594c8f6e7ae19d775d2870662b0d97c8d33a26047cf77fa28ca9a",
+     "profiles": [
+      "size-off",
+      "size-auto"
+     ],
+     "runs": 10,
+     "median": 936252,
+     "minimum": 936242,
+     "maximum": 936257,
+     "spread": 15,
+     "relative_spread": 1.6e-05,
+     "counts": [
+      936252,
+      936257,
+      936246,
+      936253,
+      936248,
+      936256,
+      936242,
+      936254,
+      936246,
+      936252
+     ]
+    }
+   },
+   "largest_relative_spread": 0.000432
+  },
+  "rp2350_hazard3": {
+   "target": "rv32",
+   "level": "rv32imac",
+   "counter": "mcycle",
+   "unit": "cycles",
+   "clock": "xosc-12000000hz",
+   "placement": "text:sram,data:sram,stack:sram",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 210.665,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "6212450855a752ae4a67de059d9978cadf3fc3fed818f71b017400767ba3dbb3",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 31736,
+     "minimum": 31736,
+     "maximum": 31736,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      31736,
+      31736,
+      31736,
+      31736,
+      31736,
+      31736,
+      31736,
+      31736,
+      31736,
+      31736
+     ]
+    },
+    "merge-sort": {
+     "digest": "995f9111f43571b1336314f084456ea0da782afeae320bec29eb1e313185bfc1",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 12855,
+     "minimum": 12855,
+     "maximum": 12855,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      12855,
+      12855,
+      12855,
+      12855,
+      12855,
+      12855,
+      12855,
+      12855,
+      12855,
+      12855
+     ]
+    },
+    "binary-search": {
+     "digest": "93bd5c1f10b679437612fe0f43bb96606c406c8f940c4715db8bc0857322992e",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 4735,
+     "minimum": 4735,
+     "maximum": 4735,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      4735,
+      4735,
+      4735,
+      4735,
+      4735,
+      4735,
+      4735,
+      4735,
+      4735,
+      4735
+     ]
+    },
+    "cmp-siphash-vectors": {
+     "digest": "98c31f1e0af5817a2f8f6921356fa3933c033f445623995c9aa4476d13d4a6ae",
+     "profiles": [
+      "size-off",
+      "size-auto"
+     ],
+     "runs": 10,
+     "median": 801392,
+     "minimum": 801392,
+     "maximum": 801392,
+     "spread": 0,
+     "relative_spread": 0.0,
+     "counts": [
+      801392,
+      801392,
+      801392,
+      801392,
+      801392,
+      801392,
+      801392,
+      801392,
+      801392,
+      801392
+     ]
+    }
+   },
+   "largest_relative_spread": 0.0
+  },
+  "stm32h753": {
+   "target": "cortex-m0",
+   "level": "armv7e-m",
+   "counter": "DWT_CYCCNT",
+   "unit": "cycles",
+   "clock": "hsi-64000000hz",
+   "placement": "text:axi-sram,data:axi-sram,stack:axi-sram",
+   "compiler": "fc3f5fcf442e7d27457873eeff1a86e809bcacff40273ce8dadf996fc1a97596",
+   "bundle_source": "8e766ff8e4c1136508fe70f611abdcacf4d962eb7dfc4254bad7922e28cd5b8f",
+   "seconds": 24.739,
+   "workloads": {
+    "sieve-of-eratosthenes": {
+     "digest": "33e61903ce9ee58f5571c6f1e44d38f05d7471068ab70346a8d36215eb0340b8",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 57261,
+     "minimum": 57261,
+     "maximum": 57363,
+     "spread": 102,
+     "relative_spread": 0.001781,
+     "counts": [
+      57363,
+      57261,
+      57261,
+      57261,
+      57261,
+      57261,
+      57261,
+      57261,
+      57261,
+      57261
+     ]
+    },
+    "merge-sort": {
+     "digest": "81cf85d3949a40637306b4d4f7d1e7aa1f62ee95382b823fbca8242853c47bca",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 27852,
+     "minimum": 27852,
+     "maximum": 28033,
+     "spread": 181,
+     "relative_spread": 0.006499,
+     "counts": [
+      28033,
+      27852,
+      27852,
+      27852,
+      27852,
+      27852,
+      27852,
+      27852,
+      27852,
+      27852
+     ]
+    },
+    "binary-search": {
+     "digest": "d610e04008abfe538c96d254acc56f2b65ddf225bd4f18f80229675ff8277ef8",
+     "profiles": [
+      "size-off",
+      "size-auto",
+      "size-all"
+     ],
+     "runs": 10,
+     "median": 7188,
+     "minimum": 7188,
+     "maximum": 7355,
+     "spread": 167,
+     "relative_spread": 0.023233,
+     "counts": [
+      7355,
+      7188,
+      7188,
+      7188,
+      7188,
+      7188,
+      7188,
+      7188,
+      7188,
+      7188
+     ]
+    },
+    "cmp-siphash-vectors": {
+     "digest": "4b1930a2d4097154749df2c42eb2249f38fb029c5e87a3f00df451e86ef132d4",
+     "profiles": [
+      "size-off",
+      "size-auto"
+     ],
+     "runs": 10,
+     "median": 1407572,
+     "minimum": 1407572,
+     "maximum": 1407648,
+     "spread": 76,
+     "relative_spread": 5.4e-05,
+     "counts": [
+      1407648,
+      1407572,
+      1407572,
+      1407572,
+      1407572,
+      1407572,
+      1407572,
+      1407572,
+      1407572,
+      1407572
+     ]
+    }
+   },
+   "largest_relative_spread": 0.023233
+  }
+ }
+}

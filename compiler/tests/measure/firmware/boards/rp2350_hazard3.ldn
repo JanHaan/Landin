@@ -1,0 +1,6 @@
+--  The RP2350's Hazard3 counts its cycles in mcycle.
+import descriptions/rp2350_hazard3
+
+counted: () -> (count: u32) =
+    count = assembler.block("csrr {value}, mcycle", out value: u32 at general)
+end counted

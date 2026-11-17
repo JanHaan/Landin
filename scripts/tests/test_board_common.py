@@ -1611,6 +1611,22 @@ class RamRuns(unittest.TestCase):
             with self.assertRaisesRegex(COMMON.Failed, 'memory exceeds SRAM'):
                 COMMON.validate_ram_image(path, 'rp2040')
 
+    def test_an_empty_load_segment_occupies_no_memory(self):
+        """The Xtensa link leaves an empty PT_LOAD at address 0 when an
+        image has no RAM text; the helper loads nothing of it, and neither
+        does this check refuse it, while a segment there with bytes is
+        still outside SRAM."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'test.elf'
+            empty = [('.isr_vector', 0x20000000, struct.pack('<2I', 0x20041000, 0x20000009)),
+                     ('.ramtext', 0, b'')]
+            path.write_bytes(elf32(empty, [(0x20000000, '.isr_vector'), (0, '.ramtext')]))
+            self.assertEqual(COMMON.validate_ram_image(path, 'rp2040'), 0x20000000)
+            empty[1] = ('.ramtext', 0, bytes(4))
+            path.write_bytes(elf32(empty, [(0x20000000, '.isr_vector'), (0, '.ramtext')]))
+            with self.assertRaisesRegex(COMMON.Failed, 'memory exceeds SRAM'):
+                COMMON.validate_ram_image(path, 'rp2040')
+
     def allocated_image(self, path, address=0x20000100, kind=8, load=False, symbols=()):
         names = b'\0' + b''.join(name.encode() + b'\0' for name, _ in symbols)
         entries, at = bytearray(bytes(16)), 1

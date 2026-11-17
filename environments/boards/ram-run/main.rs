@@ -33,6 +33,22 @@ struct Plan {
     mode: String,
     probe: String,
     elf: PathBuf,
+    // A timing run's ("time"): the data symbol that holds the program's
+    // status at the stop, and how long the program may take to reach it.
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    seconds: Option<u64>,
+    // Further data symbols a timing run reads at the stop, each a run of
+    // 32-bit words: a workload's checksum, beside its status.
+    #[serde(default)]
+    words: Vec<Words>,
+}
+
+#[derive(Deserialize, Clone)]
+struct Words {
+    symbol: String,
+    count: u32,
 }
 
 #[derive(Deserialize)]
@@ -117,6 +133,18 @@ struct Image {
     stack: u32,
     architecture: Architecture,
     visibility: Option<u32>,
+    timing: Option<Timing>,
+}
+
+// What a timing run stops at and reads, from the ELF before any probe opens.
+struct Timing {
+    stop: u32,
+    stop_symbol: &'static str,
+    status: u32,
+    status_symbol: String,
+    trap_count: Option<u32>,
+    seconds: u64,
+    words: Vec<(String, u32, u32)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -306,7 +334,15 @@ fn linked_symbol_section(section: object::SymbolSection) -> bool {
 }
 
 fn image(plan: &Plan) -> Result<Image> {
-    ensure!(plan.format_version == 1 && plan.mode == "ram", "expected format 1 RAM plan");
+    ensure!(plan.format_version == 1 && matches!(plan.mode.as_str(), "ram" | "time"),
+        "expected format 1 RAM or timing plan");
+    if plan.mode == "time" {
+        ensure!(plan.status.is_some() && plan.seconds.is_some(),
+            "a timing plan names its status symbol and seconds");
+    } else {
+        ensure!(plan.status.is_none() && plan.seconds.is_none() && plan.words.is_empty(),
+            "only a timing plan names a status symbol, seconds or words");
+    }
     chip(&plan.board)?;
     let bytes = fs::read(&plan.elf)?;
     ensure!(bytes.get(..6) == Some(b"\x7fELF\x01\x01"), "expected little-endian ELF32");
@@ -456,7 +492,57 @@ fn image(plan: &Plan) -> Result<Image> {
         ensure!(instruction_ram(&plan.board, code), "Xtensa entry must use instruction SRAM");
         Some(address)
     } else { None };
-    Ok(Image { bytes, segments, entry, vector, stack, architecture, visibility })
+    let timing = if plan.mode == "time" {
+        let seconds = plan.seconds.unwrap();
+        ensure!((1..=120).contains(&seconds), "a timing run takes 1 to 120 seconds");
+        // The program's return stops in compiler-owned startup: Arm and
+        // RV32 at _landin_firmware_returned, before its trap; Xtensa, whose
+        // startup has no such label, at the _landin_firmware_stopped loop
+        // its return reaches, which a trap reaches too and the trap count
+        // tells apart.
+        let stop_symbol = if architecture == Architecture::Xtensa {
+            "_landin_firmware_stopped"
+        } else {
+            "_landin_firmware_returned"
+        };
+        let stop = symbol(stop_symbol)? & if arm {!1} else {!0};
+        ensure!(executable.iter().any(|(lo, hi)| u64::from(stop) >= *lo && u64::from(stop) + 2 <= *hi),
+            "{stop_symbol} is not loaded executable code");
+        if arm {
+            // The return's trap, which the timing run's breakpoint replaces.
+            ensure!(loaded_halfword(&segments, stop) == Some(0xde01),
+                "{stop_symbol} does not hold the compiler's udf #1");
+        }
+        let data_word = |name: &str, count: u32| -> Result<u32> {
+            ensure!(!name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+                "{name:?} is not a plain symbol name");
+            ensure!((1..=4).contains(&count), "{name} names 1 to 4 words");
+            let address = symbol(name)?;
+            ensure!(address % 4 == 0 && in_ram(&plan.board, address.into(), 4 * u64::from(count))
+                && !instruction_ram(&plan.board, address.into()),
+                "{name} is not aligned words of data SRAM");
+            Ok(address)
+        };
+        let status_symbol = plan.status.clone().unwrap();
+        let status = data_word(&status_symbol, 1)?;
+        ensure!(plan.words.len() <= 4, "a timing run reads at most four further symbols");
+        let words = plan.words.iter().map(|item| Ok((item.symbol.clone(),
+            data_word(&item.symbol, item.count)?, item.count)))
+            .collect::<Result<Vec<_>>>()?;
+        let trap_count = symbol("_landin_firmware_trap_count").ok();
+        ensure!(architecture == Architecture::Arm || trap_count.is_some(),
+            "a RISC-V or Xtensa image has no _landin_firmware_trap_count");
+        Some(Timing { stop, stop_symbol, status, status_symbol, trap_count, seconds, words })
+    } else { None };
+    Ok(Image { bytes, segments, entry, vector, stack, architecture, visibility, timing })
+}
+
+fn loaded_halfword(segments: &[(u64, Vec<u8>)], address: u32) -> Option<u16> {
+    let address = u64::from(address);
+    segments.iter().find_map(|(start, body)| {
+        let at = address.checked_sub(*start)? as usize;
+        Some(u16::from_le_bytes(body.get(at..at + 2)?.try_into().ok()?))
+    })
 }
 
 fn poll(core: &mut Core<'_>, address: u64, mask: u32, expected: u32) -> Result<u32> {
@@ -926,14 +1012,238 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     core.write_core_reg(core.stack_pointer().id, image.stack).context("entry write stack pointer")?;
     core.write_core_reg(core.program_counter().id, image.entry & if image.architecture == Architecture::Arm {!1} else {!0})
         .context("entry write program counter")?;
+    let started = match &image.timing {
+        Some(timing) => Some(timing_start(&mut core, &plan.board, image.architecture, timing)
+            .with_context(|| format!("{} prepare timing run", plan.board))?),
+        None => None,
+    };
     core.run().with_context(|| format!("{} resume loaded entry", plan.board))?;
+    let timed = match (&image.timing, started) {
+        (Some(timing), Some(started)) => Some(timing_finish(&mut core, &plan.board,
+            image.architecture, timing, started)
+            .with_context(|| format!("{} timing run", plan.board))?),
+        _ => None,
+    };
     if plan.board == "rp2350_hazard3" {
         cleanup["instruction_visibility"] = json!("debug-resume-flush-and-startup-fences");
     }
-    Ok(json!({"format_version":1,"status":"passed","mode":"warm","board":plan.board,
+    let mut report = json!({"format_version":1,"status":"passed","mode":"warm","board":plan.board,
         "elf_sha256":digest(&image.bytes),"flash_written":false,"previous_pc":previous_pc,
         "entry":image.entry,"vector":image.vector,"stack":image.stack,"segments":written,
-        "cleanup":cleanup,"helper_source_sha256":source_digest()}))
+        "cleanup":cleanup,"helper_source_sha256":source_digest()});
+    if let Some(timed) = timed {
+        report["mode"] = json!("time");
+        report["timing"] = timed;
+    }
+    Ok(report)
+}
+
+// The cycle counter a timing run reads, by board (docs/measurement.md,
+// "Time").  The RP2040's Cortex-M0+ has none: its 1 us timer is read at
+// entry and at the stop instead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Counter { Microseconds, Cyccnt, Mcycle, Mpccr, Ccount }
+
+fn counter(board: &str) -> Result<Counter> {
+    Ok(match board {
+        "rp2040" => Counter::Microseconds,
+        "rp2350" | "stm32h753" => Counter::Cyccnt,
+        // ESP-IDF reads mcycle on the C5, which lacks the C3's vendor
+        // counter (soc_caps.h has no SOC_CPU_HAS_CSR_PC there).
+        "rp2350_hazard3" | "esp32c5" => Counter::Mcycle,
+        "esp32c3" => Counter::Mpccr,
+        "esp32" | "esp32s3" => Counter::Ccount,
+        _ => bail!("{board} has no timing counter"),
+    })
+}
+
+fn counter_name(counter: Counter) -> &'static str {
+    match counter {
+        Counter::Microseconds => "TIMERAWL",
+        Counter::Cyccnt => "DWT_CYCCNT",
+        Counter::Mcycle => "mcycle",
+        Counter::Mpccr => "mpccr",
+        Counter::Ccount => "CCOUNT",
+    }
+}
+
+const RP2040_TIMER: u64 = 0x40054000;
+const XTENSA_CCOUNT: RegisterId = RegisterId(0x1ea); // special register 234
+
+fn read_counter(core: &mut Core<'_>, counter: Counter) -> Result<u64> {
+    Ok(match counter {
+        Counter::Microseconds => core.read_word_32(RP2040_TIMER + 0x28).context("read TIMERAWL")?.into(),
+        Counter::Cyccnt => core.read_word_32(0xe0001004).context("read DWT CYCCNT")?.into(),
+        Counter::Mcycle => {
+            let mut high: u32 = core.read_core_reg(RegisterId(0xb80)).context("read mcycleh")?;
+            loop {
+                let low: u32 = core.read_core_reg(RegisterId(0xb00)).context("read mcycle")?;
+                let again: u32 = core.read_core_reg(RegisterId(0xb80)).context("read mcycleh")?;
+                if again == high { break (u64::from(high) << 32) | u64::from(low); }
+                high = again;
+            }
+        }
+        Counter::Mpccr => core.read_core_reg::<u32>(RegisterId(0x7e2)).context("read mpccr")?.into(),
+        Counter::Ccount => core.read_core_reg::<u32>(XTENSA_CCOUNT).context("read CCOUNT")?.into(),
+    })
+}
+
+// The RP chips run their timing from the 12 MHz crystal, as each board
+// application's bringup.crystal puts them, rather than the ring oscillator
+// the boot ROM leaves, whose frequency varies.  The RP2040 also needs its
+// timer's 1 us tick, from the reference clock, and the timer out of the
+// reset warm cleanup put it in, paused only while core 0 is halted.
+fn rp_crystal(core: &mut Core<'_>, board: &str) -> Result<Value> {
+    let rp2 = board != "rp2040";
+    let (xosc, clocks) = if rp2 {(0x40048000u64, 0x40010000u64)} else {(0x40024000u64, 0x40008000u64)};
+    core.write_word_32(xosc + 0x0c, 47).context("XOSC STARTUP")?;
+    core.write_word_32(xosc, (0xfab << 12) | 0xaa0).context("XOSC CTRL")?;
+    poll(core, xosc + 4, 1 << 31, 1 << 31)?;
+    core.write_word_32(clocks + 0x30, 2).context("CLK_REF_CTRL")?;
+    poll(core, clocks + 0x38, 0xf, 4)?;
+    core.write_word_32(clocks + 0x3c, 0).context("CLK_SYS_CTRL")?;
+    poll(core, clocks + 0x44, 3, 1)?;
+    let mut report = json!({"source":"xosc","hz":12000000u32,
+        "clk_ref_selected":4,"clk_sys_selected":1});
+    if !rp2 {
+        core.write_word_32(0x4005802c, 0x200 | 12).context("WATCHDOG TICK")?;
+        update(core, 0x4000c000, 1 << 21, 0)?; // RESET.TIMER
+        poll(core, 0x4000c008, 1 << 21, 1 << 21)?;
+        core.write_word_32(RP2040_TIMER + 0x2c, 2).context("TIMER DBGPAUSE core 0")?;
+        core.write_word_32(RP2040_TIMER + 0x30, 0).context("TIMER PAUSE")?;
+        report["tick_cycles"] = json!(12);
+        report["timer_dbgpause"] = json!(poll(core, RP2040_TIMER + 0x2c, 6, 2)?);
+    }
+    Ok(report)
+}
+
+// The clock registers a board's figure is keyed by, read before entry;
+// the board tool decodes them.  STM32H753: RCC_CR, RCC_CFGR, RCC_D1CFGR.
+// ESP32-C3: SYSTEM_CPU_PER_CONF and SYSTEM_SYSCLK_CONF.  ESP32-C5: PCR's
+// SYSCLK_CONF to AHB_FREQ_CONF.
+fn clock_registers(board: &str) -> &'static [u64] {
+    match board {
+        "stm32h753" => &[0x58024400, 0x58024410, 0x58024418],
+        "esp32c3" => &[0x600c0008, 0x600c0058],
+        "esp32c5" => &[0x60096110, 0x60096114, 0x60096118, 0x6009611c],
+        _ => &[],
+    }
+}
+
+struct Started { counter: Counter, start: u64, clock: Value, setup: Value }
+
+fn timing_start(core: &mut Core<'_>, board: &str, architecture: Architecture, timing: &Timing) -> Result<Started> {
+    let counter = counter(board)?;
+    let clock = match board {
+        "rp2040" | "rp2350" | "rp2350_hazard3" => rp_crystal(core, board)?,
+        "esp32" | "esp32s3" => json!({"source":"xtal","hz":40000000u32}),
+        _ => {
+            let mut values = serde_json::Map::new();
+            for address in clock_registers(board) {
+                values.insert(format!("{address:#010x}"), json!(core.read_word_32(*address)
+                    .with_context(|| format!("read clock register {address:#x}"))?));
+            }
+            json!({"registers":values})
+        }
+    };
+    let mut setup = json!({});
+    match counter {
+        Counter::Microseconds => {}
+        Counter::Cyccnt => {
+            if board == "stm32h753" {
+                core.write_word_32(0xe0001fb0, 0xc5acce55).context("DWT LAR unlock")?;
+            }
+            update(core, 0xe000edfc, 0, 1 << 24)?; // DEMCR.TRCENA
+            core.write_word_32(0xe0001004, 0).context("zero CYCCNT")?;
+            update(core, 0xe0001000, 0, 1)?; // DWT_CTRL.CYCCNTENA
+            setup["dwt_ctrl"] = json!(core.read_word_32(0xe0001000).context("read DWT_CTRL")?);
+        }
+        Counter::Mcycle => {
+            let inhibit: u32 = core.read_core_reg(RegisterId(0x320)).context("read mcountinhibit")?;
+            core.write_core_reg(RegisterId(0x320), inhibit & !1).context("clear mcountinhibit.CY")?;
+            core.write_core_reg(RegisterId(0xb00), 0u32).context("zero mcycle")?;
+            core.write_core_reg(RegisterId(0xb80), 0u32).context("zero mcycleh")?;
+            setup["mcountinhibit_before"] = json!(inhibit);
+        }
+        Counter::Mpccr => {
+            core.write_core_reg(RegisterId(0x7e0), 1u32).context("mpcer selects cycles")?;
+            core.write_core_reg(RegisterId(0x7e1), 1u32).context("mpcmr enables counting")?;
+            core.write_core_reg(RegisterId(0x7e2), 0u32).context("zero mpccr")?;
+        }
+        Counter::Ccount => core.write_core_reg(XTENSA_CCOUNT, 0u32).context("zero CCOUNT")?,
+    }
+    if architecture == Architecture::Riscv {
+        // dcsr.stopcount keeps the counter still while the hart is halted.
+        let dcsr: u32 = core.read_core_reg(RegisterId(0x7b0)).context("read dcsr")?;
+        core.write_core_reg(RegisterId(0x7b0), dcsr | (1 << 10)).context("dcsr.stopcount")?;
+        setup["dcsr_stopcount"] = json!(core.read_core_reg::<u32>(RegisterId(0x7b0))
+            .context("read dcsr")? >> 10 & 1);
+    }
+    if architecture == Architecture::Arm {
+        // FPB comparators on the M0+ cannot reach SRAM.  A bkpt in place of
+        // the return's udf halts each Arm core where the return arrives.
+        core.write_16(timing.stop.into(), &[0xbe00]).context("write bkpt at the stop")?;
+        let mut back = [0u16];
+        core.read_16(timing.stop.into(), &mut back).context("read the stop's bkpt back")?;
+        ensure!(back[0] == 0xbe00, "the stop's bkpt did not read back");
+        setup["stop_breakpoint"] = json!("bkpt");
+    } else {
+        core.set_hw_breakpoint(timing.stop.into()).context("hardware breakpoint at the stop")?;
+        setup["stop_breakpoint"] = json!("hardware");
+    }
+    let start = read_counter(core, counter)?;
+    Ok(Started { counter, start, clock, setup })
+}
+
+fn timing_finish(core: &mut Core<'_>, board: &str, architecture: Architecture, timing: &Timing,
+                 started: Started) -> Result<Value> {
+    let resumed = Instant::now();
+    let halted = core.wait_for_core_halted(Duration::from_secs(timing.seconds));
+    let elapsed = resumed.elapsed();
+    if halted.is_err() {
+        core.halt(Duration::from_secs(2)).context("halt a program that did not stop")?;
+    }
+    let pc: u32 = core.read_core_reg(core.program_counter().id).context("read the stop's PC")?;
+    let end = read_counter(core, started.counter)?;
+    // A counter that still moves while the core is halted puts the probe's
+    // own latency in the figure; the run says so rather than hide it.
+    std::thread::sleep(Duration::from_millis(50));
+    let later = read_counter(core, started.counter)?;
+    let status = core.read_word_32(timing.status.into()).context("read the status word")? as i32;
+    let mut words = serde_json::Map::new();
+    for (name, address, count) in &timing.words {
+        let mut values = vec![0u32; *count as usize];
+        core.read_32((*address).into(), &mut values).with_context(|| format!("read {name}"))?;
+        words.insert(name.clone(), json!(values));
+    }
+    let traps = match timing.trap_count {
+        Some(address) => Some(core.read_word_32(address.into()).context("read the trap count")?),
+        None => None,
+    };
+    if architecture == Architecture::Arm {
+        // Park the core where it stopped: a `b .` in place of the bkpt, so
+        // that the session's end, which resumes an Arm core, leaves it
+        // looping in thread mode rather than trapping into a handler a
+        // later warm load could not retire.
+        core.write_16(timing.stop.into(), &[0xe7fe]).context("park at the stop")?;
+    } else {
+        core.clear_all_hw_breakpoints().context("clear the stop's breakpoint")?;
+    }
+    ensure!(halted.is_ok(), "the program did not stop at {} within {} s; halted at {pc:#x}, \
+        trap count {traps:?}", timing.stop_symbol, timing.seconds);
+    ensure!(pc == timing.stop, "the program stopped at {pc:#x}, not at {} {:#x}",
+        timing.stop_symbol, timing.stop);
+    ensure!(traps.unwrap_or(0) == 0, "the program trapped {} time(s) before it stopped", traps.unwrap());
+    let width = if matches!(started.counter, Counter::Mcycle) {64} else {32};
+    let count = if width == 64 { end.wrapping_sub(started.start) }
+        else { u64::from((end as u32).wrapping_sub(started.start as u32)) };
+    Ok(json!({"counter":counter_name(started.counter),"board":board,
+        "unit":if started.counter == Counter::Microseconds {"microseconds"} else {"cycles"},
+        "start":started.start,"end":end,"count":count,"counter_bits":width,
+        "halted_drift":later.wrapping_sub(end),"host_seconds":elapsed.as_secs_f64(),
+        "stop_symbol":timing.stop_symbol,"stop":timing.stop,"pc":pc,
+        "status_symbol":timing.status_symbol,"status":status,"words":words,"trap_count":traps,
+        "clock":started.clock,"setup":started.setup}))
 }
 
 fn process_plan(bytes: &[u8], validate: bool) -> Result<Value> {
@@ -951,7 +1261,7 @@ fn process_plan(bytes: &[u8], validate: bool) -> Result<Value> {
         let plan: Plan = serde_json::from_slice(bytes)?;
         let image = image(&plan)?;
         if validate {
-            Ok(json!({"format_version":1,"status":"validated","mode":"ram","board":plan.board,
+            Ok(json!({"format_version":1,"status":"validated","mode":plan.mode,"board":plan.board,
                 "elf_sha256":digest(&image.bytes),"entry":image.entry,"vector":image.vector,
                 "stack":image.stack,"flash_written":false,"helper_source_sha256":source_digest()}))
         } else { execute(&plan, &image) }
@@ -970,7 +1280,8 @@ fn main() -> Result<()> {
     let envelope: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     let mode = if args.validate { "validate" } else {
         match envelope.get("mode").and_then(Value::as_str) {
-            Some("read") => "read", Some("boot-read") => "boot-read", _ => "warm",
+            Some("read") => "read", Some("boot-read") => "boot-read",
+            Some("time") => "time", _ => "warm",
         }
     };
     fs::write(args.output.context("missing output")?, serde_json::to_vec_pretty(&match &result {
@@ -1260,7 +1571,9 @@ mod tests {
     }
     // A real ELF32 image with one executable PT_LOAD, an allocated BSS
     // excluded from it (the linker-script :NONE case), and nonalloc metadata.
-    fn allocated_test_elf() -> Vec<u8> {
+    fn allocated_test_elf() -> Vec<u8> { allocated_test_elf_with(&[]) }
+    // The same image with EXTRA symbols, as (name, value, section index).
+    fn allocated_test_elf_with(extra: &[(&str, u32, u16)]) -> Vec<u8> {
         let mut bytes = vec![0u8; 0x700];
         bytes[..7].copy_from_slice(b"\x7fELF\x01\x01\x01");
         bytes[16..20].copy_from_slice(&[2, 0, 40, 0]); // ET_EXEC, EM_ARM
@@ -1291,7 +1604,7 @@ mod tests {
             [offsets[3], 8, 3, 0x20000200, 0, 16, 0, 0, 4, 0],
             [offsets[4], 3, 0, 0, 0x200, strings.len() as u32, 0, 0, 1, 0],
             [offsets[5], 3, 0, 0, 0x300, 0, 0, 0, 1, 0],
-            [offsets[6], 2, 0, 0, 0x400, 7 * 16, 5, 1, 4, 16],
+            [offsets[6], 2, 0, 0, 0x400, (7 + extra.len() as u32) * 16, 5, 1, 4, 16],
         ];
         for (index, section) in sections.into_iter().enumerate() {
             for (field, value) in section.into_iter().enumerate() {
@@ -1306,8 +1619,9 @@ mod tests {
             ("_landin_firmware_bss_start", 0x20000200, 3),
             ("_landin_firmware_bss_end", 0x20000210, 3),
         ];
+        assert!(extra.len() <= 8, "the test symbol table holds eight more");
         let mut strings = vec![0u8];
-        for (index, (name, value, section)) in symbols.into_iter().enumerate() {
+        for (index, (name, value, section)) in symbols.into_iter().chain(extra.iter().copied()).enumerate() {
             let at = 0x400 + (index + 1) * 16;
             elf_test_word(&mut bytes, at, strings.len() as u32);
             elf_test_word(&mut bytes, at + 4, value);
@@ -1321,6 +1635,73 @@ mod tests {
     }
     fn offline_elf_control(bytes: &[u8], validate: bool) -> Result<Value> {
         offline_board_elf_control(bytes, "rp2040", validate)
+    }
+    fn offline_plan_control(bytes: &[u8], plan: Value) -> Result<Value> {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!("landin-timing-{}-{}.elf", std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        fs::write(&path, bytes)?;
+        let mut plan = plan;
+        plan["format_version"] = json!(1);
+        plan["board"] = json!("rp2040");
+        plan["probe"] = json!("deliberately invalid probe selector");
+        plan["elf"] = json!(path);
+        let result = process_plan(&serde_json::to_vec(&plan)?, true);
+        fs::remove_file(path)?;
+        result
+    }
+    // The test image's text holds `bx lr` at its entry and, at 0x200000c2,
+    // the udf #1 a returning entry reaches; its BSS holds the status words.
+    fn timing_test_elf(stop: u32) -> Vec<u8> {
+        let mut bytes = allocated_test_elf_with(&[("_landin_firmware_returned", stop, 2),
+            ("measured_status", 0x20000200, 3), ("measured_before", 0x20000204, 3),
+            ("odd_word", 0x20000206, 3)]);
+        bytes[0x1c2..0x1c4].copy_from_slice(&[0x01, 0xde]);
+        bytes
+    }
+    #[test]
+    fn timing_plans_are_checked_before_any_probe_opens() {
+        let image = timing_test_elf(0x200000c3);
+        let time = json!({"mode":"time","status":"measured_status","seconds":5,
+            "words":[{"symbol":"measured_before","count":2}]});
+        let report = offline_plan_control(&image, time.clone()).unwrap();
+        assert_eq!((report["status"].as_str(), report["mode"].as_str()), (Some("validated"), Some("time")));
+        for (change, refusal) in [
+            (json!({"status":null}), "a timing plan names its status symbol and seconds"),
+            (json!({"seconds":0}), "1 to 120 seconds"),
+            (json!({"seconds":121}), "1 to 120 seconds"),
+            (json!({"status":"missing_word"}), "missing missing_word"),
+            (json!({"status":"odd_word"}), "not aligned words of data SRAM"),
+            (json!({"status":"bad name"}), "not a plain symbol name"),
+            (json!({"words":[{"symbol":"measured_before","count":5}]}), "names 1 to 4 words"),
+        ] {
+            let mut plan = time.clone();
+            for (key, value) in change.as_object().unwrap() { plan[key] = value.clone(); }
+            let error = format!("{:#}", offline_plan_control(&image, plan).unwrap_err());
+            assert!(error.contains(refusal), "{change}: {error}");
+        }
+        // A RAM plan names neither, and reads no words.
+        for change in [json!({"status":"measured_status"}), json!({"words":[{"symbol":"measured_before","count":1}]})] {
+            let mut plan = json!({"mode":"ram"});
+            for (key, value) in change.as_object().unwrap() { plan[key] = value.clone(); }
+            assert!(offline_plan_control(&image, plan).is_err(), "{change}");
+        }
+        // The stop must be the compiler's return trap, which the bkpt replaces.
+        let error = format!("{:#}", offline_plan_control(&timing_test_elf(0x200000c1), time).unwrap_err());
+        assert!(error.contains("does not hold the compiler's udf #1"), "{error}");
+    }
+    #[test]
+    fn each_board_has_the_counter_the_measurement_contract_names() {
+        for (board, expected, name) in [
+            ("rp2040", Counter::Microseconds, "TIMERAWL"), ("rp2350", Counter::Cyccnt, "DWT_CYCCNT"),
+            ("stm32h753", Counter::Cyccnt, "DWT_CYCCNT"), ("rp2350_hazard3", Counter::Mcycle, "mcycle"),
+            ("esp32c5", Counter::Mcycle, "mcycle"), ("esp32c3", Counter::Mpccr, "mpccr"),
+            ("esp32", Counter::Ccount, "CCOUNT"), ("esp32s3", Counter::Ccount, "CCOUNT"),
+        ] {
+            assert_eq!(counter(board).unwrap(), expected, "{board}");
+            assert_eq!(counter_name(expected), name);
+        }
+        assert!(counter("stm32h753_cached").is_err());
     }
     fn offline_board_elf_control(bytes: &[u8], board: &str, validate: bool) -> Result<Value> {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);

@@ -495,6 +495,73 @@ What is physical and what is not:
 The oracle refuses a control that does not fail as predicted, so a run on
 a core without caches, or with the maintenance in place, cannot pass.
 
+## Timing runs
+
+[`timing.py`](timing.py) measures the cycles the firmware workloads of
+[docs/measurement.md](../../docs/measurement.md#time) cost on each port, a
+RAM run each, through the SRAM helper's timing plan:
+
+```sh
+python3 environments/boards/timing.py build --refine REFINE --output BUNDLE
+python3 environments/boards/timing.py remote --bundle BUNDLE --output NEW_DIRECTORY \
+    --board esp32 --repeat 3 --ram-loader PI_HELPER
+```
+
+`build`, on epycmicro and without the rig, compiles each workload of
+`compiler/tests/measure/workloads.json`'s firmware set at all nine
+profiles as each port's RAM image. The workload's `main` is entered
+through `compiler/tests/measure/firmware/entry.ldn`, joined by the port's
+file under `firmware/boards/`, which imports its description and reads its
+counter. Profiles whose images load the same bytes are one image, named by
+the digest of what is loaded rather than of the ELF file, whose line
+tables differ between them; `timing.json` names every profile each image
+stands for. An image the warm load would refuse, an instruction SRAM
+segment that is not whole words, is kept as a limit with its reason.
+
+`run`, on rigpi, holds the rig lock across one port's images and runs each
+`--repeat` times; `remote` copies the bundle and these tools there and
+runs each `--board` in turn, as `run.py` does for a board tool. Each run is
+a warm load as a RAM run's, then:
+
+- the RP chips are moved to their 12 MHz crystal, as each board
+  application's `bringup.crystal` moves them, and the RP2040's timer is
+  given its 1 µs tick and taken out of reset, pausing only while core 0 is
+  halted;
+- the port's counter is started: DWT `CYCCNT` on the RP2350's M33 and the
+  STM32H753's M7, `mcycle` on Hazard3 and the ESP32-C5, `mpccr` on the
+  ESP32-C3 after `mpcer` and `mpcmr` select and enable cycles, `CCOUNT` on
+  the Xtensa chips, and the RP2040's `TIMERAWL`, in microseconds;
+- the program stops where its entry returns, at
+  `_landin_firmware_returned`, a `bkpt` in place of its `udf` on Arm, whose
+  M0+ breakpoint unit cannot reach SRAM, and a hardware breakpoint
+  elsewhere; on Xtensa at `_landin_firmware_stopped`, which a trap also
+  reaches and the trap count, read there, tells apart;
+- the probe reads the status `main` returned, the counter the program
+  read just before it called `main` and just after `main` returned, and
+  any checksum words the workload names.
+
+The figure is the difference of the program's two reads. The probe's own
+count, from its start before entry to its read at the stop, is kept
+beside it: the ESP32-C3's `mpccr` runs on while the hart is halted and its
+`dcsr.stopcount` is fixed at zero, so that count holds the probe's latency,
+milliseconds of it. A status other than the fixture's, a trap, a program
+that has not stopped within `--seconds`, or a figure past 2³¹ fails the
+run. Each figure is kept with its counter, its clock, read from the clock
+registers where the run does not choose it, and its placement, the RAM
+its text, data and stack are in. On Arm the stop's `bkpt` is replaced by a
+`b .` before the session ends, so the core the session's end resumes loops
+in thread mode, where the next warm load can halt it.
+
+`noise` writes `compiler/tests/measure/noise/cycles.json` from results
+whose images ran at least ten times, and `figures` every configuration's
+figure, keyed `board/level/profile/workload`, from a full pass's: the
+lower median of its runs, a profile whose image another gave citing its
+digest, and each limit with its reason. The RP2350's Arm images run while the
+Pico 2 runs Arm: a `rp2350` boot check first, and a `rp2350_hazard3` boot
+check after, which leaves it on its resting image. A timing run leaves a
+port's RAM image looping where it stopped, as a RAM run leaves its
+application; the next RAM run or boot check starts from that.
+
 ## The board gate on the rig
 
 [`gate.py`](gate.py) runs one port of [rig.json](rig.json) on rigpi from
