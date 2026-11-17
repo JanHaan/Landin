@@ -181,7 +181,10 @@ package body Landin.Build_Reports.Stacks is
 
       --  Zero for a routine the backend emitted no body for.
       Statistic : Count_Array := [others => 0];
-      Frame : Byte_Array := [others => 0];
+      --  The build report's two figures, by its names: Frame what the
+      --  prologue reserves, Own_Stack the routine's own whole stack, which
+      --  the depths add up.
+      Frame, Own_Stack : Byte_Array := [others => 0];
       Traps, Switches, Taken : Flag_Array := [others => False];
       First_Edge, Last_Edge : Count_Array := [others => 0];
       First_Own, Last_Own : Count_Array := [others => 0];
@@ -555,7 +558,8 @@ package body Landin.Build_Reports.Stacks is
             else Nth_Routine
               (Of_Report, Statistic (Positive (Facts_Of.Shared_With))));
       begin
-         Frame (Positive (Id)) := Body_Of.Stack_Bytes;
+         Frame (Positive (Id)) := Body_Of.Frame_Bytes;
+         Own_Stack (Positive (Id)) := Body_Of.Stack_Bytes;
          Traps (Positive (Id)) := Body_Of.Calls_Panic;
          First_Edge (Positive (Id)) := Natural (Edges.Length) + 1;
          First_Own (Positive (Id)) := Natural (Openings.Length) + 1;
@@ -602,7 +606,7 @@ package body Landin.Build_Reports.Stacks is
          end if;
          --  The hosted entry calls the argument initializer before its
          --  own frame is reserved, which counting it as a call from the
-         --  whole frame bounds.
+         --  routine's whole stack bounds.
          if Id = Hosted_Entry and then Initializer /= IR.No_Item then
             Call (Id, Initializer, IR.Origin_Of (Unit, Id));
          end if;
@@ -689,7 +693,7 @@ package body Landin.Build_Reports.Stacks is
                   Ends := At_Trap;
                   Callee := IR.No_Item;
                end if;
-               Depth (Id) := Frame (Id) + Best;
+               Depth (Id) := Own_Stack (Id) + Best;
                Next (Id) := Callee;
                Ends_At (Id) := Ends;
             end;
@@ -936,10 +940,10 @@ package body Landin.Build_Reports.Stacks is
       --  A failed check calls the handler on the stack it failed on, and
       --  a check failing inside the handler's own calls enters it once
       --  more, as far as its reserved frame, before it traps: so the
-      --  handler is measured with its own frame as the trap's cost, and
+      --  handler is measured with its own stack as the trap's cost, and
       --  every routine with what that measured.
       if Handler /= IR.No_Item and then Emitted (Handler) then
-         Trap_Bytes := Frame (Positive (Handler));
+         Trap_Bytes := Own_Stack (Positive (Handler));
          Measure;
          Trap_Bytes := Depth (Positive (Handler));
          Trap_Openings := Reached (Positive (Handler));
@@ -952,7 +956,7 @@ package body Landin.Build_Reports.Stacks is
       end if;
       Measure;
 
-      Put ("{""format"":""landin-stack-report-1"",""target"":"
+      Put ("{""format"":""landin-stack-report-2"",""target"":"
            & Landin.Json.Quoted (Landin.Targets.Name (Facts))
            & ",""level"":" & Landin.Json.Quoted
              (Landin.Targets.Levels.Name (Landin.Stages.Level (Context)))
@@ -1020,6 +1024,7 @@ package body Landin.Build_Reports.Stacks is
                        & ",""name"":" & Landin.Json.Quoted (Name_Of (Id))
                        & Where (IR.Origin_Of (Unit, Id))
                        & ",""frame_bytes"":" & Image (Frame (Index))
+                       & ",""stack_bytes"":" & Image (Own_Stack (Index))
                        & ",""depth_bytes"":" & Image (Depth (Index))
                        & ",""closed"":" & Boolean_Image (Closed)
                        & ",""address_taken"":" & Boolean_Image (Taken (Index))

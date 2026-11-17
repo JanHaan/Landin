@@ -17,7 +17,6 @@ with Landin.Diagnostics.Suggestions;
 with Landin.Driver.Library;
 with Landin.Modules;
 with Landin.Modules.Availability;
-with Landin.Source;
 with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
@@ -252,6 +251,9 @@ package body Landin.Driver.Loading is
       Cache           : access Landin.Stages.Syntax.Parse_Cache;
       Dependency_Directories : access Landin.Platform.Path_List;
       Parsing         : access procedure (Finished : Boolean);
+      Steps           : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step);
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity));
 
@@ -269,6 +271,9 @@ package body Landin.Driver.Loading is
       Cache           : access Landin.Stages.Syntax.Parse_Cache;
       Dependency_Directories : access Landin.Platform.Path_List;
       Parsing         : access procedure (Finished : Boolean);
+      Steps           : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step);
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity))
    is
@@ -1152,7 +1157,8 @@ package body Landin.Driver.Loading is
                      Parsing (Finished => False);
                   end if;
                   Landin.Stages.Syntax.Run_Using
-                    (Context, Syntax_Outcome, Previous, Watch_Syntax, Cache);
+                    (Context, Syntax_Outcome, Previous, Watch_Syntax, Cache,
+                     Steps);
                   if Parsing /= null then
                      Parsing (Finished => True);
                   end if;
@@ -1546,13 +1552,16 @@ package body Landin.Driver.Loading is
       Library         : String := "";
       Implicit        : String := "";
       Parsing         : access procedure (Finished : Boolean) := null;
+      Steps           : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step) := null;
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity) := null) is
    begin
       Discover
         (Context, Host, Roots, Library, Entry_Directory, False,
          Missing_Directories, Previous, Watch_Syntax, Implicit, Cache,
-         Dependency_Directories, Parsing, Observed);
+         Dependency_Directories, Parsing, Steps, Observed);
    end Load_Reachable_Program;
 
    procedure Load_Library_Imports
@@ -1565,6 +1574,9 @@ package body Landin.Driver.Loading is
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit     : String := "";
       Parsing      : access procedure (Finished : Boolean) := null;
+      Steps        : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step) := null;
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity) := null)
    is
@@ -1572,7 +1584,7 @@ package body Landin.Driver.Loading is
       Discover
         (Context, Host, Landin.Platform.No_Arguments, Library, "", True,
          null, Previous, Watch_Syntax, Implicit, Cache,
-         Dependency_Directories, Parsing, Observed);
+         Dependency_Directories, Parsing, Steps, Observed);
    end Load_Library_Imports;
 
    procedure Load_Rooted_Imports
@@ -1583,6 +1595,9 @@ package body Landin.Driver.Loading is
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit : String := "";
       Parsing  : access procedure (Finished : Boolean) := null;
+      Steps    : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step) := null;
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity) := null)
    is
@@ -1590,7 +1605,7 @@ package body Landin.Driver.Loading is
       Discover
         (Context, Host, Roots, Library, "", True,
          null, null, null, Implicit, null, Dependency_Directories,
-         Parsing, Observed);
+         Parsing, Steps, Observed);
    end Load_Rooted_Imports;
 
 end Landin.Driver.Loading;

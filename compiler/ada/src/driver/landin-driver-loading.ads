@@ -15,6 +15,7 @@
 --  compilation, as every other refusal is.
 
 with Landin.Platform;
+with Landin.Source;
 with Landin.Stages;
 with Landin.Stages.Syntax;
 
@@ -55,6 +56,9 @@ package Landin.Driver.Loading is
       Library         : String := "";
       Implicit        : String := "";
       Parsing         : access procedure (Finished : Boolean) := null;
+      Steps           : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step) := null;
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity) := null);
 
@@ -76,6 +80,9 @@ package Landin.Driver.Loading is
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit     : String := "";
       Parsing      : access procedure (Finished : Boolean) := null;
+      Steps        : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step) := null;
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity) := null);
 
@@ -91,12 +98,18 @@ package Landin.Driver.Loading is
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit : String := "";
       Parsing  : access procedure (Finished : Boolean) := null;
+      Steps    : access procedure
+        (Id : Landin.Source.Source_Id;
+         Step : Landin.Stages.Syntax.Source_Step) := null;
       Observed : access procedure
         (Path : String; Identity : Landin.Platform.File_Identity) := null);
 
    --  Parsing, when given, is told as each batch of newly read sources
    --  begins and finishes scanning and parsing, so a stage report can
    --  count that time as the syntax stage's rather than as reading.
+   --  Steps, when given, is Landin.Stages.Syntax.Run_Using's watcher of
+   --  each source's scan and parse inside those batches, so a stage
+   --  report can also say which source the time went to.
 
    --  Implicit, in either load, names one library module the program holds
    --  whether or not an import reaches it: platform/linux, whose process

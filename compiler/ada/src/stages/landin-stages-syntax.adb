@@ -73,7 +73,9 @@ package body Landin.Stages.Syntax is
       Outcome  : out Stage_Outcome;
       Previous : access Compilation := null;
       Watch    : access procedure (Name : String) := null;
-      Cache    : access Parse_Cache'Class := null)
+      Cache    : access Parse_Cache'Class := null;
+      Steps    : access procedure
+        (Id : Landin.Source.Source_Id; Step : Source_Step) := null)
    is
       --  The one view every helper below takes; see Landin.Stages.Run.
       Context : Compilation renames Compilation (Whole);
@@ -144,8 +146,14 @@ package body Landin.Stages.Syntax is
                      if Watch /= null then
                         Watch (Landin.Source.Name (Snapshot));
                      end if;
+                     if Steps /= null then
+                        Steps (Id, Scanning);
+                     end if;
                      Landin.Tokens.Lexer.Lex (Snapshot, Names.all, Stream);
                      Landin.Diagnostics.Lexical.Report (Stream, Found);
+                     if Steps /= null then
+                        Steps (Id, Parsing);
+                     end if;
 
                      --  One tree and space row per source, in source order.
                      Landin.Syntax.Forest.Add
@@ -157,6 +165,9 @@ package body Landin.Stages.Syntax is
                           (Snapshot, Trees.Tree_Of (Id).all, Found);
                      end if;
                      Landin.Tokens.Spacing.Add (Spaces.all, Stream);
+                     if Steps /= null then
+                        Steps (Id, Done);
+                     end if;
                   else
                      Cache.Reused := Cache.Reused + 1;
                      Landin.Syntax.Forest.Copy_Add

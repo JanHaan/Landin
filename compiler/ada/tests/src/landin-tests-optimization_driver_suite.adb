@@ -669,21 +669,34 @@ package body Landin.Tests.Optimization_Driver_Suite is
          Written := US.To_Unbounded_String (Host.Written ("stages.json"));
          Landin.Testing.Check_Equal
            (Item, Result.Status, 0, "an emitting request may be measured");
-         --  Loading samples four times: as it begins, around the parse of
-         --  the file it reads, and as it ends.  Its 30 microseconds hold
-         --  10 of parsing, which the syntax row carries beside its own 10.
+         --  Loading samples seven times: as it begins, around the parse
+         --  of the file it reads, as that file's scan begins, as its parse
+         --  begins and as it is done, and as loading ends.  Its 60
+         --  microseconds hold 40 of parsing, which the syntax row carries
+         --  beside its own 10; the file's scan and parse took 10 each.
          Landin.Testing.Check
            (Item, Has (US.To_String (Written),
                        "{""stage"":""loading"",""processor_us"":20,"
-                       & """peak_kib"":104}")
+                       & """peak_kib"":107}")
               and then Has (US.To_String (Written),
-                            "{""stage"":""syntax"",""processor_us"":20,"
-                            & """peak_kib"":106}")
+                            "{""stage"":""syntax"",""processor_us"":50,"
+                            & """peak_kib"":109}")
               and then Has (US.To_String (Written),
                             "{""stage"":""lowering"",""processor_us"":10,")
               and then Has (US.To_String (Written),
                             "{""stage"":""emission"",""processor_us"":10,"),
             "each row is the meter's difference across one stage");
+         Landin.Testing.Check
+           (Item, Has (US.To_String (Written),
+                       """sources"":[" & ASCII.LF
+                       & "    {""file"":""main.ldn"",""bytes"":"
+                       & Ada.Strings.Fixed.Trim
+                           (Natural'Image (Source'Length), Ada.Strings.Both)
+                       & ",""steps"":[{""step"":""scanning"","
+                       & """processor_us"":10},{""step"":""parsing"","
+                       & """processor_us"":10}]}" & ASCII.LF & "  ],"),
+            "each source's row is the meter's difference across its scan"
+            & " and its parse: " & US.To_String (Written));
          Landin.Testing.Check
            (Item, Ada.Strings.Fixed.Index (US.To_String (Written),
                                            """loading""")
@@ -694,6 +707,22 @@ package body Landin.Tests.Optimization_Driver_Suite is
               < Ada.Strings.Fixed.Index (US.To_String (Written),
                                          """emission"""),
             "rows are in the order the stages ran");
+      end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Clock : aliased Count;
+         Meter : Counting_Meter (Clock'Access);
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Result := Landin.Driver.Execute (Request, Host, Tools, Meter);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "an unmeasured request emits");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Clock.Calls), 0,
+            "no stage or source is sampled without a stage report");
       end;
 
       declare
@@ -736,10 +765,17 @@ package body Landin.Tests.Optimization_Driver_Suite is
            (Item, Has (Host.Written ("stages.json"),
                        "{""stage"":""loading"",""processor_us"":20,")
               and then Has (Host.Written ("stages.json"),
-                            "{""stage"":""syntax"",""processor_us"":20,")
+                            "{""stage"":""syntax"",""processor_us"":50,")
               and then not Has (Host.Written ("stages.json"),
                                 """configuration"""),
             "a parse refused while loading is the syntax stage's row");
+         Landin.Testing.Check
+           (Item, Has (Host.Written ("stages.json"),
+                       "{""file"":""main.ldn"",""bytes"":34,""steps"":["
+                       & "{""step"":""scanning"",""processor_us"":10},"
+                       & "{""step"":""parsing"",""processor_us"":10}]}"),
+            "the refused parse is its source's row: "
+            & Host.Written ("stages.json"));
       end;
       declare
          Host : Landin.Testing.Fakes.Fake_Filesystem;

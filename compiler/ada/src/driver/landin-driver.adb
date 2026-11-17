@@ -46,6 +46,7 @@ with Landin.Source.Sets;
 with Landin.Source_Digests;
 with Landin.Source_Maps;
 with Landin.Stages;
+with Landin.Stages.Syntax;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
@@ -59,6 +60,13 @@ package body Landin.Driver is
    use type Landin.Targets.Target_Facts;
 
    package Unbounded renames Ada.Strings.Unbounded;
+
+   --  A stage report's processor time for one source, by step.
+   type Source_Time is record
+      Scanning, Parsing : Long_Long_Integer := 0;
+   end record;
+   package Source_Times is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Source_Time);
 
    package Path_Sets is new Ada.Containers.Indefinite_Hashed_Sets
      (Element_Type        => String,
@@ -2704,6 +2712,11 @@ package body Landin.Driver is
          Stage_Rows : Unbounded.Unbounded_String;
          Parse_Start : Landin.Platform.Resource_Sample;
          Parse_Microseconds : Long_Long_Integer := 0;
+         --  Inside the syntax stage's time, each source's own: its scan
+         --  and its parse, by source, sampled only when a report is asked
+         --  for.  Step_Start is when the step under way began.
+         Per_Source : Source_Times.Vector;
+         Step_Start : Landin.Platform.Resource_Sample;
          --  The stage running now, for a defect to say where it arose.
          Current_Stage : Unbounded.Unbounded_String :=
            Unbounded.To_Unbounded_String ("the driver");
@@ -2712,6 +2725,9 @@ package body Landin.Driver is
          procedure Stage_Began;
          procedure Stage_Ended (Name : String);
          procedure Watch_Parsing (Finished : Boolean);
+         procedure Watch_Source
+           (Id : Landin.Source.Source_Id;
+            Step : Landin.Stages.Syntax.Source_Step);
          procedure Watch_Stage (Name : String; Finished : Boolean);
          procedure Write_Stage_Report;
 
@@ -2767,6 +2783,40 @@ package body Landin.Driver is
             end if;
          end Watch_Parsing;
 
+         --  Each step's time goes to the source it was spent on: the
+         --  scan when the parse begins, the parse when the source is done.
+         procedure Watch_Source
+           (Id : Landin.Source.Source_Id;
+            Step : Landin.Stages.Syntax.Source_Step)
+         is
+            use all type Landin.Stages.Syntax.Source_Step;
+            Now : Landin.Platform.Resource_Sample;
+            Spent : Long_Long_Integer;
+         begin
+            if not Stage_Report_Seen or else Dry_Run then
+               return;
+            end if;
+            Now := Meter.Sample;
+            if Step /= Scanning then
+               while Natural (Per_Source.Length) < Natural (Id) loop
+                  Per_Source.Append (Source_Time'(others => <>));
+               end loop;
+               Spent := Now.Processor_Microseconds
+                 - Step_Start.Processor_Microseconds;
+               declare
+                  Times : Source_Time renames
+                    Per_Source.Reference (Positive (Id));
+               begin
+                  if Step = Parsing then
+                     Times.Scanning := Times.Scanning + Spent;
+                  else
+                     Times.Parsing := Times.Parsing + Spent;
+                  end if;
+               end;
+            end if;
+            Step_Start := Now;
+         end Watch_Source;
+
          procedure Watch_Stage (Name : String; Finished : Boolean) is
          begin
             if Finished then
@@ -2793,6 +2843,44 @@ package body Landin.Driver is
             function Image (Value : Natural) return String is
               (Ada.Strings.Fixed.Trim
                  (Natural'Image (Value), Ada.Strings.Both));
+            function Image (Value : Long_Long_Integer) return String is
+              (Ada.Strings.Fixed.Trim
+                 (Long_Long_Integer'Image (Value), Ada.Strings.Both));
+            --  One row per source in the order the compilation holds them,
+            --  named as D361's report names a file, with its size and the
+            --  processor time of its scan and its parse.
+            function Source_Rows return String;
+            function Source_Rows return String is
+               Rows : Unbounded.Unbounded_String;
+            begin
+               for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+                  declare
+                     Id : constant Landin.Source.Source_Id :=
+                       Landin.Stages.Nth_Source (Context, Index);
+                     Times : constant Source_Time :=
+                       (if Natural (Id) in 1 .. Natural (Per_Source.Length)
+                        then Per_Source (Positive (Id))
+                        else (others => <>));
+                  begin
+                     Unbounded.Append
+                       (Rows,
+                        (if Index > 1 then "," else "") & LF
+                        & "    {""file"":" & Landin.Json.Quoted
+                          (Landin.Panics.Displayed_Name (Context, Id))
+                        & ",""bytes"":" & Image
+                          (Natural'(Landin.Source.Text
+                             (Landin.Stages.Source (Context, Id))'Length))
+                        & ",""steps"":[{""step"":""scanning"","
+                        & """processor_us"":" & Image (Times.Scanning)
+                        & "},{""step"":""parsing"",""processor_us"":"
+                        & Image (Times.Parsing) & "}]}");
+                  end;
+               end loop;
+               if Unbounded.Length (Rows) > 0 then
+                  Unbounded.Append (Rows, LF & "  ");
+               end if;
+               return Unbounded.To_String (Rows);
+            end Source_Rows;
          begin
             if not Stage_Report_Seen or else Bad_Use
               or else Skip_Compilation or else Dry_Run or else Policy_Denied
@@ -2888,7 +2976,8 @@ package body Landin.Driver is
               (Publication.Stage_Path (Stage_Report, Path),
                "{""format"":""landin-stage-report-1"",""stages"":[" & LF
                & Unbounded.To_String (Stage_Rows) & LF
-               & "  ],""sizes"":{""sources"":"
+               & "  ],""sources"":[" & Source_Rows & "],"
+               & """sizes"":{""sources"":"
                & Image (Landin.Stages.Source_Count (Context))
                & ",""nodes"":" & Image (Nodes)
                & ",""declarations"":" & Image
@@ -6267,6 +6356,8 @@ package body Landin.Driver is
                            then Dependency_Directories'Access else null),
                         Implicit => Implicit_Module,
                         Parsing => Watch_Parsing'Access,
+                        Steps => (if Stage_Report_Seen then Watch_Source'Access
+                                  else null),
                         Observed => Observed_Input'Access);
                   end if;
                elsif Natural (Roots.Length) > 0 then
@@ -6279,6 +6370,8 @@ package body Landin.Driver is
                         Library => Library_Root,
                         Implicit => Implicit_Module,
                         Parsing => Watch_Parsing'Access,
+                        Steps => (if Stage_Report_Seen then Watch_Source'Access
+                                  else null),
                         Observed => Observed_Input'Access);
                   end if;
                else
@@ -6299,6 +6392,8 @@ package body Landin.Driver is
                            then Dependency_Directories'Access else null),
                         Implicit => Implicit_Module,
                         Parsing => Watch_Parsing'Access,
+                        Steps => (if Stage_Report_Seen then Watch_Source'Access
+                                  else null),
                         Observed => Observed_Input'Access);
                   end if;
                end if;
