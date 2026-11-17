@@ -29246,6 +29246,8 @@ to targets it does not choose.
 
 ### D1365 — The build-mode comparison is dealt round shards, not split by target
 
+**Amended by D1374**, which deals a request by its key's digest.
+
 **The discrepancy:** the gate's `build-modes` jobs split the five mode
 targets by hand, one Linux target with firmware targets in each, as the
 host manifest's parts are (D658). The Xtensa configurations doubled one
@@ -29273,6 +29275,30 @@ give.
 **Pinned by** `scripts/tests/test_host_determinism.py`: `BuildModes`, that
 the shards together are every request once, and `Workflows`, that the
 gate's jobs are shards 1 to N of `--shard=I/N` with no target list.
+
+### D1374 — A shard takes the requests its keys' digests name
+
+**The discrepancy:** D1365's shards took every I-th request of the list,
+and the list gives each fixture's requests profile by profile, so with
+three shards and four standard profiles each shard took the same
+profiles of every fixture, not a third of every kind of request: run
+44070770890's `build-modes` shards took 18.4, 10.1 and 18.5 minutes.
+The host manifests, sharded the same way since, took 18.3 and 11.0
+minutes for Darwin's two shards on that run.
+
+**Chosen:** `emit_manifest.py`'s `deal` gives each request to the shard
+that the first 32 bits of its key's SHA-256, taken modulo N, name, for
+both `modes --shard=I/N` and `emit --shard=I/N`. Keys are unique, so the N
+shards are still every request once; a shard is about an Nth of every
+kind of request, whatever order the list is built in.
+
+**The alternatives:** dealing round a shuffled list, which needs a seed
+and makes a request's shard depend on every other request in the list;
+and choosing the stride to be prime to the profile count, which holds only
+until a profile or a mode is added.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`: `BuildModes` and
+`Workflows`, that the shards together are every request once.
 
 ### D659 — The lowering record lowers a fixture where the harness compiles it
 

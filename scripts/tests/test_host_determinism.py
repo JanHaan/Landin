@@ -840,8 +840,10 @@ class BuildModes(unittest.TestCase):
         self.assertEqual(len(requests), 68)
         self.assertEqual(len(set(strip(requests))), 68)
         self.assertEqual(strip(requests), strip(sum(dealt, [])))
-        self.assertEqual([len(one) for one in dealt], [23, 23, 22])
-        self.assertIn("shard 2 of 3, 23 of 68 requests: sources 5  requests 23",
+        #  Dealt by each key's digest (D1374): about a third each, and
+        #  the same three every time.
+        self.assertEqual([len(one) for one in dealt], [25, 20, 23])
+        self.assertIn("shard 2 of 3, 20 of 68 requests: sources 5  requests 20",
                       said[1])
 
     def test_a_shard_is_one_of_n(self):
