@@ -101,7 +101,8 @@ jobs:
           python3 scripts/gate_inputs.py reuse gate.yml \
             documents scripts linux-debug-build compiler-1 compiler-2 compiler-3 \
             compiler-checks linux-release-build \
-            release bindings editor-grammar flake cortex-m-programs cortex-m-corpus \
+            release bindings editor-grammar flake-compiler flake-ram-run flake-ram-run-rigpi \
+            cortex-m-programs cortex-m-corpus \
             cortex-m-rv32 xtensa-esp32-1 xtensa-esp32-2 xtensa-esp32-3 \
             xtensa-esp32s3-1 xtensa-esp32s3-2 xtensa-esp32s3-3 \
             scaling darwin-debug-build \
@@ -118,6 +119,7 @@ jobs:
             linux-release-clean linux-release-compare \
             'determinism / manifest (x86_64-linux 1)' \
             'determinism / manifest (x86_64-linux 2)' \
+            'determinism / manifest (x86_64-linux 3)' \
             'determinism / manifest (aarch64-linux 1)' \
             'determinism / manifest (aarch64-linux 2)' \
             'determinism / manifest (aarch64-darwin 1)' \
@@ -334,8 +336,10 @@ jobs:
   #
   #  The cache holds the build tree without bin/ and link/: the objects,
   #  the library and the manifests.  It is restored from the newest entry
-  #  of this branch, or of main, for the same runner image, whose headers
-  #  the C adapters compile against, and the same toolchain pins; build.sh
+  #  of this branch, or of main, for the same C library headers, which the
+  #  C adapters compile against, the same C compiler and the same toolchain
+  #  pins (scripts/release_cache_key.py), not the same runner image, of
+  #  which one run is often served two versions; build.sh
   #  still rebuilds from clean when the source inventory, a project file,
   #  the switches or the toolchain differ from what the restored tree
   #  records.  A push saves this run's tree for the next one
@@ -357,11 +361,12 @@ jobs:
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
-      - name: Name the cache entry by runner image and toolchain pins
+      - name: Name the cache entry by C headers, C compiler and toolchain pins
         id: objects
         run: |
           set -eu
-          prefix="linux-amd64-release-objects-$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}-"
+          headers="$(python3 scripts/release_cache_key.py linux)"
+          prefix="linux-amd64-release-objects-$ImageOS-$headers-${{ hashFiles('environments/pins.sh') }}-"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
           echo "key=${prefix}${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
 
@@ -373,6 +378,11 @@ jobs:
             !compiler/ada/build/linux-amd64/release/link
           key: ${{ steps.objects.outputs.key }}
           restore-keys: ${{ steps.objects.outputs.prefix }}
+
+      #  The checkout gave every source a new time, and GPRbuild would
+      #  recompile every unit for it (scripts/source_times.py).
+      - name: Give the sources unchanged since the cached build their times
+        run: python3 scripts/source_times.py apply . compiler/ada/build/linux-amd64/release
 
       - name: Build release executables over the restored objects
         run: ./scripts/dev-build.sh -j4
@@ -390,9 +400,10 @@ jobs:
 
       #  The tree for the next run, which linux-release-cache saves only
       #  once linux-release-compare has passed.
-      - name: Package the objects, without the executables
+      - name: Package the objects and the sources' times, without the executables
         if: github.event_name == 'push'
         run: >-
+          python3 scripts/source_times.py save . compiler/ada/build/linux-amd64/release &&
           tar -cf "$RUNNER_TEMP/linux-release-objects.tar"
           --exclude=./bin --exclude=./link
           -C compiler/ada/build/linux-amd64/release .
@@ -591,12 +602,6 @@ jobs:
           PATH="$LANDIN_GNAT_HOME/bin:$PATH"
           ./scripts/debug.sh
 
-  #  The determinism manifests compare hosts with their debug compilers, but
-  #  people run the release one: here both builds of this tree compile the
-  #  positive and runtime corpora and the Cortex-M counterparts at the four
-  #  standard profiles, and must emit the same bytes.  Emission needs no
-  #  assembler; the debug compiler is most of the cost, so the targets are
-  #  dealt across two runners.
   #  D364: the same outside user on a stock Ubuntu, with the release
   #  compiler as a downloaded archive and only the image's own GCC, its
   #  `x86_64-linux-gnu-gcc`: no pinned toolchain is installed, and the
@@ -618,14 +623,15 @@ jobs:
       - name: The distribution's compiler and no other
         run: |
           set -eu
-          sudo apt-get update
+          #  Each download bounded, the official archive the fallback
+          #  (scripts/apt_install.sh).
           if ! PATH=/usr/bin:/bin command -v x86_64-linux-gnu-gcc; then
-            sudo apt-get install -y gcc
+            ./scripts/apt_install.sh gcc
           fi
           #  D532: the distribution's Arm GCC, under the name it gives it.
           #  Keep the C library and headers; newlib's recommendations also
           #  pull the unused target C++ runtime, a much larger download.
-          sudo apt-get install -y --no-install-recommends \
+          ./scripts/apt_install.sh --no-install-recommends \
             gcc-arm-none-eabi libnewlib-arm-none-eabi
           for pinned in x86_64-pc-linux-gnu-gcc arm-eabi-gcc; do
             if PATH=/usr/bin:/bin command -v "$pinned"; then
@@ -646,6 +652,12 @@ jobs:
           PATH=/usr/bin:/bin python3 scripts/outside_user.py --stock \
             --prefix "$outside/prefix" --work "$outside/work"
 
+  #  The determinism manifests compare hosts with their debug compilers, but
+  #  people run the release one: here both builds of this tree compile the
+  #  positive and runtime corpora and the Cortex-M counterparts at the four
+  #  standard profiles, and must emit the same bytes.  Emission needs no
+  #  assembler; the debug compiler is most of the cost.
+  #
   #  Every mode target's requests, dealt round three shards (D1365).  Split
   #  by target, one part took 29.7 minutes of its 30 on a slow runner,
   #  twice the time the same part took on a fast one; a shard is a third of
@@ -784,8 +796,7 @@ jobs:
       - name: The Neovim LSP preference smoke
         run: |
           set -eu
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends neovim
+          ./scripts/apt_install.sh --no-install-recommends neovim
           nvim --version | head -n 1
           nvim -n --headless --clean \
             --cmd "set runtimepath^=$PWD/highlight/nvim" \
@@ -795,27 +806,43 @@ jobs:
   #  The flake (D585): `nix build .#refine` and `.#refine-bin`, every
   #  output of every system evaluated, and the development shell entered,
   #  on every run that does not reuse a pass, so a change anywhere in the
-  #  source that breaks `nix build .#refine` fails the commit that makes it.
-  #  Skipped under a reused pass like every lane.  About 140 s of
-  #  compilation once the toolchain is fetched.
+  #  source that breaks `nix build .#refine` fails the commit that makes it,
+  #  and the board RAM helpers built, the native one with its tests.
+  #  Skipped under a reused pass like every lane.  The three parts run on
+  #  three runners: in one job the two helpers' Rust builds shared its
+  #  four cores for twelve minutes after the compiler's six, and the job,
+  #  20 to 28 minutes, was among the gate's last.
   flake:
+    name: flake-${{ matrix.part }}
     needs: inputs
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [compiler, ram-run, ram-run-rigpi]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install nix for the flake
         uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
 
-      - name: Build the flake
+      - name: Build the compiler, evaluate every output and enter the shell
+        if: matrix.part == 'compiler'
         run: |
           set -eu
           nix build -L --no-link .#refine .#refine-bin
-          nix build -L --no-link .#board-ram-run .#board-ram-run-rigpi
           nix flake check --no-build --all-systems
           nix develop --command ./scripts/toolchain.sh
+
+      - name: Build the native board RAM helper
+        if: matrix.part == 'ram-run'
+        run: nix build -L --no-link .#board-ram-run
+
+      - name: Build the Pi board RAM helper
+        if: matrix.part == 'ram-run-rigpi'
+        run: nix build -L --no-link .#board-ram-run-rigpi
 
   #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB.  Every lane in one job took
@@ -1082,9 +1109,9 @@ jobs:
   #  runner, where the objects never outlive the job, it cannot meet.
   #
   #  The cache is keyed and saved as linux-release-build's is, and its
-  #  entry saved by darwin-release-cache only once the comparison passed.
-  #  Nothing saves one for main: main's own runs reuse the candidate's
-  #  pass and build nothing, so a new branch's first run builds from clean.
+  #  entry saved by darwin-release-cache only once the comparison passed;
+  #  main's runs reuse the candidate's pass and build nothing, so
+  #  darwin-release-main-cache saves main's entry.
   darwin-release-build:
     needs: inputs
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
@@ -1104,13 +1131,14 @@ jobs:
         with:
           platform: aarch64-darwin
 
-      - name: Name the cache entry by runner image and toolchain pins
+      - name: Name the cache entry by C headers, C compiler and toolchain pins
         id: objects
         run: |
           set -eu
-          prefix="darwin-arm64-release-objects-$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}-"
+          headers="$(python3 scripts/release_cache_key.py darwin)"
+          prefix="darwin-arm64-release-objects-$ImageOS-$headers-${{ hashFiles('environments/pins.sh') }}-"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
-          echo "key=$prefix${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+          echo "key=${prefix}${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -1120,6 +1148,11 @@ jobs:
             !compiler/ada/build/darwin-arm64/release/link
           key: ${{ steps.objects.outputs.key }}
           restore-keys: ${{ steps.objects.outputs.prefix }}
+
+      #  The checkout gave every source a new time, and GPRbuild would
+      #  recompile every unit for it (scripts/source_times.py).
+      - name: Give the sources unchanged since the cached build their times
+        run: python3 scripts/source_times.py apply . compiler/ada/build/darwin-arm64/release
 
       - name: Build release executables over the restored objects
         run: ./scripts/dev-build.sh -j3
@@ -1137,9 +1170,10 @@ jobs:
 
       #  The tree for the next run, which darwin-release-cache saves only
       #  once darwin-release-compare has passed.
-      - name: Package the objects, without the executables
+      - name: Package the objects and the sources' times, without the executables
         if: github.event_name == 'push'
         run: >-
+          python3 scripts/source_times.py save . compiler/ada/build/darwin-arm64/release &&
           tar -cf "$RUNNER_TEMP/darwin-release-objects.tar"
           --exclude=./bin --exclude=./link
           -C compiler/ada/build/darwin-arm64/release .
@@ -1242,6 +1276,49 @@ jobs:
             !compiler/ada/build/darwin-arm64/release/bin
             !compiler/ada/build/darwin-arm64/release/link
           key: ${{ needs.darwin-release-build.outputs.key }}
+
+  #  main's entry, as board-bundles saves Linux x86-64's, so a branch's
+  #  first run restores it rather than building from clean.  main's own
+  #  push reuses the candidate's pass and runs no other macOS job, so this
+  #  takes a runner nothing waits for, and `gate` does not need it.  The
+  #  tree is a clean build's, and darwin-release-compare still holds every
+  #  build over it to a clean one.
+  darwin-release-main-cache:
+    needs: inputs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      LANDIN_BUILD_MODE: release
+      ZERO_AR_DATE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - name: Build release executables from clean
+        run: >-
+          ./scripts/build.sh -j3 &&
+          python3 scripts/source_times.py save . compiler/ada/build/darwin-arm64/release
+
+      - name: Name the cache entry by C headers, C compiler and toolchain pins
+        id: objects
+        run: |
+          set -eu
+          headers="$(python3 scripts/release_cache_key.py darwin)"
+          echo "key=darwin-arm64-release-objects-$ImageOS-$headers-${{ hashFiles('environments/pins.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}-main" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/darwin-arm64/release
+            !compiler/ada/build/darwin-arm64/release/bin
+            !compiler/ada/build/darwin-arm64/release/link
+          key: ${{ steps.objects.outputs.key }}
 
   #  Compile the Darwin debug executables once for the host suite and
   #  determinism, which then need not wait for the suite.
@@ -2155,7 +2232,9 @@ jobs:
         uses: ./.github/actions/pinned-toolchain
 
       - name: Build release executables with bounded parallelism
-        run: ./scripts/build.sh -j4
+        run: >-
+          ./scripts/build.sh -j4 &&
+          python3 scripts/source_times.py save . compiler/ada/build/linux-amd64/release
 
       - name: Install the locked Cortex-M, RV32 and Xtensa tools
         run: python3 environments/cortex-m/setup.py --tools "$RUNNER_TEMP/cortex-m"
@@ -2185,12 +2264,13 @@ jobs:
       #  On main this clean build's objects also go to the cache, as a
       #  linux-release-build would save them, so that the first run on a new
       #  branch, which reads its own entries and main's, starts from main.
-      - name: Name the cache entry by runner image and toolchain pins
+      - name: Name the cache entry by C headers, C compiler and toolchain pins
         if: github.ref == 'refs/heads/main'
         id: objects
         run: |
           set -eu
-          echo "key=linux-amd64-release-objects-$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}-boards" >> "$GITHUB_OUTPUT"
+          headers="$(python3 scripts/release_cache_key.py linux)"
+          echo "key=linux-amd64-release-objects-$ImageOS-$headers-${{ hashFiles('environments/pins.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}-boards" >> "$GITHUB_OUTPUT"
 
       - if: github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

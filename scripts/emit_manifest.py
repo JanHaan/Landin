@@ -54,7 +54,10 @@ standard profiles, and every result has to agree.
 
 `modes --shard=I/N` compares the I-th of N shares of its requests, dealt
 round in the order they are listed; the gate's `build-modes` jobs are its N
-shards, which together are every request once.
+shards, which together are every request once.  `emit --shard=I/N` writes
+the I-th share of a manifest the same way, and `merge` joins a host's
+shards into its whole manifest before `compare`; each host's determinism
+jobs are such shards.  Both say how far they have got every 30 seconds.
 
 The same manifest is how a change that should alter no emitted byte is
 shown to: `emit` once with a compiler built before the change and once
@@ -384,7 +387,7 @@ def first_diagnostic(result):
 #  in its fixture's directory; empty when refine finds its own.
 LIBRARY = []
 
-#  Seconds between two progress lines of `emit`.
+#  Seconds between two progress lines of `emit` and `modes`.
 PROGRESS_EVERY = 30.0
 
 
@@ -425,7 +428,13 @@ def debug_information(target):
 
 def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",),
          fixtures=(), profiles=PROFILES, build_modes=MODES, debug_info=False,
-         library=None, clock=time.monotonic):
+         library=None, shard=(1, 1), clock=time.monotonic):
+    """Write the manifest of every request, or of SHARD's share of them.
+
+    SHARD is (I, N), as `modes` takes it: the requests are dealt round N
+    shards in the order they are listed, so each shard is about an Nth of
+    the work whatever the targets cost, and `merge` joins the N parts.
+    """
     LIBRARY[:] = [str(Path(library).resolve())] if library else []
     #  A rebuild of this build waits until the manifest is written, rather
     #  than replace refine between two of its requests.
@@ -463,6 +472,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
                                              + sources, target,
                                              selected_level, mode, optimize,
                                              specialize, debug, asm))
+        jobs = jobs[shard[0] - 1::shard[1]]
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             # Preserve inventory order regardless of completion order.
             said_at = clock()
@@ -491,10 +501,10 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
 def merge(out, paths):
     """One host's manifest from the parts it emitted, target by target.
 
-    The gate emits each host's targets in two jobs so neither waits for
-    the other; compare() holds whole manifests, so the parts are joined
-    first, and a key in two parts or a target in none is a fault rather
-    than a smaller manifest.
+    The gate emits each host's requests in shards, `emit --shard`, so no
+    job waits for another; compare() holds whole manifests, so the parts
+    are joined first, and a key in two parts or a target in none is a
+    fault rather than a smaller manifest.
     """
     manifest, faults = {}, []
     for path in paths:
@@ -698,7 +708,8 @@ def mode_refusals(root, targets):
     return found
 
 
-def modes(debug, release, root, workers=None, targets=MODE_TARGETS, shard=(1, 1)):
+def modes(debug, release, root, workers=None, targets=MODE_TARGETS, shard=(1, 1),
+          clock=time.monotonic):
     """Both compilers over every request, or SHARD's share of them.
 
     SHARD is (I, N): the requests are dealt round N shards in the order
@@ -739,7 +750,13 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS, shard=(1, 1)
             scratch.mkdir()
             jobs[index] = job + (scratch,)
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            said_at, done = clock(), 0
             for key, (first, second) in pool.map(emit_both, jobs):
+                done += 1
+                if clock() - said_at >= PROGRESS_EVERY:
+                    said_at = clock()
+                    print("modes: %d of %d requests" % (done, len(jobs)),
+                          file=sys.stderr, flush=True)
                 if first != second:
                     disagree.append("%s: debug %s, release %s"
                                     % (key, first[:24], second[:24]))
@@ -832,6 +849,7 @@ def main(argv):
         parser.add_argument("--debug-info", action="store_true")
         parser.add_argument("--jobs", type=jobs)
         parser.add_argument("--library")
+        parser.add_argument("--shard", type=shard_of, default=(1, 1))
         given = parser.parse_args(argv[2:])
         targets = target_list(given.targets, "emit")
         if targets is None:
@@ -858,7 +876,8 @@ def main(argv):
                     fixtures=tuple(given.fixture),
                     profiles=tuple(dict.fromkeys(given.profile or PROFILES)),
                     build_modes=tuple(m for m in MODES if m in (given.mode or MODES)),
-                    debug_info=given.debug_info, library=given.library)
+                    debug_info=given.debug_info, library=given.library,
+                    shard=given.shard)
     if len(argv) >= 2 and argv[1] == "modes":
         parser = argparse.ArgumentParser(prog="emit_manifest.py modes",
                                          allow_abbrev=False)
@@ -885,7 +904,7 @@ def main(argv):
     print("usage: emit_manifest.py emit REFINE ROOT OUT.json [TARGET,...]\n"
           "           [--corpus=positive|runtime|cortex-m]... [--fixture=KIND/NAME]...\n"
           "           [--profile=OPTIMIZE-SPECIALIZE]... [--mode=debug|release]...\n"
-          "           [--debug-info] [--jobs=N]", file=sys.stderr)
+          "           [--debug-info] [--jobs=N] [--shard=I/N]", file=sys.stderr)
     print("       emit_manifest.py merge OUT.json PART.json [...]", file=sys.stderr)
     print("       emit_manifest.py compare A.json B.json [...]", file=sys.stderr)
     print("       emit_manifest.py modes DEBUG RELEASE ROOT [TARGET,...] [--jobs=N]"

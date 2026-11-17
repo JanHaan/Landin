@@ -415,8 +415,11 @@ class RV64Controls(unittest.TestCase):
         manifest = (ROOT / 'scripts/emit_manifest.py').read_text()
         targets = manifest.split('TARGETS = ', 1)[1].split(')', 1)[0]
         self.assertIn('linux-rv64', targets)
+        #  Each host's shards emit every target in TARGETS: the step
+        #  names no target list.
         determinism = (ROOT / '.github/workflows/determinism.yml').read_text()
-        self.assertEqual(determinism.count('linux-rv64'), 3)
+        self.assertNotIn('matrix.targets', determinism)
+        self.assertIn('--shard=${{ matrix.shard }}/${{ matrix.shards }}', determinism)
 
 
 if __name__ == '__main__':

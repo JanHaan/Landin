@@ -7,6 +7,7 @@ the comparison is exercised against differing manifests, unexpected shared
 refusals, and agreeing manifests with real assembly evidence.
 """
 import hashlib
+import io
 import json
 import re
 import subprocess
@@ -14,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECK = ROOT / "scripts" / "emit_manifest.py"
@@ -119,32 +121,56 @@ class Workflows(unittest.TestCase):
         self.check = emit_manifest
 
     @staticmethod
-    def parts(workflow, job):
-        """{key: [targets of each part]} for JOB's matrix in WORKFLOW."""
+    def shards(workflow, job):
+        """{platform: [(shard, shards) of each leg]} for JOB's matrix in WORKFLOW."""
         text = (ROOT / ".github/workflows" / workflow).read_text()
         body = re.search(r"\n  %s:\n(.*?)(?=\n  [a-z-]+:\n)" % job, text, re.S).group(1)
         #  The matrix's include list, up to the job's next own key.
         include = re.search(r"\n +include:\n(.*?)(?=\n    \w)", body, re.S).group(1)
         found = {}
         for item in re.split(r"\n +- (?=\w+:)", "\n" + include)[1:]:
-            platform = re.search(r"platform: (\S+)", item)
-            targets = re.search(r"\btargets: (\S+)", item)
-            found.setdefault(platform.group(1) if platform else "", []).append(
-                targets.group(1).split(","))
-        return found
+            platform = re.search(r"platform: (\S+)", item).group(1)
+            shard = int(re.search(r"\bshard: (\d+)", item).group(1))
+            shards = int(re.search(r"\bshards: (\d+)", item).group(1))
+            found.setdefault(platform, []).append((shard, shards))
+        return found, body
 
-    def assertPartition(self, parts, targets):
-        joined = [t for part in parts for t in part]
-        self.assertEqual(sorted(joined), sorted(targets))
-
-    def test_each_host_emits_every_target_once(self):
-        hosts = self.parts("determinism.yml", "manifest")
+    def test_each_host_emits_every_request_once(self):
+        #  Each host's legs are shards 1 to N of N, dealt round by
+        #  `emit --shard` over every target (the step names no target
+        #  list), so together they are every request once.
+        hosts, body = self.shards("determinism.yml", "manifest")
         self.assertEqual(sorted(hosts), ["aarch64-darwin", "aarch64-linux", "x86_64-linux"])
-        for host, parts in hosts.items():
+        for host, legs in hosts.items():
             with self.subTest(host=host):
-                self.assertPartition(parts, self.check.TARGETS)
-        #  Every host splits its targets alike, so a part is one comparison.
-        self.assertEqual(len({json.dumps(parts) for parts in hosts.values()}), 1)
+                count = legs[0][1]
+                self.assertEqual(sorted(legs), [(n, count) for n in range(1, count + 1)])
+        self.assertIn("--shard=${{ matrix.shard }}/${{ matrix.shards }}", body)
+        self.assertNotIn("matrix.targets", body)
+
+    def test_emit_shards_are_every_request_once(self):
+        calls = []
+        def fake(job):
+            calls.append(job[0])
+            return job[0], "0" * 64, None
+        with tempfile.TemporaryDirectory() as out:
+            whole = []
+            for shard in ((1, 3), (2, 3), (3, 3)):
+                calls.clear()
+                with mock.patch.object(self.check, "compile_one", fake), \
+                     mock.patch.object(self.check, "evidence_faults", lambda *a: []), \
+                     mock.patch("sys.stdout", io.StringIO()):
+                    self.check.emit(sys.executable, ROOT, Path(out) / "m.json",
+                                    targets=("rv32",), shard=shard)
+                whole.append(list(calls))
+            calls.clear()
+            with mock.patch.object(self.check, "compile_one", fake), \
+                 mock.patch.object(self.check, "evidence_faults", lambda *a: []), \
+                 mock.patch("sys.stdout", io.StringIO()):
+                self.check.emit(sys.executable, ROOT, Path(out) / "m.json",
+                                targets=("rv32",))
+        self.assertTrue(all(whole))
+        self.assertEqual(sorted(k for part in whole for k in part), sorted(calls))
 
     def test_the_build_modes_jobs_are_every_shard_of_every_mode_target(self):
         #  Each job compares its shard of every mode target's requests

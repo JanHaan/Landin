@@ -273,9 +273,26 @@ class Workflow(unittest.TestCase):
         self.assertEqual(saving, {"linux-release-cache", "board-bundles"})
         self.assertIn("needs: [inputs, linux-release-build, linux-release-compare]",
                       self.jobs["linux-release-cache"])
-        self.assertIn("run: ./scripts/build.sh -j4", self.jobs["board-bundles"])
+        self.assertIn("./scripts/build.sh -j4 &&", self.jobs["board-bundles"])
         self.assertIn("if: github.ref == 'refs/heads/main'\n        uses: "
                       "actions/cache/save@", self.jobs["board-bundles"])
+
+    def test_the_key_names_headers_and_compiler_and_the_times_travel(self):
+        #  Not the runner image's version, of which one run is served two
+        #  (scripts/release_cache_key.py); and every saved tree carries the
+        #  sources' times, which the cached build gives back before it
+        #  builds (scripts/source_times.py).
+        for name in ("linux-release-build", "board-bundles"):
+            self.assertIn('headers="$(python3 scripts/release_cache_key.py linux)"',
+                          self.jobs[name], name)
+            self.assertNotIn("ImageVersion", self.jobs[name], name)
+            self.assertIn("scripts/source_times.py save . "
+                          "compiler/ada/build/linux-amd64/release",
+                          self.jobs[name], name)
+        build = self.jobs["linux-release-build"]
+        self.assertLess(build.index("scripts/source_times.py apply . "
+                                    "compiler/ada/build/linux-amd64/release"),
+                        build.index("dev-build.sh"))
 
     def test_the_comparison_compares_both_archives_and_the_gate_needs_it(self):
         compare = self.jobs["linux-release-compare"]
@@ -319,11 +336,26 @@ class DarwinWorkflow(unittest.TestCase):
         saving = {name for name, text in self.jobs.items()
                   if "actions/cache/save@" in text
                   and "compiler/ada/build/darwin-arm64/release" in text}
-        self.assertEqual(saving, {"darwin-release-cache"})
+        self.assertEqual(saving, {"darwin-release-cache", "darwin-release-main-cache"})
         self.assertIn("needs: [inputs, darwin-release-build, darwin-release-compare]",
                       self.jobs["darwin-release-cache"])
-        self.assertIn("$ImageOS-$ImageVersion-${{ hashFiles('environments/pins.sh') }}",
-                      self.jobs["darwin-release-build"])
+        main = self.jobs["darwin-release-main-cache"]
+        self.assertIn("if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+                      main)
+        self.assertIn("./scripts/build.sh -j3 &&", main)
+        self.assertIn("ZERO_AR_DATE: '1'", main)
+        self.assertNotIn("dev-build", main)
+        self.assertNotIn("actions/cache/restore", main)
+        for name in ("darwin-release-build", "darwin-release-main-cache"):
+            self.assertIn('headers="$(python3 scripts/release_cache_key.py darwin)"',
+                          self.jobs[name], name)
+            self.assertIn("scripts/source_times.py save . "
+                          "compiler/ada/build/darwin-arm64/release",
+                          self.jobs[name], name)
+        build = self.jobs["darwin-release-build"]
+        self.assertLess(build.index("scripts/source_times.py apply . "
+                                    "compiler/ada/build/darwin-arm64/release"),
+                        build.index("dev-build.sh"))
 
     def test_the_comparison_compares_both_archives_and_the_gate_needs_it(self):
         compare = self.jobs["darwin-release-compare"]
