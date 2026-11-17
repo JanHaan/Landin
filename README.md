@@ -326,7 +326,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Next roadmap item: R17.40 — The item skill rebuilt (planned).**
+**Current roadmap work: R17.40 — The item skill rebuilt.**
 
 ## Questions, bugs and ideas
 

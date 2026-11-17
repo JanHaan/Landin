@@ -382,7 +382,7 @@ it and with a blocked item.
 
 ### R17.40 — The item skill rebuilt
 
-Status: planned
+Status: active
 Depends on: R17.30
 
 `landin-change` for the new mechanics; scripts for every step that needs
