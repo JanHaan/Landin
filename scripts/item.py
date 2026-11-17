@@ -1017,7 +1017,6 @@ def main(argv=None):
     sub.add_argument("name")
     sub.add_argument("--limit", type=int, required=True,
                      help="seconds after which the run is ended")
-    sub.add_argument("command", nargs="*", help="after --, the command")
     sub.set_defaults(handler=run)
 
     sub = commands.add_parser("gate", help="record and show the gate runs of"
@@ -1054,7 +1053,16 @@ def main(argv=None):
     sub.add_argument("--minutes", type=int, default=STALL_MINUTES)
     sub.set_defaults(handler=stalled)
 
+    #  A run's command follows the first `--` and is never parsed here:
+    #  argparse's handling of `--` before a subcommand's positionals
+    #  differs between Python versions, and 3.12 refused this form.
+    argv = list(sys.argv[1:] if argv is None else argv)
+    command = []
+    if "--" in argv:
+        command = argv[argv.index("--") + 1:]
+        argv = argv[:argv.index("--")]
     arguments = parser.parse_args(argv)
+    arguments.command = command
     REPOSITORY[0] = Path(arguments.repo)
     try:
         return arguments.handler(arguments)
