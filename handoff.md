@@ -266,7 +266,7 @@ names. The register is one file a row under `roadmap/register/`, and roadmap
 identities are cited in `ROADMAP.md` and the files under `roadmap/` and
 nowhere else.
 
-**Current roadmap work: R17.40 — The item skill rebuilt.**
+**Next roadmap item: R16.10 — Measure generated code (planned).**
 
 ## Versions
 

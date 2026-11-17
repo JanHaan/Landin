@@ -382,7 +382,7 @@ it and with a blocked item.
 
 ### R17.40 — The item skill rebuilt
 
-Status: active
+Status: complete
 Depends on: R17.30
 
 `landin-change` for the new mechanics; scripts for every step that needs
@@ -394,6 +394,28 @@ from a review run between items, never across a running one.
 Exit evidence: the skill and its scripts used to run the next item start
 to finish, and a session reopened in mid-item resuming from
 its state on disk.
+
+Done: `scripts/item.py` runs every step that needs no agent: `start`
+(worktree and branch from `origin/main`, the item made active and the
+pointer moved, reserved decision, row and question numbers that
+`register_next.py` gives out first, and the brief), `resume`, `note` and
+`run` for a session's state on disk, `gate`, `boards`, `promote`, which
+pushes only on the promotion rule's evidence, `finish`, which removes the
+worktree and branches once main's gate passed, `status`, `stalled` and
+`report`. The state lives under the clone's common Git directory, which
+every worktree shares. `landin-change` is rebuilt around those steps, with
+the report form beside it, its question section last, and a part for a
+session that dispatches items; `docs/process.md` has "Running an item".
+This item was taken on with `start --adopt` once the script existed and
+ran from there under it: its gate (run 44145919140), its boards (run 44151698101),
+its promotion, main's gate and its clean-up go through the script. A fresh session with no context resumed it from
+disk with `item.py resume` while the gate ran; it said what the next step
+was, but not what came after the wait, nor what to do with an
+uncommitted file, which `resume` now says. Whether that run is this
+item's exit evidence, with the start-to-finish run left to R16.10 and the
+R17 gate, is Q-8; the R17 gate is not claimed until R16.10 has run start
+to finish under the scripts. The manager's finding that `agent_hook.py
+--check` sees only its own checkout is SR-1300.
 
 ### R17.50 — Gate wall time
 
