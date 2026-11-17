@@ -1039,7 +1039,16 @@ gate ended at 31.5 minutes. `darwin-host-release` therefore waits for
 `darwin-release-compare`, which ends after the debug build, so the two
 `darwin-host` shards and the two Darwin determinism manifests take the
 runners first; the three short parity shards still fill the runners the
-two builds leave while the debug build runs.
+two builds leave while the debug build runs. On run 44076856511 the gate
+so arranged ended at 30.5 minutes, the last Darwin job at 30.2 and the
+last Linux one at 21.3: the twelve macOS jobs held about 115 job-minutes,
+which five runners take at least 23 minutes over from the run's third
+minute, and the clean build, nine minutes on one run and fourteen on that
+one, decides when the release lanes start. A list-scheduling model of
+those durations puts the arrangement at 27.5 to 30 minutes by the clean
+build's time, against about 32.6 for building Darwin's release
+executables once from clean, the arrangement before; what would lower the
+floor is fewer macOS job-minutes or more macOS runners.
 
 The cap is the account's, not a run's: two items' gates running at once
 share the five macOS runners and the account's Linux runners too. Run
