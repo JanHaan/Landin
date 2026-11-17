@@ -8,10 +8,14 @@ normative, and derived guides such as [the IR explanation](../ir.md) remain
 non-authoritative.
 
 The front page reads its current-work pointer from `README.md` and its
-progress track from `ROADMAP.md`. `roadmap_order.py` expands the roadmap's
-declared execution order for both the renderer and `check.py`, so choosing a
-different order of work does not require renumbering the document's identities.
-The checker also requires that each item follows its dependencies.
+progress track from `ROADMAP.md`. `roadmap_order.py` reads the roadmap's
+items and expands its declared execution order for both the renderer and
+`check.py`, so choosing a different order of work does not require
+renumbering the document's identities. It also finds the serial lane's
+item, which the pointer names and the track shows first, and the other
+active items, which the track shows beside it, so the page and the
+pointer cannot disagree. The checker also requires that each item follows
+its dependencies.
 
 ## What it renders
 

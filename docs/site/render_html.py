@@ -137,7 +137,7 @@ sys.path.insert(0, str(HERE))
 
 import llms  # noqa: E402
 import library  # noqa: E402
-from roadmap_order import dependency_items, execution_order  # noqa: E402
+from roadmap_order import lane_state, roadmap_items  # noqa: E402
 
 #  Both icons travel in the page.  The pages have no external references
 #  at all, and a favicon fetched from a second file would be the first
@@ -2721,10 +2721,9 @@ LANDING_PROGRAM = "compiler/tests/fixtures/runtime/example-sensors"
 HELLO_PROGRAM = "compiler/tests/fixtures/runtime/first-program"
 
 FENCE_OPEN = re.compile(r"^```landin\s*$")
-ROADMAP_ITEM = re.compile(
-    r"^### (R\d+\.\d+) — (.+)\n\n?"
-    r"Status: (planned|active|blocked|complete)"
-    r"(?:\nDepends on: ([^\n]+))?$", re.M)
+#  The roadmap's items and lanes are read by roadmap_order, the reader
+#  check.py holds the status pointers to, so the page and the pointers
+#  cannot disagree about which item is the serial lane's.
 
 
 def tour_intro(text):
@@ -2780,51 +2779,44 @@ def status_parts(text):
 def roadmap_progress(text, recent_count=3):
     """The completed, active, next-planned or endpoint items around the work.
 
+    The serial lane's item is the one the README and handoff name, and the
+    page shows it the same way: in progress, or next.  Any other active
+    item, a continuous one or an item of a serial phase that started
+    early, is shown beside it rather than refused.
+
     The endpoint lane came last. A roadmap with nothing left to do still has
     a front page, and it says so; a roadmap with work it cannot start does not
     get to use the same lane, so the endpoint is recognised only when no item
     is planned, active or blocked.
     """
-    items = [dict(key=m.group(1), title=m.group(2), status=m.group(3),
-                  depends=m.group(4).split(", ") if m.group(4) else [])
-             for m in ROADMAP_ITEM.finditer(text)]
-    by_key = {item["key"]: item for item in items}
     try:
-        items = [by_key[key] for key in execution_order(
-            text, [item["key"] for item in items])]
+        items = roadmap_items(text)
+        kind, key, beside, order = lane_state(text, items)
     except ValueError as error:
         raise SystemExit("render_html: " + str(error)) from error
+    items = [items[one] for one in order]
+    at = order.index(key) if key else None
 
     def track(recent_at, **lanes):
         completed = [item for item in items[:recent_at]
                      if item["status"] == "complete"][-recent_count:]
         return dict({"recent": completed, "current": None,
-                     "following": None, "endpoint": None}, **lanes)
+                     "following": None, "endpoint": None,
+                     "beside": [items[order.index(one)] for one in beside]},
+                    **lanes)
 
-    active = [i for i, item in enumerate(items) if item["status"] == "active"]
-    if len(active) == 1:
-        at = active[0]
-        return track(at, current=items[at],
-                     following=items[at + 1] if at + 1 < len(items) else None)
-
-    ready = [i for i, item in enumerate(items)
-             if item["status"] == "planned"
-             and all(dependency == "none"
-                     or all(other["status"] == "complete"
-                            for other in items
-                            if other["key"] in dependency_items(
-                                dependency, [one["key"] for one in items]))
-                     for dependency in item["depends"])]
-    live = [item for item in items
-            if item["status"] in ("planned", "active", "blocked")]
-    if items and not live:
-        return track(len(items) - 1, endpoint=items[-1])
-    if active or not ready:
-        raise SystemExit("render_html: ROADMAP.md must have exactly one active "
-                         "item or at least one dependency-ready planned item for the "
-                         "front page")
-    # Execution order selects the next item when a phase opens parallel work.
-    return track(ready[0], following=items[ready[0]])
+    if kind == "endpoint":
+        return track(at, endpoint=items[at])
+    if kind == "current":
+        #  What follows is the next item still to start, not one already
+        #  running beside it.
+        following = next((item for item in items[at + 1:]
+                          if item["status"] == "planned"), None)
+        return track(at, current=items[at], following=following)
+    if kind == "next":
+        return track(at, following=items[at])
+    raise SystemExit("render_html: ROADMAP.md has no active item and no "
+                     "dependency-ready planned item for the front page")
 
 
 def landing_program(source, titles, construct_page):
@@ -3234,6 +3226,13 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
             current_lane = ('<div class="roadmap-now">'
                             '<span class="roadmap-label">in progress</span>'
                             f'{current}</div>') if current else ""
+            #  Work running beside the serial lane's item: continuous
+            #  items, or an item that started early.
+            beside = "".join(progress_item(item)
+                             for item in progress.get("beside", []))
+            beside_lane = ('<div class="roadmap-now">'
+                           '<span class="roadmap-label">also in progress'
+                           f'</span>{beside}</div>') if beside else ""
             if endpoint:
                 last_label, last_item = "roadmap endpoint", endpoint
             else:
@@ -3248,6 +3247,7 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
                     'the roadmap: its items, by state</a>'
                     f'{recent_lane}'
                     f'{current_lane}'
+                    f'{beside_lane}'
                     '<div><span class="roadmap-label">'
                     f'{last_label}</span>'
                     f'{last_item}</div></div>')
@@ -3855,7 +3855,8 @@ def main(argv):
                                  + [one for one in (progress["current"],
                                                     progress["following"],
                                                     progress.get("endpoint"))
-                                    if one])]
+                                    if one]
+                                 + progress.get("beside", []))]
                  + [("the first program", "\n".join(hello[1])),
                     ("what it prints", hello[2])]
                  + [("the program", "\n".join(program[1]))]

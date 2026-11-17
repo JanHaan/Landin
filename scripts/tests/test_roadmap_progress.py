@@ -2,6 +2,7 @@
 """Exercise roadmap status pointers and the nonpublishing landing-page track."""
 import importlib.util
 from pathlib import Path
+import re
 import tempfile
 import unittest
 import warnings
@@ -87,13 +88,48 @@ class RoadmapProgress(unittest.TestCase):
         self.assertEqual(progress["current"]["key"], FIRST)
         self.assertEqual(progress["following"]["key"], SECOND)
 
-    def test_multiple_active_status_pointers_are_refused(self):
-        two_active = ACTIVE_ITEM.replace("Status: planned", "Status: active", 1)
+    def test_an_item_started_early_runs_beside_the_serial_item(self):
+        #  An item of a serial phase that depends on nothing may start
+        #  beside the serial lane's item; the pointers keep naming the
+        #  serial lane's, active or still planned, and the page shows both.
+        beside = ACTIVE_ITEM + (
+            "\n### %s — Start the container program\n\n"
+            "Status: active\nDepends on: none\n" % THIRD)
         marker = "**Current roadmap work: " + FIRST + " — Finish the baseline.**"
-        problems = self.project_status(two_active, marker)
-        self.assertTrue(any("2 active" in problem[2] for problem in problems))
-        with self.assertRaisesRegex(SystemExit, "exactly one active"):
-            RENDER.roadmap_progress(two_active)
+        self.assertEqual(self.project_status(beside, marker), [])
+        progress = RENDER.roadmap_progress(beside)
+        self.assertEqual(progress["current"]["key"], FIRST)
+        self.assertEqual(progress["following"]["key"], SECOND)
+        self.assertEqual([item["key"] for item in progress["beside"]], [THIRD])
+        #  The serial item not yet started: it is still the one named.
+        waiting = beside.replace("Status: active", "Status: planned", 1)
+        marker = "**Next roadmap item: " + FIRST + " — Finish the baseline (planned).**"
+        self.assertEqual(self.project_status(waiting, marker), [])
+        progress = RENDER.roadmap_progress(waiting)
+        self.assertIsNone(progress["current"])
+        self.assertEqual(progress["following"]["key"], FIRST)
+        self.assertEqual([item["key"] for item in progress["beside"]], [THIRD])
+        wrong = "**Current roadmap work: " + THIRD + " — Start the container program.**"
+        problems = self.project_status(waiting, wrong)
+        self.assertTrue(any("roadmap status pointer" in problem[2]
+                            for problem in problems))
+
+    def test_a_blocked_item_is_passed_over_and_its_dependencies_read(self):
+        #  The reason stands between the status and the dependencies, as
+        #  the Mechanics' order puts it; neither reader may lose the
+        #  dependency line behind it.
+        blocked = BETWEEN_ITEMS + (
+            "\n### %s — Start the container program\n\n"
+            "Status: blocked\nBlocked because: a control says so\n"
+            "Depends on: %s\n" % (THIRD, SECOND))
+        items = RENDER.roadmap_items(blocked)
+        self.assertEqual(items[THIRD]["depends"], [SECOND])
+        self.assertEqual(items[THIRD]["blocked"], "a control says so")
+        marker = ("**Next roadmap item: " + SECOND + " — Start source debugging "
+                  "(planned).**")
+        self.assertEqual(self.project_status(blocked, marker), [])
+        self.assertEqual(RENDER.roadmap_progress(blocked)["following"]["key"],
+                         SECOND)
 
     def test_parallel_ready_items_follow_roadmap_order(self):
         two_ready = BETWEEN_ITEMS + """\
@@ -127,11 +163,25 @@ Depends on: none
         self.assertEqual(self.project_status(roadmap, marker), [])
         progress = RENDER.roadmap_progress(roadmap)
         self.assertEqual(progress["following"]["key"], THIRD)
+        #  An item started out of order runs beside the serial lane's
+        #  item, which the order still names.
         active = roadmap.replace("Status: planned", "Status: active", 1)
+        self.assertEqual(self.project_status(active, marker), [])
+        progress = RENDER.roadmap_progress(active)
+        self.assertIsNone(progress["current"])
+        self.assertEqual(progress["following"]["key"], THIRD)
+        self.assertEqual([item["key"] for item in progress["beside"]], [SECOND])
+        self.assertEqual([item["key"] for item in progress["recent"]], [FIRST])
+        #  Started in order, it is the serial lane's, with nothing after it.
+        active = active.replace(
+            "Status: planned\nDepends on: none", "Status: complete\nDepends on: none")
+        marker = "**Current roadmap work: " + SECOND + " — Start source debugging.**"
+        self.assertEqual(self.project_status(active, marker), [])
         progress = RENDER.roadmap_progress(active)
         self.assertEqual(progress["current"]["key"], SECOND)
         self.assertIsNone(progress["following"])
-        self.assertEqual([item["key"] for item in progress["recent"]], [FIRST])
+        self.assertEqual([item["key"] for item in progress["recent"]],
+                         [FIRST, THIRD])
 
     def test_invalid_execution_order_is_refused_by_both_readers(self):
         valid = "Execution order: R%d" % 4
@@ -203,8 +253,10 @@ Depends on: none
         headings = {match.group(3): match.group(1)
                     for line in text.splitlines()
                     if (match := CHECK.ROADMAP_WORK.match(line))}
-        text = (text.replace("Status: active", "Status: planned")
-                .replace("Status: complete", "Status: planned"))
+        #  Every item back to planned, a blocked one's reason with it.
+        text = re.sub(r"^Blocked because: .*\n", "", text, flags=re.M)
+        text = re.sub(r"^Status: (active|complete|blocked)$",
+                      "Status: planned", text, flags=re.M)
 
         def complete(identities):
             nonlocal text
@@ -265,9 +317,10 @@ Depends on: none
         roadmap = BETWEEN_ITEMS.replace("Status: planned", "Status: blocked", 1)
         marker = "**Current roadmap work: " + FIRST + " — Finish the baseline.**"
         problems = self.project_status(roadmap, marker)
-        self.assertTrue(any("0 active and 0 dependency-ready" in problem[2]
+        self.assertTrue(any("no roadmap item is active or planned with its"
+                            " dependencies complete" in problem[2]
                             for problem in problems))
-        with self.assertRaisesRegex(SystemExit, "exactly one active"):
+        with self.assertRaisesRegex(SystemExit, "no active item and no"):
             RENDER.roadmap_progress(roadmap)
         #  A stall and an endpoint differ by one status, and the rule that
         #  admits the second must keep refusing the first.
@@ -321,6 +374,37 @@ Depends on: none
         self.assertShowsItems(index, "Finish the baseline",
                               "Start source debugging")
         self.assertNotIn("next planned item", index)
+
+    def test_front_page_shows_the_serial_item_beside_continuous_items(self):
+        #  The serial lane's item in progress, and two continuous items
+        #  active beside it: the page shows all three and names none.
+        fourth, fifth = ("R%d.%d" % (4, n) for n in (80, 81))
+        roadmap = ACTIVE_ITEM + "".join(
+            "\n### %s — %s\n\nStatus: active\nDepends on: none\n"
+            % (key, title)
+            for key, title in ((fourth, "Measure the stack"),
+                               (fifth, "Fold the constants")))
+        roadmap = roadmap.replace(
+            "Execution order: R%d" % 4,
+            "Execution order: %s, %s\nContinuous: %s onward"
+            % (FIRST, SECOND, fourth))
+        marker = "**Current roadmap work: " + FIRST + " — Finish the baseline.**"
+        self.assertEqual(self.project_status(roadmap, marker), [])
+        progress = RENDER.roadmap_progress(roadmap)
+        self.assertEqual(progress["current"]["key"], FIRST)
+        self.assertEqual(progress["following"]["key"], SECOND)
+        self.assertEqual([item["key"] for item in progress["beside"]],
+                         [fourth, fifth])
+        index = self.front_page(roadmap)
+        self.assertIn("also in progress", index)
+        self.assertIn("up next", index)
+        self.assertShowsItems(index, "Finish the baseline",
+                              "Start source debugging", "Measure the stack",
+                              "Fold the constants")
+        for key in (fourth, fifth):
+            self.assertNotIn(key, index)
+        #  Without them, there is no lane beside it.
+        self.assertNotIn("also in progress", self.front_page(ACTIVE_ITEM))
 
     def test_front_page_shows_the_endpoint(self):
         index = self.front_page(ENDPOINT)

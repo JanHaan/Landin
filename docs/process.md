@@ -180,11 +180,13 @@ Before an item closes:
    shallow clone; the gate's `documents` job fetches the whole history
    for it, and a local check needs a full checkout.
 
-   Update the pointer in `README.md` and `handoff.md` too. Substitute the
-   item identity and title in these exact forms. Use the current form for
-   active work, the next form for the first dependency-ready planned item
-   when no item is active, and the endpoint form only when all roadmap
-   work is complete:
+   Update the pointer in `README.md` and `handoff.md` too. It names the
+   serial lane's item alone, the first in execution order that is active
+   or planned with its dependencies complete, even while other items are
+   active beside it, as `ROADMAP.md`'s Mechanics say. Substitute the item
+   identity and title in these exact forms. Use the current form when that
+   item is active, the next form when it is planned, and the endpoint form
+   only when all roadmap work is complete:
 
    ```text
    **Current roadmap work: ITEM — TITLE.**

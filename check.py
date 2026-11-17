@@ -32,7 +32,8 @@ sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ROOT, "docs", "site"))
-from roadmap_order import dependency_items, execution_order
+from roadmap_order import (dependency_items, execution_order,
+                           lane_state, roadmap_items, waiting_on)
 #  The fixture format's one Python reader, which the test program's reader
 #  is held to by compiler/tests/fixture-meta.cases.
 sys.path.insert(0, os.path.join(ROOT, "compiler", "tests"))
@@ -341,8 +342,10 @@ ROADMAP_PROSE_STATUS = re.compile(
 ROADMAP_DEPENDS = re.compile(
     r"^Depends on: (none|R\d+(?:\.[1-9]\d*)?(?:, R\d+(?:\.[1-9]\d*)?)*)$")
 ROADMAP_REFERENCE = re.compile(r"R\d+\.[1-9]\d*")
+#  A full stop after an identity ends the sentence and is not part of it;
+#  only a dot followed by more of a name, as in a file name, is.
 ROADMAP_REFERENCE_CANDIDATE = re.compile(
-    r"(?<![A-Za-z0-9_.])(R\d+\.\d+)(?![A-Za-z0-9_.])")
+    r"(?<![A-Za-z0-9_.])(R\d+\.\d+)(?![A-Za-z0-9_]|\.[A-Za-z0-9_])")
 #  The first roadmap, R0 to R7, and the second, R8 to R16, are closed and
 #  survive in the history.  The third took over the second's R15, retired,
 #  and R16, unfinished, so its phases start at R15.
@@ -2113,13 +2116,28 @@ def check_roadmap(path):
         else:
             status = ROADMAP_STATUS.fullmatch(statuses[0][1]).group(1)
             work_statuses[work_id] = status
+            reasons = [line[len("Blocked because:"):].strip()
+                       for line in chunk
+                       if line.startswith("Blocked because:")]
             if status == "blocked":
-                reasons = [line[len("Blocked because:"):].strip()
-                           for line in chunk
-                           if line.startswith("Blocked because:")]
                 if len(reasons) != 1 or not reasons[0]:
                     out.append((start, "%s needs one nonempty Blocked because"
                                 " line" % work_id))
+            elif reasons:
+                #  A reason left behind when the item moved on says it is
+                #  still stuck.
+                out.append((start, "%s is %s and keeps a Blocked because"
+                            " line" % (work_id, status)))
+        #  Standing authority to promote is the default; the one line an
+        #  item may carry returns it to the maintainer, and any other
+        #  spelling would be read as nothing.
+        promotions = [line for line in chunk if line.startswith("Promotion:")]
+        if len(promotions) > 1:
+            out.append((start, "%s has %d Promotion lines"
+                        % (work_id, len(promotions))))
+        elif promotions and promotions[0] != "Promotion: maintainer":
+            out.append((start, "%s has %r; the one promotion line is"
+                        " `Promotion: maintainer`" % (work_id, promotions[0])))
         if len(depends) != 1:
             out.append((start, "%s has %d Depends on lines" % (work_id, len(depends))))
             continue
@@ -2138,16 +2156,21 @@ def check_roadmap(path):
                 out.append((depends[0][0], "%s depends on unknown %s"
                             % (work_id, name)))
 
+    #  Any item whose dependencies are complete may be active, several at
+    #  once: the serial lane's item, the continuous items, and an item of a
+    #  serial phase that started beside them.  One whose dependencies are
+    #  not complete has started too early.
     for work_id, names in dependencies.items():
-        if work_statuses.get(work_id) != "complete":
+        if work_statuses.get(work_id) not in ("active", "complete"):
             continue
         for name in names:
             for item in dependency_items(name, works):
                 if item in work_statuses \
                         and work_statuses[item] != "complete":
-                    out.append((works[work_id][0], "%s is complete but"
+                    out.append((works[work_id][0], "%s is %s but"
                                 " dependency %s is %s" %
-                                (work_id, item, work_statuses[item])))
+                                (work_id, work_statuses[work_id], item,
+                                 work_statuses[item])))
 
     try:
         order = execution_order("\n".join(lines), works)
@@ -2787,9 +2810,12 @@ def check_project_status(full_run):
     One item was marked complete in the roadmap and README but remained active
     in the handoff, and the roadmap then had no active item for the page to
     show.
-    Keep all three answers mechanically one answer. Between active items, show
-    the first dependency-ready planned item in execution order rather than claiming its
-    implementation is active.
+    Keep all three answers mechanically one answer: the serial lane's item,
+    as lane_state finds it.  Other items may be active beside it, a
+    continuous item or one of a serial phase that started early, and the
+    pages still name the one item; between items they name the first
+    dependency-ready planned item in execution order rather than claiming
+    its implementation is active.
 
     The endpoint is the third state, the one a finished roadmap needs.
     "Nothing is ready because everything is done" and "nothing is ready
@@ -2807,69 +2833,24 @@ def check_project_status(full_run):
     if missing:
         return missing
 
-    lines = read_file(roadmap, encoding="utf-8").splitlines()
-    items = {}
-    current = None
-    for n, line in enumerate(lines, 1):
-        heading = ROADMAP_WORK.match(line)
-        if heading:
-            current = heading.group(1)
-            items[current] = {
-                "title": heading.group(3), "line": n, "status": None,
-                "status_line": n, "depends": [],
-            }
-        elif line.startswith("### "):
-            current = None
-        elif current and line.startswith("Status:"):
-            status = ROADMAP_STATUS.match(line)
-            if status:
-                items[current]["status"] = status.group(1)
-                items[current]["status_line"] = n
-        elif current and line.startswith("Depends on:"):
-            items[current]["depends"] = [
-                dependency.strip()
-                for dependency in line[len("Depends on:"):].split(",")
-            ]
-
+    text = read_file(roadmap, encoding="utf-8")
     try:
-        items = {work_id: items[work_id]
-                 for work_id in execution_order("\n".join(lines), items)}
+        items = roadmap_items(text)
+        kind, work_id, beside, order = lane_state(text, items)
     except ValueError as error:
         return [(ROADMAP, 1, str(error))]
-
-    active = [(work_id, item) for work_id, item in items.items()
-              if item["status"] == "active"]
-    ready = [(work_id, item) for work_id, item in items.items()
-             if item["status"] == "planned"
-             and all(dependency == "none"
-                     or all(items.get(one, {}).get("status") == "complete"
-                            for one in dependency_items(dependency, items))
-                     for dependency in item["depends"])]
-    live = [work_id for work_id, item in items.items()
-            if item["status"] in ("planned", "active", "blocked")]
     out = []
-    if len(active) == 1:
-        work_id, item = active[0]
-        marker_kind = "current"
-        expected = "%s — %s" % (work_id, item["title"])
-    elif not active and ready:
-        work_id, item = ready[0]
-        marker_kind = "next"
-        expected = "%s — %s" % (work_id, item["title"])
-    elif items and not live:
-        #  The endpoint: the pages name the last item in execution order, which
-        #  is the one that declared it.  ROADMAP.md's own endpoint rule holds
-        #  the declaration to the same item.
-        work_id, item = list(items.items())[-1]
-        marker_kind = "endpoint"
-        expected = "%s — %s" % (work_id, item["title"])
-    else:
+    if kind is None:
         out.append((ROADMAP, 1,
-                    "roadmap has %d active and %d dependency-ready planned work "
-                    "items; the page needs exactly one status pointer"
-                    % (len(active), len(ready))))
+                    "no roadmap item is active or planned with its"
+                    " dependencies complete, yet %d are not complete; the"
+                    " pages need the serial lane's item to name"
+                    % sum(items[key]["status"] != "complete" for key in order)))
         marker_kind = None
         expected = None
+    else:
+        marker_kind = kind
+        expected = "%s — %s" % (work_id, items[work_id]["title"])
 
     for path in documents:
         relative = os.path.relpath(path, ROOT)

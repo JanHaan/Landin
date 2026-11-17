@@ -42,10 +42,14 @@ summary.
 
 ## Mechanics
 
-**Identities.** Phases are `R16` onward, stored in identity order, each
-ending in one gate. Items are `R19.10`, `R19.20` and so on, spaced in tens;
-work found between two items takes a unit identity, R19.21. Identities are
-never reused or renumbered, the earlier roadmaps' included. Every item has
+**Identities.** Phases run from R15, where the second roadmap's numbering
+left off, in identity order without a gap, and each ends in one gate. A
+phase retired before it started, as R15 was, keeps only its heading,
+marked `(retired)`, and a paragraph saying why: no item and no gate.
+Items are `R19.10`, `R19.20` and so on, spaced in tens; work found between
+two items takes a unit identity, the earlier item's number plus one, so 21
+after 20. Identities are never reused or renumbered, the earlier
+roadmaps' included. Every item has
 one status line, one dependency line and its exit evidence:
 
 ```text
@@ -55,15 +59,23 @@ Depends on: R17.10
 ```
 
 A status is `planned`, `active`, `blocked` or `complete`; `blocked` carries
-one `Blocked because:` line. A complete item's dependencies are complete.
-There are no dates, estimates or versions here.
+one `Blocked because:` line, which no other status keeps. Any item whose
+dependencies are complete may be `active`, several at once, and a complete
+item's dependencies are complete. There are no dates, estimates or
+versions here.
 
 **Lanes.** Work runs in the lanes the execution order declares. The serial
-lane is one item at a time; its next item is the first dependency-ready
-planned item in it, and `README.md` and `handoff.md` name it. The
-continuous lane holds R16's continuous items. R16's basis is R16.10, in
-the serial lane; the continuous items take the next ten after the last
-basis item and count up by one from R16.20. Each depends only
+lane is one item at a time. Its item is the first in execution order that
+is `active`, or `planned` with its dependencies complete, a blocked item
+passed over, and `README.md` and `handoff.md` name it and no other: as
+current work while it is active, as the next item while it is planned. An
+item of a serial phase whose dependencies are complete may start beside
+it, as R17.50, which depends on nothing, ran beside R17.10 to R17.30; it
+is `active` while it runs, and the pointers keep naming the serial lane's
+item. The site's front page shows that item first and every other active
+item beside it. The continuous lane holds R16's continuous items. R16's
+basis is R16.10, in the serial lane; the continuous items take the next
+ten after the last basis item and count up by one from R16.20. Each depends only
 on the basis, may run beside anything, and is never the
 next item; any number of them may be active. A phase that declares a
 breaking window (R19, then R20) keeps its serial items on one integration
@@ -86,8 +98,8 @@ reasoning goes in the commits and in `spec.md`'s register of decisions.
 **Authority.** An item's agent may push its candidate, promote it to main
 once its gate has passed, and remove its worktrees and branches, without
 asking again. An item opts out with one line, `Promotion: maintainer`,
-which returns that step to the maintainer. Releases and versions are never
-covered.
+which returns that step to the maintainer; `check.py` refuses any other
+spelling. Releases and versions are never covered.
 
 **The register.** A row is only for what outlives the item that met it
 and waits for a trigger. A finding the item fixes is named in its commit
@@ -298,7 +310,7 @@ the R22 items that take them.
 Exit evidence: every row typed and under the cap; the allocation script and
 its control; the cap and age rule refused in a control.
 
-Done: every moved row typed, the rows-to-be filed as SR-1282 to SR-1298,
+Done: every moved row typed, the rows-to-be filed as `SR-1282` to SR-1298,
 `scripts/register_next.py` with its controls, and `check.py` refusing a
 register over its cap or a row past its age in controls. The maintainer's
 answers to Q-1 to Q-5 retired 43 rows and scheduled SR-195 and SR-768 on
@@ -330,16 +342,43 @@ determinism manifests' compiler, is Q-7.
 
 ### R17.30 — Lanes and standing authority in the checks
 
-Status: planned
+Status: complete
 Depends on: R17.10
 
 `check.py`, the site's progress track and the status pointers read lanes,
 continuous items and the promotion opt-out. It takes three rows-to-be:
-the phase rule the Mechanics do not state (SR-1282), the progress track
-that fails on a second active item (SR-1283), and a reference before a
-full stop that is never resolved (SR-1295).
+the phase rule the Mechanics do not state (`SR-1282`), the progress track
+that fails on a second active item (`SR-1283`), and a reference before a
+full stop that is never resolved (`SR-1295`). It also lets any item whose
+dependencies are complete be active, several at once, where `check.py`
+allowed one, so that R17.50 said `planned` while it ran; states in the
+Mechanics that an item of a serial phase may start beside the serial
+lane's item, as R17.50 did, which is neither lane; and makes a real
+`Status: blocked` item one the checks and their controls accept, which
+the first R17.50 session found they did not.
 Exit evidence: the front page showing the serial item beside two active
-continuous items in a control; the pointers naming the serial lane's item.
+continuous items in a control; the pointers naming the serial lane's
+item, with an item of a serial phase active beside it and with a blocked
+item, each in a control.
+
+Done: one reader in `roadmap_order.py`, `roadmap_items` and `lane_state`,
+serves `check.py` and the site. The serial lane's item is the first in
+execution order that is active, or planned and ready; the pointers name it
+alone, and the front page shows it with every other active item beside
+it, where it had refused a second active item (`SR-1283`). `check.py`
+accepts several active items and refuses one whose dependencies are not
+complete, a `Blocked because:` line on an item not blocked, and a
+promotion line other than `Promotion: maintainer`; it resolves an
+identity before a full stop (`SR-1295`), which found the Mechanics' unit
+example naming an item that does not exist. A blocked item's reason no
+longer hides its dependencies from the site, and the controls that broke
+on a real blocked item, found when the first R17.50 session tried the
+status, no longer assume none exists. The Mechanics state the phase rule
+(`SR-1282`), that several items may be active, and that an item of a serial
+phase may start beside the serial lane's item. The controls show the
+serial item beside two active continuous items on the front page, and
+the pointers holding to the serial item with an early item active beside
+it and with a blocked item.
 
 ### R17.40 — The item skill rebuilt
 

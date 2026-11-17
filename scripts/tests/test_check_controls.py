@@ -2395,12 +2395,66 @@ class RoadmapStructure(unittest.TestCase):
         self.assertTrue(any("malformed Continuous" in why for why in said))
 
     def test_a_reference_to_nothing_is_reported(self):
+        #  Before a comma and before the full stop that ends a sentence
+        #  alike; a dot followed by more of a name is not a full stop.
+        for sentence in ("Measured first, as %s was." % CLOSED,
+                         "Measured first, as in %s." % CLOSED):
+            with self.subTest(sentence=sentence):
+                said = roadmap_faults(once(
+                    quote("ROADMAP.md", "Measured first, and then only"
+                          " where the measurement says."), sentence))
+                self.assertTrue(any("%s is referenced and not defined"
+                                    % CLOSED in why for why in said))
         said = roadmap_faults(once(
             quote("ROADMAP.md", "Measured first, and then only where the"
                   " measurement says."),
-            "Measured first, as %s was." % CLOSED))
-        self.assertTrue(any("%s is referenced and not defined" % CLOSED
-                            in why for why in said))
+            "Measured first, as `%s.md` says." % CLOSED))
+        self.assertFalse(any(CLOSED in why for why in said))
+
+    def test_an_item_active_before_its_dependencies_is_reported(self):
+        text = real_roadmap()
+        items = checker.roadmap_items(text)
+        early = next(work for work in UNSTARTED
+                     if checker.waiting_on(items[work], items))
+        said = roadmap_faults(restate(early, "planned", "active"))
+        self.assertTrue(any("%s is active but dependency" % early in why
+                            for why in said), said)
+
+    def test_items_whose_dependencies_are_complete_may_be_active_together(self):
+        #  The last planned item, given no dependency, starts beside the
+        #  serial lane's item: the roadmap accepts it and the pointers
+        #  keep naming the serial lane's item.
+        from check_controls import tree
+        early = UNSTARTED[-1]
+        with tree(copied=ROADMAP_INPUTS) as root:
+            target = root / "ROADMAP.md"
+            target.write_text(then(restate_depends(early, "none"),
+                                   restate(early, "planned", "active"))(
+                                       target.read_text()))
+            self.assertEqual(checker.check_roadmap(str(target)), [])
+            self.assertEqual(checker.check_project_status(True), [])
+            self.assertIn(POINTER, (root / "README.md").read_text())
+
+    def test_a_promotion_line_is_spelled_one_way(self):
+        def promotion(*lines):
+            def edit(text):
+                at = text.index("\n### %s — " % PLANNED)
+                own = text.index("\nDepends on: ", at)
+                end = text.index("\n", own + 1)
+                return text[:end] + "".join("\n" + l for l in lines) + text[end:]
+            return edit
+        self.assertEqual(roadmap_faults(promotion("Promotion: maintainer")), [])
+        said = roadmap_faults(promotion("Promotion: the maintainer"))
+        self.assertTrue(any("the one promotion line is" in why for why in said))
+        said = roadmap_faults(promotion("Promotion: maintainer",
+                                        "Promotion: maintainer"))
+        self.assertTrue(any("2 Promotion lines" in why for why in said))
+
+    def test_a_reason_left_on_an_unblocked_item_is_reported(self):
+        said = roadmap_faults(restate(PLANNED, "planned",
+                                      "planned\nBlocked because: it was"))
+        self.assertTrue(any("%s is planned and keeps a Blocked because"
+                            % PLANNED in why for why in said))
 
     def test_a_row_with_an_unknown_family_is_reported(self):
         said = register_faults(rows={OPEN_ROW: lambda text: re.sub(
@@ -2697,30 +2751,32 @@ class RoadmapStructure(unittest.TestCase):
         self.assertEqual(said, [])
 
     def test_scope_blocked_work_does_not_hold_up_independent_work(self):
-        #  The serial lane's first item blocked: the items that depend on
-        #  it wait, and the pointer names the first one that does not.
+        #  The serial lane's item blocked, its reason between its status
+        #  and its dependencies: the pointer passes over it to the next
+        #  unfinished item, here given no dependency, and the roadmap,
+        #  which may already hold a blocked item of its own, still passes.
         from check_controls import tree
         with tree(copied=ROADMAP_INPUTS) as root:
             target = root / "ROADMAP.md"
             text = target.read_text()
             first = NAMED
-            text = restate(first, status_of(first), "blocked")(text)
-            text = text.replace("\nStatus: blocked\n",
-                                "\nStatus: blocked\nBlocked because: a"
-                                " control says so\n", 1)
-            phase = first.split(".")[0]
-            independent = next(
-                found for found in re.finditer(
-                    r"^### (%s\.\d+) — ([^\n]+)\n\nStatus: planned\n"
-                    r"Depends on: ([^\n]+)$" % re.escape(phase), text, re.M)
-                if found.group(1) != first
-                and first not in found.group(3).split(", "))
+            text = restate(first, status_of(first),
+                           "blocked\nBlocked because: a control says so")(text)
+            items = checker.roadmap_items(text)
+            order = checker.execution_order(text, items)
+            later = next(work for work in order[order.index(first) + 1:]
+                         if items[work]["status"] != "complete")
+            if items[later]["status"] == "active":
+                pointer = "**Current roadmap work: %s — %s.**"
+            else:
+                text = restate_depends(later, "none")(text)
+                pointer = "**Next roadmap item: %s — %s (planned).**"
             target.write_text(text)
             for name in ("README.md", "handoff.md"):
                 page = root / name
                 page.write_text(page.read_text().replace(
-                    POINTER, "**Next roadmap item: %s — %s (planned).**"
-                    % independent.groups()[:2]))
+                    POINTER, pointer % (later, items[later]["title"])))
+            self.assertEqual(checker.check_roadmap(str(target)), [])
             self.assertEqual(checker.check_project_status(True), [])
 
     def test_a_pointer_that_disagrees_with_the_roadmap_is_reported(self):
