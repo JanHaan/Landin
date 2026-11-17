@@ -366,6 +366,14 @@ thirteen sources the SVD omits, and the CLIC, which no SVD has and the
 policy adds from the manual's 2.8.2 (D705). The literals reviewed from the
 manuals, the watchdogs' keys and bits among them, stay in `test.py`.
 
+The C5's sources disagree on UART0's clock select, PCR_UART0_SCLK_SEL: the
+TRM v1.1 gives 0 none, 1 PLL_F80M, 2 RC_FAST and 3 XTAL, with XTAL the
+reset value, while ESP-IDF v6.1's `pcr_reg.h` and the generated module's
+reset value, 0x0040_0000, give 0 XTAL, 1 RC_FAST and 2 PLL_F80M. No board
+reading has settled which the chip has, so the port does not write the
+field and takes its divisor from the one the ROM leaves (D961); a port
+that selects the clock reads the register a known source leaves first.
+
 Both descriptions build RAM-only `esp-app-image`s (D707). The C3's SRAM1 is
 one memory on two buses: its `memory.ldn` puts code in the first 128 KiB
 through the instruction bus and data in the 160 KiB after it through the

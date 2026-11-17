@@ -2552,8 +2552,11 @@ class RoadmapStructure(unittest.TestCase):
         #  A scheduled row waits for its item, and does not count.
         self.assertEqual(holding(checker.REGISTER_CAP, edit=closed,
                                  waiting=5), [])
-        #  Before any item is complete, the exchange's count stands.
-        self.assertEqual(holding(checker.REGISTER_CAP + 1), [])
+        #  Before any item is complete, the exchange's count stands: the
+        #  roadmap with its complete items reopened.
+        def reopened(text):
+            return text.replace("\nStatus: complete\n", "\nStatus: active\n")
+        self.assertEqual(holding(checker.REGISTER_CAP + 1, edit=reopened), [])
 
     def test_a_row_open_past_its_age_is_reported(self):
         name = OPEN_ROW[:-len(".md")]
@@ -2704,16 +2707,19 @@ class RoadmapStructure(unittest.TestCase):
             text = text.replace("\nStatus: blocked\n",
                                 "\nStatus: blocked\nBlocked because: a"
                                 " control says so\n", 1)
+            phase = first.split(".")[0]
             independent = next(
                 found for found in re.finditer(
-                    r"^### (R\d+\.\d+) — ([^\n]+)\n\nStatus: planned\n"
-                    r"Depends on: none$", text, re.M))
+                    r"^### (%s\.\d+) — ([^\n]+)\n\nStatus: planned\n"
+                    r"Depends on: ([^\n]+)$" % re.escape(phase), text, re.M)
+                if found.group(1) != first
+                and first not in found.group(3).split(", "))
             target.write_text(text)
             for name in ("README.md", "handoff.md"):
                 page = root / name
                 page.write_text(page.read_text().replace(
                     POINTER, "**Next roadmap item: %s — %s (planned).**"
-                    % independent.groups()))
+                    % independent.groups()[:2]))
             self.assertEqual(checker.check_project_status(True), [])
 
     def test_a_pointer_that_disagrees_with_the_roadmap_is_reported(self):

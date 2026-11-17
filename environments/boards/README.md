@@ -134,6 +134,15 @@ holding the rig lock:
 nix develop /var/lib/landin-rig/probehive#gpio -c true
 ```
 
+Once prepared, the shell stays: rigpi's own NixOS configuration roots it.
+A service the weekly garbage collection requires, and runs first, archives
+the probehive flake's inputs and roots each of them, and roots the `#gpio`
+shell's environment in a profile, under
+`/var/lib/landin-rig/gcroots/probehive-*`; if the rooting fails, the
+collection does not run. The service runs again when the probehive copy's
+`flake.nix` or `flake.lock` changes. Before it, a collection deleted the
+shell's closure and the next RP leg spent minutes fetching it again.
+
 The matching probehive change is published on
 [`landin-ram-gpio`](https://github.com/JanHaan/probehive/tree/landin-ram-gpio),
 commit `4f69b8269a664cf1e1c47b2b40365b482e9f30ec`.

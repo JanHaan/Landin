@@ -203,7 +203,8 @@ Depends on: none
         headings = {match.group(3): match.group(1)
                     for line in text.splitlines()
                     if (match := CHECK.ROADMAP_WORK.match(line))}
-        text = text.replace("Status: active", "Status: planned")
+        text = (text.replace("Status: active", "Status: planned")
+                .replace("Status: complete", "Status: planned"))
 
         def complete(identities):
             nonlocal text

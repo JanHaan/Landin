@@ -79,7 +79,8 @@ SWAP = {
 #  at the `ret` it still reads the return address through x29 and skips a
 #  frame.  A clang-built switch with clang's CFI fails the same way, every
 #  other instruction of ours unwinds right, and the CFI there is the
-#  standard epilogue's; the roadmap's register watches it.
+#  standard epilogue's.  Drop the entry once a FreeBSD LLDB unwinds that
+#  `ret` right, and restate it for a newer version that still does not.
 UNRELIABLE_RETURN = {"freebsd-arm64": "LLDB 19.1.7's arm64 frame-0 emulation"}
 #  How many instructions a session may step inside one switch before it
 #  says the routine never returned.

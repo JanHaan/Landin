@@ -339,6 +339,8 @@ modification time. After publication that path is gone, so a later
 though the published object exists beside the executable. Full-debug linked
 images are not claimed reproducible, and regenerating a bundle from that
 debug map alone is not supported without resolving its object paths.
+Whether two `--debug=full` links in one directory give identical images has
+not been measured; Linux debug images are identical in one directory.
 
 Open `lldb ./program`, then use `breakpoint set -n main`,
 `breakpoint set -f program.ldn -l 12`, `run`, `next`, `step`, `bt` and

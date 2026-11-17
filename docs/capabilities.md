@@ -1080,3 +1080,17 @@ re-records nothing (D1306), and a runtime fixture may name the targets that
 do not emit it yet with `not_yet_emitted`, which fails once one does
 (D1308). The scripts, and every lane that takes `--refine`, warn when that
 compiler was not built from the checkout's compiler sources (D1307).
+
+What the evidence shows is all that is claimed. D227's memory-ordering
+trials and bounded store-buffer models are evidence, not a formal proof,
+and no wait-free or timing bound is claimed. A firmware stack figure, from
+stack paint or an observed stack pointer, is a measurement, not a
+worst-case bound, and the reset stage assumes no NMI or fault while it
+runs. Choosing a source or debug file by its identity is matching: it does
+not authenticate the file or protect it against replacement meanwhile. The
+native failure controls cover output preparation under a file-size or
+descriptor limit, a closed output pipe and a removed working directory;
+device and capture failures are exercised only on the fake host. Mutation
+testing reaches the frontend alone, through `compiler/tests/fuzz/fuzz.py`:
+not the driver's options, the targets other than the default, or the
+emission, linking and running of accepted mutants.

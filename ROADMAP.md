@@ -237,7 +237,8 @@ serves every backend is decided first, and R551-16's shared backend code is
 split where this work meets it. The other costs the ranked list puts first,
 among them the bounds check an indexed increment keeps and the atomic and
 barrier lowering R551-12 records as baseline, are taken here or recorded with
-their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024.
+their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024,
+and SR-1178, a test of the Xtensa outgoing area D1110 counts.
 Where it meets the backends' shared code it answers R551-16's activation and
 splits that code; the row stays open for the stage closures. Where it is the
 sensible cut, a backend is split off as a continuous item of its own and
@@ -268,7 +269,7 @@ The move's own debt; first in the serial lane.
 
 ### R17.10 — The register reviewed and typed
 
-Status: active
+Status: complete
 Depends on: none
 
 The first item, on a tree `check.py` already accepts: the exchange has moved
@@ -282,6 +283,15 @@ regular expressions, SR-285 format width and radix) become `scheduled` on
 the R22 items that take them.
 Exit evidence: every row typed and under the cap; the allocation script and
 its control; the cap and age rule refused in a control.
+
+Done: every moved row typed, the rows-to-be filed as SR-1282 to SR-1298,
+`scripts/register_next.py` with its controls, and `check.py` refusing a
+register over its cap or a row past its age in controls. The maintainer's
+answers to Q-1 to Q-5 retired 43 rows and scheduled SR-195 and SR-768 on
+R17.50, SR-1178 on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
+rooting the GPIO shell retired one more, leaving 58 open. The retired
+rows' standing facts moved to `docs/capabilities.md`, `docs/targets.md`
+and `devices/README.md`.
 
 ### R17.20 — The question queue
 
@@ -344,6 +354,9 @@ no progress, each a gate-time failure it meets, and two rows-to-be of
   a modelled Darwin end of 25 to 30 minutes by kind of change. It is
   rebased onto main, given the cache key's brace fix its Linux sibling
   got, and waits for the key decision above.
+
+It also takes on SR-195, the Cortex-M shared-GDB session's failures on a
+loaded host, and SR-768, the Xtensa corpus's heavy fixture timing out.
 
 The baseline: the gate ended 44 to 51 minutes after its creation before
 the second roadmap's last CI rework and 31.1 minutes on run 44030898347
@@ -485,6 +498,9 @@ removed them on 2026-11-16, replaced by a `distinct` type with a checking
 constructor, and R19.10 records that and groups it. The candidates that
 wait on R20 (SC-17, SC-18) are recorded as such, not forced. The answers
 on labels, `break with` and `complete` (SC-01, SC-02) settle E1.
+R19.10 also decides SR-1237 itself, whether a type application's fixed
+actual folds compiler facts and `sizeof` as an array length does or D135
+stands, rather than leave it to R19.20, which runs only if SC-24 is taken.
 
 ### R19.20 — How far the checker folds
 
@@ -555,7 +571,8 @@ one name per idea; parameter order; a locale as an explicit value; and
 whether the modules only fixtures import have their consumers. How R22
 generates its tables is already decided, and the inventory's question on
 it is not reopened. With these come the questions R19 left here:
-`iterable` (SC-17), `zeroable` (SC-18) and `caller`. The output is each
+`iterable` (SC-17), `zeroable` (SC-18) and `caller`, and C3, whether a
+call tree's host authority gets a checkable boundary. The output is each
 answer recorded as a decision in `spec.md` and the items below confirmed
 or regrouped here.
 Exit evidence: the decisions in `spec.md`; this phase's items match them.
