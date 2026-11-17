@@ -86,11 +86,24 @@ class Clone(unittest.TestCase):
 
     def item(self, *arguments):
         out, err = io.StringIO(), io.StringIO()
+        if arguments[:1] != ("--repo",):
+            arguments = ("--repo", str(self.clone)) + arguments
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
-                _environment():
-            status = item.main(["--repo", str(self.clone), *arguments])
+                _environment(), _directory():
+            status = item.main(list(arguments))
         item.REPOSITORY[0] = self.clone
         return status, out.getvalue() + err.getvalue()
+
+
+@contextlib.contextmanager
+def _directory():
+    """The test's working directory back, whatever the script chdir'd to."""
+    import os
+    saved = os.getcwd()
+    try:
+        yield
+    finally:
+        os.chdir(saved)
 
 
 @contextlib.contextmanager
@@ -314,6 +327,33 @@ class Promote(Clone):
         status, out = self.item("promote", SECOND)
         self.assertEqual(status, 2)
         self.assertIn("Promotion: maintainer", out)
+
+    def test_finish_from_the_items_own_worktree(self):
+        #  As an item's agent runs it: the script's checkout is the one
+        #  it removes.
+        status, out = self.item("--repo", str(self.worktree), "finish",
+                                FIRST, "--unpromoted")
+        self.assertEqual(status, 0, out)
+        self.assertFalse(self.worktree.exists())
+        self.assertEqual(git(self.clone, "branch", "--list",
+                             self.state["branch"]), "")
+
+    def test_finish_when_the_worktree_is_already_gone(self):
+        self.state["promoted"] = git(self.clone, "rev-parse", "HEAD")
+        self.state["gates"].append(
+            self.gate(self.state["promoted"], "main"))
+        item.save(self.state)
+        git(self.clone, "worktree", "remove", str(self.worktree))
+        saved = item.record_gates
+        item.record_gates = lambda state, commit: (
+            item.place(state), state)[1]
+        try:
+            status, out = self.item("finish", FIRST)
+        finally:
+            item.record_gates = saved
+        self.assertEqual(status, 0, out)
+        self.assertTrue((item.state_root() / item.DONE_DIRECTORY
+                         / FIRST).is_dir())
 
     def test_finish_unpromoted_removes_worktree_and_branch(self):
         status, out = self.item("finish", FIRST)

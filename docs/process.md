@@ -112,9 +112,9 @@ puts the steps in order:
 | after a reopen | `item.py resume [ITEM]` | the worktree, every recorded run as running, finished or lost, the gate runs, the journal's last lines and the next step |
 | along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state |
 | gate | `item.py gate ITEM [--main] [--watch]` | records the pushed head's runs, or main's after promotion, and follows them with `gate_watch.py --all` in a detached run |
-| boards | `item.py boards ITEM` | dispatches `scope=boards` on the pushed head and records the run |
+| boards | `item.py boards ITEM [--watch]` | dispatches `scope=boards` on the pushed head, records the run and with `--watch` follows it in a detached run |
 | promotion | `item.py promote ITEM [--dry-run] [--partial]` | pushes the head to main only as the [promotion rule](#physical-boards-and-promotion) allows: a passed push gate on it with its whole job listing, boards on its tree or before only explanatory commits, main its ancestor, the item complete; refuses an item that says `Promotion: maintainer` |
-| finish | `item.py finish ITEM` | once main's gate on the promoted commit passed: removes the worktree and the local and remote branch, keeps the state under `landin-items/done/` |
+| finish | `item.py finish ITEM` | once main's gate on the promoted commit passed: removes the worktree and the local and remote branch, keeps the state under `landin-items/done/`; run from the item's own worktree it works from the clone's main checkout |
 | watching items | `item.py status`, `item.py stalled` | every running item; those nothing has moved for an hour, exit 1 |
 | report | `item.py report ITEM` | a draft of [the report](../.agents/skills/landin-change/report.md), ending with the open questions the item asked and their defaults |
 

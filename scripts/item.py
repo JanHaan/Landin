@@ -6,7 +6,7 @@
     python3 scripts/item.py note ITEM TEXT      # one line in the item's journal
     python3 scripts/item.py run ITEM NAME --limit S -- COMMAND ...
     python3 scripts/item.py gate ITEM [--watch] # the gate runs of the branch head
-    python3 scripts/item.py boards ITEM         # dispatch scope=boards on it
+    python3 scripts/item.py boards ITEM [--watch]  # dispatch scope=boards
     python3 scripts/item.py promote ITEM        # check the evidence, push to main
     python3 scripts/item.py finish ITEM         # remove worktree and branches
     python3 scripts/item.py status              # every item this clone runs
@@ -103,6 +103,19 @@ def gh(*arguments):
         raise Refused("gh %s failed: %s" % (" ".join(arguments),
                                             result.stderr.strip()))
     return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def main_checkout(cwd=None):
+    """The clone's main worktree, which outlives every item's."""
+    listing = git("worktree", "list", "--porcelain", cwd=cwd)
+    return Path(listing.splitlines()[0].split(" ", 1)[1])
+
+
+def place(state):
+    """Where to ask Git about STATE's item: its worktree while it exists,
+    the clone's main checkout once it is gone."""
+    worktree = Path(state["worktree"])
+    return worktree if worktree.is_dir() else main_checkout()
 
 
 def slug(item):
@@ -470,7 +483,7 @@ def kind_of(run_entry):
 
 def record_gates(state, commit):
     """Add COMMIT's gate runs to STATE, refreshing those it holds."""
-    tree = git("rev-parse", commit + "^{tree}", cwd=state["worktree"])
+    tree = git("rev-parse", commit + "^{tree}", cwd=place(state))
     known = {entry["run"]: entry for entry in state["gates"]}
     for found in runs_of(commit):
         entry = known.get(found["databaseId"])
@@ -585,6 +598,14 @@ def boards(arguments):
             journal(item, "boards dispatched: run %s on %s"
                     % (new[0]["databaseId"], commit[:12]))
             print("boards run %s on %s" % (new[0]["databaseId"], commit[:12]))
+            if arguments.watch:
+                arguments.name = "boards-%s" % new[0]["databaseId"]
+                arguments.limit = 7200
+                arguments.command = ["python3",
+                                     str(ROOT / "scripts/gate_watch.py"),
+                                     "--all", "--run",
+                                     str(new[0]["databaseId"])]
+                return run(arguments)
             return 0
         time.sleep(4)
     raise Refused("the dispatch was accepted but GitHub lists no run yet;"
@@ -697,6 +718,15 @@ def finish(arguments):
     if not state.get("promoted") and not arguments.unpromoted:
         raise Refused("%s was not promoted; --unpromoted removes its worktree"
                       " and branches regardless" % item)
+    #  Run from the item's own worktree, the script would go on asking Git
+    #  in the directory it has just removed: everything after the removal
+    #  runs in the clone's main checkout.
+    home = main_checkout()
+    if Path(home).resolve() == worktree.resolve():
+        raise Refused("%s is the clone's main checkout, not an item's"
+                      " worktree" % worktree)
+    REPOSITORY[0] = home
+    os.chdir(home)
     if state.get("promoted"):
         git("fetch", "-q", "origin")
         record_gates(state, state["promoted"])
@@ -1031,6 +1061,8 @@ def main(argv=None):
     sub = commands.add_parser("boards", help="dispatch scope=boards on the"
                               " pushed head")
     sub.add_argument("item")
+    sub.add_argument("--watch", action="store_true", help="follow it to its"
+                     " end in a detached gate_watch.py --all run")
     sub.set_defaults(handler=boards)
 
     sub = commands.add_parser("promote", help="check the evidence and push"

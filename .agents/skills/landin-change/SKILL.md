@@ -52,9 +52,10 @@ what a successor needs is never only in the conversation.
    `gate_watch.py --all`. Investigate a failed job from its log; a fixed
    push supersedes the run. Another item's gate at the same time shares
    the runners and both take longer.
-4. **Boards.** When the push gate passed, `item.py boards ITEM` dispatches
-   the `scope=boards` run on the same head and records it; `item.py gate
-   ITEM` refreshes its result.
+4. **Boards.** When the push gate passed, `item.py boards ITEM --watch`
+   dispatches the `scope=boards` run on the same head, records it and
+   follows it. A closing commit that says `Gate: explanatory` may be
+   pushed beside it: a dispatch is not cancelled by a push.
 5. **Close** by [the checklist](../../../docs/process.md#closing-an-item):
    activations against the item's base, the passes it lists, the `Done:`
    paragraph naming the findings fixed, rows deleted or filed, the
@@ -70,9 +71,11 @@ what a successor needs is never only in the conversation.
    item that says `Promotion: maintainer` stops at the passed candidate.
 7. **Follow main**: `item.py gate ITEM --main --watch`. A failure there is
    investigated, never rerun blindly.
-8. **Finish**: `item.py finish ITEM` refuses until main's gate passed, then
-   removes the worktree, the local and remote branch, and moves the state
-   to `landin-items/done/`, where it stays.
+8. **Finish**: `item.py finish ITEM`, from the worktree or anywhere in the
+   clone, refuses until main's gate passed, then removes the worktree, the
+   local and remote branch, and moves the state to `landin-items/done/`,
+   where it stays. The session's shell is then in a removed directory;
+   `cd` to the clone's main checkout.
 9. **Report** in [the report form](report.md); `item.py report ITEM`
    drafts it from the state, with the open questions the item asked last.
 
