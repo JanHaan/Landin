@@ -323,8 +323,7 @@ its state on disk.
 
 ### R17.50 — Gate wall time
 
-Status: blocked
-Blocked because: the register holds 106 open rows against its cap of 60, and an item cannot close over it until the maintainer answers Q-1 to Q-5.
+Status: planned
 Depends on: none
 
 The gate's wall time cut: Xtensa shards, release build and queueing,
@@ -352,7 +351,9 @@ after it, with `flake` (31.0) and the last Darwin job (28.3) last.
 Exit evidence: the baseline and the new wall time of the complete gate,
 each over several runs.
 
-Evidence, its work promoted: the gate alone ends 30.3 to 30.5 minutes after its creation (runs
+Evidence, its work on main and its status left until the register is
+under its cap, which waits for the maintainer's answers to Q-1 to Q-5, since
+no item closes over it and the serial lane has R17.10 active: the gate alone ends 30.3 to 30.5 minutes after its creation (runs
 44076856511 and 44082338698, both complete passes; the latter on the
 promoted tree, with boards dispatch 44087207692), against 31.1 on both
 baseline runs, 44030898347 and 44052328931. Its Linux lanes now end about
