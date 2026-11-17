@@ -826,6 +826,24 @@ package body Landin.Commands is
                     (Landin.Targets.Levels.Default_Level
                        (Facts)));
                   Write_Cores (Facts);
+                  --  What each level assumes the processor executes, so a
+                  --  tool that runs a level's code asks its processor for
+                  --  these rather than keeping a list of its own (D1377).
+                  J.Name (B, "features");
+                  J.Begin_Object (B);
+                  for Level of Landin.Targets.Levels.Family_Levels (Facts)
+                  loop
+                     J.Name (B, Landin.Targets.Levels.Name (Level));
+                     J.Begin_Array (B);
+                     for Each in Landin.Targets.Levels.Feature loop
+                        if Landin.Targets.Levels.Has (Level, Each) then
+                           J.Write_String
+                             (B, Landin.Targets.Levels.Spelling (Each));
+                        end if;
+                     end loop;
+                     J.End_Array (B);
+                  end loop;
+                  J.End_Object (B);
                   J.End_Object (B);
                else
                   US.Append (Result.Output, Name

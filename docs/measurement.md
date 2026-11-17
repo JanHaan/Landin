@@ -1,0 +1,221 @@
+# Measuring generated code
+
+This is the measurement contract R16.10 sets: what the gate measures of the
+code `refine` emits, where, and how a change is held to it. It is a
+maintained reference. The choices it makes are decisions in `spec.md`'s
+register under the toolchain, and the data is under
+`compiler/tests/measure/`. `scripts/measure.py` measures and compares; its
+`--help` names every command used below.
+
+## What is measured
+
+A **configuration** is a target, one of its CPU feature levels, a firmware
+profile where the target has them, an optimization profile (`--optimize`
+`none`, `size` or `speed`) and a specialization policy (`--specialize`
+`off`, `auto` or `all`). Every supported target is measured at every level
+`refine targets --json` gives it, with the features each level assumes, and
+at all nine profiles. Nothing in the data lists the levels: a level the
+compiler adds is measured from the commit that adds it, and fails the
+comparison as unrecorded until its baselines and its runner-table row exist.
+
+A **workload** is a program with an oracle. A run whose oracle fails is a
+failed measurement, never a figure.
+
+| set | workloads | runs on |
+|---|---|---|
+| hosted | the five Benchmark Game ports of [`docs/benchmarks.md`](benchmarks.md); a fibre program and a thread program, which pay the prologue's stack check on every call | every hosted target |
+| firmware | `sieve-of-eratosthenes`, `merge-sort`, `binary-search` and `cmp-siphash-vectors`, which the firmware lanes already execute; and firmware forms of fannkuch-redux and mandelbrot, new fixtures, each fitting the constrained 32 KiB reference | every firmware target and level, on the constrained reference where the level's lane runs it and otherwise on the one profile that lane uses: `mps2-an505` for armv8-m.main, the AN500's description for armv7e-m, and the ESP chips' own for rv32 and Xtensa |
+| counterpart | prototype 5's firmware counterpart, which does not fit 32 KiB (SR-996) | `cortex-m0`, on the 256 KiB description its lane uses (D1036) |
+
+`compiler/tests/measure/workloads.json` names each workload, its fixture and
+the set it is in. An existing fixture keeps the oracle it has: its status,
+and its output where it has one. A new one brings its own, held by the
+test program like any fixture's.
+
+A hosted workload's **timing run** uses arguments large enough to be timed,
+named in the same file. Its output is not the fixture's, so the output's
+digest is recorded with the baseline and must be the same for every
+configuration of every target; the thread program's output names no thread
+order. A firmware program takes no arguments and prints nothing: its oracle
+is its status, and the new firmware fixtures also leave a full-width
+checksum in a named word that the emulator and the probe read after the run.
+
+## Size
+
+Size is the byte count of each allocated section of the linked image, read
+from the image by `scripts/measure.py`'s own ELF and Mach-O readers. Debug
+sections, symbol and string tables, `.comment` and notes are not allocated
+and not counted. For a Cortex-M image the build report's `firmware` totals
+are compared too: its `flash_used` is the load segments' extent, which
+equals the allocated flash sections' sum plus their alignment padding, and
+the script checks that relation. The report's routine counters count
+emission sites, not bytes, and are kept beside the size as evidence, not
+compared.
+
+The linker is part of the image. Each size baseline records its
+**environment**, the linker's own version line and the pinned environment's
+name. When a runner's image moves Darwin's `ld` or FreeBSD's toolchain, a
+measurement that still matches its baseline passes and names the new
+environment; one that differs fails, saying the environment moved and that
+`record --from-run` takes the new figures, exactly as a compiler change
+would. No growth passes in the window between the two.
+
+Emission is deterministic, so size has no tolerance. A section that differs
+from the base commit's baseline in either direction fails, unless the
+candidate's own baseline files record exactly the measured figure for that
+key. Changing those files is the declaration, and their diff names each key
+it changes; the comparison prints those keys grouped by target, level and
+profile with their base and new totals, and the commit message says why. A
+smaller image is declared the same way, so a later change cannot grow back
+into it unnoticed. The base is the merge base with `main` for a branch and
+the first parent for a commit on `main`.
+
+`scripts/measure.py record --from-run RUN` writes the figures a gate run
+measured, read from its artifacts, into the candidate's files, so a change
+seen on Darwin or FreeBSD is recorded from a Linux checkout. `--key` limits
+it to named keys.
+
+Configurations whose images are byte-identical are measured once, for size
+and for time; the others cite it by the image's digest.
+
+## Time
+
+How time is measured depends on where the code runs. Each way is a
+**class**, and the runner table gives every target/level pair its classes.
+
+| class | where | the figure | compared with |
+|---|---|---|---|
+| `wall` | a native hosted runner | the median wall time of the timing run over several fresh copies of each executable, each copied to a new path before it runs, since placement alone moved a run by up to 50% | the base commit's own images, built in the same job by the base's compiler and run interleaved with the candidate's |
+| `cycles` | a board on the rig, in a RAM run | the core's counter, zeroed by the probe as the program is entered, or read there where it cannot be written, and read again when the program stops at the firmware return's breakpoint; a count past 2³¹ fails rather than risk a wrap | the committed baseline of the same board, clock and RAM placement |
+| `instructions` | an emulator | the instructions the program's own code executed, counted by a QEMU plugin of the repository's own over the image's address range | the committed baseline of the same emulator |
+| `size-only` | an emulator whose count is not the program's | nothing: the target records size alone | — |
+
+A `wall` figure is compared in pairs because the hosted runners are not one
+machine: GitHub gives a job one of several processor models and moves its
+image weekly, so a committed figure would rarely meet a run on its own
+processor. The ratio of candidate to base in one job, on one processor,
+is what the tolerance judges. The committed `wall` figures record the
+processor model and image beside the median, a trend and not a threshold.
+
+The `cycles` counters, each enabled by the probe before the run:
+
+| board | core | counter |
+|---|---|---|
+| RP2040 | Cortex-M0+ | the chip's 1 µs timer, `TIMERAWL`, read at entry and at the stop and subtracted; the M0+ has no cycle counter |
+| RP2350 Arm | Cortex-M33 | DWT `CYCCNT`, after `DEMCR.TRCENA` and `CYCCNTENA` |
+| STM32H753 | Cortex-M7 | DWT `CYCCNT`, likewise; it wraps after 9 s at 480 MHz, so a run stays shorter |
+| RP2350 Hazard3 | RISC-V | `mcycle`/`mcycleh`, with `mcountinhibit` cleared |
+| ESP32-C3 | RISC-V | the vendor counter `mpccr`, after `mpcer` and `mpcmr` select cycles |
+| ESP32-C5 | RISC-V | the vendor counter `mpccr`, as on the C3 |
+| ESP32, ESP32-S3 | Xtensa LX6, LX7 | `CCOUNT` |
+
+A `cycles` key includes the board, its clock and where the code ran, since
+the same image costs a different count from another RAM.
+
+An `instructions` count is deterministic only where the emulator runs the
+program alone: QEMU's user mode for RV64 and the Cortex-M lanes'
+machines, which run with `-icount`. Espressif's QEMU, which runs the RV32
+and Xtensa lanes, is built without plugins, so those levels are timed on
+their boards and record size alone under emulation. A program with threads is
+scheduled by the host even there, so the thread workload is `size-only`
+under emulation. Espressif's QEMU gives the ESP32-S3 counts that move
+between runs (SR-1267), and FreeBSD arm64 runs as a whole system under
+emulation, its kernel and timer in any count: both are `size-only`, and
+the Xtensa levels are timed on their boards.
+
+Each class's tolerance comes from a noise study recorded on its runner
+before the gate enforces it: the same tree measured repeatedly, its spread
+kept in `compiler/tests/measure/noise/`, and the tolerance set above it.
+Until a class has its study its comparison reports and does not fail. Every
+`instructions` key is in the study too, and is held exactly only where the
+study found no spread.
+
+The same counter answers a contributor's question about one routine.
+`scripts/measure.py count` runs a firmware or RV64 program under its
+lane's emulator and prints the instructions executed in all, and between
+two symbols with `--from` and `--to`. The Cortex-M corpus's `--program`
+option (`environments/cortex-m/backend_corpus.py`), which runs any `.ldn`
+file or module directory, prints the same count for each program it runs,
+which is what SR-1267 asks.
+
+## Runners
+
+| target | level | classes | runner |
+|---|---|---|---|
+| linux-x86-64 | x86-64-v1, v2, v3 | `wall` | `ubuntu-24.04` |
+| linux-x86-64 | x86-64-v4 | `limit`: no hosted runner is promised AVX-512 | — |
+| freebsd-x86-64 | x86-64-v1, v2, v3 | `wall`, in the lane's KVM guest | `ubuntu-24.04` |
+| freebsd-x86-64 | x86-64-v4 | `limit`, as Linux's | — |
+| linux-arm64 | armv8-a, armv8.1-a | `wall` | `ubuntu-24.04-arm` |
+| darwin-arm64 | armv8-a, armv8.1-a | `wall` | `macos-26` |
+| freebsd-arm64 | armv8-a, armv8.1-a | `size-only`: the guest is emulated | — |
+| linux-rv64 | every level | `instructions`, QEMU user mode | `ubuntu-24.04` |
+| cortex-m0 | armv6-m | `instructions` on the micro:bit machine; `cycles` on the RP2040 | `ubuntu-24.04`; the rig |
+| cortex-m0 | armv7-m | `instructions` on MPS2 AN385 | `ubuntu-24.04` |
+| cortex-m0 | armv7e-m | `instructions` on MPS2 AN500; `cycles` on the STM32H753 | `ubuntu-24.04`; the rig |
+| cortex-m0 | armv8-m.main | `instructions` on MPS2 AN505; `cycles` on the RP2350 | `ubuntu-24.04`; the rig |
+| rv32 | rv32imc | `cycles` on the ESP32-C3; `size-only` under Espressif's QEMU | the rig |
+| rv32 | rv32imac | `cycles` on the RP2350's Hazard3 and the ESP32-C5; `size-only` under emulation | the rig |
+| xtensa | xtensa-esp32 | `cycles` on the ESP32 | the rig |
+| xtensa | xtensa-esp32s3 | `cycles` on the ESP32-S3 | the rig |
+
+`compiler/tests/measure/runners.json` holds this table as data, and
+`scripts/measure.py runners` checks it against every target/level pair the
+compiler gives: a pair with no row fails. A runner that lacks a feature its
+row's level needs fails the timing job rather than reclassifying the level.
+A `limit` row has a register row with its activation; it is never a skipped
+measurement or a lower level measured in its place.
+
+## Baselines
+
+Baselines are committed JSON under `compiler/tests/measure/baselines/`, one
+file per target and class, keyed by level, firmware profile where there is
+one, optimization profile and workload, with the environment or runner class
+and, for time, the processor model, image, sample count and spread. A
+candidate is compared with its base commit's baselines, never its own.
+
+## Showing that the gate holds
+
+The exit evidence is three runs of each class's comparison: one of an
+unchanged tree, which passes, and one each of two demonstration branches,
+which fail. Each branch is cut from the candidate, never promoted, and has
+one commit in the target-neutral lowering: one adds to every routine a
+block reached only when a volatile load reads a value it never holds,
+making every image larger; the other adds at each routine's entry a loop
+whose count is a volatile load, longer than any class's tolerance, making
+every workload slower. Neither can be removed by the optimizer, and the
+comparison itself shows each present in every profile's image. The runs are named in the item's `Done:`
+paragraph.
+
+## Cost
+
+Size runs on every push, in jobs that already have the target's linker:
+the Linux, RV64 and firmware targets in one job inside the pinned
+environment, Darwin on its native runner and FreeBSD beside its lanes.
+Time runs on the weekly schedule and on a dispatch, `scope=boards`
+included, in timing jobs beside the boards. The pilot over the whole
+matrix, recorded in `compiler/tests/measure/pilot.json`, gives each job's
+minutes, the jobs it adds against the account's limit of 20 concurrent
+jobs and 5 macOS, and each class's noise, before any tolerance is enforced.
+
+## Reports
+
+The stage report says where a program's compile time goes among its
+sources. The stack report's format becomes `landin-stack-report-2`, in
+which each frame quantity has the build report's name: `frame_bytes` is
+what a routine's prologue reserves and `stack_bytes` its whole stack.
+Version 1's `frame_bytes` was the whole stack, so a consumer that reads it
+by name must ask for the version.
+
+## What the measurements found
+
+The ranked list of each backend's largest measured costs, from which
+R16.20 takes its scope, is the last section of this page. A cost is
+attributed by measuring the same workload with and without the construct
+that pays it, at the same configuration. Its answers close or restate the
+rows the item names: the atom `match` table (SR-231), the heap's lock flag
+(SR-387), float selection on Cortex-M (SR-596), short `u64` routines on
+armv6-m (SR-869), the library's erased tables and formatting (SR-1023),
+the counterpart's flash against 32 KiB (SR-996), list growth through
+`resize` (SR-275) and any cost attributable to assembly's fixed memory
+effect (SR-09), and x86-64's two-instruction reach of a thread instance.

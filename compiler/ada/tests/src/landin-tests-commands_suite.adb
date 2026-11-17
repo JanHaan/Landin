@@ -325,6 +325,23 @@ package body Landin.Tests.Commands_Suite is
                      then "lines" else "full");
                begin
                   Seen_Xtensa := Seen_Xtensa or Name = "xtensa";
+                  if Name = "linux-x86-64" then
+                     declare
+                        Features : constant J.Value :=
+                          J.Member (Doc, Row, "features");
+                        V4 : constant J.Value :=
+                          J.Member (Doc, Features, "x86-64-v4");
+                     begin
+                        Landin.Testing.Check_Equal
+                          (Item, J.Length (Doc, J.Member
+                             (Doc, Features, "x86-64-v1")), 0,
+                           "the x86-64 baseline assumes no feature");
+                        Landin.Testing.Check_Equal
+                          (Item, J.Text (Doc, J.Element
+                             (Doc, V4, J.Length (Doc, V4))), "avx512vl",
+                           "x86-64-v4 lists its features, AVX-512 last");
+                     end;
+                  end if;
                   Landin.Testing.Check
                     (Item, J.Is_Kind (Doc, Debug, J.String_Value),
                      Name & " debug capability is a JSON string");

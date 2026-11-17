@@ -1,0 +1,12 @@
+{
+ "schema": 1,
+ "hosted": [
+  {"name": "fannkuch-redux", "fixture": "runtime/benchmark-game-fannkuch-redux", "timing": {"args": ["10"]}},
+  {"name": "mandelbrot", "fixture": "runtime/benchmark-game-mandelbrot", "timing": {"args": ["2000"]}},
+  {"name": "fasta", "fixture": "runtime/benchmark-game-fasta", "timing": {"args": ["2500000"]}},
+  {"name": "reverse-complement", "fixture": "runtime/benchmark-game-reverse-complement", "timing": {"stdin_repeat": 2000}},
+  {"name": "binary-trees", "fixture": "runtime/benchmark-game-binary-trees", "timing": {"args": ["16"]}},
+  {"name": "fibre", "fixture": "runtime/fibre-turns-interleave", "timing": {}},
+  {"name": "thread", "fixture": "runtime/thread-runs-fibres", "timing": {}}
+ ]
+}
