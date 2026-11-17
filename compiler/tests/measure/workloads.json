@@ -32,7 +32,7 @@
    "name": "reverse-complement",
    "fixture": "runtime/benchmark-game-reverse-complement",
    "timing": {
-    "stdin_repeat": 2000
+    "stdin_repeat": 6000
    }
   },
   {
@@ -40,7 +40,7 @@
    "fixture": "runtime/benchmark-game-binary-trees",
    "timing": {
     "args": [
-     "16"
+     "15"
     ]
    }
   },

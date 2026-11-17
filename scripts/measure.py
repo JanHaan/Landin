@@ -17,7 +17,11 @@ with an oracle, named in compiler/tests/measure/workloads.json.
     measure.py record DIR/size.json [--key KEY ...]
         write the measurements into the candidate's baseline files
     measure.py runners --refine R
-        every target/level pair the compiler gives and how it is measured
+        every target/level pair the compiler gives and how it is measured,
+        checked against compiler/tests/measure/runners.json
+    measure.py time --refine R --base-refine B --target T --output DIR
+        paired wall time of every configuration the runner table times on
+        this host: the candidate's and the base's images interleaved
 
 Standard library only.
 """
@@ -34,6 +38,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
 MEASURE = ROOT / "compiler/tests/measure"
@@ -333,6 +338,210 @@ def measure_size(args) -> int:
     return 1 if failures else 0
 
 
+# --- the runner table -------------------------------------------------------
+
+def runner_rows(given) -> dict[tuple[str, str], dict]:
+    """{(target, level): row} from runners.json, every level the compiler
+    GIVES with a row and no row naming a level it does not give."""
+    table = json.loads((MEASURE / "runners.json").read_text())
+    require(table.get("schema") == 1, "unknown runners.json schema")
+    rows, problems = {}, []
+    for target, levels in given.items():
+        entry = table["targets"].get(target)
+        if entry is None:
+            problems.append(f"{target} has no row")
+            continue
+        for named in entry.get("levels", {}):
+            if named not in levels:
+                problems.append(f"{target} names {named}, which refine does not give")
+        for level in levels:
+            row = {k: v for k, v in entry.items() if k != "levels"}
+            row.update(entry.get("levels", {}).get(level, {}))
+            if not row.get("classes"):
+                problems.append(f"{target} {level} has no class")
+            rows[(target, level)] = row
+    for target in table["targets"]:
+        if target not in given:
+            problems.append(f"the table names {target}, which refine does not emit")
+    require(not problems, "compiler/tests/measure/runners.json disagrees with"
+            " refine targets --json: " + "; ".join(problems))
+    return rows
+
+
+def runners(args) -> int:
+    rows = runner_rows(targets(args.refine))
+    for (target, level), row in rows.items():
+        print(f"{target:15} {level:22} {', '.join(row['classes']):22}"
+              f" {row.get('runner') or '-'}")
+    return 0
+
+
+# --- wall time --------------------------------------------------------------
+
+def runner_class() -> dict:
+    """What a wall figure was measured on: the job's runner label, the
+    processor's model and the runner image, as GitHub names them."""
+    if sys.platform == "darwin":
+        model = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                               capture_output=True, text=True).stdout.strip()
+    else:
+        model = next((line.split(":", 1)[1].strip() for line in
+                      Path("/proc/cpuinfo").read_text().splitlines()
+                      if line.startswith("model name")), "unknown")
+    return {"label": os.environ.get("LANDIN_RUNNER_LABEL", "local"),
+            "processor": model,
+            "image": " ".join(filter(None, (os.environ.get("ImageOS"),
+                                            os.environ.get("ImageVersion"))))
+            or "local"}
+
+
+def timing_input(workload: dict, where: Path) -> Path | None:
+    """The standard input a timing run reads, made once."""
+    repeat = workload["timing"].get("stdin_repeat")
+    if not repeat:
+        return None
+    fixture = ROOT / "compiler/tests/fixtures" / workload["fixture"]
+    meta = fixture_meta.read(fixture)
+    made = where / f"{workload['name']}.stdin"
+    if not made.exists():
+        made.write_bytes((fixture / meta["stdin"]).read_bytes() * repeat)
+    return made
+
+
+def timed_run(image: Path, workload: dict, stdin: Path | None, scratch: Path):
+    """One timing run of a fresh copy of IMAGE: (seconds, output digest)."""
+    fixture = ROOT / "compiler/tests/fixtures" / workload["fixture"]
+    fresh = Path(tempfile.mkdtemp(dir=scratch)) / image.name
+    shutil.copy2(image, fresh)
+    meta = fixture_meta.read(fixture)
+    arguments = workload["timing"].get("args")
+    if arguments is None:
+        arguments = meta.program_arguments(fixture)
+    with (open(stdin, "rb") if stdin else open(os.devnull, "rb")) as given:
+        start = time.perf_counter()
+        done = subprocess.run([str(fresh), *arguments], stdin=given,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              cwd=ROOT / "compiler/ada", timeout=600,
+                              env={**os.environ, "LC_ALL": "C"})
+        seconds = time.perf_counter() - start
+    shutil.rmtree(fresh.parent)
+    require(done.returncode == meta.status,
+            f"{image.name} returned {done.returncode} in its timing run,"
+            f" expected {meta.status}: {done.stderr[-500:]!r}")
+    return seconds, hashlib.sha256(done.stdout).hexdigest()
+
+
+def median(values):
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    return (ordered[middle] if len(ordered) % 2
+            else (ordered[middle - 1] + ordered[middle]) / 2)
+
+
+def measure_time(args) -> int:
+    """Paired wall time: each configuration's image from the candidate's
+    compiler and from the base's, built here and run interleaved, fresh
+    copies each run, on one processor."""
+    given = targets(args.refine)
+    rows = runner_rows(given)
+    target = args.target
+    require(target in given and target in HOSTED, f"{target}: not a hosted target")
+    sets = workloads()
+    out = Path(args.output)
+    for side in ("candidate", "base"):
+        (out / side).mkdir(parents=True, exist_ok=True)
+    scratch = out / "runs"
+    scratch.mkdir(exist_ok=True)
+    work = []
+    for level, features in given[target].items():
+        if "wall" not in rows[(target, level)]["classes"]:
+            continue
+        lacking = host_lacks(features)
+        require(not lacking, f"{target} {level}'s runner row says wall, and this"
+                f" processor lacks {', '.join(lacking)}")
+        for profile in PROFILES:
+            for workload in sets["hosted"]:
+                if workload["name"] not in args.skip:
+                    work.append((level, profile, workload))
+
+    def built(item):
+        level, profile, workload = item
+        pair = []
+        for side, refine in (("candidate", args.refine), ("base", args.base_refine)):
+            image, _, _ = build(refine, target, level, profile, workload,
+                                out / side, None)
+            pair.append((image, image_sections(image)[1]))
+        return item, pair
+
+    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+        images = list(pool.map(built, work))
+    #  One timing per distinct pair of images; the others cite it.
+    distinct: dict[tuple[str, str, str], list] = {}
+    for (level, profile, workload), pair in images:
+        identity = (workload["name"], pair[0][1], pair[1][1])
+        distinct.setdefault(identity, []).append(((level, profile, workload), pair))
+    print(f"{len(work)} configurations, {len(distinct)} distinct image pairs,"
+          f" {args.samples} interleaved runs of each side", flush=True)
+    figures, outputs = {}, {}
+    for identity, members in distinct.items():
+        (level, profile, workload), pair = members[0]
+        stdin = timing_input(workload, out)
+        samples = {"candidate": [], "base": []}
+        for index in range(args.samples):
+            order = (("candidate", 0), ("base", 1)) if index % 2 == 0 else (
+                ("base", 1), ("candidate", 0))
+            for side, at in order:
+                seconds, digest = timed_run(pair[at][0], workload, stdin, scratch)
+                samples[side].append(seconds)
+                first = outputs.setdefault(workload["name"], digest)
+                require(digest == first, f"{pair[at][0].name}'s timing output"
+                        " differs from the other configurations'")
+        candidate, base = median(samples["candidate"]), median(samples["base"])
+        figure = {"candidate": round(candidate, 6), "base": round(base, 6),
+                  "ratio": round(candidate / base, 4),
+                  "samples": args.samples,
+                  "spread": round((max(samples["candidate"]) - min(samples["candidate"]))
+                                  / candidate, 4)}
+        first_key = key(level, profile, workload["name"])
+        figures[first_key] = figure
+        for (other_level, other_profile, _), _ in members[1:]:
+            figures[key(other_level, other_profile, workload["name"])] = {
+                "same_as": first_key}
+    result = {"schema": 1, "class": "wall", "runner": runner_class(),
+              "outputs": outputs, "targets": {target: dict(sorted(figures.items()))}}
+    (out / "time.json").write_text(json.dumps(result, indent=1) + "\n")
+    print(f"wrote {out / 'time.json'}")
+    return judge_time(result)
+
+
+def judge_time(result: dict) -> int:
+    """Hold each ratio to the class's tolerance from its noise study, or
+    report alone while the class has none."""
+    noise = MEASURE / "noise" / "wall.json"
+    tolerance = None
+    if noise.exists():
+        tolerance = json.loads(noise.read_text())["tolerance"].get(
+            result["runner"]["label"])
+    slower = []
+    for target, figures in result["targets"].items():
+        for name, figure in figures.items():
+            if "ratio" in figure and tolerance is not None and (
+                    figure["ratio"] > 1 + tolerance):
+                slower.append(f"{target} {name}: {figure['candidate']:.4f} s against"
+                              f" the base's {figure['base']:.4f} s,"
+                              f" ratio {figure['ratio']}")
+    ratios = [f["ratio"] for t in result["targets"].values()
+              for f in t.values() if "ratio" in f]
+    print(f"wall: {len(ratios)} timed pairs, ratio median {median(ratios):.4f},"
+          f" range {min(ratios):.4f} to {max(ratios):.4f}; tolerance "
+          + (f"{tolerance:.2%}" if tolerance is not None else
+             "not yet set by a noise study, so nothing fails"))
+    for line in slower:
+        print("SLOWER " + line)
+    return 1 if slower else 0
+
+
+
 # --- baselines --------------------------------------------------------------
 
 def baseline_path(target: str) -> Path:
@@ -499,7 +708,26 @@ def main(argv=None) -> int:
     keep.add_argument("--key", action="append", default=[],
                       metavar="'TARGET KEY'")
     keep.set_defaults(run=record)
+    base = commands.add_parser("base", help="print the commit a candidate is"
+                               " compared with")
+    base.set_defaults(run=lambda args: print(default_base()) or 0)
+    table = commands.add_parser("runners", help="the runner table, checked")
+    table.add_argument("--refine", type=Path, required=True)
+    table.set_defaults(run=runners)
+    wall = commands.add_parser("time", help="paired wall time on this runner")
+    wall.add_argument("--refine", type=Path, required=True)
+    wall.add_argument("--base-refine", type=Path, required=True,
+                      help="the base commit's compiler")
+    wall.add_argument("--target", required=True, help="this host's target")
+    wall.add_argument("--output", required=True)
+    wall.add_argument("--samples", type=int, default=5)
+    wall.add_argument("--skip", action="append", default=[])
+    wall.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    wall.set_defaults(run=measure_time)
     args = parser.parse_args(argv)
+    if getattr(args, "refine", None):
+        import refine_revision
+        refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return args.run(args)
     except Failure as error:

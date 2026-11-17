@@ -87,6 +87,7 @@ jobs:
       reuse: ${{ steps.reuse.outputs.reuse }}
       software: ${{ steps.scope.outputs.software }}
       boards: ${{ steps.scope.outputs.boards }}
+      timing: ${{ steps.scope.outputs.timing }}
       scope: ${{ steps.scope.outputs.scope }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -894,6 +895,56 @@ jobs:
           name: measure-size-linux
           path: ${{ runner.temp }}/measure-size/size.json
           retention-days: 30
+
+  #  The time the emitted code takes (docs/measurement.md), on the schedule
+  #  and on a dispatch alone: each native runner builds the candidate's
+  #  compiler and its base's, and runs each configuration's two images
+  #  interleaved, fresh copies each run, so the ratio is judged on one
+  #  processor whatever processor GitHub gave the job.
+  measure-time:
+    name: measure-time-${{ matrix.target }}
+    needs: inputs
+    if: needs.inputs.outputs.timing == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: linux-x86-64, runner: ubuntu-24.04, platform: x86_64-linux}
+          - {target: linux-arm64, runner: ubuntu-24.04-arm, platform: aarch64-linux}
+          - {target: darwin-arm64, runner: macos-26, platform: aarch64-darwin}
+    env:
+      LANDIN_RUNNER_LABEL: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: ${{ matrix.platform }}
+      - name: Build the candidate's compiler and its base's
+        run: |
+          set -eu
+          base="$(python3 scripts/measure.py base)"
+          git worktree add --detach "$RUNNER_TEMP/base" "$base"
+          ./scripts/dev-build.sh | tee "$RUNNER_TEMP/candidate.log"
+          (cd "$RUNNER_TEMP/base" && ./scripts/dev-build.sh) | tee "$RUNNER_TEMP/base.log"
+          echo "CANDIDATE_REFINE=$(sed -n 's/^built: //p' "$RUNNER_TEMP/candidate.log" | tail -1)" >> "$GITHUB_ENV"
+          echo "BASE_REFINE=$(sed -n 's/^built: //p' "$RUNNER_TEMP/base.log" | tail -1)" >> "$GITHUB_ENV"
+      - name: Paired wall time of every configuration the runner table times here
+        run: >-
+          python3 scripts/measure.py time --refine "$CANDIDATE_REFINE"
+          --base-refine "$BASE_REFINE" --target ${{ matrix.target }}
+          --output "$RUNNER_TEMP/measure-time"
+      - name: Keep the figures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-time-${{ matrix.target }}
+          path: ${{ runner.temp }}/measure-time/time.json
+          retention-days: 90
 
   #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB.  Every lane in one job took
@@ -2492,7 +2543,8 @@ jobs:
             compiler-checks, linux-release-build, linux-release-clean,
             linux-release-compare, release,
             outside-user-stock, build-modes,
-            bindings, editor-grammar, flake, measure-size, cortex-m, xtensa, scaling,
+            bindings, editor-grammar, flake, measure-size, measure-time, cortex-m,
+            xtensa, scaling,
             darwin-debug-build,
             darwin-release-build, darwin-release-clean, darwin-release-compare,
             darwin-host, darwin-host-release,

@@ -104,6 +104,9 @@ CONTENT_FREE_TREES = ("roadmap/",)
 #  every job the aggregate needs is in the reuse list or here, and the
 #  board matrix is exactly BOARD_PORTS.
 PHYSICAL = ("board-bundles", "board")
+#  The jobs that time the emitted code (docs/measurement.md): they run on the
+#  schedule and on a dispatch, whatever its scope, and on no other event.
+TIMING = ("measure-time",)
 BOARD_PORTS = ("rp2040", "pico2", "stm32h753", "esp32c3", "esp32c5", "esp32",
                "esp32s3")
 #  Only this repository's rig runs boards; a fork's runs never reach it.
@@ -398,7 +401,8 @@ def scope(event_name, ref, repository, event):
     requested = (event.get("inputs") or {}).get("scope") or "full"
     boards_only = event_name == "schedule" or (
         event_name == "workflow_dispatch" and requested == "boards")
-    return {"software": not boards_only, "boards": boards,
+    timing = event_name in ("schedule", "workflow_dispatch")
+    return {"software": not boards_only, "boards": boards, "timing": timing,
             "scope": "boards" if boards_only else "full"}
 
 
@@ -455,7 +459,8 @@ def inputs_scope(needs):
     """The scope `inputs` reported; a run without the outputs ran software only."""
     outputs = (needs.get("inputs") or {}).get("outputs") or {}
     return {"software": outputs.get("software", "true") != "false",
-            "boards": outputs.get("boards") == "true"}
+            "boards": outputs.get("boards") == "true",
+            "timing": outputs.get("timing") == "true"}
 
 
 def verdict(needs, always, expected=None, evidence=None):
@@ -478,8 +483,8 @@ def verdict(needs, always, expected=None, evidence=None):
     if expected is None:
         expected = inputs_scope(needs)
     elif inputs.get("result") == "success":
-        for name in ("software", "boards"):
-            if outputs.get(name) != flag(expected[name]):
+        for name in ("software", "boards", "timing"):
+            if outputs.get(name) != flag(expected.get(name, False)):
                 problems.append("inputs says %s=%s, but this event's scope is %s=%s"
                                 % (name, outputs.get(name), name, flag(expected[name])))
     software, boards = expected["software"], expected["boards"]
@@ -492,6 +497,8 @@ def verdict(needs, always, expected=None, evidence=None):
             wanted = "success"
         elif name in PHYSICAL:
             wanted = "success" if boards else "skipped"
+        elif name in TIMING:
+            wanted = "success" if expected.get("timing") else "skipped"
         else:
             wanted = "success" if software and not reuse else "skipped"
         result = job.get("result")
@@ -655,6 +662,7 @@ def main(argv):
             found["scope"]), file=sys.stderr)
         print("software=" + flag(found["software"]))
         print("boards=" + flag(found["boards"]))
+        print("timing=" + flag(found["timing"]))
         print("scope=" + found["scope"])
         return 0
     if len(argv) == 3 and argv[0] == "bundles":

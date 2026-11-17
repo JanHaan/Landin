@@ -786,10 +786,11 @@ def required_workflow_names(workflow, called, physical=()):
     return set(names)
 
 
-def workflow_reuse_gaps(workflow, called, physical=gate_inputs.PHYSICAL):
+def workflow_reuse_gaps(workflow, called,
+                        physical=gate_inputs.PHYSICAL + gate_inputs.TIMING):
     """(missing, extra): reuse names the aggregate needs and the list lacks,
     and names the list has that the aggregate does not need or that are
-    physical, which are never reused."""
+    physical or timing jobs, which are never reused."""
     inputs = "\n".join(workflow_jobs(workflow)["inputs"])
     commands = re.findall(r"gate_inputs\.py reuse gate\.yml(.*?)>>", inputs, re.S)
     if len(commands) != 1:
@@ -966,6 +967,9 @@ def gate_closure(workflow):
     return jobs, seen
 
 
+TIMING_IF = "needs.inputs.outputs.timing == 'true'"
+
+
 def scope_gaps(workflow):
     """Jobs whose condition does not follow the event's scope, with why."""
     jobs, needed = gate_closure(workflow)
@@ -978,6 +982,9 @@ def scope_gaps(workflow):
             wanted = "always()" if identity == "gate" else ""
             if condition != wanted:
                 gaps.append("%s: if is %r, not %r" % (identity, condition, wanted))
+        elif identity in gate_inputs.TIMING:
+            if condition != TIMING_IF:
+                gaps.append("%s: a timing job runs by the timing scope alone" % identity)
         elif identity in gate_inputs.PHYSICAL:
             if BOARDS_IF not in condition or "reuse" in condition or "software" in condition:
                 gaps.append("%s: a physical job runs by the boards scope alone" % identity)
@@ -986,7 +993,7 @@ def scope_gaps(workflow):
         elif not all(part in condition for part in SOFTWARE_IF):
             gaps.append("%s: a software lane must skip for a reused pass and a "
                         "boards-only event" % identity)
-    for identity in gate_inputs.PHYSICAL:
+    for identity in gate_inputs.PHYSICAL + gate_inputs.TIMING:
         if identity not in needed:
             gaps.append("%s: the aggregate does not need a physical job" % identity)
     for identity, body in jobs.items():
@@ -1200,17 +1207,29 @@ class BoardVerdict(unittest.TestCase):
                                {"inputs": {"scope": "boards"}})
     SCHEDULE = gate_inputs.scope("schedule", "refs/heads/main", "JanHaan/Landin", {})
 
-    def needs(self, scope, lanes, boards, reuse="false"):
+    def needs(self, scope, lanes, boards, reuse="false", timing=None):
         outputs = {"reuse": reuse, "software": gate_inputs.flag(scope["software"]),
-                   "boards": gate_inputs.flag(scope["boards"])}
+                   "boards": gate_inputs.flag(scope["boards"]),
+                   "timing": gate_inputs.flag(scope["timing"])}
+        if timing is None:
+            timing = "success" if scope["timing"] else "skipped"
         return {"inputs": {"result": "success", "outputs": outputs},
                 "documents": job("success"), "scripts": job("success"),
                 "compiler": job(lanes), "cortex-m": job(lanes),
-                "board-bundles": job(boards), "board": job(boards)}
+                "board-bundles": job(boards), "board": job(boards),
+                "measure-time": job(timing)}
 
-    def verdict(self, scope, lanes, boards, reuse="false", evidence=PASSED):
-        return gate_inputs.verdict(self.needs(scope, lanes, boards, reuse), self.ALWAYS,
-                                   scope, evidence)
+    def verdict(self, scope, lanes, boards, reuse="false", evidence=PASSED, timing=None):
+        return gate_inputs.verdict(self.needs(scope, lanes, boards, reuse, timing),
+                                   self.ALWAYS, scope, evidence)
+
+    def test_timing_runs_on_the_schedule_and_a_dispatch_alone(self):
+        self.assertTrue(self.SCHEDULE["timing"] and self.BOARDS["timing"])
+        self.assertFalse(self.MAIN["timing"] or self.BRANCH["timing"])
+        self.assertTrue(self.verdict(self.SCHEDULE, "skipped", "success", timing="skipped"))
+        self.assertTrue(self.verdict(self.BOARDS, "skipped", "success", timing="failure"))
+        self.assertTrue(self.verdict(self.BRANCH, "success", "skipped", evidence={},
+                                     timing="success"))
 
     def test_a_main_push_with_every_board_passed(self):
         self.assertEqual(self.verdict(self.MAIN, "success", "success"), [])

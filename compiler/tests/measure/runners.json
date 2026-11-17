@@ -1,0 +1,26 @@
+{
+ "schema": 1,
+ "comment": "docs/measurement.md's runner table as data. A level is named only where its row differs from its target's; `levels` keys are the compiler's names and `measure.py runners` checks every one exists and every level the compiler gives has a row.",
+ "targets": {
+  "linux-x86-64": {"classes": ["wall"], "runner": "ubuntu-24.04",
+                   "levels": {"x86-64-v4": {"classes": ["limit"], "limit": "no hosted runner is promised AVX-512"}}},
+  "freebsd-x86-64": {"classes": ["wall"], "runner": "ubuntu-24.04, in the lane's KVM guest",
+                     "levels": {"x86-64-v4": {"classes": ["limit"], "limit": "no hosted runner is promised AVX-512"}}},
+  "linux-arm64": {"classes": ["wall"], "runner": "ubuntu-24.04-arm"},
+  "darwin-arm64": {"classes": ["wall"], "runner": "macos-26"},
+  "freebsd-arm64": {"classes": ["size-only"], "runner": null,
+                    "limit": "the guest is emulated, its kernel in any count"},
+  "linux-rv64": {"classes": ["instructions"], "runner": "ubuntu-24.04, QEMU user mode"},
+  "cortex-m0": {"runner": "ubuntu-24.04; the rig",
+                "levels": {"armv6-m": {"classes": ["instructions", "cycles"], "machine": "microbit", "board": "rp2040"},
+                           "armv7-m": {"classes": ["instructions"], "machine": "mps2-an385"},
+                           "armv7e-m": {"classes": ["instructions", "cycles"], "machine": "mps2-an500", "board": "stm32h753"},
+                           "armv8-m.main": {"classes": ["instructions", "cycles"], "machine": "mps2-an505", "board": "rp2350"}}},
+  "rv32": {"runner": "the rig",
+           "levels": {"rv32imc": {"classes": ["cycles"], "board": "esp32c3"},
+                      "rv32imac": {"classes": ["cycles"], "board": "rp2350_hazard3, esp32c5"}}},
+  "xtensa": {"runner": "the rig",
+             "levels": {"xtensa-esp32": {"classes": ["cycles"], "board": "esp32"},
+                        "xtensa-esp32s3": {"classes": ["cycles"], "board": "esp32s3"}}}
+ }
+}
