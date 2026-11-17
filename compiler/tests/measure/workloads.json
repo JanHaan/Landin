@@ -8,5 +8,13 @@
   {"name": "binary-trees", "fixture": "runtime/benchmark-game-binary-trees", "timing": {"args": ["16"]}},
   {"name": "fibre", "fixture": "runtime/fibre-turns-interleave", "timing": {}},
   {"name": "thread", "fixture": "runtime/thread-runs-fibres", "timing": {}}
+ ],
+ "firmware": [
+  {"name": "sieve-of-eratosthenes", "fixture": "runtime/sieve-of-eratosthenes"},
+  {"name": "merge-sort", "fixture": "runtime/merge-sort"},
+  {"name": "binary-search", "fixture": "runtime/binary-search"},
+  {"name": "cmp-siphash-vectors", "fixture": "runtime/cmp-siphash-vectors"},
+  {"name": "fannkuch-redux", "fixture": "runtime/firmware-fannkuch-redux", "checksum": "checksum"},
+  {"name": "mandelbrot", "fixture": "runtime/firmware-mandelbrot", "checksum": "checksum"}
  ]
 }

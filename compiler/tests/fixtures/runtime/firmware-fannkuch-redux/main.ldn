@@ -1,0 +1,110 @@
+--  The Benchmark Game's fannkuch-redux as firmware: the order is seven,
+--  fixed, and nothing is printed.  The enumeration is the hosted port's.
+--  Every permutation's flip count, zero for one that starts with zero, is
+--  folded into a 32-bit FNV-1a hash as one byte in enumeration order, then
+--  the maximum; the hash is left in `checksum` for a debugger to read
+--  after the run, and the status says whether it, the Benchmark Game's
+--  alternating checksum 228 and its maximum 16 are what order seven gives.
+--  The expected hash was computed by a transcription of this enumeration
+--  in another language.
+
+--- The FNV-1a hash of the run, which a debugger reads by its symbol.
+mut checksum: u32 = 0
+
+order: usize = 7
+expected_hash: u32 = 0x05b0c76f
+
+fnv_basis: u32 = 0x811c9dc5
+
+score: type = struct
+    checksum: i32
+    maximum: u32
+    hash: u32
+end score
+
+fold: (hash: u32, value: u32) -> (next: u32) =
+    next = (hash ^ (value & 0xff)) *% 16777619
+end fold
+
+reverse_prefix: (inout values: [16]u8) -> none =
+    mut left: usize = 0
+    mut right: usize = usize(values[0])
+    while left < right do
+        saved: u8 = values[left]
+        values[left] = values[right]
+        values[right] = saved
+        inc left
+        dec right
+    end while
+end reverse_prefix
+
+fannkuch: (n: usize) -> (result: score) =
+    mut order: [16]u8 = zeroed
+    mut rotations: [16]usize = zeroed
+    mut depth: usize = n
+    mut permutation_index: u32 = 0
+    first: usize = 0
+    for at in first..<n do
+        order[at] = u8(at)
+    end for
+    result = zeroed
+    result.hash = fnv_basis
+
+    loop do
+        while depth > 1 do
+            rotations[depth - 1] = depth
+            dec depth
+        end while
+
+        mut flips: u32 = 0
+        if order[0] <> 0 then
+            mut permutation: [16]u8 = order
+            loop do
+                break when permutation[0] == 0
+                reverse_prefix(permutation)
+                inc flips
+            end loop
+
+            if flips > result.maximum then
+                result.maximum = flips
+            end if
+            if permutation_index % 2 == 0 then
+                result.checksum += i32(flips)
+            else
+                result.checksum -= i32(flips)
+            end if
+        end if
+        result.hash = fold(result.hash, flips)
+
+        loop do
+            if depth == n then
+                result.hash = fold(result.hash, result.maximum)
+                return
+            end if
+
+            moved: u8 = order[0]
+            mut at: usize = 0
+            while at < depth do
+                order[at] = order[at + 1]
+                inc at
+            end while
+            order[depth] = moved
+            dec rotations[depth]
+            break when rotations[depth] > 0
+            inc depth
+        end loop
+        inc permutation_index
+    end loop
+end fannkuch
+
+public main: () -> (code: i32) =
+    value: score = fannkuch(order)
+    checksum = value.hash
+    if checksum == expected_hash and value.checksum == 228
+      and value.maximum == 16
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
