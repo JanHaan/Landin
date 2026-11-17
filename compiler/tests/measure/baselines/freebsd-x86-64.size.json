@@ -7815,5 +7815,5 @@
    }
   }
  },
- "environment": "freebsd 14.4-RELEASE sysroot; LLD 19.1.7 (compatible with GNU linkers)"
+ "environment": "freebsd 14.4-RELEASE sysroot; Ubuntu LLD 19.1.1 (compatible with GNU linkers)"
 }

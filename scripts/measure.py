@@ -106,8 +106,10 @@ def elf_sections(data: bytes, digest=None) -> dict[str, int]:
     return sections
 
 
-def macho_sections(data: bytes) -> dict[str, int]:
-    """Each section's size in a 64-bit Mach-O image, as SEGMENT,section."""
+def macho_sections(data: bytes, digest=None) -> dict[str, int]:
+    """Each section's size in a 64-bit Mach-O image, as SEGMENT,section;
+    with DIGEST, each one's name, size and content fed to it, so the
+    signature and UUID in __LINKEDIT and the load commands do not move it."""
     magic, = struct.unpack_from("<I", data, 0)
     require(magic == 0xFEEDFACF, "not a 64-bit little-endian Mach-O image")
     ncmds, = struct.unpack_from("<I", data, 16)
@@ -122,8 +124,15 @@ def macho_sections(data: bytes) -> dict[str, int]:
                 section = data[base:base + 16].rstrip(b"\0").decode()
                 segment = data[base + 16:base + 32].rstrip(b"\0").decode()
                 bytes_, = struct.unpack_from("<Q", data, base + 40)
+                offset, = struct.unpack_from("<I", data, base + 48)
+                flags, = struct.unpack_from("<I", data, base + 64)
                 if bytes_:
-                    sections[segment + "," + section] = bytes_
+                    label = segment + "," + section
+                    sections[label] = bytes_
+                    if digest is not None:
+                        digest.update(f"{label} {bytes_}\n".encode())
+                        if flags & 0xFF not in (0x1, 0xC, 0x12):  # zero fill
+                            digest.update(data[offset:offset + bytes_])
         at += size
     return sections
 
@@ -134,7 +143,8 @@ def image_sections(path: Path) -> tuple[dict[str, int], str]:
     if data[:4] == b"\x7fELF":
         digest = hashlib.sha256()
         return elf_sections(data, digest), digest.hexdigest()
-    return macho_sections(data), hashlib.sha256(data).hexdigest()
+    digest = hashlib.sha256()
+    return macho_sections(data, digest), digest.hexdigest()
 
 
 # --- configurations and workloads -------------------------------------------
@@ -636,6 +646,16 @@ def read_baseline(target: str, rev: str | None, kind: str = "size") -> dict:
 
 
 def default_base() -> str:
+    base = merge_base()
+    present = subprocess.run(["git", "cat-file", "-e", base + "^{commit}"],
+                             cwd=ROOT, capture_output=True)
+    require(present.returncode == 0, f"the base commit {base} is not in this"
+            " checkout, whose history is too shallow to compare with it;"
+            " check out with fetch-depth: 0, or name --base")
+    return base
+
+
+def merge_base() -> str:
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
                           capture_output=True, text=True).stdout.strip()
     main = subprocess.run(["git", "rev-parse", "--verify", "-q", "origin/main"],
@@ -750,9 +770,12 @@ def record(args) -> int:
             continue  # a wall figure is a trend, compared in pairs, not recorded
         named = field(kind)
         for target, figures in measured["targets"].items():
+            if args.target and target not in args.target:
+                continue
             current = read_baseline(target, None, kind) or {
                 "schema": 1, "target": target, "entries": {}}
-            current["environment"] = measured.get("environments", {}).get(target)
+            if not wanted or any(f"{target} {name}" in wanted for name in figures):
+                current["environment"] = measured.get("environments", {}).get(target)
             if not wanted:
                 #  A whole record is the target's whole baseline: a key no
                 #  workload measures any more goes with it.
@@ -803,6 +826,8 @@ def main(argv=None) -> int:
     keep.add_argument("measurements", nargs="?")
     keep.add_argument("--from-run", metavar="RUN",
                       help="take the figures from a gate run's artifacts")
+    keep.add_argument("--target", action="append", default=[],
+                      help="record only this target's figures; repeat for more")
     keep.add_argument("--key", action="append", default=[],
                       metavar="'TARGET KEY'")
     keep.set_defaults(run=record)

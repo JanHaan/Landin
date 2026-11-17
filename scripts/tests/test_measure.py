@@ -160,7 +160,7 @@ class Record(unittest.TestCase):
             with mock.patch.object(measure, "BASELINES", where / "b"), \
                     mock.patch.object(measure, "ROOT", where), \
                     contextlib.redirect_stdout(io.StringIO()):
-                measure.record(mock.Mock(measurements=str(where / "size.json"),
+                measure.record(mock.Mock(measurements=str(where / "size.json"), target=[],
                                          from_run=None, key=["t b/none-off/w"]))
                 written = json.loads((where / "b" / "t.size.json").read_text())
         self.assertEqual(list(written["entries"]), ["b/none-off/w"])

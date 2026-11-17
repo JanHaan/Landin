@@ -1,0 +1,1807 @@
+{
+ "schema": 1,
+ "target": "darwin-arm64",
+ "entries": {
+  "armv8-a/none-all/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 105540,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 13670,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 664,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-all/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 76276,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 11402,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 536,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8-a/none-all/fasta": {
+   "sections": {
+    "__TEXT,__text": 64188,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 8009,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 728,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8-a/none-all/fibre": {
+   "sections": {
+    "__TEXT,__text": 112224,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 18301,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 576,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/none-all/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 112552,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 14227,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 640,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-all/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 121892,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 14361,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 688,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-all/thread": {
+   "sections": {
+    "__TEXT,__text": 147536,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 23983,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 656,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/none-auto/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 105540,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 13670,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 664,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-auto/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 76276,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 11402,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 536,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8-a/none-auto/fasta": {
+   "sections": {
+    "__TEXT,__text": 64188,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 8009,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 728,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8-a/none-auto/fibre": {
+   "sections": {
+    "__TEXT,__text": 112224,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 18301,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 576,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/none-auto/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 112552,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 14227,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 640,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-auto/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 121892,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 14361,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 688,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-auto/thread": {
+   "sections": {
+    "__TEXT,__text": 147536,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 23983,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 656,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/none-off/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 105620,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 13670,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 664,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-off/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 76308,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 11402,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 536,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8-a/none-off/fasta": {
+   "sections": {
+    "__TEXT,__text": 64268,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 8009,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 728,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8-a/none-off/fibre": {
+   "sections": {
+    "__TEXT,__text": 112256,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 18301,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 576,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/none-off/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 112728,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 14227,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 640,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-off/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 122044,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 14361,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 688,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8-a/none-off/thread": {
+   "sections": {
+    "__TEXT,__text": 147600,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 23983,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 656,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/size-all/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 57664,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11894,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-all/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 41132,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9573,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/size-all/fasta": {
+   "sections": {
+    "__TEXT,__text": 35652,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7067,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/size-all/fibre": {
+   "sections": {
+    "__TEXT,__text": 63960,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 16178,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/size-all/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 60604,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12522,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-all/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 66220,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 13111,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-all/thread": {
+   "sections": {
+    "__TEXT,__text": 83124,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 20977,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/size-auto/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 57664,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11894,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-auto/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 41132,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9573,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/size-auto/fasta": {
+   "sections": {
+    "__TEXT,__text": 35652,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7067,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/size-auto/fibre": {
+   "sections": {
+    "__TEXT,__text": 63960,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 16178,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/size-auto/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 60604,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12522,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-auto/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 66220,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 13111,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-auto/thread": {
+   "sections": {
+    "__TEXT,__text": 83124,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 20977,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/size-off/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 57824,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11894,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-off/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 41196,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9573,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/size-off/fasta": {
+   "sections": {
+    "__TEXT,__text": 35800,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7067,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/size-off/fibre": {
+   "sections": {
+    "__TEXT,__text": 64024,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 16178,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/size-off/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 60872,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12522,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-off/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 66492,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 13111,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/size-off/thread": {
+   "sections": {
+    "__TEXT,__text": 83252,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 20977,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/speed-all/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 34616,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11727,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-all/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 24472,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9353,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/speed-all/fasta": {
+   "sections": {
+    "__TEXT,__text": 21028,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7029,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/speed-all/fibre": {
+   "sections": {
+    "__TEXT,__text": 38468,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 15076,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/speed-all/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 35236,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12357,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-all/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 40524,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 12957,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-all/thread": {
+   "sections": {
+    "__TEXT,__text": 51960,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 19441,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/speed-auto/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 34616,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11727,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-auto/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 24472,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9353,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/speed-auto/fasta": {
+   "sections": {
+    "__TEXT,__text": 21028,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7029,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/speed-auto/fibre": {
+   "sections": {
+    "__TEXT,__text": 38468,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 15076,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/speed-auto/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 35236,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12357,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-auto/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 40524,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 12957,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-auto/thread": {
+   "sections": {
+    "__TEXT,__text": 51960,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 19441,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8-a/speed-off/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 34960,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11727,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-off/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 24532,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9353,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/speed-off/fasta": {
+   "sections": {
+    "__TEXT,__text": 21068,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7029,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8-a/speed-off/fibre": {
+   "sections": {
+    "__TEXT,__text": 38512,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 15076,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8-a/speed-off/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 35360,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12357,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-off/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 40628,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 12957,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8-a/speed-off/thread": {
+   "sections": {
+    "__TEXT,__text": 52072,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 19441,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/none-all/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 105508,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 13670,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 664,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-all/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 76276,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 11402,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 536,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8.1-a/none-all/fasta": {
+   "sections": {
+    "__TEXT,__text": 64188,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 8009,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 728,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8.1-a/none-all/fibre": {
+   "sections": {
+    "__TEXT,__text": 112224,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 18301,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 576,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/none-all/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 112520,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 14227,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 640,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-all/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 121860,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 14361,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 688,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-all/thread": {
+   "sections": {
+    "__TEXT,__text": 147516,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 23983,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 656,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/none-auto/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 105508,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 13670,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 664,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-auto/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 76276,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 11402,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 536,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8.1-a/none-auto/fasta": {
+   "sections": {
+    "__TEXT,__text": 64188,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 8009,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 728,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8.1-a/none-auto/fibre": {
+   "sections": {
+    "__TEXT,__text": 112224,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 18301,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 576,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/none-auto/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 112520,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 14227,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 640,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-auto/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 121860,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 14361,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 688,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-auto/thread": {
+   "sections": {
+    "__TEXT,__text": 147516,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 23983,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 656,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/none-off/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 105588,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 13670,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 664,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-off/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 76308,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 11402,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 536,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8.1-a/none-off/fasta": {
+   "sections": {
+    "__TEXT,__text": 64268,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 8009,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 728,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 48
+   }
+  },
+  "armv8.1-a/none-off/fibre": {
+   "sections": {
+    "__TEXT,__text": 112256,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 18301,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 576,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/none-off/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 112696,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 14227,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 640,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-off/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 122012,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 14361,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 688,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 120
+   }
+  },
+  "armv8.1-a/none-off/thread": {
+   "sections": {
+    "__TEXT,__text": 147580,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 23983,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 656,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/size-all/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 57632,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11894,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-all/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 41132,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9573,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/size-all/fasta": {
+   "sections": {
+    "__TEXT,__text": 35652,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7067,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/size-all/fibre": {
+   "sections": {
+    "__TEXT,__text": 63960,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 16178,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/size-all/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 60572,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12522,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-all/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 66188,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 13111,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-all/thread": {
+   "sections": {
+    "__TEXT,__text": 83104,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 20977,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/size-auto/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 57632,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11894,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-auto/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 41132,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9573,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/size-auto/fasta": {
+   "sections": {
+    "__TEXT,__text": 35652,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7067,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/size-auto/fibre": {
+   "sections": {
+    "__TEXT,__text": 63960,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 16178,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/size-auto/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 60572,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12522,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-auto/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 66188,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 13111,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-auto/thread": {
+   "sections": {
+    "__TEXT,__text": 83104,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 20977,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/size-off/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 57792,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11894,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-off/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 41196,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9573,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/size-off/fasta": {
+   "sections": {
+    "__TEXT,__text": 35800,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7067,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/size-off/fibre": {
+   "sections": {
+    "__TEXT,__text": 64024,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 16178,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/size-off/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 60840,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12522,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-off/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 66460,
+    "__TEXT,__stubs": 132,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 13111,
+    "__DATA_CONST,__got": 88,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/size-off/thread": {
+   "sections": {
+    "__TEXT,__text": 83232,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 20977,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/speed-all/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 34584,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11727,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-all/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 24472,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9353,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/speed-all/fasta": {
+   "sections": {
+    "__TEXT,__text": 21028,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7029,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/speed-all/fibre": {
+   "sections": {
+    "__TEXT,__text": 38468,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 15076,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/speed-all/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 35204,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12357,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-all/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 40492,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 12957,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-all/thread": {
+   "sections": {
+    "__TEXT,__text": 51940,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 19441,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/speed-auto/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 34584,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11727,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-auto/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 24472,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9353,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/speed-auto/fasta": {
+   "sections": {
+    "__TEXT,__text": 21028,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7029,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/speed-auto/fibre": {
+   "sections": {
+    "__TEXT,__text": 38468,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 15076,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/speed-auto/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 35204,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12357,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-auto/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 40492,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 12957,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-auto/thread": {
+   "sections": {
+    "__TEXT,__text": 51940,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 19441,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  },
+  "armv8.1-a/speed-off/binary-trees": {
+   "sections": {
+    "__TEXT,__text": 34928,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 297,
+    "__TEXT,__cstring": 11727,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-off/fannkuch-redux": {
+   "sections": {
+    "__TEXT,__text": 24532,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 184,
+    "__TEXT,__cstring": 9353,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 240,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/speed-off/fasta": {
+   "sections": {
+    "__TEXT,__text": 21068,
+    "__TEXT,__stubs": 48,
+    "__TEXT,__const": 518,
+    "__TEXT,__cstring": 7029,
+    "__DATA_CONST,__got": 32,
+    "__DATA_CONST,__const": 144,
+    "__DATA,__data": 672,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 24
+   }
+  },
+  "armv8.1-a/speed-off/fibre": {
+   "sections": {
+    "__TEXT,__text": 38512,
+    "__TEXT,__stubs": 96,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 155,
+    "__TEXT,__cstring": 15076,
+    "__DATA_CONST,__got": 64,
+    "__DATA_CONST,__const": 392,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 16468
+   }
+  },
+  "armv8.1-a/speed-off/mandelbrot": {
+   "sections": {
+    "__TEXT,__text": 35328,
+    "__TEXT,__stubs": 108,
+    "__TEXT,__const": 172,
+    "__TEXT,__cstring": 12357,
+    "__DATA_CONST,__got": 72,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 480,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-off/reverse-complement": {
+   "sections": {
+    "__TEXT,__text": 40596,
+    "__TEXT,__stubs": 120,
+    "__TEXT,__const": 263,
+    "__TEXT,__cstring": 12957,
+    "__DATA_CONST,__got": 80,
+    "__DATA_CONST,__const": 344,
+    "__DATA,__data": 520,
+    "__DATA,__thread_vars": 24,
+    "__DATA,__thread_bss": 4,
+    "__DATA,__bss": 100
+   }
+  },
+  "armv8.1-a/speed-off/thread": {
+   "sections": {
+    "__TEXT,__text": 52052,
+    "__TEXT,__stubs": 192,
+    "__TEXT,__init_offsets": 4,
+    "__TEXT,__const": 156,
+    "__TEXT,__cstring": 19441,
+    "__DATA_CONST,__got": 128,
+    "__DATA_CONST,__const": 520,
+    "__DATA,__data": 504,
+    "__DATA,__thread_vars": 48,
+    "__DATA,__thread_bss": 8,
+    "__DATA,__bss": 147540
+   }
+  }
+ },
+ "environment": "macos-26; @(#)PROGRAM:ld PROJECT:ld-1267"
+}
