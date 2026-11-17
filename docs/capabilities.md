@@ -689,11 +689,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   frame, and the Cortex-M lane reports its flash, static RAM, backing and
   verdict at every profile (D470).
 - **Stack reports.** `--stack-report=PATH` writes, for every emitted routine
-  on each of those targets, its frame and the deepest stack of the call
-  graph it can close, and names each foreign call, recursion, runtime
-  helper and stack-moving assembly that opens it (D447, D467, D468). Its
-  `frame_bytes` is the build report's `stack_bytes`, the routine's whole
-  stack, and not the build report's `frame_bytes`
+  on each of those targets, its frame, its own stack and the deepest stack
+  of the call graph it can close, and names each foreign call, recursion,
+  runtime helper and stack-moving assembly that opens it (D447, D467,
+  D468). Its `frame_bytes` and `stack_bytes` are the build report's
+  figures of the same names
   ([the compiler guide](../compiler/ada/README.md#the-build-report)). A
   call through `any`, a generic's table or a function value is counted as
   reaching every routine of the program it could call, so a fibre's task

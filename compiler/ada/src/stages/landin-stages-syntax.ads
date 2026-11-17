@@ -56,15 +56,27 @@ package Landin.Stages.Syntax is
      with Pre => Holds (Cache, Path);
 
 
+   --  What the stage does to one source, in order, for a watcher that
+   --  attributes a measurement to it: Scanning is the lexer and what it
+   --  reports, Parsing the parse, its repair and the source's spacing,
+   --  and Done is told when both are over.
+   type Source_Step is (Scanning, Parsing, Done);
+
    --  Reuse unchanged parsed sources from Previous when source identities
    --  and text agree. The caller first copies Previous's interned names in
    --  their original order into Whole. Watch marks each actual lex/parse.
+   --  Steps, when given, is told as each step of an actual lex/parse
+   --  begins and as it is Done; a source reused or copied from Cache is
+   --  not scanned and is not told.  Like Landin.Stages.Run's watcher, it
+   --  observes and may not change the run.
    procedure Run_Using
      (Whole    : in out Compilation'Class;
       Outcome  : out Stage_Outcome;
       Previous : access Compilation := null;
       Watch    : access procedure (Name : String) := null;
-      Cache    : access Parse_Cache'Class := null);
+      Cache    : access Parse_Cache'Class := null;
+      Steps    : access procedure
+        (Id : Landin.Source.Source_Id; Step : Source_Step) := null);
 
 private
 

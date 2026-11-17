@@ -177,23 +177,23 @@ package body Landin.Tests.Stack_Report_Suite is
             Want : constant Expected := Frames (Index);
          begin
             Landin.Testing.Check
-              (Item, Contains (Text, "{""format"":""landin-stack-report-1"","
+              (Item, Contains (Text, "{""format"":""landin-stack-report-2"","
                  & """target"":""" & Target & """"),
                Target & ": the report names its format and target");
             Landin.Testing.Check_Equal
-              (Item, Field (Leaf, "frame_bytes"), Want.Leaf,
+              (Item, Field (Leaf, "stack_bytes"), Want.Leaf,
                Target & ": the leaf's frame");
             Landin.Testing.Check_Equal
               (Item, Field (Leaf, "depth_bytes"), Want.Leaf,
                Target & ": a leaf's depth is its frame");
             Landin.Testing.Check_Equal
-              (Item, Field (Middle, "frame_bytes"), Want.Middle,
+              (Item, Field (Middle, "stack_bytes"), Want.Middle,
                Target & ": the caller's frame, its call's area included");
             Landin.Testing.Check_Equal
               (Item, Field (Middle, "depth_bytes"), Want.Middle + Want.Leaf,
                Target & ": a caller's depth adds its callee's");
             Landin.Testing.Check_Equal
-              (Item, Field (Main, "frame_bytes"), Want.Main,
+              (Item, Field (Main, "stack_bytes"), Want.Main,
                Target & ": main's frame");
             Landin.Testing.Check_Equal
               (Item, Field (Main, "depth_bytes"),
@@ -301,12 +301,14 @@ package body Landin.Tests.Stack_Report_Suite is
                   Landin.Testing.Check
                     (Item, Field (Counted (Routine), "stack_bytes") > 0
                        and then Field (Counted (Routine), "stack_bytes")
-                         = Field (Measured (Routine), "frame_bytes")
+                         = Field (Measured (Routine), "stack_bytes")
                        and then Field (Counted (Routine), "stack_bytes")
                          > Field (Counted (Routine), "frame_bytes")
-                       and then Field (Counted (Routine), "frame_bytes") > 0,
-                     Target & ": a routine's stack is its depth report "
-                     & "frame and more than its frame: "
+                       and then Field (Counted (Routine), "frame_bytes") > 0
+                       and then Field (Counted (Routine), "frame_bytes")
+                         = Field (Measured (Routine), "frame_bytes"),
+                     Target & ": both reports give a routine the same "
+                     & "stack and frame, the stack more than the frame: "
                      & Counted (Routine) & " " & Measured (Routine));
                   Landin.Testing.Check
                     (Item, Field (Counted (Routine), "instructions") > 0
@@ -401,7 +403,7 @@ package body Landin.Tests.Stack_Report_Suite is
                & Fibre);
             Landin.Testing.Check_Equal
               (Item, Field (Fibre, "depth_bytes"),
-               Field (Fibre, "frame_bytes") + Want.Switch,
+               Field (Fibre, "stack_bytes") + Want.Switch,
                Target & ": a switch adds its frame, not the resumed stack");
          end;
       end loop;
@@ -458,7 +460,7 @@ package body Landin.Tests.Stack_Report_Suite is
            and then Contains (Leaf, """path"":[""main.leaf"",""(trap)""]"),
          "a checked add's trap is the leaf's deepest point: " & Leaf);
       Landin.Testing.Check_Equal
-        (Item, Field (Leaf, "depth_bytes"), Field (Leaf, "frame_bytes") + 8,
+        (Item, Field (Leaf, "depth_bytes"), Field (Leaf, "stack_bytes") + 8,
          "the report adds to the frame it failed in");
       Landin.Testing.Check
         (Item, Contains (Firmware, """trap"":{""calls"":""none"","
@@ -580,7 +582,7 @@ package body Landin.Tests.Stack_Report_Suite is
                  """path"":[""" & Closed.Caller.all & ""","""
                  & Closed.Callee.all & """]")
               and then Field (Row (Text, Closed.Caller.all), "depth_bytes")
-                = Field (Row (Text, Closed.Caller.all), "frame_bytes")
+                = Field (Row (Text, Closed.Caller.all), "stack_bytes")
                   + Field (Row (Text, Closed.Callee.all), "depth_bytes"),
             Closed.Caller.all & " is closed through "
             & Closed.Callee.all & ": " & Text);
@@ -595,7 +597,7 @@ package body Landin.Tests.Stack_Report_Suite is
          & " its address is taken");
       Landin.Testing.Check_Equal
         (Item, Field (Row (Text, "main.down"), "depth_bytes"),
-         Field (Row (Text, "main.down"), "frame_bytes") + 8,
+         Field (Row (Text, "main.down"), "stack_bytes") + 8,
          "a recursive routine's depth is what the rest of its graph closes,"
          & " here its trap");
    end Each_Opening_Is_Named;
@@ -1036,13 +1038,13 @@ package body Landin.Tests.Stack_Report_Suite is
               (Item, Contains (Entry_Row, """closed"":true")
                  and then Contains (Erased, """closed"":true")
                  and then Field (Erased, "depth_bytes")
-                   >= Field (Erased, "frame_bytes")
+                   >= Field (Erased, "stack_bytes")
                       + Field (Row (Text, "main.tally_total"), "depth_bytes"),
                Target & ": a fibre's entry through `any` is closed: "
                & Entry_Row & " " & Erased);
             Landin.Testing.Check
               (Item, Field (Entry_Row, "depth_bytes")
-                 >= Field (Entry_Row, "frame_bytes")
+                 >= Field (Entry_Row, "stack_bytes")
                     + Field (Erased, "depth_bytes"),
                Target & ": the entry's depth counts its provider's: "
                & Entry_Row);
@@ -1186,7 +1188,7 @@ package body Landin.Tests.Stack_Report_Suite is
                     Row (Text, "core.fibre.stacks.round_wait");
                   Below_Switch : constant Integer :=
                     Field (Yield, "depth_bytes")
-                    - Field (Yield, "frame_bytes")
+                    - Field (Yield, "stack_bytes")
                     - Field (Text, "switch_bytes");
                begin
                   Landin.Testing.Check

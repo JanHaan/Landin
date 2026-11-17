@@ -474,17 +474,19 @@ margin above a prepared stack's base, largest unchecked frame and what
 the margin pays before a selected handler.
 `Landin.Build_Reports.Stacks` reads the call graph from the unit the
 backend was given, closes it where a call names its routine, and renders
-`landin-stack-report-1`: the target, level and controls, `switch_bytes`,
+`landin-stack-report-2`: the target, level and controls, `switch_bytes`,
 `prepared_bytes`, `entry_bytes`, `margin_bytes`, `unchecked_bytes`,
 `handler_entry_bytes`, a
 `trap` object, `openings` (`kind`,
 `routine`, `file`, `line`, `column`, `callee` when one is named) and one
-`routines` row per emitted routine with `frame_bytes`, `depth_bytes`,
-`closed`, `address_taken`, `switches`, `traps`, the deepest `path` and the
-`openings` it reaches. A row's `frame_bytes` is the routine's whole stack,
-the figure the build report's `routines` row calls `stack_bytes`; the
-build report's own `frame_bytes` is a smaller figure,
-[described with it](#the-build-report). Files are named relative to their module's root, as
+`routines` row per emitted routine with `frame_bytes`, `stack_bytes`,
+`depth_bytes`, `closed`, `address_taken`, `switches`, `traps`, the deepest
+`path` and the `openings` it reaches. A row's `frame_bytes` and
+`stack_bytes` are the build report's figures of the same names,
+[described with it](#the-build-report): what the prologue reserves, and
+the routine's own whole stack, which the depths add up. Version 1 called
+the whole stack `frame_bytes` and had no frame, so a reader that takes a
+figure by name checks `format` first. Files are named relative to their module's root, as
 D361's report names them, so the bytes do not depend on where the program
 was read or written. The report is frames and depths; sizing a fibre's
 backing from them, alignment of the top and D461's exception frame
@@ -1258,7 +1260,7 @@ register homes, rounded to the stack's alignment. It is not the routine's
 stack. `stack_bytes` is: how far the routine takes the stack pointer below
 where its caller had it before the call, the return address, frame record,
 pushed registers and largest call or push area included. The depth report
-calls the same figure `frame_bytes`. `save_bytes` are the callee-saved registers it saves, in
+names both figures as this one does. `save_bytes` are the callee-saved registers it saves, in
 the frame or pushed beside the frame record, never the record itself;
 `spill_bytes` and `spill_count` its spill homes. `register_count` is the
 distinct registers the allocation holds a value or slot in, saved or not,
@@ -1396,7 +1398,27 @@ named files import, to find their imports; that processor time is counted in
 the `syntax` row and not in `loading`, which is reading and import search
 alone. A module refused while it loads still writes a `syntax` row for the
 parsing that refused it. A refused
-program is measured up to the stage that refused it. No measurement reaches a
+program is measured up to the stage that refused it.
+
+The report's `sources` rows say where the syntax row's time went among
+the program's sources: one row per source in the compilation's order,
+its `file` named relative to its module's root as D361's report names
+it, its `bytes`, and `steps`, the processor time of its `scanning` (the
+lexer and what it reports) and its `parsing` (the parse, its repair and
+the source's spacing), each `{"step":...,"processor_us":...}`.
+`Landin.Stages.Syntax.Run_Using` tells the driver as each step begins,
+as `Landin.Stages.Run` tells it of each stage, and the driver samples
+the meter only when a stage report is asked for. A one-off cost the
+first scan or parse pays falls in the first source's row. The later
+stages have no source rows. Configuration, resolution, checking and
+lowering each walk every source in several passes with whole-program
+work between them, which belongs to no one source, and much of a pass's
+work on one source is asked for by another, as a call checks against a
+signature or an instance lowers a generic written elsewhere. The
+backends and the optimizer work on the IR, whose items are no longer
+grouped by source. Splitting those stages' time by source would need a
+sample at every turn between sources and between passes, and would say
+where code is written rather than what made the work. No measurement reaches a
 decision, a diagnostic or an artifact; a host without a meter writes zeros.
 An incompatible `--debug` emission request is refused before loading. With
 explicit source files, it writes a requested stage report with no stage rows

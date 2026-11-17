@@ -5,12 +5,13 @@ with Landin.Provenance;
 with Landin.Stages;
 
 --  D447's stack-depth report (D467, D468): for every routine the emitted
---  program has, its own frame on the target, the deepest stack of the
+--  program has, its frame and its own stack on the target, by the build
+--  report's names and meanings, the deepest stack of the
 --  call graph below it that the compiler can close, and every place that
 --  graph is opened instead: a call through a function value, through
 --  `any` or through a generic's table, recursion, a foreign call, a
---  runtime helper, or assembly that may move the stack pointer.  Frames
---  are the backends' own figures (Routine_Statistics.Stack_Bytes); the
+--  runtime helper, or assembly that may move the stack pointer.  Both
+--  are the backends' own figures (Routine_Statistics); the
 --  graph is read from the unit the backend was given, so the depths are
 --  target-independent arithmetic over target facts.  Pure computation:
 --  no paths beyond the module-relative names D361 uses, no clocks.
