@@ -367,6 +367,14 @@ REGISTER_VALUES = {
     "impact": re.compile(r"[SML]"),
 }
 REGISTER_STATUS = re.compile(r"open|scheduled (R\d+\.\d+(?:, R\d+\.\d+)*)")
+#  The register's cap on open rows, and the number of completed items an
+#  open row may stand through before an item's close must review it.
+REGISTER_CAP = 60
+REGISTER_AGE = 10
+#  The body line that records a review keeping an aged row: one sentence
+#  saying why, which restarts the row's count.
+REGISTER_KEPT = re.compile(r"^Kept: \S", re.M)
+REGISTER_KEPT_GIT = "^Kept: [^ ]"
 #  A work item of any roadmap, or a record of the register that is
 #  spelled like no other identifier in the tree: the first roadmap's two
 #  debt ledgers and the records added since.  None may appear anywhere but
@@ -2290,6 +2298,121 @@ def register_problems(root, text, statuses):
     return out
 
 
+def register_cap_problems(root, statuses):
+    """The register holds at most REGISTER_CAP open rows.
+
+    A scheduled row waits for its item rather than for a trigger, so it
+    does not count.  At the cap an item cannot close until it has brought
+    the count under it.  The exchange moved more open rows than the cap
+    allows, and the first item brings them under it, so the cap binds from
+    the first item of this roadmap that is complete: before then no item
+    has closed over it, and after it the count never again exceeds it.
+    """
+    if "complete" not in statuses.values():
+        return []
+    rows = register_rows(root)
+    count = sum(1 for _, row in rows.values()
+                if register_row(row)[0].get("status", (0, ""))[1] == "open")
+    if count <= REGISTER_CAP:
+        return []
+    return [(REGISTER_DIRECTORY, 1, "the register holds %d open rows, %d over"
+             " its cap of %d; schedule, settle or put to the maintainer"
+             " enough of them before an item closes"
+             % (count, count - REGISTER_CAP, REGISTER_CAP))]
+
+
+def _git(root, *arguments):
+    """Git's standard output in ROOT, or None when Git cannot answer."""
+    import subprocess
+    try:
+        done = subprocess.run(["git", *arguments], cwd=root,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return done.stdout.decode("utf-8") if done.returncode == 0 else None
+
+
+def register_ages(root):
+    """{row: the items completed since it was filed or last kept}, or None.
+
+    A row's count starts at the newest commit that added its file or
+    changed its `Kept:` line; the items it has stood through are the ones
+    complete in the working ROADMAP.md that were not complete in that
+    commit's.  A row the moved register brought keeps the exchange's
+    commit, as the mechanics ask.  A row or a `Kept:` line not yet
+    committed has stood through nothing.  Without Git's full history -- an
+    exported tree, or the gate's shallow checkout -- the ages cannot be
+    read and None is returned.
+    """
+    if not os.path.exists(os.path.join(root, ".git")):
+        return None
+    if _git(root, "rev-parse", "--is-shallow-repository") != "false\n":
+        return None
+    path = os.path.join(root, ROADMAP)
+    if not os.path.exists(path):
+        return None
+    finished = {item for item, status
+                in roadmap_statuses(read_file(path, encoding="utf-8")).items()
+                if status == "complete"}
+    #  Each log is newest first, so a row's first commit in it is its last.
+    starts = []
+    for arguments in (("--diff-filter=A",), ("-G", REGISTER_KEPT_GIT)):
+        log = _git(root, "log", "--format=commit %H", "--name-only",
+                   *arguments, "--", REGISTER_DIRECTORY)
+        if log is None:
+            return None
+        newest, commit = {}, None
+        for line in log.splitlines():
+            if line.startswith("commit "):
+                commit = line[len("commit "):]
+            elif line.endswith(".md") and commit:
+                newest.setdefault(os.path.basename(line)[:-len(".md")],
+                                  commit)
+        starts.append(newest)
+    added, kept = starts
+    committed = {}
+    ages = {}
+    for record, (_, row) in register_rows(root).items():
+        start = kept.get(record) or added.get(record)
+        if REGISTER_KEPT.search(row) and record not in kept:
+            start = None
+        if start is None:
+            ages[record] = 0
+            continue
+        if start not in committed:
+            then = _git(root, "show", "%s:%s" % (start, ROADMAP))
+            committed[start] = ({item for item, status
+                                 in roadmap_statuses(then).items()
+                                 if status == "complete"}
+                                if then is not None else set())
+        ages[record] = len(finished - committed[start])
+    return ages
+
+
+def register_age_problems(root, ages):
+    """An open row past REGISTER_AGE completed items has been reviewed.
+
+    A row that has stood through ten completed items without being
+    scheduled is reviewed at the next item's close: scheduled, retired, or
+    kept with a `Kept:` line saying why, which restarts its count.  AGES is
+    register_ages' answer; None checks nothing.
+    """
+    if ages is None:
+        return []
+    out = []
+    for record, (where, row) in register_rows(root).items():
+        if register_row(row)[0].get("status", (0, ""))[1] != "open":
+            continue
+        if ages.get(record, 0) > REGISTER_AGE:
+            out.append((where, 1, "%s has stood open through %d completed"
+                        " items, more than %d: schedule it, put its"
+                        " retirement to the maintainer, or keep it with a"
+                        " `Kept:` line saying why"
+                        % (record, ages[record], REGISTER_AGE)))
+    return out
+
+
 def register_citation_problems(root, text):
     """Every register row and candidate ROADMAP.md cites is one that exists.
 
@@ -2379,6 +2502,8 @@ def check_register(full_run):
     text = read_file(path, encoding="utf-8")
     out = register_problems(ROOT, text, roadmap_statuses(text))
     out += register_citation_problems(ROOT, text)
+    out += register_cap_problems(ROOT, roadmap_statuses(text))
+    out += register_age_problems(ROOT, register_ages(ROOT))
     overview = os.path.join(ROOT, REGISTER_OVERVIEW)
     if not os.path.exists(overview) or read_file(
             overview, encoding="utf-8") != register_overview(ROOT):

@@ -2297,7 +2297,8 @@ PLANNED = UNSTARTED[0]
 SCHEDULED_ROW, SCHEDULED = next(
     (name, found.group(1)) for name, text in real_rows().items()
     for found in [re.search(r"^status: scheduled (R\d+\.\d+)$", text, re.M)]
-    if found and found.group(1) in UNSTARTED)
+    if found and found.group(1) in UNSTARTED
+    and checker.REGISTER_CITATION.fullmatch(name[:-len(".md")]))
 OPEN_ROW = next(name for name, text in real_rows().items()
                 if "\nstatus: open\n" in text)
 MERGED = next(found.group(1) for text in real_rows().values()
@@ -2517,11 +2518,90 @@ class RoadmapStructure(unittest.TestCase):
                             for why in said))
 
     def test_a_stale_overview_is_reported(self):
-        said = register_faults(rows={OPEN_ROW: lambda text: text.replace(
-            "\nstatus: open\n", "\nstatus: open\nkind: watch\n", 1)},
-            regenerate=False)
+        said = register_faults(rows={OPEN_ROW: lambda text: re.sub(
+            r"^opened: .*$", "opened: 2000-01-01", text, count=1,
+            flags=re.M)}, regenerate=False)
         self.assertTrue(any("roadmap/register.md is missing or stale" in why
                             for why in said))
+
+    def test_open_rows_past_the_cap_are_reported(self):
+        #  The register is brought to the cap, which passes, and one past
+        #  it, which not: copies of an open row under numbers no row has
+        #  had are added, or open rows deleted.  Only the cap's own
+        #  refusal is judged.
+        row = real_rows()[OPEN_ROW]
+        opened = [name for name, text in real_rows().items()
+                  if "\nstatus: open\n" in text]
+        scheduled = real_rows()[SCHEDULED_ROW]
+        def holding(total, edit=None, waiting=0):
+            change = {"SR-%d.md" % (99000 + n): (lambda _: row)
+                      for n in range(max(total - len(opened), 0))}
+            change.update({name: None
+                           for name in opened[:max(len(opened) - total, 0)]})
+            change.update({"SR-%d.md" % (98000 + n): (lambda _: scheduled)
+                           for n in range(waiting)})
+            said = register_faults(edit, rows=change)
+            return [why for why in said if "open rows" in why]
+        #  The cap binds once an item of this roadmap is complete.
+        closed = restate(PLANNED, status_of(PLANNED), "complete")
+        self.assertEqual(holding(checker.REGISTER_CAP, edit=closed), [])
+        self.assertEqual(holding(checker.REGISTER_CAP + 1, edit=closed), [
+            "the register holds %d open rows, 1 over its cap of %d; schedule,"
+            " settle or put to the maintainer enough of them before an item"
+            " closes" % (checker.REGISTER_CAP + 1, checker.REGISTER_CAP)])
+        #  A scheduled row waits for its item, and does not count.
+        self.assertEqual(holding(checker.REGISTER_CAP, edit=closed,
+                                 waiting=5), [])
+        #  Before any item is complete, the exchange's count stands.
+        self.assertEqual(holding(checker.REGISTER_CAP + 1), [])
+
+    def test_a_row_open_past_its_age_is_reported(self):
+        name = OPEN_ROW[:-len(".md")]
+        scheduled = SCHEDULED_ROW[:-len(".md")]
+        root = checker.ROOT
+        said = checker.register_age_problems(root, {
+            name: checker.REGISTER_AGE + 1, scheduled: 99})
+        self.assertEqual([why for _, _, why in said],
+                         ["%s has stood open through %d completed items,"
+                          " more than %d: schedule it, put its retirement to"
+                          " the maintainer, or keep it with a `Kept:` line"
+                          " saying why" % (name, checker.REGISTER_AGE + 1,
+                                           checker.REGISTER_AGE)])
+        self.assertEqual(checker.register_age_problems(
+            root, {name: checker.REGISTER_AGE}), [])
+        #  Without the history there is no age to judge.
+        self.assertEqual(checker.register_age_problems(root, None), [])
+
+    def test_a_row_ages_by_the_items_completed_since_it_was_filed(self):
+        from temporary_git import environment
+        item = "R%d.%d" % (9, 10)
+        def roadmap(statuses):
+            return "".join("### R9.%d — Item\n\nStatus: %s\n\n" % (n, status)
+                           for n, status in enumerate(statuses, 1))
+        row = real_rows()[OPEN_ROW]
+        old, new, kept = ("SR-%d" % n for n in (99001, 99002, 99003))
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            rows = root / checker.REGISTER_DIRECTORY
+            rows.mkdir(parents=True)
+            def commit(statuses, *files):
+                (root / "ROADMAP.md").write_text(roadmap(statuses))
+                for name, text in files:
+                    (rows / (name + ".md")).write_text(text)
+                subprocess.run(["git", "add", "-A"], cwd=root, check=True,
+                               env=environment())
+                subprocess.run(["git", "commit", "-q", "-m", "x"], cwd=root,
+                               check=True, env=environment())
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True,
+                           env=environment())
+            commit(["planned"] * 4, (old, row), (kept, row))
+            commit(["complete"] * 2 + ["planned"] * 2, (new, row))
+            commit(["complete"] * 3 + ["planned"],
+                   (kept, row + "Kept: Still wanted.\n"))
+            (root / "ROADMAP.md").write_text(roadmap(["complete"] * 4))
+            ages = checker.register_ages(str(root))
+        self.assertEqual(ages, {old: 4, new: 2, kept: 1})
+        assert item not in ages
 
     def test_a_roadmap_identity_cited_elsewhere_is_reported(self):
         #  An item or record of any roadmap: the earlier roadmaps' are
@@ -2620,7 +2700,7 @@ class RoadmapStructure(unittest.TestCase):
             target = root / "ROADMAP.md"
             text = target.read_text()
             first = NAMED
-            text = restate(first, "planned", "blocked")(text)
+            text = restate(first, status_of(first), "blocked")(text)
             text = text.replace("\nStatus: blocked\n",
                                 "\nStatus: blocked\nBlocked because: a"
                                 " control says so\n", 1)

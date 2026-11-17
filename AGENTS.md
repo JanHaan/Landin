@@ -179,7 +179,8 @@ a finding whenever they meet one of these:
 
 A finding the current item fixes is named in its commit message and its
 `Done:` paragraph, not filed. Only a finding that outlives the item that met
-it becomes a register row, a file under `roadmap/register/` under the
+it becomes a register row, a file under `roadmap/register/` named by
+`python3 scripts/register_next.py --file` under the
 Usability family, never a separate list: the symptom as it was met, what the
 person was doing, and an activation, usually the next item that touches the
 area. Merge it into an existing row when one already says the same. An agent
