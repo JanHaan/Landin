@@ -313,7 +313,7 @@ its control; the cap and age rule refused in a control.
 Done: every moved row typed, the rows-to-be filed as `SR-1282` to SR-1298,
 `scripts/register_next.py` with its controls, and `check.py` refusing a
 register over its cap or a row past its age in controls. The maintainer's
-answers to Q-1 to Q-5 retired 43 rows and scheduled SR-195 and SR-768 on
+answers to Q-1 to Q-5 retired 43 rows and scheduled `SR-195` and `SR-768` on
 R17.50, SR-1178 on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
 rooting the GPIO shell retired one more, leaving 57 open with R17.50's
 fixes merged. The retired rows' standing facts moved to
@@ -397,7 +397,7 @@ its state on disk.
 
 ### R17.50 — Gate wall time
 
-Status: planned
+Status: complete
 Depends on: none
 
 The gate's wall time cut: Xtensa shards, release build and queueing,
@@ -419,8 +419,8 @@ no progress, each a gate-time failure it meets, and two rows-to-be of
   rebased onto main, given the cache key's brace fix its Linux sibling
   got, and waits for the key decision above.
 
-It also takes on SR-195, the Cortex-M shared-GDB session's failures on a
-loaded host, and SR-768, the Xtensa corpus's heavy fixture timing out.
+It also takes on `SR-195`, the Cortex-M shared-GDB session's failures on a
+loaded host, and `SR-768`, the Xtensa corpus's heavy fixture timing out.
 
 The baseline: the gate ended 44 to 51 minutes after its creation before
 the second roadmap's last CI rework and 31.1 minutes on run 44030898347
@@ -428,9 +428,7 @@ after it, with `flake` (31.0) and the last Darwin job (28.3) last.
 Exit evidence: the baseline and the new wall time of the complete gate,
 each over several runs.
 
-Evidence, its work on main and its status left until the register is
-under its cap, which waits for the maintainer's answers to Q-1 to Q-5, since
-no item closes over it and the serial lane has R17.10 active: the gate alone ends 30.3 to 30.5 minutes after its creation (runs
+Done: the gate alone ends 30.3 to 30.5 minutes after its creation (runs
 44076856511 and 44082338698, both complete passes; the latter on the
 promoted tree, with boards dispatch 44087207692), against 31.1 on both
 baseline runs, 44030898347 and 44052328931. Its Linux lanes now end about
@@ -449,6 +447,20 @@ determinism manifests and `modes` deal requests to shards by key digest
 three jobs; the stock-user downloads are bounded with an official-mirror
 fallback (`SR-775`); and the `documents` job reads full history for the
 register's age rule (`SR-1299`).
+
+`SR-195`'s cause: GDB waits `remotetimeout`, two seconds by default, three
+times for each reply and then carries on as if it were empty, so an
+emulator stalled past that on a loaded host had its late `vCont?` reply
+read as the answer to `vMustReplyEmpty`. The shared GDB server now sets
+`remotetimeout` to each session's own limit, and the `cpu` lane holds it to
+a stub that stalls `vCont?` seven seconds, failing under the default and
+passing as served. `SR-768`'s: the Xtensa oracle judged a guest by wall time,
+and the heaviest fixture, which needs 11 CPU seconds alone and 16 beside
+two or four busy threads per hardware thread, took 32 and 70 wall seconds
+there. A guest's 20 seconds are now the wall time less the time Linux kept
+QEMU waiting to run; it passed with 16 of them at four threads per
+hardware thread, a `nonterminating-control` guest that spins still ends at
+its limit, and a host that starves a guest for ten times its limit is named.
 
 ### R17 gate
 The third roadmap's checks pass on the live file; one item run start to

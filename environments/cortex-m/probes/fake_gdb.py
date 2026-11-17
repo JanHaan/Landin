@@ -5,7 +5,8 @@ Invoked as `fake_gdb.py -q -nx -batch -x gdb_server.py`, it runs the real
 serving loop against a `gdb` module that understands only what the controls
 need: a sourced script's `python` blocks run in `__main__`, `fail` raises a
 debugger error, `die` ends the process, `sleep` stalls, and the logging
-settings redirect output to the session's log.  A script's `import gdb` is
+settings redirect output to the session's log, and `remotetimeout` is kept
+where a script can read it.  A script's `import gdb` is
 this stand-in, whose `Breakpoint` records only a location and whether it is
 internal, and whose `delete breakpoints` spares the internal ones, as GDB's
 does.
@@ -28,6 +29,7 @@ class Gdb:
         self.logging = False
         self.path = None
         self.made = []
+        self.remotetimeout = 2
         made = self.made
 
         class Breakpoint:
@@ -55,6 +57,8 @@ class Gdb:
         elif command == 'set logging enabled off':
             self.log.close()
             self.logging = False
+        elif command.startswith('set remotetimeout '):
+            self.remotetimeout = int(command.split()[2])
         elif words[0] == 'source':
             self.source(Path(words[1]))
         elif command == 'delete breakpoints':

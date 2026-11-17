@@ -256,6 +256,43 @@ class Run:
                 stop(p)
         require((self.out / 'uart.log').read_bytes() == b'R610 UART\nR610 UART\n', 'UART output mismatch')
 
+    def stalled_stub(self):
+        """A served session waits out an emulator stalled past GDB's default.
+
+        The stub holds `vCont?` for seven seconds, past GDB's three waits of
+        two.  Under the default the session misreads the late reply, as
+        sessions did on loaded hosts; the negative half shows the stub still
+        provokes that, the positive half that the server's setting holds.
+        """
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('stalled_stub', HERE / 'probes/stalled_stub.py')
+        stub = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(stub)
+        for name, lines, passes in (
+                ('gdb-stalled-default', ['set remotetimeout 2'], False),
+                ('gdb-stalled', [], True)):
+            with socket.socket() as listener:
+                listener.bind(('127.0.0.1', 0))
+                listener.listen(1)
+                thread = stub.serve(listener, 7)
+                script = [*lines, 'target remote 127.0.0.1:%d' % listener.getsockname()[1],
+                          'python', 'print("STALLED_STUB_PASS")', 'end', 'disconnect', 'quit']
+                (self.out / (name + '.gdb')).write_text('\n'.join(script) + '\n')
+                try:
+                    text = self.debug(name, 'cpu.elf', name + '.gdb', timeout=20)
+                except CommandFailed as error:
+                    require(not passes, 'a served session did not wait out a stalled stub: %s'
+                            % error)
+                    text = (self.out / (name + '.log')).read_text(errors='replace')
+                    require("Remote replied unexpectedly to 'vMustReplyEmpty'" in text,
+                            'the stalled stub no longer provokes the default\'s misreading;'
+                            ' inspect %s.log' % name)
+                else:
+                    require(passes, 'the stalled stub no longer provokes the default\'s'
+                            ' misreading; inspect %s.log' % name)
+                    oracle(text, 'STALLED_STUB_PASS')
+                thread.join(5)
+
     def peripheral(self):
         """The prototype-1 register/DMA contract under hand-written C."""
         from machine import Machine, Refused
@@ -393,6 +430,7 @@ class Run:
         """Run the lane NAME of LANES."""
         if name == 'cpu':
             self.qemu()
+            self.stalled_stub()
         elif name == 'peripheral':
             self.peripheral()
         elif name == 'abi':

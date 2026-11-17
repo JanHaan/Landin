@@ -50,7 +50,8 @@ python3 environments/xtensa/backend.py \
   --control double-exception-control \
   --control scalars \
   --control software-float --control assembly-operands --control feature-level \
-  --control break-control --control early-stop-control --control premature-stop-control
+  --control break-control --control early-stop-control --control premature-stop-control \
+  --control nonterminating-control
 ```
 
 Repeat with `--chip esp32s3` and a new output path. The source wrapper
@@ -92,20 +93,33 @@ python3 environments/xtensa/corpus.py \
 A complete lane uses `--all` and `--tools` without fixture or profile
 selectors, and reports `COMPLETE`. With `--shard=I/N` it makes the I-th of N
 shares of those runs and reports `SHARD`: the N shards together are the
-complete run, which is how the gate's three jobs a chip divide it. Run both chips separately. Keep CPU headroom while the
-complete corpus runs: the oracle has a 20-second wall-clock guard, and the
-exhaustive memory-alignment fixture can exceed it when CPU-heavy closing
-jobs saturate the host. Preserve default workers; schedule those jobs
-separately. A guest that ran and did not stop within that guard is a
-`guest timed out` failure, which retains its stop/register evidence in
-`timeout-remote.json` and remains failed until investigated; it supplies no
-source or capacity exemption. A guest that never started, its PC and
-address registers still those it held at reset when the guard interrupted
-it, as on a host too loaded to schedule it, is started again once, each
-start's transcript and QEMU log kept as `not-started-N.json` and
-`qemu-N.log`; a run that started the second time records `"starts": 2` in
-its observation, and one that started neither time fails as `the guest
-never started`, which is the host's, not the program's.
+complete run, which is how the gate's three jobs a chip divide it. Run both chips separately.
+
+Each guest has 20 seconds of its own time. That is the wall time since it
+was continued less the time the host kept QEMU waiting to run, which Linux
+reports per thread in `/proc/PID/task/TID/schedstat`, so a loaded host
+slows a guest without failing it: the heaviest fixture,
+`runtime/core-mem-blocks-alignment` on the ESP32-S3, needs about 11 seconds
+alone and 16 beside two or four busy threads per hardware thread, when it
+takes 32 and 70 wall seconds. A guest that waits for an interrupt is not
+kept waiting, so it is bounded too. Each observation records its
+`guest_clock`: the clock's kind, its seconds, the wall seconds and the
+limit. On a host without schedstat the clock is the wall clock and says so.
+
+A guest that ran and did not stop within its time is a `guest timed out`
+failure, which retains its stop/register evidence in `timeout-remote.json`
+and remains failed until investigated; it supplies no source or capacity
+exemption. The `nonterminating-control` holds the oracle to that with a
+guest that branches to itself under a three-second limit. A guest the host
+kept from running for ten times its limit fails as `the host starved the
+guest`, which is the host's, not the program's. A guest that never started,
+its PC and address registers still those it held at reset when it was
+interrupted, is started again once, each start's transcript and QEMU log
+kept as `not-started-N.json` and `qemu-N.log`; a run that started the
+second time records `"starts": 2` in its observation, and one that started
+neither time fails as `the guest never started`. The assembler has a
+budget of its own, 300 seconds, since GNU `as --auto-litpools` takes about
+35 seconds on the corpus's largest program on a quiet host.
 `result.json` contains the
 aggregate verdict; each selected case has `verdict.json` and its build and
 execution evidence. Source refusals require the inventory's exact diagnostic

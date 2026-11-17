@@ -97,7 +97,7 @@ def relayed(run, elf, commands):
         port = m.relay({'feed': model.feed, 'tick': model.tick, 'delay_stop': model.delay_stop})
         script = run.out/'source-debug.gdb'
         script.write_text('\n'.join([
-            'set pagination off', 'set confirm off', 'set remotetimeout 30',
+            'set pagination off', 'set confirm off',
             *search(elf), f'target remote 127.0.0.1:{port}', *PRELUDE,
             *landed(commands), 'python', 'print("R6100_RELAYED_SOURCE_PASS")', 'end', 'detach', 'quit', '']))
         text = run.debug('gdb-relayed-source', elf, script, timeout=60)

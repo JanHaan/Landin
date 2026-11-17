@@ -1030,7 +1030,8 @@ jobs:
             --control=window-depth --control=window-switch --control=window-arguments \
             --control=double-exception-control \
             --control=feature-level \
-            --control=break-control --control=early-stop-control --control=premature-stop-control
+            --control=break-control --control=early-stop-control --control=premature-stop-control \
+            --control=nonterminating-control
           python3 environments/xtensa/boundaries.py --tools "$RUNNER_TEMP/embedded" \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --qemu "$RUNNER_TEMP/embedded/qemu-xtensa/bin/qemu-system-xtensa" \

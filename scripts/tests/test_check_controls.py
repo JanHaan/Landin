@@ -2505,8 +2505,7 @@ class RoadmapStructure(unittest.TestCase):
                        " measurement says.")
         said = register_faults(once(anchor, anchor + " (%s)" % INVENTED))
         self.assertTrue(any("%s is cited and is no register row" % INVENTED
-                            in why and "quoted in a code span" in why
-                            for why in said))
+                            in why for why in said))
         #  Quoted in a code span, as a finding spells what it met, it is not
         #  a citation.
         said = register_faults(once(anchor, anchor + " (`%s`)" % INVENTED))
@@ -2516,8 +2515,12 @@ class RoadmapStructure(unittest.TestCase):
         #  The scheduled row's item names it, so deleting the file leaves a
         #  citation of a row the history alone keeps.
         said = register_faults(rows={SCHEDULED_ROW: None})
-        self.assertTrue(any("%s is cited and is no register row"
-                            % SCHEDULED_ROW[:-len(".md")] in why
+        name = SCHEDULED_ROW[:-len(".md")]
+        self.assertTrue(any("%s is cited and is no register row" % name in why
+                            for why in said))
+        #  The refusal says how such a row is named, which the item that
+        #  fixed one could otherwise learn only from this function.
+        self.assertTrue(any("is named in a code span, `%s`" % name in why
                             for why in said))
 
     def test_a_merged_row_is_defined_by_the_row_it_joined(self):

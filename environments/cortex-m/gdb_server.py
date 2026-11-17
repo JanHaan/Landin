@@ -11,7 +11,16 @@ the server restores the Python `__main__` namespace it started with, deletes
 every breakpoint and watchpoint the last session made, the internal ones a
 script makes from Python among them, disconnects, forgets the architecture
 the last target reported and the last script set, and loads the session's
-own executable; the script then connects to its own fresh emulator.  Every
+own executable; the script then connects to its own fresh emulator.
+
+GDB waits only `remotetimeout` seconds, two by default, for each reply of the
+remote protocol, three times, and then carries on as if the reply had been
+empty.  An emulator stalled longer than that on a loaded host still answers,
+and its late reply is read as the answer to the next request, which ended a
+session with "Remote replied unexpectedly to 'vMustReplyEmpty':
+vCont;c;C;s;S".  So the server sets `remotetimeout` to the session's
+own limit before every session: a slow emulator is waited for, and one that
+never answers ends the session at that limit, named as a timeout.  Every
 session on a thread shares that thread's GDB, whichever lane and
 architecture it debugs, so a session run alone has not met this reset.  Each session's output, including
 GDB and Python errors, goes to its own log, which the caller's oracle reads
@@ -22,6 +31,7 @@ This file is both halves: imported, it is the client `Run` uses; sourced by
 GDB, it is the loop that serves requests.
 """
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -91,7 +101,7 @@ class GdbServer:
         served = self.directory / 'session.gdb'
         served.write_text('\n'.join(lines) + '\n')
         request = {'elf': str(Path(self.cwd, elf)), 'script': str(served), 'log': str(log),
-                   'cwd': str(self.cwd)}
+                   'cwd': str(self.cwd), 'remotetimeout': max(1, math.ceil(timeout))}
         try:
             self.requests.write(json.dumps(request) + '\n')
             reply = self.reply(time.monotonic() + timeout)
@@ -153,6 +163,10 @@ def serve(gdb=None):
                 gdb.execute(command, to_string=True)
             except gdb.error:
                 pass
+        #  A reply slower than `remotetimeout` desynchronises the protocol
+        #  rather than failing; see the module's comment.  Set every time, so
+        #  a script's own setting does not outlive its session.
+        gdb.execute('set remotetimeout %d' % job['remotetimeout'], to_string=True)
         #  A batch GDB ran in the session's own directory, and scripts name
         #  files relative to it.
         gdb.execute('cd ' + job['cwd'], to_string=True)
