@@ -842,8 +842,20 @@ measured value comes back as a value:
 python3 environments/cortex-m/backend_corpus.py --refine PATH_TO_REFINE \
   --output NEW_DIRECTORY --profile none-off \
   --program compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn
-cortex program: main.ldn none/off returned 42 (r12 0): FLASH 668 of 32768 (.isr_vector 192, .text 476); RAM 20 of 12288 (.bss 20); stack 40 of 4096 observed; largest routines main 286
+cortex program: main.ldn none/off returned 42 (r12 0), 127 instructions from main: FLASH 668 of 32768 (.isr_vector 192, .text 476); RAM 20 of 12288 (.bss 20); stack 40 of 4096 observed; largest routines main 286
 ```
+
+`N instructions from main` is what the program's own code executed, from
+its `main` up to the harness's `backend_done`, counted by the repository's
+QEMU plugin, `compiler/tests/measure/qemu/count.c`, over the image's
+executable range (`docs/measurement.md`, Time). The count is the same on
+every run of the same image; the RV32 levels' lines have none, since
+Espressif's QEMU is built without plugins. `scripts/measure_count.py
+count` counts an image already linked, between any two of its symbols
+with `--from` and `--to`. The plugin is built for the API version the
+running QEMU names, by the host's C compiler (`$CC` or `cc`), so the
+counted run needs one on `PATH`, as `nix develop` and the gate's runners
+have.
 
 `stack N of M observed` is the distance from the stack top to the lowest
 word of the M-byte reservation the run changed, read from the session's

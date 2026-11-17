@@ -864,6 +864,28 @@ class ProbeFailures(unittest.TestCase):
             [sys.executable, str(Path(backend_corpus.__file__)), '--help'],
             capture_output=True, text=True, check=True).stdout.split()))
 
+    def test_a_program_of_ones_own_is_counted_from_main_on_arm_alone(self):
+        """The corpus's --program counts the instructions from `main` with
+        scripts/measure_count.py's plugin on QEMU's Arm machines, and on the
+        RV32 levels, whose Espressif QEMU has no plugins, counts nothing."""
+        from unittest.mock import patch
+        import backend_corpus
+        sys.path.insert(0, str(HERE.parent.parent / 'scripts/tests'))
+        from test_measure_count import arm_image
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), Path(directory))
+            elf = Path(directory) / 'program.elf'
+            arm_image(elf, {'main': (0x121, 2), 'backend_done': (0x171, 2)})
+            with patch.object(backend_corpus.measure_count, 'plugin_for',
+                              return_value=Path('/plugins/count-api4.so')) as built:
+                self.assertEqual(backend_corpus.counting(run, elf, 'rv32imc'), ((), None))
+                built.assert_not_called()
+                plugin, out = backend_corpus.counting(run, elf, 'armv7-m')
+            self.assertEqual(built.call_args.args[0][0], str(run.bin / 'qemu-system-arm'))
+            self.assertEqual(plugin, ('-plugin', '/plugins/count-api4.so,lo=0x100,hi=0x180,'
+                                      'out=%s,from=0x120' % out))
+            self.assertEqual(out, Path(directory) / 'count.txt')
+
     def test_a_level_repeats_and_needs_a_program(self):
         import subprocess
         from unittest.mock import patch
