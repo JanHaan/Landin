@@ -211,7 +211,8 @@ by name must ask for the version.
 ## What the measurements found
 
 The ranked list of each backend's largest measured costs, from which the
-register allocation work takes its scope, is the last section of this page.
+register allocation work takes its scope, is
+[`compiler/tests/measure/findings.md`](../compiler/tests/measure/findings.md).
 A cost is attributed by measuring the same workload with and without the
 construct that pays it, at the same configuration. Its answers are the
 ones the roadmap's rows ask of this measurement: the atom `match` table,
