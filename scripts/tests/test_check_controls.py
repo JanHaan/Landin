@@ -2713,10 +2713,17 @@ class RoadmapStructure(unittest.TestCase):
                                 "\nStatus: blocked\nBlocked because: a"
                                 " control says so\n", 1)
             phase = first.split(".")[0]
+            planned = r"^### (%s\.\d+) — ([^\n]+)\n\nStatus: planned\n" \
+                r"Depends on: ([^\n]+)$" % re.escape(phase)
+            others = [found for found in re.finditer(planned, text, re.M)
+                      if found.group(1) != first]
+            #  When every other planned item of the phase waits on the
+            #  first, as when the last independent one has closed, the
+            #  last of them is made independent here.
+            if all(first in found.group(3).split(", ") for found in others):
+                text = restate_depends(others[-1].group(1), "none")(text)
             independent = next(
-                found for found in re.finditer(
-                    r"^### (%s\.\d+) — ([^\n]+)\n\nStatus: planned\n"
-                    r"Depends on: ([^\n]+)$" % re.escape(phase), text, re.M)
+                found for found in re.finditer(planned, text, re.M)
                 if found.group(1) != first
                 and first not in found.group(3).split(", "))
             target.write_text(text)
