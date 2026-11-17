@@ -175,8 +175,8 @@ Before an item closes:
    maintainer as a question under `roadmap/questions/`, or keep it with a
    body line `Kept: ` and one sentence saying why, which restarts its
    count. The age is read from Git's history and is not checked in a
-   shallow clone, the gate's among them, so run the check in a full
-   checkout before closing.
+   shallow clone; the gate's `documents` job fetches the whole history
+   for it, and a local check needs a full checkout.
 
    Update the pointer in `README.md` and `handoff.md` too. Substitute the
    item identity and title in these exact forms. Use the current form for
@@ -873,7 +873,7 @@ still succeed. The linked full run contains the target-test results.
 | job | runner | runs |
 |---|---|---|
 | `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full push pass of main or a branch for a declared explanatory edit |
-| `documents` | `ubuntu-24.04` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
+| `documents` | `ubuntu-24.04` | `check.py` over a checkout with the whole history, which the register's age rule reads, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint and its `run:` scripts through the pinned shellcheck, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |

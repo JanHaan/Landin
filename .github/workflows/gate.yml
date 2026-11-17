@@ -133,10 +133,15 @@ jobs:
   #  not checked rather than failing, and pages.yml refuses to publish
   #  without it, so the coverage stays enforced where it matters and this
   #  job stays independent of the object storage.
+  #
+  #  The whole history, because the register's age rule reads each row's
+  #  age from it and a shallow checkout leaves the rule unchecked.
   documents:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: check.py
         run: python3 check.py
