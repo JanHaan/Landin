@@ -326,7 +326,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Next roadmap item: R16.10 — Measure generated code (planned).**
+**Current roadmap work: R16.10 — Measure generated code.**
 
 ## Questions, bugs and ideas
 

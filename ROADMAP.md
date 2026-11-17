@@ -179,7 +179,7 @@ continuous.
 
 ### R16.10 — Measure generated code
 
-Status: planned
+Status: active
 Depends on: R17
 
 Record the size and time of the same workloads for every supported target,
