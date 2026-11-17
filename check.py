@@ -2479,8 +2479,11 @@ def register_citation_problems(root, text):
         for found in REGISTER_CITATION.finditer(plain):
             if found.group(1) not in defined:
                 out.append((ROADMAP, n, "%s is cited and is no register row:"
-                            " no file under %s and no `Merged:` name"
-                            % (found.group(1), REGISTER_DIRECTORY)))
+                            " no file under %s and no `Merged:` name; a row"
+                            " that has left the register is quoted in a code"
+                            " span, `%s`, rather than cited"
+                            % (found.group(1), REGISTER_DIRECTORY,
+                               found.group(1))))
         for found in re.finditer(r"(?<![\w-])(SC-\d+)(?![\w-])", plain):
             if found.group(1) not in listed:
                 out.append((ROADMAP, n, "%s is cited and is no candidate of"

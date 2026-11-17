@@ -2505,7 +2505,8 @@ class RoadmapStructure(unittest.TestCase):
                        " measurement says.")
         said = register_faults(once(anchor, anchor + " (%s)" % INVENTED))
         self.assertTrue(any("%s is cited and is no register row" % INVENTED
-                            in why for why in said))
+                            in why and "quoted in a code span" in why
+                            for why in said))
         #  Quoted in a code span, as a finding spells what it met, it is not
         #  a citation.
         said = register_faults(once(anchor, anchor + " (`%s`)" % INVENTED))
