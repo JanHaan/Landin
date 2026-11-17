@@ -407,8 +407,13 @@ every worktree shares. `landin-change` is rebuilt around those steps, with
 the report form beside it, its question section last, and a part for a
 session that dispatches items; `docs/process.md` has "Running an item".
 This item was taken on with `start --adopt` once the script existed and
-ran from there under it: its gate (run 44145919140), its boards (run 44151698101),
-its promotion, main's gate and its clean-up go through the script. A fresh session with no context resumed it from
+ran from there under it: its gate (run 44158296103), its boards (run
+44163378136), its promotion, main's gate and its clean-up go through the
+script. Closing it met two defects the script's controls had not: `run`
+refused its documented form, on the gate's Python 3.12 after a first fix
+under the shell's 3.14, and promotion while a boards run was going said to
+dispatch one; both are fixed, and the Python the gate's script jobs run,
+which nothing names, is SR-1301. A fresh session with no context resumed it from
 disk with `item.py resume` while the gate ran; it said what the next step
 was, but not what came after the wait, nor what to do with an
 uncommitted file, which `resume` now says. Whether that run is this
