@@ -25818,6 +25818,157 @@ a new row would escape.
 which names every tracked file that mentions `roadmap/` and why no lane
 the key lets skip reads it.
 
+### D1375 — Generated code is measured against committed baselines, size exactly in both directions
+
+**The tour said** nothing of measuring what `refine` emits; D791's build
+report counts emission sites, and `scripts/quality.sh` measured five
+Linux x86-64 workloads at four profiles and held nothing over time.
+
+**Chosen:** `docs/measurement.md` is the contract. Every supported target
+is measured at every level `refine targets --json` gives it and all nine
+optimization and specialization profiles, over the hosted set (the five
+Benchmark Game ports, `runtime/measure-fibre-switches` and
+`runtime/measure-thread-switches`) and the firmware set, each keeping its
+fixture's oracle. Size is the byte count of each allocated section of the
+linked image, read by `scripts/measure.py`'s own ELF and Mach-O readers,
+and has no tolerance: a section that differs from the base commit's
+baseline in either direction fails unless the candidate's committed
+baselines record exactly the measured figure, so the diff of the baseline
+files names every key a commit changes. The base is the merge base with
+`main`, or the first parent on `main`, and a checkout too shallow to hold
+it refuses rather than compare with nothing. Each baseline records the
+linker's version line; a moved linker is named and judged by the figure
+alone. Images whose allocated sections are byte-identical are measured
+once.
+
+**The alternatives:** failing growth alone, which lets a later change
+grow back into a recorded improvement unnoticed; a tolerance on size,
+which deterministic emission does not need; and keying a size by runner,
+which would re-baseline at every runner image.
+
+**Pinned by** `scripts/tests/test_measure.py`'s `Compare` and `Images`
+cases, and the gate's `measure-size` job.
+
+### D1376 — A firmware workload's size is the image refine links, on Xtensa against the chip's description
+
+**The tour said** nothing. The Cortex-M lanes link `refine`'s assembly
+with a harness of their own, and the boards' bundles use `refine`'s
+firmware link.
+
+**Chosen:** a firmware workload's size is measured on the image `refine`
+itself links with `compiler/tests/measure/entry.ldn`, an entry that runs
+the fixture's hosted-form `main` and keeps its status, at the target's
+reference profile, the one a program importing no description gets. On
+Xtensa the reference's boot layout gives initialized data no load
+address, so a workload with initialized data links nowhere a board could
+boot it and its build report refuses, a defect the register records; Xtensa
+workloads link against the ESP32's and ESP32-S3's own descriptions
+instead, the boards'. Timing uses the image the timing lane runs.
+
+**The alternatives:** the lanes' harness-linked images, which no user
+links; and the lanes' emulator profiles, which describe no chip.
+
+**Pinned by** the gate's `measure-size` job, and the baselines it holds,
+`compiler/tests/measure/baselines/xtensa.size.json` among them.
+
+### D1377 — `refine targets --json` gives each level's features
+
+**The tour said** nothing; `refine targets` listed the levels by name.
+
+**Chosen:** each target's JSON object has `features`, an object from
+each level's name to the features it assumes, as `compiler.feature.`
+spells them. A tool that runs a level's code, `scripts/measure.py` among
+them, asks its processor for these rather than keeping a list of its own.
+
+**The alternatives:** a feature table in each tool, which the test
+program's `Host_Has_Level` already had and which a new level would leave
+stale.
+
+**Pinned by** `commands/help and queries`.
+
+### D1378 — Wall time is compared in pairs on one processor; emulator counts exactly
+
+**The tour said** nothing.
+
+**Chosen:** time is measured in four classes, which the runner table in
+`docs/measurement.md` assigns to each target and level. `wall`, on the
+native hosted runners, builds the candidate's compiler and its base's in
+one job and runs each configuration's two images interleaved, a fresh
+copy each run, judging the ratio of medians against the class's noise
+study; committed wall figures are a trend, not a threshold, because a
+hosted runner's processor model changes from run to run. `instructions`,
+under QEMU's user mode for RV64 and on the Cortex-M lanes' machines,
+counts what the image's own code executed through
+`compiler/tests/measure/qemu/count.c`, at the fixture's own arguments,
+and is held exactly on every push, its study having found no spread.
+`cycles` reads a board's counter over a RAM run. `size-only` is where no
+deterministic count exists: Espressif's QEMU has no plugin interface, and
+FreeBSD arm64's guest is a whole emulated system. Wall time and cycles run
+on the weekly schedule and on a dispatch alone.
+
+**The alternatives:** committed wall baselines keyed by processor, which
+would rarely meet a run on the same processor; emulator wall time, which
+measures the emulator; and counting at the timing arguments, which costs
+hours of emulation for a figure that is exact at any size.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s
+`test_timing_runs_on_the_schedule_and_a_dispatch_alone`,
+`scripts/tests/test_measure_count.py`, and the gate's `measure-size` and
+`cortex-m-programs` jobs.
+
+### D1379 — The instruction counter declares the plugin calls it makes
+
+**The tour said** nothing.
+
+**Chosen:** `count.c` declares the dozen QEMU plugin calls it uses, in
+two forms, plugin interface 2 to 6 and 7, and `scripts/measure_count.py`
+builds it for the version the running QEMU accepts, asking the QEMU
+itself. It includes no `<qemu-plugin.h>`, which needs glib's headers and
+which the Cortex-M lanes' Debian QEMU does not ship;
+`measure_count.py check-header` holds the declarations to a QEMU's own
+header where one is installed. An RV64 program is counted with an
+environment of `QEMU_CPU` alone, since the runtime's start walks every
+variable and each cost 128 instructions.
+
+**The alternatives:** building against each QEMU's header, which Debian's
+does not have and which would need glib in every job.
+
+**Pinned by** `scripts/tests/test_measure_count.py`.
+
+### D1380 — The stack report names each frame quantity as the build report does
+
+**The tour said** nothing. D791's build report calls a routine's whole
+stack `stack_bytes` and its prologue's reserve `frame_bytes`; the stack
+report's `frame_bytes` was the whole stack.
+
+**Chosen:** the stack report is `landin-stack-report-2`: each routine row
+carries `frame_bytes`, what its prologue reserves, and `stack_bytes`, its
+whole stack, with the build report's names and meanings, and depths add
+`stack_bytes`. A consumer that read version 1's `frame_bytes` asks for
+the version.
+
+**The alternatives:** carrying only `stack_bytes`, which loses the figure
+the build report already compares.
+
+**Pinned by** `stack report/the build report counts on every target`.
+
+### D1381 — The stage report says what scanning and parsing each source cost
+
+**The tour said** nothing; the stage report gave each stage's time for
+the whole program.
+
+**Chosen:** the stage report gains `sources`, in source order, each with
+its file, bytes and the processor time of its `scanning` and `parsing`
+steps; a source reused from the parse cache shows zero. Later stages walk
+every source several times with whole-program work between, so they are
+not divided among sources. The report stays `landin-stage-report-1`,
+since a field was only added, and nothing is measured when no report is
+asked for.
+
+**The alternatives:** a version bump, which no reader needs.
+
+**Pinned by** `opt driver/stage reports measure each stage`.
+
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 
 **The tour said** nothing of a second family. Prototype 1 drives a UART
