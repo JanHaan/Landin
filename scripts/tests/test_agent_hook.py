@@ -29,11 +29,12 @@ class AgentHook(unittest.TestCase):
             status = agent_hook.main([*arguments, "--settings", str(self.settings)])
         return status, said.getvalue()
 
-    def test_the_recipes_command_is_the_guarded_deduplicating_one(self):
+    def test_the_recipes_command_replaces_and_is_bounded(self):
         command = self.entry["command"]
         self.assertIn(agent_hook.MARK, command)
-        self.assertIn("grep -qxF", command)
-        self.assertIn("98304", command)
+        self.assertIn('} > "$e"', command)
+        self.assertNotIn(">>", command)
+        self.assertIn("65536", command)
 
     def test_installing_keeps_every_other_setting_and_hook(self):
         self.settings.parent.mkdir(parents=True)

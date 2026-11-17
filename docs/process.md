@@ -258,23 +258,30 @@ reaches every Bash command of the session and of its subagents:
 ```json
 {"hooks": {"SessionStart": [{"matcher": "", "hooks": [{"type": "command",
   "timeout": 180,
-  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && m=\"# landin agent_env $(cksum < \"$f\")\" && ! grep -qxF \"$m\" \"$CLAUDE_ENV_FILE\" 2>/dev/null && { [ \"$(cat \"$CLAUDE_ENV_FILE\" \"$f\" 2>/dev/null | wc -c)\" -lt 98304 ] || { echo \"landin: $CLAUDE_ENV_FILE would pass 96 KiB, where commands stop starting: start a fresh session\" >&2; exit 0; }; } && { echo \"$m\"; cat \"$f\"; } >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
+  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; e=\"$CLAUDE_ENV_FILE\"; [ -x \"$s\" ] && [ -n \"$e\" ] && f=$(\"$s\") && [ -n \"$f\" ] || exit 0; m=\"# landin agent_env\"; for o in \"${e%/*}\"/*-hook-[0-9]*.sh; do [ \"$o\" = \"$e\" ] || ! grep -q -e \"^$m\" -e \"^export LANDIN_ENV_KEY=\" \"$o\" 2>/dev/null || : > \"$o\"; done; : > \"$e\"; n=$(cat \"${e%/*}\"/*-hook-[0-9]*.sh \"$f\" 2>/dev/null | wc -c); if [ \"$n\" -lt 65536 ]; then { echo \"$m $(cksum < \"$f\")\"; cat \"$f\"; } > \"$e\"; else echo \"landin: the pinned environment is not loaded: with it this session's hook scripts would hold $n bytes, past the 64 KiB that leaves a command room in Linux's 128 KiB for one argument; start a fresh session\" >&2; fi; exit 0"}]}]}}
 ```
 
-The hook runs again on every resume of a session, which keeps its
-`$CLAUDE_ENV_FILE`, so it marks what it appended with a line naming the
-environment's checksum and appends nothing when that line is already there:
-appending each time, six resumes took the file past 128 KiB, and every Bash
-command of the session then failed with E2BIG, "Argument list too long".
-An environment that changes between resumes is appended again, so the
-command also refuses to take the file past 96 KiB and says to start a fresh
-session: a session that has passed the limit cannot run the command that
-would tell it so. `scripts/tests/test_agent_env.py` runs the command above as
+Claude Code names the file the hook writes after the hook's place among
+those it runs, `sessionstart-hook-N.sh` in the session's directory under
+`~/.claude/session-env/`, and keeps it across a resume, which runs the hook
+again. Before every Bash command it puts every one of those files, verbatim,
+into the single `bash -c` argument that runs the command, and Linux refuses
+one argument over 128 KiB with E2BIG, "Argument list too long". Appending on
+each resume, and appending again under another number when the hook's place
+moved, a session on 2026-11-17 held 93,519 and 46,807 bytes, six copies of
+two environments, and every command failed at 137.8 KB. So the hook
+replaces its own file with the one environment of the checkout the session
+started in, empties any other of the session's files that holds a Landin
+environment, and writes nothing when the session's files with it would pass
+64 KiB, saying so: an environment is about 23 KB, and the rest of the
+argument is Claude Code's own preamble, under 1 KB, and the command. A
+session's files therefore hold one environment, whatever the number of
+resumes. `scripts/tests/test_agent_env.py` runs the command above as
 written here, and `python3 scripts/agent_hook.py --install` writes it into
 `~/.claude/settings.json`, where one copy serves every checkout and
 worktree and does nothing in a project without `scripts/agent_env.sh`;
 `--check` names a copy that is older than this one, the state that took a
-session's shell on 2026-11-16.
+session's shell on 2026-11-16 and again on 2026-11-17.
 The file is the environment of the checkout the session started in; in a
 worktree whose flake or pins differ, `. "$(./scripts/agent_env.sh)"` run
 there adds that worktree's. The hook is
