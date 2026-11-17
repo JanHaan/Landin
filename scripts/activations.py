@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """What an item's changes activate: register rows, and passes only the gate runs.
 
-Many rows in ROADMAP.md's register wait for "the next change to" a file or
-an area, and an item that changes one closes without noticing unless
-someone diffs its range against every row's activation.  This does that
-diff.  It reads the Activation column of every `open` or `scheduled` row,
+Many rows in the register, one file each under roadmap/register/, wait for
+"the next change to" a file or an area, and an item that changes one closes
+without noticing unless someone diffs its range against every row's
+activation.  This does that diff.  It reads the `activation` of every
+`open` or `scheduled` row that is not a `limit` or a `watch`,
 finds the paths it names, and lists the rows whose paths the item changed,
 so each is taken, or its activation restated, before the item closes.
 
@@ -66,7 +67,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STATUSES = ("open", "scheduled")
-ROW = re.compile(r"^\| ((?:R551|R730|SR)-\d+|[A-Z]\d+) \| ")
+#  Rows of these kinds wait for a measurement or an observation, not for a
+#  change to a file.
+WAITING = ("limit", "watch")
+REGISTER = "roadmap/register"
+ROW = re.compile(r"^((?:R551|R730|SR)-\d+|[A-Z]\d+)\.md$")
 
 #  Where a written word stops being part of a path: sentence punctuation
 #  after it, and a parenthesis or quote around it.
@@ -104,20 +109,37 @@ def git(*arguments, root=ROOT):
                           stdout=subprocess.PIPE, text=True).stdout
 
 
-def register(text):
-    """(identity, activation, status) of every row of TEXT's register."""
-    section = text.split("\n## Register\n", 1)
-    if len(section) != 2:
-        raise ValueError("ROADMAP.md has no `## Register` section")
-    section = section[1].split("\n## ", 1)[0]
+def front(text, name):
+    """{key: value} of a row file's front matter, or a ValueError."""
+    lines = text.split("\n")
+    if not lines or lines[0] != "---" or "---" not in lines[1:]:
+        raise ValueError("a register row without front matter: " + name)
+    fields = {}
+    for line in lines[1:lines.index("---", 1)]:
+        key, colon, value = line.partition(": ")
+        if not colon:
+            raise ValueError("a register row with a malformed line: " + name)
+        fields[key] = value.strip()
+    return fields
+
+
+def register(root):
+    """(identity, activation, status) of every row file under ROOT."""
+    directory = Path(root) / REGISTER
+    if not directory.is_dir():
+        raise ValueError("no %s directory" % REGISTER)
     rows = []
-    for line in section.splitlines():
-        if not ROW.match(line):
+    for path in sorted(directory.iterdir()):
+        if not ROW.match(path.name):
             continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split(" | ")]
-        if len(cells) != 6:
-            raise ValueError("a register row without six cells: " + cells[0])
-        rows.append((cells[0], cells[3], cells[5]))
+        fields = front(path.read_text(encoding="utf-8"), path.name)
+        if "activation" not in fields or "status" not in fields:
+            raise ValueError("a register row without an activation or a"
+                             " status: " + path.name)
+        status = fields["status"]
+        if fields.get("kind") in WAITING:
+            status = fields["kind"]
+        rows.append((path.name[:-len(".md")], fields["activation"], status))
     return rows
 
 
@@ -220,30 +242,26 @@ def activated(rows, tracked, changed):
     return hits, unmatched, ambiguous, narrower
 
 
-def cells(line):
-    """A register row's cells, or None for a line that is not one."""
-    if not ROW.match(line):
-        return None
-    found = [cell.strip() for cell in line.strip().strip("|").split(" | ")]
-    return found if len(found) == 6 else None
-
-
 def stated(window, root=ROOT):
     """{identity: the newest commit in WINDOW that added the row or changed
-    its Activation}, read from one log of ROADMAP.md over the window."""
+    its activation}, read from one log of the register over the window."""
     log = git("log", "--format=%x00%H", "-p", "-U0", "--no-renames",
               "--no-merges", "--no-color", "--no-ext-diff", window, "--",
-              "ROADMAP.md", root=root)
+              REGISTER, root=root)
     since = {}
     for chunk in log.split("\0")[1:]:
         commit, _, diff = chunk.partition("\n")
         removed, added = {}, {}
+        identity = None
         for line in diff.splitlines():
-            if line.startswith(("---", "+++")):
+            if line.startswith("diff --git "):
+                name = line.rsplit("/", 1)[-1]
+                identity = name[:-len(".md")] if ROW.match(name) else None
+            elif line.startswith(("---", "+++")) or identity is None:
                 continue
-            row = cells(line[1:]) if line[:1] in "+-" else None
-            if row:
-                (added if line[0] == "+" else removed)[row[0]] = row[3]
+            elif line[:1] in "+-" and line[1:].startswith("activation: "):
+                (added if line[0] == "+" else removed)[identity] = \
+                    line[1 + len("activation: "):].strip()
         for identity, activation in added.items():
             if identity not in since and removed.get(identity) != activation:
                 since[identity] = commit.strip()
@@ -350,7 +368,7 @@ def main(argv=None, root=ROOT, out=sys.stdout):
     args = parser.parse_args(argv)
     changed = sorted(set(args.paths)) if args.paths else changes(args.base, root)
     tracked = set(git("ls-files", root=root).splitlines())
-    rows = register((root / "ROADMAP.md").read_text(encoding="utf-8"))
+    rows = register(root)
     hits, unmatched, ambiguous, narrower = activated(rows, tracked, changed)
     left = []
     if args.paths or args.whole_window:

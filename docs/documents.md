@@ -137,6 +137,21 @@ quote in the list and in the control with the document. A quote a control
 assembles at run time is not listed, so `python3 scripts/script_tests.py
 test_check_controls` remains the full answer after rewording a page.
 
+The roadmap is `ROADMAP.md` and the files under `roadmap/`. `check.py`
+holds `ROADMAP.md`'s phases, items, dependencies, execution order and
+continuous lane to its Mechanics, and each register row under
+`roadmap/register/` to its front matter: the keys the Mechanics names, a
+family `ROADMAP.md` lists, and a `scheduled` status only on an unfinished
+item whose text names the row. `roadmap/register.md` is generated from the
+rows by `python3 check.py --register`, or `--generate`, and never edited.
+A register row or simplification candidate `ROADMAP.md` cites must exist:
+a row as its file or after another row's `Merged:`, a candidate in
+`roadmap/inputs/simplification-candidates.md`. A roadmap or register
+identity may appear in `ROADMAP.md` and under `roadmap/`, and nowhere else
+but the status pointer `README.md` and `handoff.md` carry. The questions
+under `roadmap/questions/` and the inputs under `roadmap/inputs/` have no
+form of their own checked yet.
+
 `check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. `check.py` does not parse the corpus with the structural editor grammar in `highlight/tree-sitter`; the gate's `editor-grammar` job does, and `./highlight/test.sh --integration` runs that pass inside `nix develop`, which `python3 scripts/activations.py` names whenever the changes reach the grammar, a positive, runtime or ABI fixture or `core/`. A change to the editor grammar or its queries takes two commits, the second moving the editors' pins with `python3 highlight/grammar_pin.py` (`highlight/README.md`). Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
 A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` began in lexical refusal and is now raised only by the parser.

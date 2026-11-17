@@ -3,4313 +3,155 @@
 ## Authority and scope
 
 `spec.md` decides the language and `tour.md` explains it. This file is the
-sole authority for open work: its phases, dependencies and gates, and the
-register of work that waits for a trigger. A work item cannot overrule the
-specification. A semantic change updates `tour.md` or `spec.md`, the fixtures
-that pin it and this file together.
+sole authority for open work: its phases, lanes, dependencies and gates. A
+work item cannot overrule the specification. A semantic change updates
+`tour.md` or `spec.md`, the fixtures that pin it and this file together.
 
-The first roadmap, R0 to R7, built the bootstrap compiler from an empty
-repository to a feature-complete pre-v1 slice for Linux x86-64, macOS arm64
-and Cortex-M0, and closed when its last item declared that endpoint. Its full
-text is in the history, last at commit `335b0814`, and what it left open is in
-the register below.
+The first roadmap, R0 to R7, built the bootstrap compiler to a
+feature-complete pre-v1 slice, last at commit `335b0814`. The second, R8 to
+R16, took it to an editor, more hosted targets, the microcontrollers people
+buy, a library split along the capability line, concurrency and the start
+of measured optimization; its text is in the history, last at commit
+`d27308107`. Its R16 continues here. Its R15,
+Windows, was never started; its three items are retired and its content is
+rewritten as R21 for today's library, second Io and threads.
 
-This roadmap takes the compiler from that slice to one that other people can
-use on the machines they have: a frontend that scales and serves an editor,
-assembly with operands, more hosted targets, the microcontrollers people
-actually buy, a library split along the line the capability model already
-draws, concurrency and measured optimization. Windows is deferred outside the
-active scope; its existing identities below preserve the proposal for a future
-explicit scope decision.
+This roadmap makes the language smaller and the tools around it ordinary:
+the project's own process first, then `refine` split into commands, a
+breaking simplification of the language, a review of the standard library,
+Windows, and the library a newcomer expects to find. Optimization runs
+beside all of it.
 
-The stated 32 TB hosted endpoint remains an unverified project goal. What
-quantity it measures and what evidence would prove it are still open.
-Current hosted execution and the large-image work in the register below do
-not establish a 32 TB bound. Define the measure and proof criterion before
-claiming that endpoint as demonstrated.
+Outside it, and staying outside: a build tool and package manager, the
+Companion tool and ecosystem family's; self-hosting and separate
+compilation, Scale and self-hosting's; a browser or WebAssembly target;
+dates and times in the library; and every release or version decision, each
+of which needs an explicit decision of its own. Landin does not assume
+SemVer.
 
-Outside it, and staying outside: a build tool and a package manager, which
-the Companion tool and ecosystem family owns; self-hosting; and every release
-or version decision, each of which needs an explicit decision of its own.
-Landin does not assume SemVer.
+The stated 32 TB hosted endpoint remains an unverified goal; what it
+measures and what would prove it are still open, and nothing here claims it.
 
-Work item and register identities stay in this file. Code, diagnostics,
-fixtures, generated files and the other documents never cite a work item or
-a register record of either roadmap, save the one status pointer `README.md`
-and `handoff.md` carry, because an item is finished long before the text
-that cites it is, and a citation that outlives its item is a question nobody
-can answer. `check.py` refuses such a citation anywhere else.
-
-`docs/capabilities.md` is the current compiler capability inventory, and
-`README.md` summarizes it. `handoff.md` and `AGENTS.md` point to the
-inventory rather than keeping their own, and the `Done:` paragraphs here
-record completion evidence, not a second summary of current capability.
+Work item, register and question identities are cited in this file, in the
+register and question files, in the inputs under `roadmap/inputs/`, and
+nowhere else, save the status pointer
+`README.md` and `handoff.md` carry. `check.py` refuses such a citation
+anywhere else. `docs/capabilities.md` is the capability inventory and
+`README.md` summarises it; `Done:` paragraphs record evidence, not a second
+summary.
 
 ## Mechanics
 
-Phases are `R8`, `R9` and onward, stored in identity order, and each ends in
-one gate. Work items are `R8.10`, `R8.20` and so on, spaced in tens, so work found
-necessary between two items is inserted with a unit identity: between R8.20
-and R8.30 it is numbered 21. Identities are never reused or renumbered,
-including the first roadmap's.
-Every item has exactly one status line and one dependency line:
+**Identities.** Phases are `R16` onward, stored in identity order, each
+ending in one gate. Items are `R19.10`, `R19.20` and so on, spaced in tens;
+work found between two items takes a unit identity, R19.21. Identities are
+never reused or renumbered, the earlier roadmaps' included. Every item has
+one status line, one dependency line and its exit evidence:
 
 ```text
 Status: planned
-Depends on: R8.10, R8.20
+Depends on: R17.10
+
 ```
 
-A status is `planned`, `active`, `blocked` or `complete`. `blocked` means the
-item cannot proceed for a reason other than its dependencies, and the reason
-is one nonempty `Blocked because:` line in the item. A complete item's
-dependencies are all complete. `none` is the only empty dependency value.
-Work follows the execution order declared below. In it, a phase name such as
-`R16` stands for its items in document order, and an item name such as
-`R16.10` for that item alone. Every
-item appears exactly once and follows its dependencies. A phase's gate cannot
-be claimed until all its items have their exit evidence, even when its work
-straddles another phase. A phase explicitly deferred by a scope decision
-does not hold up later independent work. Its items stay
-blocked with their reasons, and its gate is inactive until scope is restored.
-The next item is the first dependency-ready planned item in execution order,
-and `README.md` and `handoff.md` name it.
+A status is `planned`, `active`, `blocked` or `complete`; `blocked` carries
+one `Blocked because:` line. A complete item's dependencies are complete.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11.10, R11.20, R11.25, R11.26, R11.30, R11.40, R11.50, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.18, R13.19, R13.31, R13.32, R13.60, R13.33, R13.34, R13.36, R13.61, R13.35, R13.70, R13.71, R13.72, R13.73, R14.10, R14.20, R14.30, R14.40, R13.74, R13.75, R12.10, R12.11, R12.12, R12.20, R12.30, R12.40, R12.45, R12.50, R12.60, R13.76, R13.77, R13.20, R13.78, R14.25, R13.79, R12.80, R12.70, R13.80, R11.27, R13.90, R13.91, R13.92, R13.93, R15, R16
+**Lanes.** Work runs in the lanes the execution order declares. The serial
+lane is one item at a time; its next item is the first dependency-ready
+planned item in it, and `README.md` and `handoff.md` name it. The
+continuous lane holds R16's continuous items. R16's basis is R16.10, in
+the serial lane; the continuous items take the next ten after the last
+basis item and count up by one from R16.20. Each depends only
+on the basis, may run beside anything, and is never the
+next item; any number of them may be active. A phase that declares a
+breaking window (R19, then R20) keeps its serial items on one integration
+branch and promotes them once, at its gate; a continuous item lands on
+main meanwhile and the branch takes it.
 
-The execution order keeps the order the completed phases ran in; R13.79
-answers a review made after R14.25, and the five items the maintainer
-scheduled from it follow it, which is why R11 and R12 are named item by
-item. R15 stays deferred, and R16 follows.
+```text
+Execution order: R17, R16.10, R18, R19, R20, R21, R22
+Continuous: R16.20 onward
+```
 
-An item is complete when its exit evidence exists: the complete gate passed
-on the completing commit, every job it runs, and, for a claim about a host
-it does not run, a named run recorded in the item. Completing an item adds a
-short `Done:` paragraph saying what landed and where its evidence is. The
-reasoning belongs in the commits and in `spec.md`'s register of decisions,
-not here; the first roadmap grew to thirteen thousand lines narrating itself.
+**Gates.** A phase's gate cannot be claimed until all its items have their
+exit evidence. R16's gate is different: once its basis is complete it is a
+standing invariant every later push must keep, not a milestone. An item is
+complete when its exit evidence exists: the complete gate passed on the
+completing commit and, for a claim about a host the gate does not run, a
+named run recorded in the item. It then gets a short `Done:` paragraph; the
+reasoning goes in the commits and in `spec.md`'s register of decisions.
+
+**Authority.** An item's agent may push its candidate, promote it to main
+once its gate has passed, and remove its worktrees and branches, without
+asking again. An item opts out with one line, `Promotion: maintainer`,
+which returns that step to the maintainer. Releases and versions are never
+covered.
+
+**The register.** A row is only for what outlives the item that met it
+and waits for a trigger. A finding the item fixes is named in its commit
+message and its `Done:` paragraph, not filed. Each row is one file,
+`roadmap/register/`, its identity the file name: a front matter
+block of `key: value` lines, then a body of a few lines at most saying
+what stands and what would complete it. The keys are `kind` (`limit`,
+`watch`, `defect`, `proposal` or `usability`), `family`, `status` (`open`,
+or `scheduled` with the items that take it on), `opened` (a date),
+`activation`, and `effort` and `impact`, each `S`, `M` or `L`. `check.py`
+validates them. `roadmap/register.md` is generated from the files and is
+never edited.
+
+A row moved from the second roadmap keeps its identity, SR-n, R551-n or
+another. A new row takes the next SR number from the allocation script
+R17.10 provides; two branches that take the same number collide as an
+add/add conflict on the file, which is the detection, and the integrator
+renumbers the later one. A retired or completed row has no file: it is
+deleted in the commit that says why, and the history keeps it. There is no
+departures list, and the second roadmap's retired rows were not migrated.
+
+A moved row's `opened` is the date it first appeared, which the migration
+script takes from the history.
+
+An item's agent may delete a row its change fixed, or one that duplicates
+another, naming the evidence in the commit. Retiring a row as not worth
+doing, and anything a row asks the maintainer to choose, is a question and
+waits for the maintainer.
+
+The register holds at most 60 open rows; a scheduled row does not count,
+and a row may be scheduled only on an item whose text names it. A row that has stood through ten
+completed items without being scheduled is reviewed at the next item's
+close: scheduled, retired, or kept with one sentence saying why. At the cap,
+an item cannot close until it has brought the count under it.
+
+For a moved row the ten completed items count from the exchange, since the
+sweep before it has just reviewed every live row; for a new row, from its
+filing.
+
+**Questions.** A decision only the maintainer can take is a question, one
+file under `roadmap/questions/`, Q-1 onward: the question, the options, the
+recommendation, and the default taken if no answer comes. `check.py`
+validates them. A question is never a register row. It closes with the
+answer recorded and, where the answer is a rule, a decision in `spec.md`.
 
 The gate is a safety net rather than a verdict: green says a tree passed
 there, and no item claims more.
 
-## R8 — Stand on its own
-
-Pay what the move off the first roadmap left owing: the citations it left in
-the tree, a frontend whose time grows with roughly the cube of a program's
-size, and a gate that runs one of the three targets.
-
-### R8.10 — Remove the first roadmap's citations
-
-Status: complete
-Depends on: none
-
-About eighteen hundred citations of R0 to R7 items, in about two hundred
-and eighty files, and some fifty of the first roadmap's ledger records sit in
-compiler sources and comments, diagnostic text and the goldens that record
-it, fixtures, `spec.md`, `tour.md`, the prototypes, the evidence registers
-and the guides, and nearly two hundred lines name `ROADMAP.md`, many of them
-sending a reader there for closure evidence and acceptance records that are
-now only in the history. Each is rewritten to say what it meant, or removed
-where it said nothing. A refusal that names the work enabling its construct
-names the construct's state instead, which amends [1830]'s note and the two
-refusal tables. The construct inventory loses its Phase column.
-
-Exit evidence: no file outside `ROADMAP.md` cites a work item or register
-identity of either roadmap beyond the status pointer, `check.py` refuses one, the first roadmap's index
-is deleted from this file, and every changed diagnostic is pinned by its
-recorded report.
-
-Done: about 1,700 lines in some 280 files now say what their citation
-meant. A refusal's second note states the form's standing, a recorded
-boundary, a withdrawal or a transfer, from a table in place of an item (D246
-and [1830]); L0305 and the tool and call notes cite a rule. The 22 goldens
-that record them are re-recorded. The inventory has no Phase column and the
-hosted parity rule no longer reads item statuses. `check_roadmap_citations`
-refuses an item of either roadmap and a record of the two debt ledgers and
-SR, and its controls show it; the inherited letter records collide with
-bytes, decisions and errata and stay with review. Fixture directory names
-are unchanged. The index is gone.
-
-### R8.20 — Make the frontend scale
-
-Status: complete
-Depends on: none
-
-Measured with the release compiler on one Linux host: a synthetic file of 250,
-500, 1,000 and 2,000 trivial functions compiles in 0.36, 1.9, 12 and 89
-seconds, and 85.7 of the 89 are spent before lowering. The derived log filter
-and the `core` it uses, about 3,500 lines, spend 6.6 of 7.9 seconds there.
-Nothing larger than a prototype can be written against that, and no editor can
-wait for it. Find the superlinear passes and replace them. This takes on
-register records R551-06 and R551-10 and the corpus timing question SR-02.
-
-Exit evidence: a scaling benchmark in the repository, generated inputs of
-growing size up to at least 16,000 declarations plus the derived programs,
-whose frontend time, the median of five runs, grows by no more than 2.5 times
-per doubling across the range; the derived log filter checks in under half a
-second with the release compiler on the host that measured the numbers above;
-the same inputs, and a struct of 20,000 fields, check without exhausting the
-host, with each stage's storage measured and a named refusal past a stated
-bound; and the gate runs the benchmark and fails when a ratio exceeds 2.5,
-which does not depend on the runner's speed.
-
-Done: `scripts/scaling.py` generates eight families from 1,000 to 16,000
-declarations and times the derived programs, each five times, from
-`--stage-report`'s per-stage processor time and peak storage. Emission is
-held to the bound as well as the frontend, because the backend's scans were
-the same records' work. The gate also refuses a peak-memory ratio above 2.5
-per doubling, using the largest peak reported across the five runs at each
-size. On the host that measured the numbers above, with
-the release compiler, the largest ratio is 2.19, the 2,000-function input
-checks in 0.41 seconds of the 89 it took, and the log filter's frontend
-takes 0.17 of 6.6. D247 refuses a routine of more than 16,384 declarations or a struct
-of more than 16,384 fields with L0325; at that bound a routine with a loop
-peaks at 130 MiB, and the 20,000-field struct is refused rather than
-exhausting the host. Every change kept every verdict, diagnostic and emitted
-byte of the corpus, checked program by program against its parent. The
-`scaling` gate job runs the benchmark.
-
-### R8.30 — Run every existing target in the gate
-
-Status: complete
-Depends on: none
-
-The gate builds and tests on Linux x86-64 in debug mode and nothing else.
-Add macOS arm64 on GitHub's arm64 macOS runners, the release build, the
-Cortex-M QEMU and Renode lanes on Linux, the GDB and LLDB sessions, and the
-structural editor grammar's integration pass. Add the runners nothing runs
-today: the determinism closures and their controls, the bindings tests, the
-object-quality lane, `scripts/tests`, and `check.py`'s control suite; and run
-the fixture execution suite with many workers, which is how a race in the
-harness's reads went unseen. This takes on R730-22 and R730-25.
-
-Exit evidence: `gate.yml` runs each of those on every push or meets the R8
-gate's explanatory-only reuse exception; a failure in any required job fails
-the gate, every end-to-end target claim is a verdict in a record the
-coverage readers read rather than a run, and the documents stop describing
-the gate as Linux and debug only.
-
-Done: `gate.yml` initially ran its worker jobs on every push and a final `gate` job
-that fails unless all succeeded: `check.py`, every `scripts/tests` module with its
-controls, the debug and the release corpus at eight workers with the
-determinism closures and report identity, object quality and GDB, the
-bindings, the editor grammar with a pinned CLI, every Cortex-M lane, the
-scaling benchmark, and on `macos-26` the host suite in both modes, native
-hosted parity and LLDB. Cortex-M runs on any glibc 2.38 host from a lock
-that carries its tools' whole runtime; one GDB per worker and parallel
-programs took it from 2,309 to 836 seconds, and Darwin parity from 1,465 to
-755, where macOS's vetting of each new program bounds it. The Darwin
-diagnostics runner runs end-to-end fixtures, and `check.py` refuses a
-fixture whose named target no record places. Every job was first green at
-`6b17c109`, after two runner-only faults were fixed at their cause: a
-process-timeout witness whose deadline a cold interpreter could miss, and a
-Renode scheduler notice the Cortex-M oracle took for a model warning. The
-completing commit's own gate then found a third: Renode's log thread wrote
-into the middle of a script's result marker on the console they shared, so
-a script's output and Renode's log are now separate files.
-
-The current gate keeps those verification lanes separate while two release
-build jobs supply same-run executables to the other release lanes on their
-respective hosts. Each consumer verifies the build's source and native
-toolchain manifest before using it; the final job still requires every build
-and verification verdict.
-
-### R8.40 — Move the peripheral models onto QEMU
-
-Status: complete
-Depends on: R8.30
-
-Renode carries every Cortex-M check that needs a peripheral: the derived
-driver's protocol, the device fixtures' access and refusal checks, the
-firmware and backend DMA lanes, the stack observer, one source-debugging
-session, and the hosted lane that drives a device model from x86-64 code over
-a line transport. It is the largest dependency the gate installs, a portable
-build with its own .NET runtime driving four C# models and a stack observer
-in 559 lines; it is absent from the flake; its threads and log have twice
-put text on the console a lane's result was read from; and the Cortex-M job
-that runs it sets the gate's length. Its CPU adds nothing QEMU's does not:
-both descend from QEMU.
-
-Run the models on the QEMU the CPU lane already pins. Its microbit machine
-leaves the model addresses unimplemented, and an Arm watchpoint stops before
-the access, so a harness on QEMU's debugger stub, in Python's standard
-library, stops at every access to a model's window, decodes the Thumb load or
-store there, performs it against a Python model and steps past it; DMA
-writes RAM while the CPU is stopped, and an interrupt is a write to the
-NVIC's pending register. The harness is single-threaded, QEMU's clock runs
-from its instruction count, and a lane stops at a named firmware event
-rather than after an interval. The models keep the contracts the C# models
-state, including refusing an unknown, misdirected or wrongly sized access,
-and the decoder refuses every form that is not a single load or store. The
-hosted lane speaks the same line protocol to a model with no CPU behind it.
-The source-debugging session moves to the QEMU sessions, and R12's boards
-take the claims about a real device. A spike outside the tree ran the
-generated peripheral consumer this way in all six profiles and matched the
-Renode lane's trace oracle exactly.
-
-Exit evidence: every Renode lane except the stock STM32 control passes on the
-harness with its oracles unchanged; that control tests Renode's own models and
-is removed with Renode rather than migrated; the decoder agrees with the
-pinned disassembler on every load and store in every image the lanes build;
-a refused access, an interrupt never delivered and a wrong device reply each
-fail a named control; the gate's Cortex-M job runs the harness in Renode's
-place; and Renode, its lock
-entries and the C# models are gone from the tree, with every document that
-cites Renode as evidence saying what now carries it.
-
-Done: `environments/cortex-m/machine.py` serves the Python models in
-`models.py` from the pinned QEMU's debugger stub, single-threaded, and runs
-the firmware until it is idle rather than for an interval. Against a Renode
-run of the same tree on one host, all six profiles gave identical device,
-prototype, packed, transport and driver traces, the same 33 protocol steps,
-2,068 executed corpus cases and the same stack observations. The hosted lane
-is a Python line transport, the Renode source session runs through the
-harness's relay to GDB, and the stack observer samples at debugger
-breakpoints, except in the four-million-sample exhaustion scenario, which
-paint measures. The stock STM32 control tested Renode's own models and went
-with it. Every harness session holds the decoder to `objdump` over its
-image, and a refused access, an undelivered interrupt and a wrong reply each
-fail by name. The gate's `cortex-m` job runs it: its lanes took 612 seconds
-against 1,281 with Renode, and the job 15.5 minutes against 26.7, at
-`4465ffcd`.
-
-### R8 gate
-
-- Nothing outside `ROADMAP.md` cites a work item but the status pointer.
-- The frontend's scaling benchmark holds in the gate.
-- Every target the compiler has runs in the gate on every push, or, for an
-  edit declared explanatory to four documents no target lane reads, passed
-  on `main` within the week.
-- Every Cortex-M peripheral check runs on QEMU in the gate, and Renode is
-  gone.
-
-## R9 — Inline assembly
-
-Assembly with operands, early, because the microcontroller work needs it and
-because every tool written after it has to know it exists.
-
-### R9.10 — Specify assembly with operands
-
-Status: complete
-Depends on: none
-
-Today `assembler.block` exists on Cortex-M0 only, with one `u32` passed through
-`r0`, and the hosted targets refuse assembly. Specify typed operands bound to a
-register or a target's register class, as inputs, outputs or both, with
-declared clobbers and memory effects, in [1630] and a register decision. Not
-GCC's constraint strings: a target-specific language inside a string literal is
-exactly what a type checker cannot see into. The form must keep the verified
-IR's view of the block as one instruction with declared effects, keep the
-frame pointer, and reserve no register, which the stackful-fibre direction
-needs.
-
-Exit evidence: [1630] and the grammar amended, the decision recorded with its
-alternative, and positive and negative fixtures the grammar derives.
-
-Done: an operand is `in`, `out` or `inout`, a name, an integer type and a
-register `at` a name the target's table answers for, or the class `general`;
-outputs are the block's value, and the text writes `{name}`. [1630], [1990]'s
-register table and D248 say it, with the rejected alternatives: constraint
-strings, output places, pointer operands, clobber-nothing defaults and a
-declared memory effect. Memory effects are the one departure from this item's
-text: they are fixed rather than declared, because the default is always
-right and nothing here would use a narrower promise. The parser reads
-operands after any call, as the grammar derives them, and the checker holds
-them to every rule on all three targets, refuses them off `assembler.block`,
-and then refuses the block at the lowering limit [1990] states; so
-`negative/assembly-operands-not-lowered`, `core/cpu` on the new form, fails
-only there. `positive/assembly-operand-forms` and 21 negative fixtures pin it,
-four of them refused by the parser and underivable; D230's form stays as the
-shorthand, and float operands came with R12.30 (D630). The gate ran every job green at
-`77d89e08`.
-
-### R9.20 — Implement assembly with operands on every target
-
-Status: complete
-Depends on: R9.10
-
-Lower the specified form on Cortex-M0, x86-64 and arm64, allocate its operands
-and honour its clobbers, and describe it to the debugger. That removes the
-lowering limit [1990] states, moves D230's shorthand onto the same
-instruction, and lowers operand-free hosted blocks; the fixtures that pin the
-limit become executed ones.
-
-Exit evidence: executed fixtures on all three targets, including one per
-target that the IR verifier refuses, and `core/cpu` written on the new form.
-
-Done: every `assembler.block` form, named operands, D230's shorthand and the
-operand-free block, is one `Assembly` IR instruction whose entries carry each
-operand's direction, name, type, register and output slot, and every target
-emits it: Cortex-M0 and arm64 load inputs through their own registers and
-set one output aside when every register holds one, and x86-64 keeps
-declared registers out of allocation and saves them. The lowering limit is
-gone. Five runtime `assembly-*` fixtures execute on Linux, natively on macOS
-arm64 and under QEMU at every profile; the verifier refuses r8, rbp and x18
-in `cortex ABI/assembly IR` and the two backend cases; `core/cpu` runs on
-`general` operands; the GDB and LLDB sessions stop on a block's line, read
-its output and unwind the register it declares, and the Cortex source lane
-steps over `core/cpu`'s block. The checker now refuses Apple's `%%` separator
-and counts `general` against the registers a block names. The Mac was
-unreachable, so Darwin execution and LLDB are the gate's: every job green on
-`05069afb`.
-
-### R9 gate
-
-- One source form of assembly with operands runs on every target.
-
-## R10 — A frontend for tools
-
-A language server that runs inside the compiler, a formatter, and diagnostics
-that say how to fix what they found. The compiler is already a library behind
-tested stage seams and a host interface, so the server is its third client
-after `refine` and the test program.
-
-### R10.10 — Reclaim a compilation's memory
-
-Status: complete
-Depends on: R8.20
-
-Sources, trees and every stage table are allocated for the life of the
-process and never freed, which is right for a batch compiler and wrong for a
-server that checks on every edit. Give a compilation its own storage and free
-it as one.
-
-Exit evidence: a test that checks the same program many times in one process
-with memory that stays flat, and a driver that behaves identically.
-
-Done: the stage tables are aliased components of a tagged `Compilation`, the
-forest frees its trees and the source set its snapshots, which are limited
-and handed out by reference; every accessor takes an aliased parameter, so a
-reference that could outlive its compilation is refused where it is written.
-Checking and resolution recognise their own trees and keys by a serial, not
-by an address a freed table's successor could reuse. Checking the derived log
-filter left 13.1 MB allocated per check and per emission; the `memory` suite
-now runs twenty checks and four emissions with debugging information in one
-process, permits at most 64 KiB of bounded settling, and rejects growth
-continuing across both parts of each measured tail. A control verifies that
-three kept compilations are counted. The count uses
-`mallinfo2` on Linux with the lifetime-test launcher disabling its per-thread
-cache and verifying small frees, and on Darwin the zones' enumerated in-use ranges,
-because a GNAT-linked binary records SDK 10.21 and under it `size_in_use` keeps freed
-blocks counted. `scripts/driver_manifest.py` held every commit to its parent:
-all 8,127 entries agree — status, report, assembly, build report and source
-map for every fixture on every target — and the largest scaling ratio is 2.19
-against the parent's 2.18. The Mac ran the host suite, 754 cases, and the
-gate was green on every job on the code of `434b2477`, run before it was
-rebased onto a commit that changed only `flake.nix`.
-
-### R10.20 — Keep comments and layout
-
-Status: complete
-Depends on: none
-
-Comments produce no token and layout is discarded. Keep both in a side table
-beside the token stream without changing what the parser sees.
-
-Exit evidence: every source in the corpus and `core` reproduced byte for byte
-from its tokens and the side table.
-
-Done: the scan keeps every byte that is not a token as a piece of space in the
-stream: a run of blanks, each line end with its own bytes, and the line, doc
-and block comments, one never closed running to the end of the file beside
-its fault. Doc comments are a kind of piece rather than a table of their own,
-and a token's pieces are found by offset, never recorded twice. A byte-order
-mark and every other byte no rule spells stay tokens. The syntax stage copies
-each stream's pieces into `Landin.Tokens.Spacing`, a table of the compilation
-beside the forest, after the parse; the parser and every later stage read
-none. A test-side check written from [1750] and [1780] requires tokens and
-pieces to tile each file exactly: all 2,098 `.ldn` files in the repository,
-faulty ones included, and every corpus program, truncation, mutant and random
-stream the parser suite reads. A piece is 12 bytes, and the derived log
-filter's 28 sources keep 185 KB of it, 1.4% of what one check allocates; the
-memory suite stays flat. `scripts/driver_manifest.py` held every commit to
-its parent: all 8,127 entries agree, and the largest scaling ratio is 2.20
-against the parent's 2.17. The Mac ran the host suite in debug and release,
-757 cases each, and the gate was green on every job on `3687cfbe`.
-
-### R10.30 — Make diagnostics say how to fix it
-
-Status: complete
-Depends on: R8.10
-
-Suggestions for misspelt names and near misses; machine-applicable edits
-attached to a diagnostic; `refine explain` for every catalogue code; and lints
-as warnings in the catalogue, with codes, rather than a second tool with a
-second opinion.
-
-Exit evidence: each kind of edit and every alternative offered by a pinned
-fixture is applied and compiles clean, every catalogue code is explained, and
-every lint is a catalogued code with a negative fixture.
-
-Done: a diagnostic carries fixes beside its notes, each a kind, an exact or
-likely applicability, a help sentence and edits: byte spans of one or several
-sources and their replacements, ordered and never overlapping, which is an
-editor's workspace edit with its coordinates still to convert. The catalogue's
-`Fixes` column says which codes may carry one and which must, the driver hands
-the report back as data beside its text, and the compiler never applies a fix.
-Suggestions rank what a position could have named by bounded optimal string
-alignment distance, innermost scope first, and never offer a name out of scope
-or inaccessible: L0201 for values, types, module members and selected imports,
-L0308, a misspelt argument label, a misspelt keyword and a missing module.
-L0109 is offered its declared name exactly, L0303 `mut`, L0105 `==`. Eleven
-negative fixtures apply every kind of fix and every offered alternative through
-the `fixes` suite and compile each result clean; one fixture offers three tied
-spellings. `refine explain` is a subcommand printing
-`docs/diagnostics.md`, generated into the compiler as an exhaustive case, so
-every code is explained and each example is compiled to its own code. D251
-admits a warning only as the compiler's judgement with the exact fix that
-settles it; L0326 diagnoses a local `mut` nothing needed, and L0349 diagnoses
-an unused local with a direct scalar literal initializer. The fixtures
-`negative/mut-never-written` and `negative/unused-pure-local` pin them, and
-`codes:` pins warnings on every
-fixture that compiles a program. `scripts/driver_manifest.py` held every
-commit to its parent: status, assembly, build report and source map agree for
-all 8,169 entries, and the only report differences are added help lines and
-warnings. The largest scaling ratio is 2.21. The Mac ran the host suite in
-debug and release, 766 cases each, and the gate was green on every job on
-`f7ab10af`.
-
-### R10.40 — Format source
-
-Status: complete
-Depends on: R10.20
-
-`refine fmt`: one style and no options.
-
-Exit evidence: formatting is idempotent and preserves every comment over the
-whole corpus, and `core` and the examples are formatted, which the gate holds.
-
-Done: D252 records one layout decided by the compiler: space only, never a
-token, a comment's bytes or a line broken or joined, LF line ends, and
-continuation lines placed by the tree. Its rules were measured on `core` and
-the examples before any was written, and `docs/format.md` shows each with a
-program as written and as formatted, which the `formatting` suite holds
-`Landin.Formatting` to. The formatter returns space-only edits in byte order,
-the shape R10.50's formatting request answers with, and refuses a source that
-does not parse with its own report; it scans a changed result and raises a
-defect if a token or comment moved, while byte-identical output needs no
-second scan. A line comment now ends at its last
-visible byte, so no trailing blank belongs to a comment. `refine fmt` rewrites
-files and `refine fmt --check` reports L0008. Over all 2,114 sources in the
-repository the 80 that fail to scan or parse are refused and every other keeps
-its tokens and comments, adds no line, and offers nothing when formatted again;
-`core`, the examples and the running examples are formatted, which the gate's
-`formatting` case holds. Seventy lines moved and no line number anything pins.
-`scripts/driver_manifest.py` held the four formatter commits equal to the parent
-at all 8,169 entries, and the reformat equal under `--layout-only` from one
-checkout: 316 entries moved, all in fixtures that read a formatted source, none
-in status, output or report. The largest scaling ratio is 2.19. The Mac ran the
-host suite in debug and release, 773 cases each, and the gate was green on every
-job on `af14ff10`.
-
-### R10.50 — Serve an editor
-
-Status: complete
-Depends on: R10.10, R10.30, R10.40
-
-A language server linked against the compiler library, over standard input
-and output: diagnostics, definitions, hover types, formatting and the edits of
-R10.30 as code actions. When syntax errors are confined to eligible routine
-bodies, analysis checks the rest of the module using stand-ins for those
-bodies. An error elsewhere stops further analysis even if the parser recovers
-later declarations. Whether it is `refine lsp` or its own executable is
-decided here.
-
-Exit evidence: scripted sessions in the gate for each capability, and a
-bounded run over mutated corpus sources that never crashes the server, which
-takes on the frontend part of R551-19.
-
-Done: `refine lsp` is a language server over standard input and output, a
-subcommand like `explain` and `fmt`, with incremental synchronisation:
-diagnostics with their codes, explanations and related information,
-definitions, hover with types as the checker spells them and doc comments,
-D252's formatting as edits, and R10.30's fixes as quick fixes, preferred
-when exact. It reads with the driver's own loader and checks with its own
-stages, now `Landin.Driver.Loading` and `Landin.Driver.Checking`, through
-buffers held over the filesystem; a file belongs to its directory's module
-under the editor's roots. Checked modules remain available for navigation
-until a document opens, changes or closes, or a watched disk file changes;
-the cache holds at most one
-compilation per open module, not a fixed byte budget. A sound analysis uses
-one compilation; an eligible broken body causes a second compilation that
-takes unchanged syntax trees from the first. The original is then released;
-the checked result may remain cached. A burst of edits is analysed once.
-One multi-module publication round may additionally cache exact parsed
-shared imports; that temporary cache is released when the round ends.
-D253 answers past a hole only inside a routine body: the server checks a
-stand-in with each broken body blanked and `loop do end loop` written in it,
-so no stage changed and `refine` reports as before.
-[2000] and D254 say what a doc comment is about. JSON is read strictly and
-bounded, framing is bounded, and positions are converted in one package, in
-UTF-8 or UTF-16. The scripted sessions under `compiler/tests/server/`
-run in the test program and through the executable on Linux and macOS; the
-memory suite runs eight sessions of twenty edits, with no net growth across
-the last three measured sessions.
-`compiler/tests/fuzz/fuzz.py` gives the single direct source from every
-one-source positive, negative, runtime and ABI fixture directory, plus every
-reproducer, mutated, to the server with the checkout as import root.
-Fixtures use their real file URIs; reproducers use separate temporary
-modules. An unchanged imported fixture and an isolated reproducer must
-report their expected checker diagnostics before the mutants run. This is
-source-text crash coverage; the lane does not execute the fixtures or their
-C companions. Its first run found a query of a module refused before the
-checker raising, which is fixed and pinned. Neovim, Helix, Emacs, Zed,
-VS Code, Vim, Sublime Text and Kate
-start the server, and Neovim and Emacs were run against it.
-`scripts/driver_manifest.py` held every commit to its parent at all 8,169
-entries, and the largest scaling ratio is 2.10. The Mac ran the host suite
-in debug and release, 793 cases each, the sessions and the fuzz lane, and
-the gate was green on every job on `14a89242`.
-
-### R10 gate
-
-- An editor gets diagnostics, navigation, types, formatting and fixes from a
-  server running the compiler's own stages.
-
-## R11 — More hosted targets
-
-The targets GitHub's runners reach, with the target description growing
-feature levels before it grows targets.
-
-### R11.10 — Describe CPU feature levels
-
-Status: complete
-Depends on: none
-
-A target description carries a feature level: x86-64 v1 to v4, arm64's
-architecture extensions, the Cortex-M profiles, RISC-V's extensions. It is
-selected per build and visible to `fixed if`.
-
-Exit evidence: feature levels selectable on every target, visible as
-compiler facts, and one feature-dependent lowering per target family executed
-at two levels.
-
-Done: a build assumes a CPU feature level of its target's family, selected
-with `--level=` or the server's `level` option through the one target mapping
-both now share; an unknown or foreign level is L0009. D255 records the
-levels, x86-64 v1 to v4, `armv8-a` and `armv8.1-a`, and `armv6-m`, `armv7-m`
-and `armv7e-m`, each a feature set whose default is what the backend always
-emitted. A level is a value beside `Target_Facts`, so layout, checking, the
-IR and every ABI see none, and `compiler.feature.NAME` reads one in
-`fixed if`. Three lowerings run at two levels: BMI2 shifts at `x86-64-v3` on
-Linux, whose lane refuses a level the processor lacks and requires the level
-in the executable's ISA note; LSE atomics at `armv8.1-a` on macOS, whose lane
-asks for FEAT_LSE and requires the executed image to hold the LSE instructions
-and no exclusive loop; and hardware division at `armv7-m` on QEMU's MPS2 AN385
-Cortex-M3 from the locked binary, whose lane requires the image to divide in
-hardware and call no 32-bit helper. The x86-64 assembler is held to the level
-at the baseline too, so an assembly block cannot outrun the build. A runtime
-fixture's `levels:` names the levels each lane runs. `scripts/driver_manifest.py`
-held every commit to its parent at all 8,169 original entries, the only
-differences being the new fixtures' own; the largest scaling ratio is 2.19.
-The Mac ran the LSE lane and the host suite, 798 cases in release, from a
-fresh clone of the branch, and the gate was green on every job on `f43e2858`.
-
-### R11.20 — Linux arm64
-
-Status: complete
-Depends on: R11.10
-
-The arm64 backend with the standard AAPCS64 and ELF, and a pinned toolchain so
-`refine` itself runs there.
-
-Exit evidence: the corpus and the GDB sessions on GitHub's arm64 Linux
-runners in the gate.
-
-Done: `linux-arm64` is the arm64 backend's second description, with the
-standard AAPCS64, ELF objects and DWARF, and Linux's libc, beside Darwin's
-under one instruction selector: an object-format layer spells relocations,
-sections and symbols, one planner holds both AAPCS64 conventions, and the
-hosted bridge asks the operating system its libc spellings. D256 makes it a
-third C ABI with its own `compiler.c_aapcs64_lp64` and an unsigned plain
-`char`, which `core/c` and the binding generator follow; D257 makes a build
-target the compiler's own host and cross-compilation explicit. The pinned
-GNAT 16.1.0 and GPRbuild 26.0.0 have aarch64-linux checksums, the flake an
-`aarch64-linux` system and the release an aarch64-linux row. The test
-program runs one target's corpus per lane, the host's own or a named one
-under an emulator; 1,950 fixtures name `linux-arm64`, and every Linux x86-64
-runtime or ABI fixture that does not has a record and a counterpart that
-runs. Six ABI peers that chose x86-64 by "not Apple" now choose by
-architecture. The gate's `arm64-compiler` and `arm64-release` jobs run both
-compilers' corpus, the GDB sessions with the bundled GDB and the bindings on
-`ubuntu-24.04-arm`, and determinism gained the host. `driver_manifest.py`
-held every compiler commit to its parent, the existing targets unchanged; the
-largest scaling ratio is 2.18. A `linux/arm64` container on the Mac ran the
-corpus, the GDB sessions and the bindings natively before the push, and the
-gate was green on every job on `6750dfcb`.
-
-### R11.25 — Linux arm64 feature-level evidence
-
-Status: complete
-Depends on: R11.20
-
-Add recurring Linux arm64 checks for the baseline `armv8-a` and selected
-`armv8.1-a` levels without reopening the completed target implementation.
-The Darwin level lane does not establish Linux evidence. Linux arm64 emits
-no ISA-level note and has no loader-refusal protection for unsupported
-levels; D255 scopes that guarantee to Linux x86-64.
-
-Exit evidence: default and explicit `--level=armv8-a` builds agree in
-instructions and ABI. `fixed if` observes the documented feature facts at
-each level, including false/true `compiler.feature.lse`; atomic add,
-exchange and compare-exchange use exclusive-monitor loops at baseline and
-LSE instructions at `armv8.1-a`. Assembler controls accept a level-specific
-instruction only at the level that permits it. Run the baseline corpus and
-GDB sessions, and execute the higher-level consumers only on a runner whose
-support for all selected features is confirmed. Missing higher-level runtime
-evidence is unverified, never supplied by baseline or Darwin success.
-
-Audit the completed Linux arm64 lane for an executed assembly block with an
-integer operand and an IR verifier refusal for an invalid arm64 register.
-Retain both as recurring gate checks; this audit does not reopen R11.20.
-
-Done: a level now runs only on a processor that confirms every feature of
-it. A native Linux lane reads its own `/proc/cpuinfo`; a cross lane asks its
-runner, through a C program its driver links, rather than assuming an
-emulator has everything, since QEMU's `-cpu cortex-a53` has no LSE. A level
-nothing confirmed fails as unverified and is never inferred from the
-default's run or from Darwin. The arm64 image check could not fail, looking
-for `ldaxr`/`stxr` where the baseline loop is `ldxr`/`stxr`; it now refuses
-the loop at `armv8.1-a` and any LSE instruction in the default's image, and
-catches an exchange left as a loop. linux-arm64 gained `fixed if` fixtures for
-`lse`, `crc32` and `rdm` at the default, an explicit `armv8-a` and `armv8.1-a`;
-a driver case requiring the default and explicit `armv8-a` to emit the same
-assembly, link command and build report for atomics, a `layout(c)` record
-across the C boundary and a variadic call; Linux add, exchange and
-compare-exchange held to exclusive loops and LSE; and an LSE assembly block
-selected by `compiler.feature.lse`. Each Linux lane's own assembler refuses
-`ldaddal` below `armv8.1-a` and `shlx` below `x86-64-v3`, at the default and
-the named lower levels, and runs the block at its level. Every hosted lane
-must execute `assembly-operands`, and the verifier refuses x18, x29, x30, sp
-and x31 under both arm64 descriptions. No compiler source changed, and
-`driver_manifest.py` agreed at all 11,729 entries. The Mac ran the Darwin
-parity corpus and host suite, and its `linux/arm64` container the whole test
-program and GDB sessions, confirming `armv8.1-a` natively. The gate was green
-on every job on `b2a51df7`, where `arm64-compiler` and `arm64-release`
-confirmed `armv8.1-a` from the runner's own `/proc/cpuinfo`.
-
-### R11.26 — Make one mistake one diagnostic
-
-Status: complete
-Depends on: R10.30
-
-R10.30 gave diagnostics fixes; it did not make them find the mistake. One
-misplaced word in a body, `v: u32 mut = 41`, gives eight reports, none
-naming `mut`. With each body line of the clean positive fixtures changed by
-one token (deleted, doubled, swapped or a stray word inserted), 694 refused
-mutants gave one report in 32%. In 65% the parser left the function and read
-the rest of the file as declarations ("this begins no declaration"), and 24%
-claimed a function closed two lines later was never closed. The first report
-was on the changed line in 99%: the parser finds the mistake and then
-abandons the construct it is in. An audit of every agent session since
-R10.30, 228 refused compiles of which about 75 were accidental, found
-agents giving up, misreading the cause or claiming success past printed
-errors. The reports that worked were written for one mistake, said what was
-found and gave the corrected form.
-
-Fix the mechanisms rather than each mistake:
-
-- Recovery respects structure. Openers and named closers are matched before
-  a body is parsed; a broken statement resumes at the next statement of its
-  own block and never leaves the enclosing construct; "never closed" is said
-  only when no closer exists; declaration resync skips balanced brackets.
-- A refused statement is diagnosed by the smallest repair that makes it
-  parse: one token deleted, inserted, swapped with its neighbour or moved to
-  the statement's start, tried on that statement alone. A repair found is the
-  report and an exact R10.30 fix; none found says what token was found and
-  after what, never only what belonged at the gap.
-- A report's primary span is the token it is about, never whitespace or a
-  line end; a secondary label never repeats it; one cause repeated is one
-  report with a count. A note cites the rule that failed, not the construct's
-  general paragraph or a grammar production.
-- A checker refusal poisons what it refuses, so a dependent error is not
-  reported: an unknown label before the parameter it leaves unfilled, an
-  unresolved import before its uses. A type error names both types and where
-  the deciding one came from; checker vocabulary that names no source
-  construct stays out of messages.
-- An import that resolves to nothing is refused at the import, not accepted.
-  A local that shadows a named return is reported at the shadowing binding.
-- Driver reports carry no source line when they have no source, distinguish
-  misuse of a known option from an unknown one, and suggest near options and
-  targets. An internal compiler defect names its stage and source span. An
-  assembler refusal of an assembly block is reported at that block.
-
-Negative fixtures that pin today's cascades as expected codes are re-pinned to
-the single report, not defended.
-
-Exit evidence: the single-token mutation suite runs in the gate over the
-positive corpus with a fixed seed. No mutant inside a body reports outside its
-enclosing function, none claims an existing closer is missing, and at least
-90% give exactly one report on the changed line. Every primary span is on a
-token. The accidental refusals the session audit found are negative fixtures,
-each pinning one report and, where the repair is mechanical, a fix the `fixes`
-suite compiles clean.
-
-Done: a mistake is reported once, inside the construct it is in, on the
-token it is about. Recovery keeps to the structure a program writes and never
-reads past the closer of the function it is in; a refused statement keeps its
-own line, the lines continuing it and the lines indented under it quiet, and
-at the top level a refused declaration's body and `end` too (D260). A
-refused line is reported as the smallest change that mends it — a token
-removed, written, swapped or moved, a line break where a value was left out —
-which the report shows and offers as a fix, likely except for removing one
-copy of a doubled token (D261). Where a form is another construct in the
-wrong place, `sizeof(t)`, `name: concept (...)`, `else (_)`, `(a, b) = value`,
-`f().x`, `addr 3` or `end struct`, the parser names that construct. A
-checker refusal poisons what it refuses: an unknown argument label hides the
-parameter it leaves unfilled, a refused write still assigns its place, a
-binding's refused writes report once and a control expression's missing value
-once (D263). An import with no root is refused at the import (D262), a local
-shadowing a named return is reported at the binding, and the driver names the
-near option, target or source, its defect's stage, and an assembler's refusal
-at its block. The `mutation` suite runs every body line of the positive corpus
-changed by one token with a fixed seed: of 1,829 refused mutants 1,659 give
-one report on the changed line, 90 per cent, and 1,758 exactly one; none
-reports outside its function, leaves its body, claims a written closer
-missing or has a primary span off a token, and those are held at zero. The
-session audit's accidental refusals are 36 negative fixtures pinning one
-report each, with the fix applied where it is mechanical; its eight foreign
-spellings are SR-13's. `driver_manifest.py` against `9d9f615c` differed at
-437 of 11,898 entries, every one in its report alone: no status, output,
-assembly, build report or map changed. The largest scaling ratio is 2.19.
-These measurements are local results. The full cross-host gate was green on
-[`5a088ec6`](https://github.com/JanHaan/Landin/actions/runs/37623707168).
-
-### R11.27 — Recover from every refused line
-
-Status: complete
-Depends on: R13.79
-
-R11.26 made one mistake one diagnostic, and two of its rules still stop
-short. D261 restates a routine's first refused line as the smallest change
-that mends it, and every later refused line keeps the parser's own report
-until the first is mended (SR-1072); D1076 measured what the repair search
-may cost and records the alternative, reading the routine with the other
-refused lines blanked. In a file with a syntax error anywhere, D260's
-recovering reading still places closers by indentation, so a correct
-routine laid out unusually, an inner bare `end` at the margin, gains a
-report beside the real one, though an accepted file is read by the grammar
-alone (D1074) (SR-1073). This item restates every refused line of a routine
-within D1076's bound, and has the recovering reading report only the
-routine that holds the mistake, whatever the layout of the others.
-
-Exit evidence: fixtures with two and with three refused lines in one
-routine, each line restated; a refused file whose other routines are
-correct and laid out unusually, reporting the mistake alone; and R11.26's
-single-token mutation campaign run again, its share of one-report mutants
-recorded beside R11.26's and no lower, with the repair search within the
-bound D1076 measured.
-
-Done: every refused line of a routine is restated, up to its first sixteen,
-each tried in the routine as the lines before it would be mended: by its
-first repair, by its report's own fix, or blanked with what D260 keeps quiet
-after it and the closer of a body it opened (D1361). Applying the first fix
-of each report then leaves every one of those lines parsing. The 1,500-line
-routine of `r = r + + N` lines reports in 1.9 seconds on a debug build and
-0.4 on a release build, against 0.7 on a debug build when only its first
-line was tried and a minute with every line tried. In a file with a mistake,
-a routine the grammar derives is closed where the grammar closes it, before
-the mistake or after it, and nothing after a routine closed at its fence is
-passed over as its leftovers (D1362). A routine with a mistake written
-before and after every fixture program that parses, its lines moved to drawn
-depths, is that mistake's report alone. The mutation suite's corpus has
-grown since R11.26. On this item's base, 97ab5248c, 2,109 of 2,155 mutants
-are refused, and 1,905 of them give one report on the changed line, 90.3 per
-cent, against R11.26's 1,659 of 1,829, 90.7. After the change every count is
-the base's. Four negative fixtures pin the new reports, and one existing
-fixture's second report is now restated. No accepted program is read
-differently. The Cortex-M `programs` part's 817 images, the `corpus` part's
-10,588, the `rv32` part's 6,443 and the Xtensa corpus's 3,254 on each chip
-are byte for byte those of R13.80's lanes. This host's manifest of 53,136
-emissions is R13.80's, and every board record matches. The largest scaling
-ratio is 2.20. These measurements are local results. The full cross-host
-gate was green on
-[`7f3e1f288`](https://github.com/JanHaan/Landin/actions/runs/43606612170),
-whose `build-modes-1` was rerun after a slow runner cut it at its limit
-(SR-1270), and the boards dispatch
-[passed](https://github.com/JanHaan/Landin/actions/runs/43606648358) on the
-same tree.
-
-### R11.30 — FreeBSD x86-64 and arm64
-
-Status: complete
-Depends on: R11.20
-
-The hosted layer and platform driver for FreeBSD x86-64 and arm64, emitted
-from Linux and run in FreeBSD virtual machines on Linux runners, one for each
-architecture. R11.30 also owns source debugging on both architectures:
-scripted debugger sessions must check source-line stops, frames, local values
-and unwinding.
-
-Exit evidence: separate gate verdicts for the runtime corpus and scripted
-source-debugger sessions in the FreeBSD x86-64 and FreeBSD arm64 virtual
-machines.
-
-Each FreeBSD architecture must execute an assembly block with an integer
-operand and have an IR verifier refusal for an invalid target register.
-
-On a FreeBSD x86-64 guest with verified `x86-64-v3` support, execute the
-variable-shift fixture at both `x86-64-v1` and `x86-64-v3`. Inspect its shift
-code in each linked executable: require BMI2 (`shlx`, `shrx` or `sarx`) at v3
-and none at v1. Missing guest support fails this lane rather than skipping it.
-
-The FreeBSD arm64 lane selects both `armv8-a` and `armv8.1-a`, verifies that
-the baseline assembler refuses an LSE instruction, and checks that an atomic
-fixture uses an exclusive loop at baseline and LSE without that loop at the
-higher level. Confirm LSE support before executing the higher-level fixture.
-If the usual VM lacks it, a named LSE-capable FreeBSD arm64 host supplies the
-higher-level execution verdict on every recurring gate run; a one-time run
-or a skipped higher-level verdict cannot satisfy completion.
-
-A nonempty C ABI fixture set must execute separately on FreeBSD x86-64 and
-FreeBSD arm64 against independently compiled C peers for each architecture.
-Cover imported and exported calls, integer and floating-point values,
-`layout(c)` aggregates, callbacks and variadic calls. Report each architecture's
-ABI verdict separately from its runtime and debugger verdicts, and fail if
-its ABI fixture selection is empty.
-
-Done: Linux emits both targets through the existing ELF backends and locked
-FreeBSD 14.4 sysroots; Linux-hosted FreeBSD 15.1 KVM guests execute them.
-The [full gate on `efeb38fe`](https://github.com/JanHaan/Landin/actions/runs/37638872998)
-passed all 34 jobs, including separate architecture runtime, LLDB and ABI
-verdicts: 2,468/2,472 runtime outcomes, four debugger profiles each, and
-158/150 ABI outcomes against 162/150 independently compiled C objects.
-Both lanes execute integer assembly operands and refuse invalid IR registers.
-Guest probes confirmed x86-64-v3 and LSE; linked v1/v3 shifts, baseline/LSE
-atomics, baseline assembler refusals and higher-level execution passed.
-All six execution verdicts and their Linux emission checks recur in the gate.
-
-### R11.40 — RISC-V rv64 Linux
-
-Status: complete
-Depends on: R11.10
-
-A RISC-V backend, RV64GC with the LP64D convention, whose instruction selection
-R12.40 reuses for rv32. Its levels are ISA strings, `rv64gc` the default,
-whose single-letter and `Z` extensions are the feature set D255 already
-models as a set rather than a rank.
-
-Exit evidence: the corpus and GDB sessions on RISC-V hardware in the gate,
-through the RISE project's runners, with QEMU user emulation as the fallback
-if that service goes away. The same gate also selects `rv64gc` and at least
-one nondefault RV64 ISA string with a different extension set, executes a
-`fixed if compiler.feature.NAME` program at both levels to show the added
-extension's fact is false at `rv64gc` and true at the extended level, and
-checks that the same operation emits and executes an extension instruction
-at the extended level and its baseline sequence at `rv64gc`. An
-`assembler.block` using that instruction must assemble at the extended level
-and be refused at `rv64gc`. The selected execution lane must support the
-extension.
-
-Execute an assembly block with an integer operand and require an IR verifier
-refusal for an invalid RV64 register in the same gate. Record the selected
-RV64 Linux LP64D C calling, layout and capability facts in `spec.md`, and
-expose the matching scalar aliases through `core/c`. A nonempty C ABI fixture
-set must execute against independently compiled C peers, covering calls in
-both directions, integer and floating-point values, aggregates, callbacks
-and variadic calls. Report its ABI verdict separately and refuse an empty
-selection.
-
-Done: the native RV64 Linux backend uses LP64D, shared ELF/DWARF and an
-XLEN-parametric instruction selector with independent ISA extension sets.
-`spec.md` records its C transport, layout and capability contracts; `core/c`
-exposes matching aliases. The
-[full gate](https://github.com/JanHaan/Landin/actions/runs/37673902236) passed on
-[`501996ec6bc872eb1f7680308c55708805ac61f8`](https://github.com/JanHaan/Landin/commit/501996ec6bc872eb1f7680308c55708805ac61f8),
-including four separate physical RISE verdicts: 537 runtime fixtures and
-2,460 executed images; four GDB profiles covering source lines, frames,
-local values and unwinding; 35 C ABI fixtures and 158 executed images
-against 158 independently compiled C peers; and 24 ISA-level images.
-Hardware execution confirmed XTheadBa support. The `rv64gc` and
-`rv64gc_xtheadba` feature verdicts, inspected and executed baseline shift/add
-and extended `th.addsl` sequences, extended assembly execution and baseline
-assembler refusal all passed. Integer assembly operands execute, and the IR
-verifier refuses invalid RV64 registers. All four execution verdicts and
-their compiler-host emission and verifier checks recur in the full gate.
-
-### R11.50 — Convert to a written type
-
-Status: complete
-Depends on: none
-
-A conversion is a type applied to a value [0310], but only a name can stand
-in front of its `(`, so converting `utf8` to its byte view needs an alias
-such as `byte_view: type = []u8` or `core/text.bytes`. Let a type expression
-stand there, so that `[]u8(text)` is the conversion that alias spells. The
-grammar must decide what `[` and `ptr` begin, since `[]` is also the empty
-slice, `[4, 5]` an array literal and `ptr(...)` the pointer conversion, and the
-admitted conversions stay exactly those an alias reaches today.
-
-Exit evidence: `spec.md`'s grammar and a register decision, every conversion
-an alias reaches spelled with its type expression in positive and runtime
-fixtures on every target, and the ambiguous prefixes pinned by fixtures that
-derive or refuse as decided.
-
-Done: D266 defines written conversion heads and their boundaries while
-preserving alias admission. Positive, runtime and refusal fixtures cover
-the existing conversion families, literal and pointer syntax, folding,
-origins and traps. The [full candidate gate](https://github.com/JanHaan/Landin/actions/runs/37702617097)
-passed all 42 jobs with no skips, including every target, physical RV64
-runtime, GDB, ABI and ISA execution, formatting, editor grammar and
-cross-host determinism.
-
-### R11 gate
-
-- R11.25 passes recurring Linux arm64 baseline and higher-level feature,
-  instruction-selection, assembler and confirmed-runner execution checks.
-- A single-token mistake in a body gives one report at the mistake, held in
-  the gate by R11.26's mutation suite.
-- Linux arm64, FreeBSD x86-64, FreeBSD arm64 and rv64 Linux each run the
-  corpus in the gate, with a separate verdict for each architecture.
-- A conversion names its type as written, without an alias.
-- FreeBSD x86-64 and FreeBSD arm64 each pass scripted source-debugger
-  sessions in the gate, with a separate verdict for each architecture.
-- RISC-V passes the baseline and nondefault extension-level evidence in
-  R11.40 on its selected execution lane.
-
-- Each new hosted target executes an assembly block with an integer operand
-  and has an IR verifier refusal for its register rules. R11.25 audits and
-  retains that evidence for completed Linux arm64 support.
-- FreeBSD x86-64 passes baseline/v3 execution and linked BMI2-selection checks;
-  FreeBSD arm64 passes baseline/LSE checks with recurring capable-host execution.
-- FreeBSD x86-64, FreeBSD arm64 and RV64 Linux each have a separate nonempty,
-  executing C ABI verdict against independently compiled C peers.
-
-## Command-line preparation before microcontrollers
-
-The public compilation command is `refine compile`; `build` is reserved for
-future project orchestration. Shared options work before or after commands,
-and their names do not overlap command-specific options except intentional
-contextual actions such as help. Command help has equivalent command-local
-and `help COMMAND` forms. Existing direct compilation spellings remain
-compatible.
-
-The first phase covers this interface, help and completion from one catalogue,
-source/build identification without assigning a release version, presentation
-and tool tracing, response files, dry-run planning and source dependency files.
-Its evidence is the command and existing driver suites, plus native CLI and
-build-consumer checks.
-
-Done: The first-phase interface, generated build identity, catalogue-derived
-help and scoped completion, diagnostic presentation and tool tracing,
-response files, dry-run plans and dependency files are implemented. Native
-Linux x86-64 command, driver and optimization-driver suites and CLI/Make
-integration checks passed. These filtered developer checks are not gate
-evidence.
-
-The second phase examines the content behind the interface: warning coverage
-and actionable repairs, diagnostic completeness and useful execution detail.
-The warning survey found two existing families, unnecessary local `mut` and
-unused immutable locals with inert literal initializers. Their requirement
-for an exact fix hid the same observation when comments or layout prevented
-an edit. D251 now separates advisory observations from exact repairs and
-allows explicit invocation policy: named warning baselines and ordered
-per-code allow, warn and deny controls. Denial must stop artifact production,
-retain the original diagnostic data and never suppress a language error.
-
-The comparison informs the policy rather than prescribing one compiler's
-flags. [Rust](https://doc.rust-lang.org/stable/rustc/lints/levels.html) separates
-allow, warn and deny and supports ordered command-line overrides;
-[Clang](https://clang.llvm.org/docs/UsersManual.html#options-to-control-error-and-warning-messages)
-supports enabling, disabling and promoting individual warnings.
-[Go](https://go.dev/doc/faq#unused_variables_and_imports) makes unused locals
-and imports errors and keeps advisory analysis in
-[vet](https://pkg.go.dev/cmd/vet). [Zig](https://ziglang.org/documentation/0.16.0/)
-treats unmutated local variables as errors. Those policies are evidence that
-there is no universal warning interface, not grounds to change Landin's
-language legality.
-
-| Survey subject | Disposition |
-|---|---|
-| Unnecessary declarations with comments or multiline layout | Report the established fact without a fix; retain exact edits where safe. |
-| Unused signed numeric literals | Include a single negation of an integer or float literal; do not generalize to arbitrary constant expressions. |
-| Uninitialized reads, incompatible types, invalid reference escapes | Keep the existing language errors; warning controls cannot weaken them. |
-| Unused imports and shadowing | Keep the retained decisions: imports add conformances, and inner shadowing is explicitly permitted without a warning. |
-| Unused parameters | Require evidence about deliberate interface parameters before admitting a new warning family. |
-| Dead stores and unreachable code | Require source-level control-flow, alias and effect evidence, including volatile accesses and configured branches, before admitting a new warning family. |
-| Local suppression and dependency-specific policy | Invocation controls are the initial mechanism; add source or package scope only when a concrete use case needs it. |
-
-Diagnostic transport must preserve labels, notes and every alternative fix.
-Real diagnostics carrying edits exposed an incorrectly closed JSON fix object;
-warning and error cases must parse as independent JSON records and retain
-their edit data. This work precedes the microcontroller phase and changes no
-language or target scope.
-
-Done: The survey and initial content improvements implement named warning
-baselines and ordered per-code allow, warn and deny controls. Denial stops
-artifact production; advisories retain observations without unsafe edits,
-and unused signed numeric literals are covered. The language server uses
-recommended warnings and offers no edit for an advisory without a fix.
-Fix-bearing JSON diagnostics preserve every alternative edit. A strict
-native Linux debug build, 242 affected filtered cases with 13,499 checks,
-six native CLI tests and 32 executable language-server sessions passed.
-Document checks and 112 checker controls passed. These developer checks
-are not gate evidence.
-
-## R12 — Microcontrollers
-
-The chips people buy: RP2040 and RP2350, STM32, and Espressif's ESP32,
-ESP32-S and ESP32-C series, on the boards of the maintainer's rig. QEMU
-emulates their cores and few of the chips, so emulator lanes carry each
-core's instructions, exceptions and ABI, and the boards carry every claim
-about a chip's peripherals, memory map and boot.
-
-The compiler knows architectures and boot image kinds and names no chip. A
-chip is a description in Landin source: its memory regions, vector slots,
-boot image kind and core options, beside the register modules `refine`
-generates from its SVD, which a developer reads, checks and navigates with
-the editor tooling like any other source. Learning a chip whose
-architecture and boot kind `refine` already supports changes no compiler
-source. No feature of the compiler needs Python, and a new runtime
-dependency is agreed with the maintainer before it is added. Vendor inputs
-are pinned by URL and hash and fetched, not vendored. The linker script and
-the sections are the developer's as well as the compiler's: a derived
-script is an output a developer can read and replace, and a declaration can
-be placed in a region its description names.
-
-An item may describe a noncoherent cached memory profile without admitting
-it for firmware. Before the first R12 item claims support for such a profile,
-it must provide platform-specific DMA cache maintenance and evidence for
-cache levels, aliases, cache-line ownership and device visibility points.
-Require target execution of transmit and receive consumers and bounded
-failure oracles for stale reads and lost dirty bytes when maintenance is
-omitted. Cacheless profiles need no such provider. A cached profile without
-this evidence remains unsupported through the R12 gate; R12.10, R12.11,
-R12.30, R12.40 and R12.50 each apply this rule to any profile they first
-admit.
-
-### R12.10 — Describe devices
-
-Status: complete
-Depends on: R11.10, R13.35, R13.70
-
-A device description in Landin source selects the memory profile, linker
-configuration, firmware vector mapping and boot image format per device,
-instead of the fixed constrained profile. The compiler holds the
-architectures and a closed set of boot image kinds: a plain vector table at
-the boot address, RP2040's checked second stage, RP2350's image block and
-Espressif's application image. The constrained profile becomes a
-description, retained as the reference. The selected device's interrupt
-numbers must map to absolute vector slots (external IRQ0 is slot 16), with
-its reserved slots kept zero and its implemented slots available to typed
-handlers. When device selection lands, [1990]/D229's fixed vector slot
-exclusions must become profile-specific; the current constrained profile
-remains a reference.
-
-The compiler derives the linker script from the description's regions and
-the regions it places each section in, and writes it as an output. A
-developer may supply a replacement script. The linked image is then checked
-against a written contract, the vector image at the boot address, the
-startup symbols, the stack and the initialized-data images, rather than the
-compiler parsing the script. A declaration can be placed in a named region
-of the selected description, where [1990] refuses section addresses and
-linker scripts today.
-
-This schedules the linker half of R551-33, R730-05's larger profiles,
-R551-08's bounded emission policy and the Cortex-M toolchain move SR-01.
-The emission policy must be in force before admitting images larger than
-32 KiB; the retained constrained profile remains available while that
-policy is established.
-
-Exit evidence: descriptions of RP2040 and the constrained reference select
-their profiles by device identity. Fixture checks compare each selected
-memory region, vector mapping and boot image format fact with an
-independently recorded expectation for that device; a wrong or absent fact
-fails the checks. The firmware ELF alone does not establish this selection.
-A developer-supplied script that meets the contract links, one that breaks
-each clause of it is refused naming that clause, and a declaration placed
-in a named region lies in that region in the linked map. Every capacity
-verdict is rerun against each selected profile with the 32 KiB reference
-retained.
-
-The Cortex-M gate runs with SR-01's migrated `arm-eabi-gcc` toolchain,
-pinned beside the host toolchain in `environments/pins.sh`,
-`compiler/ada/TOOLCHAIN.md` and `flake.nix`. Every affected Cortex-M record,
-including firmware hashes and disassemblies, is regenerated and reviewed in
-the same toolchain change.
-
-Check the RP2040 interrupt-to-vector mapping against the linked firmware
-image: `USBCTRL_IRQ` is IRQ5, so a typed handler at absolute slot 21 must
-compile in the RP2040 profile and occupy that vector word; R12.20 executes
-it when IRQ5 is delivered on the board. Verify the constrained reference
-profile still refuses slot 21 and emits zero there.
-
-Small source/IR shapes must demonstrate that compact inputs cannot cause
-unbounded assembler repetition or object growth under the emission policy,
-with the forbidden giant-fixture boundary retained. Check this bound before
-enabling a larger profile; this schedules the policy and its evidence without
-choosing a new numeric compiler limit here.
-
-Done: a firmware program selects its device by importing its description,
-a module of `compiler` and `linker` directives under
-`devices/descriptions/<chip>/`; with none it keeps the reference profile,
-now the library's `platform/cortex_m/reference`, and its assembly is
-byte-identical to before (D542, D543). A description's core builds at its
-own level or a lower one of its family. The selected profile decides which
-vector slots a handler may take and which are zero, in the checker, the IR
-verifier and the backend (D544); the linker script is derived from its
-regions and placements, the plain table and RP2040's second stage are boot
-kinds with RP2350's and Espressif's reserved (D545), `--linker-script` is
-held to a written contract that names the clause it breaks (D546), and
-`link(region:)` places a declaration (D547). RP2040's regions, vector map
-and boot kind are checked against recorded expectations, a handler at slot
-21 occupies its word there and the reference still refuses it; its second
-stage is 256 zero bytes until R12.20. Every static image is held before
-emission to the selected profile's flash and RAM or to its hosted target's
-reach, and repeated runs are written as `.zero`, `.fill` and short plain
-values, so assembler memory stays near the object's size on every target
-(D536, D537). The Cortex-M lane links with GNAT's arm-elf GCC 16.1.0, pinned
-beside the host toolchain, and refine looks for `arm-eabi-gcc` and then
-`arm-none-eabi-gcc` (D532); every Cortex-M record was rerun on it beside
-main's on the old toolchain. Capacity verdicts against each selected
-profile are measured from image sizes and frames, since the corpus links
-against the reference map (SR-489).
-
-### R12.11 — Learn a device from its SVD
-
-Status: complete
-Depends on: R12.10
-
-`refine` generates Landin from a CMSIS-SVD file: the register modules, and
-the interrupt and vector part of the device description, beside which a
-developer writes its memory and boot part. The importer is part of
-`refine`, written in Ada with no new dependency, and replaces the Python
-fixture generator. Its inputs, and every vendor header and document
-used to check its output, are pinned by URL and hash and fetched rather
-than vendored; the RP2040 inputs leave the tree too. The second family is
-the STM32H753 on the rig's NUCLEO-H753ZI; R12.30, R12.40 and R12.50 learn
-their chips the same way. This schedules the SVD half of R551-33.
-
-Exit evidence: the RP2040 fixture regenerated byte for byte by `refine`; the
-STM32H753 generated from pinned inputs, with every selected register and
-field's address, layout, reset and encoding checked against ST's CMSIS
-device header or reviewed literals independent of the generator and its SVD
-input; its read and write access policies checked against separately
-reviewed expectations; and a generated-module consumer checked against an
-independent control. No emulator models the chip, so that control compares
-the addresses, widths and values of the consumer's linked accesses with
-reviewed expectations. Each distinct SVD form used by the selected
-registers, including peripheral derivation, device-level property
-inheritance and alternate registers, is exercised by these checks;
-unsupported forms have negative refusal controls.
-
-The H753 description selects its profile as R12.10's do, with its regions,
-vector mapping and plain-table boot format checked against independently
-recorded expectations, and every capacity verdict rerun against it. Its
-profile is cacheless: compiler-owned startup leaves the M7's caches disabled,
-as reset leaves them, and a cached profile may be described but is not
-admitted.
-
-Done: `refine svd` reads a device's SVD with its own strict XML reader and a
-JSON selection policy, and writes the register modules and the description's
-`interrupts.ldn`, replacing them whole or not at all (D555-D558); the Python
-generator is gone. RP2040's fixture is regenerated byte for byte, and every
-vendor input is pinned in `devices/inputs.json` by URL and SHA-256 and
-fetched, RM0433 supplied by hand, with only the licence notices kept in the
-tree (D559). The STM32H753 is learnt from ST's SVD in Arm's STM32H7xx_DFP
-for prototype 1's UART and DMA, its selected registers held to ST's CMSIS
-header and to RM0433 Rev 9 by section and page, with reviewed corrections to
-two fields, a reset value and the vector table (D560); a consumer's device
-accesses are read from its linked image (D561); and its description is
-cacheless, with DMA buffers kept out of the TCMs (D562).
-
-### R12.12 — What the register owes now
-
-Status: complete
-Depends on: R12.11
-
-A survey of the register before R12.20 found rows on the first board's
-path, and rows whose activation an earlier item met without taking them:
-R12.10 and R12.11 changed the flake, the Cortex-M lane's runners and corpus,
-the command catalogue, the grammar and the Cortex-M0 data emission, and
-added diagnostic codes, and R14.20 and R14.30 delivered what four rows
-waited for (SR-499). This item takes them, with the recurring friction of
-the test program's selectors and the stream patches, and decides:
-
-- An import whose first matching directory holds no source, while a later
-  root holds a module of the same path, is refused naming that root; first-
-  root precedence stands, and an empty module with no rival stays legal
-  (SR-487).
-- A target-limited builtin is refused only where the program reaches it,
-  amending D453, so a module that offers one needs no submodule of its own
-  (SR-338).
-- The gate builds the flake on every run that does not reuse a pass: Nix
-  CI limited to that, the explicit
-  decision R551-15 waits for (SR-236).
-- A documents-only commit after a complete successful push run of its
-  branch reuses that run under the explanatory rule, as a main run is
-  reused now (SR-284).
-- A reference manual its publisher serves only to a browser stays supplied
-  by hand, pinned by URL and SHA-256 and verified by
-  `scripts/fetch_inputs.py`, with how a reviewer obtains it written beside
-  the pin (SR-497).
-
-The rows on R12.20's path: the Cortex-M corpus linked with each selected
-profile's derived script (SR-489), `platform/cortex_m` usable from a shared
-program's firmware arm (SR-391), the NixOS route to the lane's tools
-(SR-268), and the lane runners: a named program run with its status, every
-lane reported, case and control selectors, and a stack-guard overflow named
-(SR-343, SR-270, SR-332, SR-352, SR-274). The overdue rows: SR-129, SR-133,
-SR-227, SR-236, SR-260, SR-263, SR-271, SR-276, SR-333, SR-347, SR-349,
-SR-351, SR-362, SR-388 and SR-488. The recurring friction: SR-318, SR-428
-and SR-280, and SR-499's step naming the rows an item's changes activate.
-The shell and checklist work also meets SR-282, SR-356 and SR-357.
-Its own changes then met the activations of SR-278, SR-283, SR-305, SR-306,
-SR-353, SR-365, SR-366, SR-372, SR-393, SR-402, SR-511 and SR-517, which
-it takes too.
-
-Exit evidence: each row's completion as the register states it, with the
-fixtures and controls it names; the gate green on the completing commit;
-and what the work met in the register.
-
-Done: an import whose first directory holds no source while a later root
-holds the module is L0532, naming both (D563); a target-limited builtin is
-refused only where lowering keeps the call (D564); the command catalogue
-says what each option needs and writes the driver's usage (D565), and a
-diagnostic code is one row of one table. The stack report closes a call
-through `any`, a generic's table or a function value over every routine it
-can reach (D570), a round's yield goes at most 688 bytes past its switch on
-every target (D571), `refine check` and the server decide a handler's margin
-from the frames a build would emit (D572), RV64 reuses dead scalar homes at
-`size` and `speed`, and every Cortex-M0 datum is typed and sized.
-`platform/cortex_m` declares its operations only on M-profile, so a shared
-program calls them from a firmware arm (D575); the Cortex-M corpus links
-each program with its profile's derived script, RP2040's and the
-STM32H753's verdicts linked rather than measured, and its lanes run one
-program, case, lane or control, report every failure, name a stack-guard
-overflow and write a new fixture's row from its compilation.
-`connect_within` bounds a connect (D580), an IPv6 address keeps its zone
-(D581), `posix.words` words every errno (D582), and a signal during a sleep
-is pinned on every hosted target. The gate builds the flake on every run
-that reuses no pass (D585), an explanatory close may reuse a branch's full
-run (D586), the shell carries LLDB, `scripts/activations.py` names the rows
-an item's changes activate, the FreeBSD lane reports every outcome, and the
-test program's `--fixture` and `--record` repeat. Darwin parity's 3,916
-outcomes and the host suite passed on a Mac before the gate. What it met is
-SR-510, SR-515 to SR-517, SR-525 to SR-527, SR-530, SR-540, SR-550 and
-SR-551.
-
-### R12.20 — The first board
-
-Status: complete
-Depends on: R12.10, R12.12
-
-Raspberry Pi Pico, an RP2040 with the ARMv6-M the backend already emits: its
-second-stage boot and flashing through a debug probe. Port the prototype-1
-UART/DMA application to real RP2040 peripheral addresses, clock, reset and
-pad setup, and DMA/interrupt and stop semantics. Define a device-specific
-physical trace oracle for injected UART data, echo and GPIO effects, and
-observable DMA/interrupt progress. This item owns R730-01's first pinned
-physical-board run and smoke procedure.
-
-The existing derived driver retains its synthetic peripheral map and drain
-contract in the emulator lane; only source-level scenarios whose premises
-hold on both devices are shared.
-
-Exit evidence: check the flashed RP2040 image's second-stage bytes and
-checksum, then record a power-cycle boot from that image, without a probe-set
-program counter or RAM-loaded program. It must reach compiler-owned startup
-through the ROM-loaded second stage and execute the board smoke test. Check
-the captured board-port trace against its physical oracle and record the run
-here. The synthetic driver and its own emulator oracle remain in the gate;
-compare shared scenario outcomes only where their contracts overlap. The
-board run also delivers IRQ5 and observes the typed handler whose absolute
-slot-21 placement is required by R12.10.
-
-Done: RP2040's description holds its second stage, a port of pico-sdk's
-generic 03h stage marked `link(boot_stage)`, which refine places at the
-start of flash, pads and seals with the boot ROM's CRC-32 in the object it
-assembles (D587, D588), and `--emit=linker-script` writes a profile's
-script and limits without a program (D589). The prototype-1 application
-runs on a Pico H at the RP2040's own addresses, clocks, resets and pads,
-keeping the synthetic driver's receive contract over the chip's own DMA
-protocol, a live count and an abort for stop, with the UART's own overrun
-reported (D593, D594); its echo and indicator are a module both lanes run.
-`environments/boards/rp2040/board.py` flashes the image through a probehive
-SWD slot, reads the second stage back, cycles the Pico's power and checks
-the UART trace against an oracle written from what the host sent and the
-datasheet (D595); IRQ5 is set pending in the NVIC and runs slot 21's
-handler in exception 21 (D596). The recorded run is
-`environments/boards/rp2040/record.json`: a power-on boot, CHIP_RESET
-HAD_POR alone, with no probe attached; VTOR 0x1000_0100, written only by the
-ROM-loaded stage, whose CRC is e5e96a65; the shared `1A0` echoed with GPIO3
-set and cleared as the emulator lane's application does, read back by its pad
-and on a wire by the probe; a ring overrun and
-a FIFO overflow each reported and restarted; an exhausted epoch restarted
-with nothing lost; 11,202 bytes echoed in order; and the counters read over
-SWD equal to the trace's. It left SR-556, SR-569 to SR-571 and SR-573.
-
-### R12.30 — Thumb-2, Cortex-M33 and M7
-
-Status: complete
-Depends on: R12.20, R12.11
-
-The ARMv7-M and ARMv8-M instruction sets and the M7's hardware floating
-point, for RP2350 and the NUCLEO-H753ZI, with QEMU's `mps2-an505` M33 and
-`mps2-an500` M7 machines as the emulator lanes for the cores. RP2350 is
-learnt through R12.11's importer, with its image block as the boot format.
-`armv7-m` and `armv7e-m` exist as D255 levels with hardware division only;
-this adds `armv8-m.main`, Thumb-2 selection beyond division, and the M7's
-FPv5-D16 single- and double-precision registers, which change the C ABI and
-so are a description rather than a level. The H753 profile stays cacheless
-under R12's rule. This item also extends assembly operands to
-float registers on the M7 and the hosted targets that have them, including
-the register class and clobber set in [1630] and D248.
-
-Exit evidence: the Cortex-M corpus on the emulator lanes in the gate, and a
-recorded run on each board. On the M7 board, nonconstant source f32 and f64
-arithmetic and comparison fixtures must execute with results checked
-against their oracles; linked disassembly must show compiler-generated
-hardware float operations rather than software arithmetic helpers. Direct
-target-description and C ABI-planner checks must establish the M7's VFP
-argument and result registers, call-preserved registers and stack fallback
-against AAPCS32's VFP variant, and check the linked image's float ABI
-attributes. Executable C
-source interoperation remains in R13.20. [1630] and D248 must also be amended for float
-operands, with executed float-operand fixtures on every target with float
-registers.
-
-The recurring emulator gate must also execute a compiler-generated,
-non-division Thumb-2 operation at `armv8-m.main` and check its result. Linked
-disassembly must locate the selected instruction in the fixture's compiled
-function. The same source at default `armv6-m` must retain its baseline
-lowering without that instruction. This evidence supplements the M7 float,
-ABI and assembly-operand requirements above.
-
-Done: `armv8-m.main` is D255's fourth M-profile level, without the optional
-DSP extension, beside the `cortex-m33` core, which executes it, `armv7-m` and
-`armv6-m`. At every Thumb-2 level a 32-bit product is `smull` or `umull` and
-a 64-bit one `umull` with `mla` (D605), and at `armv8-m.main` an acquiring
-load or releasing store is `lda` or `stl` (D606); the Cortex-M corpus finds
-each in its fixture's linked function, and the same source's `bl
-__aeabi_lmul` and `ldr` with `dmb` at `armv6-m` and `armv7-m`. QEMU's
-`mps2-an505` and `mps2-an500` run the whole runtime corpus beside the M0's,
-each through a lane description in Landin source (D607, D619), as the gate's
-`cortex-m-corpus` job. The M7's FPv5-D16 is a description's
-`compiler.float_unit`, which `compiler.feature.fp` and `fp_dp` read (D615): a
-build with it uses AAPCS32's VFP variant for C and for Landin, its planner
-held to GCC's hard-float build (D616); its float arithmetic, comparisons and
-conversions are VFP instructions and call no helper (D617); reset enables CP10
-and CP11, handlers take the extended frame (D618) and a fibre's context keeps
-d8-d15 and FPSCR (D620). The linked image reads `Tag_ABI_VFP_args: VFP
-registers`, and a soft-float object is refused at its link. The STM32H753's
-description has the unit, and its consumer's device accesses are the board's
-to check (D621). Assembly operands take f32 and f64 in the class `float` on
-x86-64, arm64, RV64 and the M7, a block declaring each callee-saved float
-register it names, and a square root runs on each (D630). RP2350 is learnt
-from pico-sdk's SVD (D635, D636), and `rp2350-image-block` is built: one
-IMAGE_DEF linked to itself after the vector table, read back from the object
-and held to the first 4 KiB (D637, D638). A reviewed correction may add a
-field the SVD lacks, as the H753's DMA needs TRBUFF (D652), and a
-vector-table description may hold a stage that runs before reset, where the
-H753's configures its supply before RAM is written (D653). The board tools
-share `environments/boards/common.py`, and the shared command loop names no
-device (D645, D646).
-
-The recorded runs are `environments/boards/rp2350/record.json`, a Pico 2 on
-its Cortex-M33 at `armv8-m.main` from power-on, CHIP_RESET HAD_POR alone and
-VTOR 0x1000_0000, its image refused into USB BOOTSEL when the block's end
-marker is corrupted, the shared `1A0` echoed with GPIO3 set and cleared, IRQ14
-in exception 30, an overrun and the epochs with the UART's 32 bytes kept,
-11,202 bytes echoed in order and the counters read over SWD equal to the
-trace's (D654, D655); and `environments/boards/stm32h753/record.json`, a
-NUCLEO-H753ZI at `armv7e-m` with its float unit from power-on, through the
-supply stage with ACTVOSRDY set, CPACR granting CP10 and CP11 and CCR's caches
-off, the shared scenario on LD1, USART3's handler in exception 55, an overrun
-and the epochs with the receiver holding 17 bytes, 52 f32 and 52 f64 operand
-pairs whose sums, differences, products, quotients, comparisons and square
-roots, compiled to VFP instructions, match the host's IEEE arithmetic, and the
-counters read over SWD equal to the trace's (D647-D651). SR-510's activation
-stands, since the item changed the fibre stack's margin and not its
-documentation. It left SR-574, SR-575, SR-577, SR-578, SR-580 to SR-586,
-SR-590 to SR-596, SR-600, SR-602, SR-603, SR-605 to SR-608, SR-610, SR-613
-and SR-614.
-
-### R12.40 — RISC-V microcontrollers
-
-Status: complete
-Depends on: R11.40, R12.11, R12.30
-
-RP2350's Hazard3 cores and ESP32-C5 use `rv32imac`; ESP32-C3 uses `rv32imc`
-without A. The ESP targets also need their application image format, and
-their chips are learnt through R12.11's importer. Espressif's QEMU emulates
-the C3; it has no machine for the C5 and none emulates Hazard3, so QEMU's
-`sifive_e` carries the `rv32imac` core. The C3 default level and assembler
-limit must omit A. Under D227, support aligned
-one-, two- and four-byte atomic loads/stores and thread fences, and statically
-refuse read-modify-write atomics and eight-byte operations with L0344. There
-is no implicit library or interrupt-masking fallback.
-
-Exit evidence: the freestanding corpus on an emulator lane in the gate, and a
-recorded run on each board.
-
-C3 emulator and board cases execute its admitted atomic operations. The C3
-lane checks the `rv32imc` assembler setting and absence of A-extension
-instructions in linked firmware, and requires refusal of exchange, add,
-compare-exchange and eight-byte atomics. The Hazard3 and C5 boards and the
-`rv32imac` emulator lane execute an A-extension read-modify-write operation.
-
-Done: `rv32` is a firmware target with the ilp32 layout and two D255
-levels, `rv32imc`, the default, and `rv32imac` (D660); a program that
-imports no description is given `platform/riscv/reference`, QEMU's
-`sifive_e` map with the Cortex-M reference's capacities (D661), and a
-description names one of four cores, `sifive-e31`, `esp-rv32imc`,
-`esp-rv32imac-clic` and `hazard3`, each with its interrupt model and slots
-(D662). Its code is RV64's emitter at XLEN 32: eight-byte integers in
-register pairs, soft float and 64-bit division through libgcc, word frames,
-Table A.6's atomics, the ilp32 planner held to riscv64-elf-gcc, and RV32
-assembly operands with a verifier refusal of an invalid register
-(D670-D679), linked by GNAT's riscv64-elf GCC or a distribution's
-riscv64-unknown-elf (D660). Its text is 1.02 to 1.04 times Cortex-M0's
-Thumb for the same fixtures (D676-D678), and the epilogue, which read its
-frame record below a released stack pointer at both XLENs until the
-Hazard3's first DMA interrupt landed between the two, reads nothing below
-it (D679). A level's `a` decides the one checking rule a level may: a
-read-modify-write atomic is refused with L0344 at the caller's use at
-`rv32imc` and admitted at `rv32imac`, and an eight-byte one is refused at
-both (D690, D691). An image begins with an entry word and a trap table
-dispatching by mcause, vectored on the E31 and the C3, through one CLIC
-entry on the C5 and through meinext on the Hazard3 (D680-D687), records an
-unhandled trap in five cells (D656), and places RAM code where it can run
-(D657, D688, L0578). `esp-app-image` is built, a RAM-only image at the
-ROM's offset with no second stage, written as `OUT.bin` and read back
-(D683-D685, L0575-L0577), and `rp2350-image-block` carries RISC-V's
-IMAGE_DEF (D682). The ESP32-C3 and ESP32-C5 are learnt from Espressif's
-SVDs, with their watchdogs stopped in a stage before reset, and the
-RP2350's Hazard3 cores from pico-sdk's (D700-D708). Espressif's QEMU,
-pinned in the Cortex-M lock, runs the whole corpus at `rv32imc` on its
-`esp32c3` machine, whose CPU is held to lack A, and at `rv32imac` on
-`sifive_e` with the reference, as the gate's `cortex-m-rv32` job, and boots
-the C3's `OUT.bin` through the chip's own ROM (D695-D698); the host
-determinism manifest and the build-modes comparison hold `rv32`'s bytes
-(D658), and the recorded lowering lowers a fixture at the target it names
-(D659).
-
-The recorded runs are `environments/boards/rp2350_hazard3/record.json`, a
-Pico 2 on its Hazard3 cores at `rv32imac` from power-on, CHIP_RESET
-HAD_POR alone and mtvec vectored at 0x1000_0200, the shared `1A0` echoed
-with GPIO3 set and cleared, IRQ14 forced through meifa into slot 30's
-handler, the overrun and the epochs with two DMA completions taken through
-meinext, 11,202 bytes echoed in order, `amoadd.w` numbering every frame
-and the counters read over SWD equal to the trace's (D710-D713);
-`environments/boards/esp32c3/record.json`, an ESP32-C3 at `rv32imc` from
-power-on, its ROM's log on UART0 loading each segment of the `OUT.bin`
-read apart from refine and entering at its entry, the image holding no A
-instruction, a broken checksum refused by the ROM and our SHA-256 the one
-it computed, the receive and timer interrupts on lines the program routes
-through the interrupt matrix, its admitted atomics checked against the
-oracle, the overrun and the threshold window, and the counters, atomic
-cells and trap record read over JTAG equal to the trace's; and
-`environments/boards/esp32c5/record.json`, the same on an ESP32-C5 at
-`rv32imac` through its CLIC, its power-on read over JTAG and its ROM's log
-taken after a chip-enable reset, with an AMO and two compare-exchanges
-checked (D720-D727). The board tools share a rig lock and pace every
-action that drops a device from the hub, and refuse to switch a port
-unless the probe's Arty, moved off the hub's cascade, is still off it
-(D725). The `check.py` rows SR-254, SR-255, SR-291, SR-323, SR-460 and
-SR-530 keep their activations, since the item changed only `check.py`'s
-pin and target checks; SR-515's, SR-552's, SR-555's, SR-580's and
-SR-680's, which it reached, are restated with the others it reached. It
-left SR-618 to SR-622, SR-625, SR-635 to SR-637, SR-645 to SR-651,
-SR-655, SR-660, SR-671 to SR-673, SR-680, SR-681, SR-684, SR-685 and
-SR-690 to SR-694.
-
-### R12.45 — Board runs from RAM
-
-Status: complete
-Depends on: R12.40
-
-Done: all six board ports default to SRAM development runs under a defined
-warm reinitialization contract, without flash programming or a ROM reset.
-`--firmware-layout=ram` derives SRAM placement, validates allocated sections
-and startup ranges, keeps BSS clearing and omits in-place copies (D900).
-`environments/boards/run.py` builds on epycmicro and transfers checksummed
-images and matching tools to rigpi, where the locked, timed physical
-oracle runs (D901, D902). Explicit boot mode checks ROM packaging and cold
-startup, then restores and verifies a USB-silent fixed image. Pico 2 setup,
-architecture changes and boot checks stay off the cascade; manual UF2 and
-Pico-only cold cycles never switch the Arty or attach in BOOTSEL.
-
-All six ports passed cold-boot and repeated RAM oracles, with separate
-records that match all twelve current offline builds in strict mode.
-Pico 2 Arm RAM runs took 6.362 and 6.348 seconds; Hazard3 took 15.897 and
-15.898 seconds from the verified cold fixed image and then the running
-application. Hazard3 uses core 0 program-buffer transfers, retained hart 1
-debug halt, resume flushing and a TIMER0 pause policy that permits its
-alarm to run (SR-754, SR-755). Six independent readbacks per run confirmed
-the retained halt; RAM runs wrote no flash, reset no chip through the ROM
-and logged no kernel USB lines. Both Pico 2 boot checks passed exact
-power-on and fixed-restoration oracles; their 907.098 and 739.301 seconds
-include the operator's manual steps. Detailed timings and identities are
-retained in the tool records and the central boards guide.
-
-The complete integrated Linux suite passed 1,116 cases and 251,104 checks.
-All 286 board controls pass on Linux; native Darwin passes 284 with only
-two live Linux process-discovery checks skipped. The same focused native
-Mac compiler cases, native/Pi helper builds, fifteen Rust controls, six
-real RAM-image validations, modes/manifest comparisons, scaling,
-highlighter integration and document checks pass. The activation sweep
-uses the starting commit `eef9d3db5`. Settled SR-680, SR-684, SR-691,
-SR-706, SR-735, SR-737, SR-738, SR-739 and SR-741 through SR-756. SR-736 remains open because the Pi's
-Arty and cascade share VL805. The LiteX-only companion shell is published
-on probehive's `landin-ram-gpio` branch at `4f69b8269a664cf1e1c47b2b40365b482e9f30ec`
-(SR-737). Promotion requires the candidate's complete multi-host gate.
-
-The activation sweep also reached SR-266, SR-289, SR-296, SR-298 and
-SR-605: caller-aware internal-error reporting, language option values,
-diagnostic citation policy, trap-site resolution and RP2350 image hashes
-retain their activations. The Hazard3 debug wedge met SR-685's trigger;
-full architectural register capture remains deferred because debug access
-itself stalled, and recovery would replace the state being diagnosed.
-This item retains debug prestate, loader errors and USB deltas, and prevents
-ESP failures before a successful load from presenting stale application trap cells
-(SR-748). SR-552 and SR-555 retain theirs: no script-test
-host-only dependency or locked lane tool changed. SR-699's activation is
-the Cortex-M runner's arguments, not the new board runner. SR-724 remains
-for the next change to gate job identities, matrix legs or the reuse list;
-this item adds a step to the existing Cortex-M programs leg.
-It also builds both RAM helpers in the existing flake job; job identities
-and reuse rules are unchanged.
-
-### R12.50 — Xtensa, ESP32 and ESP32-S3
-
-Status: complete
-Depends on: R12.11
-
-Done: added the `xtensa` family, default `xtensa-esp32` LX6 and selectable
-`xtensa-esp32s3` LX7, with one windowed ILP32 layout (D903) and compiler-owned
-window overflow/underflow, interrupt, trap and stack-switch startup. CLI and
-server level selection, feature queries and L0009 refusals cover both levels;
-one unchanged source takes distinct `salt` feature branches. Pinned vendor
-assemblers accept available instructions and reject absent instructions in
-source blocks and generated code, including the default selection. Actual
-ESP32 objects run on S3 only after configuration, linked-instruction and
-helper compatibility checks; this supplies no general LX7-superset claim.
-Both strict configurations, independent C peers and helper-state audits pass.
-The compact frame plan retains ordinary checked frames, an independent opaque
-assembly bank and a measured prepared-stack handler reserve (D472, D474).
-
-Both exact CPUs pass the complete unchanged freestanding inventory on pinned
-Espressif QEMU's explicitly virtual 64 MiB SIM profile: 3,303 cases per CPU, comprising
-3,066 executions, 168 expected source refusals, 65 target restrictions and
-four witnessed selected-image limits for the unchanged two-GiB fixture.
-Separate chip controls retain the physical SRAM bounds. Both imported boards
-pass recorded RAM runs and separate packaging/cold-start checks, with verified
-fixed USB-silent images restored. ESP32 records USB cycling followed by
-CHIP_PU reset and unmeasured rail discharge; S3 separately observes power-on
-before UART. The common rig lock, USB stop rule and Hazard3 contract remain.
-No external memory, DMA or physical timing guarantee is claimed. The two new
-complete emulator lanes and required-job reuse inventory move together.
-
-Focused Linux and native Mac compiler checks, script controls, independent
-assembler/C ABI controls, all sixteen offline board images, highlighter and
-flake checks pass. Debug/release emission has no disagreements across 24,548
-requests; the all-target manifest covers 52,272 entries. The full fixture-execution suite agrees at one and eight workers: all
-14 aggregate cases pass, with 16,024 checks and retained verdict/diagnostic
-diffs empty after progress-time normalization. Scaling passes alone on its
-host with the default parameters and worker settings.
-The candidate must pass its complete remote gate before main promotion,
-which needs separate authorization and the unchanged tested tree.
-
-Settled SR-614 (including its merged SR-671) and SR-672 through the manual-text and policy-drafting recipes;
-SR-660 through emulator pointers; SR-709 through the public fake-filesystem
-contract; SR-719 through the configuration-atom catalogue; SR-723 through
-runtime link policy in mode comparisons; SR-724 through expanded required-job
-inventory checks; SR-725 through target debug-mode queries; and the carried
-SR-757 through RAM-default help. New findings SR-758 through SR-767 are also
-settled: grouped interrupt corrections, dimension documentation, installer
-preflight, distinct command logs, scoped boot reads, complete UART boot traces,
-owned emulator cancellation, explicit classic cold reset, external URL
-recognition and measured remote-protocol latency. SR-770 and SR-771 are
-settled through deterministic retained comparison evidence and canonical
-reader-lock fixtures with an inherited-marker alias control. SR-757 keeps
-its original identity. New SR-768 remains open: contended wall-clock timeouts stay failures,
-with scheduling guidance and controlled replay evidence, pending a general
-guest/transport budget policy. New SR-769 remains open for architecture-specific result/diagnostic labels
-in the shared ESP scenario; existing Xtensa records are
-documented as INTERRUPT pending bits, with the correct per-line masks. New
-SR-772 remained open at that close for selected-target corpus restriction explanations;
-shared witnesses stay valid, but inherited Cortex-M wording does not name
-Xtensa's separate controls. New SR-773 remains open for a first-failure log
-command that works while the overall gate is still active.
-New SR-774 is settled through explicit stock C compiler, library and header
-packages without unused target C++ recommendations. A signed-index resolver
-comparison preserves the C dependencies, stock identity and PATH guards,
-and the existing twenty-minute budget; actual runner timing remains a gate
-verdict rather than a claim of that simulation.
-
-Activation review against `5d1bed296d7779a718d000baa687535a7d13d62d` includes
-all unmatched rows. SR-555 retains the existing locked runtime/FHS route;
-restate its trigger for a QEMU/GDB version or packaging change. SR-650 remains
-for RV32 watchdog-stage validation, SR-605 for RP2350 boot-kind/hash work,
-and SR-552 for script tests requiring development-shell-only tools; these
-new standard-Python controls and Xtensa stages do not implement those changes.
-SR-736 remains for rig failure isolation: Arty and the cascade still share a
-controller. R551-07 remains for general large-image placement, SR-649 for a
-physical ESP image beyond internal SRAM, and SR-637 for RV32 scratch homes;
-virtual corpus RAM and Xtensa frame changes do not settle them.
-
-SR-317 remains for handler-signature and L0506 diagnostics: the resource
-margin changed without improving its convention, constraint, site-type or
-error-set explanations. SR-510 remains for discovery of the fibre task-sizing
-row: compact frames change costs without naming the library's private first
-frame or adding per-task rows. R551-12 retains R16.20's indexed-check, Darwin
-home and atomic/barrier work despite the measured Xtensa frame improvement.
-
-Other unmatched triggers remain attached to their described behavior:
-SR-266 internal-defect caller reporting; SR-289 module-value options;
-SR-296 diagnostic-note citations; SR-298 installed panic-site resolution;
-SR-379 hosted cross-runner children; SR-451 C-layout cascades; SR-722 generator
-failure reporting; SR-721 shared subprocess hang guards; SR-685 wedged
-RISC-V register capture; and SR-636 RV32 float operands or an F level.
-SR-740 retains the proposed local-path notation trigger. SR-291 is restated
-for named-file handling of fenced examples, SR-254 for the checker's command
-line and SR-530 for citation checking: external URL recognition changes none
-of those interfaces or policies.
-
-SR-734 remains for the fixture failure's re-recording hint: the lane-description
-message now names Xtensa's corpus, while that separate hint is unchanged.
-SR-281 retains stale-binary detection: the comparison wrapper builds once and
-records provenance without comparing an installed binary to its checkout.
-SR-324 retains a common non-host assembler command: adding configured Xtensa
-lanes does not change Mach-O/FreeBSD spelling or introduce that command.
-
-### R12.60 — Boards in the gate
-
-Status: complete
-Depends on: R12.20, R12.30, R12.40, R12.45, R12.50
-
-A self-hosted runner with the boards attached, run for `main` and by hand and
-never for a pull request from a fork. This extends R12.20's first-board
-readiness evidence to recurring smoke runs on every supported board.
-
-Exit evidence: every board this phase supports runs its smoke procedure
-against a device-specific physical oracle in the gate, beside the emulator
-lanes it does not replace.
-
-Done: `gate.yml` runs every port on the rig for a push to `main`, a weekly
-schedule and a manual dispatch, whose `boards` scope runs the boards with
-the document and script jobs alone; branch pushes and pull requests skip
-them and say so (D904). A hosted `board-bundles` job builds the release
-compiler and every bundle strictly against the hardware records; seven
-legs on rigpi's runner, labelled `landin-rig` alone and run as an
-unprivileged system user, check out exactly that commit, take the artifact
-by id and digest, check its file list and provenance and run
-`environments/boards/gate.py`. The runner's job-started hook,
-`environments/rig-runner/hook.py`, refuses before any step every job but
-a push or schedule on `main` and a dispatch by the maintainer, of
-`gate.yml`, since a fork's pull request runs workflow files of its own. Physical evidence is never reused; the
-aggregate fails on any leg whose latest attempt is not `passed`.
-
-`gate.py` checks bundles, helper, probe-rs, host tools, the probehive
-runtime's pins, the cascade and a bitstream load record before it takes
-the shared rig lock in `/var/lib/landin-rig`, then runs each port's RAM run
-and ends on its boot check, so every board rests on its verified fixed
-image; a board left elsewhere is restored by a boot check first. Every run
-reports one outcome and stops cleanly when cancelled (D905). The Pico 2
-hangs from the cascade on a power-only cable, so its boot checks and
-Arm/Hazard3 changes run unattended there (D906). RP boot checks cold-start
-the board first, since a RAM run leaves its other core parked.
-
-Boards dispatch [run 42036978603](https://github.com/JanHaan/Landin/actions/runs/42036978603)
-on `d1a3fc1dc` passed all seven legs on its first attempt in six minutes of
-rig time: each RAM run and boot check passed its physical oracle and every
-fixed image was restored and verified, the Pico 2's four steps through both
-architectures in 109 seconds, with 58 retained kernel USB lines and no USB
-error. The same tree's complete software gate,
-[run 42035466905](https://github.com/JanHaan/Landin/actions/runs/42035466905),
-passed 49 jobs with only the board and suspended RV64 jobs skipped. Each
-leg retains commit, tree, run attempt, artifact digest, compiler, source,
-helper and probe-rs identities, board steps, timings, oracle results,
-restoration and kernel USB lines for 90 days.
-
-Settled SR-777, SR-778, SR-780, SR-781, SR-786, SR-789, SR-791, SR-794,
-SR-795, SR-796 and SR-800. New SR-779, SR-782 to SR-785, SR-787, SR-788,
-SR-790, SR-792, SR-793 and SR-797 to SR-799 remained open at that close with
-their activations, among them the STM32H753 console's echo refusal and an
-ESP32-C3 trap read inconsistently, each passing on its rerun. The
-activation sweep against `72547271d` matched no row by path; of the rows
-read by hand SR-736 is restated for the Arty and cascade still sharing the
-VL805, and SR-685, SR-605, SR-768, SR-773 and SR-776 keep their
-activations, none of their behaviour having changed. A second Pico 2 will
-remove the architecture change from every gate run.
-
-### R12.70 — Code and constants in RAM from a flash boot
-
-Status: complete
-Depends on: R13.79
-
-The derived script gives `.text` and `.rodata` no load address of their
-own, and reset copies only `.data`, `.ramtext` and a used region's data, so
-D1116 refuses with L0514 a description that places `text` or `rodata` in
-RAM that a flash boot does not load. An ITCM, or a layout that runs its
-code from RAM, needs what `.ramtext` already has: a load image in flash and
-a reset copy before anything reads it. The maintainer confirmed the refusal
-and asked for the support (SR-1099). This item gives a `text` or `rodata`
-placed in RAM a flash load image, copied at reset on every firmware target
-whose boot image starts from flash, before the first constant, string or
-evidence table is read; the vector table, the reset entry and the copy
-itself stay where reset finds them. D1116's refusal becomes the rule for
-what stays refused, and D546's contract holds a developer's script to it.
-
-Exit evidence: an image with `rodata` in RAM and one with `text` in a RAM
-region of its own, each from a description, linked and run from flash after
-reset on the Cortex-M and RV32 emulator lanes, each with a control that
-fails when the copy is left out; fixtures of the accepted placements and of
-what stays refused in place of
-`negative/description-places-code-where-nothing-loads`; and a board's boot
-record from power-on with code or constants in RAM, checked by its tool's
-oracle.
-
-Done: in an image that boots from its own memory, a `text` or `rodata`
-placed in a writable region other than the vectors' runs or is read there,
-loaded from flash, and reset copies it before data and before anything
-reads a constant, string or evidence table; when the text is copied,
-reset, its copies, the description's stage, the unhandled entry and the
-RV32 trap entries stay in a `.landin_boot` section after the vector table
-(D1359). That is every boot kind whose image starts from flash: Cortex-M's
-`vector-table`, `rp2040-boot2` and `rp2350-image-block` and RV32's
-`vector-table` and `rp2350-image-block`. An `esp-app-image` and every
-Xtensa image are written segment by segment by their ROM, and an image
-built with `--firmware-layout=ram` by its debugger, so nothing in them is
-copied. D1116's refusal is gone, and what stays refused is D543's rule
-that a copy does not make memory executable,
-`negative/description-places-code-where-it-cannot-run`; D546's contract
-holds a developer's script to the rule, and
-`end-to-end/firmware-linker-script-leaves-copied-text-unloaded` and
-`end-to-end/firmware-linker-script-copies-reset` are refused naming
-clauses 4 and 1. Two positive fixtures record the accepted placements. The
-descriptions lane runs text in a RAM region of its own and rodata in RAM,
-each from a lane description, on the micro:bit and `sifive_e` from reset,
-each returning with its line written, and refuses each again with the
-debugger moving reset past the copy, every run then stopping in the
-unhandled entry. The board is the STM32H753: it is the one with tightly
-coupled memory a flash boot fills, its supply stage must run before reset
-writes RAM, and its ITCM at zero holds D1115 to code. Its description, and
-its cached profile's, place text in the ITCM, and its boot record from
-power-on runs the application's 47,976 bytes of text from it, the board
-tool reading the ITCM back over SWD after the run, byte for byte the
-text's load image. Images that copy nothing link the script and reset
-they did: the other sixteen board images match their records, and against
-the base every RV32 corpus image, 6,419, and every Xtensa one, 3,242 on
-each chip, is the same bytes, as are 811 of 813 Cortex-M program images
-and 10,357 of the Cortex-M corpus's 10,528; the others are the
-STM32H753's, two description images and the corpus's programs too large
-for the reference linked again for it, 111 of them with their text in the
-ITCM and 60 that no longer fit, their text past its 64 KiB, which a
-program that large places in FLASH. In
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/43458032388)
-on `205de02c` every job passed but the board and suspended RV64 legs,
-skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/43458040550)
-on the same tree passed every port.
-
-### R12.80 — Emit what firmware reaches
-
-Status: complete
-Depends on: R13.79
-
-A program with a public `main` emits only the routines it reaches (D296). A
-firmware program emits every routine of every module it imports, each in a
-section of its own, and leaves the link to discard the rest, so a Cortex-M0
-firmware calling two routines of `core/text` assembles 253 KB of object for
-a 7 KB image, and its `--stack-report` and `--emit=asm` list 175 routines
-the image does not hold, which the R13 gate's outside readers could not
-explain (SR-1144). This item roots a firmware program's reachability in
-what its image starts from: the firmware entry, the handlers its vector
-slots take, placed declarations, `public extern(c)` definitions and a boot
-stage. The assembly, the stack report and the build report then hold what
-the image does, and `docs/targets.md` loses its account of the difference.
-
-Exit evidence: SR-1144's program reporting and assembling only the
-routines its image holds; a fixture for each root, a handler, a placed
-routine, an exported C definition and a boot stage, each emitted while an
-unreachable routine beside it is not; and the Cortex-M, RV32 and Xtensa
-corpora unchanged in behaviour, with every linked image the same bytes or
-each difference explained.
-
-Done: a request that builds a firmware image roots D296's walk in what the
-image starts from, and an erased call names a table the compilation builds
-for its shape, its checker's choice built only when there is none (D1358),
-so SR-1144's program reports and assembles the eight routines its image
-holds, where it listed 177. A positive fixture for each root, the entry, a
-handler, a placed routine, an exported C definition and a boot stage, is
-recorded in `compiler/tests/lowering.ir` with an unreachable routine beside
-it left out, and a `cortex ABI` case holds the assembly, stack report and
-build report to the image. Of the corpora's linked images, 11,273 of 11,341
-Cortex-M, 6,389 of 6,419 RV32 and 6,446 of 6,484 Xtensa load the same bytes as
-before; the rest, from seven runtime fixtures and two firmware programs,
-differ by atom integers numbered over what the image keeps, by table
-entries no image projects written as zero, with `core/mem`'s arena growth
-that only those named, and by libgcc's members linked in another order. Every board was re-recorded on the rig,
-each port's RAM run and then its boot check, and all seventeen images match
-their records strictly; the ESP32 boards lose three `core/atomic` providers
-nothing calls, and their records name the interrupt snapshots by the
-register read, `INTERRUPT` on Xtensa (SR-769). In
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/43408696383)
-on `78921ed4`, 49 of 53 jobs passed and the board and suspended RV64 legs
-were skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/43408720911)
-on the same tree passed every port.
-
-### R12 gate
-
-- RP2040, RP2350, an STM32 board, ESP32, ESP32-S3 and ESP32-C run
-  compiler-owned firmware on hardware, each against an oracle valid for that
-  device, and their cores in emulation where QEMU has them, each against an
-  oracle valid for that emulator model. The synthetic driver remains an
-  emulator lane.
-
-- Every device this phase supports is selected by a description in Landin
-  source, and no compiler source names a chip.
-
-- Each new freestanding target/profile executes an assembly block with an
-  integer operand and has an IR verifier refusal for an invalid register in
-  its target gate: each new Cortex-M profile, each RV32 target, and both
-  Xtensa LX6 and LX7. This evidence is required before its milestone completes.
-
-- The RP2040 board run starts at power-on from the flashed boot image and
-  reaches compiler-owned startup through its checked second stage.
-
-- Every admitted noncoherent cached profile has its platform maintenance
-  provider and DMA visibility-point evidence from its first admitting item.
-- R12.10's bounded emission policy and small-shape controls pass before any
-  profile larger than the retained 32 KiB image is admitted.
-
-- Xtensa LX6 and LX7 pass level selection, feature-fact and assembler-limit
-  checks, with execution on compatible chips as required by R12.50.
-- R12.30 passes non-division Thumb-2 execution, linked instruction-selection
-  inspection and the same-source ARMv6-M baseline control.
-
-## R13 — The library
-
-A standard library split where the capability model already splits it.
-
-### R13.10 — Separate library availability classes
-
-Status: complete
-Depends on: none
-
-`core/*` becomes the shared freestanding library: each module and its public
-interface must be selectable on every supported target, though its
-implementation may use target-specific paths. Hosted-only modules move under
-a sibling root so that firmware cannot import them by accident.
-Target-specific freestanding modules move under a separate sibling root;
-each declares the target families or profiles on which it is available, and
-an import outside that scope is refused during target checking. They require
-no hosted runtime or services. A module mixing these availability classes is
-split so importing one class does not select declarations from another. The
-existing `core/cpu` belongs in this root for the M-profile family, including
-its later feature levels, rather than in either the shared or hosted root. The
-chosen sibling roots are `hosted/*` and `platform/*`, with [1480] and [1660]
-amended. Availability follows the source namespace independently of which
-project-first root supplies its contents; the names are not lexical keywords.
-
-Migration inventory:
-
-| Existing modules | Destination | Availability |
-|---|---|---|
-| `core/diag`, `core/failing`, `core/io`, `core/map`, `core/mem`, `core/panic`, `core/pool`, `core/region`, `core/small`, `core/sort`, `core/text`, `core/tree`, `core/vec` | retain `core/*` | Every supported hosted and firmware target |
-| `core/heap`, `core/io/hosted` | `hosted/heap`, `hosted/io` | Hosted targets only |
-| `core/cpu` | `platform/cpu` | M-profile family, including its higher levels |
-| `core/c` | `platform/c` | Currently supported LP64 C ABI descriptions; no hosted services required |
-
-The C spelling layer's scope remains explicit until a later consumer extends
-it. This migration does not enable Cortex-M C signatures or bind the library
-split to R13.20's interoperation work.
-
-Exit evidence: the amended paragraphs and an inventory assigning every
-existing module to the shared, target-specific freestanding or hosted root;
-the resulting imports and consumers check on their supported targets. A
-module under `core/*` checks on every supported target, `platform/cpu` checks on
-M-profile levels and is refused on other families, and a firmware build
-refuses a hosted import by name.
-
-Record the shared-root module inventory and supported-target matrix at
-closure. For every shared module, a small consumer must import and use it,
-then compile and link on every supported hosted and firmware target. Execute
-the consumers on native or emulator lanes where behavior needs target
-evidence, with success and failure oracles. Keep consumers separate where a
-combined image would exceed a constrained target's budget; an image-size
-refusal is not positive evidence that a shared module works. Every later
-target's gate must repeat this matrix for that target.
-
-Done: the three roots exist and the thirteen shared modules, `hosted/heap`,
-`hosted/io`, `platform/c` and `platform/cpu` sit under them (D267, [1480],
-[1660]). `Landin.Modules.Availability` decides a written namespace from target
-facts before name resolution, and an unavailable import is L0015 once, at the
-import. The thirteen `runtime/library-shared-*` consumers compile, link and
-return their status on Linux x86-64, Linux arm64, Darwin, both FreeBSD
-targets, RV64 and Cortex-M0; `negative/library-platform-cpu-hosted` and 37
-Cortex-M corpus rows pin the refusals; `environments/cortex-m` links
-`platform/cpu` at armv6-m, armv7-m and armv7e-m. The firmware return halt is
-Thumb code, which the higher levels needed.
-
-### R13.11 — Library interface conventions
-
-Status: complete
-Depends on: R13.10
-
-The split left four shapes in the library that six hosted targets would
-cement. `core/io`'s one `world` concept becomes four narrow concepts, `reader`,
-`writer`, `files` and `process`, with `world` their composition and an adapter
-lending a world's writer, so a sink implements two entries and `core/diag`
-streams through `any io.writer`; this is the split [1260] waited for and
-closes E2. One naming convention: a module's principal type is constructed
-with `new`, a view over caller bytes with `over`, every container's storage
-is given back with `release`, and the index and emptiness atoms are
-`core/mem`'s `out_of_bounds` and `empty` for every core container, while key
-lookups keep `missing` and `no_such_node`. The library ships the evidence
-the scalars were always going to need: `equatable` and `hashable` for the
-integer scalars, `bool` and `[]u8`, `ordered` for the integer scalars, and
-all three for `utf8`; a program wanting another reading wraps the type in
-`distinct` [1280]. The vector, small vector and map keep `get` as a copy and
-gain `at`, a writable
-slot under [0800]'s binding lock, with `contains`, `clear` and `reserve` on
-the map and `last` on the vector; the tree's node is private and gets none.
-
-The library reference is generated from public signatures and attached doc
-comments, with module overviews, source links, search and existing executable
-examples. Documentation completeness and generated links are checked with
-the site build.
-
-Exit evidence: D268 to D271 with their fixtures; a writer-only provider
-driving a streaming log; a program keying a map by `[]u8` and `utf8` and
-sorting `utf8` with no evidence of its own; a program updating a vector, a
-small vector and a map through `at`; a program re-declaring `u32 is
-map.hashable` refused as the collision it is; every renamed consumer, the
-derived programs and the debugger workloads passing on every target.
-
-Done: D268 to D271 and the library consumers pin the capability split,
-uniform names, shipped evidence and writable accessors. The generated
-reference documents 245 public names in seventeen modules, with executable
-examples, search and source links. All 42 jobs in
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/37926146788)
-passed on `7e4cd1f3`, including the constrained consumers and source debugger
-checks; selected-image-limit verdicts remain distinct from executions. The
-same commit reached main and its library reference was published by
-[Pages](https://github.com/JanHaan/Landin/actions/runs/37929115605). E2 is
-closed: [1260]'s split is realized by the four narrow I/O concepts and their
-`world` composition.
-
-### R13.12 — Answer the first outside reading
-
-Status: complete
-Depends on: R13.11
-
-The first reader from outside the project to read the published reference
-found four things R13.11 left. A closed set of named values is carried in a
-`u8` where [0640] has an enumeration for it: `core/diag`'s severity, which
-D216 has since made storable as an atom, and the map's private slot state.
-The comparison concepts live in the modules that consume them, `equatable`
-and `hashable` in `core/map` and `ordered` in `core/sort`, so `core/text`
-imports a hash map and a sort to say that `utf8` compares, and any later key
-type would have to as well. `platform/c` reads as though LP64 were one
-architecture's term and the C ABI an architecture's alone: its reference names
-four facts on three different axes and does not say which target selects which,
-that LP64 is the data model, or that the operating system takes part, as
-`c_char` on Linux and Darwin arm64 shows.
-
-Exit evidence: severity an atom set that a bounded and a streaming log receive
-through erased dispatch and a program matches on, on every target; the map's
-slot state an atom set with its consumers unchanged; `equatable`, `hashable`
-and `ordered` with their shipped evidence in one shared module that map, sort
-and text import, with its own shared consumer on every target and the
-collision refusal pinned at its new home; and a `platform/c` reference that
-says per target which fact holds, what LP64 is and where the OS enters. The
-reader's remark that some names are odd goes to R13.13 with names attached.
-
-Done: D272 makes the severity and the map's slot state atom sets, pinned by
-`library-diag-severity` and the map consumers; D273 moves the three
-comparison concepts and their evidence into `core/cmp`, with its own shared
-consumer and the collision refusal at its new home; the `platform/c`
-reference names each target's C ABI fact, the LP64 data model and where the
-operating system enters. All 42 jobs in
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38076543394)
-passed on `759dbb7e`, which also carries R13.13.
-
-### R13.13 — Review the library
-
-Status: complete
-Depends on: R13.12
-
-R13.11 held the library to conventions it wrote down; nobody has read the
-whole of it as a user would since. Read every public declaration of `core`,
-`hosted` and `platform` against its own module, the conventions and the
-reference, for names that say something other than what the declaration does,
-facilities that exist twice, integers standing in for closed sets, contracts
-the doc comment and the source disagree on, and evidence a facility has
-without a consumer. The outside reader's names are the first entries:
-`core/mem.failing` and `core/failing.counted`, two deterministic failure
-injectors that count different things, the first of them a budgeted arena
-not called one; the equality concept's name; and module names that abbreviate
-in `map` and `vec` but spell out an adjective or a noun in `failing` and
-`region`.
-
-Exit evidence: each finding either fixed with the fixtures that pin it and a
-decision where it changes an interface, or recorded in the register below with
-its trigger; the generated reference rebuilt and every renamed consumer, the
-derived programs and the debugger workloads passing on every target.
-
-Done: D274 records the fixes: `core/spill` and `core/fault` for the two
-adjective-named modules, one fault injector instead of two, the renames in
-`core/README.md`'s migration table, a map that counts tombstones towards
-growth and rebuilds in place only while its live entries fit in half its
-capacity, spread hashes, `capacity` beside `slots` and an exact `reserve`.
-A generic signature that applies its own parameter, or names nothing, is
-refused at the declaration instead of crashing. SR-14 holds what the review
-left, SR-15 the hosted gaps for R13.30, SR-16 atom display in debuggers and
-SR-17 unprivileged formatting. The gate's server fuzz round found two older
-defects on the reviewed corpus, a lowering crash and a hover crash, both
-fixed and pinned. All 42 jobs in
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38076543394)
-passed on `759dbb7e`, with every renamed consumer, the derived programs and
-the debugger workloads on every target.
-
-### R13.14 — The compiler finds its library
-
-Status: complete
-Depends on: R13.13
-
-`core`, `hosted` and `platform` ship with no installed compiler: the flake's
-two packages and the release asset hold `refine` alone, and a program outside
-the checkout compiles only with `--root` naming a clone of the repository.
-These namespaces are not packages. The compiler names them, decides their
-availability by target (D267) and matches its hosted contracts against them,
-so a compiler and a library from different revisions are a fault, not a
-choice. The compiler finds its own library relative to its executable, as
-Go, Zig and rustc find theirs, through a host interface the test program can
-fake; the library root follows every `--root`, and the repository-owned
-namespaces resolve from it alone. An explicit option replaces it for an
-unusual installation, `refine version` reports which root is in use, and
-the language server finds it the same way. The user's home root and every
-other default root stay the Companion tool and ecosystem family's.
-
-Exit evidence: a decision amending [1480]'s bootstrap paragraph; the flake's
-packages and the release asset installing the library beside `refine`; and a
-gate job that installs the toolchain as the documentation says, outside the
-checkout, and compiles and runs the README's first program and every
-`examples.md` program with no option and no environment, on every hosted
-target the release publishes for.
-
-Done: D275 finds the library beside the executable, installed or in a
-checkout, with `--library` for a staged tree; `core`, `hosted` and `platform`
-resolve from it alone, also for named files, and `refine version` and the
-language server name it. `scripts/package.sh` lays out the flake's packages
-and the release archive as an installed prefix. The README's first program
-is `runtime/first-program`, held to the README by `check.py`, and each
-release job installs the archive outside the checkout and runs it and the
-eleven `examples.md` programs with no option. All 42 jobs in
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38123255895)
-passed on `13eb4918`. The path showed what a newcomer still meets: SR-22's
-linker driver name, SR-23's missing suggestion, SR-24's installed paths in
-debug information and SR-25's shell.
-
-### R13.15 — The OS boundary in source
-
-Status: complete
-Depends on: R13.14
-
-The compiler owns the hosted operating-system boundary: fourteen
-`_landin_host_*` helpers that the checker holds to a special contract, that
-each of the x86-64, arm64 and RV64 backends emits as libc trampolines, with
-the libc facts per OS in the compiler and `strlen`, `open`, `read` and their
-neighbours reserved from source. Move that boundary into the library as
-ordinary source, on libc for every hosted target as now: one public
-`hosted/libc` module holds the `extern(c)` declarations and per-OS records,
-as `hosted/io/stat.ldn` already does, with errno read through the C
-library's own accessor, and `hosted/io` and `hosted/heap` import it. The
-argument root's startup function is library source the hosted entry calls.
-`open` is variadic, and Darwin arm64 passes every variadic argument on the
-stack, where no outgoing variadic call is pinned yet, so that comes first.
-What stays in the compiler is the hosted entry and the link.
-
-Exit evidence: no hosted helper, helper contract, bridge emitter or libc fact
-left in the compiler; Darwin arm64 variadic calls pinned against a C peer;
-every hosted fixture, the derived programs, the debugger sessions and the C
-ABI fixtures passing unchanged on every hosted target; and decisions
-superseding D153's scalar seam and D195's shim.
-
-Done: D276 leaves the compiler one hosted contract, the call to `hosted/io`'s
-argument initializer, and removes the fourteen helpers, their checker
-contract and every backend's libc bridge, about 1,180 lines of Ada.
-`hosted/libc` declares the C library with `open` variadic, and D277 moves the
-heap's over-allocation into source. Library source can now say a path must
-not run: D278's `compiler.unreachable()` raises `unreachable` at its own site,
-so startup misuse reports what the bridge did. Darwin arm64's variadic tail
-is pinned against a C peer. The mutation campaign now seeds each fixture
-alone, and the ten reporting defects that seeding exposed are fixed and
-pinned. All 42 jobs in
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38162781050)
-passed on `a0a4b8fc`, executing the moved boundary natively on Darwin,
-FreeBSD and RV64.
-
-### R13.16 — Linux without the C library
-
-Status: complete
-Depends on: R13.15
-
-Linux promises its system-call interface, so a Linux program needs no C
-library to reach it. Darwin's system calls change between releases and
-FreeBSD documents its C library as the interface, so both stay on libc, and
-a Windows target would use kernel32. Write the Linux provider as system calls
-in source on x86-64, arm64 and RV64, using the `*at` calls and `statx` so the
-three share one layout, in a `hosted/linux` module scoped to Linux, with a
-program-owned entry that reads the arguments, environment and auxiliary
-vector from the initial stack, a static executable and a heap of size classes
-over `mmap`. `--link=static` is the default on Linux; `--link=libc` keeps the
-C runtime's startup and libc for a program that links C, with the same
-provider beneath it, and a static link that meets a C symbol says so. RV64's
-assembly checker refuses `ecall` as a control transfer while x86-64 admits
-`syscall` and arm64 `svc`; a decision gives the system-call instruction one
-standing on every hosted target first.
-
-Exit evidence: decisions for the system-call instruction, the two Linux link
-modes, and the replacements of D207's errno capture and D208's startup root;
-static Linux executables with no dynamic dependency running the whole hosted
-corpus, the derived programs and the debugger sessions on all three
-architectures; and the C ABI fixtures passing in the C-linked mode.
-
-Done: D279's `hosted/linux` makes Linux's system calls in source on all
-three architectures, and its `_landin_start` reads the initial stack, holds
-the processor to the executable's level (D284) and calls `main`; D281 gives
-RV64's `ecall` the standing of `syscall` and `svc`. D280 links Linux
-executables statically by default, with `--link=libc` for a program that
-links C and a refusal that names it, and D282 gives the Linux heap size
-classes over its own mappings. Two older defects surfaced and are fixed: a
-mutable module binding folded to its zero image, and data placed out of
-reach after a 2 GiB object (D283). All 42 jobs in
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38221083205)
-passed on `ae0b3eaf`, running static executables natively on Linux x86-64,
-arm64 and physical RV64.
-
-### R13.20 — The freestanding library
-
-Status: complete
-Depends on: R13.10, R13.11, R12.30, R12.60
-
-What firmware on the R12 boards needs, each facility driven by a complete
-consumer: peripheral configuration beyond one baud rate, a reusable
-freestanding cache-maintenance interface over the platform providers required
-when cached profiles were admitted in R12, C on Cortex-M, and `core/text`'s
-missing half for working with `utf8` in place. This schedules R551-34's freestanding part, and B5's,
-and R730-02, R730-07, R730-09 and SR-05.
-
-Exit evidence: each facility's consumer running on its targets with failure
-oracles and measured cost on the constrained profiles. For Cortex-M C, this
-includes generating bindings from a pinned device C header for the Cortex-M0
-ABI and running a firmware consumer through those generated declarations and
-adapters.
-
-Done: D920 to D924 enable AAPCS32's C surface on Cortex-M in both
-procedure call standards, with an ILP32 `platform/c` and C archives linked
-into firmware; D935 to D939 bind C for it from pinned CMSIS headers; and
-D985 to D987 run the generated adapters, a hand-written C peer and the VFP
-bindings on QEMU's micro:bit, AN505 and AN500, deciding the corpus's 65
-restrictions again. D945 to D949 give `core/text` positions, searches, an
-encoder and a UTF-8 builder over `utf8`, which finishes without a scan
-through `compiler.utf8_unvalidated` inside `unchecked`. D955 to D965 give
-every board's driver `core/line`'s settings and divisors, and the STM32H753,
-ESP32, ESP32-S3 and ESP32-C5 change line live on the chip. D970 to D979
-admit the cached STM32H753 profile with `core/cache` and
-`platform/cortex_m/l1`, and its stale read, maintained receive, lost dirty
-line and both transmits behaved on the chip as predicted. All seventeen
-board records were made again on the rig. In
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/42453825980)
-on `3b08a061`, which carries the review's corrections for R13.78 beside
-this item's work, 49 of 53 jobs passed and the board and suspended RV64
-legs were skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/42456830930)
-on the same tree passed every port.
-
-### R13.17 — Services are handles
-
-Status: complete
-Depends on: R13.16
-
-A program shares its services: a logger and the program write through one
-Io, and several containers allocate from one heap. Taken `inout`, a service
-is locked while anything derived from it lives, so a second argument, a
-query beside an erased view or a region beside its parent is refused, and
-the library routes around it with integer addresses and hand-held parent
-pointers. A value that is edited stays `inout`; a service becomes a handle,
-a small copyable value passed `in` that refers to its state, whose lifetime
-is checked once where the handle is made. The allocator and the four I/O
-concepts take their handle by value, every provider in `core` and `hosted`
-gives one, and the containers take theirs `in`. Process-wide state, the
-argument root, the last error and the Linux heap's classes, belongs to the
-process, so its handles borrow nothing.
-
-Exit evidence: no `inout` or `ptr` provider parameter left in `core` or
-`hosted`; fixtures pinning two lent results at once, a query and a direct
-write beside an erased view, a region and its parent used together, and a
-handle refused past its state; and the hosted and firmware corpora passing
-on every target.
-
-Done: D288 makes a service a handle. The allocator and the four I/O concepts
-take theirs by value, every provider in `core` and `hosted` makes one with
-`over` from state its caller declares, and region, fault and diag hold a
-copy of their parent's. `hosted.host()` and `heap.host()` stay one line; a
-handle from `hosted.over` keeps its own last error, which is how
-`abi/r440-errno-thread-local` gives each C thread its own until there is
-thread-local storage. D289 lets an erased entry take a record `self` by
-value, and D290 to D292 correct three borrow checks the conversion met.
-Passing records by value pushed a Cortex-M0 image past its flash, so a
-caller now snapshots a record only when a later argument could write memory,
-and every backend copies aligned records by words.
-`runtime/io-handle-lends-two-arguments`, `runtime/io-handle-beside-erased-view`
-and `runtime/region-beside-parent` pin the patterns that were refused, and
-`negative/handle-outlives-state` and `negative/region-release-live-handle` the
-lifetimes still checked. All 42 jobs in
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38348601801)
-passed on `09ca0033`, physical RV64 among them, once Darwin's `stat` device
-numbers were read unsigned; [the branch's final gate](https://github.com/JanHaan/Landin/actions/runs/38409022298)
-passed on `4fa6f5c9` with RV64 suspended.
-
-### R13.30 — Standard input, files and directories
-
-Status: complete
-Depends on: R13.10, R13.11, R13.13, R13.17
-
-The first of four hosted items, R13.30 to R13.33, which share these rules.
-Each facility is a narrow concept beside D268's four, with a caller-backed
-fake in `core/io`, written once over R13.16's Linux system calls and once
-over the C library for Darwin and FreeBSD, and reached through the same
-capabilities as now. Each is driven by a complete consumer published in
-`examples.md`, decided in `spec.md`'s register, documented in
-`docs/library.md` and `core/README.md`, and refused by name on firmware
-where it is hosted-only. Together they take R551-34's hosted part, and with
-it B5's.
-
-This item lays the ground and adds files and directories. `core/text`
-writes `u64` and `usize` decimals and parses them from `[]u8`, replacing the
-tree's hand-written copies, and `ENOTDIR` maps to `not_found`. Standard
-input joins the process concept, which takes SR-14's by-pointer `out`, `err`
-and `argument_count` with it, and reaches a runtime fixture through a
-`stdin:` key that every runtime lane honours. A counting consumer reads
-standard input. A listing consumer builds a scratch tree, reads its names
-as bytes, validates them through `core/text` and prints `u64` sizes and
-kinds.
-
-Exit evidence: both consumers running on every hosted target with failure
-oracles: a missing path, a file used as a directory, a name that is not
-UTF-8 with each system's own outcome, and a directory larger than one read
-buffer.
-
-Done: standard input is the process concept's third stream, reached in a
-fixture through `stdin:` (D285); `core/text` writes and parses every unsigned
-width over bytes (D286); and ENOTDIR is `not_found` (D287). `io.directories`
-is a fifth concept whose open directory is a value lending each name until
-the next read (D293), over `getdents64` on Linux, with every record held
-inside what was filled, and over `readdir` on Darwin and FreeBSD.
-`hosted/linux` makes its raw call public and `hosted/linux/numbers` names
-every call's number, generated from Linux 7.2's own tables (D294). The word
-counter and the directory listing are published in `examples.md` and run by
-the outside-user lane. The listing's oracles met each system's own outcome
-for a name that is not UTF-8 natively: Darwin refused it with EILSEQ, and
-Linux and FreeBSD listed its exact bytes. On the way, `try` of a callee whose
-set is still inferred waits for it (D295), unused module data is not emitted
-(D296), L0328 names its routes, the Cortex-M0 backend addresses frame homes
-from `sp`, which brought three memory-world fixtures inside 32 KiB, and the
-FreeBSD lane compares output only where a fixture declares it, as the other
-lanes do. The complete gate passed on the commit that closes this item, with
-RV64 suspended; [the run before it](https://github.com/JanHaan/Landin/actions/runs/38470178283)
-passed every job but FreeBSD's output comparison.
-
-### R13.18 — The POSIX layer and host strings
-
-Status: complete
-Depends on: R13.30
-
-The hosted library gets four layers. Each system's own interface stays raw:
-`hosted/linux` and `hosted/libc` move to `platform/linux` and
-`platform/libc`, and Linux's
-epoll, signalfd, pidfd and getrandom stay in `platform/linux`. A new
-`platform/posix` gives POSIX's facilities in Landin types, a descriptor as a
-handle type, errno as atoms with the number kept, a structured `stat` and
-`poll`, written once over Linux's system calls and once over the C library on
-Darwin and FreeBSD; it is never available on Windows. The portable concepts
-in `core` name no POSIX type, no integer descriptor, mode bit, user or signal
-number, and `hosted/io` and `hosted/heap` are rewritten over `platform/posix`,
-so a hosted facility is written once and Windows can later implement the
-same concepts over its own interface. Each later hosted item adds the POSIX
-facilities its consumer needs. A host string is one opaque type whose
-representation each target fixes, bytes on POSIX and 16-bit units on
-Windows, with checked conversions to `utf8` and to bytes and comparison with
-a literal; arguments and paths take it, so a value passed through is never
-converted.
-
-Exit evidence: every existing hosted fixture passing on every hosted target
-over the new layers, with no `hosted/io` facility written per system;
-`platform/posix` fixtures with failure oracles for each facility it gives;
-and an argument and a path that are not UTF-8 passed through unchanged and
-refused by the checked conversion to `utf8`.
-
-Done: `hosted/linux` and `hosted/libc` are `platform/linux` and
-`platform/libc`, and `platform/posix` is written once over each with a
-descriptor handle, every system's errno as atoms with its number, a
-structured status and `poll` (D297, D298). `hosted/io` and `hosted/heap` have
-no code of their own for any system, and one size-class heap serves all three
-(D300). Paths, arguments and entry names are host strings, passed through
-unconverted (D299). Two language rules came with it: static storage satisfies
-a read-only `from` clause, which retired a forged argument table (D301), and
-two values of one distinct scalar type compare equal and flag sets combine
-(D302). Every backend now gives each routine its own section, which brought a
-static arm64 hello from about 200 KB to 15 KB, and L0500 counts only what the
-entry reaches (D303). Three checker and lowering defects met on the way are
-fixed and pinned, and atom-set validity is tested by ranges. The kqueue module
-is R14.30's. The complete gate passed on the commit that closes this item,
-with RV64 suspended.
-
-### R13.19 — Formatting, buffered text and byte blocks
-
-Status: complete
-Depends on: R13.18
-
-`core/mem` gains `copy`, with `memmove`'s rule for overlap, `fill`, `compare`
-and `find` over byte slices with their lengths checked. `core/text` gains a
-builder that writes typed pieces into a caller's buffer, bytes and text,
-signed and unsigned decimals, hexadecimal, width and padding, failing
-`no_space` or growing through an allocator the caller passes, and appends a
-byte string; and `text.format` over a format string and an array of
-`any text.formattable`, whose count and kinds are checked when it runs,
-because nothing is executed at compile time. Parsing is its mirror, signed
-values included. `core/io` gains a buffered writer flushed explicitly, with
-`defer` its idiom, and a line reader that lends each line until the next
-read, as a directory lends its names. Formatting is independent of locale,
-and a locale is never global state. The word counter and the directory
-listing are rewritten over it.
-
-Exit evidence: both consumers rewritten and running on every hosted target;
-fixtures for each piece with failure oracles, a full buffer, a format string
-whose count disagrees with its arguments and an overlapping copy among them;
-and the builder and the buffered writer running on the Cortex-M0 profiles.
-
-Done: `core/mem` copies, fills, compares and finds over byte slices, overlap
-always safe (D304). `core/text` has a builder that writes whole pieces into
-the caller's buffer or a growing one (D305), `text.format` with `{}` checked
-against its values when it runs (D306), and parsing that mirrors it (D307).
-`core/io` has a buffered writer flushed explicitly and a line reader that
-lends its lines (D308). An array literal or a fixed array is now lent whole
-to a slice parameter, so a format call passes its values directly (D309), and
-a value in the `else` of a call returning nothing is refused, which ended an
-idiom written 192 times in the corpus (D310). The word counter and the
-listing are rewritten over it, and a line numberer is published as the line
-reader's consumer. On Cortex-M0 the builder and `format` run in one fixture
-of 21 KB and the buffered writer in another; the two broadest fixtures are
-recorded as image limits. A checker defect on a generic routine re-failing in
-a concept entry's `else` is fixed and pinned. The complete gate passed on the
-commit that closes this item, with RV64 suspended.
-
-### R13.31 — The environment and processes
-
-Status: complete
-Depends on: R13.19
-
-Under R13.30's rules, written once over `platform/posix`: the environment as
-host strings, read from the initial stack on Linux and through the C library
-elsewhere, read-only, since changing one's own environment is not safe beside
-threads; and processes spawned by explicit path with explicit arguments and
-an explicitly built environment, each of their three streams inherited,
-discarded or a pipe, waited for, and reported as exited with a code or ended
-by a signal. `platform/posix` gains pipes and the waiting it needs. A
-consumer runs a shell with an explicit environment, captures what it writes
-and reports what the child saw and how it ended.
-
-Exit evidence: the consumer running on every hosted target with failure
-oracles: a missing program, a child ended by a signal, and a child's output
-larger than a pipe's buffer.
-
-Done: the environment is a read-only concept of its own, whose values are
-host strings, reached on every hosted system through the argument
-initializer, which now takes `envp` (D311, D312). `io.programs` runs a program
-by its path with an explicit environment, each stream inherited, discarded or
-piped, reads both outputs as they become ready and reports an exit code or a
-signal (D313). `platform/posix` gains pipes, spawning and waiting, and every
-descriptor it makes is closed on exec (D314). Both have fakes, and a scripted
-child runs on Cortex-M0. A shell runner is published in `examples.md`; its
-oracles are a missing program, a signalled child, a mebibyte on each stream,
-a leaked descriptor and an environment that is not UTF-8. A payload-free case
-of an imported variant could not be constructed; that is fixed and pinned.
-The complete gate passed on the commit that closes this item, with RV64
-suspended.
-
-### R13.32 — Time and randomness
-
-Status: complete
-Depends on: R13.31
-
-Under R13.30's rules: monotonic and wall clocks, and sleeping. On Linux the
-clock is read through the vDSO the auxiliary vector names, falling back to
-the system call. The system's entropy, getrandom on Linux and arc4random on
-Darwin and FreeBSD, is a hosted facility, and `core` gains a deterministic
-generator seeded from it or from a fixed seed. Calendars, time zones and
-their formatting belong to the locale record in the register. The process
-consumer times its child.
-
-Exit evidence: the consumer's timing running on every hosted target, with
-monotonic order and a sleep's lower bound as oracles; the entropy facility
-answering on every hosted target; and the generator reproducing a fixed
-seed's sequence on every target, Cortex-M0 included.
-
-Done: time is a count of nanoseconds in ordered distinct types, and the wall
-clock UTC seconds and nanoseconds (D315). A clock, a wall clock and entropy
-are concepts of their own with fakes a test controls, and a sleep never
-returns early (D316). Linux reads its clock through the vDSO with a checked
-parser and a fallback, about four times faster than the system call (D317),
-and under `--link=libc` too, since the argument initializer now adopts the
-auxiliary vector after `envp` when the tables have the initial stack's
-layout. `core/random` is xoshiro256**, reproducing its reference sequence on
-every target, Cortex-M0 included (D318). Every distinct scalar type is now
-ordered as its base is, amending D302. The shell runner times its child. The
-complete gate passed on the commit that closes this item, with RV64
-suspended.
-
-### R13.33 — Sockets
-
-Status: complete
-Depends on: R13.32
-
-Under R13.30's rules: blocking TCP and UDP sockets over IPv4 and IPv6 that
-bind, listen, accept, connect, send and receive, with address values, each
-system's address layouts, shutdown and the common options, no delay, address
-reuse and timeouts. Unix-domain sockets are `platform/posix`'s. SIGPIPE is
-ignored when a POSIX process starts, so a write to a peer that has gone is
-an error atom rather than the end of the process, and `posix.spawn` restores
-its default in a child, which would otherwise inherit it; until then, writing
-to a child that has ended ends the parent. An echo client and server
-run over loopback in one process, over TCP and UDP and both address
-families. Sockets under an event-driven Io are R14.30's; resolving a name
-belongs to the resolver record in the register.
-
-Exit evidence: the echo consumer running on every hosted target with
-failure oracles: a refused connection, an address already in use and a write
-to a closed peer.
-
-Done: `io.network` gives blocking TCP and UDP over IPv4 and IPv6, its
-connections readers and writers, its errors precise atoms and its limits
-`timed_out` (D319). An address is a family, sixteen bytes and a port, read and
-written as RFC 4291 and RFC 5952 say (D320), and a loopback network in memory
-fakes it (D321). SIGPIPE is ignored at start and restored in every child, so a
-write to a peer that has gone is `disconnected` (D322), and `platform/posix`
-gives sockets in each system's own records, Unix-domain ones among them
-(D323). The echo consumer is published. A module value now reads another
-module's values as its own (D324), which retired the constants libraries had
-wrapped in functions, and an atom widens into a generic routine's atom-set
-parameter (D138). Adding a Linux wrapper no longer needs the kernel's source.
-The complete gate passed on the commit that closes this item, with RV64
-suspended.
-
-### R13.34 — The rest of the file system
-
-Status: complete
-Depends on: R13.33
-
-Under R13.30's rules. The portable concepts gain renaming, a metadata record
-with size, kind, modification time and a read-only flag, `fsync`,
-truncation, temporary files, the current directory, reading and writing at
-an offset rather than through a hidden position, and appending as an open
-option, and whether a stream is a terminal and its window size.
-`platform/posix` gives the rest: mode bits and owners, hard and symbolic
-links, file times, advisory locks as each system has them, a terminal's raw
-mode, and users and groups, read from `/etc/passwd` and `/etc/group` on a
-static Linux program, where accounts kept elsewhere need `--link=libc`. A
-consumer copies a tree, keeping what each system keeps.
-
-Exit evidence: the consumer running on every hosted target with failure
-oracles: a rename onto an existing name, a symbolic link listed without
-being followed, a write refused on a read-only file and an offset past the
-end of a file.
-
-Done: `io.file_system` gives renaming, status, synchronizing, truncation,
-offset I/O and the working directory read-only, and `io.terminals` whether a
-stream is a terminal (D325); temporary files are made exclusively from
-entropy the caller passes (D326). `platform/posix` gives links, modes,
-owners, times and both kinds of lock (D327), a terminal's raw mode and
-pseudo-terminals (D328), and users and groups, read from `/etc/passwd` and
-`/etc/group` on a static Linux program and through the C library otherwise,
-chosen by the new fact `compiler.c_runtime` (D329). A tree copier is
-published. A parser defect refusing a construction fill after a qualified type
-is fixed. The complete gate passed on the commit that closes this item, with
-RV64 suspended.
-
-### R13.35 — Dynamic loading
-
-Status: complete
-Depends on: R13.36
-
-`platform/posix` loads a C library and looks its symbols up into typed
-`extern(c)` function values, wherever the system's loader started the
-process: on Darwin and FreeBSD always, and on Linux under `--link=libc`. A
-static Linux program that asks for it is refused by name before any tool
-runs, naming `--link=libc`, as D280 refuses a C import. Code loaded this way
-is C, or Landin only through C-ABI entry points. A consumer loads a library
-the fixture builds and calls into it.
-
-Exit evidence: the consumer running on Darwin, FreeBSD and Linux under
-`--link=libc`, with failure oracles: a missing library, a missing symbol,
-and the refusal of a static program.
-
-Done: `platform/posix` loads a C library into an opaque handle with an
-explicit scope, finds its symbols and gives the loader's words on request
-(D336), and a C function type applied to an address makes the typed function
-value, which also retired the vDSO clock's pun through memory (D335). A
-static Linux program that loads one is refused by L0500 naming the routines
-that ask for the C library. Fixtures may build C shared objects with
-`c-shared`. The consumer is a fixture rather than a published example, since
-the outside-user lane links statically and assumes no C compiler. The
-complete gate passed on the commit that closes this item, with RV64
-suspended.
-
-### R13.36 — The recurring parser frictions
-
-Status: complete
-Depends on: R13.34
-
-Four refusals were met in nearly every hosted item and routed around each
-time, with helper routines the library and its fixtures still carry: a call's
-`else` inside an `if` arm taken as the `if`'s (SR-57); a line beginning with
-`(` continuing the one before, so a construction or a destructuring is read as
-a call (SR-39); an inline atom-set union as a parameter's type (SR-58); and
-`lenof` taking only a name, not a field path or a call's result (SR-66,
-SR-44). Each gets a decided grammar rule in `spec.md`, which `check.py`'s
-derivation and the corpus agree with, a parser that follows it and a refusal
-that names the route where a form stays refused; then the workarounds are
-removed from the library, the examples and the fixtures.
-
-Exit evidence: fixtures for each form, accepted and refused, the grammar
-deriving every positive one, and no helper left in `core`, `hosted` or
-`platform` that exists only to avoid one of these refusals.
-
-Done: a call's bound recovery recovers inside an `if` arm (D330); a line that
-begins `(` and binds with `:=` destructures, and a continued line is named in
-the refusal it causes (D331); an atom union may be written in place as a
-declared type (D332); and `lenof` measures paths, slices and a call's result,
-a call always evaluated (D333). A statement's branch that ends with a value is
-now refused (D334), which the first rule made urgent. Thirty-four
-parenthesised recoveries, six helper routines, seven `lenof` helpers with
-their seventy-nine calls and twenty locals are gone, and the editor grammar
-and the formatter follow every form. `check.py` names the two refused
-fixtures its grammar still derives as stated in prose. The complete gate
-passed on the commit that closes this item, with RV64 suspended.
-
-### R13.60 — The cheap code-generation and compile-time wins
-
-Status: complete
-Depends on: none
-
-The Benchmark Game ports ran at two to sixteen times C's time on Linux
-x86-64, and hand-patched assembly put most of the gap in code generation and
-the library rather than in the checks [1960] keeps. This takes the parts of
-R16.20 those measurements named ahead of R16.10's baselines. On x86-64:
-small fixed copies and clears as moves, traps after each routine's body,
-`movapd` between registers, results computed in their own register with
-immediate operands, float comparisons fused with their branches, division by
-a constant as a multiplication, and indexed accesses as scaled operands, with
-arm64 using register offsets the same way. In the IR: float and pointer slots
-forwarded, a forwarded value surviving writes that cannot reach its slot,
-block-local value numbering that reuses an identical earlier check, `and` and
-`or` conditions lowered as jumps, and a live interval for every slot, which
-the x86-64 and arm64 allocators fill with registers. In the library:
-`hosted/heap`'s headers as aligned words and `core/region`'s ledger as a
-chain, SR-135, and `core/mem` moving words on hosted targets. Inlining,
-vectorization and scalar replacement, SR-154, stay in R16. The ports land
-here too: fannkuch-redux, mandelbrot and fasta take their size as an
-argument and buffer their output, and reverse-complement and binary-trees
-join them, each held to the Benchmark Game's own output.
-
-The compiler itself took longer than gcc, GNAT, rustc and go over every
-port, and nearly all of it went to the library rather than the program.
-Only the routines a program can reach are lowered, emitted and assembled,
-SR-156 and D296; table reads no longer build controlled references and the
-checker's container instances are elaborated once, SR-157; and the IR
-verifier's duplicate checks and pointer trace, and x86-64's frame test, no
-longer repeat work per set, slot or routine.
-
-Exit evidence: every check still trapping at its own operation, with its
-line, panic-map entry and unwinding unchanged, and the debugger sessions
-unchanged; the five ports timed before and after on Linux x86-64 with
-identical output, binary-trees on peak memory as well; the compile-time
-scaling bound held; the Cortex-M reference profile still holding the
-firmware that uses `core/region` and `core/mem`; and hello-world and the
-ports compiled before and after beside gcc, GNAT, rustc, zig and go, with
-the GNAT and verifier changes emitting byte-identical assembly.
-
-Done: on Linux x86-64 the five ports take 1.19, 1.13, 2.0, 2.0 and 3.8
-times C's time, from 2.7, 5.0, 4.7, 7.9 and 15.9, with identical output, and
-binary-trees peaks at 394 megabytes rather than 656; `docs/benchmarks.md`
-records each run. The test program, the GDB sessions, object quality and the
-scaling bound pass on Linux x86-64. The arm64 and RV64 cross lanes fail only
-fixtures that fail identically at `--optimize none` on that host, SR-76, and
-the Cortex-M lanes run the new fixtures, `core/mem` keeping its byte loops on
-firmware for the 32 KiB flash. A lowering defect the work met, a loop whose
-condition leaves on every edge, is fixed with its fixture. Hello-world
-compiles in 0.29 seconds rather than 1.16 and the ports in 0.31 to 0.35
-rather than 1.19 to 1.25, against 0.12 to 0.18 for gcc `-O3` and 0.22 to
-0.30 for go, at a peak of 37 to 44 megabytes rather than 68 to 80. The
-complete gate passed on the commit that closes this item, with RV64
-suspended.
-
-### R13.70 — The newcomer's path
-
-Status: complete
-Depends on: R13.35
-
-The hosted library is complete enough for someone to use, and their first
-ten minutes still go wrong. Reproduced with R13.35's compiler: `refine fmt`
-refuses to rewrite a writable file for every unprivileged Linux user and says
-only that it cannot write, while `--check`'s note sends them back to it; an
-index out of bounds ends as "Illegal instruction"; the README's first compile
-leaves its assembly beside the executable; `import cor/io` is told to give
-`--root`; and `elif`, a reserved word used as a name and a `match` over an
-integer each get a refusal that does not name the Landin form. This item
-fixes what a newcomer meets, then the contributor and Cortex-M frictions
-that R12 would otherwise meet in every item, and ends with the outside
-reading the R13 gate requires and no item owned. A second whole reading of
-the library after R13.35 found defects, and a library each hosted item had
-grown by adding a file to the nearest module: `core/io` has 193 public names
-and `platform/posix` 342, and some facilities are written two to four times.
-That work comes first, because it renames what the rest teaches and what six
-hosted targets and R14's second Io would otherwise build on.
-
-The library's defects, each fixed with a fixture that fails without it:
-`io.write` to a Linux socket passes `MSG_NOSIGNAL`, as D322 promises; the
-volume fake creates a dangling link's target rather than a second node at
-its path, and follows links where a system does, a relative target from its
-link's directory; a read or write above `INT_MAX` is bounded on Darwin;
-`dlopen` of an empty path is refused rather than giving the main program,
-which D336 keeps out; `linux.ppoll`'s limit is writable, as the kernel writes
-it; FreeBSD opens its pseudo-terminal controller close-on-exec; the static
-and C account routes fail alike, and the C group lookup gets the caller's
-whole buffer; the fakes fail as the hosted provider does, for
-`remove_directory` on a file, a listener beside an accepted connection and a
-line reader over an empty buffer; `vec.list`'s storage cannot be replaced
-from outside, and `heap.free`'s trust and its ignored unmap are checked or
-stated; `platform/libc`'s `stat` is chosen by name rather than by
-elimination; `random.below(0)` is refused as what it is; and `next_u32`'s
-reason is xoshiro256**'s own.
-
-The library's shape, decided as R13.13's renames were: each facility once,
-with byte equality, hashing and three-way order in `core/cmp`, its `less`,
-`equal` and `greater` moved there from `core/mem`, and `[]u8` ordered; one
-decimal writer, the builder's, and one home for parsing in `core/text`, whose
-legacy byte layer and cursor are retired, with `parse_*` and `core/io`'s
-network no longer copying its scanners and hex digits; `text.format` writing
-through any byte sink, a buffered writer among them, rather than a builder
-and a copy; the containers' slot allocation written once in `core/mem`, and
-the arena a provider of its own beside pool, region and fault; one fake of
-files and directories, the volume, with the memory world kept as firmware's
-own world over it; one way to open and to close a file, `file_system`
-refining `files`; and `hosted/io`'s errno mapping, retried open and quiet
-close, and `platform/posix`'s close-and-ignore helpers, each written once,
-with the declarations and constants D298 and D300 left unused removed,
-`platform/libc`'s `malloc` and `free` among them. `core/io` splits along its
-seams into `core/time`, `core/net` and fakes under `core/io/fake` named one
-way. `core/tree` is named for what it is or leaves `core`. `hosted/io` is
-renamed so that no importer needs an alias (SR-181), and its files mirror
-`core/io`'s, `file_system`, directories and entropy each in its own.
-`platform/posix` keeps each facility's backends in its own file, splits
-`posix.ldn` by facility, names its C route for what selects it (SR-183) and
-keeps the `/etc/passwd` parsers private; `platform/libc` is one file per
-system (SR-184); `vdso` is a submodule of `platform/linux`; and `platform/cpu`
-is named for the M profile, as `platform/cortex_m` would be. The closed sets
-carried in integers and bools become atom sets or variants: the loopback
-socket's role, a scripted program's ending, which stream a child read failed
-on, the builder's ownership, a zero-capacity region, a vacant pool slot and
-the bare flags of `status_of` and `synchronize`. Principal types, providers'
-counters and the fakes' constructors follow one naming rule, a byte is
-written as a character rather than a number (SR-182), and SR-14's points are
-each changed or retired. The stale documentation it found is corrected:
-`last_errno`'s zero; `docs/library.md`'s heap, its `libc.allocation` and its
-hand-written descriptor conversion where `hosted.descriptor_of` exists;
-D282's header words; dynamic loading's systems in `core/README.md`;
-`vdso_image`; and the module headers that describe how things were.
-
-Formatting: `refine fmt` replaces a file without privilege and keeps what it
-cannot see, by a replacement decided in `spec.md`'s register, and a refusal
-names its cause rather than "cannot write" (SR-17). `--check` reports every
-difference, each with the line as the layout wants it, and a mode writes the
-formatted source to standard output (SR-69, SR-124). `docs/format.md` shows
-a parenthesised continuation (SR-91), the tour's examples are in the one
-layout and `check.py` holds them there (SR-137), and the tour states a raw
-literal's leading newline (SR-119).
-
-Running a program: a hosted program that traps with no panic handler writes
-the trap's kind and source site to standard error before it ends, amending
-D232, and firmware keeps its terminal instruction (SR-55). Linux links
-through a driver a stock distribution supplies (SR-22), and a static link's
-refusal of a C symbol comes before the toolchain's (SR-168). The
-intermediate assembly is kept only on request, and an assembly file links
-through `refine` as a compiled program does (SR-90, SR-141). `refine` shows
-the IR a program lowers to, named in `--help` and `docs/ir.md` (SR-140).
-
-Finding the library: a misspelt library namespace is offered the near name in
-the explicit-file mode too (SR-23); a project root holding a reserved
-namespace is told about `--library` (SR-62); and a library import found
-nowhere names where `refine` looked and `--library`, with `--emit=asm`
-refusing rather than leaving a module out (SR-145).
-
-Refusals that name the Landin form: `elif` names `elsif` (SR-152); a reserved
-word in a binding's place is named reserved, in one report (SR-144); a
-`match` over an integer names `if` and `elsif` (SR-132); a function-typed
-module binding is admitted or names the alias it needs (SR-131); and an
-assignment after a bare `else` names the recovery's binder (SR-155). SR-13's
-decision is taken with them. No note quotes a register label or a grammar
-summary as its whole explanation. An untyped integer literal and a fixed
-array passed to a generic routine are typed or lent from the parameter, or
-refused naming the conversion (SR-109). Ignoring a failure gets a decided
-short form, or the tour teaches the block form, and the README's first
-program uses what is decided (SR-108). A page maps a C programmer's habits
-to their Landin forms and names those with no answer yet (SR-56).
-
-The lanes R12 changes: `nix develop` provides the pinned cross lane, QEMU's
-user emulation, the cross drivers with a static `libm` and an aarch64 GDB,
-and the lanes' host failures are listed as expected (SR-76). The debugger
-workload inventory is checked where a library change is made, naming the
-files and the command that regenerates it (SR-113). The memory controls and
-the scaling bound give one verdict under load, or refuse a measurement taken
-under contention (SR-134, SR-159). The Cortex-M corpus line gives each
-section's size against its region, overflowing or not, and a stale image
-limit fails (SR-75); missing tools are refused naming the path and `--tools`
-(SR-78); a failure names its case and log (SR-93); a profile has one spelling
-(SR-103); the inventory's rules are documented and its refusals name the row
-(SR-111); a timeout names its limit and the fixture's time (SR-150); and a
-firmware image leaves out conformance entries it never calls (SR-61). RV64
-returns to the gate on QEMU's user emulation, its hardware jobs staying out
-until they are dependable (SR-80), and SR-122 is measured again on the hosted
-runners.
-
-A review of `main` after R13.35 found four more defects, each fixed with a
-regression fixture: a standard stream whose descriptor is already its
-destination losing its close-on-exec clearing in `platform/posix`'s spawn
-(SR-210); the compiler's own tool runner losing explicit input and captures
-when its caller has closed standard input (SR-211); `map.reserve` keeping
-tombstones it then grows for (SR-212); and the volume fake's directory reads
-bypassing its failure counter (SR-213).
-
-Exit evidence: the library's defects pinned by fixtures that fail without
-their fixes; decisions for every changed interface, the migration table in
-`core/README.md`, the reference rebuilt, and every renamed consumer, the
-derived programs and the debugger workloads passing on every target; every
-record named here meeting its completion, with fixtures pinning each refusal
-and each admitted form; `refine fmt` rewriting a file
-for an unprivileged user on Linux tmpfs, ZFS and ext4 with its attributes
-kept; a trap's report on every hosted target; the README's first program
-compiled and run on a stock Ubuntu with only the distribution's compiler;
-the RV64 emulated jobs in the gate; and then a reader with no project context
-doing a realistic hosted task from the published documentation alone, with
-what they met in the register.
-
-### R13.61 — Closing the gap the measurements found
-
-Status: complete
-Depends on: R13.60
-
-After R13.60, native arm64 still ran the Benchmark Game ports at 2.4 to 11
-times C's time while x86-64 ran them at 1.1 to 3.9, ordinary programs over
-`core/vec`, `core/map`, `core/sort`, `text.format` and a lexer at 2.3 to 13.7,
-and binary-trees spent nearly all of its gap in calls. Hand-patched code and
-library copies, with output unchanged and every check kept, measured each
-cause. The arm64 backend takes what R13.60 gave x86-64: floating-point values
-in registers, results in their own register with immediate operands, fused
-comparisons, division by a constant as a multiplication and small copies as
-moves. Both backends give registers to small routines, caller-saved where no
-call crosses a value. Immutable module data folds, SR-46; `--specialize auto`
-counts no growth for a call it only makes direct; a generic instance is not
-address-exposed for being public; a check a dominating comparison or a type's
-range proves is removed; a callee reads an aggregate parameter in place when
-nothing can change it, under D94's convention unchanged. An allocator may
-resize a block, `hosted/heap` with `mremap` on Linux, and the text builder
-grows through it. The compiler restricts its own runtime to what it uses, reads
-token and node kinds without copying, and builds its emitter's tokens as
-spans. A second phase copies small direct calls into their callers at
-`speed`, one level, with inlined-routine debugging records and a speed lane
-the scaling measure holds (D339); splits slices and small structs into
-scalars, SR-154; turns a branch whose arms only compute into a choice
-(D338), with fasta's lookup counting as the Benchmark Game's C program does;
-starts every x86-64 routine on a 64-byte boundary at `speed`, SR-146; and
-makes the debug and release compilers emit the same bytes, SR-179, which a
-gate job now holds. Passing slices in registers and frameless leaf routines
-would revise D94, D97 and [1550], and stay out.
-
-Exit evidence: every check still trapping at its own operation; the debugger
-sessions unchanged, at `speed` too; the five ports and the ordinary workloads
-timed before and after on Linux x86-64 and native arm64 with identical output;
-compile times before and after beside the other compilers; the scaling bound
-held; and the Cortex-M reference profile still holding the firmware.
-
-Done: on Linux x86-64 the five ports take 1.05, 1.07, 1.23, 1.30 and 2.22
-times C's time, from 1.20, 1.14, 1.99, 2.10 and 3.87, a geometric mean of
-1.32 from 1.86, each over three copies of its executable with output
-identical to C's. Native arm64 on an M1 Pro runs them 2.2 to 5.8 times
-faster than before at `speed`, at 1.07 to 2.5 times C's time on Darwin and
-0.99 to 3.0 on Linux. The ordinary workloads over `core/vec`, `core/map`,
-`core/sort`, `text.format`, a lexer and `any` dispatch run 12 to 31 per cent
-faster from the first phase, and word count and binary-trees about a third
-and vec a fifth faster again from inlining; reverse-complement, which the
-second phase first slowed by moving its loop, ends faster than after the
-first, 0.99 seconds against 1.03, once placement is fixed. Hello-world compiles in
-0.30 seconds rather than 0.34, and the 16,000-declaration families 30 to 40
-per cent faster. The test program, the GDB sessions, object quality, the
-cross and Cortex-M lanes and both scaling lanes pass on Linux x86-64;
-`docs/benchmarks.md` records every run. The complete gate passed on the
-commit that closes this item, with RV64 suspended.
-
-Done: `refine fmt` rewrites a file in place without privilege, keeping what it
-cannot see, and `--check` gives every line as the layout writes it (D358 to
-D360). A hosted trap reports its kind and site (D361); the assembly stays only
-on request and links through `refine` (D362); library refusals name
-`--library` (D363, D366); Linux links through a stock distribution's driver
-(D364); and `--emit=ir` shows the IR (D365). Foreign spellings, keywords as
-names, integer matches and a bare `else` name the Landin form (D367 to D370);
-a function-typed module binding is admitted (D371); generic arguments are
-typed and lent from their parameter (D372); notes say in words what they cite
-(D373); and `else none` ignores a failure (D376). The library review's defects
-are fixed, and the library is reshaped: `hosted/system`, `core/time`,
-`core/net`, `core/io/fake`, `core/arena`, `platform/cortex_m`, `platform/posix`
-and `platform/libc` by facility and system, each facility written once
-(D340 to D357). A read-only erased view of static storage satisfies a
-writable `from` (D375), an erased call no value can reach traps (D377), and
-the four defects a review of `main` found are fixed (D378 to D380). The text
-cursor, the memory world over the volume and the pool's slot sentinel stay,
-for the reasons D355 and D354 record. `nix develop` carries the cross lanes,
-RV64 runs in the gate under QEMU, the Cortex-M lanes give each region's size,
-and an image keeps only the evidence entries it can call (D374).
-`docs/from-c.md` maps C to Landin. A reader with no project context then
-built a directory tally from the published documentation alone, and what they
-met is in the register. The complete gate passed on the commit that closes
-this item, with RV64's hardware jobs suspended.
-
-### R13.71 — What the newcomer's path met
-
-Status: complete
-Depends on: R13.70
-
-R13.70's agents and its outside reader recorded what they met as they went,
-in rows new to the register and in older rows met again. This item answers
-them before the release that follows R13.70 and before R14 builds on the
-same tools.
-
-The language, each decided in `spec.md`'s register with fixtures: several
-labels on one `match` arm, as the tour already teaches, or the tour
-corrected (SR-214); a short way to ignore the failure of a call that returns
-a value, or a refusal naming the forms that work (SR-206); byte-packed C
-records (SR-216); an offset query and a compile-time assertion over a
-declared layout (SR-53); and which public names reach the C namespace, so a
-library name cannot collide unseen with a C symbol or a linked object
-(SR-26).
-
-Refusals and commands: L0329 names the atom and the `fail` that raises it
-(SR-215); a local or parameter that shadows an import or a concept is named
-as the cause (SR-64); `check` accepts what `compile` accepts, `--link`,
-`--firmware-entry` and `--build-report` among them (SR-70); an option before
-its command is named in its refusal with where it goes (SR-170); `refine fmt`
-takes a directory (SR-205) and its note marks where a line differs (SR-224);
-and the C driver refusal and the installation text name the Nix route and
-which commands need no driver (SR-220).
-
-The library: the pool grows a block within its slot (SR-200), a library
-failure atom has words for a person (SR-221), and `core/sort` takes a
-comparison with a context (SR-222), each with a consumer.
-
-The documentation: the tour's placeholder bodies parse or are marked as
-fragments (SR-190); installation is reachable from the front page and says
-where an archive unpacks and what `refine version` prints (SR-219); the
-reference pages are sized for a reader (SR-223); and `arena` is no longer
-coloured as a keyword (SR-208).
-
-The tools a contributor meets: the debugger sessions' frames are checked
-where the library changes (SR-189); the suite that checks a recorded report
-is named (SR-191); the catalogue's label counts are checked statically
-(SR-192); the unfiltered run reports progress per suite (SR-193); every lane
-takes one default for merged streams (SR-194); a fixture's report, a server
-session and the lowering corpus are re-recorded one at a time and a stale one
-is named (SR-197, SR-207, SR-217); the server's analysis sees the library for
-rooted fixtures (SR-198); a rooted negative selects its target (SR-199);
-`scripts/debug.sh` finds the shell's toolchain and replaces its own output
-(SR-201, SR-149); `nix develop` has the pinned tree-sitter CLI and a bash with
-completion, and prints its banner on standard error (SR-202, SR-25, SR-218);
-the corpus gives per-routine Cortex-M sizes (SR-203) and states its
-inventory's trap-report rule (SR-209); a failed build rebuilds only what it
-must and a rebuild never pulls `refine` from under a running reader (SR-68,
-SR-94); and fixture metadata spells targets as `--target` does (SR-185).
-Hosted images narrow what their startup assembly keeps live, so evidence
-pruning applies there too (SR-204).
-
-Exit evidence: every record named here meeting its completion, with the
-fixtures and decisions it names; and a second outside reader repeating the
-directory tally from the published documentation and an archive meeting none
-of SR-219, SR-220 or SR-222.
-
-Done: several labels share one `match` arm (D405), a value call's failure is
-ignored under a discard with `else none` (D406), C's byte-packed records are
-`layout(c, packed)` (D410), `offsetof` and the layout facts measure in
-`compiler.assert` (D411, D412), a last `[0]t` field is C's flexible member
-(D413, D414), and `public` no longer makes a global symbol: only exports do,
-and a collision is named by its module (D415 to D418). Refusals name what
-raised them, what hides an import and where an option goes, `check` takes
-what `compile` takes and `fmt` takes a directory (D381 to D385). The pool
-grows within its slot, `sort.sort_by` takes a context and `core/failure`
-gives library atoms words (D386 to D388). Assembly reaches only what it
-names, so hosted images prune evidence entries too (D374). The tour's
-placeholders are code, installation is reachable from the front page and
-the reference pages are a sixth of their size. A contributor's tools record
-one artefact at a time, report progress, check the debugger frames and the
-catalogue's label counts where they change, refuse a known-bad emulator, and
-`nix develop` carries the pinned tree-sitter CLI, a bash with completion and
-a build that never pulls `refine` from under a reader. A second reader with
-no project context built the directory tally from the published material,
-reached installation and sorted with a context; what they met is in the
-register. The complete gate passed on the commit that closes this item, with
-RV64's hardware jobs suspended.
-
-### R13.72 — What the register holds now
-
-Status: complete
-Depends on: R13.71
-
-After R13.71 the register's open rows were mostly friction met while the
-library and its tools were built, each waiting for "the next item that
-touches" its area. This item takes every one of them that needs neither a
-board, a new target, a library facility no program has asked for, nor a
-maintainer's release decision, so R14 starts from a register that holds
-what waits for a reason.
-
-The language, each decided in `spec.md`'s register with fixtures, either
-admitting the form or giving a refusal that names the route that works:
-selecting from a call's result (SR-27); a made pointer, a struct literal, a
-named array and an erased view as call or generic arguments (SR-37, SR-67,
-SR-106, SR-164); positional destructuring of results (SR-42); a guarded
-trap (SR-31); fixed selection inside a body and feature facts in module
-values, with a fact naming the selected level (SR-38, SR-45, SR-48); a
-module constant as an array bound (SR-102); a trapping `match` arm leaving
-the match a statement (SR-104); comparing a pointer union with an atom
-(SR-105); a payload-free case in module data (SR-116); assignment before
-`break` counted (SR-117); destructured bindings addressable, with their
-escape refused (SR-123); a qualified module array copied as an unqualified
-one is (SR-130); an arm's binding as a `sink` place (SR-138); a concept
-entry returning its own pointer argument (SR-175); narrowing in a `_` arm
-(SR-230); equality, updating assignment and zero images for distinct types
-over atom sets and pointers (SR-107, SR-163); `escaping` outside C-symbol
-compatibility (SR-28); `cstring` paths for the raw Linux wrappers (SR-41);
-a pointer offset that keeps its base's origin and pointer operands that
-keep their permission, or the boundary recorded (SR-29, SR-54); and a
-conditional import, or the empty-module shape recorded as the way (SR-40).
-
-Refusals: an unknown applied name gets L0201's near names (SR-20); L0331
-names `noreturn` (SR-32); the buffered writer's `format` takes the inline
-list `text.format` takes, and L0304 never offers a form that is then refused
-(D419); no refusal repeats its own span as a secondary
-(SR-34); one missing conformance entry is one report (SR-59); L0315 names
-the convention that locks (SR-63); L0326 counts an erased view's address
-(SR-71); L0342 names a read-only address (SR-74); no fix-it changes a
-program's meaning (SR-85); an imported variant's case is offered qualified
-(SR-114); L0328 offers `[]` at length zero (SR-115); a module-internal
-representation names the concept's public operation (SR-169); the verifier
-names the path to an uninitialized read (SR-187); `make_buffer(4, u8)`
-and a generic struct value are offered their working forms (SR-238,
-SR-239); a `public main` that is not the entry is refused before the link
-(SR-243); Cortex-M0's `layout(c)` refusal names its missing C ABI
-(SR-252); and `check` gives D280's refusal as `compile` does (SR-229).
-
-The compiler's own visibility: library sources recorded under a logical
-prefix (SR-24); each option's effect on generated code in its help and a
-specialization report naming what stayed indirect (SR-143); parsing as its
-own stage in the stage report (SR-171); generic instances carrying symbols
-a profiler shows (SR-142); a documented way to profile `refine` and count
-calls (SR-92, SR-172); kept and dropped evidence entries in the IR dump
-(SR-241); atom sets described to debuggers as enumerations (SR-16); GDB's
-past-`main` setting documented (SR-43); and the shell's linker held to the
-pin or the difference recorded (SR-173).
-
-The library and its code: a growable byte container filled at word speed,
-measured on reverse-complement (SR-136); no always-true bound on a
-`usize`-to-pointer conversion (SR-151); an atom `match` lowered as one test
-(SR-231); the vDSO parser's size measured and reduced or stated (SR-128);
-glibc's `AT_HWCAP` documented (SR-126); and the binding generator emitting
-packed records and flexible members (SR-246).
-
-The documentation's generators: the Linux numbers page as one row per
-name (SR-240); a public value on its own line accepted by the site generator
-(SR-118); and a continuation layout for `if` expressions with a reference
-that reads a wrapped signature (SR-47).
-
-The tools a contributor meets: the fixture format read in one place, with
-one base for its paths, a host-excluded fixture saying where it runs, and
-adding a fixture or a `core` module naming each step (SR-234, SR-60, SR-72,
-SR-176, SR-228, SR-232, SR-233); generated files regenerated by one command
-(SR-235); several selectors in one run and an unknown case answered with
-the naming rule (SR-158, SR-95); usage without a build and a missing
-interpreter naming the shell (SR-139); a build that names what changed
-under it, relinks whatever it compiled, has a tree of its own for
-experiments, finds its inputs from the project files and does not clean on
-a script edit (SR-147, SR-188, SR-186, SR-180, SR-237); each cross lane
-selecting its own levels, an RV64 debugger route, the FreeBSD lane's tools
-in the shell and a Cortex-M failure naming its fault (SR-77, SR-242,
-SR-249, SR-244); misaligned RV64 access shown by a check of the emitted
-sequence (SR-245); the corpus held to the formatter (SR-177); the fuzzer's
-and mutation suite's dependencies and failures named (SR-73, SR-112); the
-syntax walk's contract stating recovery clauses (SR-160); the grammar
-corpus derived cold in a small multiple of a warm run (SR-161) and the
-roadmap test without the whole site (SR-162); the debugger check on
-resolved paths (SR-153); `quality.sh --output` honoured (SR-178); the
-scaling families compiling clean (SR-174); the x86 optimization suite
-emitting as `refine compile` does (SR-148); the tree-sitter cache and pins
-surviving a hand run and a rebase (SR-165, SR-166, SR-248); a closing
-commit reusing its candidate's gate (SR-81); and the mirror's contents
-described as they are (SR-83).
-
-Exit evidence: every record named here meeting its completion, with the
-fixtures and decisions it names.
-
-Done: a parameter whose type names no generic formal is an ordinary
-context, so the buffered writer's `format` takes an inline list and erased
-views, made pointers and constructions reach generic routines (D419, D420);
-distinct types compare, update and zero as their bases do, a pointer union
-compares with an atom, `_ (rest):` passes the atoms no arm named, an
-assignment before `break` counts, a trapping arm leaves a `match` a
-statement, destructured names are places and `ptr (sink l)` consumes a
-matched pointer (D427 to D436); module values read compiler facts and size
-arrays (D437, D438), the empty-module shape and the pointer and C boundaries
-are recorded with their routes (D439 to D442), and `check` and `--emit=asm`
-refuse what the link would (D443). Generic instances carry symbols, atom
-sets are debugger enumerations, library sources have a logical prefix and
-`if` expressions a continuation layout (D421 to D424); a list of bytes is
-the growable byte container and the binding generator writes packed and
-flexible records (D425, D426). Refusals name their routes and a second
-place, the verifier names the path to an uninitialized read, the fixture
-format has one reader held to the Ada one, the build relinks what it
-compiled, `check.py --generate` regenerates everything, and the tools a
-contributor meets take several selectors and name their faults. An atom
-`match` tests its subject once but is not yet a table (SR-231). The complete
-gate passed on the commit that closes this item, with RV64's hardware jobs
-suspended.
-
-### R13.73 — Documentation that teaches
-
-Status: complete
-Depends on: R13.72
-
-The tour began as "Learn X in Y minutes" and drifted into a design
-document. Its preamble was a version history, 153 of its 173 entries
-opened by repeating their own heading, design rationale and decision
-records sat in the middle of what a newcomer reads first, and nothing
-showed a hello world or what replaces `printf`. `docs/from-c.md` opened
-with how its fixture is checked, and the library reference and its
-pages read as walls of text. This item makes the published documents
-teach, and decides nothing about the language: a rule a rewrite would
-drop moves to `spec.md` first.
-
-The tour: it opens with a hello world and a formatted line, and says how
-to read it; the version history moves to the handoff. Every entry is a
-heading that is a title, one sentence saying what the construct is, its
-example, why it is that way, and its edge cases last, pointing to
-`spec.md` rather than repeating it. Design history, rejected
-alternatives and implementation detail leave the entries for `spec.md`'s
-register and the library reference. Sections are ordered so that a
-reader can write a function before meeting pointers. Every `[NNNN]` keeps
-its number, and the tour stays one page.
-
-`docs/from-c.md` leads with the C habits and their Landin forms, and puts
-how its fixture is checked at the end; the gaps are a table. The README's
-first program uses `else none`. The library reference reads in order as
-text (SR-251), and its sections are paragraphs a reader can scan rather
-than one paragraph per module. `examples.md` gains the everyday hosted
-tasks — reading standard input, listing a directory, running a command,
-printing formatted values — and an example that puts a failure into
-words, each run by the outside-user lane (SR-51, SR-250).
-
-Exit: an outside reader with no project context writes a small hosted
-program from the tour and the examples alone, and what they met is in the
-register; `python3 check.py`, the script tests and the tour's layout case
-pass.
-
-Done: the tour is a learning tour again. It opens with a hello world, a
-formatted line and a complete program that reads a file, says how to read
-it and where the reference part begins, and teaches types before control
-flow; its entries have titles, examples that declare what they use and
-compile, short fine print and no decision numbers, and the generic types it
-teaches build no container it cannot build honestly. `docs/from-c.md` leads
-with what to write instead of C, and gained callbacks, the byte calls,
-reading a line, `assert`, allocators and `defer`; the README leads with
-installing, the first program and next steps; `examples.md` prints what
-each program computes, everyday tools first, and reports failures in words;
-the library reference reads in order as text, links its calls, shows each
-module's own runnable example and holds its code to fixtures; the
-prototypes and the specification say who they are for. Four rounds of
-outside readers wrote programs from the pages alone, and two rounds of
-design review shaped the site: headings above body size, a reading measure,
-quiet citations, one captioned code panel, wayfinding on phones and in the
-library, print and keyboard use. What they met is SR-285 to SR-308 and
-SR-310 in the register.
-
-### R13.74 — What a first stream meets
-
-Status: complete
-Depends on: R13.73
-
-A newcomer trial of the 0.2.8 archive, guessing from C the way a streamer
-reviews a language, had hello world compiled in a third of a second and
-then needed five attempts to call raylib, could not print a number in one
-line and found no way to run what it built (SR-420 to SR-427). This item
-fixes what it met, and decides:
-
-- Under `--link=libc`, `linker.library("NAME")` is passed to the C driver as
-  `-lNAME` on every hosted target, so the driver resolves it as it would for
-  C, shared library or archive. This amends D202's archive-only resolution;
-  the default static link still refuses the directive (D280) (SR-423).
-- `linker.directory("DIR")`, a tool directive resolved against the
-  declaring file's directory, and a repeatable `-L DIR` on `compile` and
-  `run` name where libraries are searched. A library the link cannot find
-  is refused with the directories searched (SR-422).
-- `refine run FILE [-- ARGS]` compiles to a temporary executable, runs it
-  with the arguments, exits with its status and removes it. Bare
-  `refine FILE` says that it only checked (SR-424).
-- One call writes a template and its values straight to a file, with no
-  buffered writer or flush, and the tour shows it before its first loop. An
-  unknown `core/io` member spelt as another language's print, `print`,
-  `println` or `printf`, is told that call (SR-426). Floating-point text
-  stays SR-97's.
-
-Without a decision: L0012 once per identifier, naming `link(symbol: ...)`
-when the declaration follows `extern(c)` (SR-420); L0346 naming the record
-that is not `layout(c)` (SR-421); `refine explain` resolving `[NNNN]` and
-`Dnnn` to their titles and where to read them (SR-427); the released
-compiler without its debug information, and the archive's size beside the
-install route (SR-425); and `docs/from-c.md`'s C entry calling a mixed-case
-C library linked from a directory beside the source.
-
-Exit evidence: a runtime fixture that calls an archive built beside it
-through mixed-case link names, passes a `layout(c)` record by value and
-calls `sqrtf` and `pow` from libm under `--link=libc`, linked through both
-`linker.directory` and `-L`; a negative fixture for each refusal above;
-`refine run` cases in the test program; and the trial repeated on a release
-archive with raylib 5.5, what it meets in the register.
-
-Done: under `--link=libc` a library is the C driver's `-lNAME` on every
-hosted target, so libm links as C links it (D523), `linker.directory` beside
-the source and `-L` on the command line say where libraries are, each also
-the executable's runtime search path (D524), and a library the link cannot
-find is L0509 naming every directory searched, the SDK's on Darwin (D525).
-`refine run` compiles to a private temporary directory, runs the program
-with its arguments and exits with its status, and bare `refine FILE` says
-it only checked (D526). `io.write_format` writes a template and its values
-in one call, which the tour shows before its first loop and L0201 offers
-for another language's print (D527). L0012 is one report per word, naming
-`link(symbol: ...)` for a C name (D528), L0346 names the record that is not
-`layout(c)` (D529), `refine explain` answers a construct or a decision
-(D530), and the released compiler's debug information ships beside the
-archive (D531). `runtime/c-library-directories` calls two archives built
-beside it through mixed-case link names, one found by `linker.directory`
-and one by `-L`, passes a `layout(c)` record by value and calls `sqrtf` and
-`pow`. The trial, repeated on a release-shaped archive outside the
-checkout, followed each refusal to a raylib 5.5 program that links against
-raylib's shared library and starts; a window was not drawn, since the
-headless host has no GLX and the same C program stops there alike. What it
-met is SR-461 to SR-463.
-
-### R13.75 — Refusals that say what to do
-
-Status: complete
-Depends on: R13.74
-
-The register's largest group of findings was refusals that name a symptom
-rather than the mistake, or name the mistake and not what to write: a
-second statement under a match arm, another language's unnamed result, an
-exit written as an `else` value, a failure in the hosted `main`, a type
-spelt as the checker holds it rather than as the program wrote it. This item
-takes the three groups the November triage rated first, parser refusals,
-refusals around failures and types named in refusals, with the driver's
-messages beside them. Each refusal points at the cause and says what to
-write, in the code whose meaning fits; no new form is admitted, so no
-accepted program behaves differently.
-
-Exit evidence: a negative fixture for each refusal pinning its text, and a
-`fixes` case for each repair that writes one.
-
-Done: a second statement under a match arm names `begin ... end` (D860), a
-type alone after `->` names `-> (result: i32)` and the function still closes
-at its own `end`, as named returns without parentheses do (D861), a quoted
-import path is told to lose its quotes (D862), `addr` of a measure is the
-address of a value to bind first (D863) and no repair moves `lenof` (D864),
-a stray `when` names the four exits (D865), and a `_` arm on a variant part
-is one L0333 naming the cases left, [1210] saying where `_` stands (D866).
-An exit written as an `else` value is told to stand in `else begin ... end`,
-with a fix that writes it (D870); a failing call ending a body is refused for
-its failure alone (D871); a failure in the hosted `main` names `else` and a
-fallible helper, not an error set `main` cannot have (D872); an assignment
-after `defer` or `undo` is named as one (D873); and an atom `else` filling a
-several-atom pointer union names the one-atom union to recover into (D874).
-Refusals spell types and concepts as the program writes them (D880), a
-missing composed conformance names the parents the type has (D881), a memory
-builtin given an atomic cell names the cell's operations (D882), a source
-with no entry was checked as a module (D883), and a missing option value
-names its values while `-g` is answered with `--debug=full` (D884). It
-retires SR-264, SR-462, SR-673, SR-301, SR-440, SR-471, SR-553, SR-339,
-SR-286, SR-302, SR-527, SR-696, SR-293, SR-337, SR-690, SR-262, SR-470 and
-SR-651.
-
-### R13.76 — A command destroys nothing it did not create
-
-Status: complete
-Depends on: R13.75
-
-The second outside review, six reviewers whose every finding the lead
-reproduced at `5d1bed296`, found seven ways a command loses a person's
-files, all one gap: no command has a shared rule for what it may write.
-A demonstration in `examples.md` that a reader copies removes a
-pre-existing directory before it creates its own (review #59). `refine fmt`
-can replace a newer save an editor renamed over the source between its
-read and its open, and discard its recovery copy (#47). A compilation
-writes over its own auxiliary inputs: a supplied linker script, response
-file or resolved driver input (#107). `refine bindings` can replace its own
-header or policy input (#98), and a dangling staging link escapes its output
-directory (#104). `refine svd` follows links in its output tree to delete or
-replace files outside it (#88). A failed ESP image publication deletes the
-previous good executable (#109). An interrupted link leaves the toolchain
-running and the prior output stranded (#111).
-
-The answer is one publication step in `Landin.Platform` that every command
-writing files goes through, not a patch per command: a target checked
-against every input the command read, links never followed, staging
-created exclusively beside the target and renamed into place, a file that
-changed since it was read never replaced, and a failure restoring only
-what this invocation replaced. Ordinary cancellation reaches the tools a
-command started and unwinds the same way.
-
-Exit evidence: the demonstrations create and remove only roots they made;
-each finding's reproducer, re-run on the item's starting commit first,
-refused or preserving on every host the gate runs, with fake-filesystem
-controls for each case and native controls for the formatter's open
-window and an interrupted link; the publication rule written into
-`spec.md`'s register and the manuals of `fmt`, `bindings` and `svd`.
-
-Done: commands share D907's loss-preserving publication contract: known
-inputs and selected tools are protected, destinations have expected versions,
-and descriptor-owned staging and recovery preserve conflicting saves.
-D358 retains the formatter's original read descriptor and inode. Publication
-entries and input separation are checked before generated files or a missing
-bindings tree become visible. Ordinary cancellation reaches the active tool
-group and reaps its direct child before cleanup. Cooperative producers permit
-unrelated outputs, overlapping
-same-parent reservations refuse, and native registries support cross-thread
-handoff. Darwin objects and complete debug bundles publish with the image.
-The starting-commit reproducers were confirmed; demonstrations create and
-remove only owned roots, and each finding has fake and native controls,
-including the renamed-save and interrupted-link windows. Manuals, the
-capabilities inventory and the specification record the same limits.
-
-At `613ba6503`, the fresh complete software push
-[gate](https://github.com/JanHaan/Landin/actions/runs/42229528092) passed.
-All 53 latest-attempt jobs were checked directly: 49 succeeded; two board
-jobs were skipped for branch scope and two physical RV64 jobs remain
-suspended. Debug/release comparison covered 24548 requests, 24192 emitted
-and 356 refused alike, with no disagreements; three host manifests agreed
-on all 52272 entries, and scaling and image bounds passed. Linux and Darwin
-native lanes passed 37 publication, 34 compile-publication, 7 owned-runtime
-and 16 native cancellation controls plus all 9 actual command cancellation
-controls and 768 registry handoffs. FreeBSD's production C adapter controls
-passed on amd64 and arm64 beside the generated-program, debugger and ABI
-lanes. No FreeBSD-hosted Ada compiler or command-reproducer run is claimed:
-the host criterion uses Jan's accepted Linux/Darwin command and native
-FreeBSD adapter scope.
-
-The one/eight-worker fixture comparison at `8ff513fa3` passed:
-both runs passed all 14 selected cases and 16024 checks with exit zero,
-identical stdout and normalized stderr, and empty full diffs. Both recorded
-commands used the guarded allocator environment. The Ada fixture harness
-and its launchers are unchanged by the later physical-board oracle and
-roadmap sequence-control fixes.
-
-The lifetime-test launchers disable glibc's thread cache in fresh Linux
-test processes; every actual meter case requires visible allocation and
-exact free of 512 bytes. A retained 512-byte control rejects growth with
-the original windows and thresholds. Focused native feedback passed all
-eight memory cases and 20 checks; seven unconfigured entries refused
-before workloads. Launcher controls passed 34 Python tests. The
-owned-runtime controls passed with TMPDIR unset, empty and explicit on
-Linux and native FreeBSD amd64, and the complete host gate passed.
-SR-813, SR-817 through SR-822 and SR-824 through SR-827 are settled.
-SR-806 credits ordinary compilation cancellation and mixed firmware
-generation fixes while retaining the cleanup-refusal state summary.
-
-The first boards
-[dispatch](https://github.com/JanHaan/Landin/actions/runs/42214376527)
-at `86041b9d` failed on SR-799's STM32 receive-oracle error; six other ports
-passed. The raw capture contains all six scenario bytes after a valid boot
-frame, with two unframed bytes before it; the image is byte-identical to the
-prior main run's passed image. The host now validates the first boot frame
-before counting echoes, retaining and reporting the raw prefix while keeping
-the exact echo, counter and float checks. The combined STM32, common-board
-and gate controls passed 173 tests. Replay of the retained complete passed
-trace, clean and with a prefix, consumed all 12185 sent bytes through the
-scenario, epochs, floats and final report; each float width checked 52
-operand pairs and square roots. Changed post-boundary bytes were refused.
-Replay establishes no fresh physical pass or cause for the prefix. SR-799
-is settled by these controls and `b1f29f845`'s complete software
-[gate](https://github.com/JanHaan/Landin/actions/runs/42218748077) and
-identical-tree physical
-[dispatch](https://github.com/JanHaan/Landin/actions/runs/42224711415),
-whose seven ports passed their RAM runs and final boot checks.
-
-The first explanatory closing candidate's
-[gate](https://github.com/JanHaan/Landin/actions/runs/42228465204)
-exposed SR-829: the roadmap sequence control replayed earlier progress
-without resetting the two outside-review items. It failed when this item
-became complete. Both items now enter the simulated sequence as planned,
-with the same next-item and dependency assertions; all 31 module tests
-passed after reproducing the failure. SR-829 is settled by this correction
-and the fresh complete software gate above.
-
-Activation review: the sweep against `df4ccb875` found 104 changed paths and
-no path-matched activation; all 159 unmatched rows were read against the
-actual changes.
-R551-20 remains for native failures beyond these bounded controls.
-SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect caller
-diagnostics, note citations, installed panic-site lookup,
-description-request guidance and report contents. SR-324 and SR-379 remain
-for local cross-target assembly validation and child-process runner support;
-SR-702 for Darwin ABI-fixture execution; SR-281 for detecting a stale binary
-beside its checkout, since test-environment setup adds no version warning;
-SR-721 for shared script hang guards, since the new launcher controls use
-the existing 300-second convention rather than introducing a shared guard;
-SR-783 and SR-785 for gate-inventory controls and workflow linting;
-and SR-812 for verification across partial rerun attempts. SR-773 retains
-the completed-job log route while its overall run is active, encountered
-again while following this candidate. SR-703 retains
-the staged-object debug-map residue and unmeasured full-debug
-reproducibility limits. SR-814 retains unsupported relative or indirect
-tool inputs and Clang dependencies escaping their private workspace.
-SR-815 waits for fixture-corpus progress reporting: recording the allocator
-environment in the wrapper adds no progress inside a long case. SR-816
-retains the separate attached-program post-reap forwarding window. SR-823
-retains review #51's missing-report-parent diagnostic variant for R13.77.
-SR-806 retains #110's cleanup-refusal state summary for R13.78. SR-828
-retains the preexisting packed-byte instrumentation finding for the
-next iterator or instrumentation change. These triggers are restated rather
-than importing unrelated fixes into publication.
-
-The required identical-tree boards
-[dispatch](https://github.com/JanHaan/Landin/actions/runs/42236059545)
-passed on `613ba6503`. All 39 latest-attempt jobs were checked directly:
-12 succeeded and 27 were skipped under boards scope. Every port's artifact
-and source identities were verified; all seven ports passed their RAM runs
-and final boot checks, leaving their verified fixed images at rest.
-Promotion to `main` requires its own push gate with fresh physical boards,
-followed to completion. No release or version change is claimed.
-
-### R13.77 — What the second outside review found
-
-Status: complete
-Depends on: R13.76
-
-The same review's other shoulds. Default optimization crashes the
-compiler, exit 70, on an unsigned below-zero branch followed by a shift
-(#54). `lenof` of a slice expression skips the frame-origin escape check
-the equivalent direct call receives (#30). `refine bindings` succeeds and
-writes Landin that does not check when a C parameter is named `result`
-(#55) or matches its record type (#71). The language server leaves an
-importer's diagnostics stale when an unsaved imported buffer closes (#48)
-or a module gains a file (#103). Returning a value draws a grammar-jargon
-refusal without the Landin route (#13); likely-deletion repairs erase the
-foreign operation a person meant (#14); common first-file C-family forms
-get opaque refusals (#18); a misspelled leading keyword gets a mislocated
-refusal (#106); a missing output directory is reported as a source
-collision (#51), including SR-823's report-parent variant; build options
-collide with implicit library internals after `check` succeeds (#25), and
-one such collision cascades into hundreds of library diagnostics (#100);
-the installed bindings command points only at an unshipped policy reference
-(#57).
-
-Exit evidence: each finding's reproducer, re-run on the item's starting
-commit first, answered on every host the gate runs: the optimizer and
-origin cases as fixtures, the generated bindings checking, the server's
-dependent diagnostics republished in scripted sessions, and each refusal
-naming the route that works, with the language rules changed in `spec.md`
-and its register.
-
-Done: all fourteen findings were reproduced at `fab292f6137`, with matching
-controls. Bounds stay inside their integer type on contradictory edges
-(review #54), and every evaluated slice operand under `lenof` receives origin
-checks while fixed-array measurements retain their unevaluated operands
-(review #30). Generated signatures allocate parameter and result names
-against each other and their referenced types, including adapters and
-callbacks (review #55, review #71). Closing an imported overlay or creating
-a module source republishes dependent diagnostics (review #48, review #103).
-Returning a value names assignment to the named result followed by bare
-`return`; foreign operations receive preserving routes, common C punctuation
-and comments name their Landin forms, and leading-keyword typos point at the
-word to repair (review #13, review #14, review #18, review #106). Offered edits
-were applied and checked; valid identifier and bare-return controls remain
-accepted. Unavailable output/report parents and uncertain identity are
-distinguished from proven collisions without creating directories or
-weakening D907 or D358 (review #51, SR-823). Installed bindings help names the
-generated `bindings.html` policy reference, whose inventory and content were
-checked locally; no live deployment is claimed (review #57).
-
-Jan chose D202's declaring-module collision rule: option names remain globally
-unique and configuration-only, while unrelated modules may use their spelling
-for ordinary declarations or imports. Static Linux checking includes the
-same available startup graph as compilation; standalone checking without that
-library retains its optional boundary (review #25). Actual same-module
-conflicts report one primary cause and suppress dependent noise from refused
-bindings, preserving independent mistakes (review #100).
-
-At `e139bf9fc`, both Linux compiler modes passed the FILTERED integrated
-selection, 46 cases and 4267 checks each; both Darwin modes passed its
-HOST-ONLY selection, 45 cases and 4056 checks each. Native Linux/Darwin
-optimizer, origin, generator, scripted LSP and command controls passed at
-their retained revisions, including all 40 native publication controls.
-The debug/release comparison covered 24620 requests, 24264 emitted and 356
-refused alike, with no disagreements. Linux and Darwin's complete manifests
-agree on all 52272 entries at `418b280ec`, whose compiler implementation and
-fixtures are identical to `e139bf9fc`; their later difference is tests and
-manuals. Scaling and image bounds passed. FreeBSD 14.4 amd64 and arm64 each
-executed the three new runtime fixtures at four profiles and passed production
-C adapter controls, using the frozen `418b280ec` release emitter. This is
-generated-program and native C evidence, not FreeBSD-hosted Ada. Cortex
-emission and recorded refusals passed; local QEMU execution was not established
-because the locked tool inventory was unavailable. The first candidate gate
-found stale native report-identity expectations and fake reports lacking
-parents, now pinned to the refused cause and working route with preservation
-controls retained. The startup graph retains user-site hosted-entry refusals
-and ordinary C compatibility checks. Source-document
-links use the bindings guide before its generated page is deployed; installed
-explanations name `refine help bindings` for that page's address. The complete
-candidate software gate, identical-tree boards dispatch and main's own push
-gate remain required before promotion. No release or version designation
-changed.
-
-Activation review against `fab292f6137` read all 160 unmatched activations
-before closure; the final 109-path sweep has no automatic matches.
-SR-726, SR-823, the new
-SR-830, the target manual's misleading refusal of `--link` on checks, and
-SR-831, generated reference links requiring deployment before validation, are
-settled. The next server change retains SR-247's `offsetof` navigation; the
-next driver/diagnostics change SR-266's caller report; the next parser-refusal
-change SR-273's continued `else []`; the next generated-record-pointer consumer
-SR-277's typing; the next configuration change SR-289's option initializers;
-and the next catalogue pass SR-296's citations. SR-298 retains installed trap
-lookup for the next command/reporting change, SR-307 adjacent literals for
-the next string/L0103 change, SR-369 direct facts in array lengths for the next
-fixed-expression change, and SR-370 module timing for the next report change.
-SR-374 retains disjoint-field origins for the next field-origin change,
-SR-390 generic cascades for the next deduction/recovery change, SR-481 library
-directory guidance for the next library-discovery/refusal change, SR-590
-description inputs for the next rooted-request refusal change, SR-722 generator
-causes for the next catalogue/coverage change, SR-728 `mut name = value` for
-the next line-repair change, and SR-785 linting for the next workflow/environment
-change. Other rows retain their triggers; SR-801 through SR-811 stay with
-R13.78, and the R13 gate remains open.
-
-### R13.78 — What the review and the register leave
-
-Status: complete
-Depends on: R13.20, R13.77
-
-After the library is split, this item takes the second outside review's
-eighty-three confirmed nits, transcribed by area as SR-801 to SR-811, each
-with the correction its ledger names, together with the register's open
-rows whose activation the work since R13.72 has met, as R13.72 did. Rows
-that wait for a board, a target, a library facility no program asks for or
-a release decision keep their activations.
-
-Exit evidence: every SR-801 to SR-811 nit corrected or answered with a
-reason, each row settled or restated, and the register's open rows read
-against their activations, on every host the gate runs.
-
-Done: each of the second outside review's 83 nits was confirmed on `main`
-against the code and its tests rather than the review's report, and every
-one is corrected or answered: the eighty the review's session fixed, #85
-by R13.76, and the remainders this item finished, #1, #24, #29, #46, #60,
-#63, #69, #80, #81, #86, #89, #101's early directory refusal, #110's
-cleanup summary, #112 and the controls of #49, #66, #83 and #97. SR-801 and
-SR-803 to SR-811 have left the register; SR-802 keeps #21's non-type
-remainder open, by the maintainer's choice. The 183 other open rows were
-read against the work since R13.72, each from the commit that stated its
-activation, and the rows met were taken or restated: the frontend's
-refusals name what to write (SR-273, SR-289, SR-303, SR-307, SR-321,
-SR-373, SR-382, SR-727, SR-728, SR-866), the server answers `offsetof`
-fields and hovers in the source's spelling (SR-247, SR-732), generated
-record pointers are typed (SR-277, D426 amended), a group's error mapping
-is the way (SR-314, D494), RP3's review is written (E3), and the scripts,
-checks and fetcher rows went with them. Four defects found on the way are
-fixed and pinned: Xtensa's `link(align:)` crash, a qualified type refused
-as a type argument, a generic instance first named in a slice crashing
-lowering, and the reference pass's dense facts, which made checking grow
-with the square of a routine's locals and failed the first candidate's
-`scaling` job (SR-380). The library ships comparison evidence for `time`
-and `net` (D1031), `l1.new` replaces `l1.caches` (D1032, D269 amended), an
-unscoped `platform/*` module is refused (D1022), and `check.py` refuses a
-public routine or value no program reaches. The cached STM32H753 RAM record
-was made again on the rig after the rename, and `build.py --records=strict`
-matches all seventeen images. On a native Mac the publication and
-cancellation controls passed and sixty programs emitted on Linux ran as
-their fixtures expect, after one, `posix-poll`, showed that Darwin reports
-urgent data on a regular file; the native Ada build still fails as SR-901
-says. In
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/42503239741)
-on `69333162`, 49 of 53 jobs passed and the board and suspended RV64 legs
-were skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/42507266743)
-on the same tree passed every port.
-
-The R13 gate held when this item closed. R13.79 has opened the phase
-again, and its gate is claimed anew when the phase's items have their exit
-evidence.
-What held then: the three roots are separate, every `core` module
-checks on all ten targets, each `platform` module only on its declared
-families with the others refused, and a firmware build refuses a hosted
-import by name on Cortex-M0, RV32 and Xtensa. Every public routine and
-value has a consumer a program reaches, which `check.py` now holds. The 23
-`library-shared-*` consumers, `core/line`, `core/cache` and `core/text`'s
-new operations among them, compile, link and return their status on every
-hosted target and execute on the Cortex-M, RV32 and Xtensa corpus lanes,
-with their refusals checked. The library's later facilities follow R13.11's
-conventions, the departures decided as D1031 to D1033 and D269 record. Two
-readers with no project context, sandboxed with only the packaged
-candidate `27ad1087c` and the rendered site, each wrote a UTF-8
-line-statistics module, its hosted tool and a Cortex-M0 build of the module
-from the published documentation alone; what they met is SR-940 to SR-949.
-
-### R13.79 — What the defect review found
-
-Status: complete
-Depends on: R13.78
-
-A defect and security review of `main` at `715a45e19`, the tree on which
-specification 0.2.9 was declared, left 147 findings, each with a
-reproducer: 6 rated high, 34 medium, 100 low and 7 for information. They
-reach every part: the host adapters, the driver, `refine svd` and
-`refine bindings`, the language server, the parser and the formatter, the
-checker and lowering, the backends, the library, and the workflows, scripts
-and editor packages. The high ones are an `inout` match binding that
-writes read-only storage, a view no name holds going unchecked, with the
-library's self-append that reads a freed block behind it, two Xtensa
-faults, a wide call losing its caller's base save and a stack switch
-naming its context before it masks interrupts, and a rig runner whose
-refusal may not stop a job's `always()` steps. The review's register is
-kept outside the repository, in the maintainer's
-`~/review-registers/landin`, whose index lists the findings.
-
-This item takes the fixes, each at its root cause with regression evidence
-that fails before it, and with them the register's open rows that could be
-settled without a decision of the maintainer's, as R13.72 and R13.78 took
-theirs, and then the rows his answers settled. Where a fix needed a choice
-between real alternatives, the conservative one was taken, refusing the
-unsound program rather than changing what a valid one means, and recorded
-as a decision for him to confirm. With this item open the R13 gate is not
-claimed.
-
-Exit evidence: each finding's reproducer, re-run on the reviewed tree
-first, answered by a fixture, a test-program case or a script test; each
-settled row's wanted control; the complete gate on the completing commit,
-which is the first to run the Darwin and FreeBSD paths, the complete
-Cortex-M and Xtensa corpora, the outside-user lane over `citations.txt`,
-the flake's build and the changed `release.yml` and `pages.yml` logic; and
-a boards dispatch on the identical tree. The ESP32's and ESP32-S3's
-records, which the Xtensa fixes and frame layout change by design, were
-made again on the rig, and every one of the seventeen board images matches
-its record strictly (SR-1103). RV32's far stubs (D1290) have
-a test-program case and an emulator session; no board runs one yet, which
-SR-648 keeps. Two fixes were not executed on any local host and rest on the
-gate: the FreeBSD errno-interposition fixture's new `fstat` script and the
-SVD scaling case's processor time, read on Darwin through the native meter.
-
-The maintainer has answered every decision this item recorded and every
-register row that waited for one. Most decisions were confirmed; D1046,
-D1100 and D1110 were changed and implemented as he chose, and five rows
-became R11.27, R12.70, R12.80, R13.80 and R13.90. He then read the choices
-the implementers made in answering them, kept most, and had seven changed:
-`citations.txt` names the compiler sources it was made beside (D1357),
-L0684 offers its rewrite as a fix (D1341), a declaration that takes a
-predeclared type's name is warned of (D1342), a C function value converts
-to its address, which `signal_action.handler` holds (D1343, D1344),
-`posix.kill` takes process groups (D1356), `alignof` of a scalar folds in
-an array length (D1340), and the gate's actionlint runs a pinned
-shellcheck over `run:` scripts. These choices, which he has not seen,
-each change what a user sees or what is accepted:
-
-- the ESP32-C3's board check parks the firmware before the probe reads its
-  counters (D1254), so the C3's image and records changed;
-- a read of a consumed module binding under its qualified spelling,
-  `store.state` after `consume(state)`, is now L0302 where it was accepted;
-- a checker report whose related label repeats its own place keeps the
-  label where its catalogue row requires one, and drops it only on the five
-  rows that admit none (D1251);
-- L0684's fix is exact, so a tool may apply it unasked, and it always
-  writes `else begin`, for a block of one value too (D1341);
-- no command applies an exact fix: `refine fmt` changes no token and there
-  is no `refine fix`, so a fix reaches the report, the JSON report and the
-  language server's quick fix only (SR-1242);
-- L0692 is raised only in a program without errors, at every kind of
-  declaration, a type declaration, a variant case and an error binding
-  among them (D1342);
-- `usize(f)` converts only a C function value, and only to `usize`; a
-  Landin, interrupt or naked function and any other integer type are
-  refused with L0301 (D1343);
-- `signal_action.handler`, `sig_dfl` and `sig_ign` are `usize` words
-  rather than a C function type, since `sig_dfl` is zero, which no function
-  value can be; `libc.handling` returns a `signal_action`, and
-  `handler_action` and `sigaction_handler` are removed (D1344);
-- `citations.txt` names the compiler sources by the source digest that
-  `refine version --json` reports, not by a revision, so every edit to a
-  compiler source makes `python3 check.py` fail until `--generate`
-  (SR-1249), and a file that names none, or names them malformed, is
-  answered with L0017's warning (D1357);
-- `posix.kill` still refuses -1, every process, with `einval`, and a group
-  has no helper name: it is written `process_id(0)` or
-  `process_id(-i32(leader))` (D1356);
-- a release is approved after its builds, since only `publish` is in the
-  `release` environment, and is dispatched on its tag,
-  `--ref vX.Y.Z`, which `release.py ref` checks first (D1337);
-- one attestation covers all six archives, the debug archives among them,
-  and the `.sha256` files are not attested (D1337);
-- an administrator may publish without the approval and pass the `v*` tag
-  ruleset, and the one reviewer may approve his own run (D1337);
-- the licensed code face is looked for in `$XDG_CACHE_HOME/landin/fonts`,
-  no longer in `../landin-fonts`, and a bare `assets/fonts.py --fetch`
-  replaces only a directory an earlier fetch made (D1336).
-
-What remains is held by register rows rather than by the exit evidence:
-seeing on the rig an ESP run switch its own port on (SR-1117), and a
-board run of an RV32 far handler at the next RV32 board record (SR-648).
-
-No finding was found wrong. Two are left open, the FreeBSD guest's open
-login (SR-1122) and the Emacs grammar install (SR-1119), and one was not
-reproduced (SR-1082). What the fixes left is in rows: objects sized by an
-input on the compiler's stack (SR-1067), a reference copied out of a
-container counted as a view of it (SR-1080, SR-1171), Xtensa's switch not
-interrupted at each instruction (SR-1102) and its frame's limit figures
-untested (SR-1178), editor smokes the gate cannot run (SR-1118, SR-1120),
-and what the streams met, in the rows from SR-1170 on. Of the register's
-rows, SR-344 was too large for a sweep; SR-369, SR-610, SR-619, SR-645 and
-SR-1100 were settled as the maintainer chose (D1320 to D1323).
-
-Done: every finding of the review is answered at its root cause, each
-by a fixture, a test-program case or a script test that fails before its
-fix, and every decision the item recorded has the maintainer's answer. The
-rig runner's hook was deployed to rigpi on 2026-11-12, and a refused branch
-job ended with its worker killed, its `if: always()` step never run and the
-runner online after (SR-1114). In
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/43367927187)
-on `a16ab915`, 49 of 53 jobs passed and the board and suspended RV64 legs
-were skipped;
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/43373366045)
-on the same tree passed every port, and
-[main's push gate](https://github.com/JanHaan/Landin/actions/runs/43376123620)
-reused that pass and passed with fresh boards. R13.80 and R13.90 remain in
-the phase, so the R13 gate is claimed when they close.
-
-### R13.80 — A seeded hash for maps
-
-Status: complete
-Depends on: R13.79
-
-`core/map` hashes a key with the evidence `core/cmp` ships, 64-bit FNV-1a
-for byte slices and `utf8`, and takes no seed, so whoever chooses the keys
-of a map keyed by outside data can make its operations quadratic;
-`docs/library.md` says so (SR-1109). This item gives `core/map` a seed and
-`core/cmp` a keyed hash among its evidence, under R13.11's conventions: a
-hosted program draws the seed from its entropy provider, and a firmware or
-test program supplies one. Which keyed hash is shipped, and whether an
-unseeded map stays for a program that wants the same order on every run,
-are decided here and recorded in `spec.md`.
-
-Exit evidence: the keyed hash against its published test vectors on every
-target; a fixture whose chosen keys share one bucket under the unseeded
-hash and spread under a seed; a hosted map seeded from the system's entropy
-and a firmware map given its seed; and `docs/library.md`'s warning replaced
-by what the library does.
-
-Done: every hash `core/cmp` ships is SipHash-1-3 keyed by a
-`cmp.hash_seed`, which `cmp.seed_from` makes from two words, and
-`hashable`'s entry takes the seed; `cmp.hash_bytes` and `cmp.hash_word`
-are public for a key type's own hash. `map.new` requires a seed and the map
-keeps it, `random.hash_seed` draws one from an entropy provider, and a
-firmware program gives two words of its own. There is no unseeded map: the
-walk goes by insertion order, so a seed changes no order, only the probes
-and, after removals, when the table rebuilds, which a constant seed makes
-reproducible (D1360). The candidates were measured on the host, Cortex-M0,
-Armv8-M, RV32 and both Xtensa chips before SipHash-1-3 was chosen; its
-vectors come from the authors' reference code, built at one and three
-rounds, since their `vectors.h` has SipHash-2-4's alone. A populated map
-does not fit Cortex-M0's 32 KiB profile with any hash, so the firmware map
-runs on the M7 and Xtensa corpus lanes; SR-1109 is answered. The evidence
-is on dda144b7a: the complete gate 43572285248 and the boards dispatch
-43572318615 on that tree. Against R12.70's images, every Cortex-M, RV32
-and Xtensa image that differs either links the keyed hash or keeps a map
-that now holds its seed, and the board images are the same bytes; four
-STM32H753 relinks of map fixtures no longer fit its 64 KiB ITCM and are
-measured instead.
-
-### R13.90 — Supply a concept through a field
-
-Status: complete
-Depends on: R13.79
-
-A provider that supplies a concept by handing every entry to a field's
-provider writes one routine per entry, each with its whole signature,
-failures and origins: `hosted/blocking` hands thirty-eight entries of nine
-concepts to the `hosted/system` handle it holds, `hosted/events`'
-`delegated.ldn` is a copy of those routines renamed, and prototype 5's
-firmware board hands four entries to the round it holds (SR-361). A
-concept's entry cannot be called through a concrete provider type's name
-either, `system.host.make_temporary(services, ...)`, though it can through
-a type parameter, so `hosted/blocking` keeps a private generic routine
-whose only line calls the entry (SR-360). This item decides, in `spec.md`,
-a conformance that names a field whose provider supplies the concept and an
-entry call through a concrete type's name; the parser, checker, formatter,
-editor grammar and server follow them, and the library's delegating
-routines and that helper go.
-
-Exit evidence: fixtures accepted and refused for both forms, among them a
-field whose type does not supply the concept, an entry the field's provider
-lacks and a type name with no conformance; `hosted/blocking`,
-`hosted/events` and the firmware counterpart with no routine left that only
-hands an entry on, their runtime fixtures unchanged; and the grammar
-deriving every positive fixture, with the highlighters' corpus passing.
-
-Done: a conformance may end with `through` and the name of a field of its
-target, or of a routine `(self: T) -> (r: F)` taking it, whose type's
-conformance supplies every entry its list does not name (D1363), and an
-entry is called through a concrete type's name, `box.count(b)` or
-`i32.less(1, 2)`, by the one conformance of that type that declares it
-(D1364). The parser, checker, lowering, editor grammar, highlighters and
-server follow; the formatter lays the clause out by its existing rules. A
-table entry so supplied is a forwarding routine lowering makes, one call
-more than a provider written for the holder, as the routines it replaces
-were. SR-361's count was wrong: `hosted/blocking` handed 34 entries of
-eight concepts, now all through its `services` field. `hosted/events`
-hands 33 of them, keeping `close`, through its `services` routine, and
-`fibre.scheduler` to its round, keeping `yield`, which calls `fibre.yield`;
-a `services` field, the form first chosen, could not be filled (D222,
-SR-374), and the maintainer chose the routine form instead. The firmware
-counterpart's board hands both its concepts to its `any fibre.turns`.
-`temporary_over`, SR-360's helper, and `hosted/events`' four generic
-helpers went with them, so no library code calls an entry through a type's
-name, which D1364 admits for programs. The selection of an entry a type
-parameter's constraint lacks, and an entry selected and not called, are
-reported with what to do, where L0338's note spoke of construction. The
-runtime fixtures are unchanged and pass; the grammar derives every positive
-fixture, and the editor grammar's corpus parses, 1,399 files. Against
-R11.27's images, every Cortex-M, RV32 and Xtensa image is the same bytes
-but the 22 of the Cortex-M `programs` part's 817 that are counterpart
-images, whose board's four routines are gone: the `corpus` part's 10,588,
-RV32's 6,443 and each Xtensa chip's 3,254, at `sim`, are all the same, and
-the two new runtime fixtures add images of their own. Every one of the
-seventeen board images matches its record strictly. This host's emission
-manifest differs from R11.27's only in the 108 entries of
-`positive/from-c`, which links `hosted/blocking`, on the six hosted
-targets, and gains the new positive fixture's 180; the debug and release
-compilers agree on all 25,712 requests. The evidence
-is on `33e47e04`:
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/43683213840),
-where 49 of 53 jobs passed and the board and suspended RV64 legs were
-skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/43683249636)
-on the same tree, which passed every port.
-
-With R13.80 and this item closed, the phase's items have their exit
-evidence and the R13 gate is claimed again. Its first three bullets hold
-as R13.79 left them, each gate checking the roots and every shared module
-on its targets, and the library's facilities since, R13.80's keyed hash
-and this item's conformances, follow R13.11's conventions (D1360, D1363).
-Its reader bullet rests on R13.78's two readers, whose candidate predates
-R13.79; no reader has worked from the documentation since.
-
-### R13.91 — Say which instance, and which value
-
-Status: complete
-Depends on: R13.90
-
-Two reports a reader cannot act on. A slip that writes a value twice,
-`code = 0 1` in a routine returning `(code: i32)`, compiles without a word
-and returns 1: the line is two statements, and the body's trailing value
-replaces what the named result was given (SR-1269). And a refusal made in
-one instance of a generic routine names neither the instance's type
-arguments nor the call that made it, and identical reports of several
-instances are merged into one, so two instances refused on one line cannot
-be told apart (SR-1170). The maintainer chose a warning, with a code of its
-own, where a body ends with a value after its named result was assigned on
-the way to it, which leaves a body that only ends with its value alone, and
-a tour sentence saying which one the result takes; and a note on each
-instance-time report naming the instance's type arguments and the call that
-made it, with how many more instances a merged report covers, the related
-labels unchanged.
-
-Exit evidence: fixtures warning on `code = 0 1` and on the same slip over
-two lines, and accepting a body that ends with its value without assigning
-the result first; a fixture with two instances refused on one line whose
-reports name each instance and its call, and a merged report saying how
-many more it covers; the catalogue and `docs/diagnostics.md` stating both.
-
-Done: a body that ends with a value after every path to it assigned a
-named result is warned of, L0693 (D1367), `code = 0 1` and the same slip
-over two lines among them; a body that only ends with its value, one whose
-assignment a path skips, and a value an error already stands on are not.
-The tour's [0880] says which one the result takes. Every report made while
-an instance's body is checked names the instance, with each formal's
-actual, and the first call that asked for it, and a report standing for
-the same report of other instances says how many (D1368), in a note the
-catalogue gives every code. `runtime/r491-function-final-values`, which
-replaces an assigned result on purpose, pins its four warnings, and ten
-recorded reports from generic bodies gain the note. The fuzzer's round over
-the first candidate met a defect older than the item: a family
-conformance's instance for a type the program holds only through a pointer
-had a table whose target nothing had laid out; the checker now lays it out
-where it instantiates the conformance, pinned by
-`positive/family-provider-held-by-pointer` and the server's
-`min-501889.ldn`. The evidence is on
-`59969d15`: [the complete gate](https://github.com/JanHaan/Landin/actions/runs/43752919881), where 50 of 54 jobs passed and the board and suspended RV64 legs were skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/43752923104) on the same tree, which passed every
-port.
-
-### R13.92 — What a container holds
-
-Status: complete
-Depends on: R13.91
-
-A reference copied out of a container counts as a view of the container:
-`vec.get`, `vec.last` and `vec.pop` declare their result `from value`, and
-the checker cannot tell a reference into the list's storage from a
-reference the list held, so `vec.push(list, memory, try vec.last(list))` of
-a list of pointers or slices is L0315, and a popped reference cannot be
-pushed back (SR-1080, SR-1171). The only ways round it are holes in D1084,
-copying the list value first or a round trip through `usize`. The
-maintainer chose to build the language's answer now: a container's origin
-for what it holds, apart from its storage's, so that a signature can say
-its result refers to what the container held, decided in `spec.md` with
-the alternatives, followed by the checker, and taken up by `core/vec`'s
-signatures and by any other library routine that copies a reference out of
-a container.
-
-Exit evidence: fixtures accepting a pointer or slice read out of a list and
-pushed back into it, through `get`, `last` and `pop`, and refusing a view
-into the list's storage held across a push, as D1084 refuses it now; the
-loopholes the rows name either still accepted for their stated reason or
-refused; the library's runtime fixtures unchanged.
-
-Done: a `from` name may be written `held p` (D1369): the result is what `p`
-holds, read out of an element through a pointer or by an index, and at the
-call it takes what the argument refers to and lends no view of its binding
-or place; `held` is part of the function's type. `core/mem`, `core/vec`,
-`core/spill`, `core/map` and `core/tree` say `held` where they copy an
-item out, `used` and `at` keep `from value`, and every container insert
-keeps what it is given `escaping into` the container, which the maintainer
-chose so that an item of a caller's list goes back into it. That made a
-list remember the views it was given, which met an older limit in the
-derived hosted program: a binding declared in a loop's body was one
-binding for the whole loop, and the maintainer chose that a declaration
-which runs again makes a new binding (D1370). `runtime/held-references-go-back`
-pushes pointers and slices back through `get`, `last` and `pop`, inline,
-through a local, a field and a helper, into a caller's list and through
-`core/map` and `core/spill`, and keeps a view of each pass's storage;
-`negative/held-result-refusals` refuses a `held` result that is a view, a
-view held across a push, a frame address read back out of a list, a
-function value differing in `held` and a view of this pass's binding. Of
-the loopholes, a copy of the list value now reads what is held for that
-reason, and a round trip through `usize` stays [0470]'s untracked
-boundary; a view of the block taken through a copy of a local list is
-still not held against the original, a row of its own. The library's
-runtime fixtures are unchanged, and the editors highlight `held` where a
-name follows it. A `held` result refused at an `escaping` parameter names
-the parameter it came from as the shorter-lived source, which the first
-run of the corpus found pointing at the called function's own parameter.
-The evidence is on
-`a5838ccb`: [the complete gate](https://github.com/JanHaan/Landin/actions/runs/43849621582), where 50 of 54 jobs passed and the board and suspended RV64 legs were skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/43849639774) on the same tree, which passed every
-port, rp2040 in its second attempt once probehive's GPIO shell was
-prepared again (SR-1013).
-
-### R13.93 — Fields lent apart
-
-Status: complete
-Depends on: R13.92
-
-The checker treats every field of a binding as the binding itself, so once
-one field is lent to a handle, `system.over(state.cells)`, lending another,
-`stacks.round_over(state.round, ...)`, is L0315, though the two never
-overlap; L0315's note says that fields are not tracked apart (SR-374). It
-has shaped the library twice: `hosted/events` could not keep an error cell
-of the caller's own (D485), and its handle reaches the system's through a
-routine rather than a field (D1363). The maintainer chose per-field
-tracking: lending and origins carry the field path a place was reached
-through, so disjoint fields of one binding never conflict, while a field
-and the binding holding it still do.
-
-Exit evidence: fixtures accepting two handles filled from disjoint fields
-of one `inout` state, in either order and through nested fields, and
-refusing a field lent while its holder or an enclosing field is; the
-scaling bound held with a family of many fields; and the library's
-designs around the limit, `hosted/events`' own error cell among them,
-reconsidered, each kept with its reason or changed.
-
-Done: a view, and a reference a binding holds, record the fields they
-reached the binding through, and an `inout` or `sink` argument is refused
-only beside a live one whose fields overlap it (D1371): two handles filled
-from disjoint fields of one state are in use together, in either order and
-through nested fields, while a field and the binding or field holding it
-still conflict, and L0315's note names the part the view reaches. An
-element, a range or a step through a pointer stands for the field it was
-taken of. A call given a place of a binding to write may store there a
-reference derived from it, so a read or a view of that place reaches what
-the reference may point into, kept per place so that two lists of one
-record stay apart after a push into each; a reference stored by an
-assignment in the body makes the binding lend its reference-holding fields
-together. Of the library's designs around the limit, `hosted/events` now
-keeps its last-error and last-signal cells in its space, over
-`system.over(state.cells)`, and its handle holds the system's as the field
-`through services` names (D1372); its `services` routine went with them,
-and no other design leaned on the limit. Many lent fields in one routine
-met costs that grew with its size squared: the borrow checks visited every
-local at each `inout` call (SR-991), the type checker found a field by
-reading every name of its struct, the IR verifier walked from entry once
-per address slot, and value numbering hashed the addresses of a record's
-fields into one chain. Each now looks up or walks only what it needs, and
-the scaling bound holds for two new families, an `inout` call per local
-and many lent fields. `runtime/fields-lent-apart`,
-`negative/inout-field-beside-a-view-of-its-binding` and
-`negative/field-lent-beside-what-its-binding-holds` pin the rules. The
-first candidate's Darwin release build failed when a connection reset cut
-its fetch of the pinned GNAT, which `landin_fetch` did not ask again for;
-it now does, for every failure but an HTTP status.
-The evidence is on
-`a72a0014`: [the complete gate](https://github.com/JanHaan/Landin/actions/runs/43899319543), where 50 of 54 jobs passed and the board and suspended RV64 legs were skipped, and
-[the boards dispatch](https://github.com/JanHaan/Landin/actions/runs/43899429059) on the same tree, which passed every
-port.
-
-With R13.91 to R13.93 closed, the phase's items have their exit evidence
-and the R13 gate is claimed again. Its first three bullets hold as R13.90
-left them, each gate checking the roots and every shared module on its
-targets, and the library's changes since, `core/vec`'s `held` results and
-`hosted/events`' own cells, follow R13.11's conventions (D1369, D1372).
-Its reader bullet still rests on R13.78's two readers; no reader has
-worked from the documentation since.
-
-### R13 gate
-
-- The shared freestanding, target-specific freestanding and hosted roots are
-  separate. Every shared module checks on every supported target, each
-  target-specific module checks only on its declared targets, firmware
-  refuses hosted imports by name, and every facility has a consumer.
-
-- Every shared-root module has R13.10's positive per-target compile/link
-  evidence and applicable execution and failure checks. Target-specific
-  freestanding and hosted availability checks remain separate.
-
-- The library's concepts, names and shipped evidence follow R13.11's
-  conventions, and every later facility is held to them.
-
-- A reader with no project context has done a realistic task from the
-  published documentation alone, and what they met is in the register.
-
-## R14 — Concurrency
-
-Beyond blocking, by switching stacks rather than rewriting functions; "The
-concurrency execution model" below binds this phase.
-
-### R14.10 — Prototype 5
-
-Status: complete
-Depends on: none
-
-A concurrent program written as a specification stress test, as the first four
-prototypes were: a small network server with two operations in flight, and a
-firmware counterpart that has to answer the same request on a single core.
-Its findings are recorded as the first four's were.
-
-Exit evidence: `prototype-5` with its findings, checked by `check.py` like the
-other four.
-
-Done: `prototype-5-server.md` is a line-protocol server that admits each
-connection to a group of two fibres over stacks cut from its own frame,
-with a test client that needs the requests to overlap, and a Cortex-M0
-counterpart that takes the same two requests on one serial line with a
-taker and an answerer fibre and a round of fixed turns written in the
-application. One `app/protocol` module serves both. Switching is
-cooperative: a fibre gives the core away only inside a call to the provider
-that runs it. An application starts fibres only as a group, which it joins
-before going on, and hands each an ordinary routine and a state; the
-first draft, which started them as C starts threads, is V15, resolved.
-The other fourteen findings, V1-V14, are open, each with a proposed
-answer, and each item below names the ones it settles. `check.py` reads the
-file as it reads the other four, and the site renders it beside them. It
-has no derivation yet, so it has no row in the prototype registers.
-
-### R14.20 — Stackful fibres
-
-Status: complete
-Depends on: R14.10
-
-A stack switch on every target, specified with a register decision. The caller
-supplies each fibre's writable stack backing, directly from a fixed buffer or
-through an explicit allocator capability; creating a fibre does not require
-an implicit heap allocation. The caller owns that backing while the fibre can
-run or resume and reclaims it only after the fibre has finished and no switch
-can reach it. Specify the backing's size, alignment, creation-failure and
-release rules with the switch interface. This takes on the stackful-fibre
-part of R551-35.
-
-Prototype 5's findings were decided before this item began, and it
-implements and pins them: D444, `core/fibre`'s switch, the `scheduler` and
-`turns` concepts, `whole`, one round of fixed turns and the group an
-application starts fibres as; D445, `escaping into`, with the checker and
-the tour's [0780]; D446, cooperative switch points, a provider's fibres as
-one D227 context and a switch as a full compiler memory boundary; and D447,
-the stack-limit check, the stack-depth report, Cortex-M fibres on the
-process stack and the debugger's view. D448's single-core answer is the one
-this item specifies. D450 makes the switch two compiler builtins and D451
-adds `stack_exhausted` to `core/panic`'s kinds. D471 to D473 move the limit
-check from the switch into every routine's prologue in a program that
-prepares a stack, with the limit carried in the frames a switch saves. D474
-refuses a panic handler deeper than the margin that check leaves.
-
-Exit evidence: fibres switching on every target with debugger backtraces
-through a switch, and the single-core freestanding answer specified. On the
-retained 32 KiB flash, 16 KiB RAM Cortex-M0 profile with its 4 KiB main-stack
-reservation, run a stack-switch consumer using fixed caller-supplied backing.
-Report its linked flash size, static RAM with fibre buffers identified, the
-main-stack reservation, each fibre's backing size and peak simultaneous
-backing, plus the total reserved RAM without double counting and the fit
-verdict against that profile. A switch that only fits a larger device profile
-does not complete this item; the measurement is for this consumer, not a
-general bound on stack depth.
-
-Done: `compiler.stack_prepare` and `compiler.stack_switch` run on every
-native target, and `core/fibre` builds a group, `whole`, a round of fixed
-turns and the blocking host as a scheduler on them. Every routine of a
-program that prepares a stack checks its frame against the running
-stack's limit, so an overflow traps `stack_exhausted` at the routine that
-overflows, and a program with no prepared stack emits the code it did
-before. `refine --stack-report` gives each routine's frame and the deepest
-stack it can close, naming what opens it. `escaping into` lets a group
-keep state its caller lent, and an `any` made in any position from a
-parameterized provider now dispatches. A scripted session through a switch
-names `landin.stack_switch` and `landin.stack_start` and checks the frames
-on each side with GDB on Linux x86-64, arm64 and RV64 and on Cortex-M0, and
-with LLDB on Darwin and FreeBSD. On the retained Cortex-M0 profile two
-fibres of `core/fibre`'s round, each on 1,472 bytes of module storage, fit
-at every profile: when the item closed, 22,492 bytes of flash at none,
-7,168 of 16,384 bytes of RAM reserved with the 4 KiB main stack and a
-painted peak of 904 bytes per fibre, and the Cortex-M lane reports each
-run's figures and verdict (D470).
-
-### R14.25 — Run the firmware counterpart
-
-Status: complete
-Depends on: R14.20, R13.20
-
-Derive a complete Cortex-M0 program from prototype 5's firmware counterpart.
-It presents the same request for two operations in flight as the hosted server
-and produces the single-core answer specified in R14.20. Record a trace that
-shows the answer and when each operation starts and finishes.
-
-D448 says what "in flight" means on one core and what the trace shows;
-D449 how the tick reaches a fibre without read-modify-write.
-
-Exit evidence: the firmware derivative running in the Cortex-M0 emulator lane
-in the gate, with its captured trace checked against a repository-owned oracle
-for the specified no-concurrency answer and no two operations in flight. A
-missing answer, overlap, trap or timeout fails the run.
-
-Done: `compiler/tests/counterpart` derives prototype 5's firmware
-counterpart: a taker and an answerer fibre on `core/fibre`'s round, lent
-with a SysTick clock counted by `atomic.sole_add` as one board provider,
-take requests on prototype 1's synthetic serial line and answer them
-through the hosted server's `app/protocol`, unchanged, one at a time in
-arrival order, refusing `busy` for a full queue (D1034). Its trace records
-when each request arrived, began and ended being answered, and the
-`counterpart` lane of the Cortex-M0 emulator, in the gate's
-`cortex-m-programs` job, feeds `WAIT 200 a` and then `NOW b` while `a` is
-being answered, with a full queue and refused lines beside them, and holds
-each run at every profile to an oracle for D448's answer: a missing
-answer, an overlap, a broken order or wait, a trap or a timeout fails it,
-and four controls that overlap, drop, trap and stall each fail for their
-own reason (D1035). The program takes about 56 KB of flash at `size`, so
-the maintainer chose a lane description of the micro:bit's own nRF51822
-over the 32 KiB reference (D1036). A writer made from a reference-free
-handle no longer locks the state it was copied from (D1042), and the RV64
-lane registers its emulator as a binfmt_misc handler, so the derived
-server's two-process fixture runs there over both Ios (D1037). In
-[the complete gate](https://github.com/JanHaan/Landin/actions/runs/42567437394)
-on `343ac6a1`, 49 of 53 jobs passed in its fourth attempt, after GitHub's
-release downloads answered 504 to the first three, and the board and
-suspended RV64 legs were skipped; [the boards
-dispatch](https://github.com/JanHaan/Landin/actions/runs/42577864078) on the same
-tree passed every port in its third attempt, once probehive's GPIO shell,
-which the rig's weekly garbage collection had removed, was prepared again
-(SR-1013), and after two ESP32-C3 cross-checks found one recovery more
-over JTAG than in the last frame (SR-1014).
-
-The R14 gate holds. In that gate the derived server ran on every hosted
-target over both Ios, `runtime/derived-server-two-process` on Linux
-x86-64, arm64 and RV64, Darwin arm64 and FreeBSD x86-64 and arm64, and the
-firmware counterpart ran on Cortex-M0 against its trace oracle; the
-capacity control reported R14.20's retained-profile figures at every
-profile, each fitting; and the scripted session through the switch passed
-on every target R14.20 covers, with GDB on Linux x86-64, arm64 and RV64
-and on Cortex-M0 and with LLDB on Darwin and FreeBSD.
-
-### R14.30 — A second Io
-
-Status: complete
-Depends on: R14.20, R13.33
-
-An event-driven Io that runs fibres over epoll on Linux and kqueue on
-Darwin/FreeBSD, through `platform/kqueue`, the module Darwin and FreeBSD
-share (D481), and `platform/linux`'s epoll and signalfd wrappers. Its operations are completion-shaped, submitted and then
-answered, so that a completion interface, Windows' or Linux's io_uring, can
-later implement the same Io; readiness stays below it, in `platform/posix`'s
-`poll` and the systems' own modules. Signals reach it as events, through
-signalfd on Linux and kqueue on Darwin and FreeBSD, never as handlers that
-run Landin code. Windows is outside this item's scope.
-
-It implements D446's list of the Io's entries that may switch, and D449's
-wake with a failure for a waiter whose descriptor is shut or closed, signals
-as waitable events and the fake network under a scheduler that takes turns.
-It supplies `io.programs` as `hosted/blocking` does, starting a child
-through `hosted/system` and waiting on its pipes and its end through the
-event mechanism (D479).
-
-Exit evidence: prototype 5's derived server running on the hosted targets over
-both implementations of Io, unchanged.
-
-Done: `hosted/system` keeps the services that do not wait, and two
-providers wait over it: `hosted/blocking`, which blocks the thread, and
-`hosted/events`, which runs fibres on a round whose wait is the system's
-event mechanism, epoll and a signalfd on Linux and kqueue on Darwin and
-FreeBSD, through `platform/linux`'s new wrappers and `platform/kqueue`
-(D476-D481). A wait is submitted on the waiting fibre's own stack and
-answered by the loop, so a completion interface can implement the same Io
-(D485-D488). Signals are events of `core/io/signal`, which only a provider
-of turns supplies (D477, D482); a child's pipes and end wait in the
-providers (D479), and a closed or shut descriptor wakes its waiters with a
-failure. The fake network takes turns and waits for a fake clock's sleepers
-(D483, D493), an `any C` is a provider of C (D492), and lowering keeps only
-the evidence entries a program selects (D484). Prototype 5's derived server,
-`examples/derived_server`, runs from one source as a process of its own
-over both providers on every hosted target: one request at a time and
-ended by SIGTERM over `hosted/blocking`, two in flight and stopped cleanly
-by its signal waiter over `hosted/events` (D489, D490). Off Linux a trap
-report writes on a stack of its own, since lazy binding overran a fibre's
-(D491).
-
-### R14.40 — Threads and the atomic wrapper
-
-Status: complete
-Depends on: R14.20
-
-Hosted threads, and the atomic wrapper type over D227's builtins that answers
-Cortex-M0's missing read-modify-write explicitly. This takes on R730-21.
-A heap that threads share, and a vDSO cache they can read together, come
-with them on every hosted system alike,
-since one single-threaded heap serves all three (D300). Under `--link=libc`
-the C library owns thread creation and thread-local storage, so a thread there is the C library's; a static Linux program owns
-both itself.
-
-It holds D446's rule that threads are not a provider of the fibre
-concepts, and gives the wrapper D449's single-writer operation on a core
-without read-modify-write.
-
-Exit evidence: consumers of both on every applicable target, with failure
-oracles. The hosted thread facility implements D227's creation and join
-happens-before edges: executable cases publish ordinary data before starting a
-worker and observe its ordinary writes after joining it, on each hosted
-target, with no other synchronization supplying either edge.
-
-Done: `hosted/thread` starts threads as a group its caller joins, over a
-backing the caller lends, with the first failure kept: `clone` and a wait
-on the word the kernel clears in a static Linux program, `pthread_create`
-on a stack area and `pthread_join` under `--link=libc`, on Darwin and on
-FreeBSD (D494, D495, D516-D520). A thread begins with the asynchronous
-signals blocked and a fault's own left open (D521), and runs on a
-prepared stack whose limit is its own: `link(thread)` places per-thread
-module storage, ELF local-exec on Linux and FreeBSD and Darwin's
-thread-local variables, and the stack-limit cell is the thread's, a
-pthread key's slot read inline on Darwin (D496, D497, D504-D508). One
-report stack serves every thread behind a latch (D498), and a
-`system.new()` handle records into the calling thread's last error
-(D503, D509). `core/atomic` wraps one unsigned scalar with acquiring
-loads, releasing stores, acq_rel read-modify-writes, a relaxed family
-and `sole_add`, the single writer's update, and Cortex-M0 refuses its
-read-modify-writes where they are used, naming `sole_add` and the
-critical section (D500, D510, D511). A lock waits on its word through
-the futex, `_umtx_op` or `os_sync_wait_on_address`, the heap is behind
-it once a thread has started, and the vDSO cache is a relaxed word
-(D501, D502, D512-D514). Every backend fences an atomic only as its
-ordering asks, so a relaxed load on x86-64 is a plain move (D499, D522).
-Executable cases publish ordinary data before a worker starts and read
-its ordinary writes after the join on every hosted target and under
-`--link=libc`, with no other synchronization.
-
-### R14 gate
-
-- Prototype 5's derived server runs on every hosted target over both Io
-  implementations, and its firmware counterpart runs on Cortex-M0 with the
-  single-core answer checked against its trace oracle.
-- R14.20's retained-profile stack-backing and capacity evidence is recorded.
-- On every target covered by R14.20, a scripted debugger session switches
-  fibres and checks the expected frames in a backtrace through the switch.
-
-## R15 — Windows (deferred)
-
-Windows is not in the current implementation scope. These identities and
-original proposals remain for history and possible reconsideration, not as
-current implementation commitments. Only an explicit scope decision can
-reactivate them. In particular, they do not block R16 or require a Windows
-event-driven backend. R14.30 retains epoll on Linux and kqueue on
-Darwin/FreeBSD.
-
-### R15.10 — Windows x86-64
-
-Status: blocked
-Blocked because: Windows is outside the approved scope until an explicit decision reopens it.
-Depends on: R11.10
-
-The Win64 calling convention, COFF objects, the unwind tables Windows requires
-of every function that calls, and a hosted layer over the Windows API. Which
-assembler and linker is decided here.
-
-Exit evidence: the corpus on GitHub's Windows runners in the gate.
-
-### R15.20 — Windows debugging
-
-Status: blocked
-Blocked because: Windows is outside the approved scope until an explicit decision reopens it.
-Depends on: R15.10
-
-CodeView debug information in the objects, and PDB files from the linker
-rather than written by the compiler.
-
-Exit evidence: scripted debugger sessions on Windows in the gate.
-
-### R15.30 — Windows arm64
-
-Status: blocked
-Blocked because: Windows is outside the approved scope until an explicit decision reopens it.
-Depends on: R15.20, R11.20
-
-The same on arm64, which reuses the arm64 backend with Windows' variant of
-its calling convention.
-
-Exit evidence: the corpus and debugger sessions on GitHub's arm64 Windows
-runners in the gate.
-
-### R15 gate
-
-Inactive while Windows is deferred. If an explicit decision restores this
-phase, its original proposed gate is corpus and debugger sessions on both
-architectures; future scope and exit evidence must be reviewed at that time.
+## R15 — Windows (retired)
+
+Never started. Its three items are retired unused; their content is R21's,
+and nothing cites them. This phase has no gate; it is the one
+phase the gate rule exempts.
 
 ## R16 — Optimization
 
-Measured first, and then only where the measurement says.
+Measured first, and then only where the measurement says. R16.10 is the
+basis and runs in the serial lane right after R17; R16.20 onward are
+continuous.
 
 ### R16.10 — Measure generated code
 
 Status: planned
-Depends on: none
+Depends on: R17
 
 Record the size and time of the same workloads for every supported target,
 each CPU feature level `Landin.Targets.Levels` gives it (`refine targets`
@@ -4331,7 +173,7 @@ baseline is recorded:
   fails unless the commit declares the new baseline.
 - **Time** depends on where the code runs. On a native runner it is the
   median wall time over several fresh copies of each executable, since
-  SR-146 found placement alone moving it by up to 50%. On the rig's boards
+  placement alone was found moving it by up to 50%. On the rig's boards
   it is the core's cycle counter over a RAM run where it has one (DWT CYCCNT on
   the M7 and M33, `mcycle` or the vendor's counter on RISC-V, CCOUNT on
   Xtensa), and a SysTick or timer count where it does not, as on the
@@ -4360,11 +202,13 @@ baseline is recorded:
 
 The build report (D791) and `scripts/quality.sh` are the starting point; the
 new parts are time, the matrix and the baselines. A report format change here
-answers SR-370 and SR-707. A measured code-quality cost attributable to
+also says where a program's compile time goes among its sources, and gives
+the build and depth reports one name for each frame quantity. A measured code-quality cost attributable to
 assembly's fixed memory effect is recorded against SR-09 before any narrower
 effect is proposed. Its ranked list answers the activations of SR-231,
-SR-385, SR-387, SR-596, SR-869 and SR-1023. This takes on SR-996 and SR-275,
-and carries SR-146's fresh-copy requirement.
+SR-387, SR-596, SR-869 and SR-1023, and measures x86-64's two-instruction
+reach of a thread instance. This takes on SR-996 and SR-275, and carries the
+fresh-copy requirement.
 
 Exit evidence: the contract, the runner table and committed baselines for the
 whole matrix; the gate failing a deliberately larger image and a deliberately
@@ -4391,7 +235,9 @@ among them the bounds check an indexed increment keeps and the atomic and
 barrier lowering R551-12 records as baseline, are taken here or recorded with
 their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024.
 Where it meets the backends' shared code it answers R551-16's activation and
-splits that code; the row stays open for the stage closures.
+splits that code; the row stays open for the stage closures. Where it is the
+sensible cut, a backend is split off as a continuous item of its own and
+takes that backend's rows with it.
 
 Exit evidence: a direct test of `Landin.IR.Liveness`'s intervals, its
 conservative whole-routine fallback included, before any allocator change that
@@ -4400,16 +246,534 @@ combinations against their matching R16.10 baselines, with unchanged behavior,
 ABI and debugger evidence. Every supported combination remains under the same
 size and time regression gate, including unaffected levels and profiles.
 
-### R16 gate
+### The continuous items
 
-- Every supported target, CPU feature level and all nine optimization/
-  specialization combinations are measured on their workloads against their
-  own committed size and time baselines, in the execution class the runner
-  table names. An undeclared size growth, or a time beyond its class's
-  recorded tolerance, fails; a level no runner executes is a `limit` row,
-  never a skipped or substituted measurement.
-- R16.20's improvements hold against their baselines with behavior, ABI and
-  debugger evidence intact.
+Numbered on from R16.20, each is added here when it is taken up, with its
+own status and a dependency on R16.10. Each takes one cost from R16.10's
+ranked list, a further backend's register allocation among them.
+Exit evidence: the cost measured lower against its R16.10 baseline, and no
+other combination over its own.
+
+### R16 gate
+The standing invariant: every supported target, level and optimization
+combination within its committed baselines on every push.
+
+## R17 — Process, register and skills
+
+The move's own debt; first in the serial lane.
+
+### R17.10 — The register reviewed and typed
+
+Status: planned
+Depends on: none
+
+The first item, on a tree `check.py` already accepts: the exchange has moved
+every live row into its file. R17.10 reviews each moved row against
+"outlives its item", gives it its `kind`, `effort` and `impact`, deletes
+those its authority covers and puts the rest it would retire to the
+maintainer as questions. It provides the SR allocation script and files the
+rows-to-be in `roadmap/inputs/rows-to-be.md`. The rows that describe R22's
+additions (SR-96 math, SR-97 float text, SR-98 locale and Unicode, SR-100
+regular expressions, SR-285 format width and radix) become `scheduled` on
+the R22 items that take them.
+Exit evidence: every row typed and under the cap; the allocation script and
+its control; the cap and age rule refused in a control.
+
+### R17.20 — The question queue
+
+Status: planned
+Depends on: R17.10
+
+`roadmap/questions/`, its checks and the open maintainer decisions moved
+into it.
+Exit evidence: every open maintainer decision a `Q-n` file; `check.py`
+refusing a question without options, default or what waits on it.
+
+### R17.30 — Lanes and standing authority in the checks
+
+Status: planned
+Depends on: R17.10
+
+`check.py`, the site's progress track and the status pointers read lanes,
+continuous items and the promotion opt-out.
+Exit evidence: the front page showing the serial item beside two active
+continuous items in a control; the pointers naming the serial lane's item.
+
+### R17.40 — The item skill rebuilt
+
+Status: planned
+Depends on: R17.30
+
+`landin-change` for the new mechanics; scripts for every step that needs
+no agent (starting an item with its worktree, brief and reserved
+identities; closing it with its clean-up; promotion; a check for a stalled
+agent); reopen-safe session state on disk; and the report form that ends
+with what the maintainer must answer, each with the default taken. Fixes
+from a review run between items, never across a running one.
+Exit evidence: the skill and its scripts used to run the next item start
+to finish, and a session reopened in mid-item resuming from
+its state on disk.
+
+### R17.50 — Gate wall time
+
+Status: planned
+Depends on: none
+
+The gate's wall time cut: Xtensa shards, release build and queueing,
+against a measured baseline. It takes on SR-775, the stock-user job's
+unbounded package downloads, and SR-1276, `emit_manifest.py modes` printing
+no progress, each a gate-time failure it meets, and two rows-to-be of
+`roadmap/inputs/rows-to-be.md`:
+
+- The release-build cache mostly misses. Its key names the runner image
+  version, and GitHub serves two image versions within one run, so a job
+  restores an entry only when it shares an image with the job that saved
+  it: on run 44030898347 main's entry was saved on image 20261111.127.1,
+  `linux-release-build` ran on 20261111.370.1, found none and took as long
+  as the clean build. The key names what the C adapters compile against,
+  the C library headers' and the C compiler's versions, instead.
+- The cached Darwin release build, prepared on the local branch
+  `ci-darwin-cached-release`: whole-file identity through `ZERO_AR_DATE=1`,
+  a modelled Darwin end of 25 to 30 minutes by kind of change. It is
+  rebased onto main, given the cache key's brace fix its Linux sibling
+  got, and waits for the key decision above.
+
+The baseline: the gate ended 44 to 51 minutes after its creation before
+the second roadmap's last CI rework and 31.1 minutes on run 44030898347
+after it, with `flake` (31.0) and the last Darwin job (28.3) last.
+Exit evidence: the baseline and the new wall time of the complete gate,
+each over several runs.
+
+### R17 gate
+The third roadmap's checks pass on the live file; one item run start to
+finish under the new mechanics.
+
+## R18 — refine's commands
+
+`refine` becomes a dispatcher in cargo's manner: the compiler's own commands
+stay built in, and a command that links little of the compiler, or is a tool
+beside it, becomes its own executable `refine-NAME`. Its input is
+`roadmap/inputs/command-inventory.md`: the thirteen commands, what each
+links, the rules a command is held to, and eight questions with a default
+each. Nothing in it is decided until R18.10 decides it. The items after
+R18.10 are written as the inventory's defaults would shape them, and R18.10
+may regroup them.
+
+### R18.10 — Decide the commands
+
+Status: planned
+Depends on: R17
+
+The maintainer answers the inventory's questions: lockstep linking of
+shipped split commands, the discovery rule, what a contributed tool is
+released from, the diagnostics a split or contributed tool emits, `lsp`
+built in or split, how help and completion list external commands, and
+whether cutting the edge from `Driver.Library` to `Driver.Loading` comes
+first; and with them whether `dap` is built in or external. Retiring the
+bare-source form, the inventory's third question, is already decided and is
+not reopened. The output is each answer recorded as a decision in `spec.md`,
+the classification of every command as built in or split, and the items
+below confirmed or regrouped here.
+Exit evidence: the decisions in `spec.md`; this phase's items match them.
+
+### R18.20 — Cut the loading edge
+
+Status: planned
+Depends on: R18.10
+
+`Driver.Library`'s body withs `Driver.Loading` for one path helper, which
+links the whole front end into `fmt`, `explain` and `version`. The helper
+moves below both, so each links what it uses.
+Exit evidence: the release text of `explain`, `version` and `fmt`
+measured before and after, near the inventory's 0.5, 0.6 and 1.9 MB.
+
+### R18.30 — The docs agree with the tool
+
+Status: planned
+Depends on: R18.10
+
+The disagreements the inventory found, each fixed on whichever side is
+wrong: `refine targets --identify` against `docs/capabilities.md`; L0004,
+L0009 and `docs/targets.md` sending the reader to `refine --identify`;
+README's command table missing `targets`, `completion` and `help`; the
+`Explain_Command` and `Format_Command` comments; and a check that holds
+`refine help reference` to the documents, which nothing outside the
+`commands` suite does today.
+Exit evidence: each row-to-be of `roadmap/inputs/rows-to-be.md` it names
+closed; the new check refuses a command or flag the documents do not name.
+
+### R18.40 — Retire the bare-source form
+
+Status: planned
+Depends on: R18.10
+
+`refine NAME` with an unknown NAME is read today as `refine check NAME`.
+That form is refused, naming `refine check NAME`, so an unknown NAME can
+name a command. A break of its own, promoted on its own, not held for
+R19's window.
+Exit evidence: the refusal and its explanation in the catalogue; every
+fixture, script and document that used the form rewritten.
+
+### R18.50 — The dispatcher
+
+Status: planned
+Depends on: R18.40
+
+`refine NAME` runs a built-in command, else `libexec/landin/refine-NAME`
+beside the executable, found through `Landin.Platform` as the library is,
+else `refine-NAME` on PATH. Help lists external commands under their own
+heading; completion delegates to `refine-NAME --complete`; `refine
+explain` forwards a contributed tool's code to it. The release archive,
+the flake and the release smoke test ship and run every split command.
+Exit evidence: the dispatch order pinned by fake-filesystem driver cases;
+a contributed test tool found on PATH in a native case; the archive and
+flake carry `libexec/landin`.
+
+### R18.60 — `refine dap`
+
+Status: planned
+Depends on: R18.50
+
+The first new command: a Debug Adapter Protocol server over the GDB and
+LLDB sessions the targets already script, written to the split's rules
+from its start. Built in unless R18.10 finds external the better fit.
+Exit evidence: scripted DAP sessions in the gate over GDB and LLDB, the
+debuggers the targets script today, on every hosted target the debugging
+suites run. A further debugger is its own adapter backend.
+
+### R18.70 — The existing splits
+
+Status: planned
+Depends on: R18.50
+
+`svd`, `bindings` and `site` become `refine-svd`, `refine-bindings` and
+`refine-site`, each in lockstep with the compiler's library and each
+keeping its suites and its black-box "destroys nothing" and determinism
+controls.
+Exit evidence: each split linked without the front end; its suites, and
+every invocation of the old form, pass through the dispatcher.
+
+### R18 gate
+Every existing invocation works or is refused with its new form; every
+split command ships in the archive and the flake and keeps its controls;
+DAP sessions are scripted in the gate.
+
+## R19 — A smaller language
+
+Breaking, serial. Its input is the list of simplification candidates,
+SC-01 onward, each with a stable identifier. Nothing in the list is decided
+until R19.10 decides it.
+
+### R19.10 — Decide the candidates
+
+Status: planned
+Depends on: R18
+
+The maintainer takes each candidate in or leaves it out, and groups the
+ones taken in. The output is the accepted list in its groups, with each
+group's items added here, and each answer recorded as a decision in
+`spec.md`. Range subtypes (SC-16) are already decided: the maintainer
+removed them on 2026-11-16, replaced by a `distinct` type with a checking
+constructor, and R19.10 records that and groups it. The candidates that
+wait on R20 (SC-17, SC-18) are recorded as such, not forced.
+
+### R19.20 — How far the checker folds
+
+Status: planned
+Depends on: R19.10
+
+Taken only if the value-model fold (SC-24) is accepted. It reads the
+checker and lowering against D24-D109 and says which per-slice paths
+collapse into one rule and which stay. The fold's item takes its scope
+from this reading.
+
+### R19.30 — One write order for an aggregate assignment
+
+Status: planned
+Depends on: R19.10
+
+SC-26, a behaviour fix as much as a simplification. D29 writes a literal
+into its destination element by element; D209 keeps array operands whole
+before writing. One rule for both, with in-place writing where no overlap
+is shown. Taken unless R19.10 leaves it out.
+
+### R19.40 — The migration aid
+
+Status: planned
+Depends on: R19.10
+
+A `refine fix` rewrite for every accepted change that is mechanical, and a
+refusal naming the replacement for every removed form. It grows with each
+group item, which lands its rewrite with it. The same command applies the
+exact fix a diagnostic carries, which SR-1242 asks for.
+
+### Groups accepted in R19.10
+Written after R19.10, one item per group, each depending on R19.10 and on
+R19.40; the fold's item also depends on R19.20.
+
+### R19 gate
+R19's breaking window: every accepted group, R19.30 and R19.40 integrate on
+one branch and reach main together in one promotion, so main never carries
+half of the breaking changes and no release falls between them. Every
+removed form is refused with its replacement named, and `refine fix`
+rewrites the mechanical ones. The corpus, the library and the examples are
+rewritten, and the prototypes reread.
+
+## R20 — The standard library reviewed
+
+A review of structure and concepts, on the smaller language. Its input is
+`roadmap/inputs/library-inventory.md`: the module graph, the concepts, how
+capabilities are received, the conventions and their departures, and ten
+questions with a default each. Its result is one list of breaking renames
+and restructurings, applied at once. The items after R20.10 are written as
+the inventory's defaults would shape them, and R20.10 may regroup them.
+
+R20 has a breaking window of its own after R19's: each integration
+branch lives one phase, and a release can fall between the two, while
+R19.40's `refine fix` is reused for R20's renames. `iterable`, `zeroable`
+and `caller`, which R19 leaves to R20, land in R20's window.
+
+### R20.10 — Decide the review's questions
+
+Status: planned
+Depends on: R19
+
+The maintainer answers the inventory's questions: when a routine takes
+`type is C` and when `any C`; one task concept for fibres and threads;
+whether `core/failure` keeps importing the modules whose atoms it names;
+`platform/posix` below the protocol concepts; how the I/O concepts group;
+one name per idea; parameter order; a locale as an explicit value; and
+whether the modules only fixtures import have their consumers. How R22
+generates its tables is already decided, and the inventory's question on
+it is not reopened. With these come the questions R19 left here:
+`iterable` (SC-17), `zeroable` (SC-18) and `caller`. The output is each
+answer recorded as a decision in `spec.md` and the items below confirmed
+or regrouped here.
+Exit evidence: the decisions in `spec.md`; this phase's items match them.
+
+### R20.20 — How a capability is received
+
+Status: planned
+Depends on: R20.10
+
+The rule for `type is C` against `any C` and the order of parameters
+written into `core/README.md`'s conventions, and every routine that
+departs from them put on the breaking list.
+Exit evidence: the conventions stated; a check, where one is mechanical,
+that holds the library to them.
+
+### R20.30 — The concepts
+
+Status: planned
+Depends on: R20.10
+
+One task concept for `core/fibre` and `hosted/thread`; the I/O concepts
+grouped, and `world` giving each of its parts without `lent`; whether
+containers iterate through `iterable`, and the fate of `zeroable` and
+`caller`. Each change goes on the breaking list.
+Exit evidence: the concept changes on the list, prototype 3's concept
+uses reread against them.
+
+### R20.40 — Layers and consumers
+
+Status: planned
+Depends on: R20.10
+
+`platform/posix` moved below the protocol layer as far as its types
+allow; what importing `core/fibre` costs a firmware image measured, and
+`core/failure`'s registry kept or split on that measurement; an example
+program for each module only fixtures import.
+Exit evidence: the import graph without the upward edges; the firmware
+measurement recorded.
+
+### R20.50 — One name per idea
+
+Status: planned
+Depends on: R20.10
+
+One name each for absence, running out of room, the end of an iteration,
+a length and giving storage back, and one meaning each for the names
+that carry several. Each rename goes on the breaking list.
+Exit evidence: the list's naming entries, each with its old and new name.
+
+### R20.60 — The breaking list applied
+
+Status: planned
+Depends on: R20.20, R20.30, R20.40, R20.50, R19.40
+
+The list, applied on R20's own integration branch and promoted alone in
+one promotion: every renamed or moved name refused with its replacement,
+and rewritten by R19.40's `refine fix` where the rewrite is mechanical.
+Exit evidence: the library, the corpus, the examples and the documents
+rewritten; `docs/library.md` regenerated.
+
+### R20 gate
+R20's breaking window: the list reached main in one promotion, so main
+never carries half of it; every removed name refused with its replacement;
+prototypes 3 and 4 reread against the result.
+
+## R21 — Windows
+
+R15's proposal rewritten for today's library, second Io and threads.
+
+### R21.10 — Windows x86-64
+
+Status: planned
+Depends on: R20
+
+Win64 convention, COFF, unwind tables, a hosted layer over the Windows
+API; assembler and linker chosen here. Decides `utf16`, which R19 leaves
+to it.
+Exit evidence: the corpus runs on a Windows x86-64 runner in the gate;
+the `utf16` decision in `spec.md`.
+
+### R21.20 — Windows' Io and threads
+
+Status: planned
+Depends on: R21.10
+
+Both Io providers and `hosted/thread` over the Windows API.
+Exit evidence: the Io and thread suites pass on Windows x86-64 in the
+gate.
+
+### R21.30 — Windows debugging
+
+Status: planned
+Depends on: R21.10
+
+CodeView in the objects, PDBs from the linker, and the Windows debugger
+added as a backend of R18.60's adapter, which is shown only against GDB
+and LLDB; it takes nothing from R18.60 but the protocol layer.
+Exit evidence: scripted debugger sessions, directly and through `refine
+dap`, on Windows x86-64 in the gate.
+
+### R21.40 — Windows arm64
+
+Status: planned
+Depends on: R21.30
+
+Exit evidence: the corpus, the Io and thread suites and the debugger
+sessions on Windows arm64 in the gate.
+
+### R21 gate
+The corpus and debugger sessions on both architectures on GitHub's Windows
+runners.
+
+## R22 — Library additions
+
+What a newcomer expects to find, written against the library R20 left.
+Placement, data and evidence for each are in `library-inventory.md`'s
+appendix B §5. A table derived from outside data (the Unicode Character
+Database, the WHATWG and IANA encodings, CLDR) comes from a generator
+program with a pinned input, its output checked in and held current by a
+check, the route `refine svd` and `scripts/linux_syscalls.py` take. No
+build tool is assumed and nothing runs at compile time. Each module has a
+consumer outside its fixtures.
+
+### R22.10 — Math
+
+Status: planned
+Depends on: R20
+
+`core/math`: the elementary functions over `f32` and `f64`, written in
+Landin so results agree across targets, with `sqrt` and `fma` as
+instructions where IEEE makes them exact. From R20: the naming of its
+module and routines, and whether floats get ordering evidence.
+Exit evidence: results against a correctly rounded oracle on every
+target; image size on Cortex-M0's soft float measured.
+
+### R22.20 — Float text
+
+Status: planned
+Depends on: R20
+
+Shortest round-trip printing and correctly rounded parsing of `f32` and
+`f64` in `core/text`, with floats made `formattable`; it uses hexadecimal
+float literals as R19.10 left them (SC-29). From R20: the byte-sink shape
+`formattable` writes to and the names of its failures.
+Exit evidence: every `f32` round-tripped exhaustively and `f64` against
+an oracle; image size on Cortex-M0 measured.
+
+### R22.30 — Text and Unicode
+
+Status: planned
+Depends on: R20
+
+Character properties, case, normalisation and segmentation over `utf8`,
+from a generated UCD table. Settles how a large constant table is laid
+out and what it costs a firmware image. From R20: where it lives, the
+sink it writes to, the end-of-iteration form segmentation uses, and
+whether it iterates through `iterable`.
+Exit evidence: the Unicode conformance test files pass; the generator's
+check in the gate; table cost on Cortex-M0 measured.
+
+### R22.40 — Character encodings
+
+Status: planned
+Depends on: R22.30, R21.10
+
+Conversions between `utf8`, `utf16` and the legacy encodings from
+generated WHATWG tables, whole scalars or nothing into a caller's buffer.
+Implements `utf16` as R21.10 decided it. From R20: the failure names and
+the buffer conventions.
+Exit evidence: the WHATWG test data pass on every target the namespace
+admits.
+
+### R22.50 — Locale formatting
+
+Status: planned
+Depends on: R22.20, R22.30
+
+Numbers and text formatted for a locale, an explicit value from a BCP 47
+identifier and never global state, from generated CLDR data a program
+uses in part. From R20: the answer on a locale as an explicit value, and
+how formatting evidence takes one.
+Exit evidence: CLDR's own test data pass for the locales generated; a
+program that uses one locale carries only its data.
+
+### R22.60 — Regular expressions
+
+Status: planned
+Depends on: R22.30
+
+`core/regex`: patterns compiled at run time with the caller's allocator,
+matched in linear time, no backreferences; Unicode classes from R22.30's
+tables. From R20: the allocator and capability shape, and how a match
+position is named.
+Exit evidence: linear time pinned on adversarial patterns on a hosted
+target and on Cortex-M0; an external conformance suite passes for the
+supported syntax.
+
+### R22 gate
+Each addition on every target its namespace admits, with its oracle; each
+generated table held by its check.
+
+## Successor families
+
+The first roadmap named six families as destinations for what it did not do,
+and the second added Usability. They are kept as the owners of register records, not as roadmaps of their
+own; a record that an item here takes on says so, and one that none does
+waits for its activation.
+
+- **Scale and self-hosting:** separate compilation and interface files,
+  caching, cross-language stage transport and the incremental replacement of
+  tested Ada stages.
+- **Companion tool and ecosystem:** a build tool, package acquisition, version
+  solving, manifests, locks, publishing, naming authority and generator
+  orchestration. A build description between Zig's build program and a
+  makefile was discussed when this roadmap was written and left out of it.
+- **Broader standard library:** library facilities beyond what the prototypes
+  needed.
+- **Competitive optimization:** optimization beyond correct deterministic
+  baseline code.
+- **Language evolution:** parked constructs, watches and proposals whose
+  triggers have not fired.
+- **Release readiness:** distribution, production claims and every release or
+  version decision.
+- **Usability:** what a person meets using Landin from its documentation
+  alone: knowledge a newcomer cannot guess, workarounds, refusals that do
+  not say what to do, and documentation that disagrees with the tool.
+  `AGENTS.md` makes recording it everyone's job.
 
 ## The concurrency execution model
 
@@ -4441,468 +805,6 @@ in `tour.md` under WHAT WAS TRIED AND DROPPED.
   Call-free Cortex-M leaves may omit the pointer because they cannot switch
   stacks. The case to design against is a single-core freestanding target, where the
   honest answer to a request for concurrency is that there is none.
-
-## Successor families
-
-The first roadmap named six families as destinations for what it did not do,
-and this one added Usability. They are kept as the owners of register records, not as roadmaps of their
-own; a record that an item here takes on says so, and one that none does
-waits for its activation.
-
-- **Scale and self-hosting:** separate compilation and interface files,
-  caching, cross-language stage transport and the incremental replacement of
-  tested Ada stages.
-- **Companion tool and ecosystem:** a build tool, package acquisition, version
-  solving, manifests, locks, publishing, naming authority and generator
-  orchestration. A build description between Zig's build program and a
-  makefile was discussed when this roadmap was written and left out of it.
-- **Broader standard library:** library facilities beyond what the prototypes
-  needed.
-- **Competitive optimization:** optimization beyond correct deterministic
-  baseline code.
-- **Language evolution:** parked constructs, watches and proposals whose
-  triggers have not fired.
-- **Release readiness:** distribution, production claims and every release or
-  version decision.
-- **Usability:** what a person meets using Landin from its documentation
-  alone: knowledge a newcomer cannot guess, workarounds, refusals that do
-  not say what to do, and documentation that disagrees with the tool.
-  `AGENTS.md` makes recording it everyone's job.
-
-## Register
-
-Work that waits for its activation, one row each, as distinct from the
-evidence registers in `compiler/tests/registers.md`. A row keeps the identity
-it was given — R551 and R730 for the first roadmap's two debt ledgers, a letter
-and a number for the review register it inherited, SR for rows added since —
-because the first roadmap's text refers to them. A merged row is folded into
-the row it joined.
-
-A status is `open`, waiting for its activation; `limit`, a measured boundary
-that stands until its activation; `watch`, an observation waiting for
-evidence; `scheduled` followed by one or more unfinished items that take on
-its parts, separated by commas; or `retired`, with the reason it no longer
-applies; a retired row stays in the table with its reason. Remove a
-scheduled owner when its part is complete. A row stays scheduled on its other
-owners until they finish, and is then removed.
-
-A removed row is still cited by the item that closed it, so its identity is
-listed below, which tells a citation of a removed row from one of a row that
-never existed. Remove the row and add its identity to the following departure
-list in the same edit.
-SR-210 to SR-213 are
-the four defects a review of `main` after R13.35 numbered and fixed at
-once; they were never rows.
-
-Records that have left the register: SR-13, SR-14, SR-15, SR-16, SR-17,
-SR-20, SR-22, SR-23, SR-24, SR-25, SR-26, SR-27, SR-28, SR-29, SR-31, SR-32,
-SR-34, SR-37, SR-38, SR-39, SR-40, SR-41, SR-42, SR-43, SR-44, SR-45, SR-47,
-SR-48, SR-53, SR-54, SR-55, SR-56, SR-57, SR-58, SR-59, SR-60, SR-61, SR-62,
-SR-63, SR-64, SR-66, SR-67, SR-68, SR-69, SR-70, SR-71, SR-72, SR-73, SR-74,
-SR-75, SR-76, SR-77, SR-78, SR-80, SR-81, SR-83, SR-85, SR-90, SR-91, SR-92,
-SR-93, SR-94, SR-95, SR-102, SR-103, SR-104, SR-105, SR-106, SR-107, SR-108,
-SR-109, SR-111, SR-112, SR-113, SR-114, SR-115, SR-116, SR-117, SR-118,
-SR-119, SR-123, SR-124, SR-126, SR-128, SR-129, SR-130, SR-131, SR-132,
-SR-133, SR-134, SR-136, SR-137, SR-138, SR-139, SR-140, SR-141, SR-142,
-SR-143, SR-144, SR-145, SR-147, SR-148, SR-149, SR-150, SR-151, SR-152,
-SR-153, SR-155, SR-158, SR-159, SR-160, SR-161, SR-162, SR-163, SR-164,
-SR-165, SR-166, SR-168, SR-169, SR-170, SR-171, SR-172, SR-173, SR-174,
-SR-175, SR-176, SR-177, SR-178, SR-180, SR-181, SR-182, SR-183, SR-184,
-SR-185, SR-186, SR-187, SR-188, SR-189, SR-190, SR-191, SR-192, SR-193,
-SR-194, SR-197, SR-198, SR-199, SR-200, SR-201, SR-202, SR-203, SR-204,
-SR-205, SR-206, SR-207, SR-208, SR-209, SR-210, SR-211, SR-212, SR-213,
-SR-214, SR-215, SR-216, SR-217, SR-218, SR-219, SR-220, SR-221, SR-222,
-SR-223, SR-224, SR-227, SR-228, SR-229, SR-230, SR-232, SR-233, SR-234,
-SR-235, SR-236, SR-237, SR-238, SR-239, SR-240, SR-241, SR-242, SR-243,
-SR-244, SR-245, SR-246, SR-248, SR-249, SR-250, SR-251, SR-252, SR-260,
-SR-263, SR-268, SR-270, SR-271, SR-274, SR-276, SR-278, SR-280, SR-282,
-SR-283, SR-284, SR-305, SR-306, SR-318, SR-332, SR-333, SR-338, SR-343,
-SR-347, SR-349, SR-351, SR-352, SR-353, SR-356, SR-357, SR-362, SR-365,
-SR-366, SR-372, SR-388, SR-391, SR-393, SR-402, SR-428, SR-487, SR-488,
-SR-489, SR-499, SR-511, SR-517, SR-680, SR-684, SR-691, SR-706, SR-735,
-SR-737, SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746,
-SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
-SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
-SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
-SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817, SR-818,
-SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827, SR-799,
-SR-829, SR-726, SR-823, SR-830, SR-831, SR-05, SR-540, SR-843, SR-858,
-SR-861, SR-862, SR-876, SR-842, SR-850, SR-870, SR-883, SR-772, SR-801,
-SR-803, SR-804, SR-805, SR-806, SR-807, SR-808, SR-809, SR-810, SR-811,
-SR-253, SR-254, SR-256, SR-266, SR-392, SR-472, SR-734, SR-790, SR-816,
-SR-851, SR-900, SR-291, SR-325, SR-722, SR-247, SR-269, SR-273, SR-289,
-SR-303, SR-307, SR-314, SR-321, SR-373, SR-382, SR-727, SR-728, SR-866,
-SR-875, SR-882, SR-51, SR-277, E3, SR-902, SR-903, SR-904, SR-905, SR-906,
-SR-907, SR-908, SR-909, SR-970, SR-979, SR-910, SR-911, SR-912, SR-913,
-SR-914, SR-916, SR-606, SR-530, SR-308, SR-732, SR-740, SR-942, SR-380,
-SR-982, SR-699, SR-636, SR-600, SR-317, SR-320, SR-390, SR-525, SR-451,
-SR-731, SR-841, SR-944, SR-987, SR-993, SR-994, SR-1017, SR-828, SR-510,
-SR-1022, SR-403, SR-702, SR-618, SR-884, SR-700, SR-972, SR-1021, SR-707,
-SR-984, SR-812, SR-1012, SR-1032, SR-1033, SR-1036, SR-1040, SR-971,
-SR-1038, SR-985, SR-551, SR-949, SR-943, SR-945, SR-973, SR-590, SR-481,
-SR-370, SR-840, SR-948, SR-978, SR-1010, SR-720, SR-730, SR-815, SR-998,
-SR-990, SR-974, SR-299, SR-729, SR-915, SR-981, SR-1025, SR-988, SR-385,
-SR-1028, SR-257, SR-300, SR-324, SR-552, SR-721, SR-773, SR-776, SR-783,
-SR-784, SR-1011, SR-1030, SR-1019, SR-1005, SR-977, SR-989, SR-992, SR-1020,
-SR-622, SR-793, SR-980, SR-983, SR-1000, SR-860, SR-885, SR-976, SR-575,
-SR-986, SR-997, SR-999, SR-1034, SR-1039, SR-782, SR-787, SR-788, SR-792,
-SR-1018, SR-650, SR-595, SR-1016, SR-1043, SR-1045, SR-1046, SR-1053,
-SR-1060, SR-1061, SR-1062, SR-1064, SR-1066, SR-1091, SR-1078, SR-1089,
-SR-1106, SR-1150, SR-1050, SR-1070, SR-1096, SR-1097, SR-1098, SR-1101,
-SR-1160, SR-573, SR-1071, SR-1081, SR-1111, SR-1121, SR-1123, SR-1128,
-SR-1132, SR-1138, SR-1145, SR-1146, SR-1156, SR-1159, SR-1058, SR-1059,
-SR-1090, SR-267, SR-802, SR-947, SR-288, SR-379, SR-526, SR-946, SR-1026,
-SR-33, SR-298, SR-975, SR-1140, SR-281, SR-316, SR-859, SR-867, SR-1015,
-SR-1035, SR-1051, SR-785, SR-555, SR-1230, SR-619, SR-645, SR-369, SR-610,
-SR-1100, SR-1103, SR-1115, SR-1116, SR-1212, SR-1231, SR-1114, SR-769, SR-1144,
-SR-1099, SR-1109, SR-1072, SR-1073, SR-360, SR-361, SR-1269, SR-1170,
-SR-1080, SR-1171, SR-374, SR-991, SR-940, SR-1255.
-
-| Record | Family | What stands | Activation | Completion | Status |
-| --- | --- | --- | --- | --- | --- |
-| R551-07 | Scale and self-hosting | Final linker placement is not preflighted: Linux RIP-relative reach, Darwin's 2 GiB static-image collision and arm64 branch reach. Merged: R730-05, thirty-six shared programs exceed the 32 KiB flash, 16 KiB RAM and 4 KiB stack profile in 148 capacity verdicts, 118 map overflows, 26 frames over the stack and 4 images over the budget, recounted when the descriptions arrived; linked again with each device's derived script and held to its build report's limits, 34 of them in 8 programs still exceed RP2040's profile, 26 frames over its 4 KiB stack, 4 RAM overflows and the 4 images over the budget, the same 34 in 8 RP2350's, 26 frames over its 4 KiB stack, the 4 RAM overflows of one program's 530,012 bytes against its 512 KiB and the 4 images over the budget, and 30 in 7 the STM32H753's, 22 frames over its 16 KiB stack and the same 8, the counts the earlier measurement from image sizes and frames gave. | Before general large-image support, or a workload that needs it. | Bounded reach and layout evidence with the native control and its status-42 oracle retained. R12.10 gave the per-device profiles (D543) and held every image to its target's reach (D537); placement is still not preflighted. | open |
-| SR-580 | Language evolution | Atomic exchange, add and compare-exchange are refused on `cortex-m0` at every level: Cortex-M0's admission (D510, D690) holds no level's read-modify-write, so a Thumb-2 core's LDREX and STREX, and Armv8-M's LDAEX and STLEX, go unused, and `core/atomic`'s `exchangeable` has no conformance there. The level-dependent admission itself exists since R12.40 (D690, RV32's `a`); what is missing is the lowering. Met deciding R12.30's selection, which left it out of scope. | A program that needs a read-modify-write on a Thumb-2 core. | The exclusive loops lowered at `armv7-m`, `armv7e-m` and `armv8-m.main` by each ordering's published mapping, Cortex-M0's admission and `core/atomic`'s condition opened at those levels, and executed fixtures on the AN385 and the AN505. | open |
-| SR-581 | Competitive optimization | The Cortex-M backend allocates only r0 to r7 at every level, so at the Thumb-2 levels, whose 32-bit encodings reach the high registers as they reach the low ones, r8, r10 and r12 still hold no value and every value moves through the low registers and frame homes. Left out of R12.30's Thumb-2 selection. | R16.20's register allocation, or a measured Thumb-2 code-size or speed need. | High registers allocated at the Thumb-2 levels with `armv6-m` byte for byte unchanged, and the corpus, the frame stepping and the source-debugging lanes still passing at each level. | scheduled R16.20 |
-| SR-582 | Competitive optimization | A conditional transfer inverts its condition over an absolute jump at every level, and a comparison with zero is a `cmp` and a branch: Thumb-2's IT blocks and CBZ and CBNZ go unused. Left out of R12.30's Thumb-2 selection. | A measured Thumb-2 code-size need, or R16.20. | IT, CBZ and CBNZ selected at the Thumb-2 levels where their reach allows, with branch-reach controls at each level and `armv6-m` unchanged. | scheduled R16.20 |
-| SR-583 | Competitive optimization | A packed field is extracted and inserted with shifts and masks at every level; Thumb-2's UBFX, SBFX and BFI go unused. Left out of R12.30's Thumb-2 selection. | A measured cost of packed register access on a Thumb-2 board. | Bitfield instructions selected at the Thumb-2 levels, with the packed peripheral traces unchanged at each level. | open |
-| SR-584 | Competitive optimization | A constant MOVS cannot make comes from a literal island at every level; Thumb-2's MOVW and MOVT go unused, so a Thumb-2 image still carries the islands and the branches over them. Left out of R12.30's Thumb-2 selection. | A measured Thumb-2 code-size need, or R16.20. | MOVW and MOVT selected at the Thumb-2 levels, the literal-reach controls kept for `armv6-m`, which keeps its lowering. | scheduled R16.20 |
-| SR-585 | Language evolution | D255 has no Armv8-M level with the optional DSP extension, so a Cortex-M33 that has it, as RP2350's do, builds at `armv8-m.main` and `compiler.feature.dsp` is false there, and a `cortex-m33` description admits no `armv7e-m` build either, since its DSP instructions are optional. Left out of R12.30. | A program that selects declarations by `compiler.feature.dsp` on an Armv8-M core, or a DSP instruction the backend would select. | A level in D255's table, `armv8-m.main+dsp` in GCC's spelling, holding `dsp`, admitted for a core whose description says it has the extension, with its tool arguments and an executed fixture on the AN505. | open |
-| SR-586 | Usability | The Cortex-M emitter's local labels, `L3_1` and `Lcm_step_17`, are symbols in the object and the linked image, so `objdump -d` lists a routine as fragments, each label a heading of its own, and a reader looking for `main`'s instructions under `<main>:` finds only its prologue. Met when the corpus's selection check first read every routine as empty past its first label, and took each routine's extent from `nm -S` instead. SR-874 shares the root fix: local labels emitted as assembler-local `.L` symbols stay out of the ELF symbol table, so a listing keeps a routine whole and a renumbering leaves the image's hash; it changes every board record once and so waits for a physical re-record. | The next change to the Cortex-M emitter's labels, taken with SR-874. | Labels the listing does not split a routine at, or the lane guide saying where a routine's instructions are found. | open |
-| R551-08 | Scale and self-hosting | Compact source or IR can still ask for enormous assembler repetition; small compiler output does not bound assembler memory or object size. | Before admitting larger images or generation policies. | A bounded emission policy tested on tiny shapes, with the forbidden giant-fixture boundary kept. | retired: R12.10 writes repeated runs without expansion (D536) and bounds every image before emission on every target, tested on small shapes with the giant fixture still refused (D537) |
-| R551-09 | Competitive optimization | Guarded cleanups can expand quickly despite correct pop-before-run order. | A measured cleanup workload with unacceptable growth. | Selectors, effects and order preserved, with bounded size compared before and after. | open |
-| R551-11 | Competitive optimization | Frame and allocation planning is repeated by preflight, emission and debug output. | Profiling justifies sharing the plans. | One immutable plan owning emission and debug locations, with debugger agreement. | retired: preflight answers from a bound on the reference frame and plans a frame only past it, and emission plans each routine once with debug output reading that plan, on every backend (D790); arm64's allocation fell from 15.5 to 6 per cent of a 16,000-declaration compile with `--debug=full`, with byte-identical assembly on all eight targets, nine profiles and both debug modes |
-| R551-12 | Competitive optimization | An indexed increment can keep an extra bounds check, and Darwin still has stack homes beyond the scalar value reuse and integer register promotion already implemented. Merged: R730-04, atomic and barrier lowering is baseline, not competitive. | Measured code-quality pressure. | Single evaluation, traps, addresses, ABI and debugger evidence preserved under measured improvement. | scheduled R16.20 |
-| R551-15 | Scale and self-hosting | Nix provides a development shell and a flake, and the gate's `flake` job builds the flake on every run that does not reuse a pass (D585). Nothing else is Nix CI: no derivation is cached, and the only other job that uses the flake, `rv64-qemu`, takes its emulator from it. | An explicit decision to extend Nix CI beyond building the flake. | Builders, SDK identity, debugger permissions and cache provenance accounted for. | limit |
-| R551-16 | Scale and self-hosting | Stage and backend procedures nest tens of thousands of lines in one closure: the checker's `Run` 41,842, lowering's `Run` 21,022, the parser's `Parse` 12,036, the five backends' `Emit` at 6,300 to 9,200 and the verifier's `Check` 8,728. The five backends repeat their static-data emission body for body (`Folded` 497 lines, `Evaluate` 479, `Whole_Clear_Extent`, `Element_Shape_Of`, `Place_Fields`, `Emit_Children`, `Run` and `Packed`, and a dozen smaller), as do `Validate_Linkage`, `Allocate_Symbols`, `Call_Plan` and `Signature_Plan`; the driver repeats `Text_At` and `Number` in its image block, ESP image and boot stage, and the checker and its flow pass `Declaration_At`, `Tree_For` and `Written`. `Add_Module`'s `Root_Index` is stored and never read; the Arm32 ABI's `Error_Register`, `Frame_Record_Bytes`, `Call_Stack_Alignment`, `Minimum_SP_Alignment` and `Thumb_Address_Bit` and ELF's `Data_Section` and `Zero_Section` are declared while the backends spell the same values as literals. R12.50's Xtensa backend was made from the RISC-V one and still writes RISC-V-form words its machine layer translates, and `Add_Conformance`'s `Bindings` are stored and never read. The interfaces nothing called, `Needs_Source` among them, the unused variadic-descriptor chain and the stages' duplicated construction helpers are gone, and lowering's three largest statement arms are named procedures. | Replacing or splitting the affected stage, a change it obstructs, or the next backend. | Refactoring behind existing seams with strict warnings: the backends' static-data emission shared once, closures turned into parameters where a split needs it, and every listed declaration used or removed. | open |
-| R551-19 | Release readiness | No mutation coverage of the driver's options, targets other than the default, several editor documents resolved as one module, or emission, linking and running of the mutants that are accepted. The frontend has source-text crash coverage: R10.50's `compiler/tests/fuzz/fuzz.py` drives the sole direct `.ldn` source of each positive, negative, runtime and ABI fixture directory, plus every reproducer, mutated with a fixed seed, through `refine lsp` with rooted imports and an imported-fixture diagnostic check, bounded per response and in memory. C companions are not executed. | Before robustness or production claims. | Fixed seeds, bounded resources, stage and target reach, crash classes and minimal reproducers, for the driver and the backends as the frontend has them. | open |
-| R551-20 | Release readiness | Fake-host failure controls do not establish native device, capture or exhaustion failure paths. R13.78 established one: output preparation under a file-size limit is now injected natively with `RLIMIT_FSIZE` in `compiler/tests/test_compile_publication.py` and the native publication controls, with its cleanup and diagnostic checked, and `docs/capabilities.md` claims that path alone. R13.79 added native controls to the same script for a descriptor limit, a closed pipe on the command's own output, the file-size signal and a removed working directory; device and capture paths remain fake-host only. | Before claiming those native failure guarantees. | Controlled fault injection with cleanup and diagnostic oracles on each host. | open |
-| R551-22 | Release readiness | The code face was removed from all history and the acceptance tags re-issued; only the vendored Nunito Sans remains. Its redistribution, which the pages depend on, is not settled. | Before distribution, or a font policy change. | A distribution decision keeping the private-font boundary. | retired: settled; Nunito Sans is under the SIL Open Font License 1.1, which permits vendoring, serving and redistributing it with its notice, kept as `assets/fonts/nunito-sans/OFL.txt` and named among `LICENSE`'s third-party notices, while MonoLisa is fetched from the project's object storage, held to `assets/fonts/licensed.sha256` (D1336), and the publishing workflow refuses without it |
-| R551-25 | Language evolution | Source-debug CFI is not a promise of foreign-exception unwinding. | An explicit proposal for runtime foreign unwinding. | Semantic, ABI and failure decisions, then native evidence. | limit |
-| R551-26 | Language evolution | LLDB shows C scalar spellings and manual tag and payload selection, with no Landin expression evaluator. Merged: R730-12, Cortex-M0 debugging is lines and functions only. | A concrete debugger-usability proposal. | Truthful types and locations with native sessions for each new promise. | limit |
-| R551-27 | Release readiness | Linux driver overrides follow the GNU contract; Darwin emits thin arm64 Mach-O, not universal binaries; no Clang header parsing. | A requested driver or distribution expansion. | Pinned producer and consumer, packaging and identity evidence. | limit |
-| R551-28 | Language evolution | No callback-identity counterexample exists, and static rejection of known slice-range endpoints is not a normative requirement. | A valid counterexample or an explicit semantic proposal. | Present-contract defects go to their implementation owner; semantic changes need specification and tests. | watch |
-| R551-32 | Scale and self-hosting | The whole program is compiled together on every build, the library included, and nothing is kept between builds: no stable separate compilation, interfaces or package identity in them. The scaling bound holds frontend and emission to 2.5 times per doubling. Merged: B3, whole-program checking done and stable interfaces left here. Self-hosting, split from this record, is SR-697. Kept outside the current roadmap and proposed for the next in discussion #2 (<https://github.com/JanHaan/Landin/discussions/2#discussioncomment-19369243>). | The next roadmap taking it, or a measured compile cost the scaling bound or private caches cannot answer. | Tested seams and complete interface and package identity with whole-program semantics preserved. | limit |
-| R551-33 | Companion tool and ecosystem | Package acquisition, version solving, manifests, locks, naming authority, deterministic roots, generators and sandboxing; the binding generator's four-file publication is recoverable (D907) but is not a snapshot concurrent readers can rely on. Merged: B6, a naming authority keeping the project-first override [1480]; R730-08, a general SVD generator, and R730-11, a fixed firmware linker script, which R12.11's `refine svd` and R12.10's derived and developer scripts settled. | Before acquisition, general generation or concurrent build consumers are offered. | Declared inputs and outputs, immutable publication, reproducible roots, single-version conflicts and a naming policy that keeps the project-first override [1480]. R12.10 gave the derived and the developer's linker script (D545, D546) and R12.11 the general SVD importer (D555-D558). | open |
-| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type, which R14.40's `core/atomic` gave (D500). | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 gave the atomic wrapper, `core/atomic` (D500). | retired: R13.20 gave the freestanding facilities its firmware asked for, each driven by a complete consumer: `core/line`'s serial line settings and divisors behind every board's driver, with a live line exchange on the tty boards (D955 to D964), R730-09's part; `core/cache`'s maintenance concept, its cacheless provider and the Cortex-M7's `platform/cortex_m/l1` over the admitted cached STM32H753 profile, whose receive ring maintains itself (D970 to D978), R730-02's part; and `core/text`'s positions, searches, encoder and UTF-8 builder over `utf8` (D945 to D949). R13.30 to R13.33 gave the hosted part, and R14.40 the atomic wrapper (D500) |
-| R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | retired: R14.20 specifies the switch (D450), makes fibres a group over a scheduler (D444) and teaches them at [1675]; stackless coroutines stay rejected |
-| R551-36 | Release readiness | No production or operational claim is made, and no versioning scheme is: each release and its version designation is a maintainer decision of its own, and Landin does not assume SemVer. Licensing is decided, `MIT OR Apache-2.0` with compiled programs and linked `core/*` under no condition of `refine`'s, and so is distribution, through `release.yml`'s tagged assets. | A proposed production or operational claim, or a versioning scheme. | Each claim or scheme a separate decision with its evidence. | limit |
-| R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | retired: R12.20 ran the first pinned board against its physical oracle, with the shared scenario compared and the emulator lanes kept (D595); recurring board runs are R12.60's |
-| R730-03 | Release readiness | D227's ordering trials and bounded store-buffer models are evidence, not a formal proof; no wait-free or timing bound is claimed. | Before a claim beyond the bounded models, or any timing bound. | A stated proof or checked model agreeing with the native trials. | open |
-| R730-06 | Release readiness | Stack paint and SP observation are measurements, not worst-case bounds; 64 spare flash bytes is a fit, not a budget; reset assumes no NMI or fault in its window. | Before a production budget, worst-case stack or fault-tolerant reset claim. | A workload and interrupt model with a checked bound, and reset-window behaviour with executable evidence. | open |
-| R730-07 | Broader standard library | Cortex-M0 C source capabilities, `platform/c` and header generation are disabled; 65 restrictions in `compiler/tests/cortex-m/corpus.json` stand there, 53 of them shared ABI fixtures that need the general C surface. | A freestanding program that must call or be called from C. | An ILP32 `platform/c`, Cortex-M0 C signatures, generated bindings from a pinned device C header under a checked Cortex-M0 ABI, and executable firmware fixtures using the generated declarations and adapters with failure oracles; those restrictions re-decided. R12.30 gave the AAPCS32 VFP variant's planner beside the base one, checked against GCC's hard-float build (D616). | retired: R13.20 enables AAPCS32's C surface on Cortex-M in both procedure call standards, with an ILP32 `platform/c` and C archives linked into firmware (D920 to D924), binds C for it from pinned CMSIS headers (D935 to D939), and runs the generated declarations and adapters and a hand-written C peer on QEMU's micro:bit, AN505 and AN500 (D985); the 65 restrictions were decided again, 8 to execute, 36 to refuse with their codes and 21 to stay restrictions that the lane holds to their stops (D986) |
-| R730-13 | Release readiness | Source and debug identity selection is matching, not authentication or protection against concurrent replacement. | Before stronger provenance or attestation claims. | An attestation design with verified restore; the seven negative selections stay. | limit |
-| R730-17 | Language evolution | A call returning a plain pointer cannot fill a several-atom pointer union through an atom `else`; D235 keeps it refused. | A program that needs that recovery to widen. | D235 amended with a recovery lowering and evidence on every target. | open |
-| R730-20 | Language evolution | D237 leaves u128, i128 and f16 out. | A program that needs 128-bit arithmetic or binary16 values. | D237's recorded plan on every target. | open |
-| R730-23 | Release readiness | A linked hosted image is not bit-reproducible: the GNU driver writes a random temporary object name, six bytes. | Before a reproducible-distribution claim. | Byte-identical images on both hosted targets, with the assembly-identity check kept. | retired: every hosted ELF target's assembly names its file symbol `landin` (D810), so GNU ld names none after the driver's temporary object; `test_determinism.py` requires identical images from two directories on Linux x86-64, Linux arm64 and Darwin, and keeps the assembly-identity check |
-| R730-24 | Competitive optimization | Build-report counters are filled differently per backend, so a cross-target comparison from them is unsafe. | Before any cross-target code-quality comparison from the report. | Every declared counter filled on every backend, or the report saying which it does not measure. | retired: every backend fills every counter with one meaning, sites counted over the final text (D791) |
-| B4 | Companion tool and ecosystem | Package, build and generators beyond the thin pieces the compiler owns; R551-33's. | As R551-33. | As R551-33. | open |
-| B5 | Broader standard library | The standard library beyond the `core` modules `core/README.md` lists; R551-34's. | As R551-34. | As R551-34. | retired: as R551-34; the `core` modules `core/README.md` lists now include `core/line` and `core/cache` |
-| D6 | Companion tool and ecosystem | One version of a package name per program [1470]; the compiler's first-root rule is done and arranging roots is the tool's. | Before acquisition or root arrangement is offered. | Roots arranged so one version is reachable, a conflict a hard error. | open |
-| C1 | Language evolution | Affine values, which would change [0910]'s non-ownership `sink`. Merged: R730-10, the derived driver's device authority, descriptor linearity and stop are manual obligations. | A peripheral or resource program unpleasant without them. | [0910] amended with a register decision answering R730-10's obligations, on every target. | open |
-| C2 | Language evolution | Conformances as named values. | Conformance collisions hurting in real libraries. | A register decision weighed against retained position RP2, with library consumers. | open |
-| C3 | Language evolution | A checkable host-authority boundary for call trees [1680], including whether root minting should be restricted to the entry module. D258 keeps public constructors: provider arguments support substitution for uses of those providers, but do not prove host exclusion. | A trusted-code case needing static host exclusion or reliable provider substitution without auditing its call tree, or a need to run untrusted code. | [1680] amended with a register decision and executable evidence for the chosen boundary, accounting for constructors, foreign calls and freestanding address literals rather than treating entry-module restriction alone as isolation. | open |
-| C4 | Language evolution | Generational observers and inferred uniqueness; no trigger was ever given. | None until later evidence supplies one, recorded first. | That trigger recorded, then a design with its own evidence. | open |
-| C5 | Language evolution | Structure-of-arrays collections [0620]. | A simulation program needing one field contiguous. | [0620] enabled by amendment and register decision, with executable evidence. | open |
-| E1 | Language evolution | Labels, `break with` and `complete` are implemented and none of the four derived programs uses them. | A proposal to remove or reshape them, with evidence beyond non-use. | A tour amendment and register decision. | watch |
-| SR-01 | Release readiness | The Cortex-M lane pins `arm-none-eabi-gcc` 14.2.1; the same publisher's `arm-eabi-gcc` 16.1.0 builds a valid image, and moving changes every recorded firmware hash and disassembly. | R12's new cores rebaseline the firmware records anyway. | The toolchain moved with every Cortex-M record rebaselined in one change. | retired: R12.10 moved the lane to GNAT's arm-elf GCC 16.1.0 and rebaselined every Cortex-M record in one change (D532) |
-| SR-03 | Language evolution | A module value cannot hold `addr` of storage: [1940]'s known values are numbers, and a static address is a data relocation no backend emits. L0305 refuses it and its note says why; this record is the construct's only owner. | A program needing a static pointer: a vector table it owns, a table of pointers into module storage, or a statically linked structure. | [1940] amended with a register decision, data relocations emitted on every target, and `negative/r491-construction-static-address` turned into executable fixtures. | open |
-| SR-625 | Usability | Adding the `rv32` target meant finding every hand-written list of what a target is: the `compiler.arch` atoms are spelled out as string alternatives five times in `landin-stages-configuration.adb` and once in `landin-stages-resolution.adb`, the `compiler.c_*` fact names four times across `landin-stages-configuration.adb` and `landin-configuration.adb`, the driver keeps its own target-spelling list and identity text beside `Landin.Targets.Selection`, and two discussion templates list the targets again, which `check.py` compared only when a name had a hyphen, so `rv32` was first read as prose; only the compiler's missing-case errors and `check.py`'s template comparison named any that was missed, and the rest were found by search. Met adding RV32 for R12.40. The first fixture to name `targets: rv32`, the atomics' refusals, met four more: the fixture harness's `Is_Named_Target` and the fixture suite's `Facts_Named`, `check.py`'s own set of known targets, and the target applicability register in `compiler/tests/registers.md`, from which `check.py` takes the targets a fixture may name; `check.py` named the last two, and only by calling the fixture's target unknown. A runtime fixture written for `rv32` met a sixth: `scripts/add_fixture.py` refused `targets: rv32` as an unknown target, so `runtime/library-platform-riscv` names `cortex-m0` and reaches the RV32 lanes through the Cortex-M inventory; the list was `compiler/tests/fixture_meta.py`'s `TARGETS` and `FAMILIES`, which also failed the gate's scripts job on the first `rv32` fixture, and the close added `rv32` there. | The next target or fixed fact, R12.50's Xtensa first. | One table of architectures and their atoms, and one of fixed facts, in the compiler, each list derived from it and the driver's spellings read from `Landin.Targets.Selection`. | retired: one table of architecture atoms (`Landin.Targets.Atom`) and one of fixed facts (`Landin.Configuration.Fact_Name`), every Ada list derived from them, the driver's spellings and identity and the harness's targets and levels read from `Landin.Targets.Selection`, and `fixture_meta.TARGETS` and `check.py`'s known targets parsed from its `Described_Name`, with `FAMILIES` held to `Landin.Targets.Levels` |
-| SR-626 | Usability | `environments/cortex-m`'s harness read every `devices` record of `descriptions.json` as an Arm device it builds and links, in `backend.py`, `backend_corpus.py`, `descriptions.py` and `test.py`, so recording the RV32 reference there, where its lane reads it, would have failed every Cortex-M lane; nothing in the file or its README said a record is one target's, and two readers now pass over a record that names another `target`. Met recording the RV32 reference for R12.40. | R12.40's RV32 lane. | The record's `target` documented in the README beside the lanes, and every reader selecting by it rather than by omission. | retired: every record in `descriptions.json` names its `target`, each reader selects by it and refuses a record that names none, and the README beside the lanes says so |
-| SR-10 | Language evolution | D145 refuses a module static image of `any C`: D147's data-pointer/table-pointer pair needs two relocations, beyond SR-03's single static `addr` value. | A program needs a preinitialized module `any C` value, such as a static dispatch registry; take on SR-03's data-address relocation work too if it is still open. | D145 and [1940] amended with a register decision for static construction; an image containing both the data address and the selected flattened-table address emitted on every target, with executable fixtures for a module binding, an aggregate field and a copied image on 32- and 64-bit targets. | open |
-| SR-06 | Language evolution | An XMOS xcore.ai target, XS3: hardware threads, channels and ports timed to the cycle, on which XMOS now recommends C over its own concurrent XC. Its compiler is proprietary, but the public XS3 architecture manual gives the instruction encodings, the XE executable format is specified to the byte, XMOS publishes the source of its BinUtils and XGDB, and AXE, an open XS1 emulator, exists unmaintained. Unsettled: the XTC tools licence, whether the published BinUtils and XGDB work without the proprietary tools, and a load and debug path that avoids the undocumented XTAG protocol. | R14's execution model settled, and an xcore.ai board in hand. | A backend emitting XS3 and packaging XE itself or through the published BinUtils, the corpus on an open emulator lane in the gate, threads and channels mapped through R14's model, and a recorded board run; no timing claim rests on an emulator. | open |
-| SR-07 | Language evolution | A Microchip dsPIC33A target: a 32-bit signal controller with a DSP engine and double-precision FPU, sold for the motor and power control TI's C29 serves, where the C29's instruction set is under NDA and its tools forbid reverse engineering. The dsPIC33A Programmer's Reference Manual is public, the XC-DSC assembler, linker and compiler are GPL ports of the GNU tools with published source, and every XC licence is free; no LLVM backend reaches it. Its program and data memories are separate, which no Landin target has had. Unsettled: whether the published source builds a toolchain that runs without MPLAB X, an emulator outside MPLAB X's proprietary simulator, and an open debug path through the on-board debugger or a PICkit. | An open emulator or instruction-set simulator for the dsPIC33A, written from the manual or found, and a Curiosity board in hand. | A backend emitting dsPIC33A for the GNU assembler and linker built from the published source, separate program and data memory decided in `spec.md`'s register, the freestanding corpus on that emulator in the gate, and a recorded board run. | open |
-| SR-08 | Scale and self-hosting | D247's 16,384-declaration routine bound limits the measured cost of origin tracking. Since R13.78 the reference pass's derivation facts are sparse, each naming the locals it derives from, and branches and loops share unchanged facts; what remains is the host stack at larger routines, below. The separate 16,384-field struct bound has a different cause. Measured again in R13.61: `scaling.sh`'s locals family peaks in checking, which grows from 61 to 141 MiB and from 0.10 to 0.28 s of processor time between 8,000 and 16,000 locals, so its peak-memory ratio was 2.45 against the 2.5 bound, its 16,000 point unchanged since R13.60. Met again in R13.70: the locals family's frontend grew 2.52 times from 8,000 to 16,000 and failed the gate's scaling job, the reference pass's joins ORing every derivation byte; a join now reads only the bytes between a fact's lowest and highest local, which took the checking stage at 16,000 locals from 0.27 to 0.20 s, but copying and comparing a fact still costs the routine's size. Answered in R13.78: the reference pass's derivation facts are sparse, each naming the locals it derives from, after the candidate's gate failed `scaling` at 2.80x on `locals` and 3.05x on `branches`; checking's exact instructions now grow 1.89x and 1.95x per doubling to 16,000 locals, and 1.94x and 1.99x to 64,000 on a compiler built with the bound raised, its peak from 78 to 291 MiB. A `branches`-shaped routine of 64,000 locals exhausts the default 8 MiB host stack, "refine: host resources exhausted", so a higher bound needs that recursion found first. | A real routine needs more than 16,384 declarations, or measured origin storage for a routine within the bound is unacceptable on a supported host. | Raise or remove the routine bound only to the extent the measurements support, after the stack depth at large routines is bounded, updating D247 and its size-bound test; leave the struct field bound independently justified. | limit |
-| SR-09 | Competitive optimization | D248 fixes every assembly block as a read/write, call and trap boundary; no block can promise a narrower memory effect. | R16.10 or later measurements show a material code-quality cost caused by that fixed effect in a concrete assembly workload. | Record the baseline and the attributable cost, then decide whether a narrower effect is warranted against D248's critical-section rationale. If adopted, amend [1630] and D248, preserve the conservative default, and show IR and backend correctness plus measured improvement on the affected targets; otherwise record why the fixed effect stands. | watch |
-| SR-11 | Language evolution | No Fortran calling convention is specified or scheduled. R13.73's trim of the tour took direct Fortran interop out of [1570]'s candidates, so this record is the idea's only owner. The enabled foreign boundary is `extern(c)`. | A concrete program needs to call or expose a Fortran procedure whose required signature cannot use the C boundary. | A decision in `spec.md` and an amendment to [1570] define the supported Fortran ABI and type subset; calls and callbacks run against a pinned Fortran producer on every host claimed, with negative cases for unsupported signatures. | open |
-| SR-12 | Language evolution | No Swift calling convention is specified or scheduled. R13.73's trim of the tour took direct Swift interop, with its separate error channel, out of [1570]'s candidates, so this record is the idea's only owner. The enabled foreign boundary is `extern(c)`. | A concrete program needs direct Swift calls or callbacks, including error transport, that cannot use the C boundary. | A decision in `spec.md` and an amendment to [1570] define the supported Swift ABI, type subset and error mapping; calls, callbacks and failures run against a pinned Swift producer on every host claimed, with negative cases for unsupported signatures. | open |
-| SR-35 | Usability | The mutation campaign's one-report-on-the-line share is 90.5% against a 90% bar. The largest misses are reports one line from the mistake: a deleted `end` or value reported on the next line, and missing tokens the parser meets on the next line, some genuinely ambiguous. | A frontend change that moves the share, or the next work on the parser's recovery. R11.27 changed recovery (D1361, D1362) and left the share at 90 per cent, 1,905 of 2,109 refused mutants, as on its base. | The share raised with margin, or the bar's meaning restated for the ambiguous cases. | watch |
-| SR-46 | Competitive optimization | An immutable module `bool` is loaded from memory rather than folded, so `return when baseline` kept a whole check routine in a baseline image until the check was split per level. An immutable module `usize` is reloaded the same way at `--optimize speed`: `word: usize = sizeof usize` in `core/mem` is read from memory in every loop, and `3 * word` becomes a run-time `mulq`. | A measured image or hot path holding a foldable module constant. | Immutable scalar module values folded at their uses, with an image comparison. | retired: R13.61 folds a read of an immutable module value, `bool` and `usize` among them, and the arithmetic and checks that become constant |
-| SR-79 | Usability | A gate's `darwin-host` build failed at the bind with gnatbind's "error: disk full" writing the binder's generated main on a macOS runner guest with 37 GiB free, after three passes of the same job there. GNAT reports any short write as "disk full", so the message sent the investigation to clean disks that were not full; the cause is unknown, and the root runner service's open-file limit of 256 is unconfirmed. `scripts/build.sh` now reports the free space and open-file limit beside the message. | The next "disk full" from a build, read with the space and limit it reports. | The cause named, and either removed from the runner or reported by the build in its own words. | retired: met only on a registered macOS runner, and those are retired; `scripts/build.sh` still prints the free space and open-file limit beside GNAT's "disk full", so a recurrence on a hosted runner is read with them. |
-| SR-82 | Broader standard library | `platform/linux` gives every Linux system call by number with one raw call that takes and returns integers, and typed wrappers for most of the calls the library itself uses; a program calling anything else converts its own pointers, flags and structures, and the checker sees none of them. `hosted/events` makes its own `pidfd_open` through the raw call (`hosted/events/programs.ldn`), and the runtime fixtures `events-signal-stops-server` and `thread-signal-reaches-events` call `getpid` and `kill` the same way. | A consumer outside the library's own modules and their fixtures that needs an unwrapped call, or a proposal for a complete Linux binding. | A typed wrapper for each call, generated with the numbers or written, with its flags and structures and their layouts checked per architecture. | open |
-| SR-86 | Usability | A second `io.terminate_path` into the same scratch silently re-points a path still in use, because a fresh `[]mut` view of the scratch is not an `inout` use of it, so the checker does not see the first path's borrow end. | The next change to `core/io`'s paths or to the borrow rules for `[]mut` views. | Either the second terminate refused while the first path lives, or a path form that cannot alias. | retired: `io.terminate_path` no longer exists, since R13.18 made paths host strings (D299) |
-| SR-96 | Broader standard library | `core` has no math functions: `f32` and `f64` have the language's arithmetic and nothing more. The first `core/math` is written in Landin, so its results are the same on every target, with `sqrt` and `fma` as instructions where IEEE makes them exact and the other functions ported from a permissively licensed implementation, musl's and FreeBSD's msun or CORE-MATH, and tested against MPFR's values; it is known to need tuning for speed and accuracy after that. | The first consumer that needs a math function, or a numeric workload. | `core/math` with its functions' accuracy stated and pinned, and the tuning left measured rather than assumed. | open |
-| SR-591 | Release readiness | refine's soft-float Cortex-M assembly declares no `Tag_ABI_FP_number_model`, and the linker compares `Tag_ABI_VFP_args` only between objects that both declare one, so a soft-float refine object links silently into a hard-float image and its floats go to the wrong registers, while a soft-float GCC object is refused. R12.30's hard-float output declares IEEE 754 and VFP arguments; the soft-float output was kept byte-identical. | The next change to the Cortex-M assembly header, or a mixed-object consumer. | Soft-float objects declaring their number model and base arguments, with a refused mixed link in both directions. | retired: soft-float Arm assembly declares the IEEE number model and base arguments, as GCC's soft-float object does (D780); `firmware.py`'s float-unit case refuses each mixed pair in both orders |
-| SR-592 | Release readiness | `runtime/r420-list-real-exhaustion`, `runtime/r420-map-arena` and `runtime/r420-pool-provider` are sized for 64-bit pointers, `sizeof padded_slot == 24` and arenas exhausted at 64-bit extents, so on Cortex-M they fail their oracles; the constrained reference's map never held them, so no Cortex-M lane ran them until R12.30's mps2-an500 lane, where they carry a lane restriction that the lane still requires to fail. | The next change to these three fixtures, or an M7 or RV32 counterpart of them. | 32-bit counterparts in `compiler/tests/cortex-m/cases` with their own expected values, executed on the M7 lane, and the restrictions removed. | retired: 32-bit counterparts of the three fixtures execute on the M7 lane at every profile and the lane restrictions are removed; on the reference, the M33 and both RV32 lanes their images remain limits |
-| SR-593 | Language evolution | Only `fpv5-d16` is a float unit refine builds. The Cortex-M33 of RP2350 and mps2-an505, and single-precision Cortex-M4 and M7 parts, have `fpv5-sp-d16` or `fpv4-sp-d16`: hard float with f32 in the VFP bank and f64 still in software helpers under the VFP variant, which needs the helpers' base-PCS transport beside banked f32 and a level per unit. | A consumer on RP2350 or another single-precision part that wants hardware f32. | Those units as description facts with their cores and levels, f64 helpers called across the VFP variant, and execution on an emulator lane with each. | open |
-| SR-594 | Language evolution | A float unit always selects hard float. `softfp`, the unit's instructions with the base PCS's core-register transport, which links with soft-float objects, is not offered. | A consumer that must link soft-float objects on a part with a unit. | A decision whether to offer it, and if so the transport and its contract rows. | open |
-| SR-596 | Competitive optimization | With a float unit every f32 and f64 operation loads its operands from their homes and stores its result through r6, two to five instructions each beside the one VFP instruction, and a comparison branches where an IT block would do; no float stays in a register between operations. Nothing is measured. | A float-heavy Cortex-M workload or benchmark. | A measured float selection that keeps values in VFP registers across operations, or the cost recorded as acceptable. | open |
-| SR-97 | Broader standard library | Floating-point values are neither written as text nor parsed: R13.19's formatting covers integers. Writing the shortest text that reads back exactly, and parsing correctly rounded, is real work and costs flash on Cortex-M0. The Benchmark Game's n-body and spectral-norm print nine decimal places and k-nucleotide three, which is fixed-precision writing, a different and smaller algorithm than the shortest round trip. | The first consumer that writes or reads a floating-point value, or `core/math`. | Shortest round-trip writing, correctly rounded fixed-precision writing and correctly rounded parsing, with their size on the Cortex-M0 profiles measured. | open |
-| SR-98 | Broader standard library | There is no locale or Unicode beyond `utf8`'s validation and traversal. Done properly, a locale is an explicit value named by a BCP 47 identifier, never global state, with the host reporting the user's; its data is generated from a pinned CLDR release into modules a program uses only in part, as ICU4X does; and the work comes in phases: Unicode properties from the character database, case mapping, normalization and segmentation, then numbers and dates by locale, collation, and time zones from the IANA database, read from the host or carried. | The first consumer that formats for a person's locale, or a time zone. | The first phase's data generated from a pinned release with a checked generator, and a consumer formatting in two locales. | open |
-| SR-99 | Broader standard library | No library resolves a host name. `getaddrinfo` is a C library service, not a system call: glibc reads `nsswitch.conf`, `hosts` and `resolv.conf` and may load NSS modules, Darwin asks its resolver daemon, and FreeBSD's C library resolves itself. A resolver library uses the system's where it is authoritative, the C library on Darwin and FreeBSD, and on a static Linux program its own, reading `/etc/hosts` and `/etc/resolv.conf` and speaking DNS over UDP and TCP, with configured NSS modules needing `--link=libc`. | The first consumer that connects by name, after R13.33. | The resolver on every hosted target with failure oracles: an unknown name, a name only `/etc/hosts` knows, and a server that does not answer. | open |
-| SR-100 | Broader standard library | There is no regular-expression library. It is its own library, outside the hosted layers: linear-time automata without backreferences, so no pattern can make it run away, compiled when the program runs with its allocator passed, and freestanding. | The first consumer that matches a pattern. | The library with its linear time pinned on adversarial patterns, on a hosted target and Cortex-M0. | open |
-| SR-101 | Broader standard library | Nothing loads self-contained code into a process: freestanding position-independent C, built `-ffreestanding -nostdlib -fPIC`, or Landin with C-ABI entry points, whose imports the host provides. A loader would have a format-neutral core that maps, relocates, binds each import to a function the host exports, runs initializers and finds exports, with ELF first, then Mach-O, registering a file's signature as Darwin's own loader does, and PE; it works whether or not the host links a C library, and needs no C library in the loaded code. Code that uses a statically embedded C library's process state, musl's thread block among it, is outside it. `refine` would also need to emit a self-contained shared object with C-ABI exports. | A consumer that loads plugins without the system's libraries. | The loader and the driver output on Linux, FreeBSD and Darwin, with failure oracles: an unknown relocation, an import the host does not provide, and an unsigned object on Darwin. | open |
-| SR-110 | Usability | A helper returning a memory world over module-level buffers is refused with L0316 (D222), and its note, "pass each alternative as an explicit source", cannot apply to static storage, so a fixture repeats the construction three times instead. | The next change to L0316's note or to static origins. | A note that fits static sources, or the helper admitted. | retired: the note fits static storage after all: a helper taking the module buffers as `[]mut u8` parameters, `-> (host: io.memory from state, output, errors)`, checks clean, and D222 rightly refuses writable module buffers hidden behind `from state` alone |
-| SR-120 | Competitive optimization | A static Linux program spawns a child with a `clone` that shares nothing, a `fork` that copies the parent's page tables, so a large parent pays for every spawn. A spawn with `CLONE_VM` and a stack of the child's own is expressible since R14.40's naked `clone` for threads (D516), and is not built. | A consumer spawning from a large process, or a measurement. | A spawn that does not copy the parent, measured against `fork`. | open |
-| SR-121 | Broader standard library | Darwin has no `pipe2`, so `posix.pipe` sets close-on-exec with `fcntl` after `pipe`, and a thread spawning in between leaks both ends into its child. Darwin's sockets have the same window since R13.33: `fcntl` follows `socket` and `accept`. | Threads, R14.40. | Pipes and spawning made safe beside threads on Darwin, with a fixture. | retired: Darwin's `spawn` asks for POSIX_SPAWN_CLOEXEC_DEFAULT, so no descriptor it does not give the child reaches a program `platform/posix` starts however and whenever another thread made it, pipes and sockets alike, which `runtime/thread-spawn-leaks-no-descriptor` pins on every hosted target with four pipes made with no close-on-exec flag at all (D503); the window is left only to a C library's own `exec`, which is the C code's |
-| SR-122 | Release readiness | Every gate job downloads `actions/checkout` from GitHub, and in three consecutive R13.31 runs GitHub answered some of those downloads with 429 Too Many Requests after three attempts, failing `cortex-m` or a FreeBSD emission job before it ran anything; a failed emission job also skips every FreeBSD execution job, so a whole platform went untested and each run had to be repeated. | The next gate run lost to it, or a change to the runners. | The self-hosted runners serving actions from a local cache, or the workflow retrying a rate-limited download, so a gate verdict no longer depends on GitHub's download limit. | retired: measured again on the GitHub-hosted runners from 2026-10-16T14:57Z to 2026-10-17T20:03Z, 56 runs, 999 job logs and 1,861 action downloads, with no 429 and no retried download; the 429s came from the registered runners, whose jobs shared their hosts' addresses. Reopen on the next gate job lost to a rate-limited download |
-| SR-127 | Competitive optimization | The x86-64 backend emits `mfence` before and after every atomic operation whatever its ordering, so a relaxed atomic cost about 50 ns more a clock read than a plain word, and the vDSO cache stays a plain word. | Threads, R14.40, or the optimization phase. | Fences chosen by ordering, measured. | retired: R14.40 lowers every atomic by its ordering on each backend (D499, D522), and a relaxed load on x86-64 is one `mov`, 0.9 ns a read in a loop against 49.5 before and 0.6 for a plain word; the vDSO cache's relaxed word is D502's |
-| SR-135 | Competitive optimization | `hosted/heap` reads and writes each block's header a byte at a time, because a header may be misaligned, and an allocation-bound program pays for it: a profile of the Benchmark Game's binary-trees at depth 15 puts `load_word` at 20 per cent and `store_word` at 18, `class_of` at 8, and the program's own routines under 7; depth 21 takes 4 minutes 4 seconds at `--optimize speed`, 655 MB at its peak. A `core/region` over the heap adds a 16-byte ledger record to every allocation, and freeing each node directly instead was 29 per cent faster at depth 16. Hand-measured on 2026-10-15: header words read and written through `ptr usize`, with the header pair placed word-aligned below the block and the `unit - 1` slack dropped when the unit divides 16, took depth 16 from 5.67 to 3.66 seconds and a node's slot from 64 bytes to 32, so depth 21's peak fell from 655 MB to 385 MB, against C's 257; the misalignment the heap's comment gives as the reason is its own placement, not a language constraint. The region ledger maps and unmaps every block over 4 KiB as it doubles, 14,500 of each at depth 16, and chaining fixed 4 KiB ledger blocks took 3.66 seconds to 2.89. | The next `hosted/heap` change, or a measured allocation-bound workload. | Headers read and written as words, with binary-trees measured before and after. | retired: R13.60 reads and writes the headers as aligned words, and binary-trees was measured before and after |
-| SR-146 | Competitive optimization | The x86-64 backend aligns no routine entry, so code shrinking anywhere moves the hot routines after it: with `store_word`, `load_word` and `class_of` byte-identical, binary-trees at `--optimize size` ran 4 per cent slower, 5.71 to 5.96 seconds at depth 16, reproducibly, only because earlier copies got shorter. A time baseline therefore moves by a few per cent with unrelated changes. Met again in R13.61, where it cost reverse-complement 22%: larger routines put its hot loop and two callees 4 KB apart, contending for Zen 2's decoded-instruction cache; and copying an unchanged executable moved a timing by up to 50% with where its code landed in physical memory, so one executable's time is no baseline. | R16.10, whose time tolerances meet the same noise. | Routine entries aligned at `speed`, or the baselines' tolerance justified against layout noise measured on the same workloads. | retired: R13.61 starts every routine on a 64-byte boundary at speed and aligns a loop head reached only by a jump to 32 bytes, and reverse-complement runs in 0.78 seconds rather than 1.00; baselines still need several fresh copies of each executable, which R16.10 measures |
-| SR-154 | Competitive optimization | Scalar replacement of slices and small structs, written and verified on the local branch `perf3-sroa` (an IR pass before simplification, `DW_OP_piece` locations, a verifier rule and a fixture), saved under a quarter of a per cent of the five Benchmark Game ports' instructions on top of R13.60's allocators and cost about 17 per cent of compile time at `--optimize speed`, so it was left out; a loop narrowing a local slice and updating a local struct saved 14 per cent of its instructions with it. | A measured workload whose hot loop keeps a local slice or small struct, or inlining exposing caller aggregates. | The pass merged with that workload measured before and after, and its verification shared with simplification's. | retired: R13.61 splits slices and small structs inside simplification's own verification, and the lexer runs 18 per cent faster with it |
-| SR-635 | Usability | `u64(1.0e18)` is 999,999,984,306,749,440, not 10^18: a float literal with no context is an f32 ([0210], D162), so a conversion's operand is rounded to 24 bits before it is converted, and nothing says so; writing `big: f64 = 1.0e18` first gives the exact value. Met writing R12.40's RV32 conversion checks, whose expected values were off by the rounding. | The next item that touches literal typing or conversion diagnostics. | A note, or a refusal naming `f64(...)`, when a float literal's conversion to an integer would differ at f64, or the default documented where conversions are taught. | retired: L0350 refuses an untyped float literal's integer conversion that its f32 rounding changes (D760), and the tour's [0310] says the literal is f32 |
-| SR-637 | Competitive optimization | RV32's frames reserve a home for every fixed scratch register a routine might save, 44 bytes, although D678 prunes the saves a routine's text never names after its frame is laid out, so a frame is up to 44 bytes larger than its saves need; with eight-byte homes and sixteen-byte rounding RV32's frames are 1.1 to 1.35 times Cortex-M0's, and seven corpus programs overrun the reference's 4 KiB stack. | A firmware program whose stack the reservation decides, or R12's lanes asking for a smaller stack. | The frame laid out after the text that decides its saves, or the saves predicted before it. | open |
-| SR-156 | Scale and self-hosting | Every routine of every imported module is lowered, simplified, emitted and assembled whether or not the program can call it: lowering prunes unused module data but counts a routine's body as a use "whether or not that routine is itself used". A ten-line hello-world over `core/io` emits 546 routines, 69,178 lines of assembly, among them `network_listen` and the memory world's `scripted_fill`, of which `--gc-sections` keeps 34 in a 9.6 KB executable. Lowering, emission and the assembler take about 0.8 s of its 1.16 s release compile at `--optimize speed`, which is why every Benchmark Game port costs about 1.2 s however small it is, against 0.09 s for C and 0.23 s for Rust. | The next compile-time item, or R16.10's benchmarks. | Routines reachable from `main` (calls, evidence tables, routine values, link symbols, placements and `assembler.block` text) the only ones lowered, with hello-world's compile measured before and after. | retired: R13.60 lowers only the routines a program can reach, and hello-world emits 64 routines rather than 546 and compiles in 0.64 seconds rather than 1.18 |
-| SR-157 | Scale and self-hosting | About a fifth of a release compile is GNAT runtime work rather than compiler work: a `perf` profile of hello-world's compile puts 14% in abort deferral and exception-state lookups around controlled container references, 5% in `Ada.Tags` external-tag hashing from the ten generic container instances that `Landin.Stages.Checking.References` and `.Flow` declare inside `Check_Function` and so elaborate on every routine they check, and 12% in `memmove`, a third of it from the IR verifier. | The next compile-time item. | Container instances at library level and element access that elaborates no controlled reference on the hot paths, with the profile measured before and after. | retired: R13.60 reads tables through `Element` and elaborates the checker's container instances once, and hello-world compiles in 0.63 seconds rather than 1.24 with byte-identical assembly |
-| SR-167 | Usability | `refine check` refuses `--link`, so `compiler.c_runtime` is false when checking on Linux and a program that asserts it cannot be checked; `compile --dry-run --link=libc` is the route nothing names. | The next driver item or change to `compiler.c_runtime`. | `check` taking `--link`, or its refusal naming the dry run. | retired: R13.71 gave `check` `--link`, so a program asserting `compiler.c_runtime` checks as it compiles |
-| SR-179 | Release readiness | The debug and release `refine` built from one tree emit different assembly at `--optimize none` for `cortex-m/cases/utf8-ordinal-out-of-range-traps`, on every target: `subq $720` against `subq $736` on x86-64. Each build is deterministic alone, and the determinism manifests compare debug compilers only, so nothing catches it. Met in R13.61. | Now: the release compiler is what users run. | The two builds emitting identical bytes for the corpus, held by a check. | retired: R13.61 sequences the emissions Ada left unordered in `Lower_Utf8_Index`, and the `build-modes` gate jobs hold the two builds to the same bytes over the corpus |
-| SR-195 | Release readiness | The Cortex-M shared-GDB session failed twice in about 2,800 sessions on a loaded host with "Remote replied unexpectedly to 'vMustReplyEmpty': vCont;c;C;s;S" and passed when rerun. Met again in R13.72: one backend-corpus session failed the same way while other streams ran QEMU on the host, and passed when rerun. Met again in R13.79: the `freestanding` lane's `none-all/library-shared-map` failed once the same way beside sixteen other streams' builds, and was not rerun. | Its next failure in a gate run. | The cause named and removed, or the session retried with the reason. | watch |
-| SR-196 | Language evolution | Under D145 a closed program refuses an erased call with L0342 when no conformance can answer it, although no such value can exist; the refusal names D145 and no remedy. It kept the arena in `core/mem` in R13.70: as its own module, every program importing `core/text` but no allocator would be refused through the growing builder. | The arena split, or the next change to D145. | D145 amended so an erased call no value can reach is not refused, with the arena moved and fixtures, or the refusal naming its remedy. | retired: D377 amended D145 so an erased call no value can reach traps instead of being refused, and the arena is `core/arena` |
-| SR-225 | Usability | Under Ubuntu 24.04's `qemu-user`, 8.2.2, every `linux-rv64` program that sets a signal disposition dies of SIGSEGV before writing anything, because that QEMU writes a 32-byte riscv64 `sigaction` over Linux's 24-byte record; the R13.70 gate reported about 240 runs as "the program returned a status" with empty output, nothing naming the emulator, and the cause was found only in QEMU's source. The gate now runs the pinned QEMU. | The next change to the cross-lane runner or `--runner`. | The harness probing the runner's version, or this signal record, and refusing a known-bad emulator with the reason. | retired: R13.71 probes the runner's emulator before a cross lane and refuses a known-bad one by name, held by `fixture execution/a known-bad runner is refused` |
-| SR-226 | Usability | `refine -o x.s main.ldn` with no command is refused with "-o requires its own command", which does not name `compile` as the command it needs. Met in R13.70 checking the Cortex-M probes. | The next command-line item. | The refusal naming `compile`, or `-o` taking it as given. | retired: R13.71 refuses `-o` before its command as "an option of compile; name the command first: refine compile -o …" |
-| SR-602 | Usability | `./scripts/dev-test.sh --suite='fixture execution'`, which an item's brief named beside its new fixtures, executes every runtime fixture at every profile, and at the default single test worker it was still running after the 30 minutes an agent's background command is given, and was stopped, where at `LANDIN_TEST_JOBS=8` it took 15; `--help` lists the suite with no word of what it runs or of `LANDIN_TEST_JOBS`, which only `docs/process.md`'s examples, setting it to 1, and AGENTS.md's gate table, setting it to 8, mention. Met running R12.30's float-operand fixtures. The same holds of `--suite=parser`, which a stream brief requires in every run, and `--suite=memory`: in R12.40's first filtered target run they took 290 s and 281 s of its 636 s, every other selected suite together under a minute, and `--help` says neither. | The next change to `scripts/dev-test.sh`'s help or to the fixture execution suite. | The help saying what the suite runs and naming `LANDIN_TEST_JOBS`, or the suite taking the wider worker count by default under `parallel-equivalence.sh`'s guarantee. | retired: `dev-test.sh --help` says what `fixture execution`, `parser` and `memory` run and cost, and that `LANDIN_TEST_JOBS` splits only `fixture execution`'s corpus cases |
-| SR-603 | Usability | `QEMU_CPU= ./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 ...`, with the variable set but empty, fails every fixture as "qemu-aarch64 is refused before any program runs under it (qemu-aarch64 version 11.1.0): it could not run the runner probe ... qemu-aarch64: -cpu option cannot be empty; run the lane under the pinned QEMU, which nix develop provides", though the QEMU was the pinned one and the fault was the empty variable, which the advice never names. Met running R12.30's float-operand fixtures on the arm64 cross lane from a loop that set `QEMU_CPU` for RV64 alone. | The next change to the cross lanes' runner probe. | The refusal naming `QEMU_CPU` when QEMU's own message is about `-cpu`, or the lane refusing an empty `QEMU_CPU` by name before it probes. | retired: the runner probe's refusal names `QEMU_CPU` when QEMU's own message is about `-cpu` |
-| SR-231 | Competitive optimization | An atom `match` re-tests its subject's set at every arm, so `failure.words`'s 32 arms cost about 6.3 KiB of Cortex-M0 code at size/auto, about 200 bytes an arm. R13.72 tests the subject once, through a sealed slot the backends do not revalidate, which took `failure.words` on Cortex-M0 at size/auto from 6,336 to 3,552 bytes; the arms remain a compare-and-jump chain of about 110 bytes each, because a table needs a multiway IR terminator. | The next Cortex-M code-size item. | A multiway IR terminator and an atom `match` lowered through it as a table or jump, with the image measured. | open |
-| R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
-| R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
-| R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |
-| R551-23 | Release readiness | Native acceptance evidence had no backup, expiry or attestation. | — | — | retired: nothing produces native evidence now. The Linux and Darwin bundles of the last approval before 0.2.0, `ci/accepted/57d1c76a`, remain on the maintainer's Mac, and on 2026-09-23 their records and source archive matched that tag's hashes; they have no backup, and no claim rests on them. R730-13 stands on its own |
-| R551-24 | Release readiness | Two-domain publication was not atomic. | — | — | retired: `pages.yml` is the one publisher |
-| R551-06 | Scale and self-hosting | Flow snapshots, declaration-origin matrices, folding and dependency walks and IR scratch arrays have storage and stack costs that grow with input size. | — | — | retired: R8.20 bounded a routine's declarations and a struct's fields (D247, L0325), measured every stage's storage, and made the remaining declaration-origin facts shared between branches; the identified whole-unit IR optimization scratch was subsequently moved off the stack. Automatic per-routine IR-value arrays remain outside L0325's bounds; SR-08 owns the deferred sparse origin representation |
-| R551-10 | Competitive optimization | Atom and symbol allocation and imported-module lookup repeat identity scans; simplification keeps size-dependent scratch work. | — | — | retired: R8.20 keyed atom codes, linker spellings, machine-body sharing and imported modules, and simplification forgets only what it stored |
-| SR-02 | Scale and self-hosting | The corpus at one worker measured 4,523 s on CI against 3,592 s before the parallelism change; single shared-hardware samples cannot tell variance from a regression. | — | — | retired: three repeated runs on one host put the corpus at one worker at 5,599 to 5,654 seconds before the parallelism change and 5,657 to 5,713 after it, a one per cent cost, and R8.20's tree runs it in 1,400 to 1,436 |
-| SR-255 | Usability | `check.py` and its controls leave files open, and hundreds of `ResourceWarning` lines bury real failures in `scripts/script_tests.py`'s output. Met in R13.72. | The next change to `check.py`'s file reading. | No resource warnings in a full run. | retired: `check.py` closes every file it opens, and `scripts/script_tests.py` fails a module that prints a ResourceWarning |
-| SR-258 | Usability | `scripts/scaling.py`'s declarations column counts the platform library's roughly 616 declarations, so the fields family reads the same at every size, 619 when met and 789 now, unlike its docstring. Met in R13.72. | The next change to `scripts/scaling.py`. | The column counting the generated program, or labelled for what it counts. | retired: the column counts the generated program's own declarations, the empty program's count taken off |
-| SR-259 | Usability | The pinned `tree-sitter parse --rebuild` silently keeps the cached parser when no C compiler works, and a bare `tree-sitter` run warns "no parser directories" on every invocation. Met in R13.72. `highlight/tree-sitter/README.md` now explains both and gives a fresh-cache recipe; the pinned CLI still refuses nothing. | The next tree-sitter pin change. | A refusal when the parser cannot be rebuilt, and the warning explained or silenced in `highlight/README.md`. | retired: the suite compiles into an empty cache, passes no `--rebuild` and refuses when no library results; both READMEs say what the pinned CLI's `--rebuild` and warning do |
-| SR-261 | Usability | L0304, like every refusal of its kind, has two fixed notes, the tour paragraph and the standing, so the catalogue cannot carry a route as a note and every route is written into the message. Met writing the generic literal route in R13.72. | The next diagnostics item touching the catalogue's note counts. | A route note available to such refusals, or the message form recorded as the way. | retired: L0304 carries its route as a third note (D761); the generic-literal, match-alias and construction-statement routes moved out of their messages |
-| SR-262 | Usability | L0342's list of concepts uses bare names, `formattable`, not the spelling a program writes, `text.formattable`, because the checker's spelling has no module-qualified concept text. Met in R13.72. | The next change to type spelling. | Concepts spelled as the program would write them. | retired: R13.75: concepts are spelt as the program writes them (D880) |
-| SR-264 | Usability | A `match` arm with two statements and no `begin … end` is refused with "a match arm puts `:` after its case" at the second statement's `=`, which does not name `begin … end`. Met writing R13.72's fixtures. Merged: SR-292, the same refusal met in R13.73's outside reviews, where `refine explain L0103` covers other mistakes and nothing says an arm runs one statement; SR-322, met at `ptr (front):` writing `runtime/escaping-into-frame-list` in R14.20. | The next parser-diagnostics item. | The refusal naming the block form, with a fixture. | retired: R13.75: a second statement under an arm is one L0103 naming the bare block, labelled at the arm's case, and the next arm still parses (D860) |
-| SR-265 | Usability | `refine fmt` writes `ptr (p):` and `_ (rest):` with a space but `red(shade):` without one. Met in R13.72. `docs/format.md` states the difference between `ptr (p):` and `some(value):`, but not `_ (rest):`. | The next formatter item. | One spacing for every arm binding, or the difference stated in `docs/format.md`. | retired: `docs/format.md` states `_ (rest):`'s spacing and why, and its example holds the formatter to it |
-| SR-272 | Usability | `scripts/build.sh --help` starts a build instead of printing its usage, unlike `dev-test.sh --help` since R13.72. Met in R13.72. It is worse than a missing usage line: the option reaches the staleness check first, so checking SR-295 with `./scripts/build.sh --help` rebuilt from clean and deleted the debug build's objects. | The next change to the build scripts. | Usage printed without a build. | retired: `build.sh` and `dev-build.sh` print their usage on `--help`, and refuse an argument they do not take with it, before any build step |
-| SR-275 | Competitive optimization | A `list` grows by allocate and copy (D356) while the text builder grows by `resize`, so reading 250 MB into a byte list takes 0.40 s against the builder's 0.23 s, and reverse-complement stays on the builder; growing lists through `resize` rewrites the fixtures that pin allocator calls and overflowed a Cortex-M image when tried. R13.79 added `mem.reserve_admit_copy`, which `vec.append_bytes` grows through, and a builder path that keeps the old block while it may still be read (D1122); a list still grows by allocate and copy, and the builder still calls `resize` otherwise. | The next change to `core/mem`'s storage growth (`reserve_storage`, `grow_storage`) or to the text builder's growth, or R16.10. | Lists grown through `resize` where a provider has it, measured, with the counter fixtures re-decided. | scheduled R16.10 |
-| SR-279 | Usability | `f(1)(a: 2)` is L0103 "an expression belongs here" because `f(1)` was read as a type application in a written conversion, which the report does not say; it was found only under a debugger. Met in R13.72. | The next change to written conversions. | The refusal saying what the first application was read as. | retired: the refusal is "an applied type is not called to make a value", with a label on the applied type, pinned by `negative/an-applied-type-is-not-called`. |
-| SR-285 | Broader standard library | A `{}` placeholder takes no width, padding or radix, so C's `printf("%5u")` is five builder calls (`docs/from-c.md`'s `printf` entry), where Rust writes `{:5}`. Met in R13.73. R13.74's `format_onto` (D527) kept `{}` alone; extending it is a choice of the template syntax `format`, `format_onto` and `io.write_format` share, which is the maintainer's. | A program whose output needs a width, padding or radix inside a template, or the next change to the template syntax. | Rust's format specification studied and the parts that suit a template checked when it runs ported, `{:5}`, `{:<5}`, `{:05}` and `{:x}` among them, or each declined with its reason. | open |
-| SR-286 | Usability | A call that can fail, written as a routine's last line, is read as the body's value: the first refusal is L0301, a type mismatch, and L0329's "use `try` or `else`" comes second. Met in R13.73. | The next change to L0329 or to result checking. | L0329 reported first, or L0301 naming the unhandled failure. | retired: R13.75: such a call is one L0329 saying the body reads it as its value, and L0301 waits for the failure to be handled (D871) |
-| SR-287 | Usability | In `if c then a() else b() end if` the `else` belongs to the `if`, and a call's own `else` inside an arm needs parentheses; the tour needs a paragraph to say so, and nothing warns a reader who meant the call's. Met in R13.73. | The next change to call-site `else` parsing. | A warning or a note when an arm's last call can fail and the `if`'s `else` follows it. | retired: L0329 says that the `else` after the call divides the `if` around it and names the parenthesised form, pinned by `negative/recovery-value-in-an-if-arm-divides-the-if`; the change predates the row. |
-| SR-290 | Usability | Printing one formatted line takes three lines of setup first, `system.new()`, `io.buffered_over` over a buffer and `defer io.flush(out) else none`, and an unbuffered `io.write` formats nothing; every example on the examples page repeats them. Met in R13.73. | The next change to `core/io`'s writers. | A formatted write straight to a file through a small buffer of its own, or the three lines kept with the reason recorded. | retired: D527's `io.write_format` writes a template and its values to a file in one call, through a store of its own. |
-| SR-646 | Language evolution | An RV32 handler runs with mstatus.MIE clear until its `mret` (D680), so no interrupt preempts another at any priority: a long handler delays every other, and the CLIC's levels and Hazard3's meicontext priorities go unused. The NVIC nests by priority on Cortex-M. Left out of R12.40. | A board program whose interrupt latency needs preemption. | Nesting by the core's priority mechanism, with the saved context and the stack it needs stated. | open |
-| SR-647 | Language evolution | The ESP32-C5's CLIC runs in its non-vectored mode (D680): every interrupt enters the common entry, which reads mcause, and `mtvt` is never set, so an interrupt a program configures with `shv` set enters an address table that does not exist. Selective hardware vectoring, as ESP-IDF uses it, is not built. Left out of R12.40. | A C5 program that needs the lower latency of hardware vectoring. | mtvt pointing at a table of handler addresses, written beside the table of jumps, and the interrupts' `shv` the program's. | retired: the C5 port vectors its timer through mtvt's table of stubs by `shv`, with UART0 on the common entry (D830); its board run passed with CLICINT18's SHV set and CLICINT17's clear in its boot frame, and the C5's record was re-recorded from it |
-| SR-648 | Release readiness | Since D1290 an RV32 slot whose routine lies beyond a `j`'s 1 MiB reach enters it through an `auipc` and `jr` stub kept near the table, which the test program's case and one QEMU `sifive_e` session hold, the session entering a naked `.ramtext` routine with every register and mepc unchanged. No board has run a far handler, an RP2350 Hazard3 handler in `.ramtext` at 0x2000_0000 with the table in flash at 0x1000_0000 among them. Met reading R12.40's slot layout. | The first RV32 board port whose handlers lie beyond 1 MiB of its table, or the next change to an RV32 board application's handlers; R12.80 re-recorded every RV32 board, whose handlers lie near their tables. | A board run entering a handler through its stub, recorded with the port's record. | open |
-| SR-649 | Language evolution | An `esp-app-image` is RAM-only (D683): the ROM loads every segment into SRAM, so an image is bounded by the SRAM the description gives code and data, and flash execute-in-place, which needs the ROM's or a second stage's cache and MMU set-up, is not built. Left out of R12.40, as Jan decided. | An ESP program larger than its SRAM. | Flash-mapped text and rodata, the cache and MMU set up before reset, and the image's flash segments placed where the ROM maps them. | open |
-| SR-651 | Usability | `refine compile --debug` is refused as "--debug needs a value", which does not say the values are `none`, `full` and `lines`; `-g`, which a C programmer tries first, is "unknown option: -g". Met building RV32 firmware with debug lines for R12.40. `--debug FILE` is now answered with the values; a bare `--debug` or `--debug=` still is not. | The next change to the driver's option messages. | The refusal listing the values, and `-g` answered with the option that gives debug information. | retired: R13.75: a missing value names the values, and `-g` is answered with the option it means rather than accepted (D884) |
-| SR-293 | Usability | `io.format(out, "{}", [any(addr y)])` with an `f64` is L0318 "this concrete type has no conformance to `formattable`", which does not name `f64`, and its second label points into the library's own `core/io/buffered.ldn`. Met in R13.73's outside reviews. | The next change to L0318. | The refusal naming the concrete type, with the label at the caller's own source. | retired: R13.75: L0318 names the type and the concept as the program writes them, `f64` and `text.formattable`, with its primary label at the caller's erasure (D880) |
-| SR-294 | Release readiness | The latest release, 0.2.7, ships `refine` without its library, so a newcomer who installs the archive, or `nix profile install` of `#refine-bin` which fetches it, cannot compile hello world: `import core/io` has nowhere to come from. The README now warns above the archive route. Met in R13.73's outside reviews. | The next release. | A released archive holding `lib/landin`, with the README's warning removed. | retired: v0.2.8's archive holds `lib/landin`, and the README confines its warning to 0.2.7 and earlier; what still keeps a newcomer from building the first program from a release is SR-695's. |
-| SR-295 | Usability | `./scripts/build.sh` builds the debug compiler by default, into `compiler/ada/build/<host tag>/debug/bin/refine`, and a reader building from source to use `refine` finds the release mode only in `scripts/env.sh`'s `LANDIN_BUILD_MODE`. Met in R13.73. | The next change to the build scripts or the README's install route. | The README's source route naming the release build and where `refine` lands, or a `--release` option. | retired: the README's source route names the debug build's path and `LANDIN_BUILD_MODE=release`; that `build.sh --help` builds is SR-272's. |
-| SR-296 | Usability | Refusal notes cite decision numbers, as L0103's "D77, D405: an arm is its case…", which a reader cannot follow from the message and which the tour no longer uses. Met in R13.73. `refine explain` resolves a decision number since R13.74 (D530), so a reader can follow one; whether a note should cite a paragraph instead stands. | The next pass over the diagnostic catalogue. | Notes citing the tour's or spec's paragraph instead, or none. | retired: the maintainer keeps decision numbers in notes, since `refine explain` resolves them (D530) |
-| SR-297 | Usability | A generic routine nothing calls is not checked for L0315: a live `vec.at` view held across `vec.push` in an uncalled `(provider: type is mem.allocator, …)` routine checked clean until a concrete caller was added, though the tour says a template is checked even if nothing applies it. Met in R13.73. | The next change to generic checking or the borrow check. | The template checked, or the tour's claim narrowed to what is checked. | retired: the tour narrowed: a generic routine's body is checked for each instance a call makes (D771, [1290]); checking templates symbolically is declined until a program needs a template refused uncalled |
-| SR-301 | Usability | `any(addr lenof people)` is L0103 "`people` does not belong here" with the help "remove `people`", a repair that changes the program's meaning; the real rule, that `addr` needs a named place, is not said. Met in R13.73's outside reviews. | The next change to L0103's repairs or to `addr`'s operand. | A refusal saying that `addr` takes a named place and to bind the value first, with no repair that drops the operand. | retired: R13.75: `addr` of a measure is refused as a value's address, saying to bind it first, with no repair dropping the operand (D863) |
-| SR-302 | Usability | `try` inside hosted `main` is L0329, whose note says to add the atom to the routine's `!` set, but `main` may have none (L0502), so the suggested fix is refused next. Met in R13.73's outside reviews, pasting the library's recipes into `main`. Merged: SR-463, the same note met writing `try io.write_format(...)` inside `main`, following L0329's earlier text, "write `try` to propagate or `else` to handle". | The next change to L0329's note. | In `main`, the note naming `else` or a fallible helper as the route. | retired: R13.75: in hosted `main` both L0329 notes name `else` and a fallible helper, never `main`'s `!` set (D872) |
-| SR-304 | Usability | L0202's note for a private type crossing a public signature cites "D150: a private identity may cross", but `spec.md`'s D150 is the module graph's identity order; the note's rule has no decision under that number. Met in R13.73. | The next pass over the diagnostic catalogue, with SR-296. | The note citing the paragraph that holds the rule. | retired: D150's body holds the rule, that public declarations may mention private identities, and D151 cites it so; only D150's title, the identity order, does not suggest it, and `refine explain D150` shows that title. |
-| SR-309 | Usability | The Claude session timing review found long local checks managed through repeated sleep/log probes; the process guide did not show how to retain complete output and the command's exit status while using completion notifications. | The next change to the local agent feedback workflow. | A documented logged-command path with completion notifications and resource measurements, preserving the selected checks. | retired: `scripts/run_logged.py` retains the complete log, exit status, elapsed time and CPU/memory measurements; AGENTS.md and `docs/process.md` describe background completion notifications, batched inspections and combined test selectors |
-| SR-310 | Usability | Script tests fail under host load and pass alone, so a timing assertion reads as a broken change: `scripts/tests/test_macos_environment.py`'s `test_timeout_stops_a_separate_tool_group` failed under `scripts/script_tests.py`'s sixteen workers in R13.73 and R14.20 and twice more in the November register sweep; in that sweep `test_build_inventory.py`'s `ConfiguredBuild` failed with `TimeoutExpired` on its five-second `build.sh` timeout at a load near 50, `test_board_common.py`'s `test_a_tty_console_keeps_every_byte_each_way` got `b'S'` for `b'S1'` from one `os.read` of a pty, and `test_run_logged.py` failed once, each passing alone. | The next change to any of those tests. | Each test independent of host load: reads until the bytes or a deadline, timeouts with margins stated and wide enough for the load `script_tests.py` itself puts on a host. | retired: each test named here, `test_fuzz_close.py` and five more modules read until their bytes or a stated deadline, with hang guards of 120 to 300 s; `scripts/script_tests.py` passed run twice at once beside a busy loop on every core, at a load of 65 to 99 |
-| SR-311 | Usability | Registering a fifth prototype meant finding every place the four are named, and `grep prototype-4` finds only some: the finding letters were written out as `[XYZW]` three times in `check.py` and three in `docs/site/render_html.py`, so the new findings rendered unlinked and ROADMAP.md's citations of them went unchecked, with every check clean; and the site's navigation is a `NAV_GROUPS` list beside each document's own `group=`, which only `site.sh` refuses, after `check.py` has passed. Met in R14.10, which put the letters in `PROTOTYPE_FINDINGS` and one renderer constant that `check.py` holds to it. The finding letters were settled then; each document's `group=` in the renderer is still read nowhere, and already disagrees with `NAV_GROUPS`. | The next prototype, or the next change to the renderer's document list. | `NAV_GROUPS` read from the documents' `group=` or checked by `check.py`, and the places a prototype is registered named in one place. | retired: `NAV_GROUPS` is the one place a page's group is written, and `check.py` holds it, every prototype's page and `pages.yml`'s paths to the documents; `PROTOTYPE_FINDINGS` is where a prototype is registered and names the places outside it |
-| SR-312 | Usability | A citation of a register record that does not exist passes every check: ROADMAP.md's R13.72 paragraph cites `SR-350`, and no such row ever existed; the register now runs past it, so the citation could come to point at an unrelated row. `check.py` holds construct and finding citations to a definition and register identities to staying inside ROADMAP.md, but not to existing. Met in R14.10. | The next change to `check_roadmap_citations`. | Every cited register identity defined in the register, and the `SR-350` citation corrected to the row it meant. | retired: `check.py` holds every cited register record to a row, a `Merged:` name or the list of records that have left the register, and the R13.72 paragraph cites D419, what it meant, since no SR-350 ever existed |
-| SR-313 | Usability | `scripts/gate_watch.py --commit 581b73f5` printed "no gate run for 581b73f5 yet" for 23 minutes beside a gate run that had passed: `gh run list --commit` matches only a full hash, and the watcher passed the short one on and waited. Met in R14.10. | The next change to the gate watcher. | A short hash expanded, and a name that is no commit refused. | retired: the watcher expands a name with `git rev-parse` and refuses one that is neither a commit here nor a full hash |
-| SR-315 | Language evolution | A fibre group whose backing is the caller's frame must be joined before the frame goes, and only the program's `defer` makes sure of it (D444); a forgotten join runs a fibre on a dead frame. A check that such a group is joined on every path out, as [0910] checks that a sunk place is replaced, was declined until needed, since marking a type as needing it is close to the parked affine values. | A derived program or a fixture that forgets a join, or a second library value whose release is as unsafe to forget. | A register decision for a path check keyed on a property rather than one library type, or the `defer` recorded as the way. | retired: the `defer` recorded as the way (D773); a path check keyed on a library type or a declared property declined as the parked affine values |
-| SR-323 | Usability | `python3 scripts/add_fixture.py` and `python3 check.py --tokens` stopped with "the grammar has problems; fix those first" and named no problem, and `python3 check.py spec.md` reported the grammar clean; the problem, "grammar preamble omits contextual words: into", was found only by calling `read_grammar` from Python. Met adding `escaping into`'s fixtures in R14.20. | The next change to `check.py`'s token or grammar generation. | Both refusals printing the grammar's problems with their lines, and a targeted `spec.md` run reporting them. | retired: a run over `spec.md` alone and the token generator, which `add_fixture.py` runs, both print the grammar's problems with their lines |
-| SR-336 | Usability | An `any C` made straight in a call's argument from a pointer to an instance of a parameterized provider, `runner(any(p))` with `(t: type) box(t) is task`, compiles, and the callee's erased call traps `unreachable` at run time: the checker's discovery pass materializes the family's conformance for a binding with a written `any C` type but not for an argument, so D377 decides beforehand that no conformance answers the concept. Binding it first, `work: any task = any(p)`, works, and `core/fibre`'s `admit` does so. Met writing `core/fibre` in R14.20; a patch materializing it for a non-generic callee's `any C` parameter was tried and passed the reproducers, and leaves generic callees, function values, results, fields and array literals as they are. | The next change to erased construction or D377, or the next parameterized provider erased in an argument. | Discovery materializing the conformance wherever the contextual `any C` is known, and D377's trap reported at compile time when a program does make an `any` of the concept. | retired: the checker selected an erased call's dispatch when discovery ended, before an `any` made outside a binding with its type written had materialized the parameterized conformance; the call now takes its dispatch once every body is checked, so D377 is decided over the closed program wherever the `any` is made, pinned by the `runtime/any-parameterized-provider-*` fixtures, and `core/fibre`'s `admit` passes `any(copy)` directly |
-| SR-337 | Usability | `fibre.turns_over(any(addr runner), ...)` over a `fibre.whole`, and over the blocking host, is L0318 "this concrete type has no conformance to `turns`": it names neither the type nor that the type provides `turns`' parent `scheduler`, which is the whole reason a group over turns is refused for it (D444). Met writing `negative/fibre-turns-over-scheduler-only` in R14.20. | The next change to L0318 or to concept composition. | L0318 naming the type, and the parent concepts it does conform to when a composed concept is missing. | retired: R13.75: L0318 names the type and, for a composed concept, the parents it does conform to (D880, D881) |
-| SR-339 | Usability | `x := f() else return` and `f() else return`, written as a newcomer writes them to give up on a failure, are L0102 "`return` begins a statement, and a statement has no value" with the note "a statement stands on its own line"; the forms that do it, `else (problem)` with `_ = problem` and `return` on lines of their own, or `try` in a routine with the failure in its set, are named nowhere in the refusal. Met four times writing R14.20's fibre fixtures. | The next change to `else`'s handler forms or to L0102's notes. | L0102's note naming the block form and `try` when the token after `else` is `return`, `break` or `continue`. | retired: R13.75: an exit after a call's `else` is L0102 naming `else begin ... end`, with the note naming the bound block and `try` and a fix that writes the block (D870) |
-| SR-342 | Usability | The build report's `frame_bytes` reads as a routine's stack and is not one, and means different things by target: on x86-64, arm64 and RV64 it is the frame's extent without the sixteen-byte frame record, the return address or any call's argument area, while on Cortex-M0 it includes the pushed registers. Met in R14.20 building D447's depth report, whose frames had to come from each backend's prologue instead. | The next change to the build report's `routines`. | `frame_bytes` documented as the extent it is, or the report carrying the `Stack_Bytes` the depth report reads. | retired: the build report carries `stack_bytes`, the depth report's frame, and `frame_bytes` is what the prologue reserves on every target, documented with it (D791) |
-| SR-605 | Release readiness | An `rp2350-image-block` image carries one IMAGE_DEF block with no HASH_DEF item, so RP2350's boot ROM boots it without checking a byte of the image: a partly written or corrupted flash image whose first 4 KiB survive is entered as if whole, and a board with secure boot enabled refuses it. pico-sdk's default build does the same, and adds an end block only to close its block loop. Met making the boot kind in R12.30. | A board run that needs to detect a damaged image, a secure-boot RP2350, or the next change to the boot kind after R12.40's RISC-V form. | A HASH_DEF item and HASH_VALUE over the image's load map, computed after the link and checked by the descriptions lane, with a board run booting it and refusing a corrupted one. | open |
-| SR-681 | Usability | probe-rs enumerates every USB probe before it opens the one `--probe` names, a CMSIS-DAP TCP probe included, so a USB device the host cannot enumerate delays every command, `read` of one word, by 85 s, with no message at the default log level; it showed only as a gap before `list_wlink_devices` at `RUST_LOG=probe_rs=debug`. Met in R12.40's Hazard3 board run, with a halted BOOTSEL Pico 2 on the bus (SR-680). | The next change to the probe-rs fork's CMSIS-DAP TCP and UDP transports. | A probe selector naming a network transport opening it without listing USB probes. | open |
-| SR-682 | Usability | Polling `uhubctl -l HUB` after a port's cycle fails now and then with "There were permission problems while accessing USB", the race `common.power_cycle` describes for a second call, since the cycle re-enumerates the hub's inner hubs before udev regroups their nodes. The Arm Pico 2's tool polls for BOOTSEL with a listing that fails the run on it; R12.40's Hazard3 tool met it on its first block control and now retries its poll. | The next change to `environments/boards/rp2350/board.py` or to `common.py`'s hub functions. | A shared poll in `common.py` that retries a listing refused this way until its deadline. | retired: `common.listing` retries a listing refused this way, or taken while the cascade hides the hub, until its deadline, and the Arm Pico 2's BOOTSEL poll and the Hazard3 and ESP tools take their listings through it |
-| SR-683 | Release readiness | On the rig the probe's Arty hangs from the same hub tree as the boards' power: a Pico 2 that fell back to BOOTSEL and was then halted by a probe-rs attach (SR-680) left port 7-2.3.3.2 failing enumeration, and the kernel's recoveries and three guarded `uhubctl -a cycle`s of port 2 each coincided to the second with a disconnect of the whole tree from 7-2 down, the Arty's FTDI on the guarded port 4 and the ESP boards' hub included; once more, at 15:27:19, the tree went while a Hazard3 tool only listed the hub, with no kernel error on any port before it. The guard keeps the Arty's port from being switched, not its upstream hubs from being reset, and probehive kept its bitstream only as far as `ping` shows. The Hazard3 tool now refuses a BOOTSEL attach, cycles only after a quiet minute in the kernel log and stops unless the Arty and `ping` are back (D712); the BOOTSEL negative control does not run on this hub. Met in R12.40's Hazard3 board run. | Before the next board run that cycles a port on the probe's own hub, or the next BOOTSEL negative control. | The cause of each tree reset found in the kernel and uhubctl logs, and either the probe moved off a switched hub, the boards powered otherwise, or every board tool holding the same guards. | retired: the maintainer moved the Arty off the RSH-A16 cascade to a host port of its own, and every board tool now refuses a cycle unless the Arty's FTDI, found by its serial, is present and off the cascade it switches (D725) |
-| SR-685 | Usability | Reading a wedged RISC-V core's state needs probe-rs's interactive `debug` console: with its commands given as `-c` and its input not a terminal, it runs them and then panics with "No such device or address" at `cmd/debug.rs:444`, so a script has to give it a pty through `script -qc`; its `info reg` names mepc, mcause and mstatus but not mtval, and a board tool has no way to record a failed run's pc and cause. Met finding R12.40's Hazard3 wedge, an interrupt that corrupted a frame. | The next board run that fails on a wedged core, or the next change to the Hazard3 board tool's failure record; the ESP tools record D656's trap cells in a failed run's result since R12.40. | A failed board run reading the halted core's pc, mepc, mcause and mtval into its result, through `probe-rs gdb` and the pinned GDB rather than the console. | open |
-| SR-607 | Usability | The cores a description may name are `Landin.Targets.Firmware`'s, and `refine svd` kept its own list of the SVD `cpu/name`s it reads, with `devices/test.py`'s `render_d542` a third: the core `cortex-m33` was added to the first alone, so the RP2350's SVD would have been refused as L0528, "the SVD's cpu is CM33, which is none of CM0, CM0PLUS, CM3, CM4 and CM7", for a core the compiler builds, and nothing points from the core list to the other two. Met reading the importer before learning the RP2350 in R12.30. | R12.50's Xtensa core, or the next core a description may name after R12.40's four RISC-V ones. | One table of cores and their SVD names that the importer reads, or a targets case that holds the importer's names to the core list. | retired: `Landin.Targets.Firmware.Svd_Name` is the one table of cores and their SVD names, which `refine svd` reads, and `devices/test.py`'s `CORES` is held to it by an offline test |
-| SR-608 | Usability | A boot kind's layout is restated by the Cortex-M corpus harness: `environments/cortex-m/backend.py`'s `BOOT_PREFIX` and `BOOT_SUFFIX` and `probes/backend-start.S` give the bytes each kind puts before and after the vector table, which refine's build report and the derived script already say, so a new boot kind would first fail the corpus with "the harness supplies no BOOT boot prefix", and its suffix the derived script's size assertion, until both are edited by someone who has read the harness. Met adding `rp2350-image-block` to the corpus's capacity verdicts in R12.30. | The next boot kind, `esp-app-image`, or the next change to the corpus harness's start. | The harness reading the prefix and suffix from the derived profile's report, so a boot kind is known in one place. | retired: R12.40's build report gives each boot kind's `boot_prefix` and `boot_suffix`, which the corpus harness reads from the derived profile and `descriptions.json` records apart from the compiler, so a boot kind is known in one place |
-| SR-344 | Usability | A fixture can hold only what `refine` prints, never a file an option writes, so an option that writes a report, `--build-report`, `--stage-report` or `--stack-report`, is pinned only by fake-host cases in the test program and never end to end on a real host. Met in R14.20 adding `--stack-report`. R13.20's `c-inputs` key and the recording of a positive, runtime or ABI fixture's ordered `codes` changed what a fixture compares, and neither needed a written file. R13.79 read it and left it as too large for a register sweep: every recorded fixture runs `--dry-run`, so a written-file key needs real emission into a scratch directory, the option's path supplied by the harness, `--record` recording the file, both metadata readers and every Python lane that runs recorded fixtures. | The next report option, or the next change to a written report's format, that a fixture would pin. | A fixture key naming a written file and its expected bytes, such as `written: --stack-report=stack.expected.json`, as an item of its own. | open |
-| SR-346 | Usability | A runtime fixture that imports nothing has its hosted entry's platform module, `platform/linux`, named in the build report by its absolute library path, while a program that imports it through its root has it named relative to the root; `workload_sources.py --write` recorded `/home/...` paths for the stack switch's debugger workload until it and the test program's inventory case learnt to read an absolute path inside the checkout as a repository one. Met adding `runtime/stack-switch-frames` as a debugger workload in R14.20. | The next change to the build report's source names or to a module's implicit inclusion. | One spelling for a source however the compiler came to include it, or the rule stated in the build report's documentation. | retired: an added module is spelt through the root that names the library, as its import is (D732); `workload_sources.py` and the inventory case lost their absolute-path branches |
-| SR-348 | Usability | `compiler/tests/rv64/check.py --kind=debugger` would run its sessions only on physical riscv64 hardware, and with the RISE lanes suspended no command anywhere ran the RV64 GDB sessions, though `compiler/tests/debugging/check.py` runs the arm64 ones under QEMU's stub on any Linux host. Met adding the stack switch's session for R14.20. | — | — | retired: the debugger kind's prepared payload takes `--qemu=PATH` and runs under QEMU's user-mode GDB stub as cross evidence, named in its summary, and the gate's first `rv64-qemu` shard runs it |
-| SR-358 | Usability | Nothing starts and keeps a FreeBSD VM: the lanes' `--ssh-port` takes "an existing development VM" without saying how to start one, so booting the cached `arm64.raw` behind a qcow2 overlay with the lane's own QEMU arguments, to keep the guest for `image show-unwind` and C comparisons, was read out of `environments/freebsd/vm.py`. Met investigating the FreeBSD arm64 switch session's final `ret` in R14.20. The README gives the shell's build tag and `LANDIN_FREEBSD_EFI`, and since R13.79 the missing-`refine` refusal lists the `refine` executables the build tree holds. | The next change to the FreeBSD lanes or to `environments/freebsd/vm.py`.; the register sweep after R13.90 changed `vm.py` for the guest's per-boot key and added no boot-only mode | A `--keep-vm` or boot-only mode that prints the port a later `--ssh-port` run uses. | open |
-| SR-359 | Usability | FreeBSD 14.4's base LLDB, 19.1.7, misreads the stack switch's final `ret` on arm64: in frame 0 it emulates the routine's instructions rather than read its CFI, its emulator loses the stack at `mov sp, x10`, and at the `ret` it reads the return address through x29 and skips a frame. A clang-built switch with clang's CFI fails the same way, every other instruction unwinds right, and the CFI there is the standard epilogue's. So the FreeBSD arm64 switch session records that one stop and does not judge it (`UNRELIABLE_RETURN` in `compiler/tests/debugging/switch_frames.py`). Met in R14.20, gate run 40707225594. | FreeBSD's base system shipping another LLDB, or an upstream fix to LLDB's arm64 instruction emulation. | The exemption removed once that LLDB unwinds the `ret` right, or the reason restated for the version that still does not. | watch |
-| SR-364 | Usability | R14.30 said the event Io would sit "beside `platform/linux`'s epoll", and there was none: `platform/linux` wrapped no epoll or signalfd call, and only `platform/linux/numbers` named their numbers, so a reader planning the provider was sent to a module that did not have it. Met starting R14.30's platform layer. | Fixed with it: R14.30's text names `platform/linux`'s epoll and signalfd wrappers and `platform/kqueue`, which now exist. | The roadmap naming only what exists, or saying it is to be written. | retired: R14.30 added the wrappers and `platform/kqueue` and its text names them |
-| SR-368 | Usability | A struct field named `at` after another field, `listener: io.file` and then `at: net.address` on the next line, is refused with `L0102` "an expression belongs here" pointing at the colon: the parser reads `at` as the previous field's [1795] `at` offset clause, across the line end, and nothing in the report says so; the note asks for a literal, a name, a call or a parenthesised expression. Renaming the field was the only way on, found by guessing. Met writing the fake network's fixtures in R14.30, and again writing `hosted/events`' first fixture, `peer` for `at`. | The next change to the parser's struct-field recovery or to contextual words. | An `at` that begins a line taken as the next field's name when a `:` follows it, or the refusal saying it read an offset clause of the field before. | retired: an `at` that a `:` or `,` follows is the next field's name, in the parser and the structural grammar; pinned by `positive/field-named-at` |
-| SR-375 | Usability | On FreeBSD arm64 at `speed`, both with `--specialize=auto` and `all`, a task whose stack is cut from a module-storage backing (`mut backing: [2 * 16384]u8` at module level) and which slept once on `hosted/events`' clock before recursing past its stack ended in SIGSEGV with no output, where every other profile, and Linux arm64 and RV64 under QEMU, printed `trap: stack_exhausted` and stopped on `brk`. The same task over the same provider passed at every profile with the backing a local of the routine making the group, or with `fibre.yield` in place of the sleep; `runtime/fibre-stack-past-limit-traps` passes there. The handler's report goes through FreeBSD's C library `write`, reached through the PLT and the run-time linker's lazy binding, and nothing bounds that below D472's margin, so a handler that writes below the margin under a module backing lands in whatever the image lays out beneath it; this was not confirmed in the guest, which has no debugger the lane can drive from here. `runtime/events-stack-past-limit-traps` keeps its backing local as the existing fixture does. Met running the FreeBSD arm64 lane locally for R14.30's event provider. | The next change to the trap report on FreeBSD, D474's margin or the FreeBSD link. | The report reached without lazy binding (a direct system call, or a link with `-z now`) or the margin counted with it, and a module-storage variant of the fixture trapping `stack_exhausted` at every profile on FreeBSD arm64. | retired: confirmed in the guest, SIGSEGV in the run-time linker's symbol lookup with the stack pointer 848 bytes below the backing, and gone under `LD_BIND_NOW=1`; off Linux a program that prepares a stack now reports on a stack of its own (D491), and `runtime/events-stack-past-limit-traps` keeps its backing in module storage |
-| SR-377 | Usability | An `any C` is no provider of `C`, and the refusal does not say what to write instead: prototype 5's sketch passes an `any net.network` to `net.accept`, `io.lines_over` and `io.buffered_over` and an `any time.clock` to a generic `answer`, and each is refused with `L0318` "this concrete type has no conformance to `network`", citing [1290]. The way on is to call the erased entry, `network.accept(listener)`, and for a generic routine to write an adapter that holds the `any` and forwards each entry, as `io.writer_of` does for a world and nothing does for a network; both were found by reading `core/io`. Met deriving prototype 5's server in R14.30. | The next change to erased dispatch, to `L0318`, or to `core/io`'s and `core/net`'s adapters. | `L0318` on an `any` actual naming the erased call and the adapter, or `core/net` lending a reader and writer from an `any net.network` as `io.writer_of` lends one from a world. | retired: an `any C` is a provider of C and of the concepts C refines (D492), so the erased network goes to `io.lines_over`, `io.buffered_over` and `net`'s routines as the sketch wrote it, and the derived session's adapter is gone; an `any` actual of a concept outside that closure is L0318 saying what it provides and to erase the provider as the wanted concept where it is made |
-| SR-378 | Usability | `core/io/fake`'s network over turns fails a call `timed_out` after a round in which nothing in the network moved, even while another fibre of the same round is sleeping on a clock that takes turns and will answer when it wakes: a sleep is no move. A server's `accept` and a client's `receive` over it both time out during a 200 millisecond `WAIT`, so the derived server and client retry `timed_out`, which over the hosted providers, with no limit set, never happens. Met writing `runtime/derived-server-fake-turns` in R14.30. | The next change to `core/io/fake`'s network or clock. | A fake clock that takes turns whose sleep the network counts as a move, or the network given the clock it waits beside. | retired: `clock_beside` makes the fake clock beside the network, whose sleep takes the network's turns and moves the clock only after a quiet round, and the network times out no call while a fibre sleeps on it (D493); the derived server and client no longer try a timed-out call again, and `runtime/network-fake-turns-sleeper` pins an accept waiting through two sleeps |
-| SR-655 | Usability | `refine --target=rv32 --level=rv32imac DIR` succeeds with "checked DIR and wrote nothing; run it with `refine run DIR`, or build it with `refine compile DIR -o NAME`": the hint drops the `--target`, `--level` and `--root` the check was given, so the commands it offers check another build, on `rv32` a hosted one; `cortex-m0`'s positive fixtures record the same hint. Met recording `positive/atomic-read-modify-write-rv32imac` for R12.40's atomics. | The next change to the driver's closing line. | The hint repeats the selection the check was given, and offers only what the target can do. | retired: the closing line repeats the selection and offers `run` only for a hosted target, `compile` with `--firmware-entry` for firmware (D731) |
-| SR-410 | Usability | Adding a row to `compiler/tests/cross-lanes.json` for a new fixture fails `scripts/tests/test_check_controls.py`'s `CrossLanes` control with "runtime/NAME names no fixture", though the fixture exists: the control checks the record in a copied tree whose files are a hand-kept list, and nothing says the list is what to extend. Met adding the QEMU row for `runtime/atomic-orderings-between-processes` in R14.40. | The next change to the cross-lanes record or its control. | The control copying every fixture the record names, or its failure naming the list. | retired: the control reads the fixtures it copies from the record itself, so a new row needs no second list; met again when R14.40's integration added the thread rows |
-| SR-411 | Usability | On a Mac, `./scripts/dev-test.sh --fixture=runtime/r630-memory-scalars` refuses every `armv8.1-a` variant as "UNVERIFIED, not run: the darwin-arm64 lane has no /proc/cpuinfo to confirm a level with", though `compiler/tests/darwin/check.py`, which the gate's `darwin-parity` job runs, confirms the same level through `sysctl hw.optional.arm.FEAT_LSE`; the refusal names neither that route nor the sysctl, so a level fixture's focused Darwin check looks like a failure. Past that refusal the image check assumed `readelf`, which a Mac has not: it held every non-Linux-arm64 level to an x86 ISA note. Met checking R14.40's orderings on Apple silicon. | The next change to the test program's level confirmation or to the Darwin lanes. | The test program confirming a Darwin level through the same sysctl, or its refusal naming `compiler/tests/darwin/check.py --case`. | retired: R14.40's test program asks a Mac's `hw.optional.arm` sysctls, `FEAT_LSE`, `FEAT_CRC32` and `FEAT_RDM`, runs the level they confirm, and holds a Darwin arm64 image to its level with `objdump` as it does Linux arm64's |
-| SR-412 | Release readiness | QEMU on an x86-64 host does not keep an arm64 `stlr` before a later `ldar`, which ARMv8 orders (the RCsc rule seq_cst's mapping relies on): QEMU 11.1's TCG ops, from `qemu-aarch64 -one-insn-per-tb -d op`, are `mb rel:all` then `qemu_st_i64` for `stlr x9, [x10]`, and `qemu_ld_i64` then `mb acq:all` for `ldar x9, [x10]`, so nothing lies between the store and the later load, and the x86-64 store buffer lets `runtime/atomic-store-buffering-between-processes` read both old values at `--optimize speed` in every local run, under user emulation and under the FreeBSD arm64 lane's system emulation alike, while the same rounds with a `dmb ish` between pass. Any program built by GCC or LLVM has the same `stlr`/`ldar`. Met in R14.40. | A QEMU release ordering them, or an arm64 lane that is not emulated on x86-64 for FreeBSD. | The fixture targeting FreeBSD arm64 again and its `cross-lanes.json` row removed, with the emulator's ops shown to order the pair. | watch |
-| SR-381 | Release readiness | GDB cannot read a `link(thread)` instance in a static Linux program: under `--link=libc` `print counter` gives the selected thread's value, and statically linked it says "Cannot find thread-local storage ... Unable to fetch TLS block address", because GDB resolves `DW_OP_form_tls_address` through the C library's thread descriptors, which a block platform/linux lays has none of (D508). On arm64 ELF the datum has no location at all, since GNU as spells no DTP-relative word. Met checking D508 by hand on x86-64 during R14.40. | A debugger session that prints a thread's instance, or a static program's thread storage a debugger needs. | A scripted session printing a thread's instance on every hosted target, the static Linux block carrying what the debugger reads, and arm64 ELF described. | open |
-| SR-383 | Language evolution | Nothing refuses keeping a thread's `link(thread)` address where another thread reads it after the first ends; D505 tracks the address as module storage's, and a store into a module pointer union, the one place module storage can hold it, is admitted. | A program that keeps a thread's instance's address in shared storage, or a defect traced to one. | D375's external alternative carrying "thread storage", and a store of it into a module binding without `link(thread)` refused. | retired: a store of a thread's instance's address into a module binding without `link(thread)` is L0314 (D772, `negative/thread-storage-address-kept-in-module`); call results and escaping arguments stay the program's |
-| SR-384 | Release readiness | On Darwin a thread's first access to a `link(thread)` datum enters dyld's `tlv_get_addr` slow path, which saves every register and allocates the thread's block, on whatever stack the access runs on; on a prepared stack that depth is in no check and no depth report, as the C library's `write` was before D491. Every later access takes the fast path, which uses no stack. Found while emitting D496's accessor in R14.40; not measured. | A Darwin thread that first touches thread storage on a prepared stack, or the threads item's Darwin start. | The first access made before a prepared stack runs, or the slow path's depth measured and counted as D468's foreign opening. | retired: the threads `hosted/thread` starts write a `link(thread)` byte on their start area before the prepared stack runs, so dyld makes their storage on the C library's 16 KiB area (D517); a C thread calling into Landin makes it wherever its first access runs, as it calls any C function there, and the slow path's depth stays unmeasured |
-| SR-386 | Usability | `./scripts/dev-test.sh --fixture=abi/r440-errno-thread-local` on a Mac fails to link with "ld: unknown options: --wrap=open": the fixture's `c-args: -pthread -Wl,--wrap=open` are GNU ld's, and only `compiler/tests/darwin/check.py`'s parity run rewrites `-Wl,--wrap=NAME` to Apple's `-Wl,-alias,___wrap_NAME,_NAME`, so the gate's `darwin-parity` passes while the test program's own ABI execution on Darwin refuses the fixture, and nothing says which of the two is the fixture's Darwin verdict. The harness is unchanged by R14.40; met running R14.40's Darwin fixtures on the Mac. | The next change to the ABI fixture execution's C link or to Darwin parity. | One translation of a fixture's linker arguments for Darwin, shared by the test program and the parity run, or a fixture key that says which runner gives the Darwin verdict. | retired: `compiler/tests/c-args.targets` spells `-Wl,--wrap=NAME` as Apple's `-Wl,-alias,___wrap_NAME,_NAME`, and the test program and every Python lane read it; `fixture-meta.cases`' `c-args@TARGET` holds both readers to it |
-| SR-387 | Competitive optimization | `hosted/heap` with no thread started still costs about 10 ns more an allocation and free of 24 bytes than the heap before its lock, 37.7 against 27.5 ns a pair at `--optimize speed` on Linux x86-64 (100 against 76 at `size`), though the flag it reads is one relaxed load that D499 lowers to a plain move; nothing has yet shown where the rest goes, whether the call into `hosted/thread/lock` or the cell's concept dispatch. D514 records the figures. | The optimization phase, or a measured allocation-heavy program. | The flag-clear path within a load and a branch of the old heap, measured. | open |
-| SR-401 | Usability | A bodyless `extern(c) link(symbol: "S")` import beside a public naked routine named `S`, which D415 makes a global symbol under its own spelling, is admitted with no L0347: the collision check compares explicit and C link names, and a public machine-convention routine's spelling is neither, so the pair reached the IR unchecked. D516 admits the pair when the naked routine names its symbol explicitly. Met trying ways to call `clone`'s naked text in R14.40. The pair checks clean and then fails at the link with an undefined reference to `spin_text`, since the naked routine is emitted as `main.spin_text`. | The next change to how naked or machine-convention routines' symbols are checked for collisions. | A public naked routine's own spelling held to the same collision rule as an explicit link name. | retired: a public machine-convention routine's own spelling is held to [1610]'s collision rule (D770, `negative/naked-routine-own-symbol-collides`); D516's pair still needs the routine's written link name |
-| SR-527 | Usability | `defer finished = true` is L0103 "`defer` registers a call, not a constructed value", with the note "write the call that runs when its block is left": an assignment is called a constructed value, and the way to defer one, a routine of its own that makes it, is not said. Met writing `runtime/events-connect-within` in R12.12. | The next change to `defer`'s refusals. | An assignment after `defer` named as one, with the note showing it moved into a routine the `defer` calls. | retired: R13.75: an assignment after `defer` or `undo` is named as one, the note moving it into a routine the cleanup calls (D873) |
-| SR-420 | Usability | `extern(c) InitWindow: (...) -> none`, raylib's own name, is L0012 "identifiers use lower-case letters" once per capital letter, 58 errors for eight declarations, and neither the note nor `refine explain L0012` says that a C name Landin cannot spell is `extern(c) link(symbol: "InitWindow") init_window: ...`; `docs/from-c.md`'s "Calling C, and linking it" calls `atoi`, which needs no link name. Met calling raylib from the 0.2.8 archive, guessing from C, in a newcomer trial on 2026-10-29. | The next change to L0012 or to `docs/from-c.md`'s C entry. | One refusal per identifier, naming `link(symbol: ...)` when the declaration follows `extern(c)`, and the C entry showing a mixed-case C name. | retired: R13.74 reports a word with a capital once, and an `extern(c)` name's note shows `link(symbol: "InitWindow") init_window` (D528); `docs/from-c.md`'s C entry calls raylib's mixed-case names, `negative/c-name-with-capitals` pins the note |
-| SR-421 | Usability | A C function taking raylib's `Color` by value, declared as a plain `struct`, is L0346 "C cannot take this parameter" with [1580]'s whole C-signature rule as its note, eleven clauses, `layout(c) structs` among them, rather than saying that `color` is not `layout(c)`. Met in the same trial. | The next change to L0346. | The refusal naming the record and the `layout(c)` repair. | retired: R13.74's L0346 says "C cannot take `tint`: `color` is not `layout(c)`" with the repair (D529), pinned by `negative/c-record-not-layout-c` |
-| SR-422 | Usability | Nothing says where `linker.library("raylib")` looks: `-L` is "unknown option: -L", `refine compile --help` names no search directory, and an archive in the project's own `raylib/lib` was found only through GCC's `LIBRARY_PATH`, which no document mentions. Met in the same trial. | The next change to [1590] or to `compile`'s link options. | A documented way to name an archive's directory, and a missing archive's refusal naming it. | retired: R13.74 adds `linker.directory` beside the source and `-L` on `check`, `compile` and `run`, each also the runtime search path (D524), and a library the link cannot find is L0509 naming every directory searched (D525) |
-| SR-423 | Usability | `linker.library("m")` passes `-l:libm.a`, so under `--link=libc` glibc's static `libm` goes into a dynamically linked executable, and raylib 5.5's `libraylib.a` then fails with "undefined reference to `_dl_x86_cpu_features`" from libm's ifunc members; the same C program fails alike with `-l:libm.a` and links with `-lm`. Only a `--toolchain` wrapper appending `-lm` linked it. [1590]'s own example is `linker.library("m")`, and `runtime/r430-static-library` calls only `fegetround`, which avoids those members. Reproduced with glibc 2.42 on NixOS; Debian and Ubuntu not tried. Met in the same trial. | Now: [1590]'s own example. | The C runtime's own libraries linked as the driver links them, or a shared-library form, with a fixture calling `sqrtf` and `pow` under `--link=libc`. | retired: under `--link=libc` a library is the C driver's `-lNAME` on every hosted target (D523); `runtime/c-library-directories` calls `sqrtf` and `pow` from libm beside two archives built beside it |
-| SR-424 | Usability | `refine main.ldn` exits 0 silently having only checked, so a newcomer looks for an executable that was never written, and `refine run main.ldn` answers "`refine run` is not a command: name the source to check it, as `refine FILE`", steering to checking rather than running. There is no compile-and-run, which `hare run`, `nim c -r`, `crystal run`, `rdmd` and `c3c compile-run` each offer. Met in the same trial. | The next driver item. | The bare form saying it checked, and either a compile-and-run command or the refusal naming `refine compile main.ldn -o prog`. | retired: R13.74 adds `refine run FILE [-- ARGS]` and has bare `refine FILE` say it checked and wrote nothing (D526) |
-| SR-425 | Release readiness | The 0.2.8 archive's `bin/refine` is 100 MB, not stripped and carrying its debug information; stripped it is 27.6 MB. Met unpacking the archive in the same trial. | The next release. | The released compiler stripped, or its debug information shipped apart, with the archive's size stated beside the install route. | retired: R13.74's `scripts/package.sh --debug` publishes the debug information beside the archive, which on Linux x86-64 drops from 34 MB to about 10 MB, and the README says so (D531) |
-| SR-426 | Usability | `io.println(x)` is L0201 "module `io` has no member `println`", naming nothing to use instead, and the shortest way the documents give to print an integer is `docs/from-c.md`'s `printf` entry: a buffered writer over a storage array, a deferred flush and `[any(addr name), any(addr count)]`. A float cannot be printed at all (SR-97). Met printing a number in the same trial. | The next change to L0201 or to `core/io`'s writing. | L0201 naming the module's nearest members, and one line that prints an integer shown before the tour's first loop. | retired: `io.write_format` writes a template and its values in one call, the tour prints with it before its first loop, and `print`, `println`, `printf` and `puts` asked of `core/io` are told it (D527) |
-| SR-427 | Usability | Diagnostic notes cite paragraphs and decisions, `[1760]`, `[1580]` and `D275`, which `refine explain` refuses ("no catalogue row holds the code: D275"), so a reader at a terminal cannot follow a note's citation without the site. Met in the same trial. | The next change to `refine explain` or to diagnostic notes. | `refine explain` resolving a citation, or a note carrying where to read it. | retired: `refine explain` answers `[1590]`, `1590`, `D275` and `d275` with the title, place and page, and `--full` with the text (D530) |
-| SR-429 | Usability | `refine run` removes its private directory when the program ends, is refused or is killed, and ignores the terminal's interrupt and quit while it runs, but a `SIGTERM` or `SIGHUP` to refine itself, as a closed terminal or `kill` sends, ends refine at once and leaves `refine-run-*` under `TMPDIR`. Met stopping a spinning program's run with `pkill`. Met again integrating R12.12: a stream's `refine run` of a program that spun ended without its child, which then ran for thirteen and a half hours at a full core, parented to the session manager, until a load check before `scaling.sh` found it. | The next change to `refine run`. | refine forwarding termination to the program and removing the directory, or the leftover named where it is. | retired: `refine run` passes SIGTERM and SIGHUP on to the program and removes its directory (D730) |
-| SR-440 | Usability | A `_` arm on a variant part, `_: fail no_space` after `drains(onto): ...`, is refused as L0333 "this case does not belong to the variant part matched here", beside an L0312 for each case it was to cover, although [1210] says the subject may be "a variant part" and that "`_` is an arm of its own and covers whatever is left". D77 declined a wildcard on a variant part, which neither the tour nor the refusal says; naming the remaining cases in one arm (D405) is the way on, found by reading `spec.md`. Met writing `core/text`'s draining builder in R13.74. | The next change to [1210] or to `match` on a variant part. | [1210] saying where `_` stands, and its refusal on a variant part saying that a wildcard is not taken there and to list the cases instead; or a `_` arm admitted. | retired: R13.75: [1210] says where `_` stands, and on a variant part it is one L0333 naming the cases to list, with no L0312 per case (D866) |
-| SR-441 | Usability | Following L0201's note for `io.println(answer)` in a program that imports only `core/io`, `io.write_format(host, io.out(host), "{}\n", [any(addr x)])`, still leaves a newcomer to find where `host` comes from: the note named the call and not `hosted/blocking`'s `blocking.new()`. Met repeating the print trial outside the checkout in R13.74. | Now: the note. | The note naming where a hosted program's `host` comes from. | retired: R13.74's note says where `host` comes from |
-| SR-450 | Usability | `refine explain [1760]`, the citation as a note writes it, never reaches `refine` under zsh, macOS's default shell: zsh reads `[1760]` as a pattern and answers "no matches found: [1760]"; bash passes it on only while no one-character file named `1`, `7`, `6` or `0` is in the directory. Met trying the new citation forms from a terminal outside the checkout. | The change that makes `refine explain` answer citations. | The bare `1760` accepted beside `[1760]`, and the explanation page saying which to write in zsh. | retired: `refine explain 1760` answers as `[1760]` does, and `docs/diagnostics.md` says to write it so in zsh |
-| SR-460 | Usability | `python3 check.py docs/from-c.md`, the narrowest scope a reader is told to use, reports "'at' is a keyword and cannot be a name" at line 1223, a parameter the test program compiles, while the full `python3 check.py` reports the same file clean: the single-file and full runs read the document under different word lists. Met checking `docs/from-c.md` alone while integrating R13.74. | The next change to `check.py`'s per-file checks. | One verdict for a document whichever scope checks it. | retired: a file named alone gets the per-file rules the full run gives it, and any other is left to the full run with a line saying so |
-| SR-461 | Usability | The call L0201's note offers for `io.println(x)`, `io.write_format(host, io.out(host), "{}\n", [any(addr x)])`, pasted as it is, is L0329 "this failing call is neither tried nor recovered with `else`": the note leaves out the `else none` that hello world's own `io.write` line carries. Met repeating the newcomer trial on a release-shaped archive outside the checkout. | Now. | The note's call compiling as written in `main`. | retired: R13.74's note carries `else none` |
-| SR-462 | Usability | `add: (a: i32, b: i32) -> i32 =`, a C programmer's unnamed result, is first L0104 "this function is never closed" at the `->`, although `end add` closes it, and only second L0103 "returns are named, or `none`", which is the mistake and its repair. Met in the same trial. | The next change to the parser's recovery of a signature. | One report, the named-results one. | retired: R13.75: one L0103 naming the named form, for a bare type and for named returns without parentheses, the function closed by its own `end` (D861) |
-| SR-470 | Usability | `refine FILE` on a source with no `main`, a library module or a file still being written, answers "checked FILE and wrote nothing; run it with `refine run FILE`, or build it with `refine compile FILE -o NAME`", and both commands it names then refuse the same file as L0502 "a hosted program needs public main". Met checking the reduced reproducer of the gate's fuzzer hit while integrating R13.74. | The next change to the driver's closing line. | The closing line offering `run` and `compile` only for a program that has a `main`, and saying for one without that it was checked as a module. | retired: R13.75: the closing line offers `run` and `compile` only for a program with an entry, and says a module was checked otherwise (D883) |
-| SR-471 | Usability | `count = lenof line +`, an expression cut off after its operator, is L0102 "`line` and `+` are written the wrong way round" with the note "written as `count = lenof + line` the line parses", and that line is L0201 "`lenof` is not declared"; `y = x +` gets the right "a value belongs after `+`". The repair search treats `lenof`'s operand as a name it may move. Met writing the reproducer of the same fuzzer hit. | The next change to the parser's operator repairs. | A trailing operator after a `lenof` or `sizeof` operand answered as one after any other value. | retired: R13.75: no repair moves `lenof` or its operand, and a trailing operator after a measure is answered as after any value (D864) |
-| SR-473 | Language evolution | Renesas's FPB-RA8E1, on the maintainer's rig: a Cortex-M85, Armv8.1-M with the MVE (Helium) vector extension, and with the PACBTI pointer authentication and branch target extension unconfirmed until its ID_ISAR5 is read; Renesas's FSP headers give the RA8E1 no double-precision FPU. No level, register class or emulator lane covers Armv8.1-M or MVE. | A program that wants MVE or the M85. | The M85 learnt through R12.11's importer, an Armv8.1-M level with its MVE registers in [1630]'s classes and the C ABI, PACBTI decided from the read ID_ISAR5, the corpus on QEMU's `mps3-an547` M55 core lane, and a recorded board run. | open |
-| SR-690 | Usability | `compiler.atomic_store(addr word_cell, word, compiler.seq_cst)` on a `mut word_cell: atomic.cell(u32)` is refused with L0344, "memory access needs an unsigned scalar pointer without a subtype", whose note cites [1620]/D227 and names neither `core/atomic`'s own `atomic.store` and `atomic.load` for a cell nor a plain `u32` for the builtin; the fix was found by reading `core/atomic`'s source. Met writing the ESP32-C3 board port's atomics for R12.40. | The next change to L0344's texts or to `core/atomic`. | When the pointer is to an `atomic.cell`, the refusal names the cell's operations, or the builtins accept a cell. | retired: R13.75: L0344 names the pointer and, for an atomic cell, the cell's own operations (D882) |
-| SR-692 | Usability | On the maintainer's rig every hub of the cascade under 7-2 re-enumerates, the Arty's FTDI and every board's USB device with it, whenever any port of it is switched or any device on it disconnects: an ESP32-C3's `probe-rs download` ended at 15:33:47.22 on 2026-11-02 with the chip's reset, whose USB-Serial-JTAG then dropped, and at 15:33:47.66 `usb 7-2: USB disconnect` took the whole tree until 15:33:50, so the run's next `uhubctl -l 7-2.3.4`, at 15:33:48, found no hub; a guarded cycle of the ESP32-C5's port at 15:32:31 did the same, and two streams' runs disturbed each other until every run took one host-wide lock. Paced two minutes apart after a quiet minute, an ESP32-C5 download at 20:57:5x set off a storm, 20:57:57 to 20:58:02, of whole-tree disconnects in which the kernel itself power-cycled `7-2-port4`, `7-2.4-port4` and `7-2.3.3-port4`, the Arty's; an image the ROM refuses leaves an ESP chip resetting every few seconds, each reset dropping its USB-Serial-JTAG, until a good one is written back; and uhubctl, between two switches, finds no hub while the cascade re-enumerates, for up to most of a minute. Since then every board run holds `common.rig_lock`, the Arty is off the cascade (D725) and the RP and ESP boards' READMEs say every switch re-enumerates it; the RP and STM32H753 tools do not wait for the hub after a download, and `environments/boards/stm32h753/README.md` does not name the cascade. Met running the ESP boards for R12.40. | The rig's next hub, or a board run the cascade's re-enumeration disturbs. | Every board run under `common.rig_lock`, every tool waiting with `common.wait_for_hub` after a download or a switch, as the ESP tools now do, and a hub topology whose switching does not reset its parent, or the cascade documented in each board's README. | retired: every board run holds `common.rig_lock` and every tool waits for the hub after a download or a switch (D832); on the cascade's present port a switch drops only its own device, measured on 2026-11-03, so the fixed spacing is gone (D725 amended); every board's README describes the cascade |
-| SR-693 | Language evolution | The ESP32-C3 board port runs at the chip's reset clock, 20 MHz from the crystal, because nothing in the RAM-only image brings up its PLL, and at that clock its interrupt-driven receive and echo keep pace with 115200 baud only when the host waits for each 64-byte piece's echo (D727); a C3 program that wants its 80 or 160 MHz has no library or description support for the PLL and the analog registers it is configured through. Met recording the C3's board run for R12.40. | A program that needs the C3's or C5's full CPU clock. | The PLL bring-up as a description stage or a `platform` routine, cited from the TRMs, and the board's stream at the line's rate. | open |
-| SR-694 | Language evolution | One trap on the ESP32-C3, 2026-11-02 about 22:10, that no handler took and nothing explains: the RV32 unhandled entry's record (D656) held cause 0x2 (illegal instruction), pc 0x00000002, value 0x0, sp 0x3fcc7d10, count 1; ra was not recorded. pc 2 is a jump to address 0 or 2, which the RX FIFO drain fixed by D726 alone does not account for: the image's function values were intact in memory afterwards (`port` at 0x40385e20 held indicate 0x403802d0 and transmit 0x4038034c through both buses). It ran a diagnostic build of the C3 board port before D726, built at r1240-s8 982fea271's parent with counters added in the main loop, OUT.bin SHA-256 ca64ec01d5a9f53dfdf61655478fc967d7f229cd55053cc6a1f67e9cc4e84b60, ELF 7defda26a4c538254417de3e6e461c83b386bc6949049d61c32f19d29ca00b51, at the C3's 20 MHz reset clock: after a paced download and power cycle, a recovery from line noise on UART0 (recoveries 1), two bytes handled, the last of them 0, no command dispatched, and then the trap; the main loop's counters stopped there and the timer interrupts with them. The recorded runs of both ESP boards since, with D726, read a trap count of 0. Met debugging the ESP boards' threshold step for R12.40. | A second trap of the kind on any RV32 board or lane. | The trap's instruction found from its record and the image, and its cause fixed where it lies. | watch |
-| SR-474 | Language evolution | Espressif's ESP32-P4, on the maintainer's rig as chip revision v1.3 on board Rev.D: RV32 with F, whose ESP-IDF builds use `rv32imafc_zicsr_zifencei` below revision v3 and add Zc* and B from it, with the hard-float `ilp32f` ABI. No RV32 level has F, no register class holds its float registers, and Espressif's QEMU has no P4 machine. | A program that wants RV32 float hardware. | The P4 learnt through R12.11's importer, an F level with the `ilp32f` ABI in the C ABI planner and float operands in [1630], revision-dependent extensions as levels rather than one assumed chip, an `rv32imafc` emulator lane for the core, and a recorded board run. | open |
-| SR-475 | Release readiness | The C binding generator, a feature a developer uses, was a Python script under `bindings/`, so binding a C header needed Python; no feature of the compiler may. | The next change to the binding surface, and before R13.20's executable C interoperation. | The generator ported into `refine` in Ada with no new dependency, still asking the pinned Clang for its AST rather than parsing C, its four outputs and their checks unchanged, and the Python generator removed. | retired: `refine bindings` is the generator (D820, D821), in Ada with no new dependency, still asking the pinned Clang for its JSON AST; its four outputs matched the Python generator's byte for byte for all 220 generations its tests make and for the r440 fixture on all three targets, save the first line naming `refine bindings`; the tests and the gate's `bindings` job run refine, and the Python generator is removed |
-| SR-497 | Usability | ST's RM0433, the STM32H753's reference manual, cannot be fetched by a script: www.st.com resets the HTTP/2 stream and times out over HTTP/1.1. It is pinned in `devices/inputs.json` by URL and SHA-256 as Rev 9, which the STM32H753's reviewed literals cite by section and page, but marked `"fetch": "by hand"`, so a person must download it in a browser and put it in the cache before `scripts/fetch_inputs.py --all` can verify it, and no job can. Met learning the STM32H753 under R12.11; the maintainer supplied the copy. | R12.20's board run, or the next item that checks a chip against a manual its publisher serves only to a browser. | A source that serves the pinned manual to a script, or the maintainer's decision that hand-supplied manuals stay, recorded with how a reviewer obtains one. | retired: R12.12 keeps a manual its publisher serves only to a browser supplied by hand, pinned by URL and SHA-256, with how a reviewer obtains it beside the pin |
-| SR-670 | Usability | `environments/cortex-m/descriptions.json`'s `devices` is where a description's facts are recorded apart from the compiler, and its readers are Cortex-M's: `descriptions.py` and `backend.py` skip every record naming another target (D661), so the ESP32-C3's, the ESP32-C5's and RP2350's Hazard3 records, each naming `rv32`, are recorded and nothing compares a linked image with them; and the Hazard3 record holds no table address, boot prefix or suffix, since RP2350's RISC-V image puts its code before its trap table and block, a layout the boot kind decides and `backend_corpus.py`'s fixed `boot_prefix` does not describe. Met recording R12.40's three RISC-V descriptions. | R12.40's RV32 descriptions lane. | A lane that selects each RISC-V description by its identity and compares its linked image with its record, the Hazard3 record completed with the layout the boot kind gives. | retired: R12.40's descriptions lane links every RV32 description with the RV32 toolchain, selects each by its record's `target` and identity, and holds the linked image, its slots and the Hazard3's completed layout and block to the record |
-| SR-673 | Usability | `import "esp32c5/clic"`, a module path in quotes as a text literal, is refused with L0100 "a name belongs here" at the quote, whose note cites [1760]'s rule for names and says nothing of an import taking a bare path, `import esp32c5/clic`. Met checking the generated ESP modules with `refine check` in R12.40. | The next change to the parser's import refusals. | The refusal at an import saying that a module path is written without quotes. | retired: R13.75: the refusal at a quoted import path says the path is written without quotes (D862) |
-| SR-515 | Usability | `environments/cortex-m/gdb_server.py` promises that a session cannot see the one before it and discards breakpoints between sessions, but a breakpoint a script makes with `internal=True` survives `delete`, so the corpus's first stack-guard watchpoint, made internal, fired in the paint loop of the next program on the same worker, at an armv7-m profile, and failed it as a stack overrun. Met adding the guard in R12.12, which now makes an ordinary watchpoint. | The next change to how `gdb_server.py` ends a session's breakpoints and watchpoints. | The server removing every breakpoint and watchpoint a session made, internal ones included, or its contract saying a session may make none. | retired: `gdb_server.py` deletes every breakpoint and watchpoint a session made, internal ones included; `test.py`'s fake-GDB control and the shared-debugger control hold the next session to seeing none |
-| SR-550 | Usability | A rooted negative fixture runs on the real host with its recorded `args`, so one the compiler unexpectedly accepts writes its output where the test program runs: `negative/stack-handler-opens-its-graph`, whose `args` say `--emit=asm` without `-o`, left `compiler/ada/a.s` in the checkout when a change to the stack report made it compile, beside the parser suite's verdict that its codes were missing. Met integrating R12.12. | The next change to the parser suite's pinned-codes case or to how a rooted fixture is run. | Such a run writing into a directory of its own, or its output named beside the failure. | retired: rooted negatives are compiled through an overlay that refuses writes; the failure shows the report naming the refused output |
-| SR-553 | Usability | `code = outcome when outcome > 30` is L0110 "this begins no statement" at `when`, whose note lists the statements; nothing says that `when` qualifies only `return`, `break` and `continue`, or that an assignment wants an `if`. Met making a fixture's status say which case failed in R12.12. | The next change to L0110's notes or to `when`. | The refusal naming the three statements `when` qualifies and `if` as the form for the rest. | retired: R13.75: the refusal names the four exits [0970] gives `when`, and `if` for the rest (D865) |
-| SR-554 | Usability | `compiler/tests/freebsd/check.py --case runtime/network-connect-within`, the name every other runner takes, is "unknown exact case": the lane wants the fixture directory's bare name, `network-connect-within`. Met rechecking three fixtures in the FreeBSD VM during R12.12's gate. Since R13.79 the refusal gives the bare name for `KIND/NAME` and for the transcript's `KIND-NAME`, and the nearest names for a misspelling; the lane still does not take `CLASS/NAME`. | The next change to the FreeBSD lanes' selection. | The lane taking `CLASS/NAME` as the other runners do. | open |
-| SR-661 | Usability | `environments/cortex-m/README.md`'s "On NixOS" gave the `steam-run` route for `run.py` only; `setup.py` under the same route fails, because NixOS puts neither `dpkg-deb` nor, since the RV32 lanes' `tar.xz` archive, `xz` on the path that `steam-run` inherits, and finding that took trial. Met installing the RV32 lanes' tool root. | This change. | The README giving setup's own route on NixOS. | retired: the README gives setup's route, with `dpkg` and `xz` in the shell |
-| SR-662 | Usability | A tool root installed before the lock changed refused every lane with "tool lock mismatch", and one whose files differed from its record with "installed tools changed", neither saying which area differed or that a fresh root is the remedy, since setup refuses an existing one. Met moving to the RV32 lanes' lock with an older root. | This change. | Both refusals naming what differs and the fresh `--tools` root. | retired: both name the root, the differing areas and `setup.py` |
-| SR-569 | Usability | `refine --target=cortex-m0 FILE` closes "checked FILE and wrote nothing; run it with `refine run FILE`, or build it with `refine compile FILE -o program`": both commands drop the target it was given, so the first refuses a firmware source as L0502 "a hosted program needs public main", and with `--target=cortex-m0` put back `refine run` is L0002, since nothing runs a Cortex-M program on the host; a firmware build needs `--firmware-entry`, which the line does not name. Met recording `positive/assembly-comments-naked`'s expectation in R12.20; SR-470 is the same line on a source with no `main`. | The next change to the driver's closing line. | The closing line keeping the target it was given, and offering a firmware target `refine compile --target=... --firmware-entry=NAME --emit=exe` rather than `run`. | retired: the closing line keeps the target and offers a firmware target `compile` with `--firmware-entry` (D731) |
-| SR-571 | Usability | `python3 scripts/add_fixture.py positive/NAME` says it made the fixture "known everywhere a fixture has to be known" and ends "now run ./scripts/dev-test.sh --fixture=positive/NAME and python3 check.py", both of which pass, but a positive fixture is also recorded in `compiler/tests/lowering.ir`, so the next `--suite=lowering` fails "the recorded corpus is current" until `--record=lowering` writes it, a step neither the script nor its closing line names. The same fixture's multi-line raw literal broke `compiler/tests/lexical.tokens`, which the script regenerates and only `--suite=lexer` reads: the token dump wrote the literal's lines as they were, and its reader took each as a token, so `lexer/agrees with the corpus` raised CONSTRAINT_ERROR in every job of the branch's first gate while the selections the script and the briefs named all passed; the dump now writes a line break inside a token as `\n`. Met adding `positive/assembly-comments-naked` in R12.20. Met again in R12.30: a stream that edited `runtime/assembly-keeps-call-preserved-floats` ran every suite its brief named, and only the integrated tree's `--suite=formatting` found the edit unformatted, in `the corpus is formatted`; nothing an edit of a fixture is pointed to says the corpus is held to `refine fmt`. | The next change to `scripts/add_fixture.py`. | The script recording the lowering corpus for a positive fixture, or its closing line naming `./scripts/dev-test.sh --record=lowering`, and the fixture format's documentation naming `refine fmt` and `--suite=formatting`. | retired: `add_fixture.py` lays out a positive, runtime or ABI fixture's sources with `refine fmt` and ends naming, per class, `--record=lowering`, `--record=CLASS/NAME` for an unwritten report, one run of the fixture and the corpus cases that read it, the highlighters' integration pass and `check.py` |
-| SR-556 | Competitive optimization | RP2040's description boots through a port of pico-sdk's generic second stage, which reads the flash with the serial 03h command at a quarter of the system clock, so every cache miss in flash costs one serial read; pico-sdk's default for the Pico, `boot2_w25q080.S`, reads four bits a clock, and it also writes the flash's non-volatile QE bit when that is clear, a path the Pico H's W25Q16JV, shipped with QE set, would never run. Chosen for the first board because every instruction of the generic stage runs on it and it fits any RP2040 board's flash. | A program whose speed in flash matters on an RP2040 board, or a board whose flash the generic stage cannot read. | A quad-read second stage for that flash in its description, every path of it executed on the board. | open |
-| SR-613 | Usability | The STM32H753's SVD describes none of the Cortex-M7's System Control Space, so the board application reaches VTOR, CPACR, CCR, the NVIC's enables and SysTick through a module of its own, `scs`, of volatile accesses at addresses read out of the Armv7-M Architecture Reference Manual; the RP2040's SVD gave its `ppb` module, and `platform/cortex_m` offers barriers and the interrupt mask but no System Control Space register, though every M-profile board has them at the same addresses. Met writing the STM32H753 board application in R12.30. | The next board whose SVD lacks the core's registers, or the next change to `platform/cortex_m`'s own module, `platform/cortex_m/cortex_m.ldn`; R13.20 added the `l1` cache provider beside it, which reaches the System Control Block's cache registers itself; R13.79 rewrapped doc comments there and changed nothing the module declares. | The architecture's System Control Space as a library module or a generated one of its own, which the STM32H753 board imports instead. | open |
-| SR-615 | Usability | D265 says RV64's instruction selection "uses target XLEN and independent extension sets so a future RV32 emitter can share it", and `landin-backend-riscv_instructions` takes a width of 32 or 64, but every call in `landin-backend-riscv.adb` passes a literal 64, and its frames (`sd`, `ld`, CFI at −8 and −16), its 64-bit products and quotients, its float instructions and its atomics, which use AMOs and LR/SC whatever the level holds, are written for RV64 alone, so the decision promises a reuse a reader planning RV32 finds only by reading the emitter. Met planning R12.40. | R12.40's RV32 emitter. | The emitter parametric in XLEN as D265 says, or D265's note corrected to what is shared. | retired: D671 makes `Landin.Backend.RiscV` ask the target its XLEN, and RV32 is that emitter at 32, with eight-byte values in pairs, libgcc's soft float and division, word frames with CFI at −4 and −8, and A's instructions only where the level holds A; D265's note says so |
-| SR-616 | Usability | Once an RP2350's boot ROM has switched its cores to RISC-V for an IMAGE_DEF that asks for it, probe-rs's `RP235x` target, which flashed the image, fails every later read and write with "Target device responded with a FAULT response", which says nothing of the architecture, and only `--chip RP235x_riscv` reaches the chip's memory; `probe-rs reset` with `RP235x` hangs. Met booting a Hazard3 image on the Pico 2 for R12.40. | R12.40's Hazard3 board tool. | The board tool choosing the target by the image's architecture and its README saying which reaches the chip after each boot. | retired: R12.40's Hazard3 tool flashes and reads through the target that reaches the architecture running, `RP235x` in BOOTSEL or before the switch and `RP235x_riscv` after it, and its README says which reaches the chip after each boot (D712) |
-| SR-617 | Usability | `probe-rs reset` on an ESP32-C3 resets the chip's USB-Serial-JTAG with it, "A USB error occurred", so a console opened on the board's own CDC port before the reset receives nothing of what the ROM prints at boot, and the ROM's account of the image it loaded is lost. Met checking a RAM-only image on the C3 for R12.40. | R12.40's ESP board tools. | The board's oracle reading the ROM's boot log from UART0, wired to the rig, and the README saying why the CDC port cannot carry it. | retired: R12.40's ESP32-C3 board tool reads the ROM's boot log from UART0, wired to probehive's slot 2, and its README says why the USB-Serial-JTAG cannot carry it |
-| SR-620 | Usability | A target added to the compiler is not in `scripts/emit_manifest.py`'s `TARGETS` or `MODE_TARGETS` until someone adds it, and a positive fixture only one target compiles makes `emit` fail on every other target: on R12.40's integration branch three rv32-only fixtures, from three streams, failed the host manifest for all seven targets, and nothing short of the gate's `determinism` job says so, since `docs/process.md`'s close runs only `modes` and no stream runs `emit`. Met adding rv32 to both lists for R12.40 (D658). | The next item that adds a target or a fixture class one target alone compiles. | The manifest's targets held to the compiler's own list by a check, and a fixture whose `args` name a target refused elsewhere without hand-listing every pair, or `docs/process.md` naming `emit` beside `modes`. | retired: a fixture of one target is compiled for it alone (D740), `check.py` holds the manifest's target lists to the compiler's selection table, and `docs/process.md`'s close names `emit` beside `modes` |
-| SR-621 | Usability | `cortex-m-programs` failed in the `descriptions` lane with "gdb-trap-record failed" and a log saying only "Selected architecture riscv:rv32 is not compatible with reported target architecture arm" and "Architecture of file not recognized", while the same lane passed when run alone: `Run.debug` serves every session on a worker thread from one GDB (`gdb_server.py`), whose reset between sessions kept the description the last target reported and the architecture the last script set, so the ESP32-C3 trap record failed whenever an Arm lane had debugged on its thread first. Nothing in `environments/cortex-m/README.md` says lanes share a GDB, a lane run alone cannot meet another's state, and the failure names neither the earlier session nor the server. The reset now also unsets `tdesc filename` and sets the architecture back to `auto`. Met fixing R12.40's first gate run. | The next change to `gdb_server.py` or the next lane that debugs a second architecture. | A control that serves an Arm session and then an RV32 one through one real GDB, and the README saying sessions share a GDB per worker. | retired: `rv32_controls.py`'s shared-debugger control serves an Arm session, an RV32 one and an Arm one again through one GDB and fails without the reset's description and architecture lines; `environments/cortex-m/README.md` says sessions share a GDB per worker |
-| SR-714 | Usability | The root agent guide was 45,986 bytes, while Codex's default project-document budget is 32 KiB. Its injected copy in the 2026-11-03 process review ended mid-word in Sources of truth, before the architecture, design constraints and specification-editing rules, with no warning in the conversation. | The next change to agent guidance or its delivery. | Essential instructions delivered in full, with detailed references loaded for their task and a check against future truncation. | retired: the root guide is below 24 KiB, `check.py` enforces that UTF-8 byte budget and the shared Claude alias, and linked references carry conditional detail; custom host/ancestor guidance remains subject to the guide's delivery check |
-| SR-715 | Usability | Host-local Claude guidance still said the gate was Linux-only, prescribed an old build tag and told Mac agents never to end a turn with background work, while the current process and hubbish describe different behavior; the project's `landin-native-hosts` skill link also points to a missing directory. Met comparing live instructions and transcripts during the 2026-11-03 process review. | The next update to local agent guidance or skill deployment. | Local notes checked against the current tools, obsolete operational claims removed, and skill discovery verified per provider and host. | retired: the local environment, Mac and index notes are corrected, the dangling native-hosts alias is removed with its target retained in a backup, and the portable `landin-change` skill is discovered by Codex with its Claude project alias verified against the same source |
-| SR-716 | Usability | The local feedback recipe prescribed a 540-second blocking wait inside a 600-second tool call without accounting for Codex's yielded process sessions or shorter tool limits. Met reading the recipe alongside the active Codex tool interfaces in the 2026-11-03 process review. | The next change to the local feedback recipe. | Waiting through the harness's process continuation, or a logged wait shorter than its tool limit, with completion and scope inspected before reporting. | retired: the recipe and root guide name native continuation and bounded waits, including `--timeout 45` for a 60-second tool limit |
-| SR-717 | Usability | The agent guide's gate table described the Cortex-M matrix as two parts, while `gate.yml` already ran `programs`, `corpus` and `rv32`; the RV32 controls and corpora were absent from the explanation. Met checking the moved reference against the workflow during the 2026-11-03 process review. | The next change to the gate reference. | The reference naming every current matrix part. | retired: the gate reference in `docs/process.md` names all three parts and their scope |
-| SR-718 | Usability | Parallel-session briefs repeatedly supplied checkout isolation, identity allocation, publication and hardware restrictions, but the maintained process did not explain that a new Paseo chat shares its caller's checkout, that worktrees share Git refs, or how independent sessions hand off a candidate and the rig. Met comparing Landin's RV32 briefs with Paseo's defaults and the board tools during the 2026-11-03 process review. | The next change to parallel-agent guidance. | A shared recipe naming writer isolation, integration and publication ownership, exact-tree CI evidence, peer handoffs and the rig's common exclusion boundary. | retired: `docs/process.md` defines those handoffs and ownership rules, with concise entrypoints in the root guide and `landin-change` skill |
-| SR-500 | Usability | On a nix host an agent reaches `python3` and the pinned toolchain only through `nix develop -c`, which evaluates the flake before every command, about two seconds each over some eleven thousand calls from 9 to 30 October; 229 commands run without it failed with "python3: command not found". The shell's two `landin:` banner lines came with every call, and the `grep -v '^landin:'` written to drop them also dropped the build's own "rebuilding from clean" and build-lock messages. Met reviewing that period's agent sessions. | The next change to the flake's development shell or to the local feedback recipe. | The shell's environment available to an agent without an evaluation per command, and nothing to filter from its output. | retired: `scripts/agent_env.sh` writes the shell's environment once per flake and pins, for a harness to source before each command, and the banner goes only to a terminal |
-| SR-501 | Usability | A subagent cannot wait for a background run's completion notification, since it ends with its turn, and the recipe's "use the tool's blocking wait" ends after ten minutes, so the October streams waited in about 990 `sleep` loops over logs. 39 of the 85 loops waiting for `pgrep -f` to find nothing never ended, because the pattern matched the polling shell's own command line. Met reviewing that period's agent sessions. | The next change to `scripts/run_logged.py` or to the local feedback recipe. | A blocking wait that outlasts any run by being repeated, named by the recipe. | retired: `run_logged.py --wait` blocks for up to 540 seconds and exits 124 to be called again, or 125 when the run died without a result, and AGENTS.md and the recipe name it and rule out `pgrep -f` |
-| SR-502 | Usability | `docs/process.md` recommended `dev-build.sh -j2`, and briefs to parallel streams named `-j4`, `-j8` and `taskset`, on a 32-core host where the project's own `-j0` builds the whole compiler in 72 seconds against 190 at `-j4`. Met reviewing the October agent sessions. | The next change to the local feedback recipe. | The recipe leaving the worker count to the project. | retired: the recipe and AGENTS.md leave the worker count and CPU placement at their defaults |
-| SR-503 | Usability | `scripts/gate_watch.py` returns at a run's first failed job, so a second lane that failed in the same run went unseen: in R14.40 the watcher reported `scripts`, the fix was pushed, and the next run failed on `editor-grammar`, which had failed beside it. | The next change to `scripts/gate_watch.py`. | A way to hear every failed job of a run before the fixing push. | retired: `gate_watch.py --all` follows the run to its end and names every failed job |
-| SR-574 | Usability | The Cortex-M lane's `qemu-system-arm` cannot be run by hand to try a machine: under `steam-run` it stops with "libcapstone.so.5: cannot open shared object file", because the Debian closure's libraries are found only through `LD_LIBRARY_PATH=TOOLS/root/usr/lib/x86_64-linux-gnu`, which `run.py` and `setup.py` set for their own processes and `environments/cortex-m/README.md` does not name. Met trying `mps2-an505` and `mps2-an500` in R12.30's planning. | The next change to `environments/cortex-m/setup.py` or the README's NixOS route. | The README naming the variable beside its `steam-run` route, or the tools root carrying a launcher that sets it. | retired: the README's NixOS route names both directories for a QEMU or GDB run by hand, the lanes' own `pulseaudio` one among them, which Espressif's QEMU needs as well |
-| SR-577 | Competitive optimization | On a Cortex-M profile with a float unit, a framed routine that holds any assembly block saves and restores all of d8 to d15, 64 bytes of stack and sixteen transfers, although a block must now declare each callee-saved float register it names (D630), so the declared set is known. Kept conservative when float operands came after the frame's save in R12.30. | A measured cost of the save in a routine with an assembly block on the M7, or the next change to the Cortex-M frame's float save. | The routine saving only the d registers its blocks declare and its own code uses. | open |
-| SR-578 | Usability | `. "$(./scripts/agent_env.sh)"`, the natural way to take the file the script prints, fails with bash's ": No such file or directory" in a shell that already has `python3` and `gprbuild`, as every Claude Code session started through the SessionStart hook does: there the script prints nothing, by design, and sourcing an empty path names no file, so the command fails before its own work starts and the message does not say the environment is already present. Met starting a build in R12.30's gate split, whose stream brief named that idiom. | The next change to `scripts/agent_env.sh` or to the local feedback recipe. | An idiom that holds in both shells, the script printing a path that is always safe to source, an empty file when nothing differs, or the recipe naming the guarded form. | retired: `agent_env.sh` prints `/dev/null` when it has nothing to add, so the natural sourcing form holds in either shell |
-| R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on each full gate run, subject to the R8 gate's explanatory-only reuse exception, with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
-| R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence was a run, not a record the coverage readers read. | — | — | retired: R8.30 runs end-to-end fixtures in Darwin's diagnostics runner, which the gate runs, places their Darwin claims from it, and has `check.py` refuse any fixture whose named product target no record places |
-| SR-695 | Usability | The README's install route points at the latest release, v0.2.8, whose archive holds `lib/landin`, but its first program imports `hosted/blocking` and is started with `refine run`, neither of which 0.2.8 has: following the README with the archive gives L0006 "module not found: hosted/blocking" and "`refine run` is not a command", and the README does not say which release its examples need. Met checking SR-294 against the 0.2.8 archive. | Now, or the next release. | The README's install route and first program agree with the archive it points to: a release that holds them, or the README naming the release its examples need and how to build main instead. | retired: the README's release route says no release yet builds the first program and sends a newcomer to nix or the source build until one does |
-| SR-696 | Usability | R730-17's refusal, a call returning a plain pointer filling a several-atom pointer union through an atom `else`, is a generic L0301 naming the required pointer type and shape; it names neither D235 nor what to write instead. Met checking R730-17 against main. | The next change to D235's recovery or to L0301's notes. | The refusal saying that this recovery does not widen a plain pointer, and naming the form that does. | retired: R13.75: the refusal spells the union and names the one-atom union that widens into it (D874) |
-| SR-697 | Scale and self-hosting | `refine` is written in Ada 2022 and building it from source needs the pinned GNAT toolchain; its stages sit behind tested seams so a Landin stage could replace one at a time, but no cross-language stage transport exists and self-hosting is not scheduled. Split from R551-32. Kept outside the current roadmap and proposed for the next in discussion #2 (<https://github.com/JanHaan/Landin/discussions/2#discussioncomment-19369244>). | The next roadmap taking it. | An explicit scope decision, then stages replaced behind the existing seams with their tests unchanged. | open |
-| SR-698 | Usability | `scripts/emit_manifest.py` makes an output-identity proof slow and hard to set up: `emit` runs a fixed four workers, so one manifest of every target took 31 to 40 minutes on a 32-core host and a before-and-after proof over an hour; it compiles only the positive corpus, so proving a refactor left the runtime corpus alone needed a script of its own; it has no profile or fixture selector; its `debug` key is `--build-mode=debug` and no manifest covers `--debug=full` or `--debug=lines`; and a baseline `refine` copied out of its build tree refuses every static link with L0500, which the manifest reports only as thousands of "unexpected emission result 'refused:1'" lines without the diagnostic. Met by five streams of the November register sweep proving refactors emitted the same bytes. | The next change to `emit_manifest.py` or to `docs/process.md`'s local feedback recipe. | A worker count defaulting to the host's cores, a corpus, profile and fixture selector, debug-information entries, an unexpected refusal printing its first diagnostic, and the recipe saying how to keep a baseline compiler. | retired: `emit` takes corpus, fixture, profile, mode and job selectors and runs every core by default, adds same-checkout debug-information entries kept out of the cross-host comparison, prints an unexpected refusal's first diagnostic, and `docs/process.md` says how to keep a baseline compiler (D841) |
-| SR-701 | Usability | D505's "another of the thread's instances" reads as if a thread's instance's address could be kept in thread storage, but thread storage holds no pointer or pointer union (L0328), only an integer; [1996] was corrected in the November register sweep, D505 was not. Met writing SR-383's fixture. | The next edit to D505 or to thread storage. | D505 saying the address is kept in thread storage only as an integer. | retired: D505 says a thread's instance keeps the address only as an integer (L0328) |
-| SR-703 | Release readiness | A `--debug=full` Darwin image is likely not reproducible: ld64's debug map records the object's path and modification time. Native R13.76 probes measured an additional residue of private publication staging: after publication, `dsymutil --dump-debug-map` warns about the retired private object path even though the retained object exists beside the executable. The published UUID-bound dSYM remains the debugger artifact; a later bundle rebuild needs its object paths resolved. Two-build identity was not measured; Linux debug images are identical in one directory. | Before a reproducible-distribution claim covers debug builds, or a consumer needs bundle regeneration from the published object. | Two `--debug=full` Darwin links in one directory measured, their path/time residue resolved or declared in `docs/targets.md`, and retained-object lookup supplied when bundle regeneration is offered. | open |
-| SR-704 | Usability | `scripts/add_fixture.py positive/NAME` ends by naming `dev-test.sh --fixture=...` and `check.py`, but a new positive fixture also needs `--record=lowering`, or the lowering suite's "recorded corpus is current" case fails; only `compiler/tests/README.md` says so. Met adding `positive/field-named-at`. | The next change to `add_fixture.py` or the fixture format. | `add_fixture.py` naming `--record=lowering`, and any other recording a fixture class needs, among what is left to do. | retired: `add_fixture.py` names `--record=lowering` for a positive fixture among every step it leaves, as SR-571's retirement says |
-| SR-705 | Usability | `Landin.Diagnostics.Checking.Report` silently discards a note given with a code whose notes come from the catalogue, as L0304's do: two raise sites in the checker, the substituted array element and a nested struct value, pass notes that never reach a report, and nothing refuses them. Met moving L0304's routes into a route note. | The next diagnostics item touching L0304. | A note given to a fixed-note code refused when the diagnostic is built, and the two sites' notes dropped or made routes. | retired: a note given to L0304 is a compiler defect when the diagnostic is built (D856); the `offsetof` refusals' notes are routes, and the array element's note, which restated its message, is dropped |
-| SR-708 | Usability | `check.py --matrix` does not regenerate `compiler/tests/diagnostics.matrix`; only `--catalogue` does, though the usage line says `--catalogue`, `--coverage` and `--matrix` regenerate theirs. Met adding L0579 to L0582: after `--matrix` the new codes still showed no test owner. | The next change to `check.py`'s generators. | Each generated file named by the option that regenerates it, in the usage line and in the stale-file message. | retired: `check.py`'s usage names every generated file beside the flag that writes it, every stale-file message takes its flag from the same table, which a test holds to what each generator writes, and `check.py --help` prints it |
-| SR-710 | Usability | `option linux: bool = true` is accepted while `option big` is refused as L0390 "this option name is compiler-owned" (D202): the refusal covers the architecture, byte-order and build-mode atoms but not D264's `linux`, `darwin`, `freebsd` and `freestanding`, and an option of that name is then read in place of the atom, so `compiler.os == linux` compares a bool with a system. Met making the atom lists one table for SR-625, which kept the old set to change no behaviour. | The next change to configuration atoms or options. | Every configuration atom refused as an option name, with a decision and a negative fixture. | retired: every configuration atom is refused as an option's name from the one table, and the note lists them (D855); `negative/option-takes-no-atom-name` |
-| SR-711 | Usability | `refine --target=linux-x86` answers "did you mean linux-rv64?" rather than `linux-x86-64`. Met recording the driver's refusals for SR-625. | The next change to target selection or the suggestions. | A prefix of a described name ranked first, with a driver case. | retired: at one distance and depth the candidate whose head is nearest the misspelling ranks first, and a system named alone is offered its targets (D857) |
-| SR-712 | Usability | The fixture execution suite names no lane for a runtime fixture naming `rv32`, saying "rv32 is a layout model the targets suite measures", which is `synthetic-32`'s description; RV32 runs through the Cortex-M inventory. Met reading the harness's per-target lists for SR-625. | The first runtime fixture naming `targets: rv32`, or R12.50. | The suite naming which lane runs an RV32 fixture, or refusing `rv32` in a runtime fixture's `targets:` with that lane named. | retired: the harness's note names the firmware corpus's RV32 lanes, and `check.py` holds a runtime fixture naming `rv32` to a corpus row they execute (D842) |
-| SR-713 | Usability | Python lists that pick a subset of targets are held to the compiler's list by nothing, so a renamed or new target passes them silently: `check.py`'s `PRODUCT_TARGETS` and `TARGET_SCOPES`, which leave out `rv32`, `scripts/driver_manifest.py`'s and `compiler/tests/test_determinism.py`'s `TARGETS`, and `scripts/image_bounds.py`'s table. Met searching for SR-625's lists. | R12.50's Xtensa target. | Each such list checked to be a subset of `fixture_meta.described_targets()`, and the construct inventory saying whether `rv32` is a product target. | retired: `check.py` holds every subset target list to the compiler's described targets with a backend, and the construct inventory says `rv32` is no product target and why, while a fixture naming `rv32` is held to a run (D840) |
-| SR-733 | Usability | A refusal spells a non-generic alias of a structural type by its structure: an alias `maybe` of the union of `absent` and `ptr u32` is spelt as that union in L0344, not as the `maybe` the program wrote, because the checker's descriptor keeps no alias. Met re-recording `negative/r630-optional`. | The next change to type spelling or to alias identity. | A written alias recovered where the refused node names one. | watch |
-| SR-736 | Usability | The rig's USB host failed three ways in a day. On the front-panel port the cascade's top hub dropped every 30-50 s with no device or kernel error before it, and autosuspend, turned off everywhere, was not the cause; on the ASMedia xHCI at PCI c2:00.0 a Pico 2 halted in BOOTSEL failing enumeration hard-locked a CPU in `xhci_handle_command_timeout` and the controller died, taking the Arty's USB, which shared it, with the cascade; and with the cascade on the onboard connector's second port, a Pico 2 left in BOOTSEL dropped the whole cascade 75 times in ten minutes until it was unplugged. A switch of one port drops only its own device where the host is sound. Met in the November board round. | The next change to the rig's USB topology or host controller. R12.60 met the earlier trigger, the next rig change, and took the BOOTSEL part for the Pico 2: its cable carries no USB data, so neither BOOTSEL nor the boot ROM's halted USB reaches a controller, and a device on its port stops the run (D906); every board stops on kernel USB trouble with recovery left to the maintainer. The Arty and the cascade still share the Pi's VL805. | The cascade and the Arty on separate controllers, no BOOTSEL on the bus (SR-680), and a run that meets a controller death stopping with recovery left to the maintainer. | open |
-| SR-768 | Usability | The complete Xtensa corpus times out its exhaustive memory-alignment fixture while modes, manifests and a flake build saturate the host. Both the previously passing image and the new image complete with status 42, no trap and an intact guard under controlled replay, but need 21 to 45 wall seconds despite 12 to 18 CPU seconds; the runner applies a 20-second wall guard. Met closing R12.50 with default workers. Met again in R13.79: its candidate's gate passed both Xtensa corpus jobs only when they were rerun, since `runtime/r491-cleanup-verifier-storage` emits about 530,000 lines of Xtensa assembly, unchanged from the base, which GNU as with `--auto-litpools` took 35 s to assemble locally, so a slow runner passed `environments/xtensa/backend.py`'s 60-second command budget; the assemble step now has 300 s of its own, and the guest's budget is unchanged. | The next change to the Xtensa oracle's guest time budget. | A stated transport, assembly and guest budget policy, with finite heavy-fixture and nonterminating-guest controls under documented scheduling assumptions; a contended timeout cannot become a source exemption. | open |
-| SR-775 | Usability | The stock-user gate can spend its whole twenty-minute budget downloading distribution packages before any compiler check runs. After unused C++ recommendations were removed, the Azure Ubuntu mirror still took eighteen minutes to deliver the 57.5 MB GCC archive; the next C library download was cancelled by the job limit. Recovering requires inspecting the download timestamps and rerunning on a fresh hosted runner, rather than following a diagnostic from the job. Met following R12.50's corrected candidate gate. | The next change to stock-user package acquisition or its mirror policy. | A bounded package-download attempt with a stated official-mirror fallback, retained diagnostics and fatal failure after exhaustion, preserving the distribution-toolchain identity and compiler checks. | open |
-| SR-777 | Usability | The boards guide's SRAM helper recipe imported the closure on rigpi and pointed `~/.local/bin/landin-ram-run` at its store path, which no garbage-collection root holds: a symlink from a home directory is not a root, so the Pi's weekly collection deletes the path and the board tools can no longer describe the helper. The helper deployed on rigpi is unrooted. Met verifying the Pi's helper while planning R12.60. | The next rigpi deployment or helper import. | The deployed `/var/lib/landin-rig/bin/landin-ram-run` resolving through a profile under `/nix/var/nix/profiles`, as `environments/boards/README.md`'s recipe now roots it. | retired: on rigpi `/var/lib/landin-rig/bin/landin-ram-run` resolves through the profile `/nix/var/nix/profiles/landin-ram-run` to the helper built from the current source; the older helper the home's link named is kept as the profile's first generation. That home link named a helper of an earlier source, which the board tools would have refused as stale |
-| SR-778 | Usability | `nix-store --query --roots`, run on rigpi as a read-only check of the helper's roots, removed stale automatic root links and temporary-root files as it ran, so a check meant to change nothing changed the store's roots. Met verifying the helper's roots while planning R12.60. | The next change to the rig's guidance. | The guide naming a root check that changes nothing and warning against the query. | retired: `environments/boards/README.md` checks the helper's root with `readlink -f` through its profile and warns that the query removes stale roots |
-| SR-779 | Release readiness | probehive's gateware names itself with the constant LiteX identifier `probehive`, so which bitstream the Arty runs cannot be read back over the UDP path; the board gate accepts `environments/boards/rig.py`'s load record instead, bound to the Pi's boot id and the Arty's enumeration (D905), which a load by another tool in the same boot and enumeration would not change. Met verifying that the Arty ran the pinned `slots_ci` build while planning R12.60. | The next probehive gateware change. | A build identity, the bitstream's hash or its commit, readable over the UDP path and checked by the gate against `environments/boards/rig.json`'s pin. | open |
-| SR-780 | Usability | The Pi's probehive runtime was a plain copy, not a git checkout, and epycmicro's probehive checkout was on another branch whose `flake.nix` differs, so confirming that the runtime matched commit `4f69b826` needed each file hashed by hand. Met verifying the rig while planning R12.60. | The next change to the rig's probehive runtime. | The runtime's identity checked by the board tools before any hardware. | retired: `environments/boards/rig.json` pins the SHA-256 of the seven runtime files and `gate.py` checks them before the lock, a missing file `needs-setup` and a different one `rig-tool-mismatch` |
-| SR-781 | Usability | The rig lock lived in each user's home, `~/.cache/landin/rig.lock`, so a second user on the rig, a CI runner's, would not have serialized against the maintainer's runs; `docs/process.md` warned that different homes do not serialize, and it and `spec.md`'s D725 named the home's file as the lock. Met planning R12.60's runner. | The first board run by a second user on the rig. | One lock every user of the rig takes, and the documents naming it. | retired: the rig's state is one group-shared directory, `/var/lib/landin-rig` on rigpi, holding the one lock, and a held lock in the old place stops a run `needs-operator` (D905); `docs/process.md` and D725 name the shared lock |
-| SR-786 | Usability | `python3 scripts/tests/test_gate_inputs.py` prints `fatal: not a tree object` on a run that passes, so a reader takes a git failure for a broken control. Met running the gate's controls for R12.60. | The next change to `test_gate_inputs.py`. | No stray git error on a passing run: the expected failure captured, or asserted by the control. | retired: the control captures git's refusal of the unreadable tree and asserts its text, so a passing run prints none |
-| SR-789 | Usability | The boards guides did not say why the RP and Xtensa ports need `--ram-loader` in boot mode while the STM32H753, ESP32-C3 and ESP32-C5 need it only for RAM runs, so `environments/boards/rig.json`'s argument sets were assembled from three READMEs and `common.board_preflight`. Met writing rig.json for R12.60. | The next change to a port's arguments. | The guide saying which ports need the helper and probehive in each mode, and why. | retired: `environments/boards/README.md` says which ports read only through the helper's single-core readback and which name probehive, and rig.json writes every port's arguments out |
-| SR-791 | Usability | The gate's board legs asked for `[self-hosted, landin-rig]`, the runner was registered with its one label and none of GitHub's defaults, and every leg sat `queued` with no message saying no runner carried both labels: the runner was online and idle the whole time. Met in R12.60's first boards dispatch, which was cancelled after twelve minutes in the queue. | The next change to the board legs' `runs-on` or to the runner's labels. | The legs asking for `landin-rig` alone, held by a control to the label the runner carries. | retired: the legs ask for `[landin-rig]`, and `scripts/tests/test_gate_inputs.py` refuses any other `runs-on` for a physical job and any job but those on the rig |
-| SR-794 | Usability | Every board leg's bundle check failed on the rig runner with `cmp: command not found` and `diff: command not found`, then said `the downloaded files are not the ones files.sha256 lists`: the runner's packages lack diffutils, and the step read a missing command as a mismatch, so a missing tool looked like tampered evidence. Met in R12.60's boards dispatch, the first whose legs reached the rig. | The next change to the board legs' steps or to the rig runner's packages. | The check needing no host tool the runner lacks, a missing one failing as itself, and a control. | retired: the file-list comparison is Python, which names the missing and unlisted files, and `scripts/tests/test_gate_inputs.py` refuses `cmp`, `diff`, `jq`, `curl` and `wget` in a board leg |
-| SR-795 | Usability | The first Pico 2 gate leg on the rig flashed the Arm application, power-cycled the board and then stopped on `[Errno 2] No such file or directory: 'ping'`: the runner had no `ping`, which the Pico 2 tools run after every cycle, and nothing looked for it before the hardware sequence began, so the fixed image's restoration was left pending after a second flash and cycle. The kernel logged no USB line through either RP235x download on the power-only cable. Met in R12.60's first boards dispatch whose legs reached the hardware; the other six ports passed. | The next host command a board tool adds, or the next change to the rig runner's packages. | Every host command a port's steps run found before the lock, a missing one ending the port `needs-setup` with nothing touched, with a control. | retired: `gate.py` checks each step's host tools (`uhubctl`, `journalctl`, and `nix` where probehive's GPIO shell is used) before the lock, ending `needs-setup` and naming every missing one, which `scripts/tests/test_board_gate.py` holds; the Pico 2's echo after a cycle no longer needs `ping` (SR-796) |
-| SR-796 | Usability | With `ping` installed, the Pico 2 gate leg's probe check after a cycle still failed: `probe-ping` exited -31, SIGSYS, because the NixOS runner module's syscall filter forbids `capset`, which iputils `ping` calls to drop its privileges; the log showed only the command line, and the tool reported `the probe at 10.42.0.50 does not answer ping` although probehive answered a manual `ping` at once. Met in R12.60's boards dispatch after the runner gained `ping`. | The next change to the Pico 2 tools' probe check or to the runner's sandbox. | A probe check that needs no privileged host tool, with a control. | retired: `environments/boards/common.py echo HOST` sends one ICMP echo through an unprivileged ICMP socket, which the rig's `ping_group_range` allows and which passed under the runner's own syscall and address-family limits on rigpi, and prints ping's summary line, which the Pico 2 tools already check; `scripts/tests/test_board_common.py`'s `Echo` holds it |
-| SR-797 | Usability | An ESP32-C3 gate RAM run, right after its boot check passed, failed on one unhandled trap whose two reads disagreed: the result's trap cells said cause `0x2` at `0x2`, the failure said `mcause 0x0` at `0x0`, mtval `0x0`, sp `0x3fcc7c90`. The same RAM run had passed in the dispatch before, and a manual RAM run an hour later passed in 20 s, so whether the chip trapped or the cells were read inconsistently is unknown. Met in R12.60's boards dispatches. | The next ESP32-C3 RAM run that reports a trap. | Both trap readings retained with the read order and timing, the cause told apart from a stale or torn cell read, and the fix or the corrected reading with a control. | open |
-| SR-798 | Usability | An RP boot check that followed that board's RAM run could not flash it: on the Pico H `Debug port Multidrop(11002927) does not respond` for the application and its restoration alike, on the Pico 2 after its Arm RAM run `Could not clear all hardware breakpoints` and a timeout, while the helper's single-core reads still worked. The warm contract parks the other core and keeps it out of session cleanup, and probe-rs's whole-chip download cannot attach to that; a guarded power cycle of the port brought the Pico H back on its fixed image. It first read as a RAM application that went silent after half an hour, because a gate leg ended on its RAM run and the next leg's boot check met it. Met in R12.60's boards dispatches. | The next change to the RP boot checks' first attach or to the RP warm contract's parked core. | An RP boot check that attaches whatever a RAM run left, with a control. | open |
-| SR-800 | Usability | A board leg rerun after a failure passed, every leg's latest attempt was green, and the aggregate `gate` still failed on that port: both attempts had uploaded an artifact named `board-evidence-stm32h753`, and the aggregate's pattern download took the failed attempt's, so the rerun's pass was judged by its stale failure. Met rerunning R12.60's STM32H753 leg after its echo refusal. | The next change to the board legs' evidence artifacts or to the aggregate's reading of them. | Each attempt's evidence distinct and every port judged by its latest attempt, with a control. | retired: each leg's artifact is `board-evidence-PORT-ATTEMPT`, and `scripts/gate_inputs.py` judges each port by the highest `run_attempt` its legs' `transfer.json` records, two of one attempt being ambiguous; `scripts/tests/test_gate_inputs.py`'s `Outcomes` holds both |
-| SR-814 | Usability | While protecting compile auxiliary inputs in R13.76, pinning the tool working directory exposed linker and assembler directives whose relative or indirect paths inherit the caller directory. The bounded input-closure scanner now refuses those forms rather than silently resolving them in staging, and asks for plain absolute paths; callers using relative INCLUDE, INPUT/GROUP, SEARCH_DIR, .include or .incbin must rewrite those directives. A bindings dependency reported relative to Clang's retained workspace must also stay within it; a path that escapes and reenters is refused, with an absolute include or declared --include-dir route, because lexical normalization cannot retain its external directory authority. | The next change to external-tool input discovery, or a consumer that needs these relative forms; R13.79 made the scan find a directive wherever its word stands and read each input once, and runs tools in the workspace's own `work` directory (D1050, D1059, D1060), and the relative forms are refused as before. | Discover and protect their actual resolved input closure while preserving tool lookup and include semantics, with positive and collision controls for each newly supported form. | open |
-| SR-832 | Usability | After R13.20's cached STM32H753 RAM run passed on the chip, the cacheless RAM run that followed it by hand was refused before loading with "stm32h753 warm cleanup: could not retire active exception; use the boot check": the cached image's entry returns, and every firmware entry's return ends in the compiler-owned `udf` trap, whose handler loops, so the helper's cleanup, which steps a handler until thread mode, cannot finish. The refusal says what to do but not why the board is in a handler, and the boards guide said the returned board was left as the helper requires. Met recording R13.20's cached profile, whose leg runs the boot check next and so passes. | The next change to the firmware's returned path or to the SRAM helper's cleanup. | The helper recognises the returned trap and retires it, or the returned path ends in a state the warm contract accepts, with a manual RAM run after a cached run as its control. | open |
-| SR-868 | Usability | Choosing the ESP32-C5's UART0 clock for R13.20's line changes, the C5's TRM v1.1 gives PCR_UART0_SCLK_SEL as 0 none, 1 PLL_F80M, 2 RC_FAST, 3 XTAL with XTAL the reset value, while ESP-IDF v6.1's `pcr_reg.h` and the generated module's reset value, 0x0040_0000, give 0 XTAL, 1 RC_FAST, 2 PLL_F80M. Neither the policy nor the correspondence records the disagreement, so a reader of `devices/generated/esp32c5/pcr` cannot tell which encoding the chip has; the port took its clock from the ROM's divisor instead (D961). | The next change that selects the C5's UART or another peripheral clock source. | The disagreement decided on the board, by reading the register a known source leaves, and recorded in the policy with the source that settles it. | open |
-| SR-869 | Competitive optimization | R13.20's `core/line.divisor` is a handful of `u64` operations and costs 1.4 KB on Cortex-M0 at size/auto, beside 0.6 KB of libgcc's 64-bit division and multiplication; with the derived driver's own `line_registers`, 1.3 KB, the driver's image grew from 14.4 KB to 18.2 KB of the 32 KiB profile. Wrapping the provably safe operations saved 72 bytes; dividing instead of multiplying cost 200 more. | The next Cortex-M0 code-size round. | The divisor's and the encoders' code measured against a hand-written equivalent and the difference attributed to lowering choices, with a size target for short `u64` routines on armv6-m. | open |
-| SR-874 | Usability | A board's record compares the whole linked ELF's hash, local symbols included, and the Cortex-M emitter numbers each local label by the program's item count, so a library module gaining an import moves every label of every program that reaches it: `platform/cortex_m` importing `core/cache` left the RP2040, RP2350 and STM32H753 images' code byte for byte the same and every one of their six records mismatched, which `build.py --records=strict` fails the board bundles on and only a physical rerun could re-record. Nothing says a record is that fragile, and it was found only by building the base tree's bundles beside the candidate's. Met adding the cached STM32H753 profile for R13.20, which routed around it by putting the M7 provider in a submodule, `platform/cortex_m/l1`, that no cacheless image reaches. SR-586 shares the root fix: local labels emitted as assembler-local `.L` symbols, outside the ELF symbol table; it changes every board record once and so waits for a physical re-record. | The next change to `build.py`'s record comparison or to the emitter's local labels, taken with SR-586; R13.79 changed what `build.py` says of a changed source and had it warn of a stale compiler, not what a record compares. | A record whose identity is the image's loaded bytes and the symbols the oracle reads, or labels numbered within their routine, so a library change that leaves the code unchanged leaves every record valid; with a control that adds an unused import. | open |
-| SR-877 | Usability | `environments/cortex-m/README.md` listed the firmware lane's once-run cases as `cpu-levels`, `refusals`, `independent-c-assembly` and `compact-images`, while `firmware.py --case` also took `float-unit`, so the guide disagreed with the tool on what a filtered run can name. Met adding the `cache-sequence` case for R13.20. | R13.20's cache-sequence case. | The guide naming every case `--case` takes. | retired: the guide names `float-unit` and `cache-sequence` beside the four |
-| SR-878 | Release readiness | The STM32H753's DMA transmit consumers, `devices/consumers/stm32h753` and `devices/consumers/stm32h753_cached`, set USART3's CR3 DMAT and enable TE before they enable the stream, the order the cached board's transmit lost its first byte with on the chip while FEIF reported an underrun (D979); neither consumer has run on a chip, `devices/test.py` building them for their static checks alone, so nothing has shown whether their first byte arrives. Met fixing the cached board's transmit for R13.20, whose scope was the board's application. | The next change to either consumer's transmit or DMA set-up, or the first run of one on a board; R13.78 renamed `l1.caches` to `l1.new` in the cached consumer and left its order as it was. | Each consumer enabling its stream before it sets DMAT, as D979 orders the board's transmit, with a run that checks the first byte arrives. | open |
-| SR-901 | Usability | On a native Mac with Xcode's SDK 27.2, the pinned GNAT 16.1.0 compiled the Ada sources but could not link `refine`, so a focused native test run ran no test case. The GNAT bundle's `ld` is a wrapper script that runs `ld-classic` whenever `xcrun --find ld-classic` finds one; it found the Command Line Tools' `ld-classic` 957.1 rather than Xcode's linker 27106.1, and that one ignored the SDK's `libSystem.tbd` as malformed, naming `arm64e.x1-macos` an unknown architecture. `SDKROOT` was set as `compiler/ada/TOOLCHAIN.md` says; the tested pins there are SDK 26.5 and linker 1267, and neither the guide nor the wrapper offers a way to choose the linker. The native Clang adapter checks passed on the same host. Met verifying R13.78's nit fixes on a Mac whose Xcode had moved past the pins. | The next native Mac toolchain setup, or the next change to the Mac SDK and linker pins. | The Mac guide, or the build's preflight, naming the linker GNAT will actually run and refusing an SDK it cannot read before the build starts, with the route to a supported SDK or linker. | open |
-| SR-941 | Usability | The README's first program imports `hosted/blocking` and starts with `refine run`, both after 0.2.8, so no published release builds it, as the README itself warns; a reader holding an archive cannot tell from the text which kind theirs is, since `refine version` of a build between releases prints a revision such as `refine dev (27ad1087)`, and both readers spent time deciding whether the install section described their archive. Met by the R13 gate's outside reading in R13.78, two fresh readers, Opus 5.5 and GPT-6.1 Sol, each sandboxed with only the packaged candidate `27ad1087c` and the rendered site, writing a UTF-8 line-statistics module, a hosted tool over it and a Cortex-M0 build of the module. | The next release decision. | A release that builds the first program, or the install text saying how to tell what an archive holds and what to do with each. | retired: v0.2.9's archive builds and runs the first program, `refine version` of it prints `refine 0.2.9`, and the README names 0.2.9 as the release its examples need |
-| SR-995 | Broader standard library | A firmware program that wants `time.clock` writes SysTick's registers by their addresses and a clock provider of its own: the library has no SysTick module in `platform/cortex_m` and no firmware clock, so prototype 5's counterpart programs SysTick with `compiler.volatile_store`, as `environments/cortex-m/probes/fibre-capacity.ldn` does with an `assembler.block`, and widens a 32-bit tick to 64 bits in its board. Met deriving prototype 5's firmware counterpart in R14.25. | The next firmware consumer that needs time, or the next change to `platform/cortex_m` or `core/time`; R13.79 rewrapped doc comments in `platform/cortex_m` and changed nothing it declares. R13.80 keyed `core/time`'s two hashes and changed nothing a clock provides. | SysTick's registers and a tick-counting `time.clock` provider in the library, used by the counterpart, or the reason recorded. | open |
-| SR-996 | Competitive optimization | Prototype 5's firmware counterpart takes about 56 KB of flash at `size/auto` and 66 KB at `none/off`, all of it code the program reaches, so it does not fit the constrained reference's 32 KiB and runs on a description of the micro:bit's 256 KiB (D1036); its RAM fits. Individual routines are large for what they do: at `size/auto` the board's 64-bit tick reading is 666 bytes, the trace's `record` 412, `take_lines` 2,120 and `uart.open` 2,560, with libgcc's 64-bit division beside them. Met deriving the counterpart in R14.25. | R16.10's measurement of generated code. | The counterpart within the constrained reference's flash at `size`, on the reference, or the reason it cannot be recorded. | scheduled R16.10 |
-| SR-1013 | Usability | The rp2040 boot and RAM legs of R14.25's boards dispatch, run 42577864078, failed twice with "probehive's lightweight GPIO shell ... did not open within 300 s": rigpi's weekly `nix-gc`, at 00:00 CET on 2026-11-09, had deleted 684 store paths, the shell's closure among them, since nothing roots it, and opening it again downloaded its Python and built migen on the Pi for longer than the board tool waits. Preparing it, as the refusal says, with `nix develop /var/lib/landin-rig/probehive#gpio --profile ~/.local/state/nix/profiles/probehive-gpio` took 63 s and left an automatic root; `environments/boards/README.md` roots the RAM helper in a profile and says why, and says nothing of the GPIO shell. That profile roots the shell's environment and not the flake's inputs: R13.92's boards dispatch, run 43849639774, failed its rp2040 leg the same way after the collection at 00:00 CET on 2026-11-16, and opening the shell by hand spent 6 min 39 s fetching and unpacking the probehive flake's nixpkgs `nixexprs.tar.xz` again; the rerun of the leg passed. | The next change to the rig's state setup, to `ProbehivePins` or to the board README's rig preparation; R13.79 said which probehive runtime the gate takes and left the GPIO shell unrooted. | The GPIO shell rooted as the RAM helper is, by the rig's setup or the board tool, and the README saying so. | open |
-| SR-1014 | Release readiness | Two ESP32-C3 runs of R14.25's boards dispatch, run 42577864078, the boot run of its first attempt and the RAM run of its second, failed the JTAG cross-check with "recoveries reads 3 over JTAG, 2 in the frame": the image matched its record, the last frame said two recoveries, and the firmware counted a third before the probe read it, with no USB event in the failing RAM run; the third attempt passed both runs, and no earlier gate's C3 leg had failed so. Met completing R14.25. | The next ESP32-C3 run that fails the cross-check, or the next change to `environments/boards/esp.py`'s cross-check or the C3 application's recovery. | The extra recovery's cause found, from the line or the firmware, and the cross-check or the application changed for it, or the reason recorded. | watch |
-| SR-1023 | Competitive optimization | Costs the library imposes that R16's measurements will see: an erased table still reaches every entry (D484), and formatting goes through `[]any formattable` with a pointer `self`, `text.builder` through `any grower` even over a fixed buffer, and `diag.stream` through `any io.writer`; `core/README.md`'s Cortex-M size rows for the memory network and the volume blame complete conformance tables and predate D484; and `core/mem`'s firmware copy loops are chosen by `compiler.os`, so `speed` and `size` run the same byte loops. Met by the pre-R16 council review. | R16.10's ranked costs. | Measured, and each either improved or recorded with its measurement. | open |
-| SR-1024 | Competitive optimization | The Xtensa backend keeps the RISC-V backend's saved-register set (indexed 9 to 59, with RISC-V float and `x27` comments) and its frame preflight passes that set's length to `Frame_Bound`, so the frame budget counts 51 saves that never happen; `XLEN` always returns 32. Met by the pre-R16 council review. | R16.20's decision on Xtensa. | A frame budget counting Xtensa's own saves. | scheduled R16.20 |
-| SR-1029 | Usability | Twelve `once(...)` roadmap controls in `scripts/tests` assemble the text they quote at run time from a name read out of the roadmap, so they have no fixed text for `scripts/tests/control_quotes.json` to list, and only `test_check_controls.py` and `test_library_docs.py` are scanned for a literal quote that bypasses the list. Since R13.79 `python3 check.py` reports a document that no longer says a listed quote, which covers the three controls whose breaking four documentation writers each missed while `check.py` said "all clean". Met integrating the pre-R16 council review's documentation fixes. | The next change to the roadmap controls' `once`, or to how `check.py` or its controls read a document's text; R13.79's later checks read library sources, fixtures, packaging files, `citations.txt` with its compiler-source line, the actionlint and shellcheck pins and `assets/fonts.py`'s font root, and changed neither `once` nor how a control quotes a document. R12.70 regenerated `citations.txt` and changed neither `once` nor how a control reads a document. R13.80 regenerated `citations.txt` and changed neither. R11.27 regenerated `citations.txt` and changed neither, nor did R13.90; the register sweep after R13.90 changed what `check.py --generate` says of the editor artifacts, not how a control reads a document; R13.91 regenerated it and changed neither, nor did R13.92 or R13.93. | Those quotes found without their fixed part or listed as templates, and every control file scanned. | open |
-| SR-1031 | Release readiness | The ESP32-C3's RAM run in the boards dispatch of a documentation-only change, run 42782799827's first attempt, failed with "the unhandled entry took 1 trap(s), the last mcause 0x0 at 0x2, mtval 0x0, sp 0x3fcc7d20": an instruction-address fault at address 2, from an image whose bundle verified against its digest and which passed every earlier run that day; the leg's second attempt passed. Its evidence is the run's retained artifact. Met promoting the tour's pitch fix. | The next ESP32-C3 run that traps in its RAM run, or the next change to the C3's RAM loader or its application. | The jump to address 2 explained, with the RAM load or the reset sequence that allowed it fixed. | watch |
-| SR-1037 | Usability | Text about a group of atoms hangs on the first of them, `mem.out_of_bounds` and `panic.out_of_range`, so hover on the others never shows it. Met rewriting the library's comments. Since R13.79 the site build reports the names declared once per target whose comments differ beyond their target words. | The next change to `docs/site/library.py`'s reading of a declaration's comment; R13.79 later left records out of the site build's per-target report and did not change where a comment is attached. | A place for a comment that speaks for a group. | open |
-| SR-1041 | Release readiness | The ESP32-S3's leg in the boards dispatch of the flake's move to 0.2.9, run 42829044541, failed after its RAM run and its boot verdicts had passed: restoring the resident image, `landin-ram-run` could not open the chip's own USB JTAG unit, `303a:1001`, with "The debug probe could not be created. A USB error occurred. permission denied (errno 13)", directly after the hub's status listed the unit as connected on its port, and the leg ended "resident image restoration pending: resident-ready failed (1)". The change under test touched no image. The unit enumerates again after each power cycle, and the open most likely came before udev had given the new device node its group. The run's `board-evidence-esp32s3-1` artifact holds `resident-ready.log` and the hub logs. The next dispatch failed the ESP32-S3 the same way and the ESP32-C5 too, in `probe-rs read`, so `environments/boards/common.py`'s `probe_command` now asks a probe command again for up to 15 seconds while its open is refused with errno 13. Met promoting the flake's move to 0.2.9. | The next board leg that fails opening a probe with errno 13 after `probe_command`'s wait, or the next change to that wait. | Board legs passing over a week of gate runs with no probe open refused past the wait, or the cause on the rig found if one is. | watch |
-| SR-1042 | Release readiness | `scripts/tests/test_board_manual.py`'s `test_fragmented_ack_cannot_extend_the_phase_deadline` failed main's `scripts` job in run 42852022519, "TimeoutError: timed out" at `client.recv`, on a tree whose `scripts` job had passed four times that day. The control gives the manual step a 0.05 s deadline, and `manual.Boot.request` accepts a connection only between its polls of `server.accept`, so on a slow runner the deadline can pass before the control's connection is accepted; `request` then fails as the control expects, but the connection waits unaccepted in the listening socket's backlog until the test's cleanup, and the control's read waits out its own 1 s timeout instead of meeting the close it asserts. 30 local runs alone and 12 under load all passed, and the rerun of the job passed. | The next failure of this control, or the next change to `test_board_manual.py` or to `manual.Boot.request`'s accept loop; R13.79 gave the file's copy test a stated hang guard and left this control and the accept loop as they were. | The control's deadline long enough for its connection to be accepted, with the future waited on longer, or `request` closing what is still in its backlog when it gives up. | retired: `manual.Boot.request` closes its listener when it gives up, ending a connection still in the backlog, and the control's deadline and wait have room; it passed 30 runs alone and 12 beside a busy loop on every core |
-| SR-1162 | Usability | An output name holding `~` or `:` cannot be built on a filesystem `refine` does not recognise, XFS, ZFS, NFS and all of FreeBSD's among them, since a generated short name or a stream can alias such a pair on some filesystem, and a non-ASCII output name is still refused while a selected tool is absent from `PATH`; the refusal says the filesystem's rules are unknown. Met in R13.79 re-running the review's output-name reproducer on ZFS, where D1052 admitted every other name. | The next item that touches output identity or adds a recognised filesystem. | Those names built wherever the filesystem keeps them distinct, by a table of the filesystem's rules or a probe the identity adapter's contract allows. | retired: the maintainer chose to keep the refusal where refine does not know a filesystem's rules |
-| SR-1044 | Release readiness | D1049's rule that another user's publication directory is passed over has no control that runs as a second user; mode 000 on an own directory stands in for the unreadable case only. Met in R13.79 writing the publication controls. | A gate host gaining a second account or a user-namespace control. | A control that publishes beside another user's retained workspace. | open |
-| SR-1052 | Usability | With a fan of absolute `.include`s, `refine`'s own scan returns at once since D1059 and the assembler then does the exponential work: a signal stops it and nothing bounds it. Met in R13.79 re-running the review's fifteen-level fan. | The next change to tool supervision, or a time bound on tools; R13.79's D1046 changed how a command that holds nothing ends, not how a tool is supervised. | A bound on what a tool may read or how long it may run, or the documented statement that the assembler's cost is the input's. | open |
-| SR-1065 | Usability | Whether an editor reports a removed or renamed directory under the `**/*.ldn` watcher the server registers is unknown: the server now handles a directory event, and no shipped editor package was run to see one sent. Met in R13.79 fixing the server's stale reports after disk changes. | The next editor-package item. | The event observed from each shipped editor package, or the watcher registered so that it arrives. | open |
-| SR-1067 | Scale and self-hosting | Objects sized by an input remain on the primary stack outside the text decoders R13.79 moved: `linker.directory` with a name of megabytes ends in status 71 in `landin-driver.adb`, whose `Directive_Named` builds the path by concatenation; the diagnostic renderer builds a report of up to its 1 MiB byte limit by concatenation in `landin-diagnostics-text.adb`'s `Finish`, which a stack under about 2 MiB does not hold; and the checker keeps frame arrays sized by a count the program sets, a `Seen` array of `Declaration_Count` entries, the `Node_List` of an array literal's elements and per-call argument tables, none of them measured at a size that fails. Concatenations the size of an output were audited only in the server's send path. Met in R13.79 serving a document larger than the stack. | The next large-input item, or the next status 71 on a large source. | Each moved off the primary stack or measured, with a case at a small task stack. | open |
-| SR-1079 | Language evolution | [0830]'s rule for a named view counts a reference only read out of a field, `q := h.p; bump(h); q.val`, as a view of `h`, and D1084's rule for a view no name holds does not, since such a reference has other storage under it. Met in R13.79 writing D1084, whose exemptions the maintainer confirmed. | The next change to `Landin.Stages.Checking.References`. | A decision on whether the named rule is narrowed to match. | retired: the maintainer kept [0830]'s named rule as it is beside D1084's |
-| SR-1082 | Release readiness | The review R13.79 answered reported a `noreturn` function field that does not end a path. It was not reproduced: `if c then r = 1 else o.stop() end if` is accepted by the reviewed compiler and the fixed one, and the review's retained program no longer holds the form. | A program that shows it. | The form reproduced and fixed, or the report withdrawn. | watch |
-| SR-1102 | Release readiness | The stack switch's masking of interrupts before it names its context is pinned by instruction order only, since no lane places an interrupt on a chosen instruction; the review's harness did, with `-icount shift=0 -accel tcg,one-insn-per-tb=on`. Since R13.79 the double exception handler records DEPC and `double-exception-control` raises a double exception. Met in R13.79. | The next change to the Xtensa vectors or to `environments/xtensa`'s controls; R13.79's DEPC and frame-layout changes are what this row records, and its later lane changes, running the emulator through `landin-fhs` and giving the assembler a budget of its own, added no control; the register sweep after R13.90 made the oracle read the registers before it continues a guest, to tell a start that did not happen from a hang, and added no interrupting control. | A control that interrupts the switch at each instruction. | open |
-| SR-1110 | Broader standard library | An event loop on a worker thread cannot watch signals on Linux: since D1126, which the maintainer confirmed, only the process's first thread may `signal.watch`, a refusal on one system only, whose alternatives the decision's entry records. | A program that needs it, or a change to `hosted/thread`'s signal masks. | Signals watched from any one thread of a process. | open |
-| SR-1117 | Usability | Since D1253 an ESP run switches on its own port when its hub lists it off, and a power cycle whose off half or wait fails tries the "on" once more through the same pacing and says so; a hub that does not list is left alone. Both are held by script controls alone: only the rig can show that its hubs list a switched-off port as `off` without `power`, the form `ports_off` reads from uhubctl's documentation and one recorded listing, and that a board switched on at a run's start is ready within the settle wait a download's reset is given. The Pico and STM32 tools are unchanged. Met in R13.79. | The next rig session that may switch a port by hand; R12.80's re-recording ran the board tools alone, and every ESP port's hub listed it on. | Both seen on the rig: a port switched off by hand switched on by the next run, which passes, and a failed cycle's retry. | open |
-| SR-1118 | Usability | The gate's `editor-grammar` job has no Vim, Emacs, Neovim that reads the parser, or `highlight/textmate/node_modules`, so the TextMate tokenizer, the VS Code client test, the VSIX packaging and the Emacs and Neovim parser smokes run only on a developer's host; since R13.79 `./highlight/test.sh` names what did not run. The register sweep after R13.90 met it again: the TextMate tokenizer smoke, the one test of the grammar VS Code loads, runs in no gate job, and whether that job's `npm ci` there should pass `--ignore-scripts`, as the tree-sitter install does, is part of the change. R13.92 met it on a developer's host too: the pinned shell has no Vim, Emacs, Node or Pygments, so `./highlight/test.sh --integration`, which a highlighter change runs before its push, skipped the smokes that change edits, and running them meant taking the editors from the Nix store and `npm ci` by hand, steps no document leads to. | The next change to `gate.yml`'s `editor-grammar` job; R13.79 changed only the Xtensa job's list of controls and added the scripts job's actionlint step; the register sweep after R13.90 split the `build-modes` matrix and left the `editor-grammar` job as it was. | The job installing the editors and setting `LANDIN_HIGHLIGHT_REQUIRE`, so a smoke that cannot run fails. | open |
-| SR-1119 | Usability | Emacs' `landin-ts-install-grammar` passes a commit ID where Emacs 29 and 30 take a branch or tag for `git clone -b`, so the documented tree-sitter install is believed to fail there. Reported by the review R13.79 answered and not verified: no Emacs was on the fixing host. | The next change to `highlight/emacs/landin-mode.el`, on a host with Emacs; R13.90 changed it on a host without one, and R13.92 changed its keyword rules and the grammar pin and ran its smokes on an Emacs from the Nix store, without trying `landin-ts-install-grammar`. | The install verified on Emacs 29 and 30, and corrected if it fails. | open |
-| SR-1120 | Usability | `./highlight/test.sh` takes any tree-sitter CLI that prints the pinned version; `environments/pins.sh` pins the release's `.gz`, not the binary, so the script cannot hold a binary in `node_modules` to it. Met in R13.79. | The next change to the tree-sitter pin. | The unpacked binary's digest recorded beside the archive's and checked. | open |
-| SR-1122 | Release readiness | The FreeBSD lane's guest admits root over SSH without a credential on a loopback port chosen by bind-and-close, and the client checks no host key, so another local user of a shared host can enter the guest or answer for it. Reported by the review R13.79 answered and left open: it needs a per-boot key in the image overlay, and the open login is the README's recorded position. | The next change to `environments/freebsd/vm.py`. | A key made for each boot, and the client holding the guest to it. | retired: the guest boots with no forwarded port, takes a client key made for that boot as root's only credential, and the client pins the host key read over the private console before the port is forwarded; a `--ssh-port` VM uses the caller's own identity and known hosts |
-| SR-1133 | Usability | `stack N of M observed`, which the Cortex-M corpus and `--program` print since R13.79, is the painted main reservation; a stack the program made for itself, a fibre's, is not measured. | The next firmware consumer with fibres measured through `--program`. | Each prepared stack's depth beside the main one. | open |
-| SR-1176 | Usability | `environments/xtensa/corpus.py --all` refuses to run without a locked `--tools` installation, so the whole corpus on a host with only `--qemu` took a wrapper naming all 964 rows as `--fixture`. Met in R13.79 verifying D1110. | The next change to the Xtensa lane's options. | An unlocked whole-corpus run that reports itself as not COMPLETE. | retired: an `--all` run with `--qemu` alone runs and reports `UNLOCKED`; every Xtensa run states `COMPLETE`, `FILTERED` or `UNLOCKED` first and last |
-| SR-1177 | Usability | An Xtensa lane guest that never starts on a loaded host is reported as "guest timed out", the words for a guest that hangs; its `timeout-remote.json` shows the reset PC and zero registers. Met once in 3,470 runs in R13.79, with three heavy jobs beside it. The maintainer left it open with the other lane flakes. | The next change to the Xtensa lane's runner. | A start that did not happen told apart from a hang, or retried. | retired: the Xtensa oracle reads the registers before it continues a guest, starts once more one whose PC and registers never moved, keeps each attempt's evidence, and says "the guest never started" when neither starts |
-| SR-1178 | Release readiness | D1110 counts a routine's outgoing area in L0507 and in the prologue's stack-limit figure, and no test holds either; the layout and the build and stack reports' frame figures are held. Met in R13.79. | The next change to the Xtensa frame. | A case with a prepared stack, and one with a firmware entry whose area alone exceeds the stack. | open |
-| SR-1182 | Usability | L0501 "could not release temporary tool output" cuts its reason at 200 characters, GNAT's bound on an exception's message, so the entry it says it retained is named by a truncated path, `.../tmp/.refine-cleanup-68d6527d`. Met in R13.79 sweeping the descriptor limit over a link. | The next change to `Landin.Platform.Native.Tools`' failure reporting. | The reason carried whole, outside the exception's message. | retired: the tool runner keeps the whole failure reason outside the exception's message, and L0501 names the entry it retained in full |
-| SR-1183 | Usability | `python3 bindings/test.py` with the pinned environment's default `clang` fails its seven Cortex-M cases, since the Nix wrapper adds `-fzero-call-used-regs`, which Thumb targets do not support; it passes with `CLANG=clang-19`, which `bindings/README.md` shows only for `--write`. Met in R13.79. | The next change to `bindings/test.py` or `bindings/README.md`. | The script choosing the unwrapped Clang, or its refusal saying to set `CLANG`. | retired: `bindings/test.py` takes `$CLANG`, else `clang-19`, else `clang`, and a missing one is refused saying to set `CLANG` |
-| SR-1184 | Release readiness | D1220's guard, an exhausted analysis answered as that document's defect, is exercised only by an injected `Storage_Error`: no input is known that still recurses without bound, and whether a release build, Darwin and FreeBSD raise it on a real stack overflow in the server is unverified. Met in R13.79. | The next crash of that kind, or a server item on those hosts. | A real recursion held by a native session in both build modes, or a bound on the recursion. | open |
-| SR-1185 | Usability | The test program's fake filesystem stores an entry added or written under a path that spells a linked directory as it was spelled, and `Is_Link` asks about the spelling; only reads, tests, listings and identities follow such a link. R13.79 left it so to keep every existing case's meaning. | The first case that writes through a linked directory, or the next change to how `Landin.Testing.Fakes` stores an entry; R13.79 later gave the fake a `Separation_Shortage` that never runs short, and changed how it stores no path. | Writes stored at the resolved path. | open |
-| SR-1194 | Usability | An edit to `docs/diagnostics.md` still regenerates compiled Ada, `landin-diagnostics-explanations.adb`, so it needs a rebuild, and two branches that change explanations conflict in the generated file: the cost D1240 removed for citations. Met in R13.79 moving the citations into `citations.txt`. | The next change to how diagnostic explanations are generated. | The explanations read as data, as the citations are, or the cost recorded as kept. | open |
-| SR-1196 | Usability | `refine version` names the library it uses but not the `citations.txt` that `refine explain` would read there, nor whether it is readable or names refine's own sources (D1240, D1357). Met in R13.79. | The next change to `refine version` or to how `citations.txt` is found; R13.79's later fixes regenerated the file's contents and gave it the line naming its compiler sources (D1357), and changed neither the version report nor how the file is found. R12.70 regenerated the file and changed neither the version report nor how it is found. R13.80 regenerated the file as R12.70 did. R11.27 and R13.90 regenerated the file as R13.80 did; the register sweep after R13.90 regenerated the file as R13.90 did; R13.91, R13.92 and R13.93 regenerated the file as R13.90 did. | `refine version` naming the file and whether it can be read. | open |
-| SR-1200 | Usability | A publication defect cannot be held by a scripted server session, since nothing a transcript writes makes the executable fail, so D1250 rests on a test-program case over a fake host whose read raises. Met in R13.79. | The next server item. | A way for a session to inject a defect, or a recorded decision that the case is enough. | open |
-| SR-1201 | Usability | `refine bindings` refuses glibc's `scanf` family, `scanf`, `fscanf`, `sscanf` and their `v` forms, for `AsmLabelAttr`, since glibc redirects them to `__isoc99_*` symbols. Met in R13.79 binding the system's `<stdio.h>`. | The first binding that needs one. | A decision on binding the symbol the label names. | open |
-| SR-1206 | Competitive optimization | A trap given a `caller` parameter (D1262) compares its coordinates with every call in the program that fills a caller position of that struct type, so the trapping routine's code grows with the number of such calls, though it runs only when the program is already stopping. Met in R13.79 implementing the caller-site trap. | A library contract helper called from many sites, or a firmware image whose size the comparisons are measured to dominate. | The table of sites D1262 names, if the measurement shows a cost. | open |
-| SR-1213 | Broader standard library | A static Linux program cannot install a signal handler: x86-64's `rt_sigaction` needs a restorer the library cannot write, so `libc.sigaction` with a handler, `libc.handling`, works only with `--link=libc`. Met in R13.79 typing the handler. | The next item on Linux signals. | A handler installed without the C library, with the restorer the static start supplies. | open |
-| SR-1214 | Usability | A trap carries no words: D1281 has `platform/posix` write a line to standard error before one trap, the missing initializer's, and the root's other misuses, a second argument triple or a negative count, stay bare traps. Met in R13.79. | The next item on trap reports. | Each misuse trap of the root saying what was misused. | open |
-| SR-1215 | Usability | `scripts/tests/test_library_docs.py` writes out the number of `failure.reason`'s atoms, 39, so every new library failure atom fails a script test that the fixture suites do not run. Met in R13.79 adding `io.is_a_directory`. | The next new failure atom. | The count read from the library rather than written in the test. | retired: the test reads `failure.reason`'s atoms from `core/failure/failure.ldn` |
-| SR-1218 | Usability | A runtime fixture that pins a panic site computes it by hand, one plus five times the operation's byte offset plus the family's offset, and must be recomputed whenever a byte before it moves: `refine site` maps a site to its line, and nothing maps a source position to its site. Met in R13.79 rewriting `runtime/compiler-unreachable-dispatches`. | The next fixture or tool change that touches panic sites. | A way to name a site by its source position, in a fixture or through `refine site`. | open |
-| SR-1219 | Usability | `scripts/emit_manifest.py emit --debug-info` comparisons before and after a change report every entry whose debug sections changed as a difference, and nothing tells those from changed code: showing that a debug-information change left the code alone took a scratch script that strips `.debug_*`, `.landin_id` and D192's `# Landin caller files` comment. Met in R13.79 typing module bindings in firmware debug information. | The next change to debug-information emission or to `scripts/emit_manifest.py`'s comparisons; R12.80 added an expected refusal to its list and changed no comparison. R12.70 added an expected refusal to its list and changed no comparison; the register sweep after R13.90 sharded `modes` (D1365) and passed a positive's firmware entry (D1366), and changed no comparison. | The comparison reporting code and debug-information differences apart. | open |
-| SR-1224 | Usability | About fifty lanes each declare their own argparse `--refine`, so a behaviour every lane shares, D1307's stale-binary warning, took an edit in each with `sys.path` set up per file, and a lane added later is held only by `scripts/tests/test_refine_revision.py`'s scan of callers. Met in R13.79. | The next change to how lanes take their compiler. | One shared lane-argument helper. | open |
-| SR-1225 | Usability | The board script tests mock `subprocess.run` for every call and return a `str` stdout, so a board tool that adds a subprocess call meets an `AttributeError` deep in the new code rather than a word about the mock. Met in R13.79 adding D1307's check to the board tools. | The next change to the board script tests' mocks. R12.70 patched its new SWD read by name in the STM32H753 lock test and changed no shared mock. | A mock that refuses a call it does not expect by name. | retired: `scripts/tests/expected_runs.py` answers a board test's subprocess calls by program and refuses any other by name |
-| SR-1226 | Usability | The trees `scripts/tests/test_check_controls.py` copies hold no library, so `fixture_sources` over a copied fixture tree reports `runtime/r420-vec-growth-boundary`'s rooted `with` as missing, and a control has to filter for its own message. Met in R13.79. | The next change to the controls' copied trees. | Copied trees that resolve the library, or the copy saying it has none. | retired: the copied trees also hold the library files fixtures' `with:` lines reach, and the controls check their own break unfiltered |
-| SR-1232 | Usability | A firmware diagnostic's new words passed their local checks while a Cortex-M lane still expected the old ones: after L0330's armv6-m refusal was reworded, `environments/cortex-m/firmware.py`'s reserved-instruction control failed only when the lane ran, "unexpected firmware refusal: reserved-instruction", and `scripts/activations.py` names no Cortex-M lane when the firmware stage's diagnostics change. Met in R13.79 running the lanes from `nix develop`. | The next change to the firmware stage's diagnostics in `compiler/ada/src/stages/landin-targets-firmware.adb` or to `scripts/activations.py`'s passes; the actionlint pass R13.79 added there came before this row. R12.70 changed L0514's and L0519's words in the configuration stage and the build report, not this file's diagnostics, and ran every Cortex-M lane. | A change to a firmware diagnostic's text naming the firmware lane, or the lane's controls reading the text from one place. | open |
-| SR-1233 | Usability | `scripts/agent_env.sh` prints `/dev/null` whenever `python3` and `gprbuild` are on PATH, including when they come from another checkout's older environment, and says nothing of it. A session started in one checkout therefore gets none of a worktree's newer shell tools, `landin-fhs` and `actionlint` among them: `environments/cortex-m/run.py` then refuses with "run from `nix develop`" although the agent environment was sourced, and the worktree's own environment was reachable only from `env -i`. The helper's comment says such a worktree needs a `nix develop` of its own, but nothing tells the session that the helper added nothing. Met four times in R13.79: pinning actionlint, answering a gate run's failures, recording the font pin, and pinning shellcheck, where the worktree's `shellcheck` was "command not found". | The next change to `scripts/agent_env.sh`, to the local feedback recipe or to the Cortex-M lanes' NixOS route. | The helper noticing that the environment on PATH is not this checkout's flake, and saying so or writing this one's. | retired: the flake's shell exports `LANDIN_ENV_KEY`, and `scripts/agent_env.sh` says on standard error when the shell on PATH is another checkout's and prints this one's file, which it now builds from a bare environment |
-| SR-1234 | Usability | `environments/boards/README.md` says the board build needs an FHS environment on NixOS for "the foreign cross-toolchain archives" and opens `landin-fhs` for it, but `nix develop` already carries `arm-eabi-gcc`, `riscv64-elf-gcc` and the Xtensa compilers patched to the store, and `build.py` takes them from PATH, so the build may no longer need it. R11.27 checked: `build.py --mode=both --records=strict` from `nix develop` alone built every board and matched every record, and failed, with NixOS's stub-ld refusal, only while the Cortex-M tools directory's unpatched Xtensa compilers stood first on PATH. Met in R13.79 adding `landin-fhs`. | The next change to `environments/boards/build.py` or to the boards README. | A board build run from `nix develop` without `landin-fhs`, and the README following its result. | retired: `environments/boards/build.py --mode=both --records=strict` built and matched all seventeen images from `nix develop` alone, and the README says to build there |
-| SR-1237 | Usability | A type application's fixed actual reads no compiler fact and no `sizeof`: `buf(compiler.word_size)` is refused, although `[compiler.word_size]u8` is a type since D1321, because D135 keeps a fixed actual to a literal or a forwarded formal. Met in R13.79 deciding D1321's scope. | The next change to fixed actuals. | A decision on whether a fixed actual folds as an array length does. | open |
-| SR-1238 | Language evolution | D1322 places every instance of a placed generic routine, but not the evidence adapter lowering makes for an instance that is itself a conformance's provider with evidence of its own (`Bound_Providers`), so a generic provider placed in RAM text is entered through an adapter in flash; D1322 states the exclusion. Met in R13.79 writing D1322. | The next change to evidence adapters or to placement. R12.70 placed whole sections a description places, an adapter with the rest of the text, and changed no declaration's placement. R13.90 added a second kind, the routine forwarding an entry a conformance hands `through` a field (D1363), and places it as it places these. | The adapter placed with the instance it enters, or a decision that it stays where it is. | open |
-| SR-1239 | Usability | `./scripts/dev-test.sh --fixture=negative`, a class as `compiler/tests/README.md`'s "A fixture selector accepts `positive`, `negative`, …" can be read, fails with "exactly one fixture was selected (expected 1, actual 0)", which says neither that a selector names `CLASS/NAME` nor that a class alone is refused. Met in R13.79 running a cross lane over the negative corpus. | The next item that touches the test program's selectors. | The refusal naming the `CLASS/NAME` form, or a class selecting its fixtures, with the README saying which. | retired: a `--fixture` selector naming a class or no fixture is refused before anything runs, saying a selector names one fixture as `CLASS/NAME`, and `compiler/tests/README.md` says so |
-| SR-1242 | Usability | No command applies the compiler's exact fixes: `refine fmt` changes no token, there is no `refine fix`, and the JSON report's `exact` fixes are applied only by an editor through the language server. Met in R13.79 giving L0684 its rewrite (D1341), whose request named "the formatter or `refine fix`". | The next item touching the driver's commands or fixes. R11.27 restated more refused lines with fixes and changed no command that applies them. | A `refine fix` that applies exact fixes, or `docs/diagnostics.md` saying that fixes are applied by editors. | open |
-| SR-1249 | Usability | Since D1357 every edit to a compiler source, a test source or a build script makes `python3 check.py` fail, "the citations are stale; they name compiler sources …", until `--generate` rewrites `citations.txt`'s second line, and every parallel stream that touches Ada touches that line. Met in R13.79 adding the line. | The next parallel round's integration, or the next change to how `citations.txt` is generated. R12.70 was no parallel round and regenerated the file as before. R13.80 was no parallel round either, nor were R11.27 and R13.90; R13.90's one stream, the highlighters, was a branch the main stream merged and regenerated nothing. The register sweep after R13.90 was one: three of its four streams edited compiler or test sources and each regenerated the line, the merges took it without a conflict, and one `--generate` after the last merge settled it; the maintainer is to choose. | The cost measured and kept, or a lighter identity the maintainer chooses. | retired: the maintainer kept the digest as D1357 has it: in the register sweep after R13.90 three parallel streams each regenerated the line, the merges took it without a conflict, and one `--generate` after the last merge settled it, one command per compiler edit |
-| SR-1250 | Usability | shellcheck's release publishes no checksum file, so `environments/pins.sh`'s shellcheck digests were taken from the archives as downloaded, trusted on first download, where actionlint's are checked against its release's checksums. Met in R13.79 pinning shellcheck 0.11.0. | The next shellcheck version. | The digests checked against a second source, GitHub's asset digests or nixpkgs' hashes, or the trust recorded as kept. | open |
-| SR-1254 | Usability | A link under a descriptor limit of 11 to 13, `refine compile main.ldn -o pN` at RLIMIT_NOFILE, is refused as "could not create temporary tool output; x86_64-pc-linux-gnu-gcc could not be run to completion", which does not name the shortage, and `compiler/tests/test_compile_publication.py`'s `descriptor_limit_link` accepts that text. Met in R13.79 by the review's descriptor sweep, while the separation refusals were made to name the shortage. | The next item that touches tool capture. | The refusal naming the descriptor shortage as the separation refusals do, with the link control holding it. | retired: a capture file that cannot be created names the host's reason, "Too many open files", and `descriptor_limit_link` requires it |
-| SR-1256 | Release readiness | probe-rs single-steps a RISC-V hart before every resume, even after a halt the debugger asked for, and relies on `dcsr.stepie=0` to keep interrupts out of the step; the ESP32-C3 takes a pending timer interrupt inside the step anyway, which disturbed the firmware the board check read until D1254 parked the C3 first (82 of 1,124 steps entered an interrupt on the old firmware). Met finding the C3 cross-check's failures in R13.79. | The next probe-rs pin bump, or a probe-rs pull request when the maintainer asks for one. | The step taken with interrupts masked on such a core, or not taken after a requested halt. | open |
-| SR-1257 | Release readiness | The ESP32-C5's cross-check reads a running hart through the same halting probe-rs sessions that disturbed the C3 before D1254; it has never been seen to fail, and whether its single step honours `stepie` is unmeasured. Met beside SR-1256 in R13.79. | The next item touching the C5 port or the ESP oracle. | The step's interrupt entry measured on the C5, and the C5 parked as the C3 is if it takes them. | open |
-| SR-1258 | Usability | `probe-rs read` looks like a passive memory read, and the Arm boards' READMEs say their counters are read without halting the core, but on a RISC-V target each call halts and single-steps the core about five times; the board guide does not say so. Met finding the C3 cross-check's failures in R13.79. | The next edit of `environments/boards/README.md` beyond R12.80's account of the ESP interrupt snapshots. | The guide saying what a probe read does to a running RISC-V core. | retired: the board guide says that a probe read halts and single-steps a running RISC-V core about five times, where the Arm ports read without halting, and why the C3 parks first (D1254) |
-| SR-1259 | Usability | `./scripts/dev-test.sh --record=lowering` ends "could not write compiler/tests/lowering.ir" and nothing else when a positive fixture fails to lower, so it reads as a filesystem fault; only running `--case='lowering/the recorded corpus is current'` names the fixture and its report. Met in R12.80 recording a new firmware fixture. | The next change to `Record_Artefact` in `compiler/ada/tests/src/landin-tests-lowering_suite.adb` or to the test program's record mode. | Record mode printing each problem that kept it from writing, as the case does. | retired: `--record=lowering` names each fixture that kept it from writing, with its report |
-| SR-1260 | Usability | A positive fixture is lowered for `compiler/tests/lowering.ir` without the reference description `refine` gives a Cortex-M0 program that imports none, so a fixture with a `link(vector:)` handler that `refine` accepts fails there with L0518 until it imports `platform/cortex_m/reference` itself; the README's account of the recording does not say so. Met in R12.80 adding `positive/firmware-image-from-a-handler`. | The next change to how `landin-tests-lowering_suite.adb` loads a fixture, or to D543's implicit reference; the register sweep after R13.90 changed what record mode says when the corpus cannot be lowered, not how a fixture is loaded. | The recording giving a firmware fixture the description `refine` gives it, or the README saying it does not. | open |
-| SR-1261 | Usability | Nothing compares the images two compilers link: R12.80's exit evidence, every corpus image the same bytes or each difference explained, took running every Cortex-M, RV32 and Xtensa lane with the base compiler and the candidate, a scratch script hashing each ELF's loaded segments across the two output trees, and another diffing symbols and disassembly to say why one differs; `scripts/emit_manifest.py` compares assembly between build modes and hosts, not linked images between compilers, and a lane keeps no image of a base to compare. Met closing R12.80. | The next item whose exit evidence compares linked images, or the next change to `scripts/emit_manifest.py`'s comparisons. R12.70 met it again, comparing every lane's images with R12.80's scratch scripts. | A comparison of two compilers' linked images over a lane's corpus, reporting the loaded bytes that differ and the routines and data that differ. | retired: `scripts/compare_images.py BASE NEW` compares two lane outputs' linked images by their loaded segments and names the routines and data that differ; the closing checklist and both lane guides use it |
-| SR-1262 | Release readiness | Main's push gate 43428233668 failed `board-stm32h753` once, its RAM run refusing "2 bytes had arrived when the boot frame was written; the host sent 1" after the tool logged "UART pre-boot bytes at offsets 0..0: ff": a 0xff reached the firmware's UART before the host's `S`, so it counted two. The image loads the bytes of one that had passed a rig session and a boards dispatch that day, and the rerun of the job passed. Met promoting R12.80. The boards dispatch of R13.91's first candidate, run 43742524652, failed the same port's boot run otherwise: "UART pre-boot bytes at offsets 0..0: 53", then "waited 5 s for the boot frame; received 1 bytes", on an image whose code the item did not change; the next candidate's dispatch passed. | Its next failure. | The stray byte's source named, the ST-LINK's console or the line's state at the RAM run's start, and removed or tolerated with the reason. | watch |
-| SR-1263 | Usability | `environments/cortex-m/descriptions.py` takes no `--case`, where `firmware.py` does, and `run.py --lane=descriptions` runs every device, the trap records, the RAM images, the contract and the stage refusals; trying R12.70's new RAM-image case alone took a scratch script importing the module and calling the case, and otherwise the whole lane, a minute and a half with `devices`. Met building R12.70. | The next change to the descriptions lane. | A `--case` selector, as `firmware.py`'s, whose run is FILTERED. | retired: `descriptions.py --case` repeats, naming a device, a trap record, a RAM image or a contract control, and a selection is `FILTERED` |
-| SR-1264 | Usability | A positive fixture that places a vector slot, as `positive/description-copies-text-into-ram` does, has to be named by hand in `scripts/emit_manifest.py`'s `REFUSAL_PAIRS`, since the manifest emits positives without their `args` and a vector placement needs `--firmware-entry` (L0502); `compiler/tests/README.md` does not say so, and a fixture left out shows only as a refused emit in the manifest. Met adding R12.70's fixtures. | The next change to the emit manifest or to fixture metadata. | The manifest taking a positive's firmware request from its `args`, or the README naming the list. | retired: `emit_manifest.py` passes the firmware entry a positive's `args` request for the target they choose, and `REFUSAL_PAIRS` no longer lists the two (D1366) |
-| SR-1265 | Usability | `environments/xtensa/corpus.py` takes only an inventory `--fixture`, where `environments/cortex-m/backend_corpus.py` takes `--program PATH`, so running a program of one's own on either Xtensa chip took copying a fixture's retained `source` directory, its oracle wrapper and lane description, and replaying the compile, linker-script, assemble and link commands its `commands.json` records. Met measuring R13.80's hash candidates. A complete `--all` run takes the default `--memory-profile=chip`, where the gate passes `sim`, and at `chip` 20 rows fail with "link exited 1; inspect link.log", the log saying IRAM overflowed by up to 190 KB, with nothing naming the profile the gate uses; met checking R13.80's images. | The next change to the Xtensa lane's options. | `--program` on the Xtensa corpus, as the Cortex-M corpus has it, and a complete run defaulting to the gate's profile or a capacity failure naming it. | retired: `environments/xtensa/corpus.py` takes `--program PATH` and `--root`, `--memory-profile` defaults to the gate's `sim`, and a capacity failure names the profile and the gate's |
-| SR-1266 | Usability | `environments/cortex-m/backend_corpus.py --level` is not repeatable: `--level rv32imc --level rv32imac` ran rv32imac alone and said nothing of the first, where `--profile` and `--program` repeat. Met in R13.80. | The next change to the corpus runner's options. | `--level` repeating as `--profile` does, or a second one refused. | retired: `backend_corpus.py --level` repeats as `--profile` does, and `--level` without `--program` is refused |
-| SR-1267 | Usability | Nothing reports what a routine costs on an emulator lane. Choosing R13.80's hash took a script that counts QEMU's `-d exec` lines at one instruction per block up to a completion label's address; RV32's lines carry no symbol for the start file, the Xtensa label is the link symbol `_landin_xtensa_fixture_stopped`, and the ESP32-S3's counts move between runs, so a difference of two iteration counts was the only per-call figure. | The next item that chooses between implementations by their cost on a firmware target. | `--program` reporting the instructions a run executed, per lane. | open |
-| SR-1268 | Competitive optimization | SipHash-1-3 of 16 bytes costs 169 cycles on Linux x86-64 at `--optimize speed`, where C takes about 35: each round's `u64` temporaries go through stack slots, about 90 instructions a round against 14, and each byte load keeps its overflow and range checks. On Cortex-M0 it is 6,670 instructions, and an unsigned `% 8` there calls `__aeabi_uidivmod` where a mask would do. Every map operation hashes its key once. Measured in R13.80. | The next optimization item on x86-64 register allocation, or a measured map-heavy benchmark. | The round's state in registers, and a remainder by a power of two as a mask. | open |
-| SR-1270 | Usability | The gate's `build-modes-1` was cancelled at its 30-minute limit after its comparison had finished clean, "unexpected 0  disagree 0", and the gate failed on that alone. Its step ran 1,777 seconds against 978 on dda144b7a, `build-modes-2` 1,070 against 763, while the same compilers took the same time locally over 500 accepted and 1,128 refused fixtures; the job, rerun on the same tree, took 21 minutes. Met in R11.27 following its candidate's gate. | The next build-modes timeout, or the next change to how the build-modes parts are split; R13.90's `build-modes-1` passed in 29.7 minutes, 18 seconds under the limit. | A limit with room for a slow runner, or parts that each stay well under it. | retired: the gate deals the build-mode comparison round three shards, `emit_manifest.py modes --shard=I/N`, each comparing every mode target, about 164 s each locally against 30 minutes (D1365) |
-| SR-1271 | Usability | `./highlight/test.sh` skips its TextMate tokenizer smoke, the one test of the grammar VS Code and its descendants load, with "TextMate test dependencies absent", and does not say that `npm install` (or `npm ci`) in `highlight/textmate` provides them; only `highlight/README.md` does. Met in R13.90 adding `through` to the highlighters in a fresh worktree. | The next change to `highlight/test.sh` or the TextMate package. | The skip names the command that enables the smoke. | retired: the skip says `npm ci` in `highlight/textmate` installs the TextMate smoke's dependencies, or that Node.js is absent |
-| SR-1272 | Usability | `python3 check.py --generate`, which `scripts/add_fixture.py` also runs, says "wrote the editor artifacts of highlight/generate.py" when it changed none of them, beside "unchanged" for every other generated file, so a reader looks for an edit that is not there. Met in R13.90 registering its fixtures. | The next change to `check.py`'s generation step. | "unchanged" when the artifacts' bytes are the same. | retired: `highlight/generate.py` writes only the files whose bytes change, and `check.py --generate` says "unchanged" when none does |
-| SR-1273 | Usability | On NixOS an Xtensa run with `--qemu` alone cannot start the installation's QEMU: the stub loader refuses it, and inside `landin-fhs` it still needs `LD_LIBRARY_PATH` set to the installation's `root/usr/lib/x86_64-linux-gnu` and its `pulseaudio` directory. The README says so and the message names the route, which is still a workaround. Met in the register sweep after R13.90 proving an unlocked run. | The next change to `environments/xtensa/tools.py`. | A `--qemu` run routed through `landin-fhs` with its libraries, as `--tools` is. | open |
-| SR-1274 | Usability | `backend_corpus.py --program` on RV32 prints "returned 42 (a1 1070120960)": `a1` is a register nothing checks, so its number means nothing for a `main` with one result, where Cortex-M's `r12` is held to zero. Met in the register sweep after R13.90 proving `--level`. | The next change to the corpus's program lines. | `a1` left out of the line, or said what it is. | open |
-| SR-1275 | Usability | `compiler/tests/test_compile_publication.py` stops at its first failing control with a traceback, so with several `--case` selectors a later failure is never reported, and seeing a second one took a second rebuild. Met in the register sweep after R13.90 proving two new controls against a build without their fixes. | The next change to `test_compile_publication.py`. | Every selected control run, and the failures listed together, as the FreeBSD lane does. | open |
-| SR-1276 | Usability | `emit_manifest.py modes` prints nothing until it finishes, where `emit` reports progress every 30 s, so a `build-modes` log of 10 to 30 minutes cannot tell a slow runner from a stuck one until the limit. Met in the register sweep after R13.90 reading `build-modes-1`'s log. | The next change to `emit_manifest.py modes`. | The progress line `emit` writes. | open |
-| SR-1277 | Usability | A recorded negative fixture whose program has a `main` and exits 0 records `refine`'s closing hint, "run it with `refine run ...`", which names `--target=linux-x86-64` on a host whose default target differs: recorded on Linux, it passes there and fails on Darwin, and nothing local says so. The other warning fixtures are modules, which record no hint. Met in R13.91, whose first candidate failed `darwin-host` and `darwin-host-release` on its new warning fixture. | The next change to how a fixture's report is recorded or compared, or to that hint. | The hint left out of a recorded report, recorded per host, or the recording refusing a host-dependent line. | open |
-| SR-1278 | Release readiness | A view of a local list's block taken through a copy of the list value, `snapshot := numbers` then `xs := vec.used(snapshot)`, is not held against `vec.push(numbers, ...)`, which may move the block `xs` still reads; the same through a caller's `inout` list is L0315, because the parameter's value derives from itself. Met in R13.92 checking SR-1080's loopholes. Since R13.93 a copy of a list the routine has already passed `inout` holds it, since what a call may store in a place is read with the binding; a list made by a call, or copied before any such call, still lends the copy alone. | The next change to how a copied record's origins are joined, or to D1084's unnamed views. | The copy deriving from the list it was copied from, so the view holds the original, or the hole stated as a non-guarantee with its reason. | open |
-| SR-1279 | Usability | A function value given a routine whose signature differs is L0301 "this function has a different signature", naming neither signature nor the part that differs, so a `from held` against a plain `from`, or one `escaping into` against `escaping`, reads as identical text on the page. Met in R13.92 writing `negative/held-result-refusals`. | The next change to L0301's function-value report or to signature agreement. | The note spelling both signatures, or the first part where they differ. | open |
-| SR-1280 | Usability | Where Pygments is absent, `highlight/test_adapters.py` prints "Pygments absent; lexer smoke skipped" near the top of the log, but `highlight/test.sh` does not count it through its `skip`, so the closing "NOT run on this host" list and `LANDIN_HIGHLIGHT_REQUIRE` do not know of it. Met in R13.92 running `./highlight/test.sh --integration` for `held`. | The next change to `highlight/test.sh` or `highlight/test_adapters.py`. | The lexer smoke a named skip like the others. | open |
-| SR-1281 | Usability | A negative fixture written with `program:` that imports `core/`, as a runtime fixture may, passes `scripts/add_fixture.py` and `./scripts/dev-test.sh --fixture=`, then fails `parser/reports carry the pinned codes` with L0006, "no library was found", because that case reads a `program:` alone; a negative that imports the library is a directory with `main.ldn` and `args: --root=../.. ../tests/fixtures/negative/NAME`, which `compiler/tests/README.md` says only in passing. Met in R13.93. | The next change to `scripts/add_fixture.py`, or to how the parser suite reads a negative fixture's program. | `add_fixture.py` refusing a negative fixture whose `program:` imports the library and naming the directory form, or the parser suite reading such a program with its library. | open |
 
 ## Retained positions
 

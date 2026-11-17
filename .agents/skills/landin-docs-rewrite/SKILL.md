@@ -90,7 +90,8 @@ read.
   - The grammar of the enabled kernel is [1740]-[1830] in `spec.md`.
   - The permanent rules are [1840] onward.
   - Decisions go in `spec.md`'s register.
-  - Open work goes in `ROADMAP.md` only.
+  - Open work goes in `ROADMAP.md` and its register under
+    `roadmap/register/` only.
 - Where understanding A requires B, say so at A and name where B is found:
   - Within the tour and the specification, cite the paragraph inline as
     `[NNNN]`. The site turns it into a link.
@@ -99,9 +100,9 @@ read.
   - Learning material (the tour, examples, from-c, the library overview)
     carries no D-numbers and no roadmap or register identities. Point to
     a decision by the `spec.md` paragraph that holds its rule. Outside
-    `ROADMAP.md`, `check.py` refuses roadmap and register identities in
-    every document; only `README.md` and `handoff.md` may carry their
-    status pointer.
+    `ROADMAP.md` and `roadmap/`, `check.py` refuses roadmap and register
+    identities in every document; only `README.md` and `handoff.md` may
+    carry their status pointer.
 - Headings and pointers are navigation aids and count as form. They guide
   the reader to content and carry none of their own.
 
@@ -294,9 +295,10 @@ error: `spec.md` decides, and resolving it is the maintainer's decision.
      as `FILTERED`.
 4. **Friction findings**: wherever the documentation disagrees with what
    the tool does, or a reader would need the source to follow it, give
-   the symptom and where you met it. Each one becomes a Usability row in
-   `ROADMAP.md`'s register; name the rows you add, or propose them if
-   editing `ROADMAP.md` is outside your brief.
+   the symptom and where you met it. One your change fixes is named in
+   its commit; one that outlives it becomes a Usability row, a file under
+   `roadmap/register/`; name the rows you add, or propose them if editing
+   the register is outside your brief.
 
 For a collection of documents, apply the method to each separately, keep
 their order and identifiers, and gather the questions for all of them

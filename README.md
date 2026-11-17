@@ -314,12 +314,19 @@ run records and what the gate checks for each target.
 - **The first roadmap** built the enabled language, hosted Linux, native
   macOS and Cortex-M firmware. It closed with the pre-v1 language
   feature-complete, a claim about coverage and nothing else.
-- **The current roadmap** takes the compiler to an editor, more targets,
-  the microcontrollers people buy, concurrency and optimization. A build
-  tool, package acquisition, release versioning and self-hosting stay
-  outside it.
+- **The second roadmap** took the compiler to an editor, more hosted
+  targets, the microcontrollers people buy, a library split into
+  freestanding and hosted halves, concurrency and the start of measured
+  optimization. Its Windows phase was never started.
+- **The current roadmap** makes the language smaller and the tools around
+  it ordinary: the project's own process first, then `refine` split into
+  commands, a breaking simplification of the language, a review of the
+  standard library, Windows, and the library a newcomer expects to find.
+  Measured optimization runs beside all of it. A build tool and package
+  manager, self-hosting, a browser target, dates and times in the library
+  and every release decision stay outside it.
 
-**Next roadmap item: R16.10 — Measure generated code (planned).**
+**Next roadmap item: R17.10 — The register reviewed and typed (planned).**
 
 ## Questions, bugs and ideas
 
@@ -337,8 +344,9 @@ category's form says what a report needs.
   and never in a discussion.
 
 The repository has no issue tracker: a discussion that leads to work
-becomes an item or a register record in `ROADMAP.md`. Everyone taking part
-follows the [code of conduct](CODE_OF_CONDUCT.md).
+becomes an item in `ROADMAP.md` or a register record under
+`roadmap/register/`. Everyone taking part follows the
+[code of conduct](CODE_OF_CONDUCT.md).
 
 ## Working on Landin
 
@@ -362,7 +370,7 @@ documentation, or the focused tests the workflow describes for code.
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
 | `spec.md` | the normative specification: the grammar of the enabled language, the rules the tour left unsaid, and the register of decisions. |
 | `handoff.md` | the design in one page, and which decisions must not be quietly reversed. |
-| `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. |
+| `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates and the retained positions. The register of work waiting for a trigger is one file a row under `roadmap/register/`, with a generated overview in `roadmap/register.md`; decisions only the maintainer can take are under `roadmap/questions/`, and the inputs the decision items cite under `roadmap/inputs/`. |
 | `examples.md` | complete programs, each printing what it computes; the gate runs every one. |
 | `prototype-*.md` | the five design stress tests; see [The prototypes](#the-prototypes). |
 | `compiler/ada/` | [the Ada 2022 bootstrap compiler](compiler/ada/README.md): `refine`, its frontend, verified IR, native backends and test harness. |

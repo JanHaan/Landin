@@ -93,6 +93,11 @@ PAUSE = 2.0
 #  Exact repository paths.  scripts/tests/test_gate_inputs.py names every
 #  file that mentions one of these by name, so a new reader is a decision.
 CONTENT_FREE = ("AGENTS.md", "README.md", "ROADMAP.md", "handoff.md")
+#  Trees left out of the key whole, paths included: the roadmap's register,
+#  question and input files, a file each, which an item adds and deletes as
+#  often as it edits ROADMAP.md.  The same test names every file that
+#  mentions one of them.
+CONTENT_FREE_TREES = ("roadmap/",)
 
 #  The jobs whose evidence is physical: never reused, run by the event's
 #  scope alone.  scripts/tests/test_gate_inputs.py holds gate.yml to these:
@@ -122,7 +127,10 @@ def entries(rev, cwd=None):
 def key(rev="HEAD", cwd=None, content_free=CONTENT_FREE):
     digest = hashlib.sha256()
     for mode, kind, name, path in entries(rev, cwd):
-        if path.decode("utf-8", "surrogateescape") in content_free:
+        decoded = path.decode("utf-8", "surrogateescape")
+        if content_free and decoded.startswith(CONTENT_FREE_TREES):
+            continue
+        if decoded in content_free:
             name = b"-"
         digest.update(b"%s %s %s\t%s\0" % (mode, kind, name, path))
     return digest.hexdigest()

@@ -4,9 +4,9 @@
 A temporary repository holds a register and a few files, so each way an
 activation names a path -- backticks, a bare path, a base name, an Ada
 unit, an area's name, a directory -- can be met or missed alone, and the
-statuses that wait for nothing are left out.  The real ROADMAP.md is read
-too, so a change to the register's form fails here rather than silently
-matching no row.
+kinds that wait for no change are left out.  The real register is read
+too, so a change to its form fails here rather than silently matching no
+row.
 """
 import importlib.util
 import io
@@ -27,31 +27,42 @@ spec = importlib.util.spec_from_file_location("activations", ROOT / "scripts/act
 activations = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(activations)
 
-REGISTER = """# Roadmap
+def row(stands, activation, status="open", kind=None):
+    """A register row file's text."""
+    return "".join(["---\n", "kind: %s\n" % kind if kind else "",
+                    "family: Usability\nstatus: %s\nopened: 2026-01-01\n"
+                    "activation: %s\n---\n\n%s\n\nCompletion: x\n"
+                    % (status, activation, stands)])
 
-| Record | Family | What stands | Activation | Completion | Status |
-| --- | --- | --- | --- | --- | --- |
-| R8 | not the register | a | b | c | d |
 
-## Register
+REGISTER = {
+    "SR-1": row("quoted", "The next change to `scripts/debug.sh`."),
+    "SR-2": row("bare", "The next change to environments/cortex-m/run.py's"
+                " lanes.", "scheduled elsewhere"),
+    "SR-3": row("base name", "The next change to `run.py`."),
+    "SR-4": row("unit", "The next change to Landin.Driver.Usage."),
+    "SR-5": row("area", "The next change to the development shell."),
+    "SR-6": row("directory", "The next change to `environments/cortex-m`."),
+    "SR-7": row("words", "The next change to the Cortex-M lane runner."),
+    "SR-8": row("measured", "The next change to `scripts/debug.sh`.",
+                kind="limit"),
+    "SR-9": row("watched", "The next change to `scripts/debug.sh`.",
+                kind="watch"),
+    "SR-0": row("not a path", "The next change to `else` or `refine check`."),
+}
+#  Not a row: a question beside the register, and a file of another name.
+OUTSIDE = {
+    "roadmap/questions/Q9.md": row("outside",
+                                   "The next change to `scripts/debug.sh`."),
+    "roadmap/register/README.txt": "activation: `scripts/debug.sh`\n",
+}
 
-| Record | Family | What stands | Activation | Completion | Status |
-| --- | --- | --- | --- | --- | --- |
-| SR-1 | Usability | quoted | The next change to `scripts/debug.sh`. | x | open |
-| SR-2 | Usability | bare | The next change to environments/cortex-m/run.py's lanes. | x | scheduled elsewhere |
-| SR-3 | Usability | base name | The next change to `run.py`. | x | open |
-| SR-4 | Usability | unit | The next change to Landin.Driver.Usage. | x | open |
-| SR-5 | Usability | area | The next change to the development shell. | x | open |
-| SR-6 | Usability | directory | The next change to `environments/cortex-m`. | x | open |
-| SR-7 | Usability | words | The next change to the Cortex-M lane runner. | x | open |
-| SR-8 | Usability | retired | The next change to `scripts/debug.sh`. | x | retired: done |
-| SR-9 | Usability | watched | The next change to `scripts/debug.sh`. | x | watch |
-| SR-0 | Usability | not a path | The next change to `else` or `refine check`. | x | open |
 
-## After the register
+def rows(**more):
+    """The register's files, with MORE rows by identity."""
+    return {"roadmap/register/%s.md" % identity: text
+            for identity, text in dict(REGISTER, **more).items()}
 
-| Q9 | Usability | outside | The next change to `scripts/debug.sh`. | x | open |
-"""
 
 FILES = ("scripts/debug.sh", "environments/cortex-m/run.py",
          "environments/cortex-m/setup.py", "compiler/ada/src/landin-driver-usage.adb",
@@ -69,7 +80,10 @@ class Activations(unittest.TestCase):
         self.root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.root)
         git(self.root, "init", "-q", "-b", "main")
-        (self.root / "ROADMAP.md").write_text(REGISTER)
+        for name, text in dict(rows(), **OUTSIDE).items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
         for name in FILES:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,17 +154,12 @@ class Activations(unittest.TestCase):
         git(self.root, "commit", "-q", "-m", message)
         return git(self.root, "rev-parse", "HEAD")
 
-    def roadmap_with(self, row):
-        return REGISTER.replace("\n\n## After the register",
-                                "\n" + row + "\n\n## After the register")
-
     def test_a_change_before_the_row_was_written_does_not_count(self):
         #  The row's writer had seen the change it names: it is what the
         #  row was written about, not the next change to the file.
         self.commit("change setup", **{"environments/cortex-m/setup.py": "a\n"})
-        row = ("| T1 | Usability | late | The next change to"
-               " `environments/cortex-m/setup.py`. | x | open |")
-        stated = self.commit("add the row", **{"ROADMAP.md": self.roadmap_with(row)})
+        stated = self.commit("add the row", **rows(T1=row(
+            "late", "The next change to `environments/cortex-m/setup.py`.")))
         listed, text = self.listed()
         self.assertNotIn("T1", listed)
         self.assertIn("T1 (stated in %s)" % stated[:12], text)
@@ -166,18 +175,18 @@ class Activations(unittest.TestCase):
         self.assertNotIn(stated[:12], text.split("T1 (open)", 1)[1])
 
     def test_a_restated_activation_starts_the_row_again(self):
-        row = ("| T2 | Usability | restated | The next change to"
-               " `scripts/debug.sh`. | x | open |")
-        self.commit("add the row", **{"ROADMAP.md": self.roadmap_with(row)})
+        first = row("restated", "The next change to `scripts/debug.sh`.")
+        self.commit("add the row", **rows(T2=first))
         self.commit("change debug", **{"scripts/debug.sh": "a\n"})
         self.assertIn("T2", self.listed()[0])
         #  Restating its activation after that change starts it again;
         #  a change to another cell does not.
-        restated = row.replace("`scripts/debug.sh`.", "`scripts/debug.sh` again.")
-        self.commit("restate", **{"ROADMAP.md": self.roadmap_with(restated)})
+        restated = first.replace("`scripts/debug.sh`.", "`scripts/debug.sh` again.")
+        self.commit("restate", **rows(T2=restated))
         self.assertNotIn("T2", self.listed()[0])
-        reworded = restated.replace("| restated |", "| reworded |")
-        self.commit("reword", **{"ROADMAP.md": self.roadmap_with(reworded)})
+        reworded = restated.replace("\nrestated\n", "\nreworded\n")
+        self.assertNotEqual(reworded, restated)
+        self.commit("reword", **rows(T2=reworded))
         self.assertNotIn("T2", self.listed()[0])
         #  An uncommitted change is always after the row.
         (self.root / "scripts/debug.sh").write_text("b\n")
@@ -201,13 +210,12 @@ class Activations(unittest.TestCase):
         self.assertIn("SR-2", self.listed("environments/cortex-m/run.py")[0])
 
     def test_a_directory_named_as_an_owner_is_listed_apart(self):
-        rows = ("| T3 | Usability | owner | The next change to `core/io`'s"
-                " `make_temporary`. | x | open |\n"
-                "| T4 | Usability | bare owner | The next change to"
-                " environments/cortex-m's own module. | x | open |\n"
-                "| T5 | Usability | both | The next change to `core/io`'s"
-                " reader or to `core/io/io.ldn`. | x | open |")
-        self.commit("rows", **{"ROADMAP.md": self.roadmap_with(rows)})
+        self.commit("rows", **rows(
+            T3=row("owner", "The next change to `core/io`'s `make_temporary`."),
+            T4=row("bare owner", "The next change to environments/cortex-m's"
+                   " own module."),
+            T5=row("both", "The next change to `core/io`'s reader or to"
+                   " `core/io/io.ldn`.")))
         self.commit("change io", **{"core/io/io.ldn": "a\n",
                                     "environments/cortex-m/setup.py": "a\n"})
         listed, text = self.listed()
@@ -235,9 +243,8 @@ class Activations(unittest.TestCase):
         beside = self.commit("the change the row records",
                              **{"environments/cortex-m/setup.py": "a\n"})
         git(self.root, "checkout", "-q", "item")
-        row = ("| T6 | Usability | recorded | The next change to"
-               " `environments/cortex-m/setup.py`. | x | open |")
-        self.commit("add the row", **{"ROADMAP.md": self.roadmap_with(row)})
+        self.commit("add the row", **rows(T6=row(
+            "recorded", "The next change to `environments/cortex-m/setup.py`.")))
         git(self.root, "merge", "-q", "--no-ff", "-m", "merge the stream", "stream")
         merge = git(self.root, "rev-parse", "HEAD")
         listed, text = self.listed()
@@ -281,18 +288,23 @@ class Activations(unittest.TestCase):
         self.assertIn("activations: a failing pass failed", out.getvalue())
 
     def test_a_malformed_row_is_an_error(self):
+        for text in ("no front matter\n", "---\nfamily Usability\n---\n",
+                     "---\nfamily: Usability\n---\n"):
+            with self.subTest(text=text):
+                (self.root / "roadmap/register/SR-5.md").write_text(text)
+                with self.assertRaises(ValueError):
+                    activations.register(self.root)
+        shutil.rmtree(self.root / "roadmap/register")
         with self.assertRaises(ValueError):
-            activations.register("## Register\n\n| SR-1 | only | three |\n")
-        with self.assertRaises(ValueError):
-            activations.register("no register here\n")
+            activations.register(self.root)
 
 
 class TheRegister(unittest.TestCase):
     def test_the_roadmap_register_is_read(self):
-        rows = activations.register((ROOT / "ROADMAP.md").read_text(encoding="utf-8"))
-        statuses = {status.split(" ", 1)[0].rstrip(":") for _, _, status in rows}
-        self.assertGreater(len(rows), 100)
-        self.assertLessEqual(statuses, {"open", "scheduled", "retired", "watch", "limit"})
+        rows = activations.register(ROOT)
+        statuses = {status.split(" ", 1)[0] for _, _, status in rows}
+        self.assertGreater(len(rows), 50)
+        self.assertLessEqual(statuses, {"open", "scheduled", "watch", "limit"})
         self.assertTrue(any(identity.startswith("SR-") for identity, _, _ in rows))
         self.assertTrue(any(identity.startswith("R551-") for identity, _, _ in rows))
 

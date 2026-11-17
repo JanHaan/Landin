@@ -234,8 +234,8 @@ normative construct's state and evidence; completed roadmap items record
 what landed and where its exit evidence is.
 
 Every inherited item and later discovery has a terminal disposition, and
-the transferred ones are owned by the successor families in the current
-roadmap's register. Feature-complete pre-v1 is a claim about coverage.
+the transferred ones are owned by the successor families in the register
+under `roadmap/register/`. Feature-complete pre-v1 is a claim about coverage.
 The broader standard library remains successor work. `ROADMAP.md` is the
 sole work authority. Outstanding grammar, representation, ABI, guarantee,
 and diagnostic questions are settled by the first slice that needs them
@@ -248,15 +248,25 @@ the complete hosted Linux x86-64 path, native macOS arm64, and
 emulator-first Cortex-M.
 
 The first roadmap's endpoint was feature-complete pre-v1, and it closed
-there. The current `ROADMAP.md` starts where it stopped: a frontend that
-scales and serves an editor, assembly with operands, more hosted targets, the
-RP2040, RP2350, STM32 and ESP32 families, a library split into freestanding
-and hosted halves, concurrency and measured optimization. A build
-tool, package acquisition, release versioning and self-hosting stay outside
-it, owned by the successor families its register names. Its identities are
-cited in `ROADMAP.md` and nowhere else.
+there. The second roadmap took the compiler to an editor, more hosted
+targets, the RP2040, RP2350, STM32 and ESP32 families, a library split along
+the capability line into freestanding and hosted halves, concurrency and the
+start of measured optimization. Its Windows phase was never started, and its
+optimization phase continues in the current roadmap, which makes the
+language smaller and the tools around it ordinary: the project's own process
+first, then `refine` split into commands, cargo-style, a breaking
+simplification of the language, a review of the standard library, Windows,
+and the library a newcomer expects to find: math, float text, text and
+Unicode, character encodings, locale formatting and regular expressions.
+Measured optimization runs beside all of it. A build tool and package
+manager, self-hosting and separate compilation, a browser or WebAssembly
+target, dates and times in the library, and every release or version
+decision stay outside it, owned by the successor families `ROADMAP.md`
+names. The register is one file a row under `roadmap/register/`, and roadmap
+identities are cited in `ROADMAP.md` and the files under `roadmap/` and
+nowhere else.
 
-**Next roadmap item: R16.10 — Measure generated code (planned).**
+**Next roadmap item: R17.10 — The register reviewed and typed (planned).**
 
 ## Versions
 

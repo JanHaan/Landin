@@ -49,20 +49,10 @@ ACTIVE_ITEM = BETWEEN_ITEMS.replace("Status: complete", "Status: active", 1)
 ENDPOINT = BETWEEN_ITEMS.replace("Status: planned", "Status: complete", 1)
 
 
-#  The hosted items in execution order.
-HOSTED = ("Standard input, files and directories",
-          "The POSIX layer and host strings",
-          "Formatting, buffered text and byte blocks",
-          "The environment and processes", "Time and randomness", "Sockets",
-          "The rest of the file system", "The recurring parser frictions",
-          "Closing the gap the measurements found", "Dynamic loading",
-          "The newcomer's path",
-          "What the newcomer's path met", "What the register holds now",
-          "Documentation that teaches")
-CONCURRENCY = ("Prototype 5", "Stackful fibres", "A second Io",
-               "Threads and the atomic wrapper")
-#  What the newcomer's stream trial met, scheduled after the threads.
-STREAM = ("What a first stream meets",)
+#  The serial lane's first items, in execution order, by title.
+PROCESS = ("The register reviewed and typed", "The question queue",
+           "Lanes and standing authority in the checks",
+           "The item skill rebuilt", "Gate wall time")
 
 
 class RoadmapProgress(unittest.TestCase):
@@ -158,43 +148,62 @@ Depends on: none
                 with self.assertRaises(SystemExit):
                     RENDER.roadmap_progress(roadmap)
 
+    def test_a_phase_dependency_waits_for_every_item_of_the_phase(self):
+        later = "R%d.%d" % (5, 10)
+        roadmap = BETWEEN_ITEMS + (
+            "\n### %s — Start the container program\n\n"
+            "Status: planned\nDepends on: R%d\n" % (later, 4))
+        roadmap = roadmap.replace("Execution order: R%d" % 4,
+                                  "Execution order: R%d, R%d" % (4, 5))
+        marker = ("**Next roadmap item: " + SECOND + " — Start source debugging "
+                  "(planned).**")
+        self.assertEqual(self.project_status(roadmap, marker), [])
+        done = roadmap.replace("Status: planned", "Status: complete", 1)
+        marker = ("**Next roadmap item: " + later
+                  + " — Start the container program (planned).**")
+        self.assertEqual(self.project_status(done, marker), [])
+        self.assertEqual(RENDER.roadmap_progress(done)["following"]["key"],
+                         later)
+
+    def test_the_continuous_lane_follows_the_serial_order(self):
+        roadmap = BETWEEN_ITEMS + (
+            "\n### %s — Start the container program\n\n"
+            "Status: planned\nDepends on: %s\n" % (THIRD, FIRST))
+        roadmap = roadmap.replace(
+            "Execution order: R%d" % 4,
+            "Execution order: %s, %s\nContinuous: %s onward"
+            % (FIRST, SECOND, THIRD))
+        order = CHECK.execution_order(roadmap, [FIRST, SECOND, THIRD])
+        self.assertEqual(order, [FIRST, SECOND, THIRD])
+        marker = ("**Next roadmap item: " + SECOND + " — Start source debugging "
+                  "(planned).**")
+        self.assertEqual(self.project_status(roadmap, marker), [])
+        for line, expected in (
+                ("Continuous: %s" % THIRD, "malformed Continuous"),
+                ("Continuous: R%d.%d onward" % (4, 90), "unknown"),
+                ("Continuous: %s onward\nContinuous: %s onward"
+                 % (THIRD, THIRD), "at most one Continuous")):
+            with self.subTest(line=line):
+                with self.assertRaisesRegex(ValueError, expected):
+                    CHECK.execution_order(roadmap.replace(
+                        "Continuous: %s onward" % THIRD, line),
+                        [FIRST, SECOND, THIRD])
+        with self.assertRaisesRegex(ValueError, "continuous lane holds"):
+            CHECK.execution_order(roadmap.replace(
+                "Execution order: %s, %s" % (FIRST, SECOND),
+                "Execution order: R%d" % 4), [FIRST, SECOND, THIRD])
+
     def test_site_refuses_duplicate_item_identities(self):
         duplicate = BETWEEN_ITEMS + BETWEEN_ITEMS.split("\n\n", 1)[1]
         with self.assertRaisesRegex(SystemExit, "repeats"):
             RENDER.roadmap_progress(duplicate)
 
-    def test_real_library_and_device_sequence(self):
+    def test_real_serial_sequence(self):
         text = (ROOT / "ROADMAP.md").read_text()
         headings = {match.group(3): match.group(1)
                     for line in text.splitlines()
                     if (match := CHECK.ROADMAP_WORK.match(line))}
-        split = headings["Separate library availability classes"]
-        conventions = headings["Library interface conventions"]
-        reading = headings["Answer the first outside reading"]
-        review = headings["Review the library"]
-        library = headings["The compiler finds its library"]
-        boundary = headings["The OS boundary in source"]
-        linux = headings["Linux without the C library"]
-        handles = headings["Services are handles"]
-        hosted = [headings[title] for title in HOSTED]
-        devices = headings["Describe devices"]
-        freestanding = headings["The freestanding library"]
         text = text.replace("Status: active", "Status: planned")
-        device_phase = devices.split(".")[0]
-        concurrency = [headings[title] for title in CONCURRENCY]
-        stream = [headings[title] for title in STREAM]
-        outside_review = ("A command destroys nothing it did not create",
-                          "What the second outside review found")
-        selected = [split, conventions, reading, review, library, boundary,
-                    linux, handles, *hosted, *concurrency, *stream,
-                    *(headings[title] for title in outside_review), freestanding] + [
-            identity for identity in headings.values()
-            if identity.startswith(device_phase + ".")]
-        for identity in selected:
-            start = text.index("### " + identity + " — ")
-            status = CHECK.roadmap_statuses(text)[identity]
-            text = text[:start] + text[start:].replace(
-                "Status: " + status, "Status: planned", 1)
 
         def complete(identities):
             nonlocal text
@@ -203,70 +212,23 @@ Depends on: none
                 text = text[:start] + text[start:].replace(
                     "Status: planned", "Status: complete", 1)
 
-        def assert_next(identity, title):
-            marker = ("**Next roadmap item: " + identity + " — " + title
-                      + " (planned).**")
+        def assert_next(title):
+            marker = ("**Next roadmap item: " + headings[title] + " — "
+                      + title + " (planned).**")
             self.assertEqual(self.project_status(text, marker), [])
             progress = RENDER.roadmap_progress(text)
-            self.assertEqual(progress["following"]["key"], identity)
+            self.assertEqual(progress["following"]["key"], headings[title])
 
-        assert_next(split, "Separate library availability classes")
-        complete([split])
-        assert_next(conventions, "Library interface conventions")
-        complete([conventions])
-        assert_next(reading, "Answer the first outside reading")
-        complete([reading])
-        assert_next(review, "Review the library")
-        complete([review])
-        assert_next(library, "The compiler finds its library")
-        complete([library])
-        assert_next(boundary, "The OS boundary in source")
-        complete([boundary])
-        assert_next(linux, "Linux without the C library")
-        complete([linux])
-        assert_next(handles, "Services are handles")
-        complete([handles])
-        for identity, title in zip(hosted, HOSTED):
-            assert_next(identity, title)
-            complete([identity])
-        #  The hosted concurrency items come before the devices.
-        for title in CONCURRENCY:
-            assert_next(headings[title], title)
+        for title in PROCESS:
+            assert_next(title)
             complete([headings[title]])
-        #  The stream trial's item comes after them and before the devices.
-        for title in STREAM:
-            assert_next(headings[title], title)
-            complete([headings[title]])
-        assert_next(devices, "Describe devices")
-        complete([devices])
-        #  Learning a chip from its SVD follows the descriptions it fills.
-        assert_next(headings["Learn a device from its SVD"],
-                    "Learn a device from its SVD")
-        complete([headings["Learn a device from its SVD"]])
-        #  What the register owes the boards comes before the first one.
-        assert_next(headings["What the register owes now"],
-                    "What the register owes now")
-        complete([headings["What the register owes now"],
-                  headings["The first board"],
-                  headings["Thumb-2, Cortex-M33 and M7"]])
-        assert_next(headings["RISC-V microcontrollers"], "RISC-V microcontrollers")
-        #  Completion of the newer Cortex cores alone cannot open the
-        #  freestanding library before the agreed device-phase boundary.
-        blocks = {match.group(1): (match.group(4).split(", ")
-                                 if match.group(4) else [])
-                  for match in RENDER.ROADMAP_ITEM.finditer(text)}
-        states = CHECK.roadmap_statuses(text)
-        self.assertFalse(all(states[identity] == "complete"
-                             for identity in blocks[freestanding]))
-        complete([identity for identity in headings.values()
-                  if identity.startswith(device_phase + ".")
-                  and CHECK.roadmap_statuses(text)[identity] == "planned"])
-        #  The second outside review's data-loss and other findings come
-        #  before the library is split.
-        for title in outside_review:
-            assert_next(headings[title], title)
-            complete([headings[title]])
-        assert_next(freestanding, "The freestanding library")
+        #  The measurement waits for the whole process phase, and then
+        #  comes before the command split.
+        assert_next("Measure generated code")
+        complete([headings["Measure generated code"]])
+        #  Register allocation is continuous: ready now, but never the
+        #  serial lane's next item while one remains.
+        assert_next("Decide the commands")
 
     def test_the_endpoint_uses_its_own_pointer(self):
         marker = ("**Roadmap endpoint: " + SECOND + " — Start source debugging"

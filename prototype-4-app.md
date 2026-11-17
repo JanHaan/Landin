@@ -158,7 +158,7 @@ though: the handle is a copyable value, so a copy taken before
 the close is not refused anything, and closing through both is
 the double-close this does not prevent. It is a use-after-consume
 check on one place, not ownership. Affine values would be the
-other thing, and they are parked with a condition in ROADMAP.md's register. And
+other thing, and they are parked with a condition in the roadmap's register. And
 inout
 on the read buffer means, since 0.0.10, hand me a writable view;
 nothing is written back to the slice value and there would be

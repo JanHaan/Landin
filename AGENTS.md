@@ -177,12 +177,14 @@ a finding whenever they meet one of these:
 - having to read the source to learn how to use something;
 - documentation that disagrees with what the tool does.
 
-A finding is a row in `ROADMAP.md`'s register under the Usability family,
-never a separate list: the symptom as it was met, what the person was doing,
-and an activation, usually the next item that touches the area. Merge it
-into an existing row when one already says the same. An agent names every
-row it adds in its report, so the finding reaches a maintainer as it is
-made rather than when the register is next read.
+A finding the current item fixes is named in its commit message and its
+`Done:` paragraph, not filed. Only a finding that outlives the item that met
+it becomes a register row, a file under `roadmap/register/` under the
+Usability family, never a separate list: the symptom as it was met, what the
+person was doing, and an activation, usually the next item that touches the
+area. Merge it into an existing row when one already says the same. An agent
+names every row it adds in its report, so the finding reaches a maintainer
+as it is made rather than when the register is next read.
 
 ## Sources of truth
 
@@ -190,7 +192,7 @@ Use the repository documents in this order:
 
 1. `spec.md` is the normative specification; where it and `tour.md` could be read differently, it decides. It holds the grammar of the enabled kernel, [1740]-[1830], which covers what the compiler accepts today and shrinks as the language grows; the rules the tour left unsaid, [1840] onward, which are permanent; and its decision register, by subject: every rule that was a decision rather than a transcription, with the alternative and the fixture that pins it.
 2. `tour.md` explains the language, [0010]-[1730]. It teaches by example, which is why it omits what a reader supplies for themselves — every implementation item so far has found more of what it left unsaid, and the answer is to write the rule into `spec.md` rather than to attribute one to a paragraph that does not state it. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions, and no ID is defined in both documents. Both documents are arranged by subject and their numbers therefore do not ascend down the page; that is the numbering working, not drift to be tidied up. `docs/documents.md` says where a new rule goes.
-3. `ROADMAP.md` is the sole authority for open work: the current roadmap's phases, with their items, dependencies and gates; its register of work that waits for a trigger; and the positions an outside review challenged and the project kept. The first roadmap is closed and its text is in the history. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files. The evidence registers, which record what the compiler's evidence is rather than what is left to do, are in `compiler/tests/registers.md`.
+3. `ROADMAP.md` is the sole authority for open work: the current roadmap's phases, lanes, items, dependencies and gates, and the positions an outside review challenged and the project kept. Its register of work that waits for a trigger is one file a row under `roadmap/register/`, the maintainer's open decisions one file each under `roadmap/questions/`, and the inputs its decision items cite are under `roadmap/inputs/`. The first two roadmaps are closed and their text is in the history. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files. The evidence registers, which record what the compiler's evidence is rather than what is left to do, are in `compiler/tests/registers.md`.
 4. `prototype-{1..5}-*.md` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
 5. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
 6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the other live documents — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
@@ -251,29 +253,29 @@ contain only one version of a package name.
 
 Implementation proceeds without waiting for every unresolved foundation.
 `ROADMAP.md` assigns each question to the first vertical slice that needs it.
-The first roadmap is complete: no work item remains. It built the bootstrap
-chassis, the executable language kernel and the first Linux x86-64 path, the
-semantic and representation core, the first complete derived program, the
-hosted Linux path, the native macOS target and its debugging, Cortex-M0 and
-compiler-owned firmware, and finally audited every construct and gave every
-inherited row a terminal disposition.
+The first two roadmaps are complete. The first built the bootstrap chassis,
+the executable kernel, hosted Linux, native macOS and Cortex-M firmware, and
+audited every construct; the second took the compiler to an editor, more
+hosted targets, the microcontrollers people buy, the library split,
+concurrency and the start of measured optimization.
 
 What each item contributed is not re-narrated here, and the current roadmap
 does not narrate either: the first one grew to thirteen thousand lines doing
-it. A completed item gets a short `Done:` paragraph, and the reasoning goes in
+it, and the second to half a megabyte. A completed item gets a short `Done:` paragraph, and the reasoning goes in
 the commit and in `spec.md`'s register of decisions. For current compiler
 capabilities, see [what refine does today](docs/capabilities.md).
 
-The current roadmap covers a frontend that scales, assembly with
-operands, a frontend for an editor, more hosted targets, microcontrollers,
-the library split, concurrency and optimization. A build tool,
-package acquisition, release versioning and self-hosting stay outside it, with
-the successor families in `ROADMAP.md` owning each. Do not change any version
-or release designation without explicit user approval, and do not assume
-SemVer. Cite a roadmap item or register record in `ROADMAP.md` and nowhere
-else: `check.py` refuses a work item or register identity of either roadmap
-anywhere outside `ROADMAP.md`, except the status pointer `README.md` and
-`handoff.md` carry.
+The current roadmap covers the project's own process, `refine` split into
+commands, a breaking simplification of the language, a review of the
+standard library, Windows and the library additions a newcomer expects, with
+measured optimization beside them. A build tool, package acquisition,
+self-hosting and separate compilation, a browser target and dates and times
+stay outside it, with the successor families in `ROADMAP.md` owning each. Do
+not change any version or release designation without explicit user
+approval, and do not assume SemVer. Cite a roadmap item or register record
+in `ROADMAP.md` and the files under `roadmap/` and nowhere else: `check.py`
+refuses a work item or register identity of any roadmap anywhere else,
+except the status pointer `README.md` and `handoff.md` carry.
 
 ## Design constraints
 
@@ -285,7 +287,7 @@ Changes must preserve the range from a 32 KB microcontroller to a hosted applica
 - Concepts and evidence tables support both static generics and `any` runtime dispatch; specialization is an optimization rather than the semantic basis.
 - There is no compile-time execution or macro system. Source generators belong in the future build design.
 
-Before reviving a previously rejected idea, read `ROADMAP.md`'s retained positions and register, and `tour.md`'s `WHAT WAS TRIED AND DROPPED` section.
+Before reviving a previously rejected idea, read `ROADMAP.md`'s retained positions, the register under `roadmap/register/`, and `tour.md`'s `WHAT WAS TRIED AND DROPPED` section.
 
 ## Editing the specification
 

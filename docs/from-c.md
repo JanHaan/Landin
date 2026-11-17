@@ -1222,7 +1222,7 @@ convert it back [0470]. The result borrows nothing, so no lifetime check
 follows it.
 
 A pointer offset that keeps its base's origin is open work, which the
-register in `ROADMAP.md` holds.
+roadmap's register holds.
 
 ### `union`
 

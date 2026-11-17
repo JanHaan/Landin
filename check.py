@@ -32,7 +32,7 @@ sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ROOT, "docs", "site"))
-from roadmap_order import execution_order
+from roadmap_order import dependency_items, execution_order
 #  The fixture format's one Python reader, which the test program's reader
 #  is held to by compiler/tests/fixture-meta.cases.
 sys.path.insert(0, os.path.join(ROOT, "compiler", "tests"))
@@ -319,6 +319,9 @@ RETIRED = {
 BLOCK_ENDS = {"if", "while", "for", "loop", "match", "unchecked", "variant"}
 GRAMMAR_BANNER = "THE GRAMMAR OF THE ENABLED KERNEL"
 ROADMAP_PHASE = re.compile(r"^## (R(\d+)) — \S.*$")
+#  A phase retired before it started: a heading, a paragraph saying why,
+#  and neither items nor a gate.
+ROADMAP_RETIRED_PHASE = re.compile(r"^## (R\d+) — \S.* \(retired\)$")
 ROADMAP_WORK = re.compile(r"^### (R\d+\.([1-9]\d*)) — (\S.*)$")
 ROADMAP_GATE = re.compile(r"^### (R\d+) gate$")
 ROADMAP_STATUS = re.compile(r"^Status: (planned|active|blocked|complete)$")
@@ -334,25 +337,41 @@ ENDPOINT_ROADMAP_ITEM = re.compile(
 ROADMAP_PROSE_STATUS = re.compile(
     r"(?=(\b(R\d+\.\d+)'s\b.{0,240}?\b(?:is|are) "
     r"(active|complete)\b))")
+#  A dependency is an item, or a whole phase: every item of it.
 ROADMAP_DEPENDS = re.compile(
-    r"^Depends on: (none|R\d+\.[1-9]\d*(?:, R\d+\.[1-9]\d*)*)$")
+    r"^Depends on: (none|R\d+(?:\.[1-9]\d*)?(?:, R\d+(?:\.[1-9]\d*)?)*)$")
 ROADMAP_REFERENCE = re.compile(r"R\d+\.[1-9]\d*")
 ROADMAP_REFERENCE_CANDIDATE = re.compile(
     r"(?<![A-Za-z0-9_.])(R\d+\.\d+)(?![A-Za-z0-9_.])")
-#  The first roadmap, its eight phases numbered from zero, is closed and
-#  survives only in the history.  This roadmap's phases start after it.
-FIRST_ROADMAP_PHASES = 8
+#  The first roadmap, R0 to R7, and the second, R8 to R16, are closed and
+#  survive in the history.  The third took over the second's R15, retired,
+#  and R16, unfinished, so its phases start at R15.
+FIRST_ROADMAP_PHASES = 15
 SUCCESSOR_HEADING = "## Successor families"
-REGISTER_HEADING = "## Register"
-REGISTER_COLUMNS = ("Record", "Family", "What stands", "Activation",
-                    "Completion", "Status")
+#  The register: one file a row, the row's identity its name, and the
+#  questions only the maintainer can answer, one file each.
+REGISTER_DIRECTORY = "roadmap/register"
+REGISTER_OVERVIEW = "roadmap/register.md"
+QUESTION_DIRECTORY = "roadmap/questions"
+ROADMAP_INPUTS = "roadmap/inputs"
 REGISTER_RECORD = re.compile(r"R551-\d\d|R730-\d\d|[A-F]\d|SR-\d{2,}")
-REGISTER_STATUS = re.compile(
-    r"open|limit|watch|scheduled (R\d+\.\d+(?:, R\d+\.\d+)*)|retired: \S.*")
-#  A work item of either roadmap, or a record of the register that is
+REGISTER_KEYS = ("kind", "family", "status", "opened", "activation",
+                 "effort", "impact")
+#  The keys a row moved from the second roadmap has; `kind`, `effort` and
+#  `impact` are given in the review after the exchange.
+REGISTER_NEEDED = ("family", "status", "opened", "activation")
+REGISTER_VALUES = {
+    "kind": re.compile(r"limit|watch|defect|proposal|usability"),
+    "opened": re.compile(r"\d{4}-\d\d-\d\d"),
+    "effort": re.compile(r"[SML]"),
+    "impact": re.compile(r"[SML]"),
+}
+REGISTER_STATUS = re.compile(r"open|scheduled (R\d+\.\d+(?:, R\d+\.\d+)*)")
+#  A work item of any roadmap, or a record of the register that is
 #  spelled like no other identifier in the tree: the first roadmap's two
 #  debt ledgers and the records added since.  None may appear anywhere but
-#  ROADMAP.md and the status pointers that mirror it.  The inherited review
+#  ROADMAP.md, the files under roadmap/ and the status pointers that mirror
+#  it.  The inherited review
 #  records, a letter and a digit, are not matched: `C2` is also a byte, `D6`
 #  a decision and `E1` an erratum, and no rule could tell them apart.
 ROADMAP_CITATION = re.compile(
@@ -361,8 +380,6 @@ ROADMAP_CITATION = re.compile(
 #  The register's own identities among them, which ROADMAP.md must define.
 REGISTER_CITATION = re.compile(
     r"(?<![A-Za-z0-9_.])(R551-\d\d|R730-\d\d|SR-\d{2,})(?![A-Za-z0-9_])")
-#  The paragraph naming every record that has left the register's table.
-REGISTER_LEFT = "Records that have left the register: "
 #  The finding letters as a regular-expression class.  Every reader of a
 #  finding citation uses this, and the site renderer's own copy is held to
 #  it, so a new prototype is one entry above rather than a letter added
@@ -1971,6 +1988,7 @@ def check_roadmap(path):
     work_titles = collections.defaultdict(list)
     current_phase = None
     actual_phases = []
+    retired = set()
 
     for n, line in enumerate(lines, 1):
         phase = ROADMAP_PHASE.match(line)
@@ -1981,6 +1999,8 @@ def check_roadmap(path):
         if phase:
             phases[current_phase].append(n)
             actual_phases.append(phase.group(1))
+            if ROADMAP_RETIRED_PHASE.match(line):
+                retired.add(phase.group(1))
         elif re.match(r"^## R\d+\b", line):
             out.append((n, "malformed roadmap phase heading"))
         if gate:
@@ -2021,6 +2041,12 @@ def check_roadmap(path):
         if len(phases[phase]) > 1:
             out.append((phases[phase][1], "%s phase is duplicated, first at %d"
                         % (phase, phases[phase][0])))
+        if phase in retired:
+            if gates[phase] or any(work_id.startswith(phase + ".")
+                                   for work_id in works):
+                out.append((phases[phase][0], "%s is retired and keeps an"
+                            " item or a gate" % phase))
+            continue
         if not gates[phase]:
             out.append((phases[phase][0], "%s gate is missing" % phase))
         elif len(gates[phase]) > 1:
@@ -2085,9 +2111,9 @@ def check_roadmap(path):
         if len(names) != len(set(names)):
             out.append((depends[0][0], "%s repeats a dependency" % work_id))
         for name in names:
-            if name == work_id:
+            if name == work_id or name == work_id.split(".")[0]:
                 out.append((depends[0][0], "%s depends on itself" % work_id))
-            elif name not in works:
+            elif not dependency_items(name, works):
                 out.append((depends[0][0], "%s depends on unknown %s"
                             % (work_id, name)))
 
@@ -2095,10 +2121,12 @@ def check_roadmap(path):
         if work_statuses.get(work_id) != "complete":
             continue
         for name in names:
-            if name in work_statuses and work_statuses[name] != "complete":
-                out.append((works[work_id][0], "%s is complete but dependency"
-                            " %s is %s" %
-                            (work_id, name, work_statuses[name])))
+            for item in dependency_items(name, works):
+                if item in work_statuses \
+                        and work_statuses[item] != "complete":
+                    out.append((works[work_id][0], "%s is complete but"
+                                " dependency %s is %s" %
+                                (work_id, item, work_statuses[item])))
 
     try:
         order = execution_order("\n".join(lines), works)
@@ -2108,9 +2136,12 @@ def check_roadmap(path):
         positions = {work_id: at for at, work_id in enumerate(order)}
         for work_id, names in dependencies.items():
             for name in names:
-                if name in positions and positions[name] >= positions[work_id]:
-                    out.append((works[work_id][0], "%s precedes dependency %s"
-                                " in execution order" % (work_id, name)))
+                for item in dependency_items(name, works):
+                    if item in positions \
+                            and positions[item] >= positions[work_id]:
+                        out.append((works[work_id][0], "%s precedes"
+                                    " dependency %s in execution order"
+                                    % (work_id, item)))
 
     #  References in prose and matrices should be well formed and resolve
     #  too.  The first roadmap's items are in the history, not here, so a
@@ -2129,7 +2160,8 @@ def check_roadmap(path):
     state = {}
     def visit(work_id, path_to_here):
         state[work_id] = 1
-        for name in dependencies.get(work_id, []):
+        for name in [item for dependency in dependencies.get(work_id, [])
+                     for item in dependency_items(dependency, works)]:
             if name not in works:
                 continue
             if state.get(name) == 1:
@@ -2142,124 +2174,217 @@ def check_roadmap(path):
         if not state.get(work_id):
             visit(work_id, [])
 
-    out += register_problems(text, work_statuses)
-
     return sorted(set(out))
 
 
-def register_problems(text, statuses):
-    """Every register record is owned, explained and honestly scheduled.
+def register_rows(root):
+    """{identity: (relative path, its text)} of every row of the register."""
+    directory = os.path.join(root, REGISTER_DIRECTORY)
+    if not os.path.isdir(directory):
+        return {}
+    return {name[:-len(".md")]: (os.path.join(REGISTER_DIRECTORY, name),
+                                 read_file(os.path.join(directory, name),
+                                           encoding="utf-8"))
+            for name in sorted(os.listdir(directory))}
 
-    A record waits for a trigger or names the items that take it on.  Each
-    item must be one of this roadmap's and must not be finished: completed
-    parts leave the owner list, and a record whose work is done leaves the
-    register.  Every family owns something, because a family that owns
-    nothing is a direction and not an owner.
+
+def register_row(text):
+    """({key: (line, value)}, [(line, body line)], [(line, why)]) of a row.
+
+    A row is a front matter block of `key: value` lines between two `---`
+    lines, then a body saying what stands and, on a line of its own
+    beginning `Completion:`, what would complete it.
     """
-    lines = text.splitlines()
-    rows = markdown_table(lines, REGISTER_HEADING, REGISTER_COLUMNS)
-    if rows is None:
-        return [(1, "the register cannot be read")]
+    lines = text.split("\n")
+    if not lines or lines[0] != "---" or "---" not in lines[1:]:
+        return {}, [], [(1, "a register row begins with a front matter"
+                         " block between two `---` lines")]
+    end = lines.index("---", 1)
+    fields, out = {}, []
+    for n, line in enumerate(lines[1:end], 2):
+        key, colon, value = line.partition(": ")
+        if not colon or not value.strip():
+            out.append((n, "front matter line %r is not `key: value`" % line))
+        elif key not in REGISTER_KEYS:
+            out.append((n, "unknown key %r; a row's keys are %s"
+                        % (key, ", ".join(REGISTER_KEYS))))
+        elif key in fields:
+            out.append((n, "key %s is given twice" % key))
+        else:
+            fields[key] = (n, value.strip())
+    body = [(n, line) for n, line in enumerate(lines[end + 1:], end + 2)
+            if line.strip()]
+    return fields, body, out
+
+
+def register_problems(root, text, statuses):
+    """Every register row is well formed, owned and honestly scheduled.
+
+    A row waits for a trigger or names the items that take it on.  Each
+    item must be one of this roadmap's, unfinished, and must name the row
+    in its own text: a row scheduled on an item that does not know of it
+    waits for nobody.  Every family owns something, because a family that
+    owns nothing is a direction and not an owner.
+    """
     families = successor_families(text)
     if not families:
-        return [(1, "the successor families cannot be read")]
+        return [(ROADMAP, 1, "the successor families cannot be read")]
+    sections = dict(re.findall(r"^### (R\d+\.\d+) — [^\n]*\n(.*?)(?=^##)",
+                               text + "\n##", re.M | re.S))
     out = []
-    seen = {}
     owned = collections.Counter()
-    for line, row in rows:
-        record = row["Record"]
-        if not REGISTER_RECORD.fullmatch(record):
-            out.append((line, "invalid register record %r" % record))
+    for record, (where, row) in register_rows(root).items():
+        if not where.endswith(".md") or not REGISTER_RECORD.fullmatch(record):
+            out.append((where, 1, "%r is not a register identity; a row is"
+                        " a file named like SR-0.md" % os.path.basename(where)))
             continue
-        if record in seen:
-            out.append((line, "%s is registered twice, first at %d"
-                        % (record, seen[record])))
+        fields, body, problems = register_row(row)
+        out += [(where, n, why) for n, why in problems]
+        for key in REGISTER_NEEDED:
+            if key not in fields:
+                out.append((where, 1, "%s has no %s" % (record, key)))
+        for key, form in REGISTER_VALUES.items():
+            if key in fields and not form.fullmatch(fields[key][1]):
+                out.append((where, fields[key][0], "%s has invalid %s %r"
+                            % (record, key, fields[key][1])))
+        if not [line for _, line in body if not line.startswith("Completion:")]:
+            out.append((where, 1, "%s does not say what stands" % record))
+        if not [line for _, line in body
+                if line.startswith("Completion:")
+                and line[len("Completion:"):].strip(" .—-")]:
+            out.append((where, 1, "%s does not say what would complete it"
+                        % record))
+        if "family" in fields:
+            line, family = fields["family"]
+            if family not in families:
+                out.append((where, line, "%s names unknown family %r"
+                            % (record, family)))
+            owned[family] += 1
+        if "status" not in fields:
             continue
-        seen[record] = line
-        if row["Family"] not in families:
-            out.append((line, "%s names unknown family %r"
-                        % (record, row["Family"])))
-        status = REGISTER_STATUS.fullmatch(row["Status"])
+        line, value = fields["status"]
+        status = REGISTER_STATUS.fullmatch(value)
         if not status:
-            out.append((line, "%s has invalid status %r"
-                        % (record, row["Status"])))
+            out.append((where, line, "%s has invalid status %r"
+                        % (record, value)))
             continue
-        if not row["What stands"].strip(" .—-"):
-            out.append((line, "%s does not say what stands" % record))
-        if row["Status"].startswith("retired"):
-            continue
-        owned[row["Family"]] += 1
-        for column in ("Activation", "Completion"):
-            if not row[column].strip(" .—-"):
-                out.append((line, "%s has no %s" % (record, column.lower())))
         items = status.group(1)
-        if items:
-            seen_items = set()
-            for item in items.split(", "):
-                if item in seen_items:
-                    out.append((line, "%s repeats scheduled owner %s"
-                                % (record, item)))
-                seen_items.add(item)
-                if item not in statuses:
-                    out.append((line, "%s is scheduled on %s, which is not a work"
-                                " item of this roadmap" % (record, item)))
-                elif statuses[item] == "complete":
-                    out.append((line, "%s is still scheduled on finished %s"
-                                % (record, item)))
+        seen_items = set()
+        for item in (items.split(", ") if items else []):
+            if item in seen_items:
+                out.append((where, line, "%s repeats scheduled owner %s"
+                            % (record, item)))
+            seen_items.add(item)
+            if item not in statuses:
+                out.append((where, line, "%s is scheduled on %s, which is not"
+                            " a work item of this roadmap" % (record, item)))
+            elif statuses[item] == "complete":
+                out.append((where, line, "%s is still scheduled on finished %s"
+                            % (record, item)))
+            elif not re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(record),
+                               sections.get(item, "")):
+                out.append((where, line, "%s is scheduled on %s, whose text"
+                            " does not name it" % (record, item)))
     for family in sorted(families - set(owned)):
-        out.append((1, "family %s owns no open record" % family))
-    return out + register_citation_problems(lines, rows, seen)
-
-
-def register_citation_problems(lines, rows, defined):
-    """Every register record ROADMAP.md cites is one the register defines.
-
-    One item's closing paragraph cited a record that never existed, and
-    every check passed; as the register grew past its number, the citation could come to
-    name an unrelated row.  A record is defined by its row, retired or not;
-    by the row it was merged into, which names it after `Merged:`; or, once
-    its row has left the table, by the list of records that have left, since
-    the item that closed it goes on citing it.  An identity in a code span is
-    quoted rather than cited: a finding about a citation spells the one it
-    met.
-    """
-    out = []
-    merged = set()
-    for _, row in rows:
-        for cell in row.values():
-            if "Merged:" in cell:
-                merged.update(REGISTER_CITATION.findall(
-                    cell.split("Merged:", 1)[1]))
-    left = {}
-    starts = [n for n, line in enumerate(lines)
-              if line.startswith(REGISTER_LEFT)]
-    if len(starts) != 1:
-        return [(1, "expected one paragraph beginning %r, found %d"
-                 % (REGISTER_LEFT.strip(), len(starts)))]
-    at = starts[0]
-    while at < len(lines) and lines[at].strip():
-        for record in REGISTER_CITATION.findall(lines[at]):
-            if record in left:
-                out.append((at + 1, "%s is listed twice as having left the"
-                            " register" % record))
-            elif record in defined:
-                out.append((at + 1, "%s is listed as having left the register"
-                            " and is still its row at %d"
-                            % (record, defined[record])))
-            left.setdefault(record, at + 1)
-        at += 1
-    for n, line in enumerate(lines, 1):
-        for found in REGISTER_CITATION.finditer(
-                re.sub(r"`[^`]*`", "", line)):
-            record = found.group(1)
-            if record not in defined and record not in merged \
-                    and record not in left:
-                out.append((n, "%s is cited and is no register record: no"
-                            " row, no `Merged:` name and not among the"
-                            " records that have left the register; list it"
-                            " there only if its row has left the table"
-                            % record))
+        out.append((ROADMAP, 1, "family %s owns no open record" % family))
     return out
+
+
+def register_citation_problems(root, text):
+    """Every register row and candidate ROADMAP.md cites is one that exists.
+
+    One item's closing paragraph cited a row that never existed, and every
+    check passed; as the register grew past its number, the citation could
+    come to name an unrelated row.  A row is defined by its file, or by the
+    row it was merged into, which names it after `Merged:`.  A row that has
+    left the register has no file, and the history keeps it, so nothing
+    here cites it.  An identity in a code span is quoted rather than cited:
+    a finding about a citation spells the one it met.  A simplification
+    candidate, SC-01 onward, is defined by its row in the input that lists
+    them.
+    """
+    rows = register_rows(root)
+    defined = set(rows)
+    for _, row in rows.values():
+        if "Merged:" in row:
+            defined.update(REGISTER_CITATION.findall(
+                row.split("Merged:", 1)[1]))
+    candidates = os.path.join(root, ROADMAP_INPUTS,
+                              "simplification-candidates.md")
+    listed = (set(re.findall(r"^\| (SC-\d\d) \|",
+                             read_file(candidates, encoding="utf-8"), re.M))
+              if os.path.exists(candidates) else set())
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        plain = re.sub(r"`[^`]*`", "", line)
+        for found in REGISTER_CITATION.finditer(plain):
+            if found.group(1) not in defined:
+                out.append((ROADMAP, n, "%s is cited and is no register row:"
+                            " no file under %s and no `Merged:` name"
+                            % (found.group(1), REGISTER_DIRECTORY)))
+        for found in re.finditer(r"(?<![\w-])(SC-\d+)(?![\w-])", plain):
+            if found.group(1) not in listed:
+                out.append((ROADMAP, n, "%s is cited and is no candidate of"
+                            " %s/simplification-candidates.md"
+                            % (found.group(1), ROADMAP_INPUTS)))
+    return out
+
+
+def register_overview(root):
+    """The text of roadmap/register.md, made from the row files."""
+    lines = ["# The register", "",
+             "Generated by `python3 check.py --generate` from the files"
+             " under `%s/`; edit those, never this." % REGISTER_DIRECTORY,
+             "`ROADMAP.md`'s Mechanics says what a row is.", "",
+             "| Row | Family | Kind | Status | Opened | What stands |",
+             "| --- | --- | --- | --- | --- | --- |"]
+    def number(record):
+        return [int(part) if part.isdigit() else part
+                for part in re.split(r"(\d+)", record)]
+    rows = register_rows(root)
+    for record in sorted(rows, key=number):
+        row = rows[record][1]
+        fields, body, _ = register_row(row)
+        stands = " ".join(line for _, line in body
+                          if not line.startswith("Completion:"))
+        if len(stands) > 160:
+            stands = stands[:157].rsplit(" ", 1)[0] + " ..."
+        cells = [record] + [fields.get(key, (0, ""))[1]
+                            for key in ("family", "kind", "status", "opened")]
+        cells.append(stands.replace("|", "\\|"))
+        lines.append("| [%s](register/%s.md) | %s |"
+                     % (record, record, " | ".join(cells[1:])))
+    questions = os.path.join(root, QUESTION_DIRECTORY)
+    names = sorted((name for name in (os.listdir(questions)
+                                      if os.path.isdir(questions) else ())
+                    if re.fullmatch(r"Q-\d+\.md", name)),
+                   key=lambda name: int(name[2:-3]))
+    if names:
+        lines += ["", "## Questions for the maintainer", ""]
+        for name in names:
+            first = read_file(os.path.join(questions, name),
+                              encoding="utf-8").split("\n", 1)[0]
+            lines.append("- [%s](questions/%s)"
+                         % (first.lstrip("# ").strip(), name))
+    return "\n".join(lines) + "\n"
+
+
+def check_register(full_run):
+    """The register's rows, and the citations of them in ROADMAP.md."""
+    if not full_run:
+        return []
+    path = os.path.join(ROOT, ROADMAP)
+    if not os.path.exists(path):
+        return []
+    text = read_file(path, encoding="utf-8")
+    out = register_problems(ROOT, text, roadmap_statuses(text))
+    out += register_citation_problems(ROOT, text)
+    overview = os.path.join(ROOT, REGISTER_OVERVIEW)
+    if not os.path.exists(overview) or read_file(
+            overview, encoding="utf-8") != register_overview(ROOT):
+        out.append((REGISTER_OVERVIEW, 1, "%s is missing or stale; run %s"
+                    % (REGISTER_OVERVIEW, regenerating(REGISTER_OVERVIEW))))
+    return sorted(set(out))
 
 
 def git_ignored(paths):
@@ -2285,13 +2410,14 @@ def git_ignored(paths):
 
 
 def check_roadmap_citations(full_run):
-    """Roadmap items and records are cited in ROADMAP.md and nowhere else.
+    """Roadmap items and records are cited in the roadmap and nowhere else.
 
     The first roadmap's identities ended up in some sixteen hundred lines:
     comments, diagnostic text, goldens, the specification.  An item is
     finished long before the text citing it is, and a citation that outlives
     its item points a reader at nothing.  So no identity of either roadmap
-    may appear outside it.  The one exception is the status pointer
+    may appear outside it: ROADMAP.md and the register, question and input
+    files under roadmap/.  The one exception is the status pointer
     README.md and handoff.md carry, which check_project_status holds to the
     roadmap and the site renders.
     """
@@ -2310,7 +2436,8 @@ def check_roadmap_citations(full_run):
                            != os.path.join("docs", "site", "site"))
         for name in sorted(files):
             relative = os.path.relpath(os.path.join(here, name), ROOT)
-            if relative != ROADMAP:
+            if relative != ROADMAP and not relative.startswith(
+                    "roadmap" + os.sep):
                 candidates.append(relative)
     #  What Git ignores is nobody's citation, and reading it can dominate the
     #  run: QEMU leaves a sparse core file for every trap fixture a cross
@@ -2338,7 +2465,8 @@ def check_roadmap_citations(full_run):
                 #  would be, so the refusal names the spellings it leaves.
                 out.append((relative, n,
                             "%s has the form of a roadmap identity, which"
-                            " belongs in ROADMAP.md alone, whether or not"
+                            " belongs in ROADMAP.md and roadmap/ alone,"
+                            " whether or not"
                             " that item or record exists; text that needs"
                             " an invented one, such as a test's register,"
                             " can use a one-digit record such as SR-0 or a"
@@ -2410,7 +2538,8 @@ def check_project_status(full_run):
     ready = [(work_id, item) for work_id, item in items.items()
              if item["status"] == "planned"
              and all(dependency == "none"
-                     or items.get(dependency, {}).get("status") == "complete"
+                     or all(items.get(one, {}).get("status") == "complete"
+                            for one in dependency_items(dependency, items))
                      for dependency in item["depends"])]
     live = [work_id for work_id, item in items.items()
             if item["status"] in ("planned", "active", "blocked")]
@@ -11495,6 +11624,11 @@ def write_generated(relative, text):
     print("wrote " + relative)
 
 
+def generate_register():
+    write_generated(REGISTER_OVERVIEW, register_overview(ROOT))
+    return 0
+
+
 def generate_tokens():
     text = token_dump()
     if text is None:
@@ -11596,7 +11730,8 @@ def generate_highlighters():
 GENERATORS = (("--tokens", generate_tokens),
               ("--catalogue", generate_catalogue),
               ("--coverage", generate_coverage),
-              ("--matrix", generate_matrix))
+              ("--matrix", generate_matrix),
+              ("--register", generate_register))
 GENERATE_ALL = "--generate"
 
 #  What each of those flags writes.  The usage line and every message that
@@ -11611,7 +11746,8 @@ GENERATED = (("--tokens", ("compiler/tests/lexical.tokens",)),
                              "compiler/tests/conformances.matrix",
                              "compiler/tests/prototypes.matrix",
                              "compiler/tests/targets.matrix")),
-             ("--matrix", ("compiler/tests/constructs.matrix",)))
+             ("--matrix", ("compiler/tests/constructs.matrix",)),
+             ("--register", (REGISTER_OVERVIEW,)))
 
 
 def regenerating(relative):
@@ -11732,6 +11868,7 @@ def main(argv):
     extra += check_document_reachability(full_run)
     extra += check_project_status(full_run)
     extra += check_roadmap_citations(full_run)
+    extra += check_register(full_run)
     extra += check_specification_version(full_run)
     extra += check_finding_letters(full_run)
     extra += check_prototype_scopes(full_run)

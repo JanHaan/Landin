@@ -37,12 +37,17 @@ Before closing implementation work, use the
 starting commit, including its unmatched activations and the checks its
 changes require. Do not add closure work to a documentation-only review.
 Keep language decisions in the specification and remaining work in the
-roadmap, rather than in this skill or a separate task list.
+roadmap, rather than in this skill or a separate task list: a finding the
+item fixes is named in its commit and `Done:` paragraph, and only one that
+outlives the item becomes a row under `roadmap/register/`.
 
 Once a push is authorized and affected checks pass, push the candidate and
 follow the [gate](../../../docs/process.md#the-mechanical-gate). Investigate
-failed jobs and verify the complete job listing. Promote to main when that
-action is authorized, the complete software gate passed, a `scope=boards`
+failed jobs and verify the complete job listing. An item's agent holds
+standing authority to push, promote and clean up its own worktrees and
+branches unless the item says `Promotion: maintainer` (`ROADMAP.md`'s
+Mechanics); other work promotes only when that action is authorized.
+Promote to main when the complete software gate passed, a `scope=boards`
 dispatch passed on the identical tree unless the edit is declared
 `Gate: explanatory`, and the promoted tree is the tested tree; then follow
 main's own push gate, with its fresh boards, to its end. If main advanced, integrate first and obtain evidence for

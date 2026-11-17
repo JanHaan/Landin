@@ -23,7 +23,7 @@ they cost. `D586` names a decision recorded in `spec.md`, and
 | before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
 | candidate push or pull request | `.github/workflows/gate.yml` | every target, unless identical-tree reuse or an explanatory edit applies; the [job table](#the-mechanical-gate) says what each job runs |
 | physical boards for a candidate | `gh workflow run gate.yml --ref BRANCH -f scope=boards`, by the maintainer | each port's RAM run, then its boot check, on the rig through `environments/boards/gate.py`, with `inputs`, documents and scripts; never a software pass |
-| promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the identical tree, then main's own push gate followed to its end | the push reuses the full candidate software pass and runs the boards fresh; documents and script controls still run |
+| promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the identical tree, then main's own push gate followed to its end; an item's agent promotes without asking again unless the item says `Promotion: maintainer` (`ROADMAP.md`'s Mechanics) | the push reuses the full candidate software pass and runs the boards fresh; documents and script controls still run |
 | closing an item | `python3 scripts/activations.py`, then the steps in [closing an item](#closing-an-item) | the register rows whose activation the item's changes met, and the passes only the gate runs that the changes reach |
 
 Every software lane runs on GitHub-hosted images; the FreeBSD lanes boot
@@ -61,8 +61,9 @@ is explanatory, and `main`'s own gate followed to its end, as the
 An item may close in the candidate itself or after its gate. A closing
 commit made after the branch's full gate reuses that gate, on the branch and
 again when main is promoted to it, when it changes only the content of
-`README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md` and says
-`Gate: explanatory` (D586). A close that changes any other file,
+`README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md`, or anything under
+`roadmap/`, the register's rows and overview, the questions and the inputs
+included, and says `Gate: explanatory` (D586, D1373). A close that changes any other file,
 `docs/capabilities.md` among them, is a new tree and needs its own full gate.
 The [gate reference](#the-mechanical-gate) states both reuse conditions,
 identical-tree reuse and an explanatory edit; neither ever takes local
@@ -102,7 +103,8 @@ Before an item closes:
 
 1. Run `python3 scripts/activations.py --base REV`, with REV the commit the
    item started from (`main` by default). It lists every `open` or
-   `scheduled` row of the roadmap's register whose Activation names a path
+   `scheduled` row under `roadmap/register/`, other than a `limit` or a
+   `watch`, whose activation names a path
    the item changed since REV, uncommitted changes included. It also lists
    the passes only the gate runs that those paths reach: the editor
    grammar's corpus, `./highlight/test.sh --integration`, when the grammar,
@@ -157,9 +159,11 @@ Before an item closes:
    `scripts/compare_images.py`, as
    [comparing the images two compilers link](#comparing-the-images-two-compilers-link)
    shows.
-3. Write the `Done:` paragraph, remove the register rows the item settled
-   and list their identities among the records that have left the
-   register, as `ROADMAP.md`'s mechanics ask.
+3. Write the `Done:` paragraph, naming in it and in the commit message the
+   findings the item fixed rather than filing them. Delete the file of each
+   register row the item settled, saying why in the commit message, and file
+   only what outlives the item, as `ROADMAP.md`'s mechanics ask; then run
+   `python3 check.py --register` for the generated `roadmap/register.md`.
 
    Update the pointer in `README.md` and `handoff.md` too. Substitute the
    item identity and title in these exact forms. Use the current form for
@@ -828,9 +832,11 @@ group would still cancel its pending run when a third arrived, whatever
 each other.
 
 An explanatory edit: a declared edit confined to the content of `README.md`,
-`ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a complete successful
-push run of this repository from the preceding seven days, of `main` or of
-any other branch, whose commit is an ancestor of the edit (D586). So a
+`ROADMAP.md`, `handoff.md` and `AGENTS.md`, and to anything under
+`roadmap/`, files added and deleted there included (D1373), may reuse a
+complete successful push run of this repository from the preceding seven
+days, of `main` or of any other branch, whose commit is an ancestor of the
+edit (D586). So a
 documents-only commit that closes an item after its branch's full gate
 reuses that gate on the branch and again when main is promoted to it. A
 branch's run is as trustworthy a base as main's: only someone with write

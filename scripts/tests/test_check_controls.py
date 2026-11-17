@@ -2175,7 +2175,7 @@ class NativeEnvironment(unittest.TestCase):
                             for why in said))
 
 
-ROADMAP_INPUTS = ["ROADMAP.md", "scripts", "check.py", "spec.md",
+ROADMAP_INPUTS = ["ROADMAP.md", "roadmap", "scripts", "check.py", "spec.md",
                   "tour.md", "compiler/tests",
                   "compiler/ada/src"] + list(checker.LIVE_DOCS)
 
@@ -2187,6 +2187,32 @@ def roadmap_faults(edit):
         target = root / "ROADMAP.md"
         target.write_text(edit(target.read_text()))
         return [why for _, why in checker.check_roadmap(str(target))]
+
+
+def register_faults(edit=None, rows=None, regenerate=True):
+    """What check_register says about the real tree after its edits.
+
+    EDIT changes ROADMAP.md's text; ROWS maps a row's file name to a
+    function from its text to its new text, or to None, which deletes it.
+    The generated overview is written again afterwards unless REGENERATE
+    is false, so that only the edit is judged.
+    """
+    from check_controls import tree
+    with tree(copied=ROADMAP_INPUTS) as root:
+        if edit:
+            target = root / "ROADMAP.md"
+            target.write_text(edit(target.read_text()))
+        for name, change in (rows or {}).items():
+            path = root / checker.REGISTER_DIRECTORY / name
+            if change is None:
+                path.unlink()
+            else:
+                path.write_text(change(path.read_text()
+                                       if path.exists() else ""))
+        if regenerate:
+            (root / checker.REGISTER_OVERVIEW).write_text(
+                checker.register_overview(str(root)))
+        return [why for _, _, why in checker.check_register(True)]
 
 
 def once(old, new):
@@ -2207,6 +2233,16 @@ def restate(work, old, new):
     return edit
 
 
+def restate_depends(work, dependency):
+    """An edit giving one item's own dependency line another dependency."""
+    def edit(text):
+        at = text.index("\n### %s — " % work)
+        own = text.index("\nDepends on: ", at)
+        end = text.index("\n", own + 1)
+        return text[:own] + "\nDepends on: " + dependency + text[end:]
+    return edit
+
+
 def status_of(work):
     """The status the real roadmap gives WORK."""
     text = real_roadmap()
@@ -2220,26 +2256,16 @@ def then(first, second):
     return lambda text: second(first(text))
 
 
-def scheduled_pair():
-    """A register row scheduled on two items, made from the real roadmap.
-
-    The first row scheduled on one item gains a second, a planned item, so
-    that these controls do not depend on the register holding a row with
-    two owners at the time.
-    """
-    text = real_roadmap()
-    first = re.search(r"\| scheduled (R\d+\.\d+)(?:, R\d+\.\d+)* \|",
-                      text).group(1)
-    later = next(item for item in re.findall(
-        r"\n### (R\d+\.\d+) — [^\n]*\n\nStatus: planned\n", text)
-        if item != first)
-    return first, later, once("| scheduled %s |" % first,
-                              "| scheduled %s, %s |" % (first, later))
-
-
 def real_roadmap():
     """The roadmap these controls break, read rather than transcribed."""
     return (Path(checker.ROOT) / "ROADMAP.md").read_text(encoding="utf-8")
+
+
+def real_rows():
+    """{file name: text} of the real register's rows."""
+    directory = Path(checker.ROOT) / checker.REGISTER_DIRECTORY
+    return {path.name: path.read_text(encoding="utf-8")
+            for path in sorted(directory.glob("*.md"))}
 
 
 def status_pointer():
@@ -2254,34 +2280,44 @@ def status_pointer():
     raise AssertionError("README.md carries no roadmap status pointer")
 
 
-#  The items are read from the roadmap rather than named, because finishing
-#  one moves the pointer and retires its records: a control that named them
-#  failed the day the item it named was done.  Reading them also keeps the
-#  identities out of this file, where the citation rule refuses them.
-#  PLANNED is the first planned item, SCHEDULED the first planned item an
-#  open record is scheduled on, and ELSEWHERE a planned item the pointer
-#  does not name.
+#  The items and rows are read from the roadmap rather than named, because
+#  finishing one moves the pointer and retires its rows: a control that
+#  named them failed the day the item it named was done.  Reading them also
+#  keeps the identities out of this file, where the citation rule refuses
+#  them.  PLANNED is the first planned item, SCHEDULED_ROW the file of the
+#  first row scheduled on a planned item, SCHEDULED that item, OPEN_ROW the
+#  file of the first row scheduled on nothing, MERGED an identity a row
+#  names after `Merged:`, and ELSEWHERE a planned item the pointer does not
+#  name.
 POINTER, NAMED = status_pointer()
 UNSTARTED = [work for work, status
              in checker.roadmap_statuses(real_roadmap()).items()
              if status == "planned"]
 PLANNED = UNSTARTED[0]
-SCHEDULED = next(work for work in re.findall(r"\| scheduled (R\d+\.\d+) \|",
-                                             real_roadmap())
-                 if work in UNSTARTED)
+SCHEDULED_ROW, SCHEDULED = next(
+    (name, found.group(1)) for name, text in real_rows().items()
+    for found in [re.search(r"^status: scheduled (R\d+\.\d+)$", text, re.M)]
+    if found and found.group(1) in UNSTARTED)
+OPEN_ROW = next(name for name, text in real_rows().items()
+                if "\nstatus: open\n" in text)
+MERGED = next(found.group(1) for text in real_rows().values()
+              for found in [re.search(r"Merged: (SR-\d+|R730-\d\d|R551-\d\d)",
+                                      text)] if found)
 ELSEWHERE = next(work for work in UNSTARTED if work != NAMED)
 #  One of the first roadmap's items, which the history holds and this
 #  roadmap does not, and two of its debt ledger's records.
 CLOSED = "R%d.%d" % (7, 70)
 MEASURED, GUARDED = ("R%d-%02d" % (551, n) for n in (8, 9))
+#  A row number past every row the register has had, so it names nothing.
+INVENTED = "SR-%d" % 99999
 
 
 class RoadmapStructure(unittest.TestCase):
     """The checks that hold ROADMAP.md's own shape, and its reach.
 
-    The phases, items and dependencies, the register and its families, the
-    status pointers that mirror the next item, and the rule that keeps the
-    roadmap's identities in the roadmap.
+    The phases, items, dependencies and lanes, the register's row files and
+    their families, the status pointers that mirror the next item, and the
+    rule that keeps the roadmap's identities in the roadmap.
     """
 
     def test_the_real_roadmap_passes(self):
@@ -2293,6 +2329,7 @@ class RoadmapStructure(unittest.TestCase):
     def test_the_structural_checks_pass(self):
         for check in (checker.check_project_status,
                       checker.check_roadmap_citations,
+                      checker.check_register,
                       checker.check_register_entries):
             with self.subTest(check=check.__name__):
                 self.assertEqual(faults(check, copied=ROADMAP_INPUTS), [])
@@ -2302,9 +2339,31 @@ class RoadmapStructure(unittest.TestCase):
         self.assertTrue(any("invalid status" in why for why in said))
 
     def test_a_phase_out_of_order_is_reported(self):
-        said = roadmap_faults(once(quote("ROADMAP.md", "## R9 — "),
-                                   "## R7 — "))
-        self.assertTrue(any("not R8 onward in order" in why for why in said))
+        first = checker.FIRST_ROADMAP_PHASES
+        said = roadmap_faults(once(quote("ROADMAP.md", "## R18 — "),
+                                   "## R%d — " % (first - 1)))
+        self.assertTrue(any("not R%d onward in order" % first in why
+                            for why in said))
+
+    def test_a_retired_phase_keeps_neither_items_nor_a_gate(self):
+        heading = quote("ROADMAP.md", "## R15 — Windows (retired)")
+        said = roadmap_faults(once(heading, heading + "\n\n### R%d gate\n"
+                                   % (checker.FIRST_ROADMAP_PHASES)))
+        self.assertTrue(any("is retired and keeps an item or a gate" in why
+                            for why in said))
+        #  Without the word, it is a phase like any other.
+        said = roadmap_faults(once(heading, "## R%d — Windows"
+                                   % checker.FIRST_ROADMAP_PHASES))
+        self.assertTrue(any("gate is missing" in why for why in said))
+
+    def test_a_phase_dependency_must_name_a_phase(self):
+        said = roadmap_faults(restate_depends(PLANNED, "R%d" % 99))
+        self.assertTrue(any("depends on unknown R%d" % 99 in why
+                            for why in said))
+        own = PLANNED.split(".")[0]
+        said = roadmap_faults(restate_depends(PLANNED, own))
+        self.assertTrue(any("%s depends on itself" % PLANNED in why
+                            for why in said))
 
     def test_execution_order_requires_complete_unique_known_items(self):
         line = re.search(r"^Execution order: .+$", real_roadmap(), re.M).group(0)
@@ -2327,113 +2386,145 @@ class RoadmapStructure(unittest.TestCase):
             line, "Execution order: " + ", ".join(reversed(selectors))))
         self.assertTrue(any("precedes dependency" in why for why in said))
 
+    def test_the_continuous_lane_is_read(self):
+        line = re.search(r"^Continuous: .+$", real_roadmap(), re.M).group(0)
+        said = roadmap_faults(once(line, ""))
+        self.assertTrue(any("omits" in why for why in said))
+        said = roadmap_faults(once(line, line.rsplit(" ", 1)[0]))
+        self.assertTrue(any("malformed Continuous" in why for why in said))
+
     def test_a_reference_to_nothing_is_reported(self):
-        said = roadmap_faults(once(quote("ROADMAP.md",
-                                         "| Guarded cleanups can expand"),
-                                   "| %s's guarded cleanups can expand"
-                                   % CLOSED))
+        said = roadmap_faults(once(
+            quote("ROADMAP.md", "Measured first, and then only where the"
+                  " measurement says."),
+            "Measured first, as %s was." % CLOSED))
         self.assertTrue(any("%s is referenced and not defined" % CLOSED
                             in why for why in said))
 
-    def test_a_record_with_an_unknown_family_is_reported(self):
-        said = roadmap_faults(once("| %s | Scale and self-hosting |"
-                                   % MEASURED,
-                                   "| %s | Somebody else |" % MEASURED))
+    def test_a_row_with_an_unknown_family_is_reported(self):
+        said = register_faults(rows={OPEN_ROW: lambda text: re.sub(
+            r"^family: .*$", "family: Somebody else", text, count=1,
+            flags=re.M)})
         self.assertTrue(any("unknown family" in why for why in said))
 
-    def test_a_record_registered_twice_is_reported(self):
-        said = roadmap_faults(once("| %s | Competitive" % GUARDED,
-                                   "| %s | Competitive" % MEASURED))
-        self.assertTrue(any("registered twice" in why for why in said))
+    def test_a_file_not_named_as_a_row_is_reported(self):
+        said = register_faults(rows={"notes.md": lambda text: "notes\n"})
+        self.assertTrue(any("'notes.md' is not a register identity" in why
+                            for why in said))
 
-    def test_a_citation_of_a_record_that_never_was_is_reported(self):
-        #  Past every record the register has had, so it names nothing.
-        invented = "SR-%d" % (1 + max(int(n) for n in re.findall(
-            r"SR-(\d+)", real_roadmap())))
-        said = roadmap_faults(once(quote("ROADMAP.md",
-                                         "Work that waits for its activation,"),
-                                   "Work that waits for its activation (%s),"
-                                   % invented))
-        self.assertTrue(any("%s is cited and is no register record" % invented
+    def test_a_row_without_front_matter_or_with_a_bad_key_is_reported(self):
+        said = register_faults(rows={OPEN_ROW: lambda text: "only a body\n"})
+        self.assertTrue(any("front matter block" in why for why in said))
+        for line, expected in (("colour: red", "unknown key 'colour'"),
+                               ("kind: whim", "invalid kind 'whim'"),
+                               ("effort: XL", "invalid effort 'XL'"),
+                               ("opened: last week", "invalid opened"),
+                               ("family: Usability", "given twice")):
+            def change(text, line=line):
+                key = line.split(":", 1)[0]
+                if key != "family" and re.search(r"^%s: " % key, text, re.M):
+                    return re.sub(r"^%s: .*$" % key, line, text, count=1,
+                                  flags=re.M)
+                return text.replace("\n---\n", "\n%s\n---\n" % line, 1)
+            with self.subTest(line=line):
+                said = register_faults(rows={OPEN_ROW: change})
+                self.assertTrue(any(expected in why for why in said), said)
+
+    def test_a_row_without_its_parts_is_reported(self):
+        name = OPEN_ROW[:-len(".md")]
+        for remove, expected in (("activation", "has no activation"),
+                                 ("opened", "has no opened"),
+                                 ("status", "has no status")):
+            with self.subTest(remove=remove):
+                said = register_faults(rows={OPEN_ROW: lambda text: re.sub(
+                    r"^%s: .*\n" % remove, "", text, count=1, flags=re.M)})
+                self.assertTrue(any("%s %s" % (name, expected) in why
+                                    for why in said))
+        said = register_faults(rows={OPEN_ROW: lambda text: re.sub(
+            r"^Completion: .*$", "Completion: —", text, flags=re.M)})
+        self.assertTrue(any("%s does not say what would complete it" % name
+                            in why for why in said))
+
+    def test_a_citation_of_a_row_that_never_was_is_reported(self):
+        anchor = quote("ROADMAP.md", "Measured first, and then only where the"
+                       " measurement says.")
+        said = register_faults(once(anchor, anchor + " (%s)" % INVENTED))
+        self.assertTrue(any("%s is cited and is no register row" % INVENTED
                             in why for why in said))
         #  Quoted in a code span, as a finding spells what it met, it is not
         #  a citation.
-        said = roadmap_faults(once(quote("ROADMAP.md",
-                                         "Work that waits for its activation,"),
-                                   "Work that waits for its activation (`%s`),"
-                                   % invented))
-        self.assertFalse(any(invented in why for why in said))
+        said = register_faults(once(anchor, anchor + " (`%s`)" % INVENTED))
+        self.assertFalse(any(INVENTED in why for why in said))
 
-    def test_a_record_that_left_is_defined_only_by_the_list(self):
-        listed = re.search(r"^%s(\S+?)," % re.escape(checker.REGISTER_LEFT),
-                           real_roadmap(), re.M).group(1)
-        said = roadmap_faults(once(checker.REGISTER_LEFT + listed + ", ",
-                                   checker.REGISTER_LEFT))
-        self.assertTrue(any("%s is cited and is no register record" % listed
-                            in why for why in said))
-
-    def test_a_record_listed_as_left_and_still_a_row_is_reported(self):
-        said = roadmap_faults(once(checker.REGISTER_LEFT,
-                                   checker.REGISTER_LEFT + MEASURED + ", "))
-        self.assertTrue(any("%s is listed as having left the register and is"
-                            " still its row" % MEASURED in why
+    def test_a_deleted_row_is_no_longer_citable(self):
+        #  The scheduled row's item names it, so deleting the file leaves a
+        #  citation of a row the history alone keeps.
+        said = register_faults(rows={SCHEDULED_ROW: None})
+        self.assertTrue(any("%s is cited and is no register row"
+                            % SCHEDULED_ROW[:-len(".md")] in why
                             for why in said))
 
-    def test_a_merged_record_is_defined_by_the_row_it_joined(self):
-        joined = re.search(r"Merged: (R730-\d\d|SR-\d+)",
-                           real_roadmap()).group(1)
-        said = roadmap_faults(once("Merged: " + joined, "Beside " + joined))
-        self.assertTrue(any("%s is cited and is no register record" % joined
+    def test_a_merged_row_is_defined_by_the_row_it_joined(self):
+        anchor = quote("ROADMAP.md", "Measured first, and then only where the"
+                       " measurement says.")
+        cite = once(anchor, anchor + " (%s)" % MERGED)
+        self.assertEqual(register_faults(cite), [])
+        joined = next(name for name, text in real_rows().items()
+                      if "Merged: " + MERGED in text)
+        said = register_faults(cite, rows={joined: lambda text: text.replace(
+            "Merged: " + MERGED, "Beside " + MERGED)})
+        self.assertTrue(any("%s is cited and is no register row" % MERGED
                             in why for why in said))
 
-    def test_a_record_scheduled_on_no_item_is_reported(self):
-        said = roadmap_faults(once("| scheduled " + SCHEDULED + " |",
-                                   "| scheduled %s |" % CLOSED))
+    def test_a_row_scheduled_on_no_item_is_reported(self):
+        said = register_faults(rows={SCHEDULED_ROW: lambda text: text.replace(
+            "status: scheduled " + SCHEDULED, "status: scheduled " + CLOSED)})
         self.assertTrue(any("not a work item of this roadmap" in why
                             for why in said))
 
-    def test_a_record_scheduled_on_a_finished_item_is_reported(self):
-        said = roadmap_faults(restate(SCHEDULED, "planned", "complete"))
+    def test_a_row_scheduled_on_a_finished_item_is_reported(self):
+        said = register_faults(restate(SCHEDULED, "planned", "complete"))
         self.assertTrue(any("still scheduled on finished " + SCHEDULED in why
                             for why in said))
 
-    def test_every_scheduled_owner_is_checked(self):
-        first, later, owners = scheduled_pair()
-        said = roadmap_faults(then(
-            owners, once("| scheduled %s, %s |" % (first, later),
-                         "| scheduled %s, %s |" % (first, CLOSED))))
-        self.assertTrue(any("scheduled on " + CLOSED in why for why in said))
-
-        said = roadmap_faults(then(
-            owners, restate(later, status_of(later), "complete")))
-        self.assertTrue(any("still scheduled on finished " + later in why
-                            for why in said))
+    def test_a_row_scheduled_on_an_item_that_does_not_name_it(self):
+        later = next(work for work in UNSTARTED if work != SCHEDULED)
+        said = register_faults(rows={SCHEDULED_ROW: lambda text: text.replace(
+            "status: scheduled " + SCHEDULED,
+            "status: scheduled %s, %s" % (SCHEDULED, later))})
+        self.assertTrue(any("is scheduled on %s, whose text does not name it"
+                            % later in why for why in said))
 
     def test_a_repeated_scheduled_owner_is_reported(self):
-        first, later, owners = scheduled_pair()
-        said = roadmap_faults(then(
-            owners, once("| scheduled %s, %s |" % (first, later),
-                         "| scheduled %s, %s, %s |" % (first, later, first))))
-        self.assertTrue(any("repeats scheduled owner " + first in why
-                            for why in said))
-
-    def test_a_record_without_an_activation_is_reported(self):
-        said = roadmap_faults(once(
-            quote("ROADMAP.md", "| A measured cleanup workload with "
-                  "unacceptable growth. |"),
-            "| — |"))
-        self.assertTrue(any("%s has no activation" % GUARDED in why
+        said = register_faults(rows={SCHEDULED_ROW: lambda text: text.replace(
+            "status: scheduled " + SCHEDULED,
+            "status: scheduled %s, %s" % (SCHEDULED, SCHEDULED))})
+        self.assertTrue(any("repeats scheduled owner " + SCHEDULED in why
                             for why in said))
 
     def test_a_family_that_owns_nothing_is_reported(self):
-        said = roadmap_faults(once(
+        said = register_faults(once(
             quote("ROADMAP.md", "- **Release readiness:**"),
             "- **Release readiness:** unchanged.\n- **Nobody's:**"))
         self.assertTrue(any("family Nobody's owns no open record" in why
                             for why in said))
 
+    def test_a_candidate_cited_and_not_listed_is_reported(self):
+        anchor = quote("ROADMAP.md", "Measured first, and then only where the"
+                       " measurement says.")
+        said = register_faults(once(anchor, anchor + " (SC-%d)" % 99))
+        self.assertTrue(any("SC-%d is cited and is no candidate" % 99 in why
+                            for why in said))
+
+    def test_a_stale_overview_is_reported(self):
+        said = register_faults(rows={OPEN_ROW: lambda text: text.replace(
+            "\nstatus: open\n", "\nstatus: open\nkind: watch\n", 1)},
+            regenerate=False)
+        self.assertTrue(any("roadmap/register.md is missing or stale" in why
+                            for why in said))
+
     def test_a_roadmap_identity_cited_elsewhere_is_reported(self):
-        #  An item or record of either roadmap: the first roadmap's are
+        #  An item or record of any roadmap: the earlier roadmaps' are
         #  closed and in the history, and no more welcome outside it.
         from check_controls import tree
         for cited in (PLANNED, CLOSED, MEASURED, "SR-%02d" % 3, "SR-%d" % 100):
@@ -2446,6 +2537,15 @@ class RoadmapStructure(unittest.TestCase):
                         in checker.check_roadmap_citations(True)]
                 self.assertTrue(any(where == "docs/ir.md" and cited in why
                                     for where, why in said))
+
+    def test_the_roadmap_files_may_cite_identities(self):
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            for name in ("roadmap/questions/Q-0.md", "roadmap/inputs/x.md"):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text("See %s and %s.\n"
+                                         % (PLANNED, MEASURED))
+            self.assertEqual(checker.check_roadmap_citations(True), [])
 
     def test_the_refusal_names_the_spellings_a_test_may_invent(self):
         #  A test of a register reader invents rows; the refusal says it
@@ -2513,32 +2613,27 @@ class RoadmapStructure(unittest.TestCase):
         self.assertEqual(said, [])
 
     def test_scope_blocked_work_does_not_hold_up_independent_work(self):
+        #  The serial lane's first item blocked: the items that depend on
+        #  it wait, and the pointer names the first one that does not.
         from check_controls import tree
         with tree(copied=ROADMAP_INPUTS) as root:
             target = root / "ROADMAP.md"
             text = target.read_text()
-            current = None
-            future = False
-            lines = []
-            for line in text.splitlines():
-                heading = checker.ROADMAP_WORK.match(line)
-                if heading:
-                    current = heading.group(1)
-                    if heading.group(3) == "Measure generated code":
-                        future = True
-                        expected = current + " — " + heading.group(3)
-                if (not future and line.startswith("Status:")
-                        and line != "Status: blocked"):
-                    line = "Status: complete"
-                lines.append(line)
-            target.write_text("\n".join(lines) + "\n")
+            first = NAMED
+            text = restate(first, "planned", "blocked")(text)
+            text = text.replace("\nStatus: blocked\n",
+                                "\nStatus: blocked\nBlocked because: a"
+                                " control says so\n", 1)
+            independent = next(
+                found for found in re.finditer(
+                    r"^### (R\d+\.\d+) — ([^\n]+)\n\nStatus: planned\n"
+                    r"Depends on: none$", text, re.M))
+            target.write_text(text)
             for name in ("README.md", "handoff.md"):
                 page = root / name
-                content = page.read_text()
-                content = content.replace(
-                    POINTER, "**Next roadmap item: " + expected
-                    + " (planned).**")
-                page.write_text(content)
+                page.write_text(page.read_text().replace(
+                    POINTER, "**Next roadmap item: %s — %s (planned).**"
+                    % independent.groups()))
             self.assertEqual(checker.check_project_status(True), [])
 
     def test_a_pointer_that_disagrees_with_the_roadmap_is_reported(self):

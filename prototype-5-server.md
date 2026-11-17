@@ -846,7 +846,7 @@ answer, and it reaches beyond fibres.
 V2  RESOLVED by D444: as proposed. A task's error set is `failure.reason`, the group
 keeps the first failure and `join` fails with it, and a task with atoms of
 its own maps them before returning. Error sets as generic parameters are
-recorded in ROADMAP.md's register with what would bring them in.
+recorded in the roadmap's register with what would bring them in.
 
 The original finding, for the record.
 
@@ -878,7 +878,7 @@ V3  RESOLVED by D444 and D445: as proposed for the state, and by the program's
 `g`'s storage when its argument outlives `g`'s origin, decided locally, so
 `main` lends `host` to the sessions and the client its `heard`. A group is
 joined by `defer`, as a region is released; a check that a frame-backed
-group is joined on every path is recorded in ROADMAP.md's register.
+group is joined on every path is recorded in the roadmap's register.
 `fibre.within` was declined: it makes the group and the states both
 parameters of the body, so nothing local can order them.
 

@@ -1,9 +1,8 @@
 {
  "ROADMAP.md": [
-  "## R9 — ",
-  "| Guarded cleanups can expand",
-  "Work that waits for its activation,",
-  "| A measured cleanup workload with unacceptable growth. |",
+  "## R18 — ",
+  "## R15 — Windows (retired)",
+  "Measured first, and then only where the measurement says.",
   "- **Release readiness:**"
  ],
  "docs/diagnostics.md": [

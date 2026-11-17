@@ -88,6 +88,25 @@ class Key(unittest.TestCase):
         self.write("AGENTS.md", "")
         self.assertTrue(self.same())
 
+    def test_the_roadmap_tree_does_not_count_at_all(self):
+        #  A register row is a file: adding, editing and deleting one is
+        #  ROADMAP.md's kind of change.
+        self.write("roadmap/register/SR-0.md", "a row\n")
+        self.write("roadmap/questions/Q9.md", "a question\n")
+        #  A close regenerates the overview, and an input is frozen prose.
+        self.write("roadmap/register.md", "the overview\n")
+        self.write("roadmap/inputs/a-list.md", "an input\n")
+        self.assertTrue(self.same())
+        base = self.commit()
+        (self.root / "roadmap/register/SR-0.md").unlink()
+        self.assertEqual(gate_inputs.key(base, self.root),
+                         gate_inputs.key(self.commit(), self.root))
+        #  A candidate's own key still counts it.
+        self.write("roadmap/register/SR-0.md", "a row again\n")
+        self.assertNotEqual(gate_inputs.key(base, self.root, content_free=()),
+                            gate_inputs.key(self.commit(), self.root,
+                                            content_free=()))
+
     def test_any_other_content_counts(self):
         for name in ("spec.md", "docs/README.md", "compiler/main.adb"):
             with self.subTest(name=name):
@@ -1485,6 +1504,7 @@ READERS = {
                        "from object storage beside the faces in pages.yml",
     "scripts/context_pack.py": "a developer tool; its test is in scripts/tests",
     "scripts/activations.py": "a developer tool for closing an item; its test is in scripts/tests",
+    "scripts/roadmap_register.py": "the register's one-time move into files, run by hand; its test is in scripts/tests",
     "scripts/gate_inputs.py": "the inputs job",
     #  The gate's flake job builds it, skipped with the other lanes under
     #  reuse; README.md's status line gives the package only its version
@@ -1505,7 +1525,7 @@ READERS = {
     "environments/cortex-m/packed-validation.json": "names its own README",
 }
 MENTION = re.compile(r"(?<![\w./-])(?:README|ROADMAP|handoff|AGENTS)\.md"
-                     r"|\*\*?\.md\b")
+                     r"|\*\*?\.md\b|(?<![\w./-])roadmap/")
 
 
 class Readers(unittest.TestCase):
@@ -1534,7 +1554,8 @@ class Readers(unittest.TestCase):
                          "not match; one that names a top-level document without "
                          "reading it gets an entry in READERS saying why; and one "
                          "a lane really reads takes the document out of "
-                         "CONTENT_FREE" % ", ".join(gate_inputs.CONTENT_FREE))
+                         "CONTENT_FREE" % ", ".join(gate_inputs.CONTENT_FREE
+                                                    + gate_inputs.CONTENT_FREE_TREES))
 
 
 if __name__ == "__main__":

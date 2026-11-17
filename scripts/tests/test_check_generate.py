@@ -18,7 +18,8 @@ spec = importlib.util.spec_from_file_location("landin_check", ROOT / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-ORDER = ["--tokens", "--catalogue", "--coverage", "--matrix", "highlighters"]
+ORDER = ["--tokens", "--catalogue", "--coverage", "--matrix", "--register",
+         "highlighters"]
 
 
 class GeneratorFlags(unittest.TestCase):

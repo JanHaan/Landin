@@ -137,7 +137,7 @@ sys.path.insert(0, str(HERE))
 
 import llms  # noqa: E402
 import library  # noqa: E402
-from roadmap_order import execution_order  # noqa: E402
+from roadmap_order import dependency_items, execution_order  # noqa: E402
 
 #  Both icons travel in the page.  The pages have no external references
 #  at all, and a favicon fetched from a second file would be the first
@@ -2810,9 +2810,10 @@ def roadmap_progress(text, recent_count=3):
     ready = [i for i, item in enumerate(items)
              if item["status"] == "planned"
              and all(dependency == "none"
-                     or any(other["key"] == dependency
-                            and other["status"] == "complete"
-                            for other in items)
+                     or all(other["status"] == "complete"
+                            for other in items
+                            if other["key"] in dependency_items(
+                                dependency, [one["key"] for one in items]))
                      for dependency in item["depends"])]
     live = [item for item in items
             if item["status"] in ("planned", "active", "blocked")]

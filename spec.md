@@ -25788,6 +25788,36 @@ as the only base, which spends a full run on prose.
 `test_a_branch_push_may_use_the_exception`, and the `Decide` cases that
 hold ancestry, declarations and the complete listing.
 
+### D1373 — The roadmap's own files leave an explanatory edit's key
+
+**The tour said** nothing. D586 left the content of four top-level
+documents out of the tree key an explanatory edit is compared by, and
+`ROADMAP.md`'s register was a table in one of them. The third roadmap
+keeps it as a file a row under `roadmap/register/`, with a generated
+overview, the maintainer's questions and the frozen inputs beside it, so
+an item's close, which deletes, restates or schedules rows and regenerates
+the overview, changed paths the key counts and could never reuse its
+candidate's gate.
+
+**Chosen:** the gate's tree key leaves out the roadmap's whole directory,
+its paths as well as its content, and `scripts/gate_inputs.py` names it.
+A row added, edited or deleted, the register's regenerated overview, a
+question and an input are each an explanatory change like an edit to the
+roadmap itself. No lane reads the directory; `check.py`, which does, runs
+in the documents job on every event, reused or not. Everything else in
+D586 stands, and a candidate's own key, which identical-tree reuse
+compares, still counts every path.
+
+**The alternatives:** keeping the key as it was, which makes nearly every
+item close a new tree needing its own full gate and boards run, and was
+the first answer given; and listing the register's files one by one, which
+a new row would escape.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s
+`test_the_roadmap_tree_does_not_count_at_all` and its `Readers` case,
+which names every tracked file that mentions `roadmap/` and why no lane
+the key lets skip reads it.
+
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 
 **The tour said** nothing of a second family. Prototype 1 drives a UART
