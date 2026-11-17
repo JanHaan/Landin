@@ -1,0 +1,10 @@
+--  The firmware entry a measured Xtensa workload is linked with, on the
+--  chip its board runs it on (docs/measurement.md): the Xtensa reference
+--  description has no load address for initialized data at boot.
+import descriptions/esp32
+
+mut observed: i32 = 0
+
+start: () -> none =
+    observed = main()
+end start

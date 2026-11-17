@@ -1,7 +1,7 @@
 # Measuring generated code
 
-This is the measurement contract R16.10 sets: what the gate measures of the
-code `refine` emits, where, and how a change is held to it. It is a
+This is the measurement contract for generated code: what the gate measures
+of the code `refine` emits, where, and how a change is held to it. It is a
 maintained reference. The choices it makes are decisions in `spec.md`'s
 register under the toolchain, and the data is under
 `compiler/tests/measure/`. `scripts/measure.py` measures and compares; its
@@ -25,7 +25,7 @@ failed measurement, never a figure.
 |---|---|---|
 | hosted | the five Benchmark Game ports of [`docs/benchmarks.md`](benchmarks.md); a fibre program and a thread program, which pay the prologue's stack check on every call | every hosted target |
 | firmware | `sieve-of-eratosthenes`, `merge-sort`, `binary-search` and `cmp-siphash-vectors`, which the firmware lanes already execute; and firmware forms of fannkuch-redux and mandelbrot, new fixtures, each fitting the constrained 32 KiB reference | every firmware target and level, on the constrained reference where the level's lane runs it and otherwise on the one profile that lane uses: `mps2-an505` for armv8-m.main, the AN500's description for armv7e-m, and the ESP chips' own for rv32 and Xtensa |
-| counterpart | prototype 5's firmware counterpart, which does not fit 32 KiB (SR-996) | `cortex-m0`, on the 256 KiB description its lane uses (D1036) |
+| counterpart | prototype 5's firmware counterpart, which does not fit 32 KiB | `cortex-m0`, on the 256 KiB description its lane uses (D1036) |
 
 `compiler/tests/measure/workloads.json` names each workload, its fixture and
 the set it is in. An existing fixture keeps the oracle it has: its status,
@@ -119,7 +119,7 @@ and Xtensa lanes, is built without plugins, so those levels are timed on
 their boards and record size alone under emulation. A program with threads is
 scheduled by the host even there, so the thread workload is `size-only`
 under emulation. Espressif's QEMU gives the ESP32-S3 counts that move
-between runs (SR-1267), and FreeBSD arm64 runs as a whole system under
+between runs, and FreeBSD arm64 runs as a whole system under
 emulation, its kernel and timer in any count: both are `size-only`, and
 the Xtensa levels are timed on their boards.
 
@@ -136,7 +136,8 @@ lane's emulator and prints the instructions executed in all, and between
 two symbols with `--from` and `--to`. The Cortex-M corpus's `--program`
 option (`environments/cortex-m/backend_corpus.py`), which runs any `.ldn`
 file or module directory, prints the same count for each program it runs,
-which is what SR-1267 asks.
+which is what choosing between implementations by their cost on a
+firmware target needs.
 
 ## Runners
 
@@ -209,13 +210,13 @@ by name must ask for the version.
 
 ## What the measurements found
 
-The ranked list of each backend's largest measured costs, from which
-R16.20 takes its scope, is the last section of this page. A cost is
-attributed by measuring the same workload with and without the construct
-that pays it, at the same configuration. Its answers close or restate the
-rows the item names: the atom `match` table (SR-231), the heap's lock flag
-(SR-387), float selection on Cortex-M (SR-596), short `u64` routines on
-armv6-m (SR-869), the library's erased tables and formatting (SR-1023),
-the counterpart's flash against 32 KiB (SR-996), list growth through
-`resize` (SR-275) and any cost attributable to assembly's fixed memory
-effect (SR-09), and x86-64's two-instruction reach of a thread instance.
+The ranked list of each backend's largest measured costs, from which the
+register allocation work takes its scope, is the last section of this page.
+A cost is attributed by measuring the same workload with and without the
+construct that pays it, at the same configuration. Its answers are the
+ones the roadmap's rows ask of this measurement: the atom `match` table,
+the heap's lock flag, float selection on Cortex-M, short `u64` routines on
+armv6-m, the library's erased tables and formatting, the counterpart's
+flash against 32 KiB, list growth through `resize`, any cost attributable
+to assembly's fixed memory effect, and x86-64's two-instruction reach of a
+thread instance.

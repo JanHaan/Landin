@@ -1,0 +1,8 @@
+--  The firmware entry a measured workload is linked with
+--  (docs/measurement.md): it runs the fixture's hosted-form `main` and
+--  keeps its status where the emulator and the probe read it.
+mut observed: i32 = 0
+
+start: () -> none =
+    observed = main()
+end start

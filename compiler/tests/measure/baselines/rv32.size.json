@@ -1,0 +1,619 @@
+{
+ "schema": 1,
+ "target": "rv32",
+ "entries": {
+  "rv32imac/none-all/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2792,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-all/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12560,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-all/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 4796,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2896,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-auto/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2792,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12552,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-auto/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 4796,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2896,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-off/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2792,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-off/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12552,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-off/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 4796,
+    ".bss": 24
+   }
+  },
+  "rv32imac/none-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2896,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-all/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2332,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-all/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8924,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-all/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3732,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2340,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-auto/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2332,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8944,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-auto/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3732,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2340,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-off/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2332,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-off/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8944,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-off/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3732,
+    ".bss": 24
+   }
+  },
+  "rv32imac/size-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2340,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-all/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2500,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-all/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8924,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-all/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3768,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2132,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-auto/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2500,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8924,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-auto/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3768,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2132,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-off/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2500,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-off/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8944,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-off/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3768,
+    ".bss": 24
+   }
+  },
+  "rv32imac/speed-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2132,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-all/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2792,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-all/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12560,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-all/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 4796,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2896,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-auto/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2792,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12552,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-auto/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 4796,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2896,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-off/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2792,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-off/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12552,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-off/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 4796,
+    ".bss": 24
+   }
+  },
+  "rv32imc/none-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2896,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-all/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2332,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-all/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8924,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-all/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3732,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2340,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-auto/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2332,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8944,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-auto/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3732,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2340,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-off/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2332,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-off/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8944,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-off/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3732,
+    ".bss": 24
+   }
+  },
+  "rv32imc/size-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2340,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-all/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2500,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-all/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8924,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-all/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3768,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2132,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-auto/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2500,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8924,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-auto/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3768,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2132,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-off/binary-search": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2500,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-off/cmp-siphash-vectors": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 8944,
+    ".rodata": 513,
+    ".data": 36,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-off/merge-sort": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3768,
+    ".bss": 24
+   }
+  },
+  "rv32imc/speed-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 2132,
+    ".bss": 24
+   }
+  }
+ },
+ "environment": "nix; GNU ld (GNU Binutils) 2.46.1"
+}

@@ -750,7 +750,10 @@ def shard(text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--arch', choices=['amd64', 'arm64'], required=True)
-    parser.add_argument('--kind', choices=['runtime', 'debugger', 'abi'], required=True)
+    parser.add_argument('--kind', choices=['runtime', 'debugger', 'abi', 'size'], required=True,
+                        help='size: no guest; link every measured workload with the lane\'s'
+                             ' cross driver and compare its sections with the baselines'
+                             ' (docs/measurement.md)')
     parser.add_argument('--refine', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cache', type=Path, default=Path.home() / '.cache/landin/freebsd')
@@ -793,6 +796,19 @@ def main():
             image = None
             summary.update({k: manifest[k] for k in ('refine_sha256', 'scope', 'revision', 'sysroot_release', 'payload_sha256')})
             results = manifest['results']
+        elif args.kind == 'size':
+            _, sysroot = prepare(args.arch, args.cache, image=False)
+            lane = Lane(args, sysroot)
+            measured = args.output / 'measure'
+            for step in (['size', '--refine', str(args.refine.resolve()),
+                          '--target', lane.target, '--output', str(measured),
+                          '--environment', 'freebsd ' + LOCK['release'] + ' sysroot',
+                          '--toolchain', lane.target + '=' + str(lane.driver)],
+                         ['compare', str(measured / 'size.json')]):
+                done = subprocess.run([sys.executable, str(ROOT / 'scripts/measure.py'), *step])
+                require(done.returncode == 0, 'measure.py ' + step[0] + ' failed for ' + lane.target)
+            summary['status'] = 'passed'
+            return
         else:
             image, sysroot = prepare(args.arch, args.cache, image=not args.prepare_only and not args.runner_ssh)
             lane = Lane(args, sysroot)

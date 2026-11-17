@@ -114,7 +114,8 @@ jobs:
             arm64-compiler-checks arm64-release \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime-1 freebsd-arm64-runtime-2 \
-            freebsd-arm64-debugger freebsd-arm64-abi build-modes-1 build-modes-2 \
+            freebsd-arm64-debugger freebsd-arm64-abi freebsd-amd64-size freebsd-arm64-size \
+            measure-size build-modes-1 build-modes-2 \
             build-modes-3 rv64-qemu-1 rv64-qemu-2 outside-user-stock \
             linux-release-clean linux-release-compare \
             'determinism / manifest (x86_64-linux 1)' \
@@ -849,6 +850,51 @@ jobs:
         if: matrix.part == 'ram-run-rigpi'
         run: nix build -L --no-link .#board-ram-run-rigpi
 
+  #  The size of the code refine emits (docs/measurement.md): every
+  #  measured workload at every level `refine targets` gives and all nine
+  #  profiles, for the Linux, RV64 and firmware targets, linked by the
+  #  pinned environment's own linkers and held to the base commit's
+  #  baselines.  Darwin's sizes are measured on its runner and FreeBSD's
+  #  beside its lanes, each by the same script.
+  measure-size:
+    needs: [inputs, linux-release-build]
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install nix for the pinned linkers
+        uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+      - name: Restore the release compiler
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/release
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
+            -C compiler/ada/build/linux-amd64/release
+      - name: Measure every section and compare it with the base's baselines
+        run: |
+          set -eu
+          nix develop --command python3 scripts/measure.py size \
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --target linux-x86-64 --target linux-arm64 --target linux-rv64 \
+            --target cortex-m0 --target rv32 --target xtensa \
+            --host linux-x86-64 --environment nix \
+            --output "$RUNNER_TEMP/measure-size"
+          nix develop --command python3 scripts/measure.py compare \
+            "$RUNNER_TEMP/measure-size/size.json"
+      - name: Keep the figures, which record --from-run reads
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-size-linux
+          path: ${{ runner.temp }}/measure-size/size.json
+          retention-days: 30
+
   #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB.  Every lane in one job took
   #  612 s on the runner and the job sixteen and a half minutes, before the
@@ -1505,6 +1551,24 @@ jobs:
           LANDIN_TEST_TIMINGS=1
           ./scripts/test.sh --host --target=linux-x86-64 --shard=${{ matrix.shard }}/2
 
+      - name: Measure Darwin's sections and compare them with the base's baselines
+        if: matrix.shard == 2
+        run: |
+          set -eu
+          python3 scripts/measure.py size \
+            --refine "$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine" \
+            --target darwin-arm64 --host darwin-arm64 --environment macos-26 \
+            --output "$RUNNER_TEMP/measure-size"
+          python3 scripts/measure.py compare "$RUNNER_TEMP/measure-size/size.json"
+
+      - name: Keep the measured sizes, which record --from-run reads
+        if: always() && matrix.shard == 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-size-darwin
+          path: ${{ runner.temp }}/measure-size/size.json
+          retention-days: 30
+
       # Representative process measurements; low-stack outcomes are recorded,
       # not required thresholds. The full scaling verdict has its own job.
       - name: Representative verifier resource observations
@@ -1904,6 +1968,8 @@ jobs:
           - {arch: arm64, kind: runtime, part: 2, shard: 2/2}
           - {arch: arm64, kind: debugger}
           - {arch: arm64, kind: abi}
+          - {arch: amd64, kind: size}
+          - {arch: arm64, kind: size}
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
@@ -1961,6 +2027,13 @@ jobs:
             ${{ runner.temp }}/freebsd-evidence/bundle/*.stderr
             ${{ runner.temp }}/freebsd-evidence/bundle/*.status
           retention-days: 14
+      - name: Keep the measured sizes, which record --from-run reads
+        if: always() && matrix.kind == 'size'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-size-freebsd-${{ matrix.arch }}
+          path: ${{ runner.temp }}/freebsd-evidence/measure/size.json
+          retention-days: 30
 
   #  The RV64 Linux lane under QEMU's user emulation: the release compiler's
   #  whole test program with linux-rv64 as its lane, every executable linked
@@ -2419,7 +2492,8 @@ jobs:
             compiler-checks, linux-release-build, linux-release-clean,
             linux-release-compare, release,
             outside-user-stock, build-modes,
-            bindings, editor-grammar, flake, cortex-m, xtensa, scaling, darwin-debug-build,
+            bindings, editor-grammar, flake, measure-size, cortex-m, xtensa, scaling,
+            darwin-debug-build,
             darwin-release-build, darwin-release-clean, darwin-release-compare,
             darwin-host, darwin-host-release,
             darwin-parity, arm64-debug-build, arm64-compiler,

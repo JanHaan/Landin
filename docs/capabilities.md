@@ -446,8 +446,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - `refine targets` lists described targets, their CPU feature levels and
   accepted debug modes, and for a firmware target the cores each level is,
   so a Cortex-M4 reads as `cortex-m0`'s `armv7e-m`; `--json` gives
-  structured output, with a `cores` list of names and levels, and
-  `--identify` retains the older capability summary.
+  structured output, with a `cores` list of names and levels and a
+  `features` list for each level, and `--identify` retains the older
+  capability summary.
 
 ### Reports and diagnostics
 
@@ -973,6 +974,12 @@ process ignores SIGPIPE and gives its children the default back.
   its entry, handlers, placed declarations, boot stage and exported C
   definitions reach, so its assembly and stack report hold what the image
   does (D296, D1358, [Cortex-M firmware images](targets.md)).
+- **Measured code.** Every push measures the size of each allocated
+  section of the image every measured workload links to, at every target,
+  level and of the nine optimization and specialization profiles, and fails
+  on any change its commit does not record in the committed baselines;
+  [measuring generated code](measurement.md) is the contract and
+  `scripts/measure.py` the tool.
 - `./scripts/quality.sh` measures the objects a built compiler produces, and
   [the Benchmark Game, measured](benchmarks.md) compares five ports, their
   running and their compile times, with seven other languages.

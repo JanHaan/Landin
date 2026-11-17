@@ -1,0 +1,619 @@
+{
+ "schema": 1,
+ "target": "xtensa",
+ "entries": {
+  "xtensa-esp32/none-all/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7036,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-all/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 20744,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-all/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9728,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6932,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-auto/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7036,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 20784,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-auto/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9728,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6932,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-off/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7036,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-off/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 20784,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-off/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9728,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6932,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-all/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6288,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-all/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 16328,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-all/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8236,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6212,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-auto/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6288,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 16384,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-auto/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8236,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6212,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-off/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6288,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-off/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 16384,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-off/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8236,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6212,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-all/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6428,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-all/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 16276,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-all/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8052,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 5788,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-auto/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6428,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 16276,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-auto/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8052,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 5788,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-off/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 6428,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-off/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 16332,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-off/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8052,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 5788,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-all/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8720,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-all/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 22428,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-all/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 11412,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8616,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-auto/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8720,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 22468,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-auto/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 11412,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8616,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-off/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8720,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-off/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 22468,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-off/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 11412,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8616,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-all/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7972,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-all/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 18012,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-all/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9920,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7896,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-auto/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7972,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 18068,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-auto/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9920,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7896,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-off/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7972,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-off/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 18068,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-off/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9920,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7896,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-all/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8112,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-all/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 17960,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-all/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9736,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-all/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7472,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-auto/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8112,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-auto/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 17960,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-auto/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9736,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-auto/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7472,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-off/binary-search": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8112,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-off/cmp-siphash-vectors": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 18016,
+    ".rodata": 516,
+    ".data": 36,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-off/merge-sort": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9736,
+    ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-off/sieve-of-eratosthenes": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7472,
+    ".bss": 436
+   }
+  }
+ },
+ "environment": "nix; GNU ld (crosstool-NG esp-16.1.0_20260609) 2.46"
+}
