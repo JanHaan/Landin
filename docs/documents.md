@@ -148,9 +148,11 @@ A register row or simplification candidate `ROADMAP.md` cites must exist:
 a row as its file or after another row's `Merged:`, a candidate in
 `roadmap/inputs/simplification-candidates.md`. A roadmap or register
 identity may appear in `ROADMAP.md` and under `roadmap/`, and nowhere else
-but the status pointer `README.md` and `handoff.md` carry. The questions
-under `roadmap/questions/` and the inputs under `roadmap/inputs/` have no
-form of their own checked yet.
+but the status pointer `README.md` and `handoff.md` carry. Each question
+under `roadmap/questions/` has the parts `ROADMAP.md`'s Mechanics list,
+was asked by one of its items, and is cited only if its file exists;
+`roadmap/register.md` lists the open ones. The inputs under
+`roadmap/inputs/` have no form of their own checked yet.
 
 `check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. `check.py` does not parse the corpus with the structural editor grammar in `highlight/tree-sitter`; the gate's `editor-grammar` job does, and `./highlight/test.sh --integration` runs that pass inside `nix develop`, which `python3 scripts/activations.py` names whenever the changes reach the grammar, a positive, runtime or ABI fixture or `core/`. A change to the editor grammar or its queries takes two commits, the second moving the editors' pins with `python3 highlight/grammar_pin.py` (`highlight/README.md`). Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 

@@ -375,16 +375,29 @@ REGISTER_AGE = 10
 #  saying why, which restarts the row's count.
 REGISTER_KEPT = re.compile(r"^Kept: \S", re.M)
 REGISTER_KEPT_GIT = "^Kept: [^ ]"
+#  A question for the maintainer: its file, its heading, who asked it, and
+#  the parts without which an answer cannot be given or done without, each
+#  a paragraph beginning with its bold label.  An answer closes it.
+QUESTION_FILE = re.compile(r"Q-([1-9]\d*)\.md")
+QUESTION_HEADING = re.compile(r"# (Q-[1-9]\d*) — \S.*\?")
+QUESTION_ASKED = re.compile(
+    r"^Asked by (R\d+\.\d+) on (\d{4}-\d\d-\d\d)(?:, [^\n]+)?\.$", re.M)
+QUESTION_PARTS = ("Options", "Recommendation", "Default until answered",
+                  "What waits on the answer")
+QUESTION_ANSWER = re.compile(
+    r"^\*\*Answer \((\d{4}-\d\d-\d\d), the maintainer\):\*\* \S", re.M)
+QUESTION_CITATION = re.compile(r"(?<![A-Za-z0-9_.-])(Q-[1-9]\d*)(?![\w-])")
 #  A work item of any roadmap, or a record of the register that is
 #  spelled like no other identifier in the tree: the first roadmap's two
-#  debt ledgers and the records added since.  None may appear anywhere but
+#  debt ledgers and the records added since -- or a question for the
+#  maintainer, numbered from one.  None may appear anywhere but
 #  ROADMAP.md, the files under roadmap/ and the status pointers that mirror
 #  it.  The inherited review
 #  records, a letter and a digit, are not matched: `C2` is also a byte, `D6`
 #  a decision and `E1` an erratum, and no rule could tell them apart.
 ROADMAP_CITATION = re.compile(
-    r"(?<![A-Za-z0-9_.])(R\d+\.\d+|R551-\d\d|R730-\d\d|SR-\d{2,})"
-    r"(?![A-Za-z0-9_])")
+    r"(?<![A-Za-z0-9_.])(R\d+\.\d+|R551-\d\d|R730-\d\d|SR-\d{2,}"
+    r"|Q-[1-9]\d*)(?![A-Za-z0-9_])")
 #  The register's own identities among them, which ROADMAP.md must define.
 REGISTER_CITATION = re.compile(
     r"(?<![A-Za-z0-9_.])(R551-\d\d|R730-\d\d|SR-\d{2,})(?![A-Za-z0-9_])")
@@ -2453,6 +2466,149 @@ def register_citation_problems(root, text):
     return out
 
 
+def question_files(root):
+    """{identity: (relative path, its text)} of every file of the queue."""
+    directory = os.path.join(root, QUESTION_DIRECTORY)
+    if not os.path.isdir(directory):
+        return {}
+    return {name[:-len(".md")]: (os.path.join(QUESTION_DIRECTORY, name),
+                                 read_file(os.path.join(directory, name),
+                                           encoding="utf-8"))
+            for name in sorted(os.listdir(directory))}
+
+
+def question_parts(text):
+    """{label: (line, the paragraph after it)} of a question's bold parts.
+
+    A part is a paragraph that begins `**Label:**`; its text runs to the
+    next bold label at the start of a paragraph, so the options' numbered
+    list is the text of `Options`.  An answer's label carries its date and
+    is returned under `Answer`.
+    """
+    parts = {}
+    label, start, body = None, 0, []
+    lines = text.split("\n")
+    for n, line in enumerate(lines + ["**End:**"], 1):
+        found = re.match(r"\*\*(Answer|[A-Z][^*(]*?)(?: \([^)]*\))?:\*\*(.*)",
+                         line)
+        if found and (n == 1 or not lines[n - 2].strip()
+                      or n > len(lines)):
+            if label is not None:
+                parts.setdefault(label, (start, "\n".join(body).strip()))
+            label, start, body = found.group(1), n, [found.group(2)]
+        elif label is not None:
+            body.append(line)
+    return parts
+
+
+def question_problems(root, statuses):
+    """Every question can be answered, and can be done without meanwhile.
+
+    The maintainer often reads a question in a summary another agent
+    wrote, so the file has to carry everything an answer needs at once:
+    the options to choose between, the recommendation, the default that
+    stands until the answer comes and what waits on it.  A question
+    without a default stops whoever asked it; one that does not say what
+    waits cannot be ranked against the others.
+    """
+    out = []
+    for identity, (where, text) in question_files(root).items():
+        if not QUESTION_FILE.fullmatch(identity + ".md"):
+            out.append((where, 1, "%r is not a question's file; a question"
+                        " is a file named `Q-`, its number counted from one,"
+                        " and `.md`" % os.path.basename(where)))
+            continue
+        heading = QUESTION_HEADING.fullmatch(text.split("\n", 1)[0])
+        if not heading or heading.group(1) != identity:
+            out.append((where, 1, "%s does not begin `# %s — ` and the"
+                        " question, ending in a question mark"
+                        % (identity, identity)))
+        asked = QUESTION_ASKED.search(text)
+        if not asked:
+            out.append((where, 1, "%s does not say `Asked by ITEM on"
+                        " YYYY-MM-DD.`" % identity))
+        elif asked.group(1) not in statuses:
+            out.append((where, text.count("\n", 0, asked.start()) + 1,
+                        "%s was asked by %s, which is not a work item of"
+                        " this roadmap" % (identity, asked.group(1))))
+        for n, line in enumerate(text.split("\n"), 1):
+            if "TODO" in line:
+                out.append((where, n, "%s still has a TODO to fill in"
+                            % identity))
+        parts = question_parts(text)
+        for label in QUESTION_PARTS:
+            if not parts.get(label, (0, ""))[1]:
+                out.append((where, 1, "%s has no `**%s:**` paragraph, or an"
+                            " empty one" % (identity, label)))
+        default = parts.get("Default until answered", (0, ""))
+        if re.fullmatch(r"(?i)option \d+\.?", default[1]):
+            out.append((where, default[0], "%s's default names an option by"
+                        " its number alone; say what it is, since a summary"
+                        " quotes the default without the options"
+                        % identity))
+        if parts.get("Options", (0, ""))[1]:
+            line, options = parts["Options"]
+            numbers = [int(number) for number
+                       in re.findall(r"^(\d+)\. \S", options, re.M)]
+            if len(numbers) < 2 or numbers != list(range(1, len(numbers) + 1)):
+                out.append((where, line, "%s's options are not a list"
+                            " numbered 1, 2 and on, of two or more"
+                            % identity))
+        answers = list(QUESTION_ANSWER.finditer(text))
+        if "Answer" in parts and not answers:
+            out.append((where, parts["Answer"][0], "%s's answer does not"
+                        " begin `**Answer (YYYY-MM-DD, the maintainer):**`"
+                        % identity))
+        elif len(answers) > 1:
+            out.append((where, 1, "%s has more than one answer; a question"
+                        " answered again is a new question" % identity))
+        elif answers and asked and answers[0].group(1) < asked.group(2):
+            out.append((where, 1, "%s is answered before it was asked"
+                        % identity))
+    return out
+
+
+def question_citation_problems(root, roadmap_text):
+    """Every question the roadmap or its files cite is one that exists."""
+    defined = set(question_files(root))
+    texts = [(ROADMAP, roadmap_text)]
+    for directory in (REGISTER_DIRECTORY, QUESTION_DIRECTORY, ROADMAP_INPUTS):
+        full = os.path.join(root, directory)
+        for name in sorted(os.listdir(full) if os.path.isdir(full) else ()):
+            if name.endswith(".md"):
+                texts.append((os.path.join(directory, name),
+                              read_file(os.path.join(full, name),
+                                        encoding="utf-8")))
+    out = []
+    for where, text in texts:
+        for n, line in enumerate(text.splitlines(), 1):
+            for found in QUESTION_CITATION.finditer(
+                    re.sub(r"`[^`]*`", "", line)):
+                if found.group(1) not in defined:
+                    out.append((where, n, "%s is cited and is no question:"
+                                " no file %s/%s.md"
+                                % (found.group(1), QUESTION_DIRECTORY,
+                                   found.group(1))))
+    return out
+
+
+def open_questions(root):
+    """[(identity, title, default, what waits)] of the open questions."""
+    out = []
+    for identity, (_, text) in sorted(
+            question_files(root).items(),
+            key=lambda item: int(item[0][2:]) if item[0][2:].isdigit() else 0):
+        parts = question_parts(text)
+        if "Answer" in parts:
+            continue
+        title = text.split("\n", 1)[0].lstrip("# ").strip()
+        default, waits = (" ".join(parts.get(label, (0, ""))[1].split())
+                          for label in ("Default until answered",
+                                        "What waits on the answer"))
+        out.append((identity, title, default, waits))
+    return out
+
+
 def register_overview(root):
     """The text of roadmap/register.md, made from the row files."""
     lines = ["# The register", "",
@@ -2477,18 +2633,38 @@ def register_overview(root):
         cells.append(stands.replace("|", "\\|"))
         lines.append("| [%s](register/%s.md) | %s |"
                      % (record, record, " | ".join(cells[1:])))
-    questions = os.path.join(root, QUESTION_DIRECTORY)
-    names = sorted((name for name in (os.listdir(questions)
-                                      if os.path.isdir(questions) else ())
-                    if re.fullmatch(r"Q-\d+\.md", name)),
-                   key=lambda name: int(name[2:-3]))
-    if names:
-        lines += ["", "## Questions for the maintainer", ""]
-        for name in names:
-            first = read_file(os.path.join(questions, name),
-                              encoding="utf-8").split("\n", 1)[0]
-            lines.append("- [%s](questions/%s)"
-                         % (first.lstrip("# ").strip(), name))
+    questions = question_files(root)
+    waiting = open_questions(root)
+    if questions:
+        lines += ["", "## Questions for the maintainer", "",
+                  "Each file under `%s/` is one decision only the"
+                  " maintainer can take, with its options, the"
+                  " recommendation and the default that stands until it is"
+                  " answered." % QUESTION_DIRECTORY, ""]
+        if waiting:
+            lines += ["Open:", "",
+                      "| Question | Default until answered"
+                      " | What waits on the answer |",
+                      "| --- | --- | --- |"]
+            for identity, title, default, waits in waiting:
+                lines.append("| [%s](questions/%s.md) | %s | %s |"
+                             % (title, identity, default.replace("|", "\\|"),
+                                waits.replace("|", "\\|")))
+            lines.append("")
+        else:
+            lines += ["None is open.", ""]
+        closed = [identity for identity in questions
+                  if identity not in {open_[0] for open_ in waiting}]
+        if closed:
+            lines += ["Answered:", ""]
+            for identity in sorted(closed, key=lambda name: [
+                    int(part) if part.isdigit() else part
+                    for part in re.split(r"(\d+)", name)]):
+                title = questions[identity][1].split("\n", 1)[0]
+                lines.append("- [%s](questions/%s.md)"
+                             % (title.lstrip("# ").strip(), identity))
+        while lines[-1] == "":
+            lines.pop()
     return "\n".join(lines) + "\n"
 
 
@@ -2504,6 +2680,8 @@ def check_register(full_run):
     out += register_citation_problems(ROOT, text)
     out += register_cap_problems(ROOT, roadmap_statuses(text))
     out += register_age_problems(ROOT, register_ages(ROOT))
+    out += question_problems(ROOT, roadmap_statuses(text))
+    out += question_citation_problems(ROOT, text)
     overview = os.path.join(ROOT, REGISTER_OVERVIEW)
     if not os.path.exists(overview) or read_file(
             overview, encoding="utf-8") != register_overview(ROOT):
@@ -2594,8 +2772,9 @@ def check_roadmap_citations(full_run):
                             " whether or not"
                             " that item or record exists; text that needs"
                             " an invented one, such as a test's register,"
-                            " can use a one-digit record such as SR-0 or a"
-                            " letter and a digit such as Q9"
+                            " can use a one-digit record such as SR-0, the"
+                            " question Q-0 or a letter and a digit such as"
+                            " Q9"
                             % found.group(1)))
     return out
 

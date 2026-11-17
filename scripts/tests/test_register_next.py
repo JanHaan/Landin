@@ -20,6 +20,8 @@ from temporary_git import environment  # noqa: E402
 
 #  A row's identity, written so that this file spells none.
 ROW = "SR-%d"
+#  An item no roadmap has, spelled so that this file names none.
+ASKER = "R%d.%d" % (0, 10)
 TEXT = "---\nstatus: open\n---\n\nA row.\n\nCompletion: x\n"
 
 
@@ -89,6 +91,39 @@ class Allocate(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertFalse(check.REGISTER_VALUES["kind"].fullmatch(
             fields["kind"][1]))
+
+    def test_questions_are_numbered_from_one_and_apart_from_rows(self):
+        question = "Q-%d"
+        self.write(90050)
+        directory = self.root / register_next.QUESTION_DIRECTORY
+        self.assertEqual(register_next.allocate(self.root, 1, True),
+                         [question % 1])
+        directory.mkdir(parents=True)
+        (directory / (question % 4 + ".md")).write_text("# x\n")
+        self.commit()
+        (directory / (question % 4 + ".md")).unlink()
+        self.commit()
+        #  A question's number is never taken again either.
+        self.assertEqual(register_next.allocate(self.root, 2, True),
+                         [question % 5, question % 6])
+        self.assertEqual(register_next.allocate(self.root, 1), [ROW % 90051])
+
+    def test_a_question_file_check_py_refuses_until_filled(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            register_next.main(["--question", "--file", "--asked-by",
+                                ASKER, "--root", str(self.root)])
+        name = "Q-%d.md" % 1
+        self.assertEqual(out.getvalue().split(),
+                         ["roadmap/questions/" + name])
+        text = (self.root / register_next.QUESTION_DIRECTORY
+                / name).read_text()
+        self.assertIn("Asked by %s on " % ASKER, text)
+        import check
+        parts = check.question_parts(text)
+        for label in check.QUESTION_PARTS:
+            self.assertIn(label, parts)
+        self.assertIn("TODO", parts["Default until answered"][1])
 
     def test_outside_a_repository_the_files_alone_count(self):
         scratch = tempfile.TemporaryDirectory()

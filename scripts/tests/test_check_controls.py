@@ -2610,7 +2610,8 @@ class RoadmapStructure(unittest.TestCase):
         #  An item or record of any roadmap: the earlier roadmaps' are
         #  closed and in the history, and no more welcome outside it.
         from check_controls import tree
-        for cited in (PLANNED, CLOSED, MEASURED, "SR-%02d" % 3, "SR-%d" % 100):
+        for cited in (PLANNED, CLOSED, MEASURED, "SR-%02d" % 3, "SR-%d" % 100,
+                      "Q-%d" % 7):
             with self.subTest(cited=cited), \
                     tree(copied=ROADMAP_INPUTS) as root:
                 target = root / "docs/ir.md"
@@ -2754,6 +2755,157 @@ REGISTERS = ["spec.md", "tour.md", "ROADMAP.md",
              "compiler/tests", "compiler/ada/src", "compiler/ada/tests",
              "scripts", "check.py", "environments", "devices",
              "examples", "core", "hosted", "platform", "bindings", "highlight"]
+
+
+#  A question number past any the queue will reach, so it names nothing.
+ASKED = "Q-%d" % 9001
+
+
+def question(identity=ASKED, asker=None, **changes):
+    """A question that passes, with each named part's text replaced."""
+    parts = {
+        "heading": "# %s — Is this a question?" % identity,
+        "asked": "Asked by %s on 2026-11-17." % (asker or NAMED),
+        "Options": "\n1. One.\n2. The other.",
+        "Recommendation": "option 1.",
+        "Default until answered": "option 2, the other.",
+        "What waits on the answer": "nothing.",
+    }
+    parts.update(changes)
+    text = parts["heading"] + "\n\n" + parts["asked"] + "\n\nWhy it is.\n"
+    for label in checker.QUESTION_PARTS + ("Answer",):
+        if parts.get(label) is not None:
+            text += "\n**%s:** %s\n" % (label, parts[label])
+    return text
+
+
+def question_faults(files, edit=None):
+    """What check_register says about the real tree with FILES added.
+
+    FILES maps a question's file name to its text; EDIT changes ROADMAP.md.
+    """
+    from check_controls import tree
+    with tree(copied=ROADMAP_INPUTS) as root:
+        if edit:
+            target = root / "ROADMAP.md"
+            target.write_text(edit(target.read_text()))
+        for name, text in files.items():
+            (root / checker.QUESTION_DIRECTORY / name).write_text(text)
+        (root / checker.REGISTER_OVERVIEW).write_text(
+            checker.register_overview(str(root)))
+        return [why for _, _, why in checker.check_register(True)]
+
+
+class Questions(unittest.TestCase):
+    """The question queue: what a question for the maintainer must carry.
+
+    The queue's exit evidence: a question without its options, its default or
+    what waits on it is refused, as are its other broken forms.
+    """
+
+    def faults(self, **changes):
+        return question_faults({ASKED + ".md": question(**changes)})
+
+    def test_a_whole_question_passes_and_is_listed_open(self):
+        self.assertEqual(self.faults(), [])
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            (root / checker.QUESTION_DIRECTORY / (ASKED + ".md")).write_text(
+                question())
+            overview = checker.register_overview(str(root))
+        self.assertIn("| [%s — Is this a question?](questions/%s.md) |"
+                      " option 2, the other. | nothing. |"
+                      % (ASKED, ASKED), overview)
+
+    def test_an_answered_question_passes_and_is_listed_answered(self):
+        answer = question(Answer=None) + (
+            "\n**Answer (2026-11-18, the maintainer):** option 1.\n")
+        self.assertEqual(question_faults({ASKED + ".md": answer}), [])
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            (root / checker.QUESTION_DIRECTORY / (ASKED + ".md")).write_text(
+                answer)
+            waiting = checker.open_questions(str(root))
+            overview = checker.register_overview(str(root))
+        self.assertNotIn(ASKED, [entry[0] for entry in waiting])
+        self.assertIn("- [%s — Is this a question?](questions/%s.md)"
+                      % (ASKED, ASKED), overview)
+
+    def test_a_question_without_options_is_refused(self):
+        said = self.faults(Options=None)
+        self.assertTrue(any("has no `**Options:**`" in why for why in said))
+
+    def test_a_question_with_one_option_is_refused(self):
+        said = self.faults(Options="\n1. Only this.")
+        self.assertTrue(any("options are not a list" in why for why in said))
+
+    def test_options_out_of_order_are_refused(self):
+        said = self.faults(Options="\n1. One.\n3. Three.")
+        self.assertTrue(any("options are not a list" in why for why in said))
+
+    def test_a_question_without_a_default_is_refused(self):
+        said = self.faults(**{"Default until answered": None})
+        self.assertTrue(any("has no `**Default until answered:**`" in why
+                            for why in said))
+
+    def test_a_default_by_number_alone_is_refused(self):
+        said = self.faults(**{"Default until answered": "option 2."})
+        self.assertTrue(any("by its number alone" in why for why in said))
+
+    def test_a_question_without_what_waits_is_refused(self):
+        said = self.faults(**{"What waits on the answer": None})
+        self.assertTrue(any("has no `**What waits on the answer:**`" in why
+                            for why in said))
+        said = self.faults(**{"What waits on the answer": ""})
+        self.assertTrue(any("or an empty one" in why for why in said))
+
+    def test_a_question_without_a_recommendation_is_refused(self):
+        said = self.faults(Recommendation=None)
+        self.assertTrue(any("has no `**Recommendation:**`" in why
+                            for why in said))
+
+    def test_a_question_asked_by_no_item_is_refused(self):
+        said = self.faults(asker=CLOSED)
+        self.assertTrue(any("which is not a work item of this roadmap" in why
+                            for why in said))
+        said = self.faults(asked="Asked in a chat.")
+        self.assertTrue(any("does not say `Asked by ITEM" in why
+                            for why in said))
+
+    def test_a_heading_that_is_no_question_or_names_another_is_refused(self):
+        for heading in ("# %s — A statement." % ASKED,
+                        "# %s — Is it?" % ("Q-%d" % 9002)):
+            with self.subTest(heading=heading):
+                said = self.faults(heading=heading)
+                self.assertTrue(any("does not begin" in why for why in said))
+
+    def test_a_file_misnamed_is_refused(self):
+        said = question_faults({"Q-%d.md" % 0: question()})
+        self.assertTrue(any("is not a question's file" in why
+                            for why in said))
+
+    def test_a_todo_left_in_is_refused(self):
+        said = self.faults(Recommendation="TODO")
+        self.assertTrue(any("still has a TODO" in why for why in said))
+
+    def test_an_answer_in_another_form_is_refused(self):
+        bad = question() + "\n**Answer (yes):** option 1.\n"
+        said = question_faults({ASKED + ".md": bad})
+        self.assertTrue(any("answer does not begin" in why for why in said))
+        early = question() + (
+            "\n**Answer (2026-11-16, the maintainer):** option 1.\n")
+        said = question_faults({ASKED + ".md": early})
+        self.assertTrue(any("answered before it was asked" in why
+                            for why in said))
+
+    def test_a_question_cited_without_its_file_is_refused(self):
+        anchor = quote("ROADMAP.md", "**Questions.** A decision only the")
+        said = question_faults({}, once(anchor, "%s %s" % (ASKED, anchor)))
+        self.assertTrue(any("%s is cited and is no question" % ASKED in why
+                            for why in said))
+        self.assertEqual(question_faults(
+            {ASKED + ".md": question()},
+            once(anchor, "%s %s" % (ASKED, anchor))), [])
 
 
 class Registers(unittest.TestCase):
