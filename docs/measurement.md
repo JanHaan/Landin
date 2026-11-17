@@ -118,26 +118,38 @@ The `cycles` counters, each enabled by the probe before the run:
 A `cycles` key includes the board, its clock and where the code ran, since
 the same image costs a different count from another RAM.
 
-An `instructions` count is deterministic only where the emulator runs the
-program alone: QEMU's user mode for RV64 and the Cortex-M lanes'
-machines, which run with `-icount`. Espressif's QEMU, which runs the RV32
-and Xtensa lanes, is built without plugins, so those levels are timed on
-their boards and record size alone under emulation. A program with threads is
-scheduled by the host even there, so the thread workload is `size-only`
-under emulation. Espressif's QEMU gives the ESP32-S3 counts that move
-between runs, and FreeBSD arm64 runs as a whole system under
-emulation, its kernel and timer in any count: both are `size-only`, and
-the Xtensa levels are timed on their boards.
+An `instructions` count is deterministic where the emulator runs the
+program alone: QEMU's user mode for RV64, given an environment of
+`QEMU_CPU` alone since the runtime's start walks every variable, and the
+Cortex-M lanes' machines. The study in
+`compiler/tests/measure/noise/instructions.json` counted every hosted
+workload on RV64, the thread program among them, and every firmware
+workload on each Cortex-M machine five times or more, with no spread, and
+the Cortex-M counts are the same with `-icount` and without. A count is
+taken at the fixture's own arguments: it is exact at any size, and the
+timing arguments would cost hours of emulation. Espressif's QEMU, which
+runs the RV32 and Xtensa lanes, is built without plugins, so those levels
+are timed on their boards and record size alone under emulation. FreeBSD
+arm64 runs as a whole system under emulation, its kernel and timer in any
+count, and records size alone.
+
+The plugin, `compiler/tests/measure/qemu/count.c`, declares the dozen
+calls it makes rather than including QEMU's header, which needs glib's and
+which the Cortex-M lanes' Debian QEMU does not ship; `scripts/measure_count.py`
+builds it for the plugin interface the running QEMU accepts, the version
+the two in use differ by, and its `check-header` holds the declarations to
+a QEMU's own header.
 
 Each class's tolerance comes from a noise study recorded on its runner
 before the gate enforces it: the same tree measured repeatedly, its spread
 kept in `compiler/tests/measure/noise/`, and the tolerance set above it.
-Until a class has its study its comparison reports and does not fail. Every
-`instructions` key is in the study too, and is held exactly only where the
-study found no spread.
+Until a class has its study its comparison reports and does not fail. The
+`instructions` class's study found no spread, so it is held exactly, as
+size is.
 
 The same counter answers a contributor's question about one routine.
-`scripts/measure.py count` runs a firmware or RV64 program under its
+`scripts/measure.py count` (or `scripts/measure_count.py count`) runs a
+firmware or RV64 program under its
 lane's emulator and prints the instructions executed in all, and between
 two symbols with `--from` and `--to`. The Cortex-M corpus's `--program`
 option (`environments/cortex-m/backend_corpus.py`), which runs any `.ldn`
@@ -199,11 +211,14 @@ paragraph.
 Size runs on every push, in jobs that already have the target's linker:
 the Linux, RV64 and firmware targets in one job inside the pinned
 environment, Darwin on its native runner and FreeBSD beside its lanes.
-Time runs on the weekly schedule and on a dispatch, `scope=boards`
-included, in timing jobs beside the boards. The pilot over the whole
-matrix, recorded in `compiler/tests/measure/pilot.json`, gives each job's
-minutes, the jobs it adds against the account's limit of 20 concurrent
-jobs and 5 macOS, and each class's noise, before any tolerance is enforced.
+The instruction counts, exact and a few minutes each, run on every push
+too: RV64's in the same job, Cortex-M's in the `cortex-m` job, which has
+the lanes' tools. Wall time and board cycles run on the weekly schedule
+and on a dispatch, `scope=boards` included, in timing jobs beside the
+boards. The pilot over the whole matrix, recorded in
+`compiler/tests/measure/pilot.json`, gives each job's minutes, the jobs it
+adds against the account's limit of 20 concurrent jobs and 5 macOS, and
+each class's noise, before any tolerance is enforced.
 
 ## Reports
 

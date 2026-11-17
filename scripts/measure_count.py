@@ -449,7 +449,7 @@ def hosted_noise(refine: Path, profile: tuple[str, str], runs: int, out: Path,
     images.mkdir(parents=True, exist_ok=True)
     work = []
     for workload in measure.workloads()["hosted"]:
-        image, meta, fixture = measure.hosted_build(
+        image, meta, fixture = measure.build(
             refine, "linux-rv64", level, profile, workload, images, None)
         timing = workload["timing"]
         arguments = timing.get("args", meta.program_arguments(fixture))
@@ -628,6 +628,9 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
+    if getattr(args, "refine", None):
+        import refine_revision
+        refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return args.run(args)
     except Failure as error:

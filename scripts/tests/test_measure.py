@@ -77,7 +77,7 @@ class Compare(unittest.TestCase):
             path.write_text(json.dumps(measured))
             output = io.StringIO()
             with mock.patch.object(measure, "read_baseline",
-                                   lambda target, rev: base if rev else candidate), \
+                                   lambda target, rev, kind="size": base if rev else candidate), \
                     contextlib.redirect_stdout(output), \
                     contextlib.redirect_stderr(io.StringIO()):
                 status = measure.compare(mock.Mock(
@@ -126,6 +126,27 @@ class Compare(unittest.TestCase):
         status, _ = self.run_compare(
             self.figures(11, "new"), self.baseline(10, "old"), self.baseline(10, "old"))
         self.assertEqual(status, 1)
+
+
+class Instructions(Compare):
+    """An instruction count is held exactly, like a section."""
+
+    def figures(self, count, environment=None):
+        return {"schema": 1, "class": "instructions",
+                "targets": {"t": {"l/size-auto/w": {"instructions": count}}}}
+
+    def baseline(self, count, environment=None):
+        return {"environment": None,
+                "entries": {"l/size-auto/w": {"instructions": count}}}
+
+    def test_a_moved_linker_is_named_and_judged_by_the_figure(self):
+        pass  # an emulator's count has no linker environment
+
+    def test_the_candidates_baseline_declares_a_change(self):
+        status, output = self.run_compare(
+            self.figures(12), self.baseline(10), self.baseline(12))
+        self.assertEqual(status, 0)
+        self.assertIn("10 -> 12 (+2)", output)
 
 
 class Record(unittest.TestCase):

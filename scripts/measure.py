@@ -546,14 +546,87 @@ def judge_time(result: dict) -> int:
 
 
 
+# --- instruction counts -----------------------------------------------------
+
+def counted_rv64(args, given, sets) -> dict:
+    import measure_count
+    out = Path(args.output) / "rv64"
+    out.mkdir(parents=True, exist_ok=True)
+    work = [(level, profile, workload) for level in given["linux-rv64"]
+            for profile in PROFILES for workload in sets["hosted"]]
+
+    def one(item):
+        level, profile, workload = item
+        image, meta, fixture = build(args.refine, "linux-rv64", level, profile,
+                                     workload, out, None)
+        stdin = (fixture / meta["stdin"]) if "stdin" in meta else None
+        place = out / "runs" / image.name
+        place.mkdir(parents=True, exist_ok=True)
+        result = measure_count.count("linux-rv64", level, image,
+                                     meta.program_arguments(fixture), stdin, work=place)
+        require(result["status"] == meta.status, f"{image.name} returned"
+                f" {result['status']} under the counter, expected {meta.status}")
+        return key(level, profile, workload["name"]), result["instructions"]
+
+    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+        return dict(sorted(pool.map(one, work)))
+
+
+def counted_cortex(args, sets) -> dict:
+    sys.path.insert(0, str(ROOT / "environments/cortex-m"))
+    from backend import LEVELS  # noqa: E402
+    import backend_corpus  # noqa: E402
+    levels = [level for level, row in LEVELS.items() if row.get("arch") != "rv32"]
+    workloads = sets["firmware"]
+    programs = [ROOT / "compiler/tests/fixtures" / one["fixture"] / "main.ldn"
+                for one in workloads]
+    names = dict(zip(backend_corpus.program_names(programs),
+                     (one["name"] for one in workloads)))
+    results = backend_corpus.observe(Path(args.output) / "cortex", args.tools,
+                                     args.refine, programs, list(PROFILES), levels)
+    found = {}
+    for result in results:
+        require(result.get("instructions") is not None,
+                f"no count for {result['name']} at {result['level']}")
+        name = names.get(result["name"], result["name"])
+        found[key(result["level"], (result["optimize"], result["specialize"]), name)] = (
+            result["instructions"])
+    return dict(sorted(found.items()))
+
+
+def measure_instructions(args) -> int:
+    """Every configuration the runner table counts on TARGET, at its
+    fixture's own arguments: the count is exact, so no large input is
+    needed, and it is compared with the base's baselines exactly."""
+    sets = workloads()
+    given = targets(args.refine)
+    if args.target == "linux-rv64":
+        figures = counted_rv64(args, given, sets)
+    else:
+        require(args.target == "cortex-m0", "only linux-rv64 and cortex-m0 are"
+                " counted under emulation (docs/measurement.md, Runners)")
+        require(args.tools is not None, "--tools names the Cortex-M lanes' tool root")
+        import measure_count
+        measure_count.nixos_route()  # the lanes' Debian tools, as they run them
+        figures = counted_cortex(args, sets)
+    result = {"schema": 1, "class": "instructions",
+              "targets": {args.target: {name: {"instructions": value}
+                                        for name, value in figures.items()}}}
+    path = Path(args.output) / "instructions.json"
+    path.write_text(json.dumps(result, indent=1) + "\n")
+    print(f"counted {len(figures)} configurations; {path}")
+    return 0
+
+
+
 # --- baselines --------------------------------------------------------------
 
-def baseline_path(target: str) -> Path:
-    return BASELINES / f"{target}.size.json"
+def baseline_path(target: str, kind: str = "size") -> Path:
+    return BASELINES / f"{target}.{kind}.json"
 
 
-def read_baseline(target: str, rev: str | None) -> dict:
-    path = baseline_path(target)
+def read_baseline(target: str, rev: str | None, kind: str = "size") -> dict:
+    path = baseline_path(target, kind)
     if rev is None:
         return json.loads(path.read_text()) if path.exists() else {}
     shown = subprocess.run(
@@ -573,14 +646,25 @@ def default_base() -> str:
                           check=True, capture_output=True, text=True).stdout.strip()
 
 
+def field(kind: str) -> str:
+    """The figure a baseline entry of KIND holds."""
+    return "sections" if kind == "size" else "instructions"
+
+
+def total(value) -> int:
+    return sum(value.values()) if isinstance(value, dict) else value
+
+
 def compare(args) -> int:
     measured = json.loads(Path(args.measurements).read_text())
+    kind = measured.get("class", "size")
+    named = field(kind)
     base = args.base or default_base()
     undeclared, declared, missing, moved = {}, {}, [], []
     for target, figures in measured["targets"].items():
-        environment = measured["environments"][target]
-        before = read_baseline(target, base)
-        after = read_baseline(target, None)
+        environment = measured.get("environments", {}).get(target)
+        before = read_baseline(target, base, kind)
+        after = read_baseline(target, None, kind)
         old = before.get("entries", {})
         new = after.get("entries", {})
         if before and before.get("environment") != environment:
@@ -589,28 +673,30 @@ def compare(args) -> int:
         for name, figure in figures.items():
             group = f"{target} {name.rsplit('/', 1)[0]}"
             if name not in old:
-                if new.get(name, {}).get("sections") == figure["sections"]:
+                if new.get(name, {}).get(named) == figure[named]:
                     declared.setdefault(group, []).append((name, None, figure))
                 else:
                     missing.append(f"{target} {name}")
                 continue
-            if old[name]["sections"] == figure["sections"]:
+            if old[name][named] == figure[named]:
                 continue
-            bucket = (declared if new.get(name, {}).get("sections")
-                      == figure["sections"] else undeclared)
+            bucket = (declared if new.get(name, {}).get(named)
+                      == figure[named] else undeclared)
             bucket.setdefault(group, []).append((name, old[name], figure))
     for title, groups in (("declared by the candidate's baselines", declared),
                           ("UNDECLARED", undeclared)):
         if groups:
             print(f"{title}: {sum(map(len, groups.values()))} keys")
             for group, rows in sorted(groups.items()):
-                a = sum(sum(o["sections"].values()) for _, o, _ in rows if o)
-                b = sum(sum(f["sections"].values()) for _, o, f in rows if o)
+                a = sum(total(o[named]) for _, o, _ in rows if o)
+                b = sum(total(f[named]) for _, o, f in rows if o)
                 print(f"  {group}: {len(rows)} workloads, total {a} -> {b} ({b - a:+d})")
                 if args.verbose:
                     for name, o, f in rows:
                         print("    " + name.rsplit("/", 1)[1] + ": "
-                              + (describe(o["sections"], f["sections"]) if o else "new"))
+                              + ("new" if not o else describe(o[named], f[named])
+                                 if kind == "size" else
+                                 f"{o[named]} -> {f[named]} ({f[named] - o[named]:+d})"))
     if moved:
         print("the linker moved since the base's baselines (a differing figure"
               " needs recording, as a compiler change does):")
@@ -618,13 +704,13 @@ def compare(args) -> int:
             print("  " + line)
     if missing:
         print(f"UNRECORDED: {len(missing)} keys have no baseline, such as {missing[0]}")
-    total = sum(map(len, measured["targets"].values()))
+    count = sum(map(len, measured["targets"].values()))
     bad = sum(map(len, undeclared.values()))
-    print(f"compared {total} configurations with {base}:"
+    print(f"compared {count} configurations' {kind} with {base}:"
           f" {bad} undeclared, {len(missing)} unrecorded")
     if bad or missing:
         print("a deliberate change is declared by recording it: scripts/measure.py"
-              " record DIR/size.json, or record --from-run RUN for a gate run's"
+              " record DIR/FILE.json, or record --from-run RUN for a gate run's"
               " figures, and the commit message says why", file=sys.stderr)
         return 1
     return 0
@@ -643,10 +729,10 @@ def describe(old: dict, new: dict) -> str:
 def from_run(run: str) -> list[Path]:
     """The size.json files a gate run's measure artifacts hold."""
     where = Path(tempfile.mkdtemp(prefix="measure-run-"))
-    subprocess.run(["gh", "run", "download", run, "--pattern", "measure-size-*",
+    subprocess.run(["gh", "run", "download", run, "--pattern", "measure-*",
                     "--dir", str(where)], check=True, cwd=ROOT)
-    found = sorted(where.rglob("size.json"))
-    require(found, f"run {run} has no measure-size-* artifact with a size.json")
+    found = sorted(list(where.rglob("size.json")) + list(where.rglob("instructions.json")))
+    require(found, f"run {run} has no measure-* artifact with figures")
     return found
 
 
@@ -659,10 +745,14 @@ def record(args) -> int:
     written = 0
     for source in sources:
         measured = json.loads(source.read_text())
+        kind = measured.get("class", "size")
+        if kind not in ("size", "instructions"):
+            continue  # a wall figure is a trend, compared in pairs, not recorded
+        named = field(kind)
         for target, figures in measured["targets"].items():
-            current = read_baseline(target, None) or {
+            current = read_baseline(target, None, kind) or {
                 "schema": 1, "target": target, "entries": {}}
-            current["environment"] = measured["environments"][target]
+            current["environment"] = measured.get("environments", {}).get(target)
             if not wanted:
                 #  A whole record is the target's whole baseline: a key no
                 #  workload measures any more goes with it.
@@ -670,10 +760,10 @@ def record(args) -> int:
             for name, figure in figures.items():
                 if wanted and f"{target} {name}" not in wanted:
                     continue
-                current["entries"][name] = {"sections": figure["sections"]}
+                current["entries"][name] = {named: figure[named]}
                 written += 1
             current["entries"] = dict(sorted(current["entries"].items()))
-            baseline_path(target).write_text(json.dumps(current, indent=1) + "\n")
+            baseline_path(target, kind).write_text(json.dumps(current, indent=1) + "\n")
     print(f"recorded {written} keys under {BASELINES.relative_to(ROOT)}")
     return 0
 
@@ -716,6 +806,17 @@ def main(argv=None) -> int:
     keep.add_argument("--key", action="append", default=[],
                       metavar="'TARGET KEY'")
     keep.set_defaults(run=record)
+    count = commands.add_parser("instructions", help="count every configuration"
+                                " under its lane's emulator")
+    count.add_argument("--refine", type=Path, required=True)
+    count.add_argument("--target", required=True, help="linux-rv64 or cortex-m0")
+    count.add_argument("--output", required=True)
+    count.add_argument("--tools", type=Path,
+                       help="cortex-m0: the lanes' tool root (environments/cortex-m/setup.py)")
+    count.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    count.set_defaults(run=measure_instructions)
+    import measure_count
+    measure_count.add_commands(commands)
     base = commands.add_parser("base", help="print the commit a candidate is"
                                " compared with")
     base.set_defaults(run=lambda args: print(default_base()) or 0)

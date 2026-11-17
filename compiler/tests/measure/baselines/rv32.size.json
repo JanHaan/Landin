@@ -20,6 +20,24 @@
     ".bss": 24
    }
   },
+  "rv32imac/none-all/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3668,
+    ".rodata": 12,
+    ".bss": 28
+   }
+  },
+  "rv32imac/none-all/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 13178,
+    ".rodata": 292,
+    ".bss": 28
+   }
+  },
   "rv32imac/none-all/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -52,6 +70,24 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imac/none-auto/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3668,
+    ".rodata": 12,
+    ".bss": 28
+   }
+  },
+  "rv32imac/none-auto/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 13178,
+    ".rodata": 292,
+    ".bss": 28
    }
   },
   "rv32imac/none-auto/merge-sort": {
@@ -88,6 +124,24 @@
     ".bss": 24
    }
   },
+  "rv32imac/none-off/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3668,
+    ".rodata": 12,
+    ".bss": 28
+   }
+  },
+  "rv32imac/none-off/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 13178,
+    ".rodata": 292,
+    ".bss": 28
+   }
+  },
   "rv32imac/none-off/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -120,6 +174,23 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imac/size-all/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imac/size-all/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12002,
+    ".rodata": 280,
+    ".bss": 28
    }
   },
   "rv32imac/size-all/merge-sort": {
@@ -156,6 +227,23 @@
     ".bss": 24
    }
   },
+  "rv32imac/size-auto/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imac/size-auto/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12002,
+    ".rodata": 280,
+    ".bss": 28
+   }
+  },
   "rv32imac/size-auto/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -188,6 +276,23 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imac/size-off/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imac/size-off/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12002,
+    ".rodata": 280,
+    ".bss": 28
    }
   },
   "rv32imac/size-off/merge-sort": {
@@ -224,6 +329,23 @@
     ".bss": 24
    }
   },
+  "rv32imac/speed-all/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imac/speed-all/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12014,
+    ".rodata": 280,
+    ".bss": 28
+   }
+  },
   "rv32imac/speed-all/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -256,6 +378,23 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imac/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imac/speed-auto/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12014,
+    ".rodata": 280,
+    ".bss": 28
    }
   },
   "rv32imac/speed-auto/merge-sort": {
@@ -292,6 +431,23 @@
     ".bss": 24
    }
   },
+  "rv32imac/speed-off/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imac/speed-off/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 12014,
+    ".rodata": 280,
+    ".bss": 28
+   }
+  },
   "rv32imac/speed-off/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -324,6 +480,24 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imc/none-all/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3668,
+    ".rodata": 12,
+    ".bss": 28
+   }
+  },
+  "rv32imc/none-all/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 15524,
+    ".rodata": 292,
+    ".bss": 28
    }
   },
   "rv32imc/none-all/merge-sort": {
@@ -360,6 +534,24 @@
     ".bss": 24
    }
   },
+  "rv32imc/none-auto/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3668,
+    ".rodata": 12,
+    ".bss": 28
+   }
+  },
+  "rv32imc/none-auto/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 15524,
+    ".rodata": 292,
+    ".bss": 28
+   }
+  },
   "rv32imc/none-auto/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -392,6 +584,24 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imc/none-off/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3668,
+    ".rodata": 12,
+    ".bss": 28
+   }
+  },
+  "rv32imc/none-off/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 15524,
+    ".rodata": 292,
+    ".bss": 28
    }
   },
   "rv32imc/none-off/merge-sort": {
@@ -428,6 +638,23 @@
     ".bss": 24
    }
   },
+  "rv32imc/size-all/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imc/size-all/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 14348,
+    ".rodata": 280,
+    ".bss": 28
+   }
+  },
   "rv32imc/size-all/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -460,6 +687,23 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imc/size-auto/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imc/size-auto/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 14348,
+    ".rodata": 280,
+    ".bss": 28
    }
   },
   "rv32imc/size-auto/merge-sort": {
@@ -496,6 +740,23 @@
     ".bss": 24
    }
   },
+  "rv32imc/size-off/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imc/size-off/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 14348,
+    ".rodata": 280,
+    ".bss": 28
+   }
+  },
   "rv32imc/size-off/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -528,6 +789,23 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imc/speed-all/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imc/speed-all/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 14360,
+    ".rodata": 280,
+    ".bss": 28
    }
   },
   "rv32imc/speed-all/merge-sort": {
@@ -564,6 +842,23 @@
     ".bss": 24
    }
   },
+  "rv32imc/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imc/speed-auto/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 14360,
+    ".rodata": 280,
+    ".bss": 28
+   }
+  },
   "rv32imc/speed-auto/merge-sort": {
    "sections": {
     ".landin_entry": 4,
@@ -596,6 +891,23 @@
     ".rodata": 513,
     ".data": 36,
     ".bss": 24
+   }
+  },
+  "rv32imc/speed-off/fannkuch-redux": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 3248,
+    ".bss": 28
+   }
+  },
+  "rv32imc/speed-off/mandelbrot": {
+   "sections": {
+    ".landin_entry": 4,
+    ".isr_vector": 64,
+    ".text": 14360,
+    ".rodata": 280,
+    ".bss": 28
    }
   },
   "rv32imc/speed-off/merge-sort": {

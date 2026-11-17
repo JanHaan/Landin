@@ -17,6 +17,22 @@
     ".bss": 4
    }
   },
+  "armv6-m/none-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3592,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv6-m/none-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 12320,
+    ".rodata": 36,
+    ".bss": 8
+   }
+  },
   "armv6-m/none-all/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -44,6 +60,22 @@
     ".text": 10996,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv6-m/none-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3592,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv6-m/none-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 12320,
+    ".rodata": 36,
+    ".bss": 8
    }
   },
   "armv6-m/none-auto/merge-sort": {
@@ -75,6 +107,22 @@
     ".bss": 4
    }
   },
+  "armv6-m/none-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3592,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv6-m/none-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 12320,
+    ".rodata": 36,
+    ".bss": 8
+   }
+  },
   "armv6-m/none-off/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -102,6 +150,21 @@
     ".text": 7648,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv6-m/size-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3044,
+    ".bss": 8
+   }
+  },
+  "armv6-m/size-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 11320,
+    ".rodata": 24,
+    ".bss": 8
    }
   },
   "armv6-m/size-all/merge-sort": {
@@ -133,6 +196,21 @@
     ".bss": 4
    }
   },
+  "armv6-m/size-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3044,
+    ".bss": 8
+   }
+  },
+  "armv6-m/size-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 11320,
+    ".rodata": 24,
+    ".bss": 8
+   }
+  },
   "armv6-m/size-auto/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -160,6 +238,21 @@
     ".text": 7678,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv6-m/size-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3044,
+    ".bss": 8
+   }
+  },
+  "armv6-m/size-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 11320,
+    ".rodata": 24,
+    ".bss": 8
    }
   },
   "armv6-m/size-off/merge-sort": {
@@ -191,6 +284,21 @@
     ".bss": 4
    }
   },
+  "armv6-m/speed-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3044,
+    ".bss": 8
+   }
+  },
+  "armv6-m/speed-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 11372,
+    ".rodata": 24,
+    ".bss": 8
+   }
+  },
   "armv6-m/speed-all/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -218,6 +326,21 @@
     ".text": 7664,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv6-m/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3044,
+    ".bss": 8
+   }
+  },
+  "armv6-m/speed-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 11372,
+    ".rodata": 24,
+    ".bss": 8
    }
   },
   "armv6-m/speed-auto/merge-sort": {
@@ -249,6 +372,21 @@
     ".bss": 4
    }
   },
+  "armv6-m/speed-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3044,
+    ".bss": 8
+   }
+  },
+  "armv6-m/speed-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 11372,
+    ".rodata": 24,
+    ".bss": 8
+   }
+  },
   "armv6-m/speed-off/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -276,6 +414,22 @@
     ".text": 10996,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7-m/none-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv7-m/none-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
    }
   },
   "armv7-m/none-all/merge-sort": {
@@ -307,6 +461,22 @@
     ".bss": 4
    }
   },
+  "armv7-m/none-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv7-m/none-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
   "armv7-m/none-auto/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -334,6 +504,22 @@
     ".text": 10996,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7-m/none-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv7-m/none-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
    }
   },
   "armv7-m/none-off/merge-sort": {
@@ -365,6 +551,20 @@
     ".bss": 4
    }
   },
+  "armv7-m/size-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7-m/size-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
+   }
+  },
   "armv7-m/size-all/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -392,6 +592,20 @@
     ".text": 7678,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7-m/size-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7-m/size-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
    }
   },
   "armv7-m/size-auto/merge-sort": {
@@ -423,6 +637,20 @@
     ".bss": 4
    }
   },
+  "armv7-m/size-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7-m/size-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
+   }
+  },
   "armv7-m/size-off/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -450,6 +678,20 @@
     ".text": 7664,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7-m/speed-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7-m/speed-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
    }
   },
   "armv7-m/speed-all/merge-sort": {
@@ -481,6 +723,20 @@
     ".bss": 4
    }
   },
+  "armv7-m/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7-m/speed-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
+   }
+  },
   "armv7-m/speed-auto/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -508,6 +764,20 @@
     ".text": 7694,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7-m/speed-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7-m/speed-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
    }
   },
   "armv7-m/speed-off/merge-sort": {
@@ -539,6 +809,22 @@
     ".bss": 4
    }
   },
+  "armv7e-m/none-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/none-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
   "armv7e-m/none-all/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -566,6 +852,22 @@
     ".text": 10996,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7e-m/none-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/none-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
    }
   },
   "armv7e-m/none-auto/merge-sort": {
@@ -597,6 +899,22 @@
     ".bss": 4
    }
   },
+  "armv7e-m/none-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/none-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
   "armv7e-m/none-off/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -624,6 +942,20 @@
     ".text": 7648,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7e-m/size-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/size-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
    }
   },
   "armv7e-m/size-all/merge-sort": {
@@ -655,6 +987,20 @@
     ".bss": 4
    }
   },
+  "armv7e-m/size-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/size-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
+   }
+  },
   "armv7e-m/size-auto/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -682,6 +1028,20 @@
     ".text": 7678,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7e-m/size-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/size-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
    }
   },
   "armv7e-m/size-off/merge-sort": {
@@ -713,6 +1073,20 @@
     ".bss": 4
    }
   },
+  "armv7e-m/speed-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/speed-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
+   }
+  },
   "armv7e-m/speed-all/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -740,6 +1114,20 @@
     ".text": 7664,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv7e-m/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/speed-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
    }
   },
   "armv7e-m/speed-auto/merge-sort": {
@@ -771,6 +1159,20 @@
     ".bss": 4
    }
   },
+  "armv7e-m/speed-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv7e-m/speed-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
+   }
+  },
   "armv7e-m/speed-off/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -798,6 +1200,22 @@
     ".text": 10996,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv8-m.main/none-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/none-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
    }
   },
   "armv8-m.main/none-all/merge-sort": {
@@ -829,6 +1247,22 @@
     ".bss": 4
    }
   },
+  "armv8-m.main/none-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/none-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
   "armv8-m.main/none-auto/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -856,6 +1290,22 @@
     ".text": 10996,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv8-m.main/none-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 3312,
+    ".rodata": 12,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/none-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 6200,
+    ".rodata": 12,
+    ".bss": 8
    }
   },
   "armv8-m.main/none-off/merge-sort": {
@@ -887,6 +1337,20 @@
     ".bss": 4
    }
   },
+  "armv8-m.main/size-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/size-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
+   }
+  },
   "armv8-m.main/size-all/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -914,6 +1378,20 @@
     ".text": 7678,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv8-m.main/size-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/size-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
    }
   },
   "armv8-m.main/size-auto/merge-sort": {
@@ -945,6 +1423,20 @@
     ".bss": 4
    }
   },
+  "armv8-m.main/size-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/size-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5200,
+    ".bss": 8
+   }
+  },
   "armv8-m.main/size-off/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -972,6 +1464,20 @@
     ".text": 7664,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv8-m.main/speed-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/speed-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
    }
   },
   "armv8-m.main/speed-all/merge-sort": {
@@ -1003,6 +1509,20 @@
     ".bss": 4
    }
   },
+  "armv8-m.main/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/speed-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
+   }
+  },
   "armv8-m.main/speed-auto/merge-sort": {
    "sections": {
     ".isr_vector": 192,
@@ -1030,6 +1550,20 @@
     ".text": 7694,
     ".rodata": 552,
     ".bss": 4
+   }
+  },
+  "armv8-m.main/speed-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 2764,
+    ".bss": 8
+   }
+  },
+  "armv8-m.main/speed-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 192,
+    ".text": 5252,
+    ".bss": 8
    }
   },
   "armv8-m.main/speed-off/merge-sort": {

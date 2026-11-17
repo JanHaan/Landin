@@ -20,6 +20,24 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32/none-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8364,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/none-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 11784,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32/none-all/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -52,6 +70,24 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32/none-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8364,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/none-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 11784,
+    ".rodata": 12,
+    ".bss": 440
    }
   },
   "xtensa-esp32/none-auto/merge-sort": {
@@ -88,6 +124,24 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32/none-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 8364,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/none-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 11784,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32/none-off/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -120,6 +174,22 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7756,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/size-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10396,
+    ".bss": 440
    }
   },
   "xtensa-esp32/size-all/merge-sort": {
@@ -156,6 +226,22 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32/size-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7756,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/size-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10396,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32/size-auto/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -188,6 +274,22 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32/size-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7756,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/size-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10396,
+    ".bss": 440
    }
   },
   "xtensa-esp32/size-off/merge-sort": {
@@ -224,6 +326,22 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32/speed-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7756,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/speed-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10340,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32/speed-all/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -256,6 +374,22 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7756,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/speed-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10340,
+    ".bss": 440
    }
   },
   "xtensa-esp32/speed-auto/merge-sort": {
@@ -292,6 +426,22 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32/speed-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 7756,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32/speed-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10340,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32/speed-off/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -324,6 +474,24 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10048,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/none-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 13472,
+    ".rodata": 12,
+    ".bss": 440
    }
   },
   "xtensa-esp32s3/none-all/merge-sort": {
@@ -360,6 +528,24 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32s3/none-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10048,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/none-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 13472,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32s3/none-auto/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -392,6 +578,24 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/none-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 10048,
+    ".rodata": 12,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/none-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 13472,
+    ".rodata": 12,
+    ".bss": 440
    }
   },
   "xtensa-esp32s3/none-off/merge-sort": {
@@ -428,6 +632,22 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32s3/size-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9440,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/size-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 12084,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32s3/size-all/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -460,6 +680,22 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/size-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9440,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/size-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 12084,
+    ".bss": 440
    }
   },
   "xtensa-esp32s3/size-auto/merge-sort": {
@@ -496,6 +732,22 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32s3/size-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9440,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/size-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 12084,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32s3/size-off/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -528,6 +780,22 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-all/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9440,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/speed-all/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 12028,
+    ".bss": 440
    }
   },
   "xtensa-esp32s3/speed-all/merge-sort": {
@@ -564,6 +832,22 @@
     ".bss": 436
    }
   },
+  "xtensa-esp32s3/speed-auto/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9440,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/speed-auto/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 12028,
+    ".bss": 440
+   }
+  },
   "xtensa-esp32s3/speed-auto/merge-sort": {
    "sections": {
     ".isr_vector": 1024,
@@ -596,6 +880,22 @@
     ".rodata": 516,
     ".data": 36,
     ".bss": 436
+   }
+  },
+  "xtensa-esp32s3/speed-off/fannkuch-redux": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 9440,
+    ".bss": 440
+   }
+  },
+  "xtensa-esp32s3/speed-off/mandelbrot": {
+   "sections": {
+    ".isr_vector": 1024,
+    ".landin_entry": 4,
+    ".text": 12028,
+    ".bss": 440
    }
   },
   "xtensa-esp32s3/speed-off/merge-sort": {
