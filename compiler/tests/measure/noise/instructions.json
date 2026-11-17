@@ -1,0 +1,644 @@
+{
+ "schema": 1,
+ "class": "instructions",
+ "about": "The same images counted repeatedly by compiler/tests/measure/qemu/count.c (scripts/measure_count.py noise --runs 5), on one host: each workload's figures, their spread, and its statuses. Every spread is zero. The Cortex-M figures are counted from main to the corpus harness's backend_done under -icount, and corpus_run_without_icount is the corpus --program run's own count of the same image.",
+ "source_commit": "dfea2197b0cd73f1db3a1bdc5c6d281176facbe9",
+ "compiler_sha256": "b2b2abebd57816fb5456a862cd47cbbcede76305451b41b91591916b12738f0d",
+ "plugin_sha256": "21c3eecb702a7484d8c9dce2f75877d936c132e6ba45660cba10b40d652efbdb",
+ "runs": 5,
+ "emulators": {
+  "linux-rv64": "qemu-riscv64 11.1.0 (the pinned nix qemu-user), plugin API 7",
+  "cortex-m0": "qemu-system-arm 1:10.0.13+ds-0+deb13u1 (the Cortex-M lanes' lock), plugin API 4"
+ },
+ "hosted": {
+  "target": "linux-rv64",
+  "level": "rv64gc",
+  "cpu": "max,xtheadba=true",
+  "profile": "speed-auto",
+  "workloads": {
+   "binary-trees": {
+    "runs": 5,
+    "figures": [
+     58933324158,
+     58933324158,
+     58933324158,
+     58933324158,
+     58933324158
+    ],
+    "min": 58933324158,
+    "max": 58933324158,
+    "spread": 0,
+    "relative": 0.0,
+    "statuses": [
+     0
+    ],
+    "output_sha256": [
+     "3b9e63e2b3523d282d08c35b889a2343c0ee7a24a2540ce6a41bc58f782cd7ff"
+    ]
+   },
+   "fannkuch-redux": {
+    "runs": 5,
+    "figures": [
+     12704305984,
+     12704305984,
+     12704305984,
+     12704305984,
+     12704305984
+    ],
+    "min": 12704305984,
+    "max": 12704305984,
+    "spread": 0,
+    "relative": 0.0,
+    "statuses": [
+     0
+    ],
+    "output_sha256": [
+     "26f4debed9b9f8db7609e17f35756a3f72c1d85d40977a4377a1ef34ffc4d4c8"
+    ]
+   },
+   "fasta": {
+    "runs": 5,
+    "figures": [
+     25149220904,
+     25149220904,
+     25149220904,
+     25149220904,
+     25149220904
+    ],
+    "min": 25149220904,
+    "max": 25149220904,
+    "spread": 0,
+    "relative": 0.0,
+    "statuses": [
+     0
+    ],
+    "output_sha256": [
+     "e3600e481ef68b6cd9ac155f93f40ff06a4094128f62895eb37b28ebad7cab72"
+    ]
+   },
+   "fibre": {
+    "runs": 5,
+    "figures": [
+     166665,
+     166665,
+     166665,
+     166665,
+     166665
+    ],
+    "min": 166665,
+    "max": 166665,
+    "spread": 0,
+    "relative": 0.0,
+    "statuses": [
+     0
+    ],
+    "output_sha256": [
+     "7b39a61a200897079436d551b8848d1e4943926ccd89b892ac25900b1bac7ad0"
+    ]
+   },
+   "mandelbrot": {
+    "runs": 5,
+    "figures": [
+     15826872973,
+     15826872973,
+     15826872973,
+     15826872973,
+     15826872973
+    ],
+    "min": 15826872973,
+    "max": 15826872973,
+    "spread": 0,
+    "relative": 0.0,
+    "statuses": [
+     0
+    ],
+    "output_sha256": [
+     "42444f9a249913b9fa01fde926562f8c2d9ea862d1ff7a219056e9a7dcf5d404"
+    ]
+   },
+   "reverse-complement": {
+    "runs": 5,
+    "figures": [
+     4788507064,
+     4788507064,
+     4788507064,
+     4788507064,
+     4788507064
+    ],
+    "min": 4788507064,
+    "max": 4788507064,
+    "spread": 0,
+    "relative": 0.0,
+    "statuses": [
+     0
+    ],
+    "output_sha256": [
+     "c88161c56b1d471c8a6a8f130db60ede204b057985eb9f97bd560a4fac8d2a5c"
+    ]
+   },
+   "thread": {
+    "runs": 5,
+    "figures": [
+     57525,
+     57525,
+     57525,
+     57525,
+     57525
+    ],
+    "min": 57525,
+    "max": 57525,
+    "spread": 0,
+    "relative": 0.0,
+    "statuses": [
+     42
+    ],
+    "output_sha256": [
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ]
+   }
+  }
+ },
+ "firmware": {
+  "target": "cortex-m0",
+  "profile": "speed-auto",
+  "icount": "shift=0,align=off,sleep=off",
+  "machines": {
+   "microbit": {
+    "level": "armv6-m",
+    "workloads": {
+     "runtime/sieve-of-eratosthenes": {
+      "runs": 5,
+      "figures": [
+       30173,
+       30173,
+       30173,
+       30173,
+       30173
+      ],
+      "min": 30173,
+      "max": 30173,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 30173
+     },
+     "runtime/merge-sort": {
+      "runs": 5,
+      "figures": [
+       14448,
+       14448,
+       14448,
+       14448,
+       14448
+      ],
+      "min": 14448,
+      "max": 14448,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 14448
+     },
+     "runtime/binary-search": {
+      "runs": 5,
+      "figures": [
+       4167,
+       4167,
+       4167,
+       4167,
+       4167
+      ],
+      "min": 4167,
+      "max": 4167,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 4167
+     },
+     "runtime/cmp-siphash-vectors": {
+      "runs": 5,
+      "figures": [
+       878317,
+       878317,
+       878317,
+       878317,
+       878317
+      ],
+      "min": 878317,
+      "max": 878317,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 878317
+     },
+     "runtime/firmware-fannkuch-redux": {
+      "runs": 5,
+      "figures": [
+       12176042,
+       12176042,
+       12176042,
+       12176042,
+       12176042
+      ],
+      "min": 12176042,
+      "max": 12176042,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x05b0c76f"
+      ],
+      "corpus_run_without_icount": 12176042
+     },
+     "runtime/firmware-mandelbrot": {
+      "runs": 5,
+      "figures": [
+       48030660,
+       48030660,
+       48030660,
+       48030660,
+       48030660
+      ],
+      "min": 48030660,
+      "max": 48030660,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x6b603ccc"
+      ],
+      "corpus_run_without_icount": 48030660
+     }
+    }
+   },
+   "mps2-an385": {
+    "level": "armv7-m",
+    "workloads": {
+     "runtime/sieve-of-eratosthenes": {
+      "runs": 5,
+      "figures": [
+       31359,
+       31359,
+       31359,
+       31359,
+       31359
+      ],
+      "min": 31359,
+      "max": 31359,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 31359
+     },
+     "runtime/merge-sort": {
+      "runs": 5,
+      "figures": [
+       14310,
+       14310,
+       14310,
+       14310,
+       14310
+      ],
+      "min": 14310,
+      "max": 14310,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 14310
+     },
+     "runtime/binary-search": {
+      "runs": 5,
+      "figures": [
+       4065,
+       4065,
+       4065,
+       4065,
+       4065
+      ],
+      "min": 4065,
+      "max": 4065,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 4065
+     },
+     "runtime/cmp-siphash-vectors": {
+      "runs": 5,
+      "figures": [
+       878317,
+       878317,
+       878317,
+       878317,
+       878317
+      ],
+      "min": 878317,
+      "max": 878317,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 878317
+     },
+     "runtime/firmware-fannkuch-redux": {
+      "runs": 5,
+      "figures": [
+       11850709,
+       11850709,
+       11850709,
+       11850709,
+       11850709
+      ],
+      "min": 11850709,
+      "max": 11850709,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x05b0c76f"
+      ],
+      "corpus_run_without_icount": 11850709
+     },
+     "runtime/firmware-mandelbrot": {
+      "runs": 5,
+      "figures": [
+       17636652,
+       17636652,
+       17636652,
+       17636652,
+       17636652
+      ],
+      "min": 17636652,
+      "max": 17636652,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x6b603ccc"
+      ],
+      "corpus_run_without_icount": 17636652
+     }
+    }
+   },
+   "mps2-an505": {
+    "level": "armv8-m.main",
+    "workloads": {
+     "runtime/sieve-of-eratosthenes": {
+      "runs": 5,
+      "figures": [
+       31359,
+       31359,
+       31359,
+       31359,
+       31359
+      ],
+      "min": 31359,
+      "max": 31359,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 31359
+     },
+     "runtime/merge-sort": {
+      "runs": 5,
+      "figures": [
+       14310,
+       14310,
+       14310,
+       14310,
+       14310
+      ],
+      "min": 14310,
+      "max": 14310,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 14310
+     },
+     "runtime/binary-search": {
+      "runs": 5,
+      "figures": [
+       4065,
+       4065,
+       4065,
+       4065,
+       4065
+      ],
+      "min": 4065,
+      "max": 4065,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 4065
+     },
+     "runtime/cmp-siphash-vectors": {
+      "runs": 5,
+      "figures": [
+       878317,
+       878317,
+       878317,
+       878317,
+       878317
+      ],
+      "min": 878317,
+      "max": 878317,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 878317
+     },
+     "runtime/firmware-fannkuch-redux": {
+      "runs": 5,
+      "figures": [
+       11850709,
+       11850709,
+       11850709,
+       11850709,
+       11850709
+      ],
+      "min": 11850709,
+      "max": 11850709,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x05b0c76f"
+      ],
+      "corpus_run_without_icount": 11850709
+     },
+     "runtime/firmware-mandelbrot": {
+      "runs": 5,
+      "figures": [
+       17636652,
+       17636652,
+       17636652,
+       17636652,
+       17636652
+      ],
+      "min": 17636652,
+      "max": 17636652,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x6b603ccc"
+      ],
+      "corpus_run_without_icount": 17636652
+     }
+    }
+   },
+   "mps2-an500": {
+    "level": "armv7e-m+fpv5-d16",
+    "workloads": {
+     "runtime/sieve-of-eratosthenes": {
+      "runs": 5,
+      "figures": [
+       31411,
+       31411,
+       31411,
+       31411,
+       31411
+      ],
+      "min": 31411,
+      "max": 31411,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 31411
+     },
+     "runtime/merge-sort": {
+      "runs": 5,
+      "figures": [
+       14362,
+       14362,
+       14362,
+       14362,
+       14362
+      ],
+      "min": 14362,
+      "max": 14362,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 14362
+     },
+     "runtime/binary-search": {
+      "runs": 5,
+      "figures": [
+       4117,
+       4117,
+       4117,
+       4117,
+       4117
+      ],
+      "min": 4117,
+      "max": 4117,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 4117
+     },
+     "runtime/cmp-siphash-vectors": {
+      "runs": 5,
+      "figures": [
+       878369,
+       878369,
+       878369,
+       878369,
+       878369
+      ],
+      "min": 878369,
+      "max": 878369,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "corpus_run_without_icount": 878369
+     },
+     "runtime/firmware-fannkuch-redux": {
+      "runs": 5,
+      "figures": [
+       11850761,
+       11850761,
+       11850761,
+       11850761,
+       11850761
+      ],
+      "min": 11850761,
+      "max": 11850761,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x05b0c76f"
+      ],
+      "corpus_run_without_icount": 11850761
+     },
+     "runtime/firmware-mandelbrot": {
+      "runs": 5,
+      "figures": [
+       6164386,
+       6164386,
+       6164386,
+       6164386,
+       6164386
+      ],
+      "min": 6164386,
+      "max": 6164386,
+      "spread": 0,
+      "relative": 0.0,
+      "statuses": [
+       42
+      ],
+      "checksum": [
+       "0x6b603ccc"
+      ],
+      "corpus_run_without_icount": 6164386
+     }
+    }
+   }
+  }
+ }
+}
