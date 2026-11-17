@@ -1451,14 +1451,18 @@ jobs:
   #  the first and the LLDB sessions with the second, whose checks are the
   #  shorter.  Both are required.
   #
-  #  They also wait for the debug build, which needs them not: a cached
-  #  release build can end before it, and then these two long jobs and
-  #  the parity shards would take the macOS runners darwin-host needs at
-  #  that build's end, whose two shards are the longest path
-  #  (docs/process.md).
+  #  They also wait for darwin-release-compare, which they need not
+  #  otherwise: a cached release build ends minutes before the debug
+  #  build, and these two jobs, ready then, took the macOS runners
+  #  darwin-host-1 needed at the debug build's end, so that shard, the
+  #  longest path, started 7.7 minutes late on run 44070770890 and the gate
+  #  ended at 31.5 minutes.  The comparison ends after the debug build, so
+  #  darwin-host and the Darwin determinism manifests take the runners
+  #  first; the three short parity shards still start at the release
+  #  build's end, while only the two builds hold runners (docs/process.md).
   darwin-host-release:
     name: darwin-host-release-${{ matrix.shard }}
-    needs: [inputs, darwin-release-build, darwin-debug-build]
+    needs: [inputs, darwin-release-build, darwin-release-compare]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60

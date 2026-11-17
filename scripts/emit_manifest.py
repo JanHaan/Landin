@@ -52,8 +52,8 @@ standard profiles, and every result has to agree.
     compare A.json B.json [...]   require every manifest to agree
     modes DEBUG RELEASE ROOT      require the two compiler builds to agree
 
-`modes --shard=I/N` compares the I-th of N shares of its requests, dealt
-round in the order they are listed; the gate's `build-modes` jobs are its N
+`modes --shard=I/N` compares the I-th of N shares of its requests, each
+request dealt to a shard by its key's digest; the gate's `build-modes` jobs are its N
 shards, which together are every request once.  `emit --shard=I/N` writes
 the I-th share of a manifest the same way, and `merge` joins a host's
 shards into its whole manifest before `compare`; each host's determinism
@@ -391,6 +391,23 @@ LIBRARY = []
 PROGRESS_EVERY = 30.0
 
 
+def deal(jobs, shard):
+    """SHARD's share of JOBS, each a tuple whose first item is its key.
+
+    SHARD is (I, N).  A request goes to the shard its key's digest names,
+    so the N shares together are every request once, and each is about an
+    Nth of every kind of request.  Dealing round in listed order was not:
+    a fixture's requests are listed profile by profile, so with three
+    shards each took the same profiles of every fixture, and one of run
+    44070770890's three `build-modes` shards took 10.1 minutes where the
+    other two took 18.4.
+    """
+    index, count = shard
+    return [job for job in jobs
+            if int(hashlib.sha256(job[0].encode()).hexdigest()[:8], 16) % count
+            == index - 1]
+
+
 def compile_one(job):
     """Compile one entry in its own directory, including any sidecars."""
     (key, refine, fixture, sources, target, level, mode, optimize, specialize,
@@ -431,9 +448,9 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
          library=None, shard=(1, 1), clock=time.monotonic):
     """Write the manifest of every request, or of SHARD's share of them.
 
-    SHARD is (I, N), as `modes` takes it: the requests are dealt round N
-    shards in the order they are listed, so each shard is about an Nth of
-    the work whatever the targets cost, and `merge` joins the N parts.
+    SHARD is (I, N), as `modes` takes it: `deal` gives each request to one
+    of N shards by its key, so each shard is about an Nth of the work
+    whatever the targets cost, and `merge` joins the N parts.
     """
     LIBRARY[:] = [str(Path(library).resolve())] if library else []
     #  A rebuild of this build waits until the manifest is written, rather
@@ -472,7 +489,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
                                              + sources, target,
                                              selected_level, mode, optimize,
                                              specialize, debug, asm))
-        jobs = jobs[shard[0] - 1::shard[1]]
+        jobs = deal(jobs, shard)
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             # Preserve inventory order regardless of completion order.
             said_at = clock()
@@ -712,10 +729,10 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS, shard=(1, 1)
           clock=time.monotonic):
     """Both compilers over every request, or SHARD's share of them.
 
-    SHARD is (I, N): the requests are dealt round N shards in the order
-    they are listed, and the I-th is compared.  The N shards together are
-    every request once, each about an Nth of the work whatever targets
-    the corpus grows, which a split by target is not (D1365).
+    SHARD is (I, N): `deal` gives each request to one of N shards by its
+    key, and the I-th is compared.  The N shards together are every
+    request once, each about an Nth of the work whatever targets the
+    corpus grows, which a split by target is not (D1365).
     """
     for compiler in (debug, release):
         build_lock.reading(compiler)
@@ -744,7 +761,7 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS, shard=(1, 1)
                         jobs.append((key, compilers, directory, arguments, target,
                                      selected_level, optimize, specialize))
         listed = len(jobs)
-        jobs = jobs[shard[0] - 1::shard[1]]
+        jobs = deal(jobs, shard)
         for index, job in enumerate(jobs):
             scratch = Path(tmp) / str(index)
             scratch.mkdir()

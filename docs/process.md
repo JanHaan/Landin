@@ -871,7 +871,7 @@ still succeed. The linked full run contains the target-test results.
 | `linux-release-cache` | `ubuntu-24.04` | on a push, once `linux-release-compare` has passed, save `linux-release-build`'s object tree to the cache for the next run; `gate` does not need it |
 | `release` | `ubuntu-24.04` | with the clean release compiler: the whole test program, the determinism closures, native report identity and the scripted server sessions, the compiler packaged and used outside the checkout, then object quality and the GDB sessions |
 | `outside-user-stock` | `ubuntu-24.04` | the clean release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, installed by `scripts/apt_install.sh`, whose every attempt is bounded and which falls back from the image's mirrors to the official archive, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
-| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1, over Linux x86-64, Linux arm64, Cortex-M, RV32 and both Xtensa configurations; the requests are dealt round `build-modes-1` to `build-modes-3`, `emit_manifest.py modes --shard=I/3`, so each job is a third of the work whatever target grows (D1365) |
+| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1, over Linux x86-64, Linux arm64, Cortex-M, RV32 and both Xtensa configurations; the requests are dealt to `build-modes-1` to `build-modes-3` by their keys' digests, `emit_manifest.py modes --shard=I/3`, so each job is a third of the work whatever target grows (D1365, D1374) |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI, then the Neovim LSP preference smoke under the distribution's Neovim |
 | `flake` matrix | `ubuntu-24.04` | on every run that does not reuse a pass, a full-scope dispatch included (D585), in three jobs: `flake-compiler` runs `nix build .#refine .#refine-bin`, evaluates every flake output of every system and enters the development shell, `flake-ram-run` builds the native board RAM helper with its Rust controls and `flake-ram-run-rigpi` the Pi's |
@@ -885,7 +885,7 @@ still succeed. The linked full run contains the target-test results.
 | `darwin-release-cache` | `ubuntu-24.04` | on a push, once `darwin-release-compare` has passed, save `darwin-release-build`'s object tree to the cache for the next run; `gate` does not need it |
 | `darwin-release-main-cache` | `macos-26` | on a push to `main` only, build the release executables from clean, with `ZERO_AR_DATE=1`, and save the tree as `main`'s cache entry, which a branch's first run restores; `gate` does not need it |
 | `darwin-host` matrix | `macos-26` | the debug compiler host suite in two `--host --shard` jobs, `darwin-host-1` and `darwin-host-2`, which together are the complete host run; the first also runs the verifier observations, the determinism closures, report identity and the native C controls, the second compile publication, tool cancellation and the scripted server sessions |
-| `darwin-host-release` matrix | `macos-26` | the release compiler host suite in two shards, `darwin-host-release-1` and `darwin-host-release-2`, with the same follow-on checks divided the same way; the first also uses the installed toolchain outside the checkout, the second runs the LLDB sessions; both also wait for `darwin-debug-build`, for the macOS runners' sake |
+| `darwin-host-release` matrix | `macos-26` | the release compiler host suite in two shards, `darwin-host-release-1` and `darwin-host-release-2`, with the same follow-on checks divided the same way; the first also uses the installed toolchain outside the checkout, the second runs the LLDB sessions; both also wait for `darwin-release-compare`, so that `darwin-host` and the Darwin determinism manifests take the macOS runners first |
 | `darwin-parity` matrix | `macos-26` | the hosted corpus executed natively with the release compiler, its fixtures dealt round `darwin-parity-1` to `darwin-parity-3` by `compiler/tests/darwin/check.py --parity --shard=I/3`, so the three are every case once; the parity harness's own tests (`test_darwin_assembly`) and every Darwin source verdict in the first, the bindings in the second |
 | `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` shards, `arm64-compiler-checks` and the Linux arm64 determinism manifest |
 | `arm64-compiler` matrix | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane in two `--shard` jobs, `arm64-compiler-1` and `arm64-compiler-2` |
@@ -899,7 +899,7 @@ still succeed. The linked full run contains the target-test results.
 | `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
 | `board-bundles` | `ubuntu-24.04` | on a board-scope event only, whatever the software lanes reuse: the release compiler built from the commit, every board's boot and RAM bundles by `environments/boards/build.py --mode=both --records=strict`, so drift from a hardware record fails before a board runs, and one 14-day artifact with `provenance.json` and `files.sha256`; on `main` it also saves its build's objects to the cache `linux-release-build` restores from; never reused |
 | `board` matrix | `[landin-rig]`, the rig's self-hosted runner | `board-rp2040`, `board-pico2`, `board-stm32h753`, `board-esp32c3`, `board-esp32c5`, `board-esp32` and `board-esp32s3`, one at a time on the rig's one runner: a sparse checkout of the exact commit, the bundles downloaded by artifact id against their digest, their file list and provenance checked, then `environments/boards/gate.py --lock-wait=1200`, each port's RAM run and then its boot check; 50 minutes a leg, 70 for the Pico 2's four steps; each leg's evidence, `board-evidence-PORT-ATTEMPT`, one per run attempt, kept 90 days, also after a failure or a cancellation, and the aggregate judges each port by its latest attempt; never reused |
-| `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest for all nine targets on each host, including both Xtensa levels, in `emit --shard` shards that deal its requests round, three on Linux x86-64 and two on each other host, joins each host's shards and compares the three, starting once the three debug builds succeed rather than after their suites |
+| `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest for all nine targets on each host, including both Xtensa levels, in `emit --shard` shards that deal its requests by their keys' digests, three on Linux x86-64 and two on each other host, joins each host's shards and compares the three, starting once the three debug builds succeed rather than after their suites |
 
 Linux and Darwin lanes run on GitHub-hosted images for every event, as do
 the called determinism workflow and the links, Pages and release workflows;
@@ -1015,21 +1015,24 @@ to end about 30 minutes after the run is created, 31 on the slower of the
 two runs; the five runners then sit idle only while the debug build is the
 one job ready. What remained above the Linux lanes' end was the release
 build's twelve minutes before `darwin-parity` and `darwin-host-release`
-could start, which the cached Darwin build shortens. It adds a macOS job,
-the clean build, of about fourteen minutes, and so twelve jobs share the
-five runners. Modelled with the durations above, a cached build that only
-relinks, about three minutes, ends the Darwin jobs about 25 minutes in;
-one that recompiles a few bodies, about six, about 28; and one after a
-change to a specification most units read, which recompiles about 85% of
-them (131 units on the Mac for 8aa6693b6..29d4f681f's nine files), about
-30, today's time. That holds only because `darwin-host-release` also
-waits for the debug build: otherwise the release lanes, ready first, take
-the runners `darwin-host` needs at the debug build's end, its two shards
-being the longest path, and the Darwin jobs end about 29.5 minutes in
-whatever the cached build saved. The clean build starts with the others
-and ends about 15 minutes in, before the lanes; ordered after them, the
-comparison would wait for it. The first gate runs of the arrangement give
-its real times.
+could start, which the cached Darwin build shortens to under two minutes
+when the tree's sources are unchanged (1.6 on run 44070770890). It adds a
+macOS job, the clean build, of about nine minutes, and so twelve jobs
+share the five runners, and the order they take them in decides the end.
+On run 44070770890 the release lanes, ready at the cached build's end,
+took the runners `darwin-host-1` needed at the debug build's end, and that
+shard, the longest path at sixteen minutes, started 7.7 minutes late; the
+gate ended at 31.5 minutes. `darwin-host-release` therefore waits for
+`darwin-release-compare`, which ends after the debug build, so the two
+`darwin-host` shards and the two Darwin determinism manifests take the
+runners first; the three short parity shards still fill the runners the
+two builds leave while the debug build runs.
+
+The cap is the account's, not a run's: two items' gates running at once
+share the five macOS runners and the account's Linux runners too. Run
+44062808053, beside another item's gate, took 51
+minutes, its Darwin lanes queued behind the other run's and its Linux lanes
+waiting up to nine minutes for a runner.
 
 A compile error surfaces in its host's debug or release build job; Linux
 arm64's release lane still builds its own. In
@@ -1199,7 +1202,7 @@ environments/cortex-m/test.py`, which `check.py` runs.
 | `scripts/tests/test_gate_inputs.py` | `Workflow`: the reuse list is exactly the jobs the aggregate needs, every matrix leg by its rendered name. `Physical`: every job's condition follows the event's scope, a software lane skipping for a reused pass and a boards-only event and a board job running by the boards scope alone, the board matrix is every port once, and the aggregate keeps documents and scripts always. `Inventory`: this list names every test file that names the workflow. Its matrix reader takes axis lines or one `include:` list, never both. |
 | `scripts/tests/test_rv64_lanes.py` | the RV64 jobs: the two hardware jobs are suspended, by a `false` conjunct in their condition, and absent from the aggregate and the reuse list; the emulated job is not suspended, has both shards and its packages, and its evidence is packaged. It compares conditions by that conjunct alone, so a scope change does not concern it. |
 | `scripts/tests/test_build_inventory.py` | `BuildArchives`: the archives the build jobs hand to their consumers hold the executables and both stamps. |
-| `scripts/tests/test_compare_builds.py` | the comparison over ELF and Mach-O files written by the test, a Mach-O debug map alone still failing. `Workflow`: `release` and `outside-user-stock` take Linux x86-64's clean release build and no other, the clean build never touches the cache, `linux-release-compare` compares both builds' `refine` and `landin_tests` and is among the jobs `gate` needs, and only `linux-release-cache`, after the comparison, and `board-bundles` save a release object tree; the key names the C headers and compiler, not the image, and every saved tree carries the sources' times, which the cached build gives back before it builds. `DarwinWorkflow`: only `darwin-release-compare` takes Darwin's clean build, both Darwin builds set `ZERO_AR_DATE=1`, only the cached one restores the cache and only `darwin-release-cache`, after the comparison, which `gate` needs, and `darwin-release-main-cache`, a clean build on a push to `main`, save it, with the same key and times, and `darwin-host-release` waits for the debug build too. |
+| `scripts/tests/test_compare_builds.py` | the comparison over ELF and Mach-O files written by the test, a Mach-O debug map alone still failing. `Workflow`: `release` and `outside-user-stock` take Linux x86-64's clean release build and no other, the clean build never touches the cache, `linux-release-compare` compares both builds' `refine` and `landin_tests` and is among the jobs `gate` needs, and only `linux-release-cache`, after the comparison, and `board-bundles` save a release object tree; the key names the C headers and compiler, not the image, and every saved tree carries the sources' times, which the cached build gives back before it builds. `DarwinWorkflow`: only `darwin-release-compare` takes Darwin's clean build, both Darwin builds set `ZERO_AR_DATE=1`, only the cached one restores the cache and only `darwin-release-cache`, after the comparison, which `gate` needs, and `darwin-release-main-cache`, a clean build on a push to `main`, save it, with the same key and times, and `darwin-host-release` waits for the comparison. |
 | `scripts/tests/test_host_determinism.py` | `Workflows`: the `build-modes` matrix's jobs are every shard of every mode target, numbered from one and dividing by their own count, and `determinism.yml`'s legs are shards 1 to N of N on each host, its step naming no target list, and `emit --shard` deals every request to one shard; `BuildModes`: the shards together are every request once. |
 | `environments/cortex-m/test.py` | the `cortex-m` job's `part` matrix is the runner's parts, and it passes `--part`. |
 | `scripts/tests/test_rig_runner_hook.py` | nothing of the jobs: it passes the workflow's path to the rig runner's hook. |

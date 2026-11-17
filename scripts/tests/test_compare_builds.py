@@ -368,8 +368,8 @@ class DarwinWorkflow(unittest.TestCase):
         self.assertIn("darwin-release-compare",
                       [name.strip() for name in needs.split(",")])
 
-    def test_the_release_lanes_wait_for_the_debug_build_too(self):
-        self.assertIn("needs: [inputs, darwin-release-build, darwin-debug-build]",
+    def test_the_release_lanes_wait_for_the_comparison(self):
+        self.assertIn("needs: [inputs, darwin-release-build, darwin-release-compare]",
                       self.jobs["darwin-host-release"])
 
 
