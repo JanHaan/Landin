@@ -509,6 +509,12 @@ def measure_time(args) -> int:
 
     def timed(pair, workload, stdin, count):
         samples = {"candidate": [], "base": []}
+        #  Each image runs once untimed first.  macOS vets a newly linked
+        #  program on its first launch, and that run took 1.85 s of a
+        #  workload whose others took 0.2 to 0.36: judged on one sample, it
+        #  failed an image four times faster than its base as 1.88 slower.
+        for at in (0, 1):
+            timed_run(pair[at][0], workload, stdin, scratch)
         for index in range(count):
             #  A candidate already past twice the tolerance after one
             #  interleaved sample of each is judged on it: a gross slowdown

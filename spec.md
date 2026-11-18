@@ -25928,7 +25928,8 @@ one job and runs each configuration's two images interleaved, a fresh
 copy each run, judging the ratio of medians against the class's noise
 study, a pair past it timed again three times as often and judged on
 that, and one past twice it after a single sample judged at once, and a
-pair whose candidate image is the base's own bytes is not timed; committed wall figures are a trend, not a threshold, because a
+pair whose candidate image is the base's own bytes is not timed, and each
+image runs once untimed before its samples; committed wall figures are a trend, not a threshold, because a
 hosted runner's processor model changes from run to run. `instructions`,
 under QEMU's user mode for RV64 and on the Cortex-M lanes' machines,
 counts what the image's own code executed through
