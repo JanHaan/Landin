@@ -54,12 +54,12 @@ def sessions(args, target):
                  "--optimize=" + optimize, "--specialize=" + specialize]
         label = "debug-%s-%s" % (optimize, specialize)
         image = args.output / label
-        run([args.refine, *flags, lldb_batch.SOURCE, "-o", image],
+        run([args.refine, 'compile', *flags, lldb_batch.SOURCE, "-o", image],
             args.output / (label + "-build.log"))
         built.append((label, "source", lldb_batch.source_commands(lines), image, lines))
         label = "switch-%s-%s" % (optimize, specialize)
         image = args.output / label
-        run([args.refine, *flags, "--root=" + str(ROOT), switch_frames.FIXTURE, "-o", image],
+        run([args.refine, 'compile', *flags, "--root=" + str(ROOT), switch_frames.FIXTURE, "-o", image],
             args.output / (label + "-build.log"))
         listing = run([args.objdump, "-d", "--disassemble-symbols=" + switch_frames.SWITCH,
                        image], args.output / (label + "-switch-disassembly.log"))

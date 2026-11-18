@@ -3617,6 +3617,11 @@ A concept is an ordinary type declaration, so it lives in a module like
 any other name. It has no default bodies: each conformance supplies every
 entry.
 
+An entry can also be called on an `any` value ([1390]) when its first
+parameter is `self` and `t` appears nowhere else in it. `self` is a
+`ptr t`, a `ptr mut t` or, when `t` is a record, a `t` by value. `less`
+above takes two `t`s, so only generic code can call it.
+
 ### [1240] Making a type conform
 
 A conformance registers one type against one concept, naming the
@@ -5590,7 +5595,7 @@ It gets two scalars and no strings:
   compiler gives the failing operation and its check family.
 
 File and line live in an optional table outside the target, so a small
-firmware image carries no file names. `refine --panic-map` writes that
+firmware image carries no file names. `refine compile --panic-map` writes that
 table. `refine site PROGRAM SITE` resolves a site against the build that
 made it, and only that build.
 

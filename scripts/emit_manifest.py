@@ -415,7 +415,7 @@ def compile_one(job):
     asm.parent.mkdir()
     #  cwd and operands preserve the source-path spelling on every host.
     result = subprocess.run(
-        [str(refine), "--target=" + target]
+        [str(refine), "compile", "--target=" + target]
         + (["--level=" + level] if level else [])
         + ["--build-mode=" + mode]
         + ["--optimize=" + optimize, "--specialize=" + specialize]
@@ -678,7 +678,7 @@ def emit_both(job):
     for n, refine in enumerate(compilers):
         asm = Path(tmp) / ("%d.s" % n)
         result = subprocess.run(
-            [str(refine), "--target=" + target]
+            [str(refine), "compile", "--target=" + target]
             + (["--level=" + level] if level else []) + ["--optimize=" + optimize,
              "--specialize=" + specialize, "--emit=asm", "-o", str(asm)]
             + sources, capture_output=True, cwd=directory)

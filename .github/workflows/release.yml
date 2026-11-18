@@ -180,7 +180,7 @@ jobs:
           print(json.dumps(identity, sort_keys=True))
           PY
           for target in linux-x86-64 linux-arm64 darwin-arm64; do
-            "$binary" --target="$target" --emit=asm -o "$RUNNER_TEMP/smoke.s" \
+            "$binary" compile --target="$target" --emit=asm -o "$RUNNER_TEMP/smoke.s" \
               compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn
             grep -q main "$RUNNER_TEMP/smoke.s"
           done

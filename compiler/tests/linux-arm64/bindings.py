@@ -103,7 +103,7 @@ def main():
         label = "bindings-%s-%s" % (optimize, specialize)
         assembly = output / (label + ".s")
         executable = output / label
-        run([refine, "--target=linux-arm64", "--root=" + str(ROOT),
+        run([refine, "compile", "--target=linux-arm64", "--root=" + str(ROOT),
              "--optimize=" + optimize, "--specialize=" + specialize,
              "--emit=asm", "-o", assembly, generated])
         run([args.driver, "-std=c11", "-Wall", "-Wextra", "-Werror", "-pthread",

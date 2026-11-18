@@ -164,14 +164,14 @@ class Lane:
                 base = meta_path.parent
                 #  What the harness runs refine with for this verdict, the
                 #  lane naming its own target (compiler/tests/README.md).
-                argv = [a for a in meta.source_arguments(base)
-                        if not a.startswith('--target=')]
+                verdict = meta.verdict_arguments(base)
+                argv = [a for a in verdict[1:] if not a.startswith('--target=')]
                 label = 'source-' + kind + '-' + base.name
                 status = meta.status
                 # Source verdicts run on the compiler host, selecting the guest
                 # target; execution and debugger verdicts are always guest-side.
-                completed = subprocess.run([str(self.args.refine.resolve()), '--target=' + self.target,
-                                            *argv], cwd=ROOT / 'compiler/ada', capture_output=True, timeout=180)
+                completed = subprocess.run([str(self.args.refine.resolve()), verdict[0],
+                                            '--target=' + self.target, *argv], cwd=ROOT / 'compiler/ada', capture_output=True, timeout=180)
                 actual = completed.stdout + completed.stderr
                 (self.output / (label + '.log')).write_bytes(actual)
                 require(completed.returncode == status, label + ': wrong source verdict')
@@ -213,7 +213,7 @@ class Lane:
         compiled = base
         if meta.c_archives:
             compiled, peers = self.archives(base, meta, label)
-        argv = [self.args.refine.resolve(), '--target=' + self.target,
+        argv = [self.args.refine.resolve(), 'compile', '--target=' + self.target,
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 *(['--level=' + level] if level else []),
                 *meta.library_arguments(compiled), *meta.source_arguments(compiled)]
@@ -501,7 +501,7 @@ class Lane:
         for optimize, specialize in PROFILES:
             label = 'debug-' + optimize + '-' + specialize
             executable = self.bundle / label
-            self.command([self.args.refine.resolve(), '--target=' + self.target,
+            self.command([self.args.refine.resolve(), 'compile', '--target=' + self.target,
                           '--toolchain=' + str(self.driver), '--debug=full', '--emit=exe',
                           '--optimize=' + optimize, '--specialize=' + specialize,
                           source, '-o', executable], label + '-build')
@@ -514,7 +514,7 @@ class Lane:
         for optimize, specialize in PROFILES:
             label = 'switch-' + optimize + '-' + specialize
             executable = self.bundle / label
-            self.command([self.args.refine.resolve(), '--target=' + self.target,
+            self.command([self.args.refine.resolve(), 'compile', '--target=' + self.target,
                           '--toolchain=' + str(self.driver), '--debug=full', '--emit=exe',
                           '--optimize=' + optimize, '--specialize=' + specialize,
                           '--root=' + str(ROOT), switch_frames.FIXTURE, '-o', executable],

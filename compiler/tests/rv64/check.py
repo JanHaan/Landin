@@ -117,7 +117,7 @@ class Lane(SHARED.Lane):
         compiled, peers = base, []
         if meta.c_archives:
             compiled, peers = self.archives(base, meta, label)
-        argv = [self.args.refine.resolve(), '--target=' + TARGET,
+        argv = [self.args.refine.resolve(), 'compile', '--target=' + TARGET,
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 *(['--level=' + level] if level else []), *(['--link=libc'] if libc else []),
                 *meta.library_arguments(compiled), *meta.source_arguments(compiled)]
@@ -170,7 +170,7 @@ class Lane(SHARED.Lane):
         for optimize, specialize in PROFILES:
             label = 'debug-' + optimize + '-' + specialize
             executable = self.bundle / label
-            self.command([self.args.refine.resolve(), '--target=' + TARGET,
+            self.command([self.args.refine.resolve(), 'compile', '--target=' + TARGET,
                           '--toolchain=' + str(self.driver), '--debug=full', '--emit=exe',
                           '--optimize=' + optimize, '--specialize=' + specialize,
                           source, '-o', executable], label + '-build')
@@ -180,7 +180,7 @@ class Lane(SHARED.Lane):
         for optimize, specialize in PROFILES:
             label = 'switch-' + optimize + '-' + specialize
             executable = self.bundle / label
-            self.command([self.args.refine.resolve(), '--target=' + TARGET,
+            self.command([self.args.refine.resolve(), 'compile', '--target=' + TARGET,
                           '--toolchain=' + str(self.driver), '--debug=full', '--emit=exe',
                           '--optimize=' + optimize, '--specialize=' + specialize,
                           '--root=' + str(ROOT), switch_frames.FIXTURE, '-o', executable],
@@ -209,7 +209,7 @@ class Lane(SHARED.Lane):
         fixture = HERE / 'level-block.ldn'
         assembly = self.output / 'assembly-level.s'
         for level in LEVELS:
-            self.command([self.args.refine.resolve(), '--target=' + TARGET, '--level=' + level,
+            self.command([self.args.refine.resolve(), 'compile', '--target=' + TARGET, '--level=' + level,
                           '--emit=asm', fixture, '-o', assembly], level + '-assembly-emit')
             self.command([*self.cc, '-march=' + level, '-c', assembly, '-o', self.output / 'assembly-level.o'],
                          level + '-assembly-control', expected=1 if level == LEVELS[0] else 0)

@@ -18,4 +18,3 @@ warning[L0693]: the body ends with a value, which replaces what `r` was given
 9 | twice: (x: i32) -> (r: i32) =
   |                     ^^^^^^ the result it replaces
   = note: D1367: a body's trailing value is its result [0880]; keep the assignment or the value, not both
-refine: checked ../tests/fixtures/negative/a-value-after-an-assigned-result/program.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

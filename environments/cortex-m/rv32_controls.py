@@ -241,7 +241,7 @@ def refused_lines(run, refine, level, source):
     """The lines of SOURCE refine refuses with L0344 at LEVEL, every other
     code a failure."""
     try:
-        run.command('compile-refusal', [refine, source, '--target=rv32', '--level=' + level,
+        run.command('compile-refusal', [refine, 'compile', source, '--target=rv32', '--level=' + level,
                                         '--emit=asm', '-o', run.out / 'refused.s'], timeout=60)
     except RuntimeError:
         command = run.commands[-1]

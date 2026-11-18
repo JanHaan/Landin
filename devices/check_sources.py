@@ -42,7 +42,7 @@ def main():
         if name.startswith('xtensa-'):
             imports = 'import descriptions/esp32\n' + imports
         source.write_text(imports+'start: () -> none =\n    '+body+'\nend start\n')
-        command = [str(args.refine.resolve()), '--root='+str(HERE/'generated'), '--root='+str(HERE),
+        command = [str(args.refine.resolve()), 'check', '--root='+str(HERE/'generated'), '--root='+str(HERE),
                    '--target='+('xtensa' if name.startswith('xtensa-') else 'cortex-m0'),
                    str(folder.resolve())]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)

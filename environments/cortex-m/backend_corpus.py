@@ -193,7 +193,7 @@ def source_refusal(run, refine, name, row, level='armv6-m'):
     inputs = lane_inputs(level, meta.module_arguments(base))
     selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
     try:
-        run.command('compile-refusal', [refine, *inputs, '--target=' + target(level), *selected,
+        run.command('compile-refusal', [refine, 'compile', *inputs, '--target=' + target(level), *selected,
                     '--emit=asm', '-o', run.out / 'refused.s'], timeout=900)
     except RuntimeError:
         command = run.commands[-1]
@@ -260,7 +260,7 @@ def restriction(run, refine, name, row, optimize, specialize, level='armv6-m'):
     reached, found = None, []
     try:
         run.command('compile-restricted', [
-            refine, *lane_inputs(level, inputs), '--target=' + target(level), *selected,
+            refine, 'compile', *lane_inputs(level, inputs), '--target=' + target(level), *selected,
             '--emit=asm', '-o', run.out / 'restricted.s'], timeout=900)
     except CommandFailed as error:
         log = Path(error.log).read_text(errors='replace')
@@ -353,7 +353,7 @@ def convention_control(parent, refine, name, level):
                       name='wrong')
     profile = derived(run, refine, LEVELS[level]['profile'])
     selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
-    run.command('compile', [refine, *lane_inputs(level, meta.module_arguments(base)),
+    run.command('compile', [refine, 'compile', *lane_inputs(level, meta.module_arguments(base)),
                             '--target=' + target(level), *selected, '--emit=asm',
                             '-o', out / 'program.s'], timeout=60)
     program = out / 'input-1.o'

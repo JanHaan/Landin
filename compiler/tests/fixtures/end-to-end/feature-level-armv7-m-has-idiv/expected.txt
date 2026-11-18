@@ -1,1 +1,0 @@
-refine: checked ../tests/fixtures/end-to-end/feature-level-armv7-m-has-idiv/main.ldn and wrote nothing; build it with `refine compile --target=cortex-m0 --level=armv7-m --firmware-entry=NAME ../tests/fixtures/end-to-end/feature-level-armv7-m-has-idiv/main.ldn -o main`

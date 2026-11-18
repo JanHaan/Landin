@@ -43,7 +43,7 @@ class StageReportFreshness(unittest.TestCase):
             def compile_once(command, *_args, **_kwargs):
                 nonlocal calls
                 calls += 1
-                self.assertEqual(command[2], "--stage-report=" + str(report))
+                self.assertEqual(command[3], "--stage-report=" + str(report))
                 if calls == 1:
                     report.write_text(json.dumps({
                         "stages": [
@@ -76,7 +76,7 @@ class ProgramDeclarations(unittest.TestCase):
                 self.assertEqual(
                     (Path(entry) / "main.ldn").read_text(),
                     scaling.EMPTY["main.ldn"])
-                Path(command[2].split("=", 1)[1]).write_text(json.dumps({
+                Path(command[3].split("=", 1)[1]).write_text(json.dumps({
                     "stages": [{"stage": name, "processor_us": 100,
                                 "peak_kib": 32}
                                for name in scaling.FRONTEND + scaling.EMISSION],

@@ -4,6 +4,6 @@ program: program.ldn
 constructs: 1640, 1990
 targets: cortex-m0
 codes: L0505
-args: --target=cortex-m0 --firmware-entry=start --emit=asm ../tests/fixtures/negative/r660-materialization/program.ldn
+args: compile --target=cortex-m0 --firmware-entry=start --emit=asm ../tests/fixtures/negative/r660-materialization/program.ldn
 expect: expected.txt
 status: 1

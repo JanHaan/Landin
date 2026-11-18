@@ -42,7 +42,7 @@ def build(run, refine, name, optimize, specialize, debug='none'):
     #  The staged tree is this build's library as well as its root: the
     #  library namespaces resolve from the library alone (D275), and the
     #  hashed, debugger-checked sources are the staged copies.
-    run.command('compile', [refine, '--root=source', '--library=source',
+    run.command('compile', [refine, 'compile', '--root=source', '--library=source',
         '--target=cortex-m0',
         '--firmware-entry=start', '--emit=exe', '--debug='+debug,
         '--toolchain='+str(run.arm / 'arm-eabi-gcc'),

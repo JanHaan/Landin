@@ -132,7 +132,7 @@ def build(run, args):
         elf, meta, names = common.consume_board(run, args, BOARD)
         return elf, bytes.fromhex(meta['table']), names, meta['image']
     elf = run.out / getattr(args, 'image_name', 'board.elf')
-    run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
+    run.command('compile', [args.refine, 'compile', '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
         '--root=' + str(SHARED), '--root=' + str(SOURCE), '--target=cortex-m0', '--level=armv7e-m',
         '--firmware-entry=start', '--emit=exe', '--firmware-layout=ram',

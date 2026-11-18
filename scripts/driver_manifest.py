@@ -281,7 +281,8 @@ def run_one(refine, fixture, sources, target, variant, work):
     out.mkdir(parents=True)
     asm = out / "out.s"
     report = out / "build.json"
-    command = [str(refine), "--target=" + target, "--emit=asm",
+    command = [str(refine), "compile", "--target=" + target,
+               "--emit=asm",
                "-o", str(asm), "--build-report=" + str(report)]
     if variant == "debug":
         command += ["--build-mode=debug", "--panic-map",
@@ -362,7 +363,7 @@ def emit(refine, root, work, out, targets=TARGETS):
             #  A rooted fixture's `args` are options before the module its
             #  root gives, as the test program runs it.
             if "args" in meta or (meta.get("root") and "expect" in meta):
-                recorded.append((fixture, meta.source_arguments(
+                recorded.append((fixture, meta.verdict_arguments(
                     "../tests/fixtures/%s/%s" % (klass, fixture.name))))
             if not meta.get("program"):
                 continue

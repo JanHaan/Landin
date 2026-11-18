@@ -516,7 +516,7 @@ DWARF is an output encoding. Source identity, represented types and allocation
 facts remain usable by other emitters, including a possible future PDB path;
 neither DWARF record numbers nor ELF packaging belong in the neutral IR.
 
-For a Linux source session, compile with `refine --debug=full --emit=exe
+For a Linux source session, compile with `refine compile --debug=full
 program.ldn -o program`, then open `gdb ./program`. Ordinary commands such as
 `break main`, `break program.ldn:12`, `run`, `next`, `step`, `bt`, `info args`
 and `info locals` use the emitted metadata. `--optimize=none --specialize=off`

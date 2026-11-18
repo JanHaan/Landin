@@ -78,7 +78,7 @@ def inputs_of(name, row):
 
 
 def refusal(run, refine, inputs, chip, row):
-    run.command('compile-refusal', [refine, *inputs, '--target=xtensa',
+    run.command('compile-refusal', [refine, 'compile', *inputs, '--target=xtensa',
                 '--level=xtensa-' + chip, '--emit=asm', '-o', run.out / 'refused.s'],
                 expected=1)
     text = (run.out / 'compile-refusal.log').read_text()
@@ -136,7 +136,7 @@ def restriction(run, refine, name, meta, inputs, chip, row, memory_profile):
     codes."""
     reached, found = None, []
     try:
-        run.command('compile-restricted', [refine, *inputs, '--target=xtensa',
+        run.command('compile-restricted', [refine, 'compile', *inputs, '--target=xtensa',
                     '--level=xtensa-' + chip, '--emit=asm', '-o', run.out / 'restricted.s'])
     except Exception:
         text = (run.out / 'compile-restricted.log').read_text()

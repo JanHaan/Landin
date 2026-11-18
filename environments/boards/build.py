@@ -154,7 +154,7 @@ def fixed_image(board, args, output, run, files):
     target, level = TARGETS[board]
     roots = [ROOT / 'devices', ROOT / 'devices/generated', ROOT / 'compiler/tests/driver',
              ROOT / 'compiler/tests/board/fixed' / board]
-    command = [args.refine] + ['--root=' + str(root) for root in roots]
+    command = [args.refine, 'compile'] + ['--root=' + str(root) for root in roots]
     command += ['--target=' + target]
     if level:
         command.append('--level=' + level)

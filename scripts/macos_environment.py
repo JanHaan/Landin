@@ -333,7 +333,7 @@ def main():
                     name = f"{mode}-{kind}-{count}"
                     source = directory / f"{name}.ldn"
                     source.write_text(probe_source(kind, count))
-                    code, output, expired = capture.run(name, [binary, source],
+                    code, output, expired = capture.run(name, [binary, "check", source],
                                                        check=False, stress=True)
                     verdict = classify(code, output, expired)
                     result["probes"].append({"kind": kind, "count": count,

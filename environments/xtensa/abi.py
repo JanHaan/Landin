@@ -46,7 +46,7 @@ def build(run, refine, chip, failure=0):
     desc.mkdir(parents=True)
     (desc / 'core.ldn').write_text(description(chip))
     (app / 'description.ldn').write_text('import descriptions/abi\n')
-    base = [refine, '--root=' + str(run.out / 'source'), app,
+    base = [refine, 'compile', '--root=' + str(run.out / 'source'), app,
             '--target=xtensa', '--level=xtensa-' + chip, '--firmware-layout=ram',
             '--firmware-entry=abi_entry', '--optimize=none', '--specialize=off']
     assembly = run.out / 'program.s'

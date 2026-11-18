@@ -84,7 +84,8 @@ def main():
         if args.profile and args.profile != opt + '-' + spec:
             continue
         executable = output / key
-        run(key + '-compile', [args.refine.resolve(), str(switch_frames.FIXTURE.relative_to(ROOT)),
+        run(key + '-compile', [args.refine.resolve(), 'compile',
+            str(switch_frames.FIXTURE.relative_to(ROOT)),
             '--root=.', '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', executable,
             '--optimize=' + opt, '--specialize=' + spec])
         run(key + '-execute', [executable], switch_frames.STATUS)
@@ -111,7 +112,7 @@ def main():
         if args.profile and args.profile != key:
             continue
         executable = output / key
-        compile_args = [args.refine.resolve(), *[str(s.relative_to(ROOT)) for s in linux.SOURCES],
+        compile_args = [args.refine.resolve(), 'compile', *[str(s.relative_to(ROOT)) for s in linux.SOURCES],
                         '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', executable,
                         '--optimize=' + opt, '--specialize=' + spec,
                         '--build-report=' + str(executable) + '.report.json']
@@ -185,7 +186,7 @@ def main():
         results.append({'optimize': opt, 'specialize': spec, 'status': 'passed',
                         'identity': identity, 'checks': len(session['checks'])})
         scalar_exe = output / (key + '-scalars')
-        run(key + '-scalars-compile', [args.refine.resolve(), scalar_source,
+        run(key + '-scalars-compile', [args.refine.resolve(), 'compile', scalar_source,
             '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', scalar_exe,
             '--optimize=' + opt, '--specialize=' + spec])
         scalar_config = dict(config, executable=str(scalar_exe), source=str(scalar_source),
@@ -208,7 +209,8 @@ def main():
             continue
         label = 'registers-' + name
         executable = output / label
-        run(label + '-compile', [args.refine.resolve(), str(linux.REGISTER_SOURCE.relative_to(ROOT)),
+        run(label + '-compile', [args.refine.resolve(), 'compile',
+                                 str(linux.REGISTER_SOURCE.relative_to(ROOT)),
                                  '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', executable,
                                  '--optimize=' + opt, '--specialize=' + spec])
         run(label + '-execute', [executable], 42)
@@ -236,7 +238,7 @@ def main():
         shutil.copyfile(source, identity_sources / source.name)
     copied = [identity_sources / s.name for s in linux.SOURCES]
     plain = output / 'plain'
-    plain_args = [args.refine.resolve(), *copied, '--target=darwin-arm64',
+    plain_args = [args.refine.resolve(), 'compile', *copied, '--target=darwin-arm64',
                   '--emit=exe', '-o', plain]
     run('plain-compile', plain_args)
     original_assembly = Path(str(plain) + '.s').read_bytes()

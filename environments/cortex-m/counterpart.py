@@ -122,7 +122,7 @@ def build(run, refine, optimize, specialize, mutation=None):
             text = text.replace(old, new)
         path.write_text(text)
     elf = run.out / 'core.elf'
-    run.command('compile', [refine, '--root=source', '--library=source', '--target=cortex-m0',
+    run.command('compile', [refine, 'compile', '--root=source', '--library=source', '--target=cortex-m0',
         '--firmware-entry=start', '--emit=exe', '--debug=none',
         '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
         '--optimize=' + optimize, '--specialize=' + specialize, '--build-report=build.json',

@@ -66,7 +66,7 @@ def main():
                 {**meta, **{k: v for k, v in differences.get(name, {}).items() if k != 'reason'}}, name)
             #  What the test program runs refine with, from compiler/ada
             #  (compiler/tests/fixture_meta.py).
-            argv = meta.source_arguments('../tests/fixtures/' + name)
+            argv = meta.verdict_arguments('../tests/fixtures/' + name)
             # Explicit target-refusal fixtures retain their own request; the
             # ordinary shared source selects Darwin, including recorded errors.
             argv = [a.replace('--target=linux-x86-64', '--target=darwin-arm64') for a in argv]

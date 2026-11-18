@@ -192,7 +192,7 @@ class RecordedArguments(unittest.TestCase):
             self.assertEqual(sorted(json.loads(output.read_text())), sorted(manifest))
 
             recorded = manifest["end-to-end/level|recorded"]
-            invocation = (str(ada) + "\n--level=x86-64-v3 "
+            invocation = (str(ada) + "\ncheck --level=x86-64-v3 "
                           "../tests/fixtures/end-to-end/level/main.ldn\n")
             self.assertEqual(recorded["stdout"],
                              hashlib.sha256(invocation.encode()).hexdigest())

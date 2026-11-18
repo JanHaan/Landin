@@ -332,16 +332,16 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   cleanup failure prevents safe removal, it retains the entries and reports
   their recovery location and what to do. It takes `compile`'s
   options except those that say what is written, and runs only the
-  compiler's own host. A bare `refine program.ldn` checks and says that it
-  wrote nothing, naming the commands that run and build what it checked,
-  with the options that chose it, `run` for a hosted target and `compile`
-  with a firmware entry for a firmware target, or, for a hosted source with
-  no `main`, that it checked a module and what a program needs; `-q`
-  silences that line.
+  compiler's own host.
+- Every request names its command. A source given without one, `refine
+  program.ldn`, is refused, and the refusal writes the request out after
+  the command that takes it: `refine check program.ldn`, or `compile` when
+  an option only `compile` takes was given. When the first word is neither
+  a `.ldn` file nor a path, the refusal also says that `refine help` lists
+  the commands.
 - The default target is the compiler's own host; cross-compilation names a
-  `--target`. Bare source requests and `--emit=asm|exe` remain
-  compatibility spellings, and `build` is reserved for future project
-  orchestration.
+  `--target`. `compile`'s `--emit=asm|exe` remain compatibility spellings,
+  and `build` is reserved for future project orchestration.
 - `refine fmt source.ldn ...` rewrites each named source, or every `.ldn`
   file under a named directory, in the one layout
   [`docs/format.md`](format.md) shows, changing its space and nothing else.
@@ -469,8 +469,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 
 - `--verbose` (or `-v`) describes the compilation request and names each
   source read, in load order; repeating it
-  also traces the actual native tool argument vectors. `--quiet` retains
-  warnings and errors.
+  also traces the actual native tool argument vectors. `--quiet` (or `-q`)
+  suppresses progress and retains warnings and errors.
 - `--color auto|always|never` controls human diagnostic colour; `auto`
   checks standard error's terminal, `NO_COLOR` and `TERM`.
 - `--diagnostics human|short|json` selects the source report, which is

@@ -5592,15 +5592,6 @@ package body Landin.Driver is
                Note_No_Entry;
                return;
             end if;
-            Result.Without_Entry :=
-              Landin.Targets.Capabilities.Hosted_System_Of (Facts)
-                /= Landin.Targets.Capabilities.No_Hosted_System
-              and then Landin.Backend.Entry_Point.Hosted_Main
-                (Landin.Stages.Code (Context).all,
-                 Landin.Stages.Meanings (Context).all,
-                 Landin.Stages.Modules (Context).all,
-                 Landin.Stages.Identities (Context).all)
-                   = Landin.IR.No_Item;
             if Static_Link
               and then Refused_Static_Link
                 (Executable => True, Checking => True)

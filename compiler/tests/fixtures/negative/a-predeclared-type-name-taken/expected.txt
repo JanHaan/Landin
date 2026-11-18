@@ -82,4 +82,3 @@ warning[L0692]: this declaration takes the name of the predeclared type `u32`
 61 |     r = open(path) else (u32)
    |                    ^^^^
   = note: [1790]: the nearest declaration of a spelling is what a type position names, so no type position this one reaches names the predeclared `u32`; give the declaration another name
-refine: checked ../tests/fixtures/negative/a-predeclared-type-name-taken/program.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

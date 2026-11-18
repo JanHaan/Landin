@@ -82,7 +82,7 @@ class NativeReportIdentity(unittest.TestCase):
 
     def compile(self, output, report, *, source="main.ldn", executable=False):
         return subprocess.run(
-            [str(REFINE), source, "--emit=" + ("exe" if executable else "asm"),
+            [str(REFINE), "compile", source, "--emit=" + ("exe" if executable else "asm"),
              "-o", output, "--build-report=" + report,
              *(["--toolchain=" + str(self.tool)] if executable else [])],
             cwd=self.root,

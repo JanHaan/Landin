@@ -15,8 +15,8 @@ acquisition or generator tooling. `D542` names a decision recorded in
 python3 scripts/fetch_inputs.py rp2040/RP2040.svd
 refine svd --policy=devices/policies/rp2040.json --out-dir=devices \
     ~/.cache/landin/inputs/rp2040/RP2040.svd
-refine --root=devices/generated --root=. --target=cortex-m0 \
-    --firmware-entry=start --emit=exe devices/consumers/images -o fixture.elf
+refine compile --root=devices/generated --root=. --target=cortex-m0 \
+    --firmware-entry=start devices/consumers/images -o fixture.elf
 ```
 
 This tree holds seven devices: Raspberry Pi's RP2040 and RP2350, ST's

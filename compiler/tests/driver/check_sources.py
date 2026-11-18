@@ -27,7 +27,7 @@ def main():
  for name,(body,expected) in CASES.items():
   d=a.output/name;d.mkdir();source=d/'main.ldn'
   source.write_text('import core/line\nimport drivers/uart\n'+body)
-  argv=[str(a.refine.resolve()),'--root='+str(HERE),'--root='+str(ROOT/'devices/generated'),
+  argv=[str(a.refine.resolve()),'check','--root='+str(HERE),'--root='+str(ROOT/'devices/generated'),
         '--root='+str(ROOT),'--target=cortex-m0',str(d.resolve())]
   result=subprocess.run(argv,capture_output=True,text=True,timeout=30)
   (d/'stdout.txt').write_text(result.stdout);(d/'stderr.txt').write_text(result.stderr)

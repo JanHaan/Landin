@@ -4,6 +4,6 @@ program: program.ldn
 constructs: 0520, 1640
 targets: linux-x86-64
 codes: L0505
-args: --target=linux-x86-64 --link=libc --emit=asm ../tests/fixtures/negative/image-budget-past-reach/program.ldn
+args: compile --target=linux-x86-64 --link=libc --emit=asm ../tests/fixtures/negative/image-budget-past-reach/program.ldn
 expect: expected.txt
 status: 1

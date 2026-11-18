@@ -28,4 +28,3 @@ warning[L0628]: a bidirectional control character is written here, and can show 
 8 | raw: []u8 = """as\xE2\x80\xAEwritten"""
   |                  ^^^^^^^^^^^^
   = note: D1077: remove it, or write its escape in a text or character literal, `\u{202E}` where text is meant and `\xE2\x80\xAE` where bytes are; a raw literal and a comment have no escape
-refine: checked ../tests/fixtures/negative/a-bidirectional-control-is-warned-about/program.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

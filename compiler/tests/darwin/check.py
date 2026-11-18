@@ -361,7 +361,7 @@ def main(argv=None):
                 #  `library-directories` its -L before the program.
                 compiled = (archives(base, meta, directory / (label + "-copy"), label, run, cwd)
                             if meta.c_archives else base)
-                argv = [refine, "--target=darwin-arm64", "--optimize=" + optimize,
+                argv = [refine, "compile", "--target=darwin-arm64", "--optimize=" + optimize,
                         "--specialize=" + specialize, *(["--level=" + level] if level else []),
                         *meta.library_arguments(compiled), *meta.module_arguments(compiled)]
                 # Runtime cases exercise refine's native driver selection.

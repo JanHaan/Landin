@@ -29,9 +29,10 @@ Of the shared options, lsp takes only --help.
 
 Use 'refine COMMAND --help' or 'refine help COMMAND'.
 --version is an alias for 'refine version'.
-Bare source requests and --identify remain compatibility
-spellings; use check, compile, run, version and
-targets.
+A source follows its command:
+  refine check SOURCE.ldn
+--identify is a compatibility spelling; use 'version'
+and 'targets'.
 'build' is reserved for future project orchestration.
 
 usage: refine check [options] source.ldn ...

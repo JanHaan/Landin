@@ -1,7 +1,6 @@
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
-with Landin.Backend.Entry_Point;
 with Landin.Build_Identity;
 with Landin.Commands.Bindings;
 with Landin.Commands.Catalogue;
@@ -64,7 +63,6 @@ package body Landin.Commands is
    type Request is record
       Command : C.Action := C.Overview;
       Explicit_Command : Boolean := False;
-      Legacy : Boolean := False;
       Legacy_Identity : Boolean := False;
       Wants_Help : Boolean := False;
       Verbosity : Natural := 0;
@@ -113,6 +111,29 @@ package body Landin.Commands is
          return Base;
       end;
    end Program_Name;
+
+   --  A word as a POSIX shell reads it back.
+   function Shell_Word (Text : String) return String;
+   function Shell_Word (Text : String) return String is
+      Quoted : US.Unbounded_String := US.To_Unbounded_String ("'");
+   begin
+      if Text /= "" and then
+        (for all Letter of Text =>
+           Letter in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9'
+             | '_' | '.' | '/' | '=' | ':' | ',' | '+' | '@'
+             | '%' | '-')
+      then
+         return Text;
+      end if;
+      for Letter of Text loop
+         if Letter = ''' then
+            US.Append (Quoted, "'\''");
+         else
+            US.Append (Quoted, Letter);
+         end if;
+      end loop;
+      return US.To_String (Quoted) & "'";
+   end Shell_Word;
 
    function Parse
      (Arguments : Landin.Platform.Path_List;
@@ -328,33 +349,39 @@ package body Landin.Commands is
          end;
          Index := Index + 1;
       end loop;
+      --  D1463: a command is always named.  An operand with none is told
+      --  the whole request with `check` before it, or the command of an
+      --  option `check` does not take, the words as written; an option of
+      --  a command with none is told where it goes (D384).
       if not Result.Explicit_Command
-        and then (not Result.Operands.Is_Empty or else Specific_Before)
+        and then not Result.Operands.Is_Empty
       then
-         Result.Legacy := True;
-         Result.Command := C.Check;
-         if Seen (C.Emit) then
-            Result.Command := C.Compile;
-         end if;
-         for Flag in C.Option loop
-            if Seen (Flag) and then not C.Accepts (Result.Command, Flag)
-            then
-               --  D384: which command it is an option of, and where it
-               --  goes, rather than that it needs one.
-               declare
-                  Written : constant String :=
-                    (if Flag = First_Flag
-                       and then US.Length (First_Specific) > 0
-                     then US.To_String (First_Specific)
-                     else C.Name (Flag));
-               begin
-                  Refuse (Written & " is an option of "
-                    & C.Owners (Flag) & "; name the command first: refine "
-                    & C.Name (C.First_Owner (Flag)) & " " & Written
-                    & " ...");
-               end;
-            end if;
-         end loop;
+         declare
+            First : constant String := Result.Operands.First_Element;
+            Written : US.Unbounded_String;
+            Suggested : C.Action := C.Check;
+         begin
+            for Flag in C.Option loop
+               if Seen (Flag) and then not C.Accepts (C.Check, Flag) then
+                  Suggested := C.First_Owner (Flag);
+               end if;
+            end loop;
+            for Word of Arguments loop
+               US.Append (Written, " " & Shell_Word (Word));
+            end loop;
+            --  A word that names no file as a source does is more
+            --  likely a mistyped command, which help lists.
+            Refuse ("unknown command: " & First
+              & (if Ada.Strings.Fixed.Index (First, "/") /= 0
+                   or else (First'Length > 4
+                     and then First (First'Last - 3 .. First'Last) = ".ldn")
+                 then "; name the command first: refine "
+                 else "; refine help lists the commands; if " & First
+                   & " is a source: refine ")
+              & C.Name (Suggested) & US.To_String (Written));
+         end;
+      elsif not Result.Explicit_Command and then Specific_Before then
+         Refuse (Placed (C.Overview));
       end if;
       if Result.Quiet and then Result.Verbosity /= 0 then
          Refuse ("--quiet and --verbose cannot be combined");
@@ -1035,7 +1062,7 @@ package body Landin.Commands is
                   Finish_Run;
                end if;
             when C.Check | C.Compile | C.Format | C.Explain | C.Server =>
-               if Asked.Command = C.Compile and then not Asked.Legacy then
+               if Asked.Command = C.Compile then
                   declare
                      Has_Emit : Boolean := False;
                   begin
@@ -1173,112 +1200,6 @@ package body Landin.Commands is
         (Result, Asked.Style,
          US.To_String (Asked.Color) = "always"
          or else (US.To_String (Asked.Color) = "auto" and Terminal_Color));
-      --  D526: bare `refine FILE` checked and wrote nothing, which a
-      --  reader looking for an executable is told, with how to make one.
-      if Asked.Legacy and then Asked.Command = C.Check
-        and then US.Length (Asked.Problem) = 0
-        and then not Asked.Wants_Help
-        and then Result.Status = Landin.Driver.Status_Success
-        and then not Asked.Quiet
-        and then Asked.Style not in Presentation.JSON
-        and then not Asked.Operands.Is_Empty
-      then
-         --  D731: the commands it names build what was checked, so they
-         --  repeat the options that chose it, and offer only what the
-         --  target can do: `run` for a hosted target, and for firmware a
-         --  `compile` that names its entry.  What the line says depends on
-         --  the request alone, and never on the host it is made on.
-         declare
-            package Caps renames Landin.Targets.Capabilities;
-            use type Caps.Hosted_System;
-            Named : US.Unbounded_String;
-            Selection : US.Unbounded_String;
-            Target_Name : constant String := Effective (C.Target, "");
-            Firmware : Boolean := False;
-            Entry_Named : Boolean := False;
-            --  Whether the check wrote a report it was asked for.
-            Reported : constant Boolean :=
-              Effective (C.Build_Report, "") /= ""
-              or else Effective (C.Stage_Report, "") /= "";
-            --  A word as a POSIX shell reads it back.
-            function Shell_Word (Text : String) return String;
-            function Shell_Word (Text : String) return String is
-               Quoted : US.Unbounded_String :=
-                 US.To_Unbounded_String ("'");
-            begin
-               if Text /= "" and then
-                 (for all Letter of Text =>
-                    Letter in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9'
-                      | '_' | '.' | '/' | '=' | ':' | ',' | '+' | '@'
-                      | '%' | '-')
-               then
-                  return Text;
-               end if;
-               for Letter of Text loop
-                  if Letter = ''' then
-                     US.Append (Quoted, "'\''");
-                  else
-                     US.Append (Quoted, Letter);
-                  end if;
-               end loop;
-               return US.To_String (Quoted) & "'";
-            end Shell_Word;
-         begin
-            if Target_Name /= ""
-              and then Landin.Targets.Selection.Is_Described (Target_Name)
-            then
-               Firmware := Caps.Hosted_System_Of
-                 (Landin.Targets.Selection.Described (Target_Name))
-                 = Caps.No_Hosted_System;
-            end if;
-            --  The options that say what program is built and how; a
-            --  report the check wrote is not written again.
-            for Text of Asked.Forwarded loop
-               for Flag in C.Option loop
-                  if Flag in C.Target .. C.Specialize | C.Link
-                    | C.Firmware_Entry | C.Firmware_Layout
-                    and then Text'Length > C.Name (Flag)'Length
-                    and then Text (Text'First
-                      .. Text'First + C.Name (Flag)'Length) = C.Name (Flag)
-                        & "="
-                  then
-                     US.Append (Selection, Shell_Word (Text) & " ");
-                     Entry_Named := Entry_Named
-                       or else Flag = C.Firmware_Entry;
-                  end if;
-               end loop;
-            end loop;
-            if Firmware and then not Entry_Named then
-               US.Append (Selection, "--firmware-entry=NAME ");
-            end if;
-            for Text of Asked.Operands loop
-               US.Append (Named,
-                 (if US.Length (Named) = 0 then "" else " ")
-                 & Shell_Word (Text));
-            end loop;
-            --  A module with no entry is not a program either command
-            --  would build, so the line says what makes it one instead.
-            if Result.Without_Entry then
-               US.Append (Result.Report, "refine: checked "
-                 & US.To_String (Named) & " as a module and wrote "
-                 & (if Reported then "no program" else "nothing")
-                 & "; a program to run or build needs `"
-                 & Landin.Backend.Entry_Point.Required_Shape & "`" & LF);
-               return Result;
-            end if;
-            US.Append (Result.Report, "refine: checked "
-              & US.To_String (Named) & " and wrote "
-              & (if Reported then "no program; " else "nothing; ")
-              & (if not Firmware
-                 then "run it with `refine run " & US.To_String (Selection)
-                   & US.To_String (Named) & "`, or build"
-                 else "build")
-              & " it with `refine compile " & US.To_String (Selection)
-              & US.To_String (Named) & " -o "
-              & Shell_Word (Program_Name (Asked.Operands.First_Element))
-              & "`" & LF);
-         end;
-      end if;
       return Result;
    end Execute;
 

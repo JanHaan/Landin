@@ -320,7 +320,7 @@ objects cannot redirect a lexical scope to another object's range list.
 
 ## Native source debugging
 
-`refine --target=darwin-arm64 --debug=full --emit=exe program.ldn -o program`
+`refine compile --target=darwin-arm64 --debug=full program.ldn -o program`
 produces `program.s`, `program.o`, `program`, `program.dSYM` and
 `program.sources.json`. Apple Clang receives `-gdwarf-4 -x assembler` and
 `-save-temps=obj`; explicit assembler input prevents preprocessing from
@@ -459,7 +459,7 @@ and [LLDB scripting](https://lldb.llvm.org/use/tutorials/script-driven-debugging
 
 ## Cortex source debugging
 
-`refine --target=cortex-m0 --firmware-entry=start --emit=exe --debug=lines`
+`refine compile --target=cortex-m0 --firmware-entry=start --debug=lines`
 adds DWARF 4 line tables, source function identities, ordinary-frame CFI
 and each module binding with its type (D1291).
 The pinned Linux-hosted GDB 16.3 connects to the QEMU microbit CPU lane, or
@@ -651,8 +651,8 @@ backend.
 little endian and base AAPCS32 soft-float identity. A device description
 with a float unit, a Cortex-M7's `compiler.float_unit("fpv5-d16")`, makes the
 build hard-float at `armv7e-m` with AAPCS32's VFP variant (D615, D616),
-below. `refine --target=cortex-m0`
-checks source and emits ARMv6-M assembly at the default `armv6-m` level;
+below. `refine compile --target=cortex-m0 --emit=asm`
+emits ARMv6-M assembly at the default `armv6-m` level;
 selecting `armv7-m`, `armv7e-m` or `armv8-m.main` permits instructions from that higher level
 while retaining the same layout and ABI. The toolchain identity is
 `arm-eabi`, the pinned GNAT arm-elf archive's; with no `--toolchain`, a

@@ -14,7 +14,7 @@ Standard library only, so `check.py` and the site build can import it.
 
     meta = fixture_meta.read(directory)        # strict: FixtureError
     meta.get("program"), meta.targets, meta.status
-    meta.source_arguments(base)                # what `refine` is run with
+    meta.verdict_arguments(base)               # what `refine` is run with
     meta.program_arguments(base, shared)       # what the program is run with
     meta.levels_for("linux-arm64")             # the lane's own levels
     for meta in fixture_meta.discover(): ...
@@ -31,6 +31,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE / "fixtures"
 NAME = "fixture.meta"
+
+#  `refine`'s commands, as `Landin.Commands.Catalogue.Name` spells them.
+COMMANDS = ("check", "compile", "run", "fmt", "svd", "bindings", "explain",
+            "site", "lsp", "version", "targets", "completion", "help")
 
 #  Ordered as `Landin.Testing.Fixtures.Fixture_Class`, which is the order a
 #  run reports them in.
@@ -421,7 +425,8 @@ class Metadata(dict):
                 + [_below(base, one) for one in self.with_sources])
 
     def source_arguments(self, base):
-        """What `refine` is run with for this fixture's verdict: a rooted
+        """What follows the command `refine` is run with for this fixture's
+        verdict (`verdict_arguments` adds it): a rooted
         fixture's `args` and then its module; a recorded one's `args` as
         written, which name their files from `compiler/ada`; otherwise its
         program and `with` files.  Lanes add their own target."""
@@ -430,6 +435,17 @@ class Metadata(dict):
         if "args" in self:
             return self.args
         return self.module_arguments(base)
+
+    def verdict_arguments(self, base):
+        """What `refine` is run with for this fixture's verdict (D1464):
+        `source_arguments`, after `check` unless they begin with a command
+        of their own or `--version` or `--identify`, which name one.  `Landin.Testing.Fixtures.Verdict_Arguments` is the
+        same."""
+        given = self.source_arguments(base)
+        if given and (given[0] in COMMANDS
+                      or given[0] in ("--version", "--identify")):
+            return list(given)
+        return ["check", *given]
 
     def library_arguments(self, base):
         """The `-L DIR` pairs refine is given before the program, one for
@@ -764,7 +780,10 @@ def _whole(meta, cls, complain):
             has("root") and has("class") and cls == "negative"):
         complain("args without expect: nothing would be compared")
     if has("args") and has("root"):
-        for word in meta["args"].split(" "):
+        for position, word in enumerate(meta["args"].split(" ")):
+            #  The first word may name the command (D1464).
+            if position == 0 and word in COMMANDS:
+                continue
             if word and (not word.startswith("-")
                          or word.startswith("--root=")):
                 complain("a rooted fixture's args are the options refine"

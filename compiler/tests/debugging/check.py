@@ -1554,10 +1554,10 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     target = "--target=" + LANE["target"]
     toolchain = ([f"--toolchain={tools['gcc']}"]
                  if tools.get("gcc") else [])
-    compiler_args = [str(refine), target, "--debug=full",
+    compiler_args = [str(refine), "compile", target, "--debug=full",
                      *inputs, "--emit=exe", "-o", str(executable),
                      *profile_args, f"--build-report={report}", *toolchain]
-    assembly_args = [str(refine), target, "--debug=full",
+    assembly_args = [str(refine), "compile", target, "--debug=full",
                      *inputs, "--emit=asm", "-o", str(assembly),
                      *profile_args]
     # The rooted client takes over two minutes to compile even natively;
@@ -1761,7 +1761,7 @@ def measure_registers(refine: Path, tools: dict[str, str], gdb: str,
     executable = scratch / f"debug-{key}"
     toolchain = ([f"--toolchain={tools['gcc']}"]
                  if tools.get("gcc") else [])
-    compiler_args = [str(refine), "--target=" + LANE["target"],
+    compiler_args = [str(refine), "compile", "--target=" + LANE["target"],
                      "--debug=full", os.path.relpath(REGISTER_SOURCE, ROOT),
                      "--emit=exe", "-o", str(executable),
                      f"--optimize={optimize}", f"--specialize={specialize}",
@@ -1808,7 +1808,7 @@ def measure_switch(refine: Path, tools: dict[str, str], gdb: str,
     executable = scratch / f"debug-{key}"
     toolchain = ([f"--toolchain={tools['gcc']}"]
                  if tools.get("gcc") else [])
-    compiler_args = [str(refine), "--target=" + LANE["target"],
+    compiler_args = [str(refine), "compile", "--target=" + LANE["target"],
                      "--debug=full", os.path.relpath(switch_frames.FIXTURE, ROOT),
                      "--root=.", "--emit=exe", "-o", str(executable),
                      f"--optimize={optimize}", f"--specialize={specialize}",

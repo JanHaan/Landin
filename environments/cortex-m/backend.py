@@ -1143,7 +1143,7 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
     assembly = run.out / 'program.s'
     try:
-        run.command('compile', [refine, *lane_inputs(level, inputs), '--target=' + target(level),
+        run.command('compile', [refine, 'compile', *lane_inputs(level, inputs), '--target=' + target(level),
                     *selected, '--emit=asm',
                     '--optimize=' + optimize, '--specialize=' + specialize,
                     '-o', assembly, '--build-report=' + str(run.out / 'build.json')],

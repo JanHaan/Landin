@@ -1,1 +1,0 @@
-refine: checked ../tests/fixtures/positive/library-platform-riscv-hazard3 and wrote nothing; build it with `refine compile --target=rv32 --level=rv32imac --root=../tests/fixtures/positive/library-platform-riscv-hazard3/../../../../.. --firmware-entry=NAME ../tests/fixtures/positive/library-platform-riscv-hazard3 -o library-platform-riscv-hazard3`

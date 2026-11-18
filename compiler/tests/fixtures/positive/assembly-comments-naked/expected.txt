@@ -1,1 +1,0 @@
-refine: checked ../tests/fixtures/positive/assembly-comments-naked/program.ldn and wrote nothing; build it with `refine compile --target=cortex-m0 --firmware-entry=NAME ../tests/fixtures/positive/assembly-comments-naked/program.ldn -o program`

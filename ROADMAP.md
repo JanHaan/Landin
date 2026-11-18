@@ -672,7 +672,7 @@ edge is cut first (D1386). On Q-11's condition `refine` refuses an
 incompatible `refine-NAME`, judged by a description each prints and, for a
 shipped one, its source digest (D1387). R18.20 measures `Source_Maps` too,
 R18.50 takes the check and the forwarding, and R18.60 is the split
-`refine-dap`; SR-1277, SR-1196 and SR-1224 with SR-1275 are scheduled on
+`refine-dap`; `SR-1277`, SR-1196 and SR-1224 with SR-1275 are scheduled on
 R18.40, R18.50 and R18.70. Found on the way: the cut shrinks no executable
 shipped today, since `fmt`, `explain` and `version` stay inside `refine`;
 it matters for `refine-dap`, which reaches `Driver.Library` through
@@ -743,7 +743,7 @@ compiler is not built from.
 
 ### R18.40 — Retire the bare-source form
 
-Status: planned
+Status: complete
 Depends on: R18.10
 
 `refine NAME` with an unknown NAME is read today as `refine check NAME`.
@@ -752,10 +752,21 @@ name a command. A break of its own, promoted on its own, not held for
 R19's window. Every command line `refine` prints for its reader is read
 again with it, the closing hint "run it with `refine run ...`" included,
 which a recorded report holds with the recording host's target
-(SR-1277).
+(`SR-1277`).
 Exit evidence: the refusal and its explanation in the catalogue; every
 fixture, script and document that used the form rewritten; no recorded
 report holds a line that depends on the recording host.
+Done: a request with an operand and no command is refused with L0002,
+status 2, writing the request again after `check` or after the command
+its options belong to, and a first word that is neither a source nor a
+path is told that `refine help` lists the commands (D1463). The closing
+line went with the form, so `SR-1277` is settled: the 24 reports that
+held it are re-recorded and none names a target its fixture does not. A
+fixture's `args` are `check`'s unless they name a command (D1464); the
+test program, every lane, script and the release smoke test, and the
+documents name their command. Found on the way: parallel compiles into
+one directory refuse each other with L0005 (SR-1343); `SR-1287` fixed
+at [1230].
 
 ### R18.50 — The dispatcher
 

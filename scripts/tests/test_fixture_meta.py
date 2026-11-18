@@ -70,6 +70,7 @@ def field(meta, key):
         "codes-normalized": lambda: ", ".join(meta.codes),
         "module-arguments": lambda: " ".join(meta.module_arguments(base)),
         "source-arguments": lambda: " ".join(meta.source_arguments(base)),
+        "verdict-arguments": lambda: " ".join(meta.verdict_arguments(base)),
         "program-arguments": lambda: " ".join(meta.program_arguments(base)),
     }
     if key in rendered:

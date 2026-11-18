@@ -144,7 +144,7 @@ def one(job):
     scratch.mkdir()
     asm, obj = scratch / "out.s", scratch / "out.o"
     emitted = subprocess.run(
-        [str(refine), "--target=" + target]
+        [str(refine), "compile", "--target=" + target]
         + (["--level=" + level] if level else [])
         + ["--optimize=" + optimize, "--specialize=" + specialize,
            "--emit=asm", "-o", str(asm)] + sources,

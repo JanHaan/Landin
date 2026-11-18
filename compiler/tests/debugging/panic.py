@@ -109,7 +109,7 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
         if profile and profile != key:
             continue
         executable = output / key
-        run(key+'-compile', [refine, '--root=.', '--target='+target,
+        run(key+'-compile', [refine, 'compile', '--root=.', '--target='+target,
             '--debug=full', '--panic-map', '--emit=exe', '--optimize='+opt,
             '--specialize='+specialize,
             *(['--toolchain='+str(toolchain)] if toolchain else []),

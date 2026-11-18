@@ -81,7 +81,7 @@ def measure(refine, output, capture, tools, selected=None, profile=None):
             key = workload + '-' + suffix
             print('Darwin debugger:', key, flush=True)
             executable = output / key
-            run(key + '-compile', [refine.resolve(), str(fixture.relative_to(shared.ROOT)), '--root=.',
+            run(key + '-compile', [refine.resolve(), 'compile', str(fixture.relative_to(shared.ROOT)), '--root=.',
                 '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', executable,
                 '--optimize=' + opt, '--specialize=' + spec,
                 '--build-report=' + str(executable) + '.report.json'], timeout=900)
