@@ -770,7 +770,7 @@ at [1230].
 
 ### R18.50 — The dispatcher
 
-Status: active
+Status: complete
 Depends on: R18.40
 
 `refine NAME` runs a built-in command; else, for a split command it was
@@ -792,6 +792,33 @@ a shipped command of another digest, one without a description and a
 contributed one claiming `L` each refused; a contributed test tool found
 on PATH and its code forwarded in a native case; the archive and flake
 carry `libexec/landin`.
+Done: `refine NAME` dispatches its first word alone when it could name
+a command and names no built-in one, and passes every word after it as
+written (D1484). A split command is looked for at
+`libexec/landin/refine-NAME` under the executable's prefix and nowhere
+else, refused with L0694 when missing; any other name is the first
+`refine-NAME` on PATH. Each is asked `--describe` within ten seconds and
+refused with L0695 when its answer does not hold (D1387), and runs with
+`LANDIN_REFINE` naming the refine that dispatched it (D1486). `--describe`,
+`--help` and `--complete` are a split's whole contract (D1485): help lists
+external commands under their own heading and `refine help NAME` runs the
+command's own help (D1488), the bash, zsh and fish scripts hand an
+external command's words to it, and `refine explain` forwards a code of
+another prefix to the one contributed command claiming it (D1385).
+`refine version` names the citations file and whether it can be read and
+each split command (D1487), settling `SR-1196`. One list,
+`compiler/ada/split-commands.json`, names the split commands; the digest's
+inputs, the generated built-with list, `build.sh`, `package.sh`, the
+flake, the release smoke test and `check.py` read it, and a case holds
+that editing a split's own source changes the digest (D1483). It is
+empty: the archive and the flake carry an empty `libexec/landin` until
+R18.60 and R18.70 add to it. Lockstep is worded without the implementation
+language, D1383 and D1385 amended, on the maintainer's answer of
+2026-11-18, and Q-19 is answered. Pinned by the commands suite's `the
+dispatcher` on the fake host and `scripts/tests/test_cli_native.py`'s
+contributed tool on PATH. Found on the way: `item.py run` runs only in the
+item's worktree (SR-1353), and `unit_closure.py --cut` reports closures no
+link can have (SR-1354, scheduled on R18.70).
 
 ### R18.60 — `refine dap`
 

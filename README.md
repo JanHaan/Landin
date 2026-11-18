@@ -333,7 +333,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Current roadmap work: R18.50 — The dispatcher.**
+**Next roadmap item: R18.60 — `refine dap` (planned).**
 
 ## Questions, bugs and ideas
 

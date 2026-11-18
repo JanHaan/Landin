@@ -266,7 +266,7 @@ names. The register is one file a row under `roadmap/register/`, and roadmap
 identities are cited in `ROADMAP.md` and the files under `roadmap/` and
 nowhere else.
 
-**Current roadmap work: R18.50 — The dispatcher.**
+**Next roadmap item: R18.60 — `refine dap` (planned).**
 
 ## Versions
 
