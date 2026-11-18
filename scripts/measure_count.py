@@ -252,7 +252,7 @@ def read_count(out: Path) -> dict:
 #  land where they landed last time: without it QEMU places them where the
 #  host's kernel does, and a run whose heap came out differently aligned
 #  executed another 7,200 instructions of mandelbrot's 159 million, once
-#  in about fifty runs (R16.10's demonstration stream); with it 240 runs
+#  in about fifty runs; with it 240 runs
 #  of 240 counted the same.  A command-line option, so the guest's
 #  environment stays QEMU_CPU alone.
 RESERVED = ["-R", "0x8000000000"]
