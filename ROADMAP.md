@@ -608,9 +608,13 @@ Depends on: R18.10
 `refine NAME` with an unknown NAME is read today as `refine check NAME`.
 That form is refused, naming `refine check NAME`, so an unknown NAME can
 name a command. A break of its own, promoted on its own, not held for
-R19's window.
+R19's window. Every command line `refine` prints for its reader is read
+again with it, the closing hint "run it with `refine run ...`" included,
+which a recorded report holds with the recording host's target
+(SR-1277).
 Exit evidence: the refusal and its explanation in the catalogue; every
-fixture, script and document that used the form rewritten.
+fixture, script and document that used the form rewritten; no recorded
+report holds a line that depends on the recording host.
 
 ### R18.50 — The dispatcher
 
@@ -621,8 +625,11 @@ Depends on: R18.40
 beside the executable, found through `Landin.Platform` as the library is,
 else `refine-NAME` on PATH. Help lists external commands under their own
 heading; completion delegates to `refine-NAME --complete`; `refine
-explain` forwards a contributed tool's code to it. The release archive,
-the flake and the release smoke test ship and run every split command.
+explain` forwards a contributed tool's code to it. `refine version`
+describes the installation it runs from: the split commands it finds, and
+the `citations.txt` `refine explain` reads and whether it can (SR-1196).
+The release archive, the flake and the release smoke test ship and run
+every split command.
 Exit evidence: the dispatch order pinned by fake-filesystem driver cases;
 a contributed test tool found on PATH in a native case; the archive and
 flake carry `libexec/landin`.
@@ -647,7 +654,10 @@ Depends on: R18.50
 `svd`, `bindings` and `site` become `refine-svd`, `refine-bindings` and
 `refine-site`, each in lockstep with the compiler's library and each
 keeping its suites and its black-box "destroys nothing" and determinism
-controls.
+controls. Those controls take the command they test as an argument, so the
+lanes' shared `--refine` becomes one helper (SR-1224), and
+`compiler/tests/test_compile_publication.py` reports every selected
+control's failure rather than the first (SR-1275).
 Exit evidence: each split linked without the front end; its suites, and
 every invocation of the old form, pass through the dispatcher.
 
