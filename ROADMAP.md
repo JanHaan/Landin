@@ -290,32 +290,16 @@ Status: active
 Depends on: R16.10
 
 Keep values in registers where R16.10's ranked costs show stack traffic
-leading, backend by backend: arm64's remaining stack homes and x86-64's
-remaining cases; Cortex-M, which keeps every value in a stack home and
-selects only through r0 to r7 at every level;
-RISC-V, which keeps every value in a stack home at RV64 and RV32; and Xtensa,
-whose backend writes RISC-V-form words that its machine layer keeps in memory
-(`docs/targets.md`), where this item either selects natively from the IR or
-records why Xtensa is left out. Whether one allocator over `Landin.IR.Liveness`
-serves every backend is decided first, and R551-16's shared backend code is
-split where this work meets it. The other costs the ranked list puts first,
-among them the bounds check an indexed increment keeps and the atomic and
-barrier lowering R551-12 records as baseline, are taken here or recorded with
-their measurement. This takes on R551-12, SR-581, SR-582, SR-584 and SR-1024,
-and SR-1178, a test of the Xtensa outgoing area D1110 counts; SR-596's
-float selection and SR-869's short `u64` routines on armv6-m with
-Cortex-M's allocation, and with it SR-231's atom `match` arms, SR-996's
-counterpart against 32 KiB, SR-577's float saves beside an assembly block
-and SR-583's Thumb-2 bitfield forms; SR-1268's SipHash round state with
-x86-64's remaining cases. R16.10's ranked list (`compiler/tests/measure/findings.md`)
-orders the work by measured gain: arm64's existing allocator at `size`,
-RV64's near jumps within a routine and then its allocation, Cortex-M's
-stack homes addressed from `sp` and then allocation through r0 to r7,
-then RV32 and Xtensa.
-Where it meets the backends' shared code it answers R551-16's activation and
-splits that code; the row stays open for the stage closures. Where it is the
-sensible cut, a backend is split off as a continuous item of its own and
-takes that backend's rows with it.
+leading. R16.10's ranked list (`compiler/tests/measure/findings.md`) orders
+the work by measured gain: arm64's existing allocator at `size`, RV64's near
+jumps within a routine and then its allocation, Cortex-M's stack homes
+addressed from `sp` and then allocation through r0 to r7, then RV32 and
+Xtensa. Whether one allocator over `Landin.IR.Liveness` serves every backend
+is decided first. This item then takes the two costs that change no
+firmware image: arm64's allocator at `size`, on Linux, Darwin and FreeBSD
+alike, and RV64's near jumps. The rest is split by backend into R16.21 to
+R16.24, each with its backend's rows, so that the board records are made
+again only by the items that change a firmware image.
 
 Exit evidence: a direct test of `Landin.IR.Liveness`'s intervals, its
 conservative whole-routine fallback included, before any allocator change that
@@ -324,10 +308,91 @@ combinations against their matching R16.10 baselines, with unchanged behavior,
 ABI and debugger evidence. Every supported combination remains under the same
 size and time regression gate, including unaffected levels and profiles.
 
+### R16.21 — RISC-V register allocation
+
+Status: planned
+Depends on: R16.10
+
+RV64 and RV32 keep every value in a stack home: R16.10 measured a report
+share of 37.8% at rv64gc and 53.9% at rv32imc, speed-auto, and RV64
+executing five to seven times arm64's instructions on the same runs. Keep
+their values in registers over `Landin.IR.Liveness`, as D1403 has each
+backend place its own, and with them RV32's 64-bit values, copied through a
+scratch home pair before every store to their own home. Its placement is the
+first written since D1403: where it agrees with arm64's it is shared rather
+than written again, which answers R551-16's activation for the backends'
+shared code, and the row stays open for the stage closures. RV32 changes the
+firmware images of three boards, whose records are made again.
+
+Exit evidence: RV64's instructions and both targets' sizes measured lower
+than their R16.10 baselines, RV32's cycles on the boards no slower, with
+unchanged behavior, ABI and debugger evidence and the board records made
+again.
+
+### R16.22 — Cortex-M register allocation
+
+Status: planned
+Depends on: R16.10
+
+Cortex-M keeps every value in a stack home and forms each home's address in
+r6 first: at armv6-m speed-auto 35.2% of the firmware set's instructions are
+stack loads and stores and 30.5% form their addresses, and the Thumb-2
+levels select Thumb-1. First the homes are addressed from `sp` directly,
+then values are allocated through r0 to r7, then at the Thumb-2 levels the
+high registers and Thumb-2's forms. This takes on SR-581, SR-582, SR-583
+and SR-584 at the Thumb-2 levels; SR-596's float selection in VFP
+registers, measured on `runtime/firmware-mandelbrot` with the AN500
+description; SR-869's short `u64` routines on armv6-m; SR-231's atom `match`
+arms; SR-996's counterpart against 32 KiB; SR-577's float saves beside an
+assembly block; and SR-586's local labels, since every Cortex-M board record
+is made again here once.
+
+Exit evidence: the firmware set's size and instructions measured lower than
+their R16.10 baselines at every level, the cycles on the boards no slower,
+with unchanged behavior, ABI and debugger evidence and the board records
+made again.
+
+### R16.23 — Xtensa selection
+
+Status: planned
+Depends on: R16.10
+
+Xtensa's backend writes RISC-V-form words that its machine layer keeps in
+memory (`docs/targets.md`): 414 of the firmware mandelbrot's 545
+instructions in `in_set` are `l32i` and `s32i` through the frame, and the
+report share is 53.5% at xtensa-esp32. An allocator over the RISC-V form
+does not remove that class. This item either selects natively from the IR,
+placing values as D1403 says, or records why Xtensa is left out. It takes on
+SR-1024's frame budget, SR-1178's test of the outgoing area D1110 counts and
+SR-1302's boot layout of the reference description.
+
+Exit evidence: the ESP32 and ESP32-S3 images measured smaller than their
+R16.10 baselines and their cycles no slower, with unchanged behavior and the
+board records made again; or the reason Xtensa is left out recorded with its
+measurement.
+
+### R16.24 — The hosted backends' remaining costs
+
+Status: planned
+Depends on: R16.10
+
+R16.10 ranked x86-64's costs as mostly not register allocation's: floats
+moved through a stack slot inside loops and constants rebuilt in each
+iteration, a loop's shape and the bounds check an indexed increment keeps,
+`size` giving up the hot loops' registers, and the allocators' treatment of
+a routine with an assembly block, which on x86-64 takes no caller-saved
+register and whole-routine spans and on arm64 no slot in a register. This
+takes on SR-1268's SipHash round state and R551-12, whose atomic and barrier
+lowering is taken or recorded with its measurement.
+
+Exit evidence: each cost taken measured lower against its R16.10 baseline,
+with unchanged behavior, ABI and debugger evidence.
+
 ### The continuous items
 
-Numbered on from R16.20, each is added here when it is taken up, with its
-own status and a dependency on R16.10. Each takes one cost from R16.10's
+Numbered on from R16.20, each is added when it is taken up, or planned when
+an item splits it off as R16.20 split R16.21 to R16.24, with its own status
+and a dependency on R16.10. Each takes one cost from R16.10's
 ranked list, a further backend's register allocation among them.
 Exit evidence: the cost measured lower against its R16.10 baseline, and no
 other combination over its own.

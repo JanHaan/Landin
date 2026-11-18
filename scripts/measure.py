@@ -249,7 +249,7 @@ def sources(arguments: list[str]) -> list[str]:
     return named
 
 
-def build(refine, target, level, profile, workload, out, toolchain):
+def build(refine, target, level, profile, workload, out, toolchain, library=None):
     fixture = ROOT / "compiler/tests/fixtures" / workload["fixture"]
     meta = fixture_meta.read(fixture)
     image = out / f"{target}-{level}-{profile[0]}-{profile[1]}-{workload['name']}"
@@ -257,6 +257,7 @@ def build(refine, target, level, profile, workload, out, toolchain):
     command = [str(refine), "compile", f"--target={target}", f"--level={level}",
                f"--optimize={profile[0]}", f"--specialize={profile[1]}",
                *firmware, *(["--toolchain=" + toolchain] if toolchain else []),
+               *([f"--library={library}"] if library else []),
                *meta.library_arguments(fixture),
                *(sources(meta.source_arguments(fixture)) + entry(target, level)
                  if firmware else meta.source_arguments(fixture)),

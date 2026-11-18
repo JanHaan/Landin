@@ -24625,6 +24625,37 @@ stack depth at every instruction and is left to a later item.
 inside a profile's 1 MiB regions are JAL's own and whose saves are
 sp-relative, and by the RV32 lanes' corpus fitting the reference's 32 KiB.
 
+### D1405 — RV64 jumps near within a routine whose text is provably within JAL's reach
+
+**The tour said** nothing. D678 gave RV32's firmware near jumps from its
+profile's bounded regions; RV64's text has no such bound, so every jump in a
+routine was `lla x26` and `jr x26` and every branch its inverse around them,
+21.8% of RV64's instructions at `speed` in the measurement of generated
+code (`compiler/tests/measure/findings.md`).
+
+**Chosen:** a routine's jumps never leave it, and each routine is a section
+of its own, so at XLEN 64 a routine's jump is `j` and its branch is written
+as itself, which GNU as lengthens past 4 KiB with a JAL around it, when the
+routine holds no assembly block and its lines assemble to less than 1 MiB,
+each counted at the most it can assemble to: a `li` at 32 bytes, its whole
+64-bit expansion, any other instruction at 8, an alignment at its padding,
+labels and debugging directives at nothing, and any other directive as
+unbounded. Otherwise the routine keeps the far form. A near routine neither
+saves, restores nor describes x26, whose home stays in the frame, so frames
+and stack reports are unchanged. RV32 and Xtensa emit the same bytes as
+before. Over the seven hosted workloads RV64's `.text` falls 19.9% at
+`speed` and 19.4% at `size`, and under QEMU mandelbrot 2000 executes 14.32
+G instructions where it executed 15.83 G, fannkuch-redux 10 11.31 G where it
+executed 12.70 G.
+
+**The alternatives:** the fixed far form, the measured cost; emitting each
+routine twice, near and then far when the near form fails; and a limit the
+tests could lower, which would ship a knob only a test turns. A jump past 1
+MiB the bound missed fails the link with `relocation truncated to fit`, so
+an error in the bound cannot pass silently.
+
+**Pinned by** `backend/RV64 jumps are near within a routine`.
+
 ### D679 — No RISC-V epilogue reads below the stack pointer
 
 **The tour said** nothing; [1990] says an exception stacks its frame on the
@@ -25994,6 +26025,63 @@ interval to every figure.
 
 **Pinned by** `scripts/tests/test_board_timing.py` and
 `compiler/tests/measure/noise/cycles.json`.
+
+### D1403 — Each backend places its own values over one liveness analysis
+
+**The tour said** nothing; D211 leaves where a value lives to the
+optimizer.
+
+**Chosen:** `Landin.IR.Liveness` is the one analysis every allocating
+backend reads: each slot's live interval in the order the backends lay a
+routine out, with the whole routine as its conservative fallback, and each
+block's loop depth. Placement stays each backend's own. Which registers a
+value may take at a position depends on what selection writes there, and
+the two allocators that exist differ exactly in that: x86-64's asks of each
+operation which caller-saved registers selection writes in it, while
+arm64's knows only that a call or an assembly block overwrites x0-x7 and
+d18-d31. What a save costs, which registers carry arguments and which
+scratch registers selection keeps differ as well. One allocator would carry
+all of that as parameters and decide nothing itself. The RISC-V allocation,
+the next to be written, shares arm64's placement where the two agree rather
+than writing it again; Cortex-M's low and high registers and Xtensa's
+native selection are placed by their own work.
+
+**The alternatives:** one allocator over a register description for every
+backend, which would first have had to describe each selection's scratch
+use per operation, and would have put the cheapest measured gains, arm64's
+allocator at `size` and RV64's near jumps, behind a rewrite of two
+allocators that work; and, for Xtensa, an allocator over the RISC-V form,
+which leaves its machine layer's loads and stores of every logical word in
+place.
+
+**Pinned by** `ir opt/slot intervals`, `ir opt/slot interval fallback` and
+`ir opt/loop depths`.
+
+### D1404 — arm64 keeps values in registers at `size`
+
+**The tour said** nothing. arm64's allocator placed slots and values in
+registers at `speed` alone; `size` reused scalar homes, and the measurement
+of generated code (`compiler/tests/measure/findings.md`) found its `.text`
+at 1.71 times `speed`'s and its executed instructions at 2.2 to 3.7 times.
+
+**Chosen:** `size` runs the allocator as `speed` does, with two
+differences, both x86-64's at `size`: a slot's references are counted once
+each rather than weighted by the loops around them, and a source variable
+given a register holds it for the whole routine, while the single-block
+spans go to compiler temporaries alone, so that a debugger finds every
+variable anywhere in its routine. A routine with an assembly block still
+keeps its slots in their homes. Over the seven hosted workloads `.text` at
+armv8-a `size` falls from 497,380 to 327,272 bytes, and under QEMU the
+instructions executed at `size` fall to 0.30 of what they were for
+mandelbrot 200, 0.37 for fannkuch-redux 8, 0.38 for fasta 250,000 and 0.66
+for binary-trees 12; `speed` is unchanged.
+
+**The alternatives:** homes at `size`, the measured cost above; and
+`speed`'s intervals for source variables at `size`, which saves a few more
+registers and loses variables from the debugger outside their intervals.
+
+**Pinned by** `arm64 selection/size keeps a loop in registers`, `backend/arm64
+scalar homes reuse and promote` and `compiler/tests/measure/baselines/`.
 
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 
