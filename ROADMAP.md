@@ -558,7 +558,7 @@ may regroup them.
 
 ### R18.10 — Decide the commands
 
-Status: active
+Status: complete
 Depends on: R17
 
 The maintainer answers the inventory's questions: lockstep linking of
@@ -572,6 +572,23 @@ not reopened. The output is each answer recorded as a decision in `spec.md`,
 the classification of every command as built in or split, and the items
 below confirmed or regrouped here.
 Exit evidence: the decisions in `spec.md`; this phase's items match them.
+Done: the maintainer answered Q-9 to Q-13 on 2026-11-18, each option 1,
+and `spec.md` records them as D1383-D1387. `check`, `compile`, `run`,
+`fmt`, `explain`, `lsp`, `version`, `help`, `completion` and `targets` stay
+built in; `svd`, `bindings`, `site` and the new `dap` are split commands in
+lockstep with the compiler's library (D1383). A shipped name is found
+beside `refine` alone and any other on PATH (D1384). A contributed tool is
+held to nothing and its codes never enter the catalogue; `refine explain`
+forwards a code to the one tool claiming its prefix (D1385). The loading
+edge is cut first (D1386). On Q-11's condition `refine` refuses an
+incompatible `refine-NAME`, judged by a description each prints and, for a
+shipped one, its source digest (D1387). R18.20 measures `Source_Maps` too,
+R18.50 takes the check and the forwarding, and R18.60 is the split
+`refine-dap`; SR-1277, SR-1196 and SR-1224 with SR-1275 are scheduled on
+R18.40, R18.50 and R18.70. Found on the way: the cut shrinks no executable
+shipped today, since `fmt`, `explain` and `version` stay inside `refine`;
+it matters for `refine-dap`, which reaches `Driver.Library` through
+`Source_Maps`.
 
 ### R18.20 — Cut the loading edge
 
@@ -579,10 +596,12 @@ Status: planned
 Depends on: R18.10
 
 `Driver.Library`'s body withs `Driver.Loading` for one path helper, which
-links the whole front end into `fmt`, `explain` and `version`. The helper
-moves below both, so each links what it uses.
+links the whole front end into `fmt`, `explain` and `version`, and into
+`Landin.Source_Maps`, which `refine-dap` reads. The helper moves below
+both, so each links what it uses (D1386).
 Exit evidence: the release text of `explain`, `version` and `fmt`
-measured before and after, near the inventory's 0.5, 0.6 and 1.9 MB.
+measured before and after, near the inventory's 0.5, 0.6 and 1.9 MB, and
+`Source_Maps`' closure without the front end.
 
 ### R18.30 — The docs agree with the tool
 
@@ -621,28 +640,37 @@ report holds a line that depends on the recording host.
 Status: planned
 Depends on: R18.40
 
-`refine NAME` runs a built-in command, else `libexec/landin/refine-NAME`
-beside the executable, found through `Landin.Platform` as the library is,
-else `refine-NAME` on PATH. Help lists external commands under their own
-heading; completion delegates to `refine-NAME --complete`; `refine
-explain` forwards a contributed tool's code to it. `refine version`
+`refine NAME` runs a built-in command; else, for a split command it was
+built with, `libexec/landin/refine-NAME` beside the executable, found
+through `Landin.Platform` as the library is, and nowhere else; else
+`refine-NAME` on PATH (D1384). It refuses an incompatible one, with a
+diagnostic that says what to do: each answers `refine-NAME --describe`,
+and a shipped one's source digest must be `refine`'s own (D1387). Help
+lists external commands under their own heading; completion delegates to
+`refine-NAME --complete`; `refine explain` forwards a code outside the
+catalogue to the one contributed tool claiming its prefix, and refuses
+when none or several do (D1385). `refine version`
 describes the installation it runs from: the split commands it finds, and
 the `citations.txt` `refine explain` reads and whether it can (SR-1196).
 The release archive, the flake and the release smoke test ship and run
 every split command.
 Exit evidence: the dispatch order pinned by fake-filesystem driver cases;
-a contributed test tool found on PATH in a native case; the archive and
-flake carry `libexec/landin`.
+a shipped command of another digest, one without a description and a
+contributed one claiming `L` each refused; a contributed test tool found
+on PATH and its code forwarded in a native case; the archive and flake
+carry `libexec/landin`.
 
 ### R18.60 — `refine dap`
 
 Status: planned
-Depends on: R18.50
+Depends on: R18.20, R18.50
 
 The first new command: a Debug Adapter Protocol server over the GDB and
-LLDB sessions the targets already script, written to the split's rules
-from its start. Built in unless R18.10 finds external the better fit.
-Exit evidence: scripted DAP sessions in the gate over GDB and LLDB, the
+LLDB sessions the targets already script, the split command `refine-dap`
+(D1383), in lockstep with the compiler's library, shipped in the archive
+and the flake and run as `refine dap`, written to the split's rules from
+its start.
+Exit evidence: `refine-dap` linked without the front end; scripted DAP sessions in the gate over GDB and LLDB, the
 debuggers the targets script today, on every hosted target the debugging
 suites run. A further debugger is its own adapter backend.
 

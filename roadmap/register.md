@@ -108,11 +108,6 @@ Open:
 | [Q-6 — Pay for more macOS runner time to shorten the gate?](questions/Q-6.md) | option 1, the free hosted runners and their five-job cap. | nothing; the gate runs at its present length meanwhile. |
 | [Q-7 — Emit the Darwin determinism manifests with the release compiler?](questions/Q-7.md) | option 1, the debug compiler on every host; nothing changes. | nothing; the gate keeps its present length meanwhile, and this answer and Q-6's together decide how far the macOS floor can fall. |
 | [Q-8 — May R17.40 close on its own run under the new scripts, leaving the start-to-finish run to R16.10?](questions/Q-8.md) | R17.40 is complete on its own run and the reopened session; the R17 gate stays unclaimed until R16.10 has run start to finish under the scripts. | nothing; R16.10 starts either way, and the R17 gate's claim waits for R16.10's run under either option. |
-| [Q-9 — Which commands leave `refine`, and do they link its library in lockstep?](questions/Q-9.md) | `check`, `compile`, `run`, `fmt`, `explain`, `version`, `help`, `completion` and `targets` stay built in; `svd`, `bindings` and `site` become `refine-svd`, `refine-bindings` and `refine-site`, linked in lockstep with the compiler's library and shipped in its archive and flake. | R18.10's close, whose exit evidence is the decision in `spec.md`; R18.70, written to this default, and the shipping half of R18.50. |
-| [Q-10 — Is `lsp` built in or split, and is the new `dap`?](questions/Q-10.md) | `lsp` stays built in, and `dap` is a split command, `refine-dap`, linked in lockstep and shipped in the archive and the flake. | R18.10's close, and R18.60's text, which is rewritten to the answer at that close. |
-| [Q-11 — How does `refine` find external commands, and how do help and completion list them?](questions/Q-11.md) | a built-in command wins, then `libexec/landin/refine-NAME` beside the executable, then `refine-NAME` on PATH; help lists the external ones under their own heading from a run-time scan, and completion asks `refine-NAME --complete`. | R18.10's close, and R18.50, written to this default. |
-| [Q-12 — What is a contributed `refine-NAME` held to, and whose diagnostics does it emit?](questions/Q-12.md) | option 1: contributed tools are released from every requirement and use their own code prefix, which `refine explain` forwards to `refine-NAME explain`; shipped split commands keep `L` codes and keep the destroys-nothing and determinism controls in the gate. | R18.10's close; R18.50's forwarding and R18.70's controls, written to this default. |
-| [Q-13 — Is cutting the `Driver.Library` to `Driver.Loading` edge R18's first step?](questions/Q-13.md) | R18.20 cuts the edge as R18's first item after this one, as R18 is written. | R18.10's close, and R18.20's place in R18. |
 
 Answered:
 
@@ -121,3 +116,8 @@ Answered:
 - [Q-3 — Retire proposals and limits no consumer asks for?](questions/Q-3.md)
 - [Q-4 — Retire small tool and test findings?](questions/Q-4.md)
 - [Q-5 — Should a fixed actual fold as an array length does?](questions/Q-5.md)
+- [Q-9 — Which commands leave `refine`, and do they link its library in lockstep?](questions/Q-9.md)
+- [Q-10 — Is `lsp` built in or split, and is the new `dap`?](questions/Q-10.md)
+- [Q-11 — How does `refine` find external commands, and how do help and completion list them?](questions/Q-11.md)
+- [Q-12 — What is a contributed `refine-NAME` held to, and whose diagnostics does it emit?](questions/Q-12.md)
+- [Q-13 — Is cutting the `Driver.Library` to `Driver.Loading` edge R18's first step?](questions/Q-13.md)

@@ -25995,6 +25995,58 @@ interval to every figure.
 **Pinned by** `scripts/tests/test_board_timing.py` and
 `compiler/tests/measure/noise/cycles.json`.
 
+### D1383 — `refine` keeps the compiler's commands and ships four of its tools beside it
+
+**The tour said** nothing; [what refine does today] listed thirteen commands of one executable.
+
+**Chosen:** `check`, `compile`, `run`, `fmt`, `explain`, `lsp`, `version`, `help`, `completion` and `targets` are built into `refine`. `svd`, `bindings`, `site` and the new Debug Adapter Protocol server `dap` are split commands: each its own executable `refine-NAME`, run as `refine NAME`, built from the same tree as `refine`, linking the same Ada library and released in the same archive and flake, so nothing between them is a versioned interface. `lsp` stays built in because it links every backend through the handler-fit check (D572), so a split `refine-lsp` would carry the compiler a second time and save `refine` nothing; `dap` needs only the source maps and the target facts, and keeps GDB and LLDB handling out of the compiler's executable. A tool from outside that wants more than D1387's description starts from the JSON `refine` already prints.
+
+**The alternatives:** a versioned JSON interface between `refine` and its own split commands from the start; keeping every existing command built in and splitting only new ones; `dap` built in; splitting `lsp`.
+
+**Pinned by** the split commands' native dispatch cases and the release smoke test, when they exist.
+
+### D1384 — An external command is found beside `refine` first, then on PATH
+
+**The tour said** nothing; an unknown `refine NAME` was read as `refine check NAME`.
+
+**Chosen:** `refine NAME` runs a built-in command if there is one. Else, when NAME is one of the split commands `refine` was built with (D1383), it runs `libexec/landin/refine-NAME` under the installation prefix, found through the host's executable directory as the library is (D275), and nothing else: a shipped name is never looked for on PATH, so another release's copy there cannot stand in for a missing one, and a missing copy is refused, saying the installation lacks it and to reinstall the release. Any other NAME is `refine-NAME` on PATH, a contributed command. No variable or file names another place. Before running either, `refine` checks it is compatible (D1387). `refine help` lists the external commands under a heading of their own, from a scan of both places when it runs and each one's own one-line summary; completion asks `refine-NAME --complete`.
+
+**The alternatives:** the installation's directory alone, which leaves a contributed tool to be run by its own name; PATH alone, which lets an unrelated `refine-NAME` shadow a shipped one; PATH as a fallback for a shipped name, which runs another release's copy when the installation lacks its own.
+
+**Pinned by** fake-filesystem driver cases of the dispatch order and a native case finding a test tool on PATH.
+
+### D1385 — A shipped command is held to the compiler's rules; a contributed one to none, and stays out of the catalogue
+
+**The tour said** nothing.
+
+**Chosen:** a split command shipped in the archive keeps every requirement a built-in command has: its diagnostics are `L` codes in the one catalogue, explained by `refine explain`, and its black-box "destroys nothing it did not create" and determinism controls run in the gate. A contributed `refine-NAME` is held to nothing but D1387's description. Its codes never enter the catalogue or `docs/diagnostics.md`, which hold `L` codes alone; it claims a prefix of its own, two to eight capital ASCII letters, so never `L`, and answers `refine-NAME explain CODE` itself.
+
+`refine explain CODE` explains a code in the catalogue as before, and calls an `L` code that is not there unknown. A code that is any other prefix followed by digits is forwarded. The prefix is the letters before the first digit, compared exactly. `refine` asks every compatible contributed command the scan of D1384 finds for the prefixes it claims (D1387). When exactly one claims it, `refine` runs `refine-NAME explain CODE` and passes its output and status through, after one line saying the explanation is `refine-NAME`'s, at its path, and not Landin's. When none claims it, the code is refused as unknown, naming the prefix and saying no installed command claims it. When several do, it is refused naming each with its path, and the user runs the one meant as `refine-NAME explain CODE`.
+
+**The alternatives:** `refine explain` explaining `L` codes alone; refusing to dispatch contributed tools at all; reserving catalogue ranges for them, which would make the closed catalogue open; mapping a prefix to a tool by its name, which would tie a tool's codes to its command's spelling and its renaming.
+
+**Pinned by** a native case forwarding a test tool's code, and cases of a prefix no tool claims and one two claim.
+
+### D1386 — The loading edge is cut before any command is split
+
+**The tour said** nothing.
+
+**Chosen:** `Driver.Library` stops withing `Driver.Loading`: the one path helper it took moves below both, so a unit that finds the library, `Landin.Source_Maps` among them, no longer links the front end. It is done before a split command links `Driver.Library`, and measured as the closures of `explain`, `version`, `fmt` and `Source_Maps`; the last is what `refine-dap` carries.
+
+**The alternatives:** cutting it with the first split that needs it, `dap`; not cutting it, since the built-in commands share one executable.
+
+**Pinned by** the measured closures.
+
+### D1387 — `refine` refuses a `refine-NAME` that is not compatible with it
+
+**The tour said** nothing.
+
+**Chosen:** before `refine` runs an external command, lists it in help or forwards a code to it, it runs `refine-NAME --describe` and reads one JSON object from its standard output: `format`, which is `landin-command-1`; `name`, which is NAME; `summary`, the line help shows; from a shipped command, `source_digest`; and `codes`, the list of prefixes the command claims. A shipped command is compatible when it answers in a format `refine` reads, names itself, claims no prefix, and its `source_digest` is `refine`'s own, the `Source_Digest` `refine version --json` reports (D1357): both were built from one tree. A contributed command is compatible when it answers in a format `refine` reads, names itself and claims no `L` prefix; its digest is not compared, since it was built from no tree of Landin's. Anything else, an answer that does not parse, a status other than 0, a wrong name or digest, an older or newer format, or no answer within ten seconds, is incompatible. `refine NAME` then refuses with an `L` code of its own, status 1, naming the path, what it asked and what came back, and what to do: for a shipped command, to reinstall the release, whose archive carries both, or to rebuild both from one checkout; for a contributed one, to update or remove it, or to run it by its own name. Help lists an incompatible command under its heading with the reason, and explain forwards to none. The query costs one extra process for each dispatch; nothing is cached, so a replaced tool is checked again.
+
+**The alternatives:** comparing release names, which a development build lacks, so two builds of one checkout would match whatever they hold; trusting what libexec holds, since one archive ships both, which an upgrade of one file or a build of `refine` alone breaks without a word; the tool checking its caller through an environment variable, which leaves the refusal to the tool it is meant to stop; and a cache of answers, which a replaced tool outlives.
+
+**Pinned by** fake-filesystem driver cases of a shipped command with another digest, a missing description and a contributed command claiming `L`, each refused.
+
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 
 **The tour said** nothing of a second family. Prototype 1 drives a UART
