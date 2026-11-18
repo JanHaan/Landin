@@ -1977,9 +1977,16 @@ package body Landin.Tests.Parser_Suite is
          --  Fixture arguments are whitespace-separated, as in the execution
          --  harness.  Keep emission and target flags: a valid source can be
          --  refused only when the driver is asked to produce an executable.
+         --  The driver's own request names no command: a fixture's
+         --  `args` that begin with `check` or `compile` (D1464) say it by
+         --  their options, `--emit` among them.
          for Index in Written'Range loop
             if Written (Index) in ' ' | ASCII.HT then
-               if Start < Index then
+               if Start < Index
+                 and then not (Start = Written'First
+                   and then Written (Start .. Index - 1)
+                     in "check" | "compile")
+               then
                   Made.Append (Written (Start .. Index - 1));
                end if;
                Start := Index + 1;
