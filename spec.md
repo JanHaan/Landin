@@ -26069,7 +26069,10 @@ differences, both x86-64's at `size`: a slot's references are counted once
 each rather than weighted by the loops around them, and a source variable
 given a register holds it for the whole routine, while the single-block
 spans go to compiler temporaries alone, so that a debugger finds every
-variable anywhere in its routine. A routine with an assembly block still
+variable anywhere in its routine. An integer narrower than the register
+holding it is described as the register's low bytes, a `DW_OP_piece` of
+its own size: the register holds it zero-extended, and LLDB on Darwin read
+an `i32` of -1 held whole as 4294967295. A routine with an assembly block still
 keeps its slots in their homes. Over the seven hosted workloads `.text` at
 armv8-a `size` falls from 497,380 to 327,272 bytes, and under QEMU the
 instructions executed at `size` fall to 0.30 of what they were for
@@ -26081,7 +26084,8 @@ for binary-trees 12; `speed` is unchanged.
 registers and loses variables from the debugger outside their intervals.
 
 **Pinned by** `arm64 selection/size keeps a loop in registers`, `backend/arm64
-scalar homes reuse and promote` and `compiler/tests/measure/baselines/`.
+scalar homes reuse and promote`, `debugging/arm64 narrow registers are
+pieces`, the Darwin LLDB sessions and `compiler/tests/measure/baselines/`.
 
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 

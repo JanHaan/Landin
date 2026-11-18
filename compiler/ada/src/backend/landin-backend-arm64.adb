@@ -273,9 +273,12 @@ package body Landin.Backend.Arm64 is
    --  order the routine's blocks are laid out: from the value From through
    --  the value Through, or from the entry when From is No_Value.  Both
    --  stay No_Value for a slot whose location holds everywhere.
+   --  Size is the slot's scalar size, which a debugger reads of its
+   --  register: a narrower integer is its register's low bytes.
    type Slot_Location is record
       Register : Natural := No_Register;
       From, Through : Landin.IR.Value_Id := Landin.IR.No_Value;
+      Size : Held_Size := Landin.Targets.Byte_8;
    end record;
    package Slot_Vectors is new Ada.Containers.Vectors
      (Positive, Slot_Location);
@@ -1216,6 +1219,14 @@ package body Landin.Backend.Arm64 is
             end;
          end loop;
       end;
+      for Index in 1 .. Slot_Count loop
+         if Result.Slots (Index).Register in Argument_Register | Saved_General
+         then
+            Result.Slots (Index).Size := Size_Of
+              (Landin.IR.Type_Of (Of_Unit, Item, Landin.IR.Slot_Id (Index)),
+               Facts);
+         end if;
+      end loop;
       return Result;
    end Allocate;
 
@@ -1337,10 +1348,22 @@ package body Landin.Backend.Arm64 is
                  else HT & ".byte 0x90" & LF & HT & ".uleb128 "
                    & Trimmed (Natural'Image (Register)) & LF);
       elsif Register /= No_Register then
+         --  A value narrower than its register is the register's low
+         --  bytes, a DW_OP_piece of them: LLDB on Darwin otherwise reads
+         --  a zero-extended i32 of -1 as 4294967295.
          if Indirect or else not Address_Only then
             return HT & ".byte " & Trimmed (Natural'Image
               ((if Indirect then 16#70# else 16#50#) + Register)) & LF
-              & (if Indirect then HT & ".sleb128 0" & LF else "");
+              & (if Indirect then HT & ".sleb128 0" & LF
+                 elsif Plan.Slots (Positive (Slot)).Size
+                   /= Landin.Targets.Byte_8
+                 then HT & ".byte 0x93" & LF & HT & ".uleb128 "
+                   & (case Plan.Slots (Positive (Slot)).Size is
+                        when Landin.Targets.Byte_1 => "1",
+                        when Landin.Targets.Byte_2 => "2",
+                        when Landin.Targets.Byte_4 => "4",
+                        when others => "8") & LF
+                 else "");
          end if;
          return "";
       end if;
