@@ -139,6 +139,10 @@ package Landin.Testing.Fakes is
    overriding function Executable_Directory
      (Host : Fake_Filesystem) return String;
 
+   --  The executable directory's `refine`, or "" when it is nowhere.
+   overriding function Executable_Path
+     (Host : Fake_Filesystem) return String;
+
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean;
 
@@ -377,6 +381,8 @@ package Landin.Testing.Fakes is
       --  Run_In_Environment's, and the environment it was given.
       Isolated  : Boolean := False;
       Environment : Landin.Platform.Path_List;
+      --  Run_Within's limit; zero for every other run.
+      Within    : Duration := 0.0;
    end record;
 
    function Call_At
@@ -418,6 +424,34 @@ package Landin.Testing.Fakes is
       Program   : String;
       Arguments : Landin.Platform.Path_List;
       Result    : out Landin.Platform.Program_Result);
+
+   --  Answers as Run does, and records the limit it was given.
+   overriding procedure Run_Within
+     (Host      : Fake_Tool_Runner;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Seconds   : Duration;
+      Result    : out Landin.Platform.Tool_Result;
+      Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
+
+   --  Answers as Run_Attached does, recorded as attached with its
+   --  Setting the one element of the call's Environment.
+   overriding procedure Run_Command
+     (Host      : Fake_Tool_Runner;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Setting   : String;
+      Result    : out Landin.Platform.Program_Result);
+
+   --  The search path's programs: each Add_Path_Program, a path, is found
+   --  by Programs_On_Path when its last name begins with the prefix, the
+   --  first added of a name standing for the name.
+   procedure Add_Path_Program
+     (Host : in out Fake_Tool_Runner; Path : String);
+
+   overriding function Programs_On_Path
+     (Host : Fake_Tool_Runner; Prefix : String)
+      return Landin.Platform.Path_List;
 
    --  A fake successful run stands in for writing the requested output.
    --  Cases about a lying tool can turn that promise off.
@@ -651,6 +685,7 @@ private
       State : Recorder_Owner;
       Tool_Available : Boolean := True;
       Absent : Landin.Platform.Path_List;
+      On_Path : Landin.Platform.Path_List;
    end record;
 
    package Offset_Vectors is new Ada.Containers.Vectors

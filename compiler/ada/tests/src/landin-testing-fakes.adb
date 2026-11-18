@@ -435,6 +435,11 @@ package body Landin.Testing.Fakes is
      (Host : Fake_Filesystem) return String
      is (Unbounded.To_String (Host.Executable));
 
+   overriding function Executable_Path
+     (Host : Fake_Filesystem) return String
+     is (if Unbounded.Length (Host.Executable) = 0 then ""
+         else Unbounded.To_String (Host.Executable) & "/refine");
+
    overriding function Existing_File_Key
      (Host : Fake_Filesystem; Path : String) return String
    is
@@ -1953,6 +1958,84 @@ package body Landin.Testing.Fakes is
       end if;
       Result := Host.State.Data.Program;
    end Run_Attached;
+
+   overriding procedure Run_Within
+     (Host      : Fake_Tool_Runner;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Seconds   : Duration;
+      Result    : out Landin.Platform.Tool_Result;
+      Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged)
+   is
+   begin
+      Run (Host, Program, Arguments, Result, Capture);
+      declare
+         Last : Tool_Call := Host.State.Data.Calls.Last_Element;
+      begin
+         Last.Within := Seconds;
+         Host.State.Data.Calls.Replace_Element
+           (Host.State.Data.Calls.Last_Index, Last);
+      end;
+   end Run_Within;
+
+   overriding procedure Run_Command
+     (Host      : Fake_Tool_Runner;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Setting   : String;
+      Result    : out Landin.Platform.Program_Result)
+   is
+   begin
+      Run_Attached (Host, Program, Arguments, Result);
+      declare
+         Last : Tool_Call := Host.State.Data.Calls.Last_Element;
+      begin
+         Last.Environment.Append (Setting);
+         Host.State.Data.Calls.Replace_Element
+           (Host.State.Data.Calls.Last_Index, Last);
+      end;
+   end Run_Command;
+
+   procedure Add_Path_Program
+     (Host : in out Fake_Tool_Runner; Path : String) is
+   begin
+      Host.On_Path.Append (Path);
+   end Add_Path_Program;
+
+   overriding function Programs_On_Path
+     (Host : Fake_Tool_Runner; Prefix : String)
+      return Landin.Platform.Path_List
+   is
+      package Sorting is new Landin.Platform.Path_Vectors.Generic_Sorting;
+      function Base (Path : String) return String is
+        (Path (Ada.Strings.Fixed.Index (Path, "/", Ada.Strings.Backward)
+               + 1 .. Path'Last));
+      Names, Found : Landin.Platform.Path_List;
+   begin
+      for Path of Host.On_Path loop
+         declare
+            Name : constant String := Base (Path);
+         begin
+            if Name'Length >= Prefix'Length
+              and then Name (Name'First .. Name'First + Prefix'Length - 1)
+                       = Prefix
+              and then not Names.Contains (Name)
+            then
+               Names.Append (Name);
+            end if;
+         end;
+      end loop;
+      Sorting.Sort (Names);
+      for Name of Names loop
+         for Path of Host.On_Path loop
+            if Base (Path) = Name then
+               Found.Append (Path);
+               exit;
+            end if;
+         end loop;
+      end loop;
+      return Found;
+   end Programs_On_Path;
 
    overriding procedure Run_In_Environment
      (Host        : Fake_Tool_Runner;

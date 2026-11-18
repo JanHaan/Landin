@@ -1,18 +1,23 @@
 --  The user-facing command interface. The driver remains the compilation
 --  request boundary, including its compatibility spellings.
+with Landin.Build_Identity;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Targets.Selection;
 
 package Landin.Commands is
 
+   --  Shipped is the split commands this refine was built with, their
+   --  names separated by single spaces (D1483); a case names its own.
    function Execute
      (Arguments : Landin.Platform.Path_List;
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class;
       Meter     : Landin.Platform.Resource_Meter'Class;
       Built_For : String := Landin.Targets.Selection.Build_Triplet;
-      Terminal_Color : Boolean := False) return Landin.Driver.Outcome;
+      Terminal_Color : Boolean := False;
+      Shipped   : String := Landin.Build_Identity.Split_Commands)
+      return Landin.Driver.Outcome;
 
    --  D526: run what Execute compiled for `refine run`, after the caller
    --  has written its report, with the terminal and no limit; remove its

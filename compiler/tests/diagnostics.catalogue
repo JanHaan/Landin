@@ -149,3 +149,5 @@ L0587  Live     D924: a firmware image whose C archives bring constructors, thre
 L0688  Live     D1292: a source table refine site cannot read
 L0689  Live     D1292: a build that is not the one its source table was written with
 L0690  Live     D1292: a site or a caller's file the table does not hold
+L0694  Live     D1384: a split command refine was built with that its installation lacks
+L0695  Live     D1387: an external command whose description refine cannot accept

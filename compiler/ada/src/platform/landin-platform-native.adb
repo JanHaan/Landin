@@ -305,7 +305,7 @@ package body Landin.Platform.Native is
          return "";
    end Working_Directory;
 
-   overriding function Executable_Directory
+   overriding function Executable_Path
      (Host : Native_Filesystem) return String
    is
       pragma Unreferenced (Host);
@@ -323,17 +323,28 @@ package body Landin.Platform.Native is
       end if;
       declare
          Path : constant String := Interfaces.C.To_Ada (Buffer);
-         Slash : constant Natural := Ada.Strings.Fixed.Index
-           (Path, "/", Ada.Strings.Backward);
       begin
          --  Only an absolute name says where the executable is.
          if Path = "" or else Path (Path'First) /= '/' then
             return "";
-         elsif Slash = Path'First then
-            return "/";
          end if;
-         return Path (Path'First .. Slash - 1);
+         return Path;
       end;
+   end Executable_Path;
+
+   overriding function Executable_Directory
+     (Host : Native_Filesystem) return String
+   is
+      Path : constant String := Host.Executable_Path;
+      Slash : constant Natural := Ada.Strings.Fixed.Index
+        (Path, "/", Ada.Strings.Backward);
+   begin
+      if Path = "" then
+         return "";
+      elsif Slash = Path'First then
+         return "/";
+      end if;
+      return Path (Path'First .. Slash - 1);
    end Executable_Directory;
 
    overriding function Is_Directory

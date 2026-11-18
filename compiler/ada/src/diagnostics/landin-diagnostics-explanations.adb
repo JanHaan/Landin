@@ -2164,7 +2164,33 @@ package body Landin.Diagnostics.Explanations is
                & "no number. Site 0 is the compiler's own guard and has no"
                & " source line. Pass the `site` a `panic_handler` received"
                & ", or the three numbers of a caller's coordinates, as the"
-               & " running program reported them.");
+               & " running program reported them.",
+            when Catalogue.External_Command_Missing =>
+               "`refine NAME` named a split command this `refine` was bu"
+               & "ilt with, such as `refine dap`, and the installation doe"
+               & "s not hold it (D1384). A split command ships beside `ref"
+               & "ine` as `libexec/landin/refine-NAME`, under the director"
+               & "y that holds `bin/refine`. `refine` looks for it only th"
+               & "ere, because a copy on `PATH` may belong to another rele"
+               & "ase. The report names the path it looked at. Reinstall t"
+               & "he release, whose archive carries both, or build both fr"
+               & "om one checkout with `./scripts/build.sh`. `refine versi"
+               & "on` lists each split command and where it is. The status"
+               & " is 1.",
+            when Catalogue.External_Command_Incompatible =>
+               "Before running an external command, `refine` asks it to "
+               & "describe itself with `refine-NAME --describe`. Here it c"
+               & "ould not accept the answer (D1387). The report names the"
+               & " command's path, what came back and what to do. A comman"
+               & "d shipped with `refine` is built from the same tree, so "
+               & "it must name the source digest `refine version --json` r"
+               & "eports. One from another build is refused; reinstall the"
+               & " release, or rebuild both from one checkout. A contribut"
+               & "ed command, one found on `PATH`, must answer within ten "
+               & "seconds with one JSON object in the format `landin-comma"
+               & "nd-1` that names it and claims no `L` prefix. Update or "
+               & "remove it, or run it by its own name, `refine-NAME`. The"
+               & " status is 1.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -3312,6 +3338,10 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Site_Build_Mismatch =>
                "",
             when Catalogue.Site_Unresolved =>
+               "",
+            when Catalogue.External_Command_Missing =>
+               "",
+            when Catalogue.External_Command_Incompatible =>
                "");
 
    function Fixture (Of_Code : Catalogue.Code_Name) return String
@@ -4176,6 +4206,10 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Site_Build_Mismatch =>
                "",
             when Catalogue.Site_Unresolved =>
+               "",
+            when Catalogue.External_Command_Missing =>
+               "",
+            when Catalogue.External_Command_Incompatible =>
                "");
 
 end Landin.Diagnostics.Explanations;

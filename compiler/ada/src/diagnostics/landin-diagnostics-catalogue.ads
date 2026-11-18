@@ -329,7 +329,10 @@ package Landin.Diagnostics.Catalogue is
       --  that made it.  No program is refused for any of them.
       Site_Table_Invalid,
       Site_Build_Mismatch,
-      Site_Unresolved);
+      Site_Unresolved,
+      --  D1384, D1387: an external command refine cannot run.
+      External_Command_Missing,
+      External_Command_Incompatible);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retired when the
@@ -1489,7 +1492,21 @@ package Landin.Diagnostics.Catalogue is
          Source => False, Bytes => False,
          Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
-         Rule => +"D1292: a site or a caller's file the table does not hold")];
+         Rule => +"D1292: a site or a caller's file the table does not hold"),
+      External_Command_Missing =>
+        (Code => "L0694", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D1384: a split command refine was built with that its"
+                   & " installation lacks")),
+      External_Command_Incompatible =>
+        (Code => "L0695", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D1387: an external command whose description refine"
+                   & " cannot accept"))];
 
    ------------------------------------------------------------------
    --  The columns, read out of the table

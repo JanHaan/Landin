@@ -1232,9 +1232,13 @@ keeps a newer mtime than the object built from it and gprbuild would serve the
 stale object. The developer wrappers instead pass the pinned GPRbuild's `-m2`
 checksum mode; source inventory or project-file changes still force a clean
 tree, and a failed developer build is resumed rather than cleaned. A clean
-tree keeps `bin/`: executables are linked into `link/` and published into
-`bin/` by a rename, only while no corpus lane or manifest run holds the
-build's readers lock (`scripts/build_lock.py`). A compiler-only build records `refine` as current without claiming that
+tree keeps `bin/` and `libexec/`: executables are linked into `link/` and
+published into `bin/` by a rename, only while no corpus lane or manifest run
+holds the build's readers lock (`scripts/build_lock.py`). Each split command
+`compiler/ada/split-commands.json` lists is built with `refine`, with or
+without `--compiler-only`, and published as `libexec/landin/refine-NAME`,
+the directory there even when the list is empty, as in a release archive
+([split commands](../compiler/ada/README.md#split-commands)). A compiler-only build records `refine` as current without claiming that
 `landin_tests` is current; the next full build still builds the test program.
 
 ### The controls that hold the job inventory

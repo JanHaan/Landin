@@ -437,7 +437,8 @@ exec_dir.mkdir(parents=True, exist_ok=True)
 (build / "refine-obj" / "built.o").write_text(
     "object " + os.environ.get("FAKE_OBJECT", ""))
 project = sys.argv[sys.argv.index("-P") + 1]
-name = {"refine.gpr": "refine", "landin_tests.gpr": "landin_tests"}[project]
+name = ({"refine.gpr": "refine", "landin_tests.gpr": "landin_tests"}.get(project)
+        or "refine-" + project.removeprefix("refine_").removesuffix(".gpr"))
 path = exec_dir / name
 # As GPRbuild can: an executable judged current by time stamps is kept.
 if not (os.environ.get("FAKE_KEEP_EXECUTABLE") and path.exists()):
@@ -497,6 +498,46 @@ path.write_text("-- generated at " + str(path) + "\\n"
     def calls(self):
         return [json.loads(line) for line in
                 (self.root / "calls").read_text().splitlines()]
+
+    def test_an_empty_list_of_split_commands_still_lays_out_libexec(self):
+        result = self.run_build()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.build / "libexec/landin").is_dir())
+        self.assertEqual(list((self.build / "libexec/landin").iterdir()), [])
+
+    def test_a_listed_split_command_is_built_and_published_in_libexec(self):
+        ada = self.root / "compiler/ada"
+        (ada / "svd").mkdir()
+        (ada / "svd/refine_svd.adb").write_text("split\n")
+        (ada / "refine_svd.gpr").write_text(
+            'project Refine_Svd is\n   for Source_Dirs use ("svd");\n'
+            'end Refine_Svd;\n')
+        (ada / "split-commands.json").write_text(json.dumps(
+            {"format": "landin-split-commands-1", "commands": [
+                {"name": "svd", "project": "refine_svd.gpr",
+                 "main": "refine_svd.adb"}]}))
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual([call[call.index("-P") + 1] for call in self.calls()],
+                         ["refine.gpr", "refine_svd.gpr", "landin_tests.gpr"])
+        published = self.build / "libexec/landin/refine-svd"
+        self.assertTrue(os.access(published, os.X_OK))
+        self.assertFalse((self.build / "bin/refine-svd").exists())
+        self.assertIn("built: %s" % published, first.stdout)
+        self.assertEqual([row.split()[1] for row in self.linked(self.manifest)],
+                         ["refine", "refine-svd"])
+        self.assertIn("source compiler/ada/svd/refine_svd.adb",
+                      " ".join(row.split(" ", 2)[0] + " " + row.split(" ", 2)[2]
+                               for row in self.requested(self.manifest)
+                               if row.startswith("source ")))
+        second = self.run_build()
+        self.assertIn("developer build is current", second.stdout)
+        #  A split command missing from libexec is not a current build.
+        published.unlink()
+        third = self.run_build()
+        self.assertEqual(third.returncode, 0, third.stderr)
+        self.assertNotIn("developer build is current", third.stdout)
+        self.assertTrue(os.access(published, os.X_OK))
 
     def test_first_build_is_not_called_interrupted(self):
         result = self.run_build()
@@ -1124,8 +1165,10 @@ class BuildArchives(unittest.TestCase):
         packages = [command for command in commands
                     if command.startswith("tar -czf ")]
         #  Debug builds supply their host's suite as well as determinism,
-        #  so they carry the test program and its stamp as release does.
-        members = ("bin", "bin/refine", "bin/landin_tests",
+        #  so they carry the test program and its stamp as release does,
+        #  and the split commands build.sh publishes in libexec/landin.
+        members = ("bin", "bin/refine", "bin/landin_tests", "libexec",
+                   "libexec/landin", "libexec/landin/refine-split",
                    "source-manifest.txt", "tests-manifest.txt")
         #  Linux x86-64's and Darwin's release executables are built and
         #  packaged twice, over the cache and from clean, from one build
@@ -1155,8 +1198,10 @@ class BuildArchives(unittest.TestCase):
                     build_path = words[words.index("-C") + 1]
                     build = root / build_path
                     (build / "bin").mkdir(parents=True)
-                    for name in ("refine", "landin_tests"):
-                        executable = build / "bin" / name
+                    (build / "libexec/landin").mkdir(parents=True)
+                    for name in ("bin/refine", "bin/landin_tests",
+                                 "libexec/landin/refine-split"):
+                        executable = build / name
                         executable.write_text("#!/bin/sh\nexit 0\n")
                         executable.chmod(0o755)
                     manifest = "checked source and toolchain identity\n"
@@ -1175,7 +1220,7 @@ class BuildArchives(unittest.TestCase):
                     with tarfile.open(archive_path) as archive:
                         self.assertEqual(set(archive.getnames()), set(members))
                         for name in members:
-                            if name == "bin":
+                            if name in ("bin", "libexec", "libexec/landin"):
                                 self.assertTrue(archive.getmember(name).isdir())
                             elif name.endswith("manifest.txt"):
                                 self.assertEqual(archive.extractfile(name).read(),

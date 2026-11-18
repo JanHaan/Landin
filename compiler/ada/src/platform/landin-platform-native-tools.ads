@@ -71,6 +71,26 @@ package Landin.Platform.Native.Tools is
       Arguments : Path_List;
       Result    : out Program_Result);
 
+   overriding procedure Run_Within
+     (Host      : Native_Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Seconds   : Duration;
+      Result    : out Tool_Result;
+      Capture   : Capture_Mode := Merged);
+
+   --  Through `landin_tool_process.c`, as Run_Attached, without its
+   --  private-directory check: a command is where it was installed.
+   overriding procedure Run_Command
+     (Host      : Native_Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Setting   : String;
+      Result    : out Program_Result);
+
+   overriding function Programs_On_Path
+     (Host : Native_Tool_Runner; Prefix : String) return Path_List;
+
    overriding function Output_Produced
      (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
       return Boolean;

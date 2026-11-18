@@ -52,6 +52,7 @@ package Landin.Platform.Overlays is
 
    overriding function Working_Directory (Host : Overlay) return String;
 
+   overriding function Executable_Path (Host : Overlay) return String;
    overriding function Executable_Directory (Host : Overlay) return String;
 
    overriding function Paths_Overlap

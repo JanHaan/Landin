@@ -25,6 +25,7 @@ compiler/ada/
   landin_lib.gpr        the compiler library, built by everything else
   refine.gpr            the `refine` executable
   landin_tests.gpr      the repository's own test program
+  split-commands.json   the split commands built with refine (see building)
   TOOLCHAIN.md          the pinned toolchain and warning policy
   src/
     base/               exceptions, policies, byte encoding and build reports
@@ -238,6 +239,7 @@ different responsibilities.
 | `Landin.Commands.Tracing` | native argument-vector tracing through the supplied tool runner | execute a command outside that capability |
 | `Landin.Commands.Bindings` | `refine bindings` (D820): checking the request, reading the headers and policy and running the named Clang through `Landin.Platform` in an environment of its own (D821), from a private directory it removes, and selection of the four outputs for D907's shared `Landin.Platform.Publication` group through adapter compilation and verification | generate a binding, parse C, or replace a file outside the output directory |
 | `Landin.Commands.Sites` | `refine site` (D1292): reading the build and its source table through `Landin.Platform`, holding the table to the build's identity (an ELF's `.landin_id` or GNU build ID, a Mach-O's `__TEXT,__landin_id` and its dSYM's UUID, assembly's SHA-256), and decoding a panic site or a caller's coordinates | write a file, run a tool, read DWARF, or answer for a build the table was not written with |
+| `Landin.Commands.External` | the commands `refine` does not hold: finding a split command beside the executable and a contributed one on the search path (D1384, D1484), asking each to describe itself and judging the answer (D1387), the scan help, version and explain forwarding read, and the refusals L0694 and L0695 | run a command itself, which `Landin.Commands.Launch` does with the caller named (D1486), or read an environment variable |
 | `Landin.Commands.Devices` | `refine svd`: reading the SVD and policy through `Landin.Platform`, reporting a projection's fault at its place, and selection of generated and manifest-listed stale outputs for D907's shared `Landin.Platform.Publication` group | project an SVD, or replace a file outside the output directory |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection, protected input registration and artifact verification through `Landin.Platform.Publication`, and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, an import of `core`, `hosted` or `platform` from the library root alone, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
@@ -1296,6 +1298,38 @@ selector. On the Mac add `--host`; run Linux workloads in native development
 slots. Filtered runs identify themselves and never replace the complete
 suite. [The process guide](../../docs/process.md) explains both native
 policies, debugger selection and Linux-only resume.
+
+### Split commands
+
+`refine` dispatches a command it does not implement itself to a split
+command, a `refine-NAME` executable of its own project and main in this
+directory. `split-commands.json` is the one list of them, and every
+consumer reads it: `scripts/build_identity.py` counts each split's sources
+in the source digest and names the splits to `refine` in
+`Landin.Build_Identity.Split_Commands`, `scripts/build.sh` builds them,
+`scripts/package.sh` and the release workflow ship and run them, the flake
+installs them, and `check.py` holds each entry to its project. They are
+built, counted and shipped in lockstep with `refine`, from one tree.
+
+```json
+{"format": "landin-split-commands-1",
+ "commands": [{"name": "svd", "project": "refine_svd.gpr",
+               "main": "refine_svd.adb"}]}
+```
+
+`name` is lower-case letters, digits and hyphens beginning with a letter,
+listed once and no built-in command `compiler/tests/commands.reference`
+records. `project` is the project file, relative to this directory, and
+`main` the file its `for Main use` names. The project builds what
+`scripts/build.sh` publishes, which `check.py` checks: it says
+`for Main use ("MAIN");`, `for Executable ("MAIN") use "refine-NAME";`,
+`for Exec_Dir use Landin_Common.Exec_Dir;` and
+`for Object_Dir use Landin_Common.Build_Dir & "/refine-NAME-obj";`.
+A build publishes each split as `libexec/landin/refine-NAME` beside its
+`bin/`, the directory present even when the list is empty, and a release
+archive and the flake's packages have the same layout: `refine` finds a
+split at `../libexec/landin/refine-NAME` from its own directory. Changing
+the list rebuilds from clean, as changing a project file does.
 
 ### Host adapters
 

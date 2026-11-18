@@ -26,6 +26,9 @@ So build.sh asks this script, after each GPRbuild run, what was linked:
   published BUILD MANIFEST NAME...
       Exit 0 when each BUILD/bin/NAME is the executable MANIFEST's
       `linked NAME` row records; otherwise say which is not and exit 1.
+      A NAME with a directory, a split command's
+      `libexec/landin/refine-svd`, is that path under BUILD and the row
+      of its last component.
 """
 import hashlib
 import json
@@ -180,14 +183,15 @@ def published(build, manifest, names):
         if len(words) == 3 and words[0] == "linked":
             rows[words[1]] = words[2]
     for name in names:
-        path = Path(build) / "bin" / name
-        if name not in rows:
-            print(f"landin: {Path(manifest).name} records no linked {name}",
-                  file=sys.stderr)
+        relative = Path(name) if "/" in name else Path("bin") / name
+        path = Path(build) / relative
+        if relative.name not in rows:
+            print(f"landin: {Path(manifest).name} records no linked"
+                  f" {relative.name}", file=sys.stderr)
             return 1
-        if not path.is_file() or digest(path) != rows[name]:
-            print(f"landin: bin/{name} is not the executable the last build"
-                  " linked", file=sys.stderr)
+        if not path.is_file() or digest(path) != rows[relative.name]:
+            print(f"landin: {relative.as_posix()} is not the executable the"
+                  " last build linked", file=sys.stderr)
             return 1
     return 0
 

@@ -634,9 +634,11 @@ package body Landin.Tests.Commands_Suite is
          Host.Raise_On_Read;
          declare
             Human : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (["version"], Host, Tools, Meter);
+              Landin.Commands.Execute
+                (["version"], Host, Tools, Meter, Shipped => "");
             Alias_Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (["--version"], Host, Tools, Meter);
+              Landin.Commands.Execute
+                (["--version"], Host, Tools, Meter, Shipped => "");
             Machine : constant Landin.Driver.Outcome :=
               Landin.Commands.Execute
                 (["version", "--json"], Host, Tools, Meter,
@@ -675,12 +677,14 @@ package body Landin.Tests.Commands_Suite is
                           & (if Dirty then ", dirty" else "") & ")");
             end if;
             --  A fake host has no executable directory, so no library.
-            US.Append (Expected, ASCII.LF & "library: none" & ASCII.LF);
+            US.Append (Expected, ASCII.LF & "library: none" & ASCII.LF
+                       & "citations: none" & ASCII.LF
+                       & "split commands: none" & ASCII.LF);
             Landin.Testing.Check_Equal
               (Item, Human.Status, 0, "version succeeds");
             Landin.Testing.Check_Equal
               (Item, US.To_String (Human.Output), US.To_String (Expected),
-               "banner and library lines");
+               "banner, library, citations and split commands");
             Landin.Testing.Check_Equal
               (Item, US.To_String (Alias_Result.Output),
                US.To_String (Human.Output),
@@ -741,16 +745,6 @@ package body Landin.Tests.Commands_Suite is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Meter : Landin.Platform.Unmetered;
-      function Last_Line (Text : String) return String;
-      function Last_Line (Text : String) return String is
-         Ends : constant Natural :=
-           (if Text'Length > 0 and then Text (Text'Last) = ASCII.LF
-            then Text'Last - 1 else Text'Last);
-         Starts : constant Natural := Ada.Strings.Fixed.Index
-           (Text (Text'First .. Ends), [ASCII.LF], Ada.Strings.Backward);
-      begin
-         return Text (Starts + 1 .. Ends);
-      end Last_Line;
    begin
       Host.Set_Executable_Directory ("/opt/landin/bin");
       Host.Add_Directory ("/opt/landin/lib/landin/core");
@@ -769,9 +763,10 @@ package body Landin.Tests.Commands_Suite is
              (["version", "--library=/empty"], Host, Tools, Meter);
          Doc : J.Document;
       begin
-         Landin.Testing.Check_Equal
-           (Item, Last_Line (US.To_String (Human.Output)),
-            "library: /opt/landin/lib/landin",
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Human.Output),
+                            ASCII.LF & "library: /opt/landin/lib/landin"
+                            & ASCII.LF),
             "the installed library is reported");
          J.Parse (Doc, US.To_String (Machine.Output));
          Landin.Testing.Check
@@ -781,9 +776,10 @@ package body Landin.Tests.Commands_Suite is
             and then J.Text (Doc, J.Member (Doc, J.Root (Doc), "library"))
               = "/opt/landin/lib/landin",
             "the installed library is a JSON string");
-         Landin.Testing.Check_Equal
-           (Item, Last_Line (US.To_String (Named.Output)),
-            "library: /elsewhere", "--library replaces it");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Named.Output),
+                            ASCII.LF & "library: /elsewhere" & ASCII.LF),
+            "--library replaces it");
          Landin.Testing.Check_Equal
            (Item, Refused.Status, Landin.Driver.Status_Misuse,
             "--library must name a library");
@@ -1999,6 +1995,378 @@ package body Landin.Tests.Commands_Suite is
       end if;
    end Reference_Is_Recorded;
 
+   --  D1384, D1385, D1387, D1484-D1488: the dispatcher, on the fake host.
+   --  A built-in command wins; a split command `refine` was built with is
+   --  looked for beside it alone and refused when missing; any other name
+   --  is looked for on the search path, the first directory winning.
+   --  Each is asked to describe itself, within ten seconds, before it
+   --  runs, and runs with the words after its name exactly as written and
+   --  LANDIN_REFINE naming the refine that dispatched it.
+   procedure Dispatcher (Item : in out Landin.Testing.Context);
+   procedure Dispatcher (Item : in out Landin.Testing.Context) is
+      use type Landin.Platform.Capture_Mode;
+      Meter : Landin.Platform.Unmetered;
+      Q : constant Character := '"';
+      Shipped_Path : constant String :=
+        "/opt/landin/libexec/landin/refine-probe";
+
+      function Description
+        (Name : String; Codes : String := "";
+         Digest : String := Landin.Build_Identity.Source_Digest;
+         Format : String := "landin-command-1") return String is
+        ("{" & Q & "format" & Q & ":" & Q & Format & Q & ","
+         & Q & "name" & Q & ":" & Q & Name & Q & ","
+         & Q & "summary" & Q & ":" & Q & "the " & Name & " tool" & Q & ","
+         & (if Digest = "" then ""
+            else Q & "source_digest" & Q & ":" & Q & Digest & Q & ",")
+         & Q & "codes" & Q & ":[" & Codes & "]}" & ASCII.LF);
+
+      --  A host with refine in /opt/landin/bin.
+      procedure Install (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+      procedure Install (Host : in out Landin.Testing.Fakes.Fake_Filesystem)
+      is
+      begin
+         Host.Set_Executable_Directory ("/opt/landin/bin");
+         Host.Add_Directory ("/opt/landin/libexec/landin");
+      end Install;
+
+      procedure Refused
+        (Result : Landin.Driver.Outcome; Code : String;
+         Needles : Landin.Platform.Path_List; What : String);
+      procedure Refused
+        (Result : Landin.Driver.Outcome; Code : String;
+         Needles : Landin.Platform.Path_List; What : String)
+      is
+         Report : constant String := US.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+              and then Contains (Report, "error[" & Code & "]")
+              and then US.Length (Result.Launch_Program) = 0,
+            What & " is refused with " & Code & ", status 1: " & Report);
+         for Needle of Needles loop
+            Landin.Testing.Check
+              (Item, Contains (Report, Needle),
+               What & " names " & Needle & ": " & Report);
+         end loop;
+      end Refused;
+   begin
+      --  A built-in command wins over a refine-version on the path.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Tools.Add_Path_Program ("/usr/bin/refine-version");
+         Result := Landin.Commands.Execute
+           (["version"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, Tools.Run_Count = 0 and then Result.Status = 0
+              and then US.Length (Result.Launch_Program) = 0,
+            "a built-in command is never looked for outside refine");
+      end;
+
+      --  A shipped command beside refine, described compatibly, runs with
+      --  its words as written and the caller named.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Host.Add_File (Shipped_Path, "");
+         Tools.Add_Path_Program ("/usr/bin/refine-probe");
+         Tools.Set_Result (0, Description ("probe"));
+         Result := Landin.Commands.Execute
+           (["probe", "--json", "@words", "--", ""], Host, Tools, Meter,
+            Shipped => "other probe");
+         Landin.Testing.Check_Equal
+           (Item, US.To_String (Result.Launch_Program), Shipped_Path,
+            "a shipped command runs from libexec/landin beside refine");
+         Landin.Testing.Check
+           (Item, Natural (Result.Launch_Arguments.Length) = 4
+              and then Result.Launch_Arguments (1) = "--json"
+              and then Result.Launch_Arguments (2) = "@words"
+              and then Result.Launch_Arguments (3) = "--"
+              and then Result.Launch_Arguments (4) = "",
+            "the words after its name are its own, exactly as written");
+         Landin.Testing.Check_Equal
+           (Item, US.To_String (Result.Launch_Setting),
+            "LANDIN_REFINE=/opt/landin/bin/refine",
+            "it is told the refine that dispatched it (D1486)");
+         declare
+            Asked : constant Landin.Testing.Fakes.Tool_Call :=
+              Tools.Call_At (1);
+            Words : constant Landin.Platform.Path_List := Asked.Arguments;
+         begin
+            Landin.Testing.Check
+              (Item, Tools.Run_Count = 1
+                 and then US.To_String (Asked.Program) = Shipped_Path
+                 and then Natural (Words.Length) = 1
+                 and then Words.First_Element = "--describe"
+                 and then Asked.Within = 10.0
+                 and then Asked.Capture = Landin.Platform.Output_Only,
+               "it is asked to describe itself within ten seconds first");
+         end;
+      end;
+
+      --  A shipped command that is missing is never looked for on PATH.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Install (Host);
+         Tools.Add_Path_Program ("/usr/bin/refine-probe");
+         Refused
+           (Landin.Commands.Execute
+              (["probe"], Host, Tools, Meter, Shipped => "probe"),
+            "L0694", [Shipped_Path, "reinstall the release"],
+            "a missing shipped command");
+         Landin.Testing.Check
+           (Item, Tools.Run_Count = 0,
+            "a missing shipped command runs nothing, not PATH's copy");
+      end;
+
+      --  A contributed command: the first directory on the path wins.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Tools.Add_Path_Program ("/first/refine-lint");
+         Tools.Add_Path_Program ("/second/refine-lint");
+         Tools.Set_Result (0, Description ("lint", Q & "LNT" & Q, ""));
+         Result := Landin.Commands.Execute
+           (["lint", "x.ldn"], Host, Tools, Meter, Shipped => "probe");
+         Landin.Testing.Check_Equal
+           (Item, US.To_String (Result.Launch_Program),
+            "/first/refine-lint",
+            "a contributed command is the first one on the path");
+      end;
+
+      --  A name found nowhere is the unknown command it was (D1463).
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Result := Landin.Commands.Execute
+           (["nonesuch"], Host, Tools, Meter, Shipped => "probe");
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Result.Report),
+                                 "error[L0002]: unknown command: nonesuch"),
+            "a name nothing answers is an unknown command: "
+            & US.To_String (Result.Report));
+      end;
+
+      --  D1387's refusals, each with what came back and what to do.
+      declare
+         procedure Incompatible
+           (Name : String; Shipped : Boolean; Exit_Code : Integer;
+            Output : String; Needles : Landin.Platform.Path_List;
+            What : String;
+            Ended : Landin.Platform.Termination := Landin.Platform.Exited);
+         procedure Incompatible
+           (Name : String; Shipped : Boolean; Exit_Code : Integer;
+            Output : String; Needles : Landin.Platform.Path_List;
+            What : String;
+            Ended : Landin.Platform.Termination := Landin.Platform.Exited)
+         is
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         begin
+            Install (Host);
+            if Shipped then
+               Host.Add_File
+                 ("/opt/landin/libexec/landin/refine-" & Name, "");
+            else
+               Tools.Add_Path_Program ("/usr/bin/refine-" & Name);
+            end if;
+            Tools.Set_Result (Exit_Code, Output, Ended);
+            Refused
+              (Landin.Commands.Execute
+                 ([Name], Host, Tools, Meter,
+                  Shipped => (if Shipped then Name else "")),
+               "L0695", Needles, What);
+         end Incompatible;
+         Other : constant String (1 .. 64) := [others => 'b'];
+      begin
+         Incompatible
+           ("probe", True, 0, Description ("probe", Digest => Other),
+            ["refine-probe --describe",
+             "built from compiler sources bbbbbbbbbbbb",
+             "reinstall the release"],
+            "a shipped command of another digest");
+         Incompatible
+           ("probe", True, 2, "",
+            ["exited with status 2", "rebuild both from one checkout"],
+            "a shipped command without a description");
+         Incompatible
+           ("probe", True, 0, Description ("probe", Digest => ""),
+            ["has no ""source_digest"" string"],
+            "a shipped command that names no digest");
+         Incompatible
+           ("probe", True, 0, Description ("probe", Q & "PRB" & Q),
+            ["claims the code prefix PRB"],
+            "a shipped command claiming a prefix");
+         Incompatible
+           ("lint", False, 0, Description ("lint", Q & "L" & Q, ""),
+            ["claims L", "update or remove it, or run it by its own name"],
+            "a contributed command claiming L");
+         Incompatible
+           ("lint", False, 0, "not json",
+            ["its answer is not JSON"], "an answer that is not JSON");
+         Incompatible
+           ("lint", False, 0, Description ("other", Digest => ""),
+            ["names itself other"], "a command naming another");
+         Incompatible
+           ("lint", False, 0,
+            Description ("lint", Digest => "", Format => "landin-command-2"),
+            ["format landin-command-2", "reads landin-command-1"],
+            "a newer format");
+         Incompatible
+           ("lint", False, 0, "", ["did not answer within 10 seconds"],
+            "a command that does not answer",
+            Ended => Landin.Platform.Timed_Out);
+      end;
+
+      --  D1385: a code of another prefix goes to the one contributed
+      --  command claiming it, after a line saying whose it is.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Tools.Add_Path_Program ("/usr/bin/refine-lint");
+         Tools.Set_Result (0, Description ("lint", Q & "LNT" & Q, ""));
+         Result := Landin.Commands.Execute
+           (["explain", "LNT0042"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, US.To_String (Result.Launch_Program)
+                = "/usr/bin/refine-lint"
+              and then Natural (Result.Launch_Arguments.Length) = 2
+              and then Result.Launch_Arguments (1) = "explain"
+              and then Result.Launch_Arguments (2) = "LNT0042"
+              and then US.To_String (Result.Output)
+                = "LNT0042 is explained by refine-lint at"
+                  & " /usr/bin/refine-lint, not by Landin" & ASCII.LF,
+            "a claimed code is forwarded: "
+            & US.To_String (Result.Output) & US.To_String (Result.Report));
+         Result := Landin.Commands.Execute
+           (["explain", "XYZ0042"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Result.Report),
+                                 "no refine-NAME command on PATH claims it"),
+            "a prefix no command claims is refused: "
+            & US.To_String (Result.Report));
+         Result := Landin.Commands.Execute
+           (["explain", "L9999"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then US.Length (Result.Launch_Program) = 0,
+            "an L code outside the catalogue is unknown, never forwarded");
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Tools.Add_Path_Program ("/usr/bin/refine-aa");
+         Tools.Add_Path_Program ("/usr/bin/refine-bb");
+         Tools.Add_Result (0, Description ("aa", Q & "DUP" & Q, ""));
+         Tools.Add_Result (0, Description ("bb", Q & "DUP" & Q, ""));
+         Result := Landin.Commands.Execute
+           (["explain", "DUP1"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Result.Report),
+                                 "refine-aa at /usr/bin/refine-aa,"
+                                 & " refine-bb at /usr/bin/refine-bb")
+              and then Contains (US.To_String (Result.Report),
+                                 "refine-NAME explain DUP1"),
+            "a prefix two commands claim is refused naming both: "
+            & US.To_String (Result.Report));
+      end;
+
+      --  Help lists external commands under their own heading, and an
+      --  external command's help is its own (D1488).
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Tools.Add_Path_Program ("/usr/bin/refine-lint");
+         Tools.Add_Path_Program ("/usr/bin/refine-check");
+         Tools.Add_Path_Program ("/usr/bin/refine-probe");
+         Tools.Set_Result (0, Description ("lint", Digest => ""));
+         Result := Landin.Commands.Execute
+           (["help"], Host, Tools, Meter, Shipped => "probe");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Result.Output),
+                            ASCII.LF & "External commands:" & ASCII.LF
+                            & "  probe       missing: " & Shipped_Path
+                            & ASCII.LF
+                            & "  lint        the lint tool"
+                            & " (/usr/bin/refine-lint)" & ASCII.LF)
+              and then not Contains (US.To_String (Result.Output),
+                                     "refine-check"),
+            "help lists the external commands: "
+            & US.To_String (Result.Output));
+         Result := Landin.Commands.Execute
+           (["help", "lint"], Host, Tools, Meter, Shipped => "probe");
+         Landin.Testing.Check
+           (Item, US.To_String (Result.Launch_Program)
+                = "/usr/bin/refine-lint"
+              and then Natural (Result.Launch_Arguments.Length) = 1
+              and then Result.Launch_Arguments (1) = "--help",
+            "help NAME runs refine-NAME --help");
+      end;
+
+      --  D1487: version describes the installation it runs from.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Host.Add_Directory ("/opt/landin/lib/landin/core");
+         Host.Add_File (Shipped_Path, "");
+         Tools.Set_Result (0, Description ("probe"));
+         Result := Landin.Commands.Execute
+           (["version"], Host, Tools, Meter, Shipped => "probe absent");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Result.Output),
+                            "citations: /opt/landin/lib/landin/citations.txt,"
+                            & " not there" & ASCII.LF
+                            & "split command probe: " & Shipped_Path
+                            & ASCII.LF
+                            & "split command absent: missing,"
+                            & " /opt/landin/libexec/landin/refine-absent"
+                            & ASCII.LF),
+            "version names the citations and the split commands: "
+            & US.To_String (Result.Output));
+      end;
+
+      --  D1485: completion hands an external command's words to it.
+      Landin.Testing.Check
+        (Item, Contains (Landin.Commands.Catalogue.Shell_Completion ("bash"),
+                         "--complete --")
+           and then Contains
+             (Landin.Commands.Catalogue.Shell_Completion ("zsh"),
+              "--complete --")
+           and then Contains
+             (Landin.Commands.Catalogue.Shell_Completion ("fish"),
+              "--complete --"),
+         "every shell's completion delegates to refine-NAME --complete");
+   end Dispatcher;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2061,5 +2429,7 @@ package body Landin.Tests.Commands_Suite is
       Landin.Testing.Register
         (Into, "commands", "the help reference is recorded",
          Reference_Is_Recorded'Access);
+      Landin.Testing.Register
+        (Into, "commands", "the dispatcher", Dispatcher'Access);
    end Register;
 end Landin.Tests.Commands_Suite;

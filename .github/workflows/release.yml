@@ -185,6 +185,15 @@ jobs:
             grep -q main "$RUNNER_TEMP/smoke.s"
           done
           python3 compiler/tests/test_default_target.py --refine "$binary"
+          #  Every split command, through the dispatcher, from where the
+          #  build published it (compiler/ada/split-commands.json).  A tag
+          #  older than the list has none.
+          if [ -f compiler/ada/split-commands.json ]; then
+            for name in $(python3 scripts/build_identity.py --root . --split-commands | cut -d' ' -f1); do
+              "$binary" "$name" --help > /dev/null
+              "$binary" "$name" --describe > /dev/null
+            done
+          fi
           if [ "$RUNNER_OS" = Linux ]; then
             readelf -d "$binary"
             if readelf -d "$binary" | grep -qE 'RPATH|RUNPATH'; then
@@ -207,6 +216,20 @@ jobs:
           #  information is three quarters of it, so it is published
           #  beside the archive rather than in it (D531).
           ./scripts/package.sh --debug "$debug" "$binary" "$asset"
+          #  The archive's dispatcher finds each split command in its own
+          #  libexec/landin, which is there even when the list is empty.
+          if [ -f compiler/ada/split-commands.json ]; then
+            unpacked="$RUNNER_TEMP/unpacked"
+            rm -rf "$unpacked"
+            mkdir -p "$unpacked"
+            tar -xzf "$asset" -C "$unpacked"
+            test -d "$unpacked/libexec/landin"
+            for name in $(python3 scripts/build_identity.py --root . --split-commands | cut -d' ' -f1); do
+              test -x "$unpacked/libexec/landin/refine-$name"
+              "$unpacked/bin/refine" "$name" --help > /dev/null
+              "$unpacked/bin/refine" "$name" --describe > /dev/null
+            done
+          fi
           for file in "$asset" "$debug"; do
             sum=$(shasum -a 256 "$file" | cut -d' ' -f1)
             printf '%s  %s\n' "$sum" "$file" > "$file.sha256"

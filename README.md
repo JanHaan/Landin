@@ -53,8 +53,8 @@ Use 0.2.9 or later: [the first program](#your-first-program) needs
 
 The archive for your platform on
 [the releases page](https://github.com/JanHaan/Landin/releases) holds
-`bin/refine` and the library under `lib/landin`, with no top-level
-directory. Unpack it into a directory of its own and put its `bin` on your
+`bin/refine`, the commands it runs from `libexec/landin` and the library
+under `lib/landin`, with no top-level directory. Unpack it into a directory of its own and put its `bin` on your
 `PATH`.
 
 A Linux archive's `refine` is linked against glibc and asks for the
@@ -158,7 +158,9 @@ macOS links through the Xcode command-line tools.
 Run `refine version`. It names the compiler: a release, or
 `refine dev (01234567)` for a build from a clone. Its `library: ` line
 names the directory the standard library is read from: the archive's
-`lib/landin`, or the clone.
+`lib/landin`, or the clone. The lines under it name the `citations.txt`
+that `refine explain` reads, say whether it can be read, and list each
+command shipped beside `refine` with its path.
 
 ## Your first program
 
@@ -246,11 +248,12 @@ it names.
 | `refine lsp` | the language server an editor starts |
 | `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD (System View Description); see [devices](devices/README.md) |
 | `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
-| `refine version` | name the compiler and the library it uses |
+| `refine version` | name the compiler, the library it uses and the commands shipped beside it |
 | `refine targets` | list the described targets, their CPU feature levels and debug modes; `--json` gives structured output |
 | `refine completion bash` | print shell completion definitions; also `zsh` and `fish` |
 | `refine --help`, `refine compile --help` | every command, and one command's options |
 | `refine help compile`, `refine help reference` | the same command help, and the complete command-line reference |
+| `refine NAME ...` | run `refine-NAME`, a command shipped beside `refine` or found on `PATH`; `refine help` lists them |
 
 `refine help reference` prints the complete interface, and
 [the command line](docs/capabilities.md#the-command-line) describes it.

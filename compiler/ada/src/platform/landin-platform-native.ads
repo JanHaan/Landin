@@ -46,6 +46,9 @@ package Landin.Platform.Native is
      (Host : Native_Filesystem) return String;
 
    --  Through the host C adapter `landin_executable.c`.
+   overriding function Executable_Path
+     (Host : Native_Filesystem) return String;
+
    overriding function Executable_Directory
      (Host : Native_Filesystem) return String;
 

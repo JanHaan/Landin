@@ -212,19 +212,29 @@ def _release():
     _held.clear()
 
 
+def published_path(name):
+    """Where under a build an executable NAME is published: bin/NAME, or,
+    for a NAME with a directory such as a split command's
+    `libexec/landin/refine-svd`, that path.  Either is linked as
+    link/<last component>."""
+    return Path(name) if "/" in name else Path("bin") / name
+
+
 def publish(build, names):
     """Copy each changed executable from BUILD/link into BUILD/bin.
 
     gprbuild links into link/, never into bin/, so a reader never sees a
     half-written executable.  The new one is copied beside the old and
     renamed over it, which every reader sees as one step, and only while no
-    reader holds the build's readers lock.
+    reader holds the build's readers lock.  A name with a directory is
+    published there instead (published_path).
     """
     tag, mode = _identity()
     build = Path(build)
     changed = []
     for name in names:
-        linked, current = build / "link" / name, build / "bin" / name
+        target = published_path(name)
+        linked, current = build / "link" / target.name, build / target
         if not linked.is_file():
             raise ValueError(f"the build linked no {linked}")
         if not (current.is_file()
@@ -247,11 +257,12 @@ def publish(build, names):
                  purpose="to replace " + ", ".join(changed)
                  + " while another run uses it")
     try:
-        (build / "bin").mkdir(parents=True, exist_ok=True)
         for name in changed:
-            staged = build / "bin" / f".{name}.{os.getpid()}.new"
-            shutil.copy2(build / "link" / name, staged)
-            os.replace(staged, build / "bin" / name)
+            target = build / published_path(name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            staged = target.parent / f".{target.name}.{os.getpid()}.new"
+            shutil.copy2(build / "link" / target.name, staged)
+            os.replace(staged, target)
     finally:
         _forget(str(readers))
         os.close(fd)

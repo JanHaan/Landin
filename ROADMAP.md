@@ -584,7 +584,7 @@ edge is cut first (D1386). On Q-11's condition `refine` refuses an
 incompatible `refine-NAME`, judged by a description each prints and, for a
 shipped one, its source digest (D1387). R18.20 measures `Source_Maps` too,
 R18.50 takes the check and the forwarding, and R18.60 is the split
-`refine-dap`; `SR-1277`, SR-1196 and SR-1224 with SR-1275 are scheduled on
+`refine-dap`; `SR-1277`, `SR-1196` and SR-1224 with SR-1275 are scheduled on
 R18.40, R18.50 and R18.70. Found on the way: the cut shrinks no executable
 shipped today, since `fmt`, `explain` and `version` stay inside `refine`;
 it matters for `refine-dap`, which reaches `Driver.Library` through
@@ -696,7 +696,7 @@ lists external commands under their own heading; completion delegates to
 catalogue to the one contributed tool claiming its prefix, and refuses
 when none or several do (D1385). `refine version`
 describes the installation it runs from: the split commands it finds, and
-the `citations.txt` `refine explain` reads and whether it can (SR-1196).
+the `citations.txt` `refine explain` reads and whether it can (`SR-1196`).
 The release archive, the flake and the release smoke test ship and run
 every split command.
 Exit evidence: the dispatch order pinned by fake-filesystem driver cases;
@@ -739,7 +739,9 @@ parses its own arguments and response files and answers `--help`,
 `--describe` and `--complete`, the process surface that is its whole
 contract with `refine`, and it enters `compiler/ada/split-commands.json`.
 A closure pin for each main in `scripts/tests/test_unit_closure.py` holds
-it without the front end, as D1423 pinned `Landin.Library`. `svd` gains
+it without the front end, as D1423 pinned `Landin.Library`, and
+`scripts/unit_closure.py` refuses or reports a cut parent a real link
+would bring back (SR-1354). `svd` gains
 toy-SVD goldens that run offline through the executable: the output
 bytes, and the report and exit status of each fault code. The SR-1224
 helper takes an executable path, so one suite runs `refine svd` or
