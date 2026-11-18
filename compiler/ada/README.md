@@ -99,6 +99,7 @@ different responsibilities.
 | package | owns | must not |
 | --- | --- | --- |
 | `Landin` | the namespace and the three exceptions | contain any logic |
+| `Landin.Paths` | the text of a path: joining a child to a directory, and whether a name is a source's | ask the host anything about a path |
 | `Landin.Byte_Encoding` | byte-preserving hexadecimal ASCII encoding | interpret an encoding or access the host |
 | `Landin.Hosted` | the one hosted name the compiler owns: the argument initializer a hosted entry calls, shared by checking and emission | encode target prefixes, libc names or machine signatures |
 | `Landin.Packed` | bounded raw-image masks, field/index algebra, encoding membership and explicit register access plans | access hardware, validate source values or infer optimizer facts |
@@ -240,7 +241,7 @@ different responsibilities.
 | `Landin.Commands.Devices` | `refine svd`: reading the SVD and policy through `Landin.Platform`, reporting a projection's fault at its place, and selection of generated and manifest-listed stale outputs for D907's shared `Landin.Platform.Publication` group | project an SVD, or replace a file outside the output directory |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection, protected input registration and artifact verification through `Landin.Platform.Publication`, and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, an import of `core`, `hosted` or `platform` from the library root alone, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
-| `Landin.Driver.Library` | where the repository-owned library is: beside the executable in an installed or a checkout layout, or a directory `--library=DIR` names, which imports name it, and where it looked when it found none | search any other default root, read a source, or acquire a package |
+| `Landin.Library` | where the repository-owned library is: beside the executable in an installed or a checkout layout, or a directory `--library=DIR` names, which imports name it, and where it looked when it found none | search any other default root, read a source, acquire a package, or with a unit of the front end or `Landin.Driver`, which every command that finds the library would then link (D1386) |
 | `Landin.Driver.Assembler_Sites` | placing an assembler's refusal of a `.s` line at the `assembler.block` whose text wrote it, by that text alone | change emitted assembly, or place a line two blocks share |
 | `Landin.Driver.Boot_Stage` | D588's check of an assembled object's `.boot2`, its size and the relocations that reach it, and the boot ROM's checksum written into it, as computation on the object's bytes | read or write files, run the assembler, or name a device |
 | `Landin.Driver.Image_Block` | D638's reading of an assembled object's `.embedded_block` and the relocations in it, as computation on the object's bytes | read or write files, run the assembler, or name a device |

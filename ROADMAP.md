@@ -592,7 +592,7 @@ it matters for `refine-dap`, which reaches `Driver.Library` through
 
 ### R18.20 — Cut the loading edge
 
-Status: planned
+Status: complete
 Depends on: R18.10
 
 `Driver.Library`'s body withs `Driver.Loading` for one path helper, which
@@ -602,6 +602,16 @@ both, so each links what it uses (D1386).
 Exit evidence: the release text of `explain`, `version` and `fmt`
 measured before and after, near the inventory's 0.5, 0.6 and 1.9 MB, and
 `Source_Maps`' closure without the front end.
+Done: the helpers became the pure `Landin.Paths`, and `Driver.Library`
+became `Landin.Library`, outside `Landin.Driver`, whose body every child
+linked with the whole compiler (D1423). Release text of each command's
+code closure, before and after: `explain` 6.79 to 0.49 MB, `version` 7.01
+to 0.71 MB, `fmt` 7.02 to 1.86 MB; finding the library, 4 units and
+0.09 MB. A program withing only the library linked 24.35 MB of text and
+now links 0.36 MB. `Source_Maps` went from 7.26 to 6.55 MB and keeps the
+front end, since it writes the map from a compilation (Q-19);
+`scripts/tests/test_unit_closure.py` holds the library's closure, and
+`scripts/unit_closure.py` measures any unit's.
 
 ### R18.30 — The docs agree with the tool
 
@@ -694,6 +704,8 @@ LLDB sessions the targets already script, the split command `refine-dap`
 (D1383), in lockstep with the compiler's library, shipped in the archive
 and the flake and run as `refine dap`, written to the split's rules from
 its start.
+It reads source maps without `Landin.Source_Maps`, which writes them from
+a compilation and keeps the front end (D1423).
 Exit evidence: `refine-dap` linked without the front end; scripted DAP sessions in the gate over GDB and LLDB, the
 debuggers the targets script today, on every hosted target the debugging
 suites run. A further debugger is its own adapter backend.

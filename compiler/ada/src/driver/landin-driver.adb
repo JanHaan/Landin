@@ -24,6 +24,7 @@ with Landin.IR.Pipeline;
 with Landin.Optimization;
 with Landin.Panics;
 with Landin.Platform.Publication;
+with Landin.Paths;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Citations.Answers;
 with Landin.Diagnostics.Explanations;
@@ -34,7 +35,7 @@ with Landin.Driver.Boot_Stage;
 with Landin.Driver.Checking;
 with Landin.Driver.ESP_Image;
 with Landin.Driver.Image_Block;
-with Landin.Driver.Library;
+with Landin.Library;
 with Landin.Driver.Loading;
 with Landin.Formatting;
 with Landin.IR;
@@ -360,10 +361,10 @@ package body Landin.Driver is
          Root : constant String :=
            (if Unbounded.Length (Named) > 0
             then Unbounded.To_String (Named)
-            else Landin.Driver.Library.Located (Host));
+            else Landin.Library.Located (Host));
          Path : constant String :=
            (if Root = "" then ""
-            else Loading.Joined_Path
+            else Paths.Joined_Path
                    (Root, Landin.Diagnostics.Citations.File_Name));
          Content : Unbounded.Unbounded_String;
          Read    : Landin.Platform.Read_Status;
@@ -373,7 +374,7 @@ package body Landin.Driver is
             Unread := Unbounded.To_Unbounded_String
               ("from " & Landin.Diagnostics.Citations.File_Name
                & " in its library, and no library was found: "
-               & Landin.Driver.Library.Looked_In (Host)
+               & Landin.Library.Looked_In (Host)
                & "; name the library's directory with --library=DIR");
             return;
          end if;
@@ -741,11 +742,11 @@ package body Landin.Driver is
             if Name'Length > 0 and then Name (Name'First) /= '.' then
                declare
                   Path : constant String :=
-                    Loading.Joined_Path (Directory, Name);
+                    Paths.Joined_Path (Directory, Name);
                begin
                   if Host.Is_Directory (Path) then
                      Add_Directory (Path);
-                  elsif Loading.Is_Source_Name (Name)
+                  elsif Paths.Is_Source_Name (Name)
                     and then not Seen.Contains (Path)
                   then
                      Seen.Insert (Path);
@@ -5799,7 +5800,7 @@ package body Landin.Driver is
          Rooted_Files : constant Boolean :=
            not Roots.Is_Empty and then not Inputs.Is_Empty
            and then (for all Path of Inputs =>
-                       Loading.Is_Source_Name (Path)
+                       Paths.Is_Source_Name (Path)
                        and then not Host.Is_Directory (Path));
 
          --  Whether the one operand is assembly to link, and if not, why
@@ -6016,7 +6017,7 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option, "--library= names no directory");
-               elsif not Landin.Driver.Library.Holds_Library (Host, Named)
+               elsif not Landin.Library.Holds_Library (Host, Named)
                then
                   Bad_Use := True;
                   Note_Failure
@@ -6160,7 +6161,7 @@ package body Landin.Driver is
                & " entry module's source files"
                & (if (for some Path of Inputs => Host.Is_Directory (Path))
                     and then (for some Path of Inputs =>
-                                Loading.Is_Source_Name (Path)
+                                Paths.Is_Source_Name (Path)
                                 and then not Host.Is_Directory (Path))
                   then "; to add a source file to a directory's module,"
                     & " name that directory's `.ldn` files in place of the"
@@ -6341,7 +6342,7 @@ package body Landin.Driver is
                --  source never needs to know where the library is.
                Library_Root : constant String :=
                  (if Library_Seen then Unbounded.To_String (Library_Path)
-                  else Landin.Driver.Library.Located (Host));
+                  else Landin.Library.Located (Host));
             begin
                if Natural (Roots.Length) > 0 and then Rooted_Files then
                   Loading.Load_Files

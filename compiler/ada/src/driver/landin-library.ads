@@ -16,7 +16,7 @@
 
 with Landin.Platform;
 
-package Landin.Driver.Library is
+package Landin.Library is
 
    --  Whether an import's logical path names the library: its first
    --  segment is `core`, `hosted` or `platform`.  Such an import resolves
@@ -41,4 +41,4 @@ package Landin.Driver.Library is
    function Looked_In (Host : Landin.Platform.Filesystem'Class)
      return String;
 
-end Landin.Driver.Library;
+end Landin.Library;

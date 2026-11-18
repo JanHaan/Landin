@@ -1,9 +1,9 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
-with Landin.Driver.Loading;
+with Landin.Paths;
 
-package body Landin.Driver.Library is
+package body Landin.Library is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
@@ -22,7 +22,7 @@ package body Landin.Driver.Library is
    is
       function Holds (Namespace : String) return Boolean
         is (Host.Is_Directory
-              (Landin.Driver.Loading.Joined_Path (Directory, Namespace)));
+              (Landin.Paths.Joined_Path (Directory, Namespace)));
    begin
       return Directory /= ""
         and then (Holds ("core") or else Holds ("hosted")
@@ -60,7 +60,7 @@ package body Landin.Driver.Library is
          if Prefix /= "" then
             declare
                Installed : constant String :=
-                 Landin.Driver.Loading.Joined_Path (Prefix, "lib/landin");
+                 Landin.Paths.Joined_Path (Prefix, "lib/landin");
             begin
                if Holds_Library (Host, Installed) then
                   return Installed;
@@ -88,7 +88,7 @@ package body Landin.Driver.Library is
          begin
             if Holds_Library (Host, Top)
               and then Host.Is_Directory
-                (Landin.Driver.Loading.Joined_Path (Top, "compiler/ada"))
+                (Landin.Paths.Joined_Path (Top, "compiler/ada"))
             then
                return Top;
             end if;
@@ -115,10 +115,10 @@ package body Landin.Driver.Library is
       end loop;
       return "refine looked in "
         & (if Prefix = "" then "no prefix above " & Binaries
-           else Landin.Driver.Loading.Joined_Path (Prefix, "lib/landin"))
+           else Landin.Paths.Joined_Path (Prefix, "lib/landin"))
         & (if Unbounded.Length (Repository) = 0 then ""
            else " and in " & Unbounded.To_String (Repository)
              & ", the checkout a build tree's refine is in");
    end Looked_In;
 
-end Landin.Driver.Library;
+end Landin.Library;
