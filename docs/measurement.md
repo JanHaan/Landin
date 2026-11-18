@@ -131,7 +131,10 @@ whatever the ELF file's debugging information says.
 
 An `instructions` count is deterministic where the emulator runs the
 program alone: QEMU's user mode for RV64, given an environment of
-`QEMU_CPU` alone since the runtime's start walks every variable, and the
+`QEMU_CPU` alone since the runtime's start walks every variable, and an
+address space QEMU reserves itself (`-R`), since a heap the host's kernel
+placed differently once in about fifty runs took another 7,200
+instructions of 159 million, and the
 Cortex-M lanes' machines. The study in
 `compiler/tests/measure/noise/instructions.json` counted every hosted
 workload on RV64, the thread program among them, and every firmware

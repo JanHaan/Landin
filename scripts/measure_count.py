@@ -248,6 +248,16 @@ def read_count(out: Path) -> dict:
 
 # --- RV64 --------------------------------------------------------------------
 
+#  A guest address space of QEMU's own reserving, so the guest's mappings
+#  land where they landed last time: without it QEMU places them where the
+#  host's kernel does, and a run whose heap came out differently aligned
+#  executed another 7,200 instructions of mandelbrot's 159 million, once
+#  in about fifty runs (R16.10's demonstration stream); with it 240 runs
+#  of 240 counted the same.  A command-line option, so the guest's
+#  environment stays QEMU_CPU alone.
+RESERVED = ["-R", "0x8000000000"]
+
+
 def count_rv64(image: Image, level: str, arguments=(), stdin=None, start=None,
                stop=None, qemu="qemu-riscv64", work: Path | None = None) -> dict:
     """IMAGE run once under QEMU's user emulation, as the RV64 lane runs it."""
@@ -269,7 +279,7 @@ def count_rv64(image: Image, level: str, arguments=(), stdin=None, start=None,
     last = image.address(stop) if stop else None
     with (open(stdin, "rb") if stdin else open(os.devnull, "rb")) as given:
         done = subprocess.run(
-            [qemu, "-plugin", plugin_argument(plugin, image, out, first, last),
+            [qemu, *RESERVED, "-plugin", plugin_argument(plugin, image, out, first, last),
              str(image.path), *arguments], stdin=given, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, env=env, timeout=LIMIT)
     counted = read_count(out)

@@ -25928,7 +25928,9 @@ which the Cortex-M lanes' Debian QEMU does not ship;
 `measure_count.py check-header` holds the declarations to a QEMU's own
 header where one is installed. An RV64 program is counted with an
 environment of `QEMU_CPU` alone, since the runtime's start walks every
-variable and each cost 128 instructions.
+variable and each cost 128 instructions, and in an address space QEMU
+reserves with `-R`, without which a differently placed heap moved one
+run in about fifty.
 
 **The alternatives:** building against each QEMU's header, which Debian's
 does not have and which would need glib in every job.
