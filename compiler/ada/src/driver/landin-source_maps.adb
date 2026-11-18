@@ -1,7 +1,7 @@
 with GNAT.SHA256;
 
 with Landin.Byte_Encoding;
-with Landin.Driver.Library;
+with Landin.Library;
 with Landin.IR;
 with Landin.Modules;
 with Landin.Backend.Toolchain;
@@ -30,7 +30,7 @@ package body Landin.Source_Maps is
       Base : Natural := Name'First;
    begin
       if Module = Landin.Modules.No_Module
-        or else not Landin.Driver.Library.Is_Library_Import
+        or else not Landin.Library.Is_Library_Import
           (Landin.Modules.Logical_Path (Modules, Module))
       then
          return Name;

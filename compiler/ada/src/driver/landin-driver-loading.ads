@@ -38,7 +38,7 @@ package Landin.Driver.Loading is
    --  resolved import was found in.
    --
    --  Library, when not empty, is the library root
-   --  (`Landin.Driver.Library`), and follows every root.  An import of
+   --  (`Landin.Library`), and follows every root.  An import of
    --  the library resolves from it alone and any other from Roots alone,
    --  so the rest of a checkout that holds the library is never a root
    --  nobody named.  A root that names the library's own directory is
@@ -115,9 +115,5 @@ package Landin.Driver.Loading is
    --  whether or not an import reaches it: platform/linux, whose process
    --  entry a static Linux executable starts at.  It is loaded from the
    --  library after everything the imports reach, unless one already did.
-
-   function Joined_Path (Directory, Child : String) return String;
-
-   function Is_Source_Name (Name : String) return Boolean;
 
 end Landin.Driver.Loading;

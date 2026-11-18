@@ -108,6 +108,7 @@ Open:
 | [Q-6 — Pay for more macOS runner time to shorten the gate?](questions/Q-6.md) | option 1, the free hosted runners and their five-job cap. | nothing; the gate runs at its present length meanwhile. |
 | [Q-7 — Emit the Darwin determinism manifests with the release compiler?](questions/Q-7.md) | option 1, the debug compiler on every host; nothing changes. | nothing; the gate keeps its present length meanwhile, and this answer and Q-6's together decide how far the macOS floor can fall. |
 | [Q-8 — May R17.40 close on its own run under the new scripts, leaving the start-to-finish run to R16.10?](questions/Q-8.md) | R17.40 is complete on its own run and the reopened session; the R17 gate stays unclaimed until R16.10 has run start to finish under the scripts. | nothing; R16.10 starts either way, and the R17 gate's claim waits for R16.10's run under either option. |
+| [Q-19 — May R18.20 close with `Source_Maps` still linking the front end?](questions/Q-19.md) | R18.20 closes with `Source_Maps`' closure measured and explained, and R18.60 owns a reader without the front end. | nothing; under the default R18.20 is complete, and option 2 would reopen it. |
 
 Answered:
 
