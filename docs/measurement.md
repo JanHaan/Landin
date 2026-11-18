@@ -160,7 +160,10 @@ kept in `compiler/tests/measure/noise/`, and the tolerance set above it.
 Until a class has its study its comparison reports and does not fail. A
 `wall` pair past its tolerance is timed again with three times the samples
 and judged on that, since the second A/A run of x86-64 drew one pair at
-1.085 with no change to the emitted code; the tolerances, in
+1.085 with no change to the emitted code, and one already past twice its
+tolerance after a single sample of each side is judged on that sample, so
+a grossly slower candidate is a verdict rather than a job that runs out
+its time; the tolerances, in
 `compiler/tests/measure/noise/wall.json`, are 10% on `ubuntu-24.04`, 6% on
 `ubuntu-24.04-arm` and 40% on `macos-26`, whose virtual M1 spread to
 1.198. The
