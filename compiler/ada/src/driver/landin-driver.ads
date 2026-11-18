@@ -102,11 +102,15 @@ package Landin.Driver is
    --  each named code's explanation in the order named.  A subcommand and
    --  not an option, because it reads no source and compiles nothing: the
    --  first argument, spelled exactly, selects it, so a source must be
-   --  named with a path to be called `explain`.  Only the host's arguments
-   --  reach it; it reads and writes no file.
+   --  named with a path to be called `explain`.  It reads no source and
+   --  writes no file; a citation, `[NNNN]` or `DNNN`, it answers from
+   --  `citations.txt` in the library, or under `--library=DIR`, read at
+   --  most once and only when one is asked for (D1240).
    Explain_Command : constant String := "explain";
 
-   --  `refine fmt [--check | --stdout] FILE ...`: every named source in
+   --  `refine fmt [--check | --stdout] FILE|DIR ...`: every named source,
+   --  and every `.ldn` file under a named directory, a dot-named one left
+   --  out, in
    --  D252's one layout, written into its file when it is not in it
    --  already (D358).  With `--check` nothing is written and every line
    --  out of the layout is an L0008 that shows the line as the layout
@@ -115,7 +119,8 @@ package Landin.Driver is
    --  source that does not scan or parse is refused with its own report
    --  and left as it is, and the others are formatted all the same.  Each
    --  file stands alone: no import is followed and no other stage runs, so
-   --  an operand is always a file and never a module directory.  The two
+   --  a directory operand is a set of files to lay out and never a module
+   --  directory to resolve.  The two
    --  options choose where the layout goes and never what it is.
    Format_Command : constant String := "fmt";
 

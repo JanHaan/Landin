@@ -205,7 +205,7 @@ assembler's listing or by hand.
 
 `--target=` names no target the compiler describes, or none was named and
 this compiler's own host is not a described target, so a build has nothing
-to compile for until one is named. `refine --identify` lists the described
+to compile for until one is named. `refine targets` lists the described
 targets. A misspelt target is offered the nearest described one, a name cut
 short the one it begins, and a system named alone, `linux` or `macos`,
 every target of that system (D857).
@@ -320,7 +320,7 @@ whole file laid out.
 `--level=`, or the language server's `level` option, names no CPU feature
 level of the selected target's family (D255). A level belongs to one family,
 so `armv8.1-a` is refused with `--target=linux-x86-64`, and synthetic-32 has
-no level to select. `refine --identify` lists each target's levels.
+no level to select. `refine targets` lists each target's levels.
 
 ### L0015
 

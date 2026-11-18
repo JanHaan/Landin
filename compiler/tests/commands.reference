@@ -1,0 +1,472 @@
+usage: refine COMMAND [options] [operands]
+
+Commands:
+  check       Check a whole program without producing artifacts
+  compile     Compile a whole program to an executable or assembly
+  run         Compile a whole program to a temporary executable and run it
+  fmt         Format source files, or a directory's, in the one Landin layout
+  svd         Generate a device's register modules and interrupts from its SVD
+  bindings    Generate Landin bindings and C adapters for C headers
+  explain     Explain diagnostic codes, and the rules and decisions notes cite
+  site        Resolve a panic site or a caller's coordinates to a source line
+  lsp         Serve the language server protocol over stdio
+  version     Identify this compiler build
+  targets     List described targets and their CPU feature levels
+  completion  Print shell completion definitions
+  help        Show help for a command or the complete CLI reference
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+Use 'refine COMMAND --help' or 'refine help COMMAND'.
+--version is an alias for 'refine version'.
+A source follows its command:
+  refine check SOURCE.ldn
+--identify is a compatibility spelling; use 'version'
+and 'targets'.
+'build' is reserved for future project orchestration.
+
+usage: refine check [options] source.ldn ...
+
+Check a whole program without producing artifacts
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --target VALUE            Select a target; default is this compiler's host
+  --level VALUE             CPU feature level whose instructions to use; default the baseline
+  --root VALUE              Append an ordered module import root (repeatable)
+  --library VALUE           Where core, hosted and platform are; default beside refine
+  -L DIR                    Search DIR for linker.library's libraries (repeatable)
+  --option VALUE            Override a declared NAME=VALUE build option
+  --build-mode VALUE        compiler.build_mode: debug (default), release; not optimization
+  --optimize VALUE          Code objective: none, size (default), speed
+  --specialize VALUE        Direct evidence calls: off, auto (default, if worth it), all
+  --link VALUE              Linux link: static (default) alone, or libc with C's runtime
+  --firmware-entry VALUE    Select the firmware entry routine
+  --firmware-layout VALUE   Firmware layout: boot (default), ram
+  --build-report VALUE      Write deterministic build evidence JSON
+  --stage-report VALUE      Write stage CPU time and peak memory JSON
+  --warnings VALUE          Base warning selection: default, all, none
+  --warn VALUE              Enable a warning code or all (repeatable)
+  --allow VALUE             Suppress a warning code or all (repeatable)
+  --deny VALUE              Enable and promote a warning to an error (repeatable)
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+Sources form one whole program. With --root, the operand
+is one entry-module directory, or the entry module's
+source files, and its imports are found under the roots.
+Build mode, optimization, specialization and debug
+information are independent. --build-mode changes
+generated code only where source reads
+compiler.build_mode.
+--optimize chooses selection, inlining and register
+allocation for size or speed. --specialize turns
+a generic instance's evidence call into a direct one
+where it proves the table; all skips auto's cost test,
+and an instance whose address is taken, or a call
+through any, stays indirect. --build-report lists each
+call left indirect, under left_indirect, and why.
+The build report's fields are listed under "The build
+report" in compiler/ada/README.md.
+Example: refine check program.ldn
+
+usage: refine compile [options] source.ldn ...
+
+Compile a whole program to an executable or assembly
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --target VALUE            Select a target; default is this compiler's host
+  --level VALUE             CPU feature level whose instructions to use; default the baseline
+  --root VALUE              Append an ordered module import root (repeatable)
+  --library VALUE           Where core, hosted and platform are; default beside refine
+  -L DIR                    Search DIR for linker.library's libraries (repeatable)
+  --option VALUE            Override a declared NAME=VALUE build option
+  --build-mode VALUE        compiler.build_mode: debug (default), release; not optimization
+  --optimize VALUE          Code objective: none, size (default), speed
+  --specialize VALUE        Direct evidence calls: off, auto (default, if worth it), all
+  --emit VALUE              Artifact kind: exe (default), asm, ir, ir-annotated, linker-script
+  -o, --output VALUE        Output path; default a.out, a.s or a.ir
+  --keep-asm                Keep an executable's assembly beside it as OUT.s
+  --debug VALUE             Debug information: none (default), full, lines
+  --panic-map               Emit an off-target runtime check-site map
+  --toolchain VALUE         Override the target's native compiler driver
+  --linker VALUE            Select the native linker through that driver
+  --link VALUE              Linux link: static (default) alone, or libc with C's runtime
+  --firmware-entry VALUE    Select the firmware entry routine
+  --firmware-layout VALUE   Firmware layout: boot (default), ram
+  --linker-script VALUE     Link firmware with FILE, checked against the contract
+  --build-report VALUE      Write deterministic build evidence JSON
+  --stage-report VALUE      Write stage CPU time and peak memory JSON
+  --stack-report VALUE      Write each emitted routine's frame and deepest stack JSON
+  --dry-run                 Check and plan compilation; write and execute nothing
+  --depfile VALUE           Write Make-format dependencies after successful emission
+  --warnings VALUE          Base warning selection: default, all, none
+  --warn VALUE              Enable a warning code or all (repeatable)
+  --allow VALUE             Suppress a warning code or all (repeatable)
+  --deny VALUE              Enable and promote a warning to an error (repeatable)
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+Sources form one whole program. With --root, the operand
+is one entry-module directory, or the entry module's
+source files, and its imports are found under the roots.
+Build mode, optimization, specialization and debug
+information are independent. --build-mode changes
+generated code only where source reads
+compiler.build_mode.
+--optimize chooses selection, inlining and register
+allocation for size or speed. --specialize turns
+a generic instance's evidence call into a direct one
+where it proves the table; all skips auto's cost test,
+and an instance whose address is taken, or a call
+through any, stays indirect. --build-report lists each
+call left indirect, under left_indirect, and why.
+The build report's fields are listed under "The build
+report" in compiler/ada/README.md.
+Example: refine compile program.ldn -o program
+Example: refine compile --emit asm program.ldn -o program.s
+Example: refine compile program.s -o program
+An executable's assembly is the link's input and is
+removed after it; --keep-asm keeps it as OUT.s, and
+a .s operand is linked as a compiled program is,
+with the same --target, --level and --link.
+--emit ir writes the IR the backend receives.
+--emit ir-annotated also records the target and
+settings, module-qualified routine names and the IR's
+metadata.
+Hosted targets support --debug full; firmware targets
+support --debug lines. Firmware executables require
+--firmware-entry.
+Example: refine compile --link=libc -L vendor/lib program.ldn -o program
+linker.library("NAME") links libNAME, a shared
+library or an archive, as the C driver's -lNAME
+does; on Linux it needs --link=libc.
+linker.directory("DIR") in the source, relative to
+its file, and -L DIR, relative to here, say where
+libraries are, -L's first; each is
+also where the program looks for them when it runs.
+
+usage: refine run [options] source.ldn ... [-- ARGUMENT ...]
+
+Compile a whole program to a temporary executable and run it
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --target VALUE            Select a target; default is this compiler's host
+  --level VALUE             CPU feature level whose instructions to use; default the baseline
+  --root VALUE              Append an ordered module import root (repeatable)
+  --library VALUE           Where core, hosted and platform are; default beside refine
+  -L DIR                    Search DIR for linker.library's libraries (repeatable)
+  --option VALUE            Override a declared NAME=VALUE build option
+  --build-mode VALUE        compiler.build_mode: debug (default), release; not optimization
+  --optimize VALUE          Code objective: none, size (default), speed
+  --specialize VALUE        Direct evidence calls: off, auto (default, if worth it), all
+  --debug VALUE             Debug information: none (default), full, lines
+  --panic-map               Emit an off-target runtime check-site map
+  --toolchain VALUE         Override the target's native compiler driver
+  --linker VALUE            Select the native linker through that driver
+  --link VALUE              Linux link: static (default) alone, or libc with C's runtime
+  --firmware-entry VALUE    Select the firmware entry routine
+  --firmware-layout VALUE   Firmware layout: boot (default), ram
+  --linker-script VALUE     Link firmware with FILE, checked against the contract
+  --build-report VALUE      Write deterministic build evidence JSON
+  --stage-report VALUE      Write stage CPU time and peak memory JSON
+  --stack-report VALUE      Write each emitted routine's frame and deepest stack JSON
+  --warnings VALUE          Base warning selection: default, all, none
+  --warn VALUE              Enable a warning code or all (repeatable)
+  --allow VALUE             Suppress a warning code or all (repeatable)
+  --deny VALUE              Enable and promote a warning to an error (repeatable)
+
+Shared options work before or after the command. Values may use
+a space or '='. '--' begins the program's arguments; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+Sources form one whole program. With --root, the operand
+is one entry-module directory, or the entry module's
+source files, and its imports are found under the roots.
+Build mode, optimization, specialization and debug
+information are independent. --build-mode changes
+generated code only where source reads
+compiler.build_mode.
+--optimize chooses selection, inlining and register
+allocation for size or speed. --specialize turns
+a generic instance's evidence call into a direct one
+where it proves the table; all skips auto's cost test,
+and an instance whose address is taken, or a call
+through any, stays indirect. --build-report lists each
+call left indirect, under left_indirect, and why.
+The build report's fields are listed under "The build
+report" in compiler/ada/README.md.
+Example: refine run program.ldn
+Example: refine run program.ldn -- input.txt
+The executable is written into a new directory only you
+may enter, under TMPDIR or /tmp, and removed when the
+program ends. Arguments after -- are the program's,
+exactly; write a source beginning with - as
+./-name.ldn. The program runs in this directory with
+this terminal, and refine exits with its status, or
+with 128 and the number of the signal that ended it.
+Ctrl-C reaches the program through the terminal's
+foreground process group. A supervisor that signals
+refine alone should send SIGTERM or SIGHUP, which
+refine forwards before it cleans up; SIGINT and
+SIGQUIT sent to refine alone are ignored.
+run runs this compiler's own host; build another
+target with refine compile --target=NAME.
+
+usage: refine fmt [options] source.ldn|DIR ...
+
+Format source files, or a directory's, in the one Landin layout
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --check                   Report every line out of the layout; write nothing
+  --stdout                  Print the one source in the layout; write nothing
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+fmt reads named files or directories, not standard input.
+refine fmt --stdout source.ldn prints one source in the
+layout, and an editor can format through refine lsp.
+
+usage: refine svd --policy=POLICY.json --out-dir=DIR DEVICE.svd
+
+Generate a device's register modules and interrupts from its SVD
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --policy VALUE            The policy that selects what is generated, and how
+  --out-dir VALUE           Directory the outputs are written under
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+Example: refine svd --policy=devices/policies/rp2040.json
+  --out-dir=devices RP2040.svd
+The SVD must be the file the policy was reviewed against,
+by its SHA-256. The policy selects the peripherals and
+registers to generate and says how each may be read and
+written; devices/README.md describes it. Every output is
+written beside its destination and read back before any
+is replaced, and a failure puts back what was replaced.
+scripts/fetch_inputs.py fetches a pinned SVD by its hash.
+
+usage: refine bindings --clang=CLANG [--sysroot=DIR] --policy=POLICY.json --out-dir=DIR [LOGICAL=]HEADER.h ...
+
+Generate Landin bindings and C adapters for C headers
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --target VALUE            Select a target; default is this compiler's host
+  --policy VALUE            The policy that selects what is generated, and how
+  --out-dir VALUE           Directory the outputs are written under
+  --clang VALUE             The Clang that reads the headers, by path or name
+  --sysroot DIR             The target's system root; an empty one will do
+  --include-dir DIR         Search DIR for quoted and angled headers (repeatable)
+  --system-include-dir DIR  Search DIR for system headers (repeatable)
+  --define VALUE            Define NAME, or NAME=VALUE, for Clang (repeatable)
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+Example: refine bindings --clang=clang-19 --target=linux-x86-64
+  --sysroot=sysroot --policy=policy.json --out-dir=generated
+  --system-include-dir="$(clang-19 -print-resource-dir)/include"
+  api/public.h=include/public.h
+A header is LOGICAL=PATH, or PATH, whose last name is then
+its logical one: the relative name exports.h includes it
+by. Clang reads the headers and nothing else: it gets
+-nostdinc, the roots and defines named here, and an
+environment of PATH, HOME and the temporary directory
+alone. --sysroot is required for a hosted target and
+refused for cortex-m0, which is freestanding: name its
+Clang's own headers with --system-include-dir.
+Four files are written: bindings.ldn, adapters.c,
+exports.h and bindings.json; each is written beside its
+destination and read back, and adapters.c compiled,
+before any is replaced. The complete policy reference:
+https://www.701.dev/bindings.html
+
+usage: refine explain [options] [CODE|[NNNN]|DNNN ...]
+
+Explain diagnostic codes, and the rules and decisions notes cite
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --library VALUE           Where core, hosted and platform are; default beside refine
+  --full                    Add a construct's text or a decision's chosen rule
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+usage: refine site [options] PROGRAM SITE | PROGRAM FILE LINE COLUMN
+
+Resolve a panic site or a caller's coordinates to a source line
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --map VALUE               The build's source table; default PROGRAM.sources.json
+  --dsym VALUE              A Mach-O program's dSYM DWARF file, held to its UUID
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+Example: refine site firmware.elf 4194
+PROGRAM is what the compilation wrote: an executable, a
+firmware image, or the assembly of --emit=asm. SITE is
+the number a panic_handler receives, in decimal or
+after 0x; compile with --panic-map to record sites.
+FILE LINE COLUMN are a caller's three coordinates.
+The answer is the source path, line and column, and
+for a site the check that failed. The table beside the
+program, PROGRAM.sources.json, answers only for the
+build it was written with: the program's build
+identity, or the assembly's SHA-256, must be the
+table's. A stripped program keeps its identity.
+
+usage: refine lsp [options]
+
+Serve the language server protocol over stdio
+
+Options:
+  -h, --help                Print this command's help and exit
+  --stdio                   Use the standard input/output LSP transport (default)
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+usage: refine version [options]
+
+Identify this compiler build
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --library VALUE           Where core, hosted and platform are; default beside refine
+  --json                    Print structured query output
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+usage: refine targets [options]
+
+List described targets and their CPU feature levels
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+  --json                    Print structured query output
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+usage: refine completion [options] bash|zsh|fish
+
+Print shell completion definitions
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.
+
+To enable completion in the current shell:
+  bash: source <(refine completion bash)
+  zsh:  autoload -Uz compinit; compinit
+        source <(refine completion zsh)
+  fish: refine completion fish | source
+
+usage: refine help [COMMAND|reference]
+
+Show help for a command or the complete CLI reference
+
+Options:
+  -h, --help                Print this command's help and exit
+  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
+  -q, --quiet               Suppress progress, retaining warnings and errors
+  --color VALUE             Diagnostic color: auto (default), always, never
+  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
+
+Shared options work before or after the command. Values may use
+a space or '='. Use '--' before literal operands; @FILE reads
+a response file. Single-valued options may be given once.
+Of the shared options, lsp takes only --help.

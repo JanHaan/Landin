@@ -155,6 +155,47 @@ class FirstProgram(unittest.TestCase):
                                 copied=["README.md"]))
 
 
+class CommandReference(unittest.TestCase):
+    """README.md and docs/capabilities.md name every command and option."""
+
+    INPUTS = ["README.md", "docs/capabilities.md", checker.COMMAND_REFERENCE]
+
+    def test_the_real_documents_name_the_recorded_reference(self):
+        self.assertEqual(checked(checker.check_command_reference,
+                                 copied=self.INPUTS), [])
+
+    def test_a_command_without_a_table_row_is_reported(self):
+        def more(root):
+            path = root / checker.COMMAND_REFERENCE
+            path.write_text(re.sub(r"^Commands:\n", "Commands:\n"
+                                   "  zap         Do nothing\n",
+                                   path.read_text(), count=1, flags=re.M))
+        said = checked(checker.check_command_reference, more,
+                       copied=self.INPUTS)
+        self.assertEqual(len(said), 2, said)
+        self.assertIn("no row for `refine zap`", said[0])
+        self.assertIn("never writes `refine zap`", said[1])
+
+    def test_an_option_the_documents_do_not_name_is_reported(self):
+        def more(root):
+            path = root / checker.COMMAND_REFERENCE
+            path.write_text(re.sub(r"^Options:\n", "Options:\n"
+                                   "  --zap-all                 Zap\n",
+                                   path.read_text(), count=1, flags=re.M))
+        said = checked(checker.check_command_reference, more,
+                       copied=self.INPUTS)
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("names no option --zap-all", said[0])
+
+    def test_a_record_that_lists_nothing_is_reported(self):
+        def empty(root):
+            (root / checker.COMMAND_REFERENCE).write_text("usage: x\n")
+        said = checked(checker.check_command_reference, empty,
+                       copied=self.INPUTS)
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("lists no commands", said[0])
+
+
 class FromCPage(unittest.TestCase):
     """docs/from-c.md shows the files of its fixture, and all of them."""
 
