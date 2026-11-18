@@ -621,7 +621,7 @@ closed; the new check refuses a command or flag the documents do not name.
 
 ### R18.40 — Retire the bare-source form
 
-Status: planned
+Status: active
 Depends on: R18.10
 
 `refine NAME` with an unknown NAME is read today as `refine check NAME`.
