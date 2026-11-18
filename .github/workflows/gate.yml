@@ -886,13 +886,17 @@ jobs:
             --target cortex-m0 --target rv32 --target xtensa \
             --host linux-x86-64 --environment nix \
             --output "$RUNNER_TEMP/measure-size"
+          #  Both classes are compared whatever the first says, so a run
+          #  shows each class's verdict.
+          status=0
           nix develop --command python3 scripts/measure.py compare \
-            "$RUNNER_TEMP/measure-size/size.json"
+            "$RUNNER_TEMP/measure-size/size.json" || status=1
           nix develop --command python3 scripts/measure.py instructions \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --target linux-rv64 --output "$RUNNER_TEMP/measure-instructions"
           nix develop --command python3 scripts/measure.py compare \
-            "$RUNNER_TEMP/measure-instructions/instructions.json"
+            "$RUNNER_TEMP/measure-instructions/instructions.json" || status=1
+          exit "$status"
       - name: Keep the figures, which record --from-run reads
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1008,6 +1012,24 @@ jobs:
       #  and fetched by hash, never vendored; check.py's offline half of
       #  devices/test.py cannot regenerate, so this job does.  Only the
       #  `programs` part's devices and descriptions lanes read them.
+      - name: Count every firmware workload's instructions and compare them with the base's baselines
+        if: matrix.part == 'programs'
+        run: |
+          set -eu
+          python3 scripts/measure.py instructions \
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --target cortex-m0 --tools "$RUNNER_TEMP/cortex-m" \
+            --output "$RUNNER_TEMP/measure-instructions"
+          python3 scripts/measure.py compare "$RUNNER_TEMP/measure-instructions/instructions.json"
+
+      - name: Keep the counts, which record --from-run reads
+        if: always() && matrix.part == 'programs'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-instructions-cortex-m0
+          path: ${{ runner.temp }}/measure-instructions/instructions.json
+          retention-days: 30
+
       - name: Fetch the pinned device inputs
         if: matrix.part == 'programs'
         run: python3 scripts/fetch_inputs.py
@@ -1048,24 +1070,6 @@ jobs:
       #  flash, static RAM with its fibre backing, main-stack reservation,
       #  each fibre's backing and painted peak, and the fit verdict, at
       #  every profile.  The evidence lane that writes it is `programs`'s.
-      - name: Count every firmware workload's instructions and compare them with the base's baselines
-        if: matrix.part == 'programs'
-        run: |
-          set -eu
-          python3 scripts/measure.py instructions \
-            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
-            --target cortex-m0 --tools "$RUNNER_TEMP/cortex-m" \
-            --output "$RUNNER_TEMP/measure-instructions"
-          python3 scripts/measure.py compare "$RUNNER_TEMP/measure-instructions/instructions.json"
-
-      - name: Keep the counts, which record --from-run reads
-        if: always() && matrix.part == 'programs'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: measure-instructions-cortex-m0
-          path: ${{ runner.temp }}/measure-instructions/instructions.json
-          retention-days: 30
-
       - name: Keep the stack-switch consumer's capacity report
         if: always() && matrix.part == 'programs'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
