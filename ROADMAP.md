@@ -286,7 +286,7 @@ RV64 count no longer depends on its environment.
 
 ### R16.20 — Register allocation
 
-Status: active
+Status: complete
 Depends on: R16.10
 
 Keep values in registers where R16.10's ranked costs show stack traffic
@@ -307,6 +307,26 @@ relies on it; measured improvement for affected target/level/profile
 combinations against their matching R16.10 baselines, with unchanged behavior,
 ABI and debugger evidence. Every supported combination remains under the same
 size and time regression gate, including unaffected levels and profiles.
+
+Done: D1403 keeps `Landin.IR.Liveness` the one analysis and placement each
+backend's own; `ir opt/slot intervals`, `slot interval fallback` and `loop
+depths` test it directly, committed before the allocator change. arm64 runs
+its allocator at `size` (D1404): over the seven hosted workloads at
+`size-auto` `.text` falls about a third on Linux, Darwin and FreeBSD
+(497,380 to 327,272 bytes at Linux armv8-a), and under QEMU mandelbrot
+executes 0.30 of its instructions, fannkuch-redux 0.37, fasta 0.38 and
+binary-trees 0.66. RV64 jumps near within a routine provably inside JAL's
+reach (D1405): `.text` 19.9% smaller at `speed`, counted instructions 9.5%
+to 20% fewer. No firmware, x86-64 or arm64 `speed` image changed; the build
+modes agree and the scaling bound holds. The candidate passed its
+[gate](https://github.com/JanHaan/Landin/actions/runs/44326804174) and
+[boards](https://github.com/JanHaan/Landin/actions/runs/44342272388).
+R16.21 to R16.24 took the other backends and their rows, SR-586 and
+SR-1302 among them. Findings fixed on the way: LLDB's `GetValueAsSigned`
+read a zero-extended `i32` in a register whole, so the Darwin sessions read
+integers at their type's width; a failed Darwin LLDB session keeps its
+transcripts; `measure.py plugin` names a program for a user-mode QEMU; and
+`measure_costs.py routines` takes `--library`.
 
 ### R16.21 — RISC-V register allocation
 
