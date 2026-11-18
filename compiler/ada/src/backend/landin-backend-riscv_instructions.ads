@@ -40,4 +40,15 @@ package Landin.Backend.RiscV_Instructions is
        and then Scratch /= Base and then Scratch /= Index
        and then Scratch /= 0;
 
+   --  Whether Text, one routine's emitted lines, assembles to fewer than
+   --  Reach bytes, each line counted at the most it can take: a label or
+   --  a directive that places nothing none, `.p2align N` 2**N, LI's
+   --  64-bit expansion 32 and any other instruction 8, a conditional
+   --  branch the assembler lengthens with a JAL around it included.  A
+   --  directive outside that list, which may place any number of bytes,
+   --  or a line holding more than one statement, answers False.  The
+   --  emitter passes JAL's reach; a test may pass less.
+   function Assembles_Below
+     (Text : String; Reach : Landin.Targets.Byte_Count) return Boolean;
+
 end Landin.Backend.RiscV_Instructions;
