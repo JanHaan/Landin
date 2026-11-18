@@ -499,11 +499,11 @@ def measure_time(args) -> int:
     print(f"{len(work)} configurations, {len(distinct)} distinct image pairs,"
           f" {args.samples} interleaved runs of each side", flush=True)
     figures, outputs = {}, {}
-    for identity, members in distinct.items():
-        (level, profile, workload), pair = members[0]
-        stdin = timing_input(workload, out)
+    tolerance = wall_tolerance()
+
+    def timed(pair, workload, stdin, count):
         samples = {"candidate": [], "base": []}
-        for index in range(args.samples):
+        for index in range(count):
             order = (("candidate", 0), ("base", 1)) if index % 2 == 0 else (
                 ("base", 1), ("candidate", 0))
             for side, at in order:
@@ -513,11 +513,23 @@ def measure_time(args) -> int:
                 require(digest == first, f"{pair[at][0].name}'s timing output"
                         " differs from the other configurations'")
         candidate, base = median(samples["candidate"]), median(samples["base"])
-        figure = {"candidate": round(candidate, 6), "base": round(base, 6),
-                  "ratio": round(candidate / base, 4),
-                  "samples": args.samples,
-                  "spread": round((max(samples["candidate"]) - min(samples["candidate"]))
-                                  / candidate, 4)}
+        return {"candidate": round(candidate, 6), "base": round(base, 6),
+                "ratio": round(candidate / base, 4), "samples": count,
+                "spread": round((max(samples["candidate"]) - min(samples["candidate"]))
+                                / candidate, 4)}
+
+    for identity, members in distinct.items():
+        (level, profile, workload), pair = members[0]
+        stdin = timing_input(workload, out)
+        figure = timed(pair, workload, stdin, args.samples)
+        #  A pair past the tolerance is timed again, three times as often,
+        #  and judged on that: a slowdown survives it, one noisy draw of a
+        #  hosted runner does not (the second A/A run's 1.085).
+        if tolerance is not None and figure["ratio"] > 1 + tolerance:
+            first = figure
+            figure = timed(pair, workload, stdin, 3 * args.samples)
+            figure["first"] = {k: first[k] for k in ("ratio", "samples")}
+        candidate, base = figure["candidate"], figure["base"]
         first_key = key(level, profile, workload["name"])
         figures[first_key] = figure
         print(f"  {first_key}: {candidate:.4f} s against {base:.4f} s,"
@@ -532,6 +544,14 @@ def measure_time(args) -> int:
     (out / "time.json").write_text(json.dumps(result, indent=1) + "\n")
     print(f"wrote {out / 'time.json'}")
     return judge_time(result)
+
+
+def wall_tolerance() -> float | None:
+    """This runner's wall tolerance from the noise study, or None."""
+    noise = MEASURE / "noise" / "wall.json"
+    if not noise.exists():
+        return None
+    return json.loads(noise.read_text())["tolerance"].get(runner_class()["label"])
 
 
 def judge_time(result: dict) -> int:

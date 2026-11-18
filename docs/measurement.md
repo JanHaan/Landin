@@ -157,7 +157,13 @@ a QEMU's own header.
 Each class's tolerance comes from a noise study recorded on its runner
 before the gate enforces it: the same tree measured repeatedly, its spread
 kept in `compiler/tests/measure/noise/`, and the tolerance set above it.
-Until a class has its study its comparison reports and does not fail. The
+Until a class has its study its comparison reports and does not fail. A
+`wall` pair past its tolerance is timed again with three times the samples
+and judged on that, since the second A/A run of x86-64 drew one pair at
+1.085 with no change to the emitted code; the tolerances, in
+`compiler/tests/measure/noise/wall.json`, are 10% on `ubuntu-24.04`, 6% on
+`ubuntu-24.04-arm` and 40% on `macos-26`, whose virtual M1 spread to
+1.198. The
 `instructions` class's study found no spread, so it is held exactly, as
 size is.
 

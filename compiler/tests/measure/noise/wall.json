@@ -1,11 +1,53 @@
 {
  "schema": 1,
- "comment": "docs/measurement.md's wall class: the noise study is an A/A run, the candidate's and the base's compilers emitting the same code, each configuration's two images interleaved over five fresh-copy runs. A ratio above 1 + tolerance fails. Each tolerance is set above the largest ratio the study found on that runner, with margin for a processor model the study did not meet.",
- "study": {"run": 44216106926, "commit": "ecf684a113d1", "samples": 5},
+ "comment": "docs/measurement.md's wall class: the noise study is an A/A run, the candidate's and the base's compilers emitting the same code, each configuration's two images interleaved over five fresh-copy runs. A ratio above 1 + tolerance fails. Each tolerance is set above the largest ratio the study found on that runner, with margin for a processor model the study did not meet. A pair past its tolerance is timed again with three times the samples and judged on that.",
  "observed": {
-  "ubuntu-24.04": {"processor": "AMD EPYC 9V45 96-Core Processor", "pairs": 126, "min": 0.9373, "p5": 0.9802, "p95": 1.0145, "max": 1.0247},
-  "ubuntu-24.04-arm": {"processor": "not named by /proc/cpuinfo in the study", "pairs": 84, "min": 0.9874, "p5": 0.996, "p95": 1.0058, "max": 1.0196},
-  "macos-26": {"processor": "Apple M1 (Virtual)", "pairs": 66, "min": 0.9066, "p5": 0.9214, "p95": 1.1132, "max": 1.1978}
+  "ubuntu-24.04": {
+   "processor": "AMD EPYC 9V45 96-Core Processor",
+   "pairs": 126,
+   "min": 0.9373,
+   "p5": 0.9802,
+   "p95": 1.0145,
+   "max": 1.0247
+  },
+  "ubuntu-24.04-arm": {
+   "processor": "not named by /proc/cpuinfo in the study",
+   "pairs": 84,
+   "min": 0.9874,
+   "p5": 0.996,
+   "p95": 1.0058,
+   "max": 1.0196
+  },
+  "macos-26": {
+   "processor": "Apple M1 (Virtual)",
+   "pairs": 66,
+   "min": 0.9066,
+   "p5": 0.9214,
+   "p95": 1.1132,
+   "max": 1.1978
+  }
  },
- "tolerance": {"ubuntu-24.04": 0.08, "ubuntu-24.04-arm": 0.06, "macos-26": 0.40}
+ "tolerance": {
+  "ubuntu-24.04": 0.1,
+  "ubuntu-24.04-arm": 0.06,
+  "macos-26": 0.4
+ },
+ "studies": [
+  {
+   "run": 44216106926,
+   "commit": "ecf684a113d1",
+   "samples": 5
+  },
+  {
+   "run": 44225333572,
+   "commit": "7f6cefdf6496",
+   "samples": 5,
+   "ubuntu-24.04": {
+    "pairs": 126,
+    "min": 0.9413,
+    "max": 1.0849
+   },
+   "note": "x86-64-v3/speed-off/fasta at 1.0849 failed the 8% tolerance with no change to emitted code"
+  }
+ ]
 }
