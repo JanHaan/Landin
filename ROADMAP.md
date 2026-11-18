@@ -621,7 +621,7 @@ closed; the new check refuses a command or flag the documents do not name.
 
 ### R18.40 — Retire the bare-source form
 
-Status: active
+Status: complete
 Depends on: R18.10
 
 `refine NAME` with an unknown NAME is read today as `refine check NAME`.
@@ -634,6 +634,17 @@ which a recorded report holds with the recording host's target
 Exit evidence: the refusal and its explanation in the catalogue; every
 fixture, script and document that used the form rewritten; no recorded
 report holds a line that depends on the recording host.
+Done: a request with an operand and no command is refused with L0002,
+status 2, writing the request again after `check` or after the command
+its options belong to, and a first word that is neither a source nor a
+path is told that `refine help` lists the commands (D1463). The closing
+line went with the form, so `SR-1277` is settled: the 24 reports that
+held it are re-recorded and none names a target its fixture does not. A
+fixture's `args` are `check`'s unless they name a command (D1464); the
+test program, every lane, script and the release smoke test, and the
+documents name their command. Found on the way: parallel compiles into
+one directory refuse each other with L0005 (SR-1343); `SR-1287` fixed
+at [1230].
 
 ### R18.50 — The dispatcher
 
