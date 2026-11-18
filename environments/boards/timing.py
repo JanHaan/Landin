@@ -801,6 +801,7 @@ def main(argv=None):
     if args.command == 'record':
         return record(args)
     if args.command == 'build':
+        common.warn_stale_refine(args)  # is it this checkout's?
         return build(args)
     if args.command == 'remote':
         return remote(args, board_args)
