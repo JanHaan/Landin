@@ -712,7 +712,7 @@ Depends on: R18.20, R18.50
 
 The first new command: a Debug Adapter Protocol server over the GDB and
 LLDB sessions the targets already script, the split command `refine-dap`
-(D1383), in lockstep with the compiler's library, shipped in the archive
+(D1383), in lockstep with `refine` (D1383), shipped in the archive
 and the flake and run as `refine dap`, written to the split's rules from
 its start.
 It reads source maps without `Landin.Source_Maps`, which writes them from
@@ -727,14 +727,26 @@ Status: planned
 Depends on: R18.50
 
 `svd`, `bindings` and `site` become `refine-svd`, `refine-bindings` and
-`refine-site`, each in lockstep with the compiler's library and each
+`refine-site`, each in lockstep with `refine` (D1383) and each
 keeping its suites and its black-box "destroys nothing" and determinism
 controls. Those controls take the command they test as an argument, so the
 lanes' shared `--refine` becomes one helper (SR-1224), and
 `compiler/tests/test_compile_publication.py` reports every selected
 control's failure rather than the first (SR-1275).
-Exit evidence: each split linked without the front end; its suites, and
-every invocation of the old form, pass through the dispatcher.
+Each moves out from under `Landin.Commands`, whose body withs the whole
+compiler, and stops withing `Landin.Driver` for `Outcome`. Its own main
+parses its own arguments and response files and answers `--help`,
+`--describe` and `--complete`, the process surface that is its whole
+contract with `refine`, and it enters `compiler/ada/split-commands.json`.
+A closure pin for each main in `scripts/tests/test_unit_closure.py` holds
+it without the front end, as D1423 pinned `Landin.Library`. `svd` gains
+toy-SVD goldens that run offline through the executable: the output
+bytes, and the report and exit status of each fault code. The SR-1224
+helper takes an executable path, so one suite runs `refine svd` or
+`refine-svd`.
+Exit evidence: each split linked without the front end; its black-box
+suites, and every invocation of the old form, pass through the
+dispatcher.
 
 ### R18 gate
 Every existing invocation works or is refused with its new form; every
