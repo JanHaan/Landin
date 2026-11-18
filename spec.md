@@ -25969,6 +25969,29 @@ asked for.
 
 **Pinned by** `opt driver/stage reports measure each stage`.
 
+### D1382 — A board's cycle count is the program's own reading around `main`
+
+**The tour said** nothing; the rig's RAM runs judged a status alone.
+
+**Chosen:** a timing RAM run starts the core's counter from the probe and
+lets the program read it: the measurement entry reads it just before
+`main` and just after it returns, and the probe stops the program at the
+return with a breakpoint, an Arm `bkpt` written over the return's `udf`,
+a hardware breakpoint on RISC-V and `_landin_firmware_stopped` on Xtensa,
+and reads the two words. The counters are DWT `CYCCNT` on the M33 and M7,
+`mcycle` on Hazard3 and the ESP32-C5, the vendor `mpccr` on the ESP32-C3,
+`CCOUNT` on Xtensa, and the RP2040's 1 µs timer at its 12 MHz crystal. A
+figure is the lower median of three runs; one past 2³¹ fails. A key names
+the board, its clock and where the code ran.
+
+**The alternatives:** the probe zeroing and reading the counter, which on
+the ESP32-C3 counted the probe's own latency, the counter running while
+the hart is halted; and the probe polling for completion, which adds its
+interval to every figure.
+
+**Pinned by** `scripts/tests/test_board_timing.py` and
+`compiler/tests/measure/noise/cycles.json`.
+
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 
 **The tour said** nothing of a second family. Prototype 1 drives a UART

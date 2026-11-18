@@ -92,7 +92,7 @@ How time is measured depends on where the code runs. Each way is a
 | class | where | the figure | compared with |
 |---|---|---|---|
 | `wall` | a native hosted runner | the median wall time of the timing run over several fresh copies of each executable, each copied to a new path before it runs, since placement alone moved a run by up to 50% | the base commit's own images, built in the same job by the base's compiler and run interleaved with the candidate's |
-| `cycles` | a board on the rig, in a RAM run | the core's counter, zeroed by the probe as the program is entered, or read there where it cannot be written, and read again when the program stops at the firmware return's breakpoint; a count past 2³¹ fails rather than risk a wrap | the committed baseline of the same board, clock and RAM placement |
+| `cycles` | a board on the rig, in a RAM run | the core's counter, started by the probe and read by the program itself just before `main` and just after it returns; the probe stops the program at the return with a breakpoint and reads the two words; the lower median of three runs, and a count past 2³¹ fails rather than risk a wrap | the committed baseline of the same board, clock and RAM placement, within the port's tolerance from its noise study |
 | `instructions` | an emulator | the instructions the program's own code executed, counted by a QEMU plugin of the repository's own over the image's address range | the committed baseline of the same emulator |
 | `size-only` | an emulator whose count is not the program's | nothing: the target records size alone | — |
 
@@ -107,16 +107,27 @@ The `cycles` counters, each enabled by the probe before the run:
 
 | board | core | counter |
 |---|---|---|
-| RP2040 | Cortex-M0+ | the chip's 1 µs timer, `TIMERAWL`, read at entry and at the stop and subtracted; the M0+ has no cycle counter |
+| RP2040 | Cortex-M0+ | the chip's 1 µs timer, `TIMERAWL`, at the 12 MHz crystal, twelve cycles a count; the M0+ has no cycle counter |
 | RP2350 Arm | Cortex-M33 | DWT `CYCCNT`, after `DEMCR.TRCENA` and `CYCCNTENA` |
 | STM32H753 | Cortex-M7 | DWT `CYCCNT`, likewise; it wraps after 9 s at 480 MHz, so a run stays shorter |
 | RP2350 Hazard3 | RISC-V | `mcycle`/`mcycleh`, with `mcountinhibit` cleared |
 | ESP32-C3 | RISC-V | the vendor counter `mpccr`, after `mpcer` and `mpcmr` select cycles |
-| ESP32-C5 | RISC-V | the vendor counter `mpccr`, as on the C3 |
+| ESP32-C5 | RISC-V | `mcycle`, with `mcountinhibit` cleared, as ESP-IDF reads it on the C5 |
 | ESP32, ESP32-S3 | Xtensa LX6, LX7 | `CCOUNT` |
 
 A `cycles` key includes the board, its clock and where the code ran, since
-the same image costs a different count from another RAM.
+the same image costs a different count from another RAM. The helper moves
+the RP chips to their 12 MHz crystal, as each board's application does,
+and reads and decodes the others' clocks. The counter is read by the
+program rather than the probe because the ESP32-C3's `mpccr` runs while
+the hart is halted, so a probe's span carried 130,000 to 190,000 cycles of
+its own against a program's 4,600 to 19,000. The study in
+`compiler/tests/measure/noise/cycles.json` found the ESP32, ESP32-S3,
+ESP32-C3 and Hazard3 exact, the M33 within 0.05%, the C5 within 0.31% and
+the RP2040 within one count; the M7's first run after a load is up to 5%
+high and the runs after it equal, which the lower median of three takes.
+A board's images are identical when their loaded segments and entry are,
+whatever the ELF file's debugging information says.
 
 An `instructions` count is deterministic where the emulator runs the
 program alone: QEMU's user mode for RV64, given an environment of
