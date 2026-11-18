@@ -2376,9 +2376,11 @@ jobs:
   #
   #  board-bundles builds the release compiler from this commit and every
   #  board's boot and RAM bundles, strict against the hardware records, so
-  #  a recorded image's drift fails here before a board runs.  One
-  #  artifact carries them with provenance.json and files.sha256; its id,
-  #  its digest and the list's sha256 are this job's outputs.
+  #  a recorded image's drift fails here before a board runs, and on an
+  #  event that times the boards the timing runs' images as well, every
+  #  firmware workload at every profile on each port (docs/measurement.md).
+  #  One artifact carries them with provenance.json and files.sha256; its
+  #  id, its digest and the list's sha256 are this job's outputs.
   board-bundles:
     needs: inputs
     if: needs.inputs.outputs.boards == 'true'
@@ -2410,6 +2412,14 @@ jobs:
           python3 environments/boards/build.py \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --mode=both --records=strict --output "$RUNNER_TEMP/board-bundles"
+
+      - name: Build the timing runs' images of every firmware workload and profile
+        if: needs.inputs.outputs.timing == 'true'
+        run: |
+          export PATH="$RUNNER_TEMP/cortex-m/gnat-arm-elf/bin:$RUNNER_TEMP/cortex-m/gnat-riscv64-elf/bin:$RUNNER_TEMP/cortex-m/xtensa-esp-elf/bin:$PATH"
+          python3 environments/boards/timing.py build \
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --output "$RUNNER_TEMP/board-bundles/timing"
 
       - name: Record the bundles' provenance and file list
         id: provenance
@@ -2447,7 +2457,9 @@ jobs:
           key: ${{ steps.objects.outputs.key }}
 
   #  One leg per port on the rig's one runner, one at a time; each leg is
-  #  self-contained, RAM then boot, so legs of two runs may interleave.
+  #  self-contained, RAM then boot, so legs of two runs may interleave.  On
+  #  an event that times the boards each port's timing runs come before its
+  #  boot check (rig.json's time steps), kept in the leg's evidence.
   #  The checkout is exactly this commit, sparse to the bundle's source
   #  roots: cone mode also brings every file directly under an ancestor
   #  directory, which is how flake.nix, flake.lock and environments/pins.sh
@@ -2546,11 +2558,18 @@ jobs:
       #  exec, so that the runner's SIGINT on a cancel reaches the board
       #  gate itself rather than the shell.  The lock wait ends in rig-busy
       #  well inside the job's timeout.
-      - name: Boot and RAM runs of ${{ matrix.port }} on the rig
-        run: >-
-          exec python3 environments/boards/gate.py --port=${{ matrix.port }}
-          --bundles="$RUNNER_TEMP/board-bundles" --lock-wait=1200
-          --output="$RUNNER_TEMP/board-leg/${{ matrix.port }}/evidence"
+      - name: Boot and RAM runs of ${{ matrix.port }} on the rig, and its timing runs
+        env:
+          TIMING: ${{ needs.inputs.outputs.timing }}
+        run: |
+          set -eu
+          timing=""
+          if [ "$TIMING" = true ]; then
+            timing="--timing=$RUNNER_TEMP/board-bundles/timing"
+          fi
+          exec python3 environments/boards/gate.py --port=${{ matrix.port }} \
+            --bundles="$RUNNER_TEMP/board-bundles" --lock-wait=1200 ${timing:+"$timing"} \
+            --output="$RUNNER_TEMP/board-leg/${{ matrix.port }}/evidence"
 
       #  Also after a failure or a cancel, so the outcome the tool wrote
       #  reaches the aggregate.
@@ -2584,7 +2603,11 @@ jobs:
             determinism, board-bundles, board]
     runs-on: ubuntu-24.04
     steps:
+      #  The whole history, so the cycles comparison reads its base
+      #  commit's baselines.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       #  Each leg's outcome, so the verdict names it; a leg that never
       #  started has no artifact, which the verdict reports by port.
       - name: Every board leg's evidence
@@ -2600,3 +2623,26 @@ jobs:
         run: >-
           python3 scripts/gate_inputs.py verdict
           --evidence "$RUNNER_TEMP/board-evidence" --always documents scripts
+      #  The board legs' timing runs, each port's latest attempt, held to the
+      #  base commit's baselines within each port's tolerance from its noise
+      #  study; a difference the candidate's baselines do not record fails.
+      - name: Every port's cycles against the base commit's baselines
+        if: >-
+          always() && needs.inputs.outputs.timing == 'true'
+          && needs.inputs.outputs.boards == 'true' && needs.board.result == 'success'
+        run: |
+          set -eu
+          python3 environments/boards/timing.py figures --evidence "$RUNNER_TEMP/board-evidence" \
+            --output "$RUNNER_TEMP/measure-cycles/figures.json"
+          python3 environments/boards/timing.py compare "$RUNNER_TEMP/measure-cycles/figures.json"
+      #  What timing.py record takes to declare a change.
+      - name: Keep the cycles figures
+        if: >-
+          always() && needs.inputs.outputs.timing == 'true'
+          && needs.inputs.outputs.boards == 'true' && needs.board.result == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: measure-cycles
+          path: ${{ runner.temp }}/measure-cycles/figures.json
+          if-no-files-found: warn
+          retention-days: 90

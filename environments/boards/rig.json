@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "description": "The maintainer's rig as the physical board gate runs it: each port's steps in order, with the board tool arguments that rig needs, and the probehive runtime and bitstream it uses. gate.py replaces {probehive}, {ram_loader} and each name of a port's location in an argument; a location left null is not set up, and the gate ends that port needs-setup before any hardware.",
+  "description": "The maintainer's rig as the physical board gate runs it: each port's steps in order, with the board tool arguments that rig needs, and the probehive runtime and bitstream it uses. gate.py replaces {probehive}, {ram_loader} and each name of a port's location in an argument; a location left null is not set up, and the gate ends that port needs-setup before any hardware. A time step runs timing.py's timing runs of its board from the timing bundle, only when gate.py is given one with --timing; each comes before the port's boot check, so that the board still rests on its verified fixed image, and the STM32H753's before its cached run, which leaves a handler the warm load cannot retire.",
   "arty_serial": "210319B3E738",
   "probehive": {
     "repository": "https://github.com/JanHaan/probehive",
@@ -24,6 +24,7 @@
       "steps": [
         {"board": "rp2040", "mode": "ram",
          "arguments": ["--probehive", "{probehive}", "--indicator-pin", "IO32", "--ram-loader", "{ram_loader}"]},
+        {"board": "rp2040", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "rp2040", "mode": "boot",
          "arguments": ["--probehive", "{probehive}", "--indicator-pin", "IO32", "--ram-loader", "{ram_loader}"]}
       ]
@@ -34,10 +35,12 @@
       "steps": [
         {"board": "rp2350_hazard3", "mode": "ram",
          "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
+        {"board": "rp2350_hazard3", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350", "mode": "boot",
          "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350", "mode": "ram",
          "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
+        {"board": "rp2350", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350_hazard3", "mode": "boot",
          "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]}
       ]
@@ -45,6 +48,7 @@
     "stm32h753": {
       "steps": [
         {"board": "stm32h753", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "stm32h753", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "stm32h753_cached", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "stm32h753", "mode": "boot", "arguments": []}
       ]
@@ -52,24 +56,28 @@
     "esp32c3": {
       "steps": [
         {"board": "esp32c3", "mode": "ram", "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}"]},
+        {"board": "esp32c3", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "esp32c3", "mode": "boot", "arguments": ["--probehive", "{probehive}"]}
       ]
     },
     "esp32c5": {
       "steps": [
         {"board": "esp32c5", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32c5", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "esp32c5", "mode": "boot", "arguments": []}
       ]
     },
     "esp32": {
       "steps": [
         {"board": "esp32", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "esp32", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]}
       ]
     },
     "esp32s3": {
       "steps": [
         {"board": "esp32s3", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32s3", "mode": "time", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "esp32s3", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]}
       ]
     }

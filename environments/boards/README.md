@@ -569,7 +569,7 @@ the bundles `build.py --mode=both` prepared, as the gate's board jobs do:
 
 ```sh
 python3 environments/boards/gate.py --port=PORT --bundles=BUNDLES \
-    --output=NEW_DIRECTORY [--lock-wait=SECONDS]
+    --output=NEW_DIRECTORY [--timing=TIMING] [--lock-wait=SECONDS]
 ```
 
 rig.json describes the maintainer's rig: the Arty's serial, the probehive
@@ -600,6 +600,34 @@ RAM run, its cached profile's RAM run, and its boot check
 ([below](#the-stm32h753s-cached-profile)). A RAM run's success never
 establishes power-on, ROM loading or fixed-image restoration, so no port
 runs RAM alone.
+
+Given `--timing`, a bundle `timing.py build` prepared from this checkout's
+source, the port also runs its `time` steps: after each RAM run and before
+the boot check, `timing.py run` times the board's images three times each
+([above](#timing-runs)), its output kept as `BOARD-time`. The Pico 2 times
+Hazard3 after its Hazard3 RAM run and Arm after its Arm RAM run; the
+STM32H753 times before its cached profile's run, whose handler the warm
+load cannot retire. Without `--timing` the time steps are left out, as the
+gate leaves them out of every event but the schedule and a dispatch.
+
+The gate's aggregate job then holds the legs' figures to the base
+commit's, `compiler/tests/measure/baselines/BOARD.cycles.json`, keyed by
+level, profile and workload, each with its clock and placement:
+
+```sh
+python3 environments/boards/timing.py figures --evidence EVIDENCE --output figures.json
+python3 environments/boards/timing.py compare figures.json [--base REV]
+python3 environments/boards/timing.py record figures.json [--board BOARD] [--key KEY]
+```
+
+A figure is its baseline's when it is within the larger of the port's
+relative and absolute tolerance, `tolerance` in
+`compiler/tests/measure/noise/cycles.json`; beyond it, slower or faster, it
+fails unless the candidate's own baselines record it, which is how a
+change is declared: `record` the `measure-cycles` artifact's figures and
+say why in the commit. A configuration with no baseline, a new placement
+or a changed limit fails as well; one run at another clock is the
+runner's change, reported for recording and not failed.
 
 Before it takes the lock, and before anything touches a board, a probe or
 a hub, `gate.py` reads rig.json, validates every bundle against this

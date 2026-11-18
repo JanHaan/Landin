@@ -2,7 +2,7 @@
 """Run one port's physical board gate on the rig, from prepared bundles.
 
     python3 environments/boards/gate.py --port=PORT --bundles=DIR --output=NEW_DIRECTORY \
-        [--rig=environments/boards/rig.json] [--lock-wait=SECONDS] \
+        [--timing=TIMING] [--rig=environments/boards/rig.json] [--lock-wait=SECONDS] \
         [--probehive=DIR] [--ram-loader=PATH]
 
 PORT is one of rig.json's ports, whose configured steps run in order: the
@@ -21,7 +21,12 @@ at most --lock-wait seconds for it, across the whole sequence, so that no
 other run comes between its steps.  Each port runs its RAM run first, from
 the verified fixed image the last run left, and its boot check last, so the
 board rests on a freshly restored and verified fixed image rather than on a
-RAM application left running.  Before each step it writes
+RAM application left running.  A port's `time` steps, before its boot
+check, run environments/boards/timing.py's timing runs of the TIMING
+bundle `timing.py build` prepared, which must have been built from this
+checkout's source; without --timing they are left out, as the gate leaves
+them out of every event but the schedule and a dispatch.  Before each step
+it writes
 RIG_STATE/runs/PORT.json, and removes it once every step has run to its own
 result and the sequence has ended on its passed boot check: an entry found
 there says an earlier gate run of the port did not leave the board on its
@@ -38,6 +43,9 @@ point and records its cancellation.  The sequence stops at the first step
 that does not pass.  NEW_DIRECTORY/outcome.json keeps each step's outcome
 and the run's provenance, and a summary is appended to $GITHUB_STEP_SUMMARY
 when that is set.  The exit status is 0 only for a passed port.
+
+A time step runs `python3 environments/boards/timing.py run --board=BOARD
+--bundle=TIMING --output=NEW_DIRECTORY/BOARD-time --repeat=3 ARGUMENTS`.
 
 --probehive defaults to RIG_STATE/probehive and --ram-loader to
 RIG_STATE/bin/landin-ram-run.
@@ -65,11 +73,17 @@ sys.path.insert(0, str(HERE))
 import bundle  # noqa: E402
 import common  # noqa: E402
 import rig as rigs  # noqa: E402
+import timing  # noqa: E402
 from common import Failed, NeedsOperator, NeedsSetup, ToolMismatch, require  # noqa: E402
 
 BOARDS = ('rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753', 'stm32h753_cached', 'esp32c3',
           'esp32c5', 'esp32', 'esp32s3')
 PLACEHOLDER = re.compile(r'\{([a-z_]+)\}')
+MODES = ('boot', 'ram', 'time')
+#  The runs of each image a time step makes: the lower median of three is a
+#  warm run on every port, where a single run on the STM32H753 is a cold one
+#  (compiler/tests/measure/noise/cycles.json).
+TIMING_REPEAT = 3
 
 
 def utc_now():
@@ -92,7 +106,8 @@ def port_steps(rig, port, values):
     steps, unset, used = [], set(), set()
     for step in spec['steps']:
         require(isinstance(step, dict) and step.get('board') in BOARDS
-                and step.get('mode') in ('boot', 'ram') and isinstance(step.get('arguments'), list)
+                and step.get('mode') in MODES and isinstance(step.get('arguments'), list)
+                and (step.get('mode') != 'time' or step['board'] in timing.BOARDS)
                 and all(isinstance(a, str) for a in step['arguments']),
                 'rig.json port %s has an invalid step: %r' % (port, step))
         for argument in step['arguments']:
@@ -101,7 +116,8 @@ def port_steps(rig, port, values):
                 used.add(name)
                 if known[name] is None:
                     unset.add(name)
-        require(not any(a.split('=', 1)[0] in ('--mode', '--bundle', '--output', '--record')
+        require(not any(a.split('=', 1)[0] in ('--mode', '--bundle', '--output', '--record',
+                                               '--board', '--repeat')
                         for a in step['arguments']),
                 'rig.json port %s passes an option the gate controls' % port)
         steps.append(step)
@@ -260,6 +276,34 @@ def stopped(process, seconds):
     reader.join(5)
 
 
+def timing_bundle(directory, boards, root):
+    """The timing bundle at DIRECTORY, refused unless it is built from
+    ROOT's source and holds every board of BOARDS; its provenance."""
+    try:
+        manifest = timing.read_bundle(directory)
+    except (OSError, ValueError, KeyError) as error:
+        raise Failed('timing bundle %s: %s' % (directory, error)) from error
+    here = bundle.source_identity(root)['sha256']
+    require(manifest['source_identity'] == here, 'timing bundle %s was built from source %s, not'
+            ' this checkout\'s %s' % (directory, manifest['source_identity'], here))
+    missing = sorted(set(boards) - set(manifest['boards']))
+    require(not missing, 'timing bundle %s has no images of %s' % (directory, ', '.join(missing)))
+    return dict(directory=str(directory), source_identity=manifest['source_identity'],
+                compiler=manifest['compiler'],
+                images={board: len(manifest['boards'][board]['images']) for board in boards})
+
+
+def step_argv(root, board, mode, directory, out, arguments):
+    """The command one step runs: its board tool, or for a time step the
+    timing runs of DIRECTORY, the timing bundle."""
+    if mode == 'time':
+        return [sys.executable, str(Path(root) / 'environments/boards/timing.py'), 'run',
+                '--board=' + board, '--bundle=' + str(directory), '--output=' + str(out),
+                '--repeat=%d' % TIMING_REPEAT, *arguments]
+    return [sys.executable, str(Path(root) / 'environments/boards' / board / 'board.py'),
+            '--mode=' + mode, '--bundle=' + str(directory), '--output=' + str(out), *arguments]
+
+
 def run_step(root, board, mode, directory, output, arguments, forwarder, environ):
     """One board tool run; returns its step entry for outcome.json."""
     # A step repeated in one run, the boot check that restores a board
@@ -269,8 +313,7 @@ def run_step(root, board, mode, directory, output, arguments, forwarder, environ
         again += 1
         name = '%s-%s-%d' % (board, mode, again)
     out, log = output / name, output / (name + '.log')
-    argv = [sys.executable, str(Path(root) / 'environments/boards' / board / 'board.py'),
-            '--mode=' + mode, '--bundle=' + str(directory), '--output=' + str(out), *arguments]
+    argv = step_argv(root, board, mode, directory, out, arguments)
     began = time.monotonic()
     with log.open('wb') as stream:
         stream.write(('$ ' + shlex.join(argv) + '\n').encode())
@@ -334,6 +377,7 @@ def summary(document):
 def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
              sysfs=rigs.USB_SYSFS, boot_id_path=rigs.BOOT_ID, validate_bundle=bundle.validate,
              verify_helper=common.verify_ram_helper, probe_rs=probe_rs_identity, which=shutil.which,
+             validate_timing=timing_bundle,
              locks='/proc/locks',
              report=None, signals=True):
     environ = os.environ if environ is None else environ
@@ -367,7 +411,15 @@ def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
         provenance['rig'] = dict(path=str(args.rig), sha256=common.sha(args.rig))
         rig = rigs.load_rig(args.rig)
         steps, used = port_steps(rig, args.port, dict(probehive=args.probehive, ram_loader=args.ram_loader))
+        timed = sorted({board for board, mode, _ in steps if mode == 'time'})
+        if getattr(args, 'timing', None) is None:
+            steps = [step for step in steps if step[1] != 'time']
+            provenance['timing'] = 'not asked: no --timing bundle'
+        elif timed:
+            provenance['timing'] = validate_timing(Path(args.timing), timed, root)
         for board, mode, _ in steps:
+            if mode == 'time':
+                continue
             directory = Path(args.bundles) / board / mode
             try:
                 prepared = validate_bundle(directory, board=board, mode=mode, source_root=root)
@@ -420,7 +472,8 @@ def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
                 port=args.port, step=index, board=board, mode=mode, started=utc_now(),
                 output=str(output), commit=provenance['commit'], github=provenance['github']),
                 indent=2) + '\n', state)
-            entry = run_step(root, board, mode, Path(args.bundles) / board / mode, output, arguments,
+            entry = run_step(root, board, mode, Path(args.timing) if mode == 'time'
+                             else Path(args.bundles) / board / mode, output, arguments,
                              forwarder, environ)
             document['steps'].append(entry)
             if entry['outcome'] != 'passed':
@@ -474,6 +527,9 @@ def main(argv=None):
     parser.add_argument('--bundles', type=Path, required=True,
                         help="build.py's output, holding BOARD/MODE bundles")
     parser.add_argument('--output', type=Path, required=True, help='a new directory')
+    parser.add_argument('--timing', type=Path,
+                        help="timing.py build's output, whose images the port's time steps run;"
+                             ' without it they are left out')
     parser.add_argument('--rig', type=Path, default=HERE / 'rig.json')
     parser.add_argument('--lock-wait', type=float, default=2700.0,
                         help='seconds to wait for the rig lock before ending rig-busy')

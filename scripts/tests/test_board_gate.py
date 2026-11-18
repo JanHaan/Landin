@@ -34,9 +34,10 @@ PATIENCE = 60
 FAKE = r'''
 import fcntl, json, os, signal, sys, time
 from pathlib import Path
-board = Path(__file__).parent.name
 values = dict(a.split('=', 1) for a in sys.argv[1:] if a.startswith('--') and '=' in a)
-mode, out = values['--mode'], Path(values['--output'])
+# timing.py names its board; a board tool is in its board's directory.
+board = values.get('--board') or Path(__file__).parent.name
+mode, out = values.get('--mode', 'time'), Path(values['--output'])
 action = os.environ.get('GATE_FAKE_%s_%s' % (board.upper(), mode.upper()), 'pass')
 out.mkdir(parents=True)
 lock = open(os.environ['GATE_FAKE_LOCK'])
@@ -92,6 +93,10 @@ class Rig:
             tool = self.root / 'environments/boards' / board / 'board.py'
             tool.parent.mkdir(parents=True)
             tool.write_text(FAKE)
+        (self.root / 'environments/boards/timing.py').write_text(FAKE)
+        self.timing = self.tmp / 'timing'
+        self.timing.mkdir()
+        self.timed = []
         self.bundles = self.tmp / 'bundles'
         for board in GATE.BOARDS:
             for mode in ('boot', 'ram'):
@@ -150,6 +155,11 @@ class Rig:
         assert source_root == self.root
         return dict(compiler_identity=dict(sha256='c' * 64), source_identity=dict(sha256='s' * 64))
 
+    def validate_timing(self, directory, boards, root):
+        self.timed.append((directory, boards))
+        assert root == self.root
+        return dict(directory=str(directory), source_identity='s' * 64)
+
     def args(self, port, **more):
         values = dict(port=port, bundles=self.bundles, output=self.tmp / ('out-%s' % port),
                       rig=self.rig, lock_wait=0.0, probehive=self.hive, ram_loader=self.helper)
@@ -159,7 +169,7 @@ class Rig:
     def gate(self, port, environ=None, **options):
         arguments = dict(root=self.root, environ=self.environ if environ is None else environ,
                          state=self.state, lock_path=self.lock, sysfs=self.sysfs, boot_id_path=self.boot,
-                         validate_bundle=self.validate,
+                         validate_bundle=self.validate, validate_timing=self.validate_timing,
                          verify_helper=lambda args: dict(protocol_version=1, source_sha256='h' * 64),
                          probe_rs=lambda: dict(path='/bin/probe-rs', version='probe-rs 0.32.0 6f9946fe'),
                          which=lambda tool: '/bin/' + tool, report=lambda _: None)
@@ -381,17 +391,95 @@ class Refusals(unittest.TestCase):
         values = dict(probehive='P', ram_loader='L')
         steps, used = GATE.port_steps(rig, 'esp32c3', values)
         self.assertEqual(steps, [('esp32c3', 'ram', ['--probehive', 'P', '--ram-loader', 'L']),
+                                 ('esp32c3', 'time', ['--ram-loader', 'L']),
                                  ('esp32c3', 'boot', ['--probehive', 'P'])])
         self.assertEqual(used, {'probehive', 'ram_loader'})
         for change, text in (([dict(board='rp2040', mode='ram', arguments=['{unknown}'])], 'unknown'),
                              ([dict(board='rp2040', mode='ram', arguments=['--output=x'])], 'controls'),
                              ([dict(board='nucleo', mode='ram', arguments=[])], 'invalid step'),
+                             ([dict(board='stm32h753_cached', mode='time', arguments=[])], 'invalid step'),
+                             ([dict(board='rp2040', mode='time', arguments=['--repeat=1'])], 'controls'),
                              ([], 'no steps')):
             rig['ports']['bad'] = dict(steps=change)
             with self.assertRaisesRegex(COMMON.Failed, text):
                 GATE.port_steps(rig, 'bad', values)
         with self.assertRaisesRegex(COMMON.Failed, 'no port'):
             GATE.port_steps(rig, 'absent', values)
+
+    def test_time_steps_run_the_timing_bundle_before_the_boot_check_under_the_lock(self):
+        args = self.rig.args('esp32', timing=self.rig.timing)
+        document, output = self.rig.gate('esp32', args=args)
+        self.assertEqual(document['outcome'], 'passed', document.get('failure'))
+        self.assertEqual([(s['board'], s['mode'], s['output']) for s in document['steps']],
+                         [('esp32', 'ram', 'esp32-ram'), ('esp32', 'time', 'esp32-time'),
+                          ('esp32', 'boot', 'esp32-boot')])
+        self.assertEqual(self.rig.timed, [(self.rig.timing, ['esp32'])])
+        self.assertEqual(document['provenance']['timing']['source_identity'], 's' * 64)
+        ran = json.loads((output / 'esp32-time' / 'argv.json').read_text())
+        self.assertTrue(ran['lock_held_by_gate'])
+        self.assertEqual(ran['argv'][:5], ['run', '--board=esp32', '--bundle=%s' % self.rig.timing,
+                                           '--output=%s' % (output / 'esp32-time'),
+                                           '--repeat=%d' % GATE.TIMING_REPEAT])
+        self.assertEqual(ran['argv'][5:], ['--ram-loader', str(self.rig.helper)])
+        # Only the board bundles of the RAM and boot steps are read.
+        self.assertEqual(self.rig.validated, [('esp32', 'ram'), ('esp32', 'boot')])
+
+    def test_without_a_timing_bundle_the_time_steps_are_left_out(self):
+        document, _ = self.rig.gate('stm32h753')
+        self.assertEqual(document['outcome'], 'passed', document.get('failure'))
+        self.assertEqual([(s['board'], s['mode']) for s in document['steps']],
+                         [('stm32h753', 'ram'), ('stm32h753_cached', 'ram'), ('stm32h753', 'boot')])
+        self.assertEqual(document['provenance']['timing'], 'not asked: no --timing bundle')
+        self.assertEqual(self.rig.timed, [])
+
+    def test_the_pico_2_times_each_architecture_while_it_runs_it(self):
+        args = self.rig.args('pico2', timing=self.rig.timing)
+        document, output = self.rig.gate('pico2', args=args)
+        self.assertEqual(document['outcome'], 'passed', document.get('failure'))
+        self.assertEqual([(s['board'], s['mode']) for s in document['steps']],
+                         [('rp2350_hazard3', 'ram'), ('rp2350_hazard3', 'time'), ('rp2350', 'boot'),
+                          ('rp2350', 'ram'), ('rp2350', 'time'), ('rp2350_hazard3', 'boot')])
+        self.assertEqual(self.rig.timed, [(self.rig.timing, ['rp2350', 'rp2350_hazard3'])])
+        ran = json.loads((output / 'rp2350-time' / 'argv.json').read_text())['argv']
+        self.assertIn('--power-only', ran)
+        self.assertEqual(ran[ran.index('--port') + 1], '2')
+
+    def test_a_failed_time_step_stops_the_port_before_its_boot_check_and_keeps_the_journal(self):
+        environ = dict(self.rig.environ, GATE_FAKE_ESP32_TIME='failed')
+        args = self.rig.args('esp32', timing=self.rig.timing)
+        document, _ = self.rig.gate('esp32', environ=environ, args=args)
+        self.assertEqual(document['outcome'], 'failed')
+        self.assertEqual(document['failure'], 'esp32 time: fake failed')
+        self.assertEqual([s['mode'] for s in document['steps']], ['ram', 'time'])
+        self.assertTrue((self.rig.state / 'runs/esp32.json').exists())
+
+    def test_a_timing_bundle_from_other_source_is_refused_before_the_lock(self):
+        def refuse(directory, boards, root):
+            raise COMMON.Failed('timing bundle %s was built from source x' % directory)
+        args = self.rig.args('esp32', timing=self.rig.timing)
+        document, _ = self.rig.gate('esp32', args=args, validate_timing=refuse)
+        self.assertEqual(document['outcome'], 'failed')
+        self.assertIn('was built from source x', document['failure'])
+        self.assertEqual(document['steps'], [])
+        self.assertNotIn('lock', document['provenance'])
+
+    def test_the_real_timing_bundle_check_holds_source_and_boards(self):
+        bundle = self.rig.tmp / 'real-timing'
+        (bundle / 'images/esp32').mkdir(parents=True)
+        elf = bundle / 'images/esp32/a.elf'
+        elf.write_bytes(b'\x7fELF\x01\x01\x01' + bytes(9) + bytes(36))
+        here = GATE.bundle.source_identity(ROOT)['sha256']
+        image = dict(elf='images/esp32/a.elf', elf_sha256=GATE.bundle.sha(elf),
+                     digest=GATE.timing.loaded_digest(elf))
+        manifest = dict(format=GATE.timing.FORMAT, source_identity=here, compiler=dict(sha256='c'),
+                        boards=dict(esp32=dict(images=[image])))
+        (bundle / 'timing.json').write_text(json.dumps(manifest))
+        self.assertEqual(GATE.timing_bundle(bundle, ['esp32'], ROOT)['images'], dict(esp32=1))
+        with self.assertRaisesRegex(COMMON.Failed, 'has no images of rp2040'):
+            GATE.timing_bundle(bundle, ['esp32', 'rp2040'], ROOT)
+        (bundle / 'timing.json').write_text(json.dumps(dict(manifest, source_identity='other')))
+        with self.assertRaisesRegex(COMMON.Failed, "was built from source other, not this checkout's"):
+            GATE.timing_bundle(bundle, ['esp32'], ROOT)
 
     def test_probe_rs_must_be_the_pinned_revision(self):
         with self.assertRaises(COMMON.NeedsSetup):
