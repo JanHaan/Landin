@@ -319,13 +319,15 @@ binary-trees 0.66. RV64 jumps near within a routine provably inside JAL's
 reach (D1405): `.text` 19.9% smaller at `speed`, counted instructions 9.5%
 to 20% fewer. No firmware, x86-64 or arm64 `speed` image changed; the build
 modes agree and the scaling bound holds. The candidate passed its
-[gate](https://github.com/JanHaan/Landin/actions/runs/44326804174) and
-[boards](https://github.com/JanHaan/Landin/actions/runs/44342272388).
+[gate](https://github.com/JanHaan/Landin/actions/runs/44351244760) and
+[boards](https://github.com/JanHaan/Landin/actions/runs/44360913324).
 R16.21 to R16.24 took the other backends and their rows, SR-586 and
 SR-1302 among them. Findings fixed on the way: LLDB's `GetValueAsSigned`
 read a zero-extended `i32` in a register whole, so the Darwin sessions read
 integers at their type's width; a failed Darwin LLDB session keeps its
-transcripts; `measure.py plugin` names a program for a user-mode QEMU; and
+transcripts; a wall pair whose candidate image is the base's is no longer
+timed, after one such pair failed at 2.04 on a single sample;
+`measure.py plugin` names a program for a user-mode QEMU; and
 `measure_costs.py routines` takes `--library`.
 
 ### R16.21 — RISC-V register allocation
