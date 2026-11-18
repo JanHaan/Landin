@@ -605,7 +605,7 @@ measured before and after, near the inventory's 0.5, 0.6 and 1.9 MB, and
 
 ### R18.30 — The docs agree with the tool
 
-Status: planned
+Status: active
 Depends on: R18.10
 
 The disagreements the inventory found, each fixed on whichever side is
