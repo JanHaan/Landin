@@ -13,7 +13,7 @@ with Ada.Strings.Fixed;
 
 with Landin.Diagnostics;
 with Landin.Driver;
-with Landin.Driver.Library;
+with Landin.Library;
 with Landin.Json;
 with Landin.Platform;
 with Landin.Platform.Native;
@@ -406,7 +406,7 @@ package body Landin.Tests.Server_Suite is
                   --  root may import `core/*` here as it may there.
                   Arguments.Append ("--target=linux-x86-64");
                   Asked.Library := Unbounded.To_Unbounded_String
-                    (Landin.Driver.Library.Located (Real));
+                    (Landin.Library.Located (Real));
                   Fixtures.Append_Module_Arguments
                     (Fixture, Corpus, Arguments);
                   for Argument of Arguments loop

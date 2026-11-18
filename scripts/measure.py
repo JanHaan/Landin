@@ -252,7 +252,12 @@ def sources(arguments: list[str]) -> list[str]:
 def build(refine, target, level, profile, workload, out, toolchain, library=None):
     fixture = ROOT / "compiler/tests/fixtures" / workload["fixture"]
     meta = fixture_meta.read(fixture)
-    image = out / f"{target}-{level}-{profile[0]}-{profile[1]}-{workload['name']}"
+    name = f"{target}-{level}-{profile[0]}-{profile[1]}-{workload['name']}"
+    #  Each configuration publishes into a directory of its own: the callers
+    #  build concurrently, and refine refuses an output whose directory
+    #  another compile's publication holds locked for two seconds (D1049).
+    (out / name).mkdir(parents=True, exist_ok=True)
+    image = out / name / name
     firmware = (["--firmware-entry=start"] if target in FIRMWARE else [])
     command = [str(refine), "compile", f"--target={target}", f"--level={level}",
                f"--optimize={profile[0]}", f"--specialize={profile[1]}",

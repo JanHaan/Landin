@@ -326,7 +326,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Next roadmap item: R18.10 — Decide the commands (planned).**
+**Next roadmap item: R18.30 — The docs agree with the tool (planned).**
 
 ## Questions, bugs and ideas
 
