@@ -215,7 +215,7 @@ arm64; existing Linux x86-64 generated files remain unchanged.
 
 A build assumes one CPU feature level of its target's family (D255), given
 with `--level=NAME` or the language server's `level` option and resolved
-after the target, so a level of another family is L0009. `refine --identify`
+after the target, so a level of another family is L0009. `refine targets`
 lists each target's levels. The level is a value beside `Target_Facts`, so
 layout, calling convention and C ABI are the same at every level of a
 family. Checking reads the level for three questions only: whether an

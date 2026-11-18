@@ -605,19 +605,36 @@ measured before and after, near the inventory's 0.5, 0.6 and 1.9 MB, and
 
 ### R18.30 — The docs agree with the tool
 
-Status: active
+Status: complete
 Depends on: R18.10
 
 The disagreements the inventory found, each fixed on whichever side is
 wrong: `refine targets --identify` against `docs/capabilities.md`
-(SR-1289); L0004, L0009 and `docs/targets.md` sending the reader to
-`refine --identify` (SR-1290); README's command table missing `targets`,
-`completion` and `help` (SR-1291); the `Explain_Command` and
-`Format_Command` comments (SR-1292, SR-1293); and a check that holds
+(`SR-1289`); L0004, L0009 and `docs/targets.md` sending the reader to
+`refine --identify` (`SR-1290`); README's command table missing `targets`,
+`completion` and `help` (`SR-1291`); the `Explain_Command` and
+`Format_Command` comments (`SR-1292`, `SR-1293`); and a check that holds
 `refine help reference` to the documents, which nothing outside the
-`commands` suite does today (SR-1294).
+`commands` suite does today (`SR-1294`).
 Exit evidence: each row-to-be of `roadmap/inputs/rows-to-be.md` it names
 closed; the new check refuses a command or flag the documents do not name.
+
+Done: `docs/capabilities.md` says `refine targets --identify` is refused
+and only the bare compatibility spelling prints the older summary; L0004,
+L0009 and `docs/targets.md` send the reader to `refine targets`, which
+lists the targets and their levels both promise. README's command table
+has rows for `targets`, `completion` and `help` and both forms of `site`.
+The `Explain_Command` comment names `citations.txt`, and the
+`Format_Command` comment a directory operand. `refine help reference` is
+recorded in `compiler/tests/commands.reference`: a commands-suite case
+holds the record to the catalogue, and `check.py` holds README's command
+table and `docs/capabilities.md` to the record, refusing a command or
+option they do not name, with controls in
+`scripts/tests/test_check_inventories.py`. The check found what the
+inventory had called clean: `-h`, `--output`, `--option`, `--build-mode`,
+`--toolchain`, `--linker`, `--define`, `--system-include-dir` and
+`--stdio` were named nowhere in either document, and `--define` and `-h`
+in no document at all; each is now named where its command is described.
 
 ### R18.40 — Retire the bare-source form
 

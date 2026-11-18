@@ -103,11 +103,11 @@ package body Landin.Diagnostics.Explanations is
                "`--target=` names no target the compiler describes, or n"
                & "one was named and this compiler's own host is not a desc"
                & "ribed target, so a build has nothing to compile for unti"
-               & "l one is named. `refine --identify` lists the described "
-               & "targets. A misspelt target is offered the nearest descri"
-               & "bed one, a name cut short the one it begins, and a syste"
-               & "m named alone, `linux` or `macos`, every target of that "
-               & "system (D857).",
+               & "l one is named. `refine targets` lists the described tar"
+               & "gets. A misspelt target is offered the nearest described"
+               & " one, a name cut short the one it begins, and a system n"
+               & "amed alone, `linux` or `macos`, every target of that sys"
+               & "tem (D857).",
             when Catalogue.Unwritable_Output =>
                "An output cannot be written, published or recovered, or "
                & "`refine fmt` cannot rewrite its input. Check the destina"
@@ -319,8 +319,8 @@ package body Landin.Diagnostics.Explanations is
                & "es no CPU feature level of the selected target's family "
                & "(D255). A level belongs to one family, so `armv8.1-a` is"
                & " refused with `--target=linux-x86-64`, and synthetic-32 "
-               & "has no level to select. `refine --identify` lists each t"
-               & "arget's levels.",
+               & "has no level to select. `refine targets` lists each targ"
+               & "et's levels.",
             when Catalogue.Construct_Not_Enabled =>
                "The program uses a construct the tour describes and the "
                & "kernel does not enable yet [1830]. The two notes name th"

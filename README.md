@@ -242,11 +242,15 @@ it names.
 | `refine fmt main.ldn` | rewrite a source in the one layout; `--check` only reports |
 | `refine explain L0301` | explain a diagnostic code and what to change. It also explains a numbered paragraph of the tour or `spec.md`, `[1760]`, or a decision recorded in `spec.md`, `D275`, which it reads from the `citations.txt` installed with the library |
 | `refine site prog SITE` | name the source line and the failed check of the panic site a program's handler received, from the table `--panic-map` writes beside it |
+| `refine site prog FILE LINE COLUMN` | name the source position of a caller's three coordinates, from the same table |
 | `refine lsp` | the language server an editor starts |
 | `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD (System View Description); see [devices](devices/README.md) |
 | `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
 | `refine version` | name the compiler and the library it uses |
+| `refine targets` | list the described targets, their CPU feature levels and debug modes; `--json` gives structured output |
+| `refine completion bash` | print shell completion definitions; also `zsh` and `fish` |
 | `refine --help`, `refine compile --help` | every command, and one command's options |
+| `refine help compile`, `refine help reference` | the same command help, and the complete command-line reference |
 
 `refine help reference` prints the complete interface, and
 [the command line](docs/capabilities.md#the-command-line) describes it.

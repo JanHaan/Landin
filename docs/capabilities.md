@@ -235,7 +235,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - `refine check program.ldn ...` runs the frontend, lowering and
   verification on the named sources as one whole program, without writing
   an artifact. It takes every option that says which program is compiled,
-  `--link`, `--firmware-entry` and `--build-report` among them, and with
+  `--link`, `--firmware-entry` and `--build-report` among them.
+  `--option NAME=VALUE` overrides a build option the program declares, and
+  `--build-mode debug|release` sets the built-in `compiler.build_mode`,
+  which is independent of optimization and debug information; `compile`
+  and `run` take both too. With
   `--root` the operand is the entry module's directory or its source files;
   source files named as the entry are not also imported as their
   directory's module, which is L0616 (D1055).
@@ -249,6 +253,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   generic instance, its template and item, and the IR's metadata. The
   compile leaves only the executable; `--keep-asm` keeps the assembly
   beside it.
+  `--toolchain DRIVER` overrides the target's native compiler driver, and
+  `--linker NAME` selects the native linker through that driver; `run`
+  takes both too.
 - **Publishing outputs.** Generated artifacts use one
   loss-preserving publication group (D907): exclusive private staging beside
   each destination, verification before installation, and prior versions kept
@@ -274,7 +281,7 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   symbolic link, and an output replaces only a regular file; a refusal says
   so in the rule's words (D1051). A name outside ASCII builds on every
   filesystem, and one holding `~` or `:` only where refine recognises the
-  filesystem (D1052). `-o` names
+  filesystem (D1052). `-o`, or `--output`, names
   the file to write: an existing directory there is refused before anything
   is compiled, with a file under it as the example. A path that cannot be
   prepared is refused naming the option that gave it, `-o`,
@@ -370,7 +377,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   D821). It binds for Linux x86-64, Linux arm64, macOS arm64 and
   freestanding Cortex-M, the last under AAPCS32's base procedure call
   standard or its VFP variant as the policy says, with Clang's own headers
-  alone and adapters that allocate nothing (D935-D938). It stages its four outputs and compiles the adapters before
+  alone and adapters that allocate nothing (D935-D938).
+  `--define NAME[=VALUE]` defines a macro for Clang, and
+  `--system-include-dir DIR` names a root of system headers, which for
+  `cortex-m0` is that of Clang's own freestanding headers; both repeat.
+  It stages its four outputs and compiles the adapters before
   publishing them through the same protected-input and recovery contract as
   `refine svd`. Missing output directories are staged privately and published
   only after validation; refusal preserves any tree created there meanwhile.
@@ -378,7 +389,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   [The binding guide](../bindings/README.md)
   describes the policy; installed command help points to its generated
   reading copy, `bindings.html`.
-- `refine lsp` is a language server over standard input and output: an
+- `refine lsp` is a language server over standard input and output;
+  `--stdio` is accepted and changes nothing, since an editor's language
+  client often adds it. An
   editor started with it gets diagnostics, definitions, hover types,
   formatting and quick fixes from the compiler's own stages, as
   [`docs/server.md`](server.md) describes. A build option the editor
@@ -416,7 +429,7 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 
 ### Help, options and completion
 
-- `refine --help` lists commands. `refine compile --help`,
+- `refine --help`, or `-h`, lists commands. `refine compile --help`,
   `refine --help compile` and `refine help compile` give the same command
   help. `refine completion bash|zsh|fish` prints shell completion
   definitions from the same option catalogue.
@@ -447,8 +460,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   accepted debug modes, and for a firmware target the cores each level is,
   so a Cortex-M4 reads as `cortex-m0`'s `armv7e-m`; `--json` gives
   structured output, with a `cores` list of names and levels and a
-  `features` list for each level, and `--identify` retains the older
-  capability summary.
+  `features` list for each level. `refine targets --identify` is refused:
+  only the bare `refine --identify`, a compatibility spelling from before
+  the commands existed, prints the older summary of the backends, the IR,
+  the targets and their levels. Use `refine targets`.
 
 ### Reports and diagnostics
 

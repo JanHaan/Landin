@@ -9752,6 +9752,102 @@ def check_unfenced_code(full_run):
 FIRST_PROGRAM = "compiler/tests/fixtures/runtime/first-program"
 
 
+COMMAND_REFERENCE = "compiler/tests/commands.reference"
+
+
+def check_command_reference(full_run):
+    """Every command and option `refine help reference` prints is named.
+
+    compiler/tests/commands.reference records what `refine help reference`
+    prints, and the commands suite holds the record to the catalogue.  Here
+    the documents are held to the record: each command is a row
+    of README.md's command table and is written `refine NAME` in
+    docs/capabilities.md, and each option is named in a code span there.  The check runs on every edit of a
+    document, which the compiler's suites do not.
+    """
+    if not full_run:
+        return []
+
+    readme = os.path.join(ROOT, "README.md")
+    inventory = os.path.join(ROOT, "docs/capabilities.md")
+    record = os.path.join(ROOT, COMMAND_REFERENCE)
+    missing = absent([readme, inventory, record])
+    if missing:
+        return missing
+
+    commands, options = [], []
+    block = None
+    for line in read_file(record, encoding="utf-8").splitlines():
+        if line.endswith(":") and not line.startswith(" "):
+            block = line
+            continue
+        if not line.strip():
+            if block == "Commands:":
+                block = None
+            continue
+        if block == "Commands:":
+            found = re.match(r"^  ([a-z]+)  ", line)
+            if found:
+                commands.append(found.group(1))
+        elif block == "Options:":
+            found = re.match(r"^  (-[A-Za-z]|--[a-z][a-z-]*)"
+                             r"(?:, (--[a-z][a-z-]*))?(?:\s|$)", line)
+            if found:
+                for name in found.groups():
+                    if name and name not in options:
+                        options.append(name)
+    out = []
+    if not commands or not options:
+        return [(COMMAND_REFERENCE, 1, "lists no %s; is it the output of"
+                 " `refine help reference`?"
+                 % ("commands" if not commands else "options"))]
+
+    lines = read_file(readme, encoding="utf-8").splitlines()
+    header = "| command | what it does |"
+    if lines.count(header) != 1:
+        out.append(("README.md", 1, "has %d command tables headed %r"
+                    " instead of one" % (lines.count(header), header)))
+    else:
+        start = lines.index(header)
+        rows = []
+        for line in lines[start + 2:]:
+            if not line.startswith("|"):
+                break
+            rows.append(line.split("|")[1])
+        named = set()
+        for cell in rows:
+            for span in re.findall(r"`([^`]*)`", cell):
+                named.update(re.findall(r"\brefine ([a-z]+)", span))
+        for command in commands:
+            if command not in named:
+                out.append(("README.md", start + 1,
+                            "the command table has no row for `refine %s`,"
+                            " which %s lists; add one" % (command,
+                                                        COMMAND_REFERENCE)))
+
+    text = read_file(inventory, encoding="utf-8")
+    spans = re.findall(r"`([^`]*)`", text.replace("\n", " "))
+    named = set()
+    words = set()
+    for span in spans:
+        named.update(re.findall(r"\brefine ([a-z]+)", span))
+        words.update(re.findall(r"(?<![\w-])(--?[A-Za-z][\w-]*)", span))
+    for command in commands:
+        if command not in named:
+            out.append(("docs/capabilities.md", 1,
+                        "never writes `refine %s`, which %s lists; say"
+                        " what it does where its kind of command is"
+                        " described"
+                        % (command, COMMAND_REFERENCE)))
+    for option in options:
+        if option not in words:
+            out.append(("docs/capabilities.md", 1,
+                        "names no option %s in code, which %s lists; name"
+                        " it where its command is described"
+                        % (option, COMMAND_REFERENCE)))
+    return out
+
+
 def check_first_program(full_run):
     """The README's first program is the fixture every hosted target runs.
 
@@ -12182,6 +12278,7 @@ def main(argv):
     extra += check_unfenced_code(full_run)
     extra += check_running_examples(full_run)
     extra += check_first_program(full_run)
+    extra += check_command_reference(full_run)
     extra += check_from_c_page(full_run)
     extra += check_library_page(full_run)
     extra += check_library_documentation(full_run)
