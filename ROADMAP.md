@@ -179,7 +179,7 @@ continuous.
 
 ### R16.10 — Measure generated code
 
-Status: active
+Status: complete
 Depends on: R17
 
 Record the size and time of the same workloads for every supported target,
@@ -245,6 +245,44 @@ whole matrix; the gate failing a deliberately larger image and a deliberately
 slower one in each execution class and passing an unchanged one; the pilot's
 recorded cost; and a ranked list of each backend's largest measured costs,
 from which R16.20 takes its scope.
+
+Done: `docs/measurement.md` is the contract, reviewed twice by an
+independent agent before any baseline (D1375-D1382), with its runner table
+as `compiler/tests/measure/runners.json`, which `measure.py runners` holds
+to `refine targets --json`, now giving each level's features (D1377).
+Every push holds each allocated section of 1,566 configurations' images,
+every target, level and profile, to committed baselines exactly, and the
+instructions of 468 under QEMU, RV64's and Cortex-M's; the schedule and
+any dispatch time the hosted workloads in pairs on one processor and the
+firmware set by each board's counter. The candidate `25159f4a8` passed its
+[gate](https://github.com/JanHaan/Landin/actions/runs/44255590398) and
+[boards](https://github.com/JanHaan/Landin/actions/runs/44259826354),
+timing included, and
+[main's gate](https://github.com/JanHaan/Landin/actions/runs/44265284174);
+two never-promoted branches cut from it failed: a larger image
+([run](https://github.com/JanHaan/Landin/actions/runs/44265298161)) on every
+size key of Linux, firmware and FreeBSD and every instruction count, and a
+slower one ([run](https://github.com/JanHaan/Landin/actions/runs/44265297675),
+[dispatch](https://github.com/JanHaan/Landin/actions/runs/44265301923)) on
+the same and on wall time, 126 of 126 pairs on x86-64, 84 of 84 on arm64 and
+62 of 66 on Darwin. Its board legs never ran, since `board-bundles` refuses
+a changed image on record drift first; a named rig run timed it on the
+ESP32 and STM32H753, 108 of 108 configurations failing by 1.26 to 12.1
+times where `a9e880430` passed all 108. On the demonstration branches
+Darwin's host suite fails before its size step. `compiler/tests/measure/
+pilot.json` records the cost, three jobs a push and three a timed run, and
+the noise studies are under `compiler/tests/measure/noise/`: none in size
+and instructions once RV64 runs in a reserved address space, per port in
+cycles, and up to 1.085 in an A/A wall run, so a pair past its tolerance is
+timed again. `compiler/tests/measure/findings.md` is the ranked list:
+arm64's allocator unused at `size`, RV64's far jumps, Cortex-M's homes
+addressed through r6, then allocation. `SR-09` and `SR-1267` are settled;
+SR-596, SR-869, SR-231, SR-996, SR-577, SR-583 and SR-1268 are R16.20's;
+SR-275, SR-387 and SR-1023 are restated with their figures, and SR-1302
+records the Xtensa reference's boot layout. Findings fixed on the way: the
+stack report names its frame quantities as the build report does (D1380),
+the stage report gives each source's scanning and parsing (D1381), and an
+RV64 count no longer depends on its environment.
 
 ### R16.20 — Register allocation
 
@@ -501,6 +539,11 @@ its limit, and a host that starves a guest for ten times its limit is named.
 ### R17 gate
 The third roadmap's checks pass on the live file; one item run start to
 finish under the new mechanics.
+
+Claimed at R16.10's close, Q-8's default: R16.10 ran under `scripts/item.py`
+from `start` through its gates, boards dispatches, two promotions and
+main's gates, five parallel streams in their own worktrees, and its
+`finish` follows this commit; what in the scripts misled is in its report.
 
 ## R18 — refine's commands
 
