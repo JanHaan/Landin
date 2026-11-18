@@ -350,11 +350,20 @@ if [ -n "$Previous" ] && [ "$Current" != "$Previous" ]; then
             fi
             Moved="$(python3 "$LANDIN_ROOT/scripts/build_identity.py" \
                 --changed "$Compared-before.txt" "$Compared-after.txt")" || exit
+            #  GNAT's checksum leaves out comments, so a comment moving a
+            #  spec's lines would recompile nothing that depends on it, and
+            #  their debugging information would keep the old lines.
+            Stale="$(python3 "$LANDIN_ROOT/scripts/build_identity.py" \
+                --stale "$Compared-before.txt" "$Compared-after.txt" \
+                "$LANDIN_BUILD_DIR")" || exit
             rm -f "$Compared-before.txt" "$Compared-after.txt"
             awk 'NR <= 12 { print "landin:   " $0 }
                  END { if (NR > 12) print "landin:   and", NR - 12, "more" }' <<EOF
 $Moved
 EOF
+            if [ -n "$Stale" ]; then
+                echo "landin:   $Stale"
+            fi
         fi
     else
         echo "landin: sources changed since the last build; rebuilding from clean, keeping bin/"

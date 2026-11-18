@@ -265,6 +265,10 @@ def changed(old, new):
             now = after.get(key, 'identity - none none').split()
             if was[2:3] != now[2:3]:
                 said.append(f'HEAD moved from {was[2]} to {now[2]}')
+            elif was[3:4] != now[3:4] and any(
+                    other != 'identity' and before.get(other) != after.get(other)
+                    for other in set(before) | set(after)):
+                said.append(f'the checkout went from {was[3]} to {now[3]}')
             elif was[3:4] != now[3:4]:
                 said.append(
                     f'the checkout went from {was[3]} to {now[3]}: a tracked'
@@ -290,6 +294,51 @@ def changed(old, new):
     return said
 
 
+def stale(old, new, build):
+    """Remove the objects of every unit that depends on a changed source.
+
+    GPRbuild's checksum mode recompiles a unit when a source it depends on
+    changed in its tokens, and GNAT's checksum leaves out comments and
+    spacing.  An edit to a spec's comments therefore recompiled nothing
+    that depends on it, though those objects' debugging information names
+    the spec's lines, which the edit moved, and the gate's comparison found
+    the cached release build no longer the clean one.  Every ALI file under
+    BUILD lists its unit's sources on `D` lines; a unit that names a source
+    whose row changed loses its ALI and object, and is compiled again.
+    Returns the units removed.
+    """
+    def sources(text):
+        table = {}
+        for row in text.splitlines():
+            words = row.split(' ', 2)
+            if len(words) == 3 and words[0] == 'source':
+                table[words[2]] = words[1]
+        return table
+    before, after = sources(old), sources(new)
+    names = {os.path.basename(path) for path, digest in after.items()
+             if before.get(path) not in (None, digest)}
+    removed = []
+    if not names:
+        return removed
+    for directory, subdirectories, files in os.walk(build):
+        subdirectories[:] = [name for name in subdirectories
+                             if name not in ('bin', 'link')]
+        for name in files:
+            if not name.endswith('.ali'):
+                continue
+            path = os.path.join(directory, name)
+            with open(path, encoding='latin-1') as ali:
+                named = {line.split()[1] for line in ali
+                         if line.startswith('D ') and len(line.split()) > 1}
+            if named & names:
+                os.remove(path)
+                stem = path[:-len('.ali')]
+                if os.path.exists(stem + '.o'):
+                    os.remove(stem + '.o')
+                removed.append(name[:-len('.ali')])
+    return sorted(removed)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path)
@@ -303,7 +352,20 @@ def main():
                         metavar=('BEFORE', 'AFTER'), type=Path,
                         help='succeed when two manifest files differ only'
                         ' in the checkout state the provenance reports')
+    parser.add_argument('--stale', nargs=3,
+                        metavar=('BEFORE', 'AFTER', 'BUILD'),
+                        help='remove the objects of every unit under BUILD'
+                        ' that depends on a source changed between two'
+                        ' manifest files')
     args = parser.parse_args()
+    if args.stale:
+        before, after, build = args.stale
+        removed = stale(Path(before).read_text(), Path(after).read_text(),
+                        build)
+        if removed:
+            print(f'{len(removed)} units depend on a changed source and'
+                  ' are compiled again')
+        return
     if args.provenance_only:
         raise SystemExit(0 if provenance_only(
             *(path.read_text() for path in args.provenance_only)) else 1)

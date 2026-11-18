@@ -635,6 +635,13 @@ inventory had called clean: `-h`, `--output`, `--option`, `--build-mode`,
 `--toolchain`, `--linker`, `--define`, `--system-include-dir` and
 `--stdio` were named nowhere in either document, and `--define` and `-h`
 in no document at all; each is now named where its command is described.
+The first gate (run 44324479031) found the cached release build's
+`landin_tests` unequal to the clean build's in its line tables: GNAT's
+checksum leaves out comments, so GPRbuild's checksum mode recompiled no
+dependent of `landin-driver.ads` after a comment moved its lines.
+`scripts/build.sh` now compiles again every unit whose ALI file names a
+changed source, and says which file changed without calling it one the
+compiler is not built from.
 
 ### R18.40 — Retire the bare-source form
 
