@@ -58,7 +58,7 @@ def changed(row):
 
 class BuildInventory(unittest.TestCase):
     def decision(self, old, new, incremental="yes", fail_tool=None,
-                 unfinished=None):
+                 unfinished=None, ali=None):
         # This is deliberately the production branch including both inventory
         # and fixed-identity comparisons, not a copy of its regexes. Its only
         # destructive operation addresses our disposable fixture directory.
@@ -71,6 +71,8 @@ class BuildInventory(unittest.TestCase):
             obj = build / "refine-obj" / "main.o"
             obj.parent.mkdir()
             obj.write_text("object\n")
+            if ali is not None:
+                (build / "refine-obj" / "main.ali").write_text(ali)
             manifest = build / "source-manifest.txt"
             attempt = build / "attempt-manifest.txt"
             state = build / "build-state"
@@ -122,6 +124,32 @@ class BuildInventory(unittest.TestCase):
                 self.assertIn("source content changed; using checksum"
                               " recompilation:\nlandin:   compiler/ada/src/"
                               f"member.{extension} changed\n", text)
+
+    def test_a_unit_depending_on_a_changed_source_is_compiled_again(self):
+        #  GNAT's checksum leaves out comments, so GPRbuild's checksum mode
+        #  kept the objects of every unit depending on a spec whose comments
+        #  moved its lines, and their debugging information named the old
+        #  lines: the gate's cached release build differed from the clean.
+        depends = "V \"GNAT Lib v16\"\nD host.h\t\t20261118 1\n"
+        for row, kept in ((BASE[2], False), (BASE[0], True)):
+            with self.subTest(row=row):
+                new = [changed(entry) if entry == row else entry
+                       for entry in BASE]
+                exists, text = self.decision(BASE, new, ali=depends)
+                self.assertEqual(exists, kept, text)
+                self.assertEqual("1 units depend on a changed source" in text,
+                                 not kept, text)
+
+    def test_a_source_change_does_not_call_the_file_unbuilt(self):
+        #  An edited source makes the checkout dirty too; the line said a
+        #  file the compiler does not build from was edited.
+        new = [changed(BASE[0])] + [
+            "identity 6 0123abc dirty" if row.startswith("identity ") else row
+            for row in BASE[1:]]
+        _, text = self.decision(BASE, new)
+        self.assertIn("landin:   the checkout went from clean to dirty\n",
+                      text)
+        self.assertNotIn("does not build from", text)
 
     def test_a_change_of_checkout_state_alone_is_not_called_source(self):
         #  Commits that changed no file the compiler is built from were

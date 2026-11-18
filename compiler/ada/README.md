@@ -1287,8 +1287,11 @@ From the repository root, with the toolchain `TOOLCHAIN.md` pins:
 On the Mac use `./scripts/test.sh --host`; the unqualified suite includes
 Linux workload cases and is not the Mac compiler-host command.
 
-`scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop,
-and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
+`scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop.
+GNAT's checksum leaves out comments, so the build also compiles again every
+unit whose ALI file names a changed source, or a comment that moved a spec's
+lines would leave its dependents' debugging information on the old lines
+and the cached build unequal to the clean one. `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
 selector. On the Mac add `--host`; run Linux workloads in native development
 slots. Filtered runs identify themselves and never replace the complete
 suite. [The process guide](../../docs/process.md) explains both native

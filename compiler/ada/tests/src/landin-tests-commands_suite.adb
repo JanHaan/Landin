@@ -9,6 +9,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Json;
 with Landin.Platform;
+with Landin.Platform.Native;
 with Landin.Testing.Fakes;
 
 package body Landin.Tests.Commands_Suite is
@@ -1962,6 +1963,40 @@ package body Landin.Tests.Commands_Suite is
       end;
    end Library_Directory_Option;
 
+   --  `refine help reference` is recorded in
+   --  compiler/tests/commands.reference, which check.py holds the front page's
+   --  command table and docs/capabilities.md to, so a command or option
+   --  the documents do not name is refused by a check that runs on every
+   --  edit of them.  This case holds the record to the catalogue.  It
+   --  reads the repository's file through the real filesystem, a
+   --  deliberate exception: the record is of the checkout, not of a fake.
+   procedure Reference_Is_Recorded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reference_Is_Recorded
+     (Item : in out Landin.Testing.Context)
+   is
+      Host   : Landin.Platform.Native.Native_Filesystem;
+      Text   : US.Unbounded_String;
+      Status : Landin.Platform.Read_Status;
+      use type Landin.Platform.Read_Status;
+   begin
+      Host.Read_File ("../tests/commands.reference", Text, Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Read_Ok,
+         "compiler/tests/commands.reference is readable");
+      if Status = Landin.Platform.Read_Ok then
+         Landin.Testing.Check
+           (Item, US.To_String (Text) = Landin.Commands.Catalogue.Reference,
+            "compiler/tests/commands.reference is `refine help reference`;"
+            & " after changing help, record it again from the checkout's"
+            & " root with the refine this build made,"
+            & " `REFINE help reference > compiler/tests/commands.reference`,"
+            & " and run python3 check.py, which names any command or"
+            & " option the documents do not");
+      end if;
+   end Reference_Is_Recorded;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2021,5 +2056,8 @@ package body Landin.Tests.Commands_Suite is
          Library_Directory_Option'Access);
       Landin.Testing.Register (Into, "commands", "diagnostic presentation",
                               Presentation'Access);
+      Landin.Testing.Register
+        (Into, "commands", "the help reference is recorded",
+         Reference_Is_Recorded'Access);
    end Register;
 end Landin.Tests.Commands_Suite;
