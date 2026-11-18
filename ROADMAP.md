@@ -592,7 +592,7 @@ it matters for `refine-dap`, which reaches `Driver.Library` through
 
 ### R18.20 — Cut the loading edge
 
-Status: planned
+Status: active
 Depends on: R18.10
 
 `Driver.Library`'s body withs `Driver.Loading` for one path helper, which
