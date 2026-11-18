@@ -13,6 +13,7 @@ with Landin.IR.Dominance;
 with Landin.IR.Dump;
 with Landin.IR.If_Conversion;
 with Landin.IR.In_Place;
+with Landin.IR.Liveness;
 with Landin.IR.Scalar_Replacement;
 with Landin.IR.Simplification;
 with Landin.IR.Specialization;
@@ -101,6 +102,10 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Proved_Checks (Item : in out Landin.Testing.Context);
    procedure Contradictory_Bounds (Item : in out Landin.Testing.Context);
    procedure Dominators (Item : in out Landin.Testing.Context);
+   procedure Slot_Intervals (Item : in out Landin.Testing.Context);
+   procedure Slot_Interval_Fallback (Item : in out Landin.Testing.Context);
+   procedure Loop_Depths (Item : in out Landin.Testing.Context);
+   function Image (Span : IR.Liveness.Interval) return String;
    procedure Choices_From_Computing_Arms
      (Item : in out Landin.Testing.Context);
    procedure Branches_Around_Observable_Arms
@@ -2562,6 +2567,318 @@ package body Landin.Tests.IR_Optimization_Suite is
       end;
    end Dominators;
 
+   function Image (Span : IR.Liveness.Interval) return String is
+     (if IR.Liveness.Is_Empty (Span) then "empty"
+      else Ada.Strings.Fixed.Trim
+             (Natural'Image (Span.First), Ada.Strings.Both)
+           & ".." & Ada.Strings.Fixed.Trim
+             (Natural'Image (Span.Last), Ada.Strings.Both));
+
+   --  Positions count each block's values in block order from one, the
+   --  entry being zero; the comment on each emitted value is its position.
+   procedure Slot_Intervals (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Code : IR.Unit;
+      Site : Landin.Provenance.Origin;
+      Usize : constant Landin.Types.Integer_Name := Landin.Types.Usize;
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      IR.Prepare (Code, Landin.Stages.Meanings (Work).all);
+      Site := IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
+      declare
+         --  A parameter, a slot stored and read in one block, one stored
+         --  before a branch and read at the join, one never mentioned and
+         --  one whose only block writes it before reading it.
+         Joined : constant IR.Item_Id := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value, Site);
+         P : constant IR.Slot_Id := IR.Add_Parameter
+           (Code, Joined, Usize, IR.No_Declaration, Site);
+         S, T, U, W : IR.Slot_Id;
+         --  A slot read in a loop's header and written in its body, and one
+         --  stored before the loop and read only in its body.
+         Looped : constant IR.Item_Id := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value, Site);
+         I, K : IR.Slot_Id;
+         Blocks : array (1 .. 4) of IR.Block_Id;
+         Number, Condition, Ignore : IR.Value_Id;
+      begin
+         S := IR.Add_Slot (Code, Joined, Usize, IR.No_Declaration, Site);
+         T := IR.Add_Slot (Code, Joined, Usize, IR.No_Declaration, Site);
+         U := IR.Add_Slot (Code, Joined, Usize, IR.No_Declaration, Site);
+         W := IR.Add_Slot (Code, Joined, Usize, IR.No_Declaration, Site);
+         I := IR.Add_Slot (Code, Looped, Usize, IR.No_Declaration, Site);
+         K := IR.Add_Slot (Code, Looped, Usize, IR.No_Declaration, Site);
+
+         --  Block 1 branches to the join, block 2, or to block 3, which
+         --  jumps back to it; block 3 is laid out after the join, so a
+         --  slot live out of it is live past the join's read.
+         for B in 1 .. 3 loop
+            Blocks (B) := IR.Add_Block
+              (Code, Joined, Landin.Resolution.Program_Scope, Site);
+         end loop;
+         IR.Enter (Code, Joined, Blocks (1));
+         Number := IR.Emit_Number (Code, Joined, Usize, 7, False, Site); --  1
+         IR.Emit_Store (Code, Joined, S, Number, Site);                --  2
+         Number := IR.Emit_Load (Code, Joined, S, Site);               --  3
+         IR.Emit_Store (Code, Joined, T, Number, Site);                --  4
+         Condition := IR.Emit_Truth (Code, Joined, True, Site);        --  5
+         IR.Emit_Branch                                                --  6
+           (Code, Joined, Condition, Blocks (2), Blocks (3), Site);
+         IR.Leave_Block (Code, Joined);
+         IR.Enter (Code, Joined, Blocks (2));
+         Ignore := IR.Emit_Load (Code, Joined, T, Site);               --  7
+         Ignore := IR.Emit_Load (Code, Joined, P, Site);               --  8
+         IR.Emit_Leave (Code, Joined, IR.No_Value, Site);              --  9
+         IR.Leave_Block (Code, Joined);
+         IR.Enter (Code, Joined, Blocks (3));
+         Number := IR.Emit_Number (Code, Joined, Usize, 2, False, Site); --  10
+         IR.Emit_Store (Code, Joined, W, Number, Site);                --  11
+         Ignore := IR.Emit_Load (Code, Joined, W, Site);               --  12
+         IR.Emit_Jump (Code, Joined, Blocks (2), Site);                --  13
+         IR.Leave_Block (Code, Joined);
+
+         --  Block 1 enters the loop at its header, block 2, whose body is
+         --  block 3 and whose exit is block 4.
+         for B in 1 .. 4 loop
+            Blocks (B) := IR.Add_Block
+              (Code, Looped, Landin.Resolution.Program_Scope, Site);
+         end loop;
+         IR.Enter (Code, Looped, Blocks (1));
+         Number := IR.Emit_Number (Code, Looped, Usize, 0, False, Site); --  1
+         IR.Emit_Store (Code, Looped, I, Number, Site);                --  2
+         IR.Emit_Store (Code, Looped, K, Number, Site);                --  3
+         IR.Emit_Jump (Code, Looped, Blocks (2), Site);                --  4
+         IR.Leave_Block (Code, Looped);
+         IR.Enter (Code, Looped, Blocks (2));
+         Ignore := IR.Emit_Load (Code, Looped, I, Site);               --  5
+         Condition := IR.Emit_Truth (Code, Looped, True, Site);        --  6
+         IR.Emit_Branch                                                --  7
+           (Code, Looped, Condition, Blocks (3), Blocks (4), Site);
+         IR.Leave_Block (Code, Looped);
+         IR.Enter (Code, Looped, Blocks (3));
+         Ignore := IR.Emit_Load (Code, Looped, K, Site);               --  8
+         Number := IR.Emit_Number (Code, Looped, Usize, 1, False, Site); --  9
+         IR.Emit_Store (Code, Looped, I, Number, Site);                --  10
+         IR.Emit_Jump (Code, Looped, Blocks (2), Site);                --  11
+         IR.Leave_Block (Code, Looped);
+         IR.Enter (Code, Looped, Blocks (4));
+         IR.Emit_Leave (Code, Looped, IR.No_Value, Site);              --  12
+         IR.Leave_Block (Code, Looped);
+
+         IR.Verifier.Verify (Code, Landin.Stages.Target (Work));
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Code, Joined), 13,
+            "the joined routine has the positions counted here");
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Code, Looped), 12,
+            "the looped routine has the positions counted here");
+         declare
+            Spans : constant IR.Liveness.Interval_Vectors.Vector :=
+              IR.Liveness.Slot_Intervals
+                (Code, Joined, IR.Control_Flow.Make (Code, Joined));
+            function Of_Slot (Slot : IR.Slot_Id) return String
+              is (Image (Spans (Positive (Slot))));
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Natural (Spans.Length), 5, "one interval per slot");
+            Landin.Testing.Check_Equal
+              (Item, Of_Slot (P), "0..13",
+               "a parameter is written at entry and stays live through "
+               & "the block laid out after its read, which jumps back to it");
+            Landin.Testing.Check_Equal
+              (Item, Of_Slot (S), "2..3",
+               "a slot stored and read in one block lives from the store "
+               & "to the load");
+            Landin.Testing.Check_Equal
+              (Item, Of_Slot (T), "4..13",
+               "a slot read at a join covers the end of each predecessor "
+               & "it is live out of, past its last reference");
+            Landin.Testing.Check_Equal
+              (Item, Of_Slot (U), "empty", "an unreferenced slot");
+            Landin.Testing.Check_Equal
+              (Item, Of_Slot (W), "11..12",
+               "a block that writes a slot before reading it does not "
+               & "make it live on entry");
+         end;
+         declare
+            Spans : constant IR.Liveness.Interval_Vectors.Vector :=
+              IR.Liveness.Slot_Intervals
+                (Code, Looped, IR.Control_Flow.Make (Code, Looped));
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Image (Spans (Positive (I))), "2..11",
+               "a slot read in a loop's header and written in its body "
+               & "is live around the back edge");
+            Landin.Testing.Check_Equal
+              (Item, Image (Spans (Positive (K))), "3..11",
+               "a slot read only in a loop's body is live through the "
+               & "rest of the loop");
+         end;
+      end;
+   end Slot_Intervals;
+
+   --  A chain of blocks with every slot stored in the first and loaded in
+   --  the last walks back the whole chain for each slot, more edges in
+   --  total than the search's budget of 32 per value and block.
+   procedure Slot_Interval_Fallback (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Code : IR.Unit;
+      Site : Landin.Provenance.Origin;
+      Slot_Total : constant := 128;
+      Chain : constant := 256;
+      --  Block 1 holds a number, a store per slot and a jump; each block
+      --  between holds a jump; the last a load per slot and the leave.
+      Stored_At : constant := 1;
+      Loaded_At : constant := 1 + Slot_Total + 1 + (Chain - 2);
+      Value_Total : constant := Loaded_At + Slot_Total + 1;
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      IR.Prepare (Code, Landin.Stages.Meanings (Work).all);
+      Site := IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
+      declare
+         Routine : constant IR.Item_Id := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value, Site);
+         Slots : array (1 .. Slot_Total) of IR.Slot_Id;
+         Blocks : array (1 .. Chain) of IR.Block_Id;
+         Number, Ignore : IR.Value_Id;
+         Whole, Precise : Natural := 0;
+      begin
+         for Slot of Slots loop
+            Slot := IR.Add_Slot
+              (Code, Routine, Landin.Types.Usize, IR.No_Declaration, Site);
+         end loop;
+         for B in Blocks'Range loop
+            Blocks (B) := IR.Add_Block
+              (Code, Routine, Landin.Resolution.Program_Scope, Site);
+         end loop;
+         for B in Blocks'Range loop
+            IR.Enter (Code, Routine, Blocks (B));
+            if B = 1 then
+               Number := IR.Emit_Number
+                 (Code, Routine, Landin.Types.Usize, 1, False, Site);
+               for Slot of Slots loop
+                  IR.Emit_Store (Code, Routine, Slot, Number, Site);
+               end loop;
+            end if;
+            if B < Chain then
+               IR.Emit_Jump (Code, Routine, Blocks (B + 1), Site);
+            else
+               for Slot of Slots loop
+                  Ignore := IR.Emit_Load (Code, Routine, Slot, Site);
+               end loop;
+               IR.Emit_Leave (Code, Routine, IR.No_Value, Site);
+            end if;
+            IR.Leave_Block (Code, Routine);
+         end loop;
+         IR.Verifier.Verify (Code, Landin.Stages.Target (Work));
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Code, Routine), Value_Total,
+            "the chain has the positions counted here");
+         Landin.Testing.Check
+           (Item, Slot_Total * (Chain - 1)
+                    > 32 * (IR.Value_Count (Code, Routine)
+                            + IR.Block_Count (Code, Routine) + 1),
+            "the slots' searches together exceed the budget");
+         declare
+            Spans : constant IR.Liveness.Interval_Vectors.Vector :=
+              IR.Liveness.Slot_Intervals
+                (Code, Routine, IR.Control_Flow.Make (Code, Routine));
+         begin
+            for Index in Slots'Range loop
+               declare
+                  Span : constant IR.Liveness.Interval := Spans (Index);
+                  Store : constant Natural := Stored_At + Index;
+                  Load : constant Natural := Loaded_At + Index;
+               begin
+                  Landin.Testing.Check
+                    (Item, Span.First <= Store and then Load <= Span.Last,
+                     "slot" & Natural'Image (Index) & "'s interval "
+                     & Image (Span) & " holds its store at"
+                     & Natural'Image (Store) & " and its load at"
+                     & Natural'Image (Load));
+                  if Span.First = 0 and then Span.Last = Value_Total then
+                     Whole := Whole + 1;
+                  elsif Span.First = Store and then Span.Last = Load then
+                     Precise := Precise + 1;
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Image (Spans (1)),
+               Image ((Stored_At + 1, Loaded_At + 1)),
+               "the first slot's search finishes within the budget");
+            Landin.Testing.Check_Equal
+              (Item, Image (Spans (Slot_Total)), Image ((0, Value_Total)),
+               "the last slot, past the budget, is given the whole "
+               & "routine");
+            Landin.Testing.Check_Equal
+              (Item, Whole + Precise, Slot_Total,
+               "every slot is either exact or given the whole routine:"
+               & Natural'Image (Whole) & " whole,"
+               & Natural'Image (Precise) & " exact");
+         end;
+      end;
+   end Slot_Interval_Fallback;
+
+   procedure Loop_Depths (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Code : IR.Unit;
+      Site : Landin.Provenance.Origin;
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      IR.Prepare (Code, Landin.Stages.Meanings (Work).all);
+      Site := IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
+      declare
+         --  Block 2 heads the outer loop, closed by block 5; block 3 heads
+         --  the inner one, closed by block 4; block 6 leaves; block 7,
+         --  unreachable, jumps into the outer header.
+         Routine : constant IR.Item_Id := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value, Site);
+         Blocks : array (1 .. 7) of IR.Block_Id;
+         Expected : constant array (Blocks'Range) of Natural :=
+           [0, 1, 2, 2, 1, 0, 0];
+         Condition : IR.Value_Id;
+      begin
+         for B in Blocks'Range loop
+            Blocks (B) := IR.Add_Block
+              (Code, Routine, Landin.Resolution.Program_Scope, Site);
+         end loop;
+         for B in Blocks'Range loop
+            IR.Enter (Code, Routine, Blocks (B));
+            case B is
+               when 2 | 3 =>
+                  Condition := IR.Emit_Truth (Code, Routine, True, Site);
+                  IR.Emit_Branch
+                    (Code, Routine, Condition, Blocks (B + 1),
+                     Blocks (if B = 2 then 6 else 5), Site);
+               when 1 | 5 | 7 =>
+                  IR.Emit_Jump (Code, Routine, Blocks (2), Site);
+               when 4 =>
+                  IR.Emit_Jump (Code, Routine, Blocks (3), Site);
+               when others =>
+                  IR.Emit_Leave (Code, Routine, IR.No_Value, Site);
+            end case;
+            IR.Leave_Block (Code, Routine);
+         end loop;
+         declare
+            Depths : constant IR.Liveness.Count_Vectors.Vector :=
+              IR.Liveness.Loop_Depths (IR.Control_Flow.Make (Code, Routine));
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Natural (Depths.Length), Blocks'Length,
+               "one depth per block");
+            for B in Blocks'Range loop
+               Landin.Testing.Check_Equal
+                 (Item, Depths (Positive (Blocks (B))), Expected (B),
+                  "block" & Natural'Image (B) & "'s loop depth");
+            end loop;
+         end;
+      end;
+   end Loop_Depths;
+
    procedure Converted
      (Item : in out Landin.Testing.Context;
       Source : String;
@@ -2785,6 +3102,13 @@ package body Landin.Tests.IR_Optimization_Suite is
         (Into, "ir opt", "contradictory bounds", Contradictory_Bounds'Access);
       Landin.Testing.Register
         (Into, "ir opt", "dominators", Dominators'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "slot intervals", Slot_Intervals'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "slot interval fallback",
+         Slot_Interval_Fallback'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "loop depths", Loop_Depths'Access);
       Landin.Testing.Register
         (Into, "ir opt",
          "if-conversion chooses between arms that only compute",
