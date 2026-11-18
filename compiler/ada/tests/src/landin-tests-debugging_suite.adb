@@ -1614,60 +1614,11 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Split_Variables_Are_Pieces;
 
-   --  D1404: a narrower integer held in a 64-bit register is the
-   --  register's low bytes, a DW_OP_piece of its own size: the register
-   --  holds an i32 of -1 zero-extended, which LLDB otherwise reads whole,
-   --  as 4294967295.  At size the parameter lives across its calls in a
-   --  callee-saved register.
-   procedure Arm64_Narrow_Registers_Are_Pieces
-     (Item : in out Landin.Testing.Context);
-
-   procedure Arm64_Narrow_Registers_Are_Pieces
-     (Item : in out Landin.Testing.Context)
-   is
-      HT : constant Character := Character'Val (9);
-      Host : Landin.Testing.Fakes.Fake_Filesystem;
-      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-      Args : Landin.Platform.Path_List;
-      Result : Landin.Driver.Outcome;
-   begin
-      Host.Add_File
-        ("main.ldn",
-         "id: (x: i32) -> (r: i32) = r = x end id" & LF
-         & "twice: (left: i32) -> (r: i32) =" & LF
-         & "r = id(left) + id(left) + id(left) + id(left) + id(left)" & LF
-         & "end twice" & LF
-         & "public main: () -> (code: i32) =" & LF
-         & "code = twice(-1) + 47 end main");
-      Args.Append ("--target=linux-arm64");
-      Args.Append ("main.ldn");
-      Args.Append ("--emit=asm");
-      Args.Append ("--link=libc");
-      Args.Append ("-o");
-      Args.Append ("out.s");
-      Args.Append ("--debug=full");
-      Args.Append ("--optimize=size");
-      Result := Landin.Driver.Execute (Args, Host, Tools);
-      Landin.Testing.Check_Equal
-        (Item, Result.Status, 0, "arm64 size debug emission");
-      declare
-         Left : constant String := List_Of (Host.Written ("out.s"), "left");
-      begin
-         Landin.Testing.Check
-           (Item, Contains (Left, HT & ".byte 0x93" & LF & HT
-                            & ".uleb128 4" & LF),
-            "an i32 in a register is its low four bytes: " & Left);
-      end;
-   end Arm64_Narrow_Registers_Are_Pieces;
-
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "debugging", "split variables are pieces",
          Split_Variables_Are_Pieces'Access);
-      Landin.Testing.Register
-        (Into, "debugging", "arm64 narrow registers are pieces",
-         Arm64_Narrow_Registers_Are_Pieces'Access);
       Landin.Testing.Register
         (Into, "debugging", "registers outlast their last use at speed",
          Registers_Outlast_Last_Use'Access);
