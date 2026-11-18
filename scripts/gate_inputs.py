@@ -547,9 +547,11 @@ def report(needs, problems, expected, evidence):
 def bundle_provenance(directory, refine, environ, cwd=None):
     """Write DIRECTORY's provenance.json and files.sha256; return the manifest's sha256.
 
-    DIRECTORY is environments/boards/build.py's output.  Every bundle must
-    match its hardware record and name the one source identity and the
-    compiler REFINE, and the checkout must be the commit this run is for.
+    DIRECTORY is environments/boards/build.py's output, with
+    environments/boards/timing.py's in DIRECTORY/timing when the event
+    times the boards.  Every bundle must match its hardware record and name
+    the one source identity and the compiler REFINE, the timing bundle
+    too, and the checkout must be the commit this run is for.
     files.sha256 lists every file the artifact carries, in sha256sum's
     format, so the rig checks the transfer with coreutils alone and the
     digest of that list, a job output, binds it to this job.
@@ -580,6 +582,17 @@ def bundle_provenance(directory, refine, environ, cwd=None):
                      "bundle_sha256": sha256_file(path)})
     if not rows or len(sources) != 1:
         raise ValueError("expected bundles of one source identity, found %d" % len(sources))
+    source = sources.pop()
+    timing = None
+    built = directory / "timing" / "timing.json"
+    if built.exists():
+        #  The timing runs' bundle, when the event times the boards: built
+        #  by the same compiler from the same source as the bundles.
+        manifest = json.loads(built.read_text(encoding="utf-8"))
+        if manifest["compiler"]["sha256"] != compiler or manifest["source_identity"] != source:
+            raise ValueError("%s names another compiler or source" % built)
+        timing = {"sha256": sha256_file(built),
+                  "images": sum(len(board["images"]) for board in manifest["boards"].values())}
     provenance = {
         "commit": commit, "tree": git("rev-parse", "HEAD^{tree}"),
         "repository": environ.get("GITHUB_REPOSITORY"),
@@ -587,7 +600,8 @@ def bundle_provenance(directory, refine, environ, cwd=None):
         "run_attempt": environ.get("GITHUB_RUN_ATTEMPT"),
         "event": environ.get("GITHUB_EVENT_NAME"), "ref": environ.get("GITHUB_REF"),
         "compiler": {"name": Path(refine).name, "sha256": compiler},
-        "source_identity": sources.pop(), "bundles": rows}
+        "source_identity": source, "bundles": rows,
+        **({"timing": timing} if timing else {})}
     (directory / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     listing = []
     for path in sorted(directory.rglob("*")):

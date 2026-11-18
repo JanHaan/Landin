@@ -8,7 +8,10 @@
     python3 environments/boards/timing.py remote --bundle BUNDLE --output NEW_DIRECTORY
         [--board BOARD ...] [--repeat N] [--ram-loader PI_HELPER] [-- board options]
     python3 environments/boards/timing.py noise --results DIRECTORY ... --output FILE
-    python3 environments/boards/timing.py figures --results DIRECTORY ... --output FILE
+    python3 environments/boards/timing.py figures (--results DIRECTORY ... | --evidence DIRECTORY)
+        --output FILE
+    python3 environments/boards/timing.py compare FIGURES [--base REV]
+    python3 environments/boards/timing.py record FIGURES [--board BOARD ...] [--key KEY ...]
 
 `build`, on the build host, compiles each workload of the firmware set in
 compiler/tests/measure/workloads.json at each of the nine profiles as each
@@ -30,7 +33,10 @@ there for each board in turn, and retrieves every result.  `noise` writes
 the noise study's record, compiler/tests/measure/noise/cycles.json, from
 results whose images ran at least ten times; `figures` writes every
 configuration's figure, keyed `board/level/profile/workload`, and the
-limits, from a full pass's results.
+limits, from a full pass's results or from the gate's board evidence;
+`compare` holds them to the base commit's baselines,
+compiler/tests/measure/baselines/BOARD.cycles.json, with each board's
+tolerance from the noise study's record, and `record` writes them there.
 """
 import argparse
 import hashlib
@@ -235,7 +241,7 @@ def build(args):
                         digest=digest, elf_sha256=bundle.sha(kept),
                         elf=kept.relative_to(output).as_posix(),
                         workload=workload['name'], fixture=workload['fixture'], status=status,
-                        words=workload.get('words', []), profiles=[],
+                        checksum=workload.get('checksum'), profiles=[],
                         placement=placement(board, elf))
                 require(images[digest]['workload'] == workload['name'],
                         'two workloads gave one image: %s' % digest)
@@ -312,8 +318,8 @@ def time_load(run, args, board, image, elf, attempt):
     common.write_json(plan, dict(format_version=1, board=board, mode='time', probe=args.probe,
                                  elf=str(elf.resolve()), status=STATUS, seconds=args.seconds,
                                  words=[dict(symbol=BEFORE, count=1), dict(symbol=AFTER, count=1)]
-                                 + [dict(symbol=w['symbol'], count=len(w['value']))
-                                    for w in image.get('words', [])]))
+                                 + ([dict(symbol=image['checksum'], count=1)]
+                                    if image.get('checksum') else [])))
     args.pace.before('timing load')
     try:
         common.probe_command(run, 'time-' + stem, [args.ram_loader, '--plan', plan,
@@ -332,9 +338,10 @@ def time_load(run, args, board, image, elf, attempt):
     timed = report['timing']
     require(timed['status'] == image['status'], '%s: the program returned %d, expected %d'
             % (stem, timed['status'], image['status']))
-    for word in image.get('words', []):
-        require(timed['words'].get(word['symbol']) == word['value'], '%s: %s is %s, expected %s'
-                % (stem, word['symbol'], timed['words'].get(word['symbol']), word['value']))
+    if image.get('checksum'):
+        # The program checks its own checksum before it returns its status;
+        # the word is kept, as the instruction counts keep it.
+        timed['checksum'] = timed['words'][image['checksum']][0]
     # The figure is what the program read around `main`; the probe's own
     # span, from its zeroing to its read at the stop, is kept beside it.
     timed['probe_count'] = timed.pop('count')
@@ -390,6 +397,9 @@ def run_board(args):
             clock = decode_clock(board, runs[0]['clock'])
             require(all(decode_clock(board, one['clock']) == clock for one in runs),
                     '%s: the clock changed between runs' % image['workload'])
+            checksums = {one.get('checksum') for one in runs}
+            require(len(checksums) == 1, '%s: the checksum changed between runs: %s'
+                    % (image['workload'], sorted(checksums)))
             row = dict(workload=image['workload'], digest=image['digest'], profiles=image['profiles'],
                        placement=image['placement'], counter=runs[0]['counter'], unit=runs[0]['unit'],
                        clock=clock, clock_key=clock_key(clock), counts=counts,
@@ -397,7 +407,8 @@ def run_board(args):
                        probe_counts=[one['probe_count'] for one in runs],
                        halted_drift=[one['halted_drift'] for one in runs],
                        host_seconds=[round(one['host_seconds'], 6) for one in runs],
-                       setup=runs[0]['setup'])
+                       setup=runs[0]['setup'], **({'checksum': '%#010x' % runs[0]['checksum']}
+                                                  if image.get('checksum') else {}))
             result['images'].append(row)
             print('%s %s %s: %s %s, median %s (%s..%s)' % (
                 board, image['workload'], ','.join(image['profiles']), row['counter'],
@@ -447,6 +458,11 @@ def noise(args):
                 largest_relative_spread=max(row['relative_spread'] for row in rows.values()))
     require(boards, 'no results under %s' % ', '.join(map(str, args.results)))
     record = dict(schema=1, kind='cycles', runner='rig', note=args.note, boards=dict(sorted(boards.items())))
+    if Path(args.output).exists():
+        # The tolerance set above the spread is a decision, kept across a
+        # new study until it is set again.
+        kept = json.loads(Path(args.output).read_text())
+        record.update({key: kept[key] for key in ('tolerance_rule', 'tolerance') if key in kept})
     Path(args.output).write_text(json.dumps(record, indent=1) + '\n')
     for board, row in sorted(boards.items()):
         print('%-15s %-11s %-12s largest relative spread %.4f%%' % (
@@ -454,35 +470,205 @@ def noise(args):
     return 0
 
 
+def latest_legs(root):
+    """Each board leg's time results under ROOT, a directory of the gate's
+    board-evidence artifacts, from the latest attempt of each port: the
+    leg's transfer.json names its port and attempt, and gate.py writes each
+    time step's output as evidence/BOARD-time."""
+    legs = {}
+    for transfer in sorted(Path(root).rglob('transfer.json')):
+        try:
+            leg = json.loads(transfer.read_text())
+            port, attempt = leg['port'], int(leg['run_attempt'])
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if attempt >= legs.get(port, (0, None))[0]:
+            legs[port] = (attempt, transfer.parent)
+    return sorted(path for _, directory in legs.values()
+                  for path in (directory / 'evidence').glob('*-time*/result.json'))
+
+
 def figures(args):
     """Every configuration's figure from timing runs' results, keyed as
     `board/level/profile/workload` with its counter, clock and placement;
     a configuration whose image another profile also gave cites its digest."""
+    paths = [path for directory in args.results or ()
+             for path in sorted(Path(directory).glob('*/result.json'))]
+    paths += latest_legs(args.evidence) if args.evidence else []
     found = {}
-    for directory in args.results:
-        for path in sorted(Path(directory).glob('*/result.json')):
-            result = json.loads(path.read_text())
-            require(result.get('status') == 'passed', '%s did not pass' % path)
-            board = result['board']
-            _, level = BOARDS[board]
-            for image in result['images']:
-                for profile in image['profiles']:
-                    key = '%s/%s/%s/%s' % (board, level or 'armv6-m', profile, image['workload'])
-                    require(key not in found, '%s is in two results' % key)
-                    found[key] = dict(figure=statistics.median_low(image['counts']),
-                                      unit=image['unit'], counter=image['counter'],
-                                      clock=image['clock_key'], placement=image['placement'],
-                                      runs=len(image['counts']), spread=max(image['counts'])
-                                      - min(image['counts']), image=image['digest'],
-                                      compiler=result['compiler']['sha256'])
-            for limit in result.get('limits', []):
-                key = '%s/%s/%s/%s' % (board, level or 'armv6-m', limit['profile'], limit['workload'])
-                found[key] = dict(limit=limit['reason'])
-    require(found, 'no results under %s' % ', '.join(map(str, args.results)))
+    for path in paths:
+        result = json.loads(path.read_text())
+        require(result.get('status') == 'passed', '%s did not pass' % path)
+        board = result['board']
+        _, level = BOARDS[board]
+        for image in result['images']:
+            for profile in image['profiles']:
+                key = '%s/%s/%s/%s' % (board, level or 'armv6-m', profile, image['workload'])
+                require(key not in found, '%s is in two results' % key)
+                found[key] = dict(figure=statistics.median_low(image['counts']),
+                                  unit=image['unit'], counter=image['counter'],
+                                  clock=image['clock_key'], placement=image['placement'],
+                                  runs=len(image['counts']), spread=max(image['counts'])
+                                  - min(image['counts']), image=image['digest'],
+                                  compiler=result['compiler']['sha256'],
+                                  **({'checksum': image['checksum']} if 'checksum' in image else {}))
+        for limit in result.get('limits', []):
+            key = '%s/%s/%s/%s' % (board, level or 'armv6-m', limit['profile'], limit['workload'])
+            found[key] = dict(limit=limit['reason'])
+    require(found, 'no time results in %s' % ', '.join(map(str, list(args.results or ())
+                                                           + ([args.evidence] if args.evidence else []))))
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(json.dumps(dict(schema=1, kind='cycles', figures=dict(
         sorted(found.items()))), indent=1) + '\n')
     print('%d configurations, %d limits: %s' % (len(found), sum('limit' in v for v in found.values()),
                                                 args.output))
+    return 0
+
+
+BASELINES = ROOT / 'compiler/tests/measure/baselines'
+NOISE = ROOT / 'compiler/tests/measure/noise/cycles.json'
+
+
+def baseline_path(board):
+    return BASELINES / ('%s.cycles.json' % board)
+
+
+def read_baseline(board, rev=None):
+    """BOARD's committed cycles baseline, at REV or as the checkout has it."""
+    path = baseline_path(board)
+    if rev is None:
+        return json.loads(path.read_text()) if path.exists() else {}
+    shown = subprocess.run(['git', 'show', '%s:%s' % (rev, path.relative_to(ROOT).as_posix())],
+                           cwd=ROOT, capture_output=True, text=True)
+    return json.loads(shown.stdout) if shown.returncode == 0 else {}
+
+
+def tolerances():
+    """{board: (relative, absolute)} from the noise study's record: a figure
+    within the larger of the two of its baseline is the same figure."""
+    record = json.loads(NOISE.read_text()) if NOISE.exists() else {}
+    return {board: (one['relative'], one['absolute'])
+            for board, one in record.get('tolerance', {}).items()}
+
+
+def within(old, new, tolerance):
+    relative, absolute = tolerance
+    return abs(new - old) <= max(relative * old, absolute)
+
+
+def split(key):
+    board, rest = key.split('/', 1)
+    return board, rest
+
+
+def compare(args):
+    """The figures against the base commit's baselines.  A figure beyond
+    its board's tolerance, slower or faster, fails unless the candidate's
+    own baseline records it; so does a configuration with no baseline, a
+    changed placement or a changed limit.  A changed clock is the runner's,
+    not the code's: it is reported for recording and does not fail."""
+    measured = json.loads(Path(args.figures).read_text())
+    require(measured.get('kind') == 'cycles', '%s holds no cycles figures' % args.figures)
+    if args.base:
+        base = args.base
+    else:
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        import measure
+        base = measure.default_base()
+    allowed = tolerances()
+    before, after = {}, {}
+    undeclared, declared, unrecorded, clocks, ok = [], [], [], [], 0
+    for key, figure in sorted(measured['figures'].items()):
+        board, name = split(key)
+        if board not in before:
+            before[board] = read_baseline(board, base).get('entries', {})
+            after[board] = read_baseline(board).get('entries', {})
+        old, new = before[board].get(name), after[board].get(name)
+        tolerance = allowed.get(board, (0.0, 0))
+
+        def same(entry):
+            if entry is None:
+                return False
+            if 'limit' in figure or 'limit' in entry:
+                return entry.get('limit') == figure.get('limit')
+            return (entry['placement'] == figure['placement'] and entry['clock'] == figure['clock']
+                    and within(entry['cycles'], figure['figure'], tolerance))
+        if same(old):
+            ok += 1
+        elif old is not None and 'limit' not in old and 'limit' not in figure \
+                and old['clock'] != figure['clock']:
+            clocks.append('%s: the base ran at %s, this at %s' % (key, old['clock'], figure['clock']))
+        elif same(new):
+            declared.append((key, old, figure))
+        elif old is None:
+            unrecorded.append(key)
+        else:
+            undeclared.append((key, old, figure))
+
+    def change(old, figure):
+        if old is None:
+            return 'new'
+        if 'limit' in old or 'limit' in figure:
+            return '%s -> %s' % (old.get('limit', old.get('cycles')), figure.get('limit', figure.get('figure')))
+        moved = '' if old['placement'] == figure['placement'] else ', placement %s -> %s' % (
+            old['placement'], figure['placement'])
+        return '%d -> %d (%+.2f%%)%s' % (old['cycles'], figure['figure'],
+                                        100.0 * (figure['figure'] - old['cycles']) / old['cycles'], moved)
+    for title, rows in (('declared by the candidate\'s baselines', declared), ('UNDECLARED', undeclared)):
+        if rows:
+            print('%s: %d configurations' % (title, len(rows)))
+            for key, old, figure in rows:
+                print('  %s: %s' % (key, change(old, figure)))
+    if clocks:
+        print('the runner changed: these ran at another clock than their baseline, so they are'
+              ' recorded again rather than compared (timing.py record):')
+        for line in clocks:
+            print('  ' + line)
+    if unrecorded:
+        print('UNRECORDED: %d configurations have no baseline, such as %s' % (len(unrecorded), unrecorded[0]))
+    print('compared %d configurations\' cycles with %s: %d within tolerance, %d declared, %d undeclared,'
+          ' %d unrecorded, %d at another clock' % (len(measured['figures']), base, ok, len(declared),
+                                                  len(undeclared), len(unrecorded), len(clocks)))
+    if undeclared or unrecorded:
+        print('a deliberate change is declared by recording it: environments/boards/timing.py record'
+              ' FIGURES.json, the figures a gate run kept as its measure-cycles artifact, and the'
+              ' commit message says why', file=sys.stderr)
+        return 1
+    return 0
+
+
+def record(args):
+    """Write the figures into each board's baseline: the whole board's
+    record unless --key names the configurations to write."""
+    measured = json.loads(Path(args.figures).read_text())
+    require(measured.get('kind') == 'cycles', '%s holds no cycles figures' % args.figures)
+    wanted = set(args.key or ())
+    boards = {}
+    for key, figure in measured['figures'].items():
+        board, name = split(key)
+        if (args.board and board not in args.board) or (wanted and key not in wanted):
+            continue
+        boards.setdefault(board, {})[name] = (
+            dict(limit=figure['limit']) if 'limit' in figure else dict(
+                cycles=figure['figure'], unit=figure['unit'], counter=figure['counter'],
+                clock=figure['clock'], placement=figure['placement'], image=figure['image'],
+                runs=figure['runs'], **({'checksum': figure['checksum']} if 'checksum' in figure else {})))
+    require(boards, 'no figures selected in %s' % args.figures)
+    BASELINES.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for board, entries in sorted(boards.items()):
+        target, level = BOARDS[board]
+        current = read_baseline(board) or dict(schema=1, kind='cycles', board=board, target=target,
+                                               level=level or 'armv6-m', entries={})
+        if not wanted:
+            # A whole record is the board's whole baseline: a configuration
+            # no workload measures any more goes with it.
+            current['entries'] = {}
+        current['entries'].update(entries)
+        current['entries'] = dict(sorted(current['entries'].items()))
+        baseline_path(board).write_text(json.dumps(current, indent=1) + '\n')
+        written += len(entries)
+    print('recorded %d configurations under %s' % (written, BASELINES))
     return 0
 
 
@@ -592,15 +778,30 @@ def main(argv=None):
     studied.add_argument('--least', type=int, default=10, help='fewest runs an image may have')
     studied.add_argument('--note', default='', help='what the record is, kept in it')
     listed = commands.add_parser('figures', help="every configuration's figure from run results")
-    listed.add_argument('--results', type=Path, action='append', required=True,
+    listed.add_argument('--results', type=Path, action='append',
                         help="a `remote` output directory, or a directory of `run` outputs; repeat")
+    listed.add_argument('--evidence', type=Path,
+                        help="the gate's board-evidence artifacts, each port's latest attempt")
     listed.add_argument('--output', type=Path, required=True)
+    held = commands.add_parser('compare', help="hold figures to the base commit's baselines")
+    held.add_argument('figures', type=Path)
+    held.add_argument('--base', help="the commit compared with; measure.py's base by default")
+    kept = commands.add_parser('record', help='write figures as the baselines')
+    kept.add_argument('figures', type=Path)
+    kept.add_argument('--board', choices=BOARDS, action='append', help='only this board; repeat')
+    kept.add_argument('--key', action='append', help='only this BOARD/LEVEL/PROFILE/WORKLOAD; repeat')
     args = parser.parse_args(arguments)
     if args.command == 'noise':
         return noise(args)
     if args.command == 'figures':
+        require(args.results or args.evidence, 'name --results or --evidence')
         return figures(args)
+    if args.command == 'compare':
+        return compare(args)
+    if args.command == 'record':
+        return record(args)
     if args.command == 'build':
+        common.warn_stale_refine(args)  # is it this checkout's?
         return build(args)
     if args.command == 'remote':
         return remote(args, board_args)

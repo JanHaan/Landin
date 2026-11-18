@@ -17,6 +17,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'environments/boards'))
 import rig as RIG  # noqa: E402
+import timing as TIMING  # noqa: E402
 
 COMMON = RIG.common
 ARTY = '210319B3E738'
@@ -74,15 +75,22 @@ class Description(unittest.TestCase):
             # The boot check comes last, so the board rests on its verified
             # fixed image; the STM32H753's cached RAM run (D975) is the one
             # RAM run that follows another, before the same boot check.
+            # Each RAM run's board is timed after it, before the boot check,
+            # while the board runs that architecture; the cached run, whose
+            # handler a warm load cannot retire, comes after the timing.
             if name == 'stm32h753':
-                self.assertEqual(modes, ['ram', 'ram', 'boot'])
+                self.assertEqual(modes, ['ram', 'time', 'ram', 'boot'])
             else:
-                self.assertEqual(modes, ['ram', 'boot'] * (len(modes) // 2), name)
+                self.assertEqual(modes, ['ram', 'time', 'boot'] * (len(modes) // 3), name)
         self.assertEqual([(s['board'], s['mode']) for s in rig['ports']['stm32h753']['steps']],
-                         [('stm32h753', 'ram'), ('stm32h753_cached', 'ram'), ('stm32h753', 'boot')])
+                         [('stm32h753', 'ram'), ('stm32h753', 'time'), ('stm32h753_cached', 'ram'),
+                          ('stm32h753', 'boot')])
         self.assertEqual([(s['board'], s['mode']) for s in rig['ports']['pico2']['steps']],
-                         [('rp2350_hazard3', 'ram'), ('rp2350', 'boot'),
-                          ('rp2350', 'ram'), ('rp2350_hazard3', 'boot')])
+                         [('rp2350_hazard3', 'ram'), ('rp2350_hazard3', 'time'), ('rp2350', 'boot'),
+                          ('rp2350', 'ram'), ('rp2350', 'time'), ('rp2350_hazard3', 'boot')])
+        timed = {s['board'] for port in rig['ports'].values() for s in port['steps']
+                 if s['mode'] == 'time'}
+        self.assertEqual(timed, set(TIMING.BOARDS))
         # The Pico 2 runs on the cascade only through its power-only cable.
         self.assertEqual(rig['ports']['pico2']['location'], dict(hub='.3.3', port=2))
         for step in rig['ports']['pico2']['steps']:

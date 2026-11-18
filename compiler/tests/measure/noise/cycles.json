@@ -915,5 +915,40 @@
    },
    "largest_relative_spread": 0.023233
   }
+ },
+ "tolerance_rule": "A figure, the lower median of a time step's three runs, is its baseline's when it differs from it by no more than the larger of `relative` times the baseline and `absolute` counts; each board's pair is set above the largest spread its warm runs showed here: none on the ESP32, ESP32-S3, ESP32-C3 and Hazard3, 15 cycles on the M33, 13 on the C5, 1 us on the RP2040, none after the first run on the M7, whose first run after a load the lower median of three leaves out.",
+ "tolerance": {
+  "esp32": {
+   "relative": 0.002,
+   "absolute": 8
+  },
+  "esp32c3": {
+   "relative": 0.002,
+   "absolute": 8
+  },
+  "esp32c5": {
+   "relative": 0.005,
+   "absolute": 20
+  },
+  "esp32s3": {
+   "relative": 0.002,
+   "absolute": 8
+  },
+  "rp2040": {
+   "relative": 0.002,
+   "absolute": 3
+  },
+  "rp2350": {
+   "relative": 0.002,
+   "absolute": 20
+  },
+  "rp2350_hazard3": {
+   "relative": 0.002,
+   "absolute": 8
+  },
+  "stm32h753": {
+   "relative": 0.005,
+   "absolute": 40
+  }
  }
 }

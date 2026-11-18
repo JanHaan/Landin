@@ -1,0 +1,513 @@
+{
+ "schema": 1,
+ "kind": "cycles",
+ "board": "esp32",
+ "target": "xtensa",
+ "level": "xtensa-esp32",
+ "entries": {
+  "xtensa-esp32/none-all/binary-search": {
+   "cycles": 11131,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "9459eea7beeeac284dd753cf7ebbcb089cef5ae0ec12bd089f7f7ec10d3d2c26",
+   "runs": 3
+  },
+  "xtensa-esp32/none-all/cmp-siphash-vectors": {
+   "cycles": 2424509,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "de59df9a4c32a80e9b062f6ff01eb8a02122cf79bc35d428021330042e827a96",
+   "runs": 3
+  },
+  "xtensa-esp32/none-all/fannkuch-redux": {
+   "cycles": 27927269,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "c79ed83079b6cf0886723696d34713b82896579ae2c03a6fc0fe3fac5bbc5054",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/none-all/mandelbrot": {
+   "cycles": 30946300,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "74612372b87273f3c8966e612262e6ae7ad4061c1fe0aa1290279c2a1a16f0ab",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/none-all/merge-sort": {
+   "cycles": 40505,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "03b39d75dbbde386a3117ec28cdb000d2853d4d5ddbcb4f5412b8507cd9ddab1",
+   "runs": 3
+  },
+  "xtensa-esp32/none-all/sieve-of-eratosthenes": {
+   "cycles": 69726,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "0adbba9004306e3a1b8a66ce507bb5b3460a149d4275fc66e806579c3c4ec7fa",
+   "runs": 3
+  },
+  "xtensa-esp32/none-auto/binary-search": {
+   "cycles": 11131,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "9459eea7beeeac284dd753cf7ebbcb089cef5ae0ec12bd089f7f7ec10d3d2c26",
+   "runs": 3
+  },
+  "xtensa-esp32/none-auto/cmp-siphash-vectors": {
+   "cycles": 2424538,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "a73f6e669776eb46ad0a73e9bd1167cfdf6b78e67191a2b01b4e140026a6a3f8",
+   "runs": 3
+  },
+  "xtensa-esp32/none-auto/fannkuch-redux": {
+   "cycles": 27927269,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "c79ed83079b6cf0886723696d34713b82896579ae2c03a6fc0fe3fac5bbc5054",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/none-auto/mandelbrot": {
+   "cycles": 30946300,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "74612372b87273f3c8966e612262e6ae7ad4061c1fe0aa1290279c2a1a16f0ab",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/none-auto/merge-sort": {
+   "cycles": 40505,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "03b39d75dbbde386a3117ec28cdb000d2853d4d5ddbcb4f5412b8507cd9ddab1",
+   "runs": 3
+  },
+  "xtensa-esp32/none-auto/sieve-of-eratosthenes": {
+   "cycles": 69726,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "0adbba9004306e3a1b8a66ce507bb5b3460a149d4275fc66e806579c3c4ec7fa",
+   "runs": 3
+  },
+  "xtensa-esp32/none-off/binary-search": {
+   "cycles": 11131,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "9459eea7beeeac284dd753cf7ebbcb089cef5ae0ec12bd089f7f7ec10d3d2c26",
+   "runs": 3
+  },
+  "xtensa-esp32/none-off/cmp-siphash-vectors": {
+   "cycles": 2424538,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "a73f6e669776eb46ad0a73e9bd1167cfdf6b78e67191a2b01b4e140026a6a3f8",
+   "runs": 3
+  },
+  "xtensa-esp32/none-off/fannkuch-redux": {
+   "cycles": 27927269,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "c79ed83079b6cf0886723696d34713b82896579ae2c03a6fc0fe3fac5bbc5054",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/none-off/mandelbrot": {
+   "cycles": 30946300,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "74612372b87273f3c8966e612262e6ae7ad4061c1fe0aa1290279c2a1a16f0ab",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/none-off/merge-sort": {
+   "cycles": 40505,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "03b39d75dbbde386a3117ec28cdb000d2853d4d5ddbcb4f5412b8507cd9ddab1",
+   "runs": 3
+  },
+  "xtensa-esp32/none-off/sieve-of-eratosthenes": {
+   "cycles": 69726,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "0adbba9004306e3a1b8a66ce507bb5b3460a149d4275fc66e806579c3c4ec7fa",
+   "runs": 3
+  },
+  "xtensa-esp32/size-all/binary-search": {
+   "cycles": 9388,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "cb8807de4ba29a17d447de294f47351d83a45d95f38b2fae1cb1c00dcb73ffa8",
+   "runs": 3
+  },
+  "xtensa-esp32/size-all/cmp-siphash-vectors": {
+   "cycles": 1950160,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "4e5d4515b50ffd0ff7d06938c8db1c7dccfb5361a61f5e356b4e44a00d4f3c9f",
+   "runs": 3
+  },
+  "xtensa-esp32/size-all/fannkuch-redux": {
+   "cycles": 23790139,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "7aff645d12625515c29fd2b520b1dad880ead7c5f9e599afe7115f80c8fabec5",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/size-all/mandelbrot": {
+   "cycles": 27211276,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "367ea2953a771a7074572af919b45aef8ed3b91f623b6d5836208d6a26ed5e58",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/size-all/merge-sort": {
+   "cycles": 26405,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "6e267ab429b49173957fe6a091dc6f64f55e8eedabed79e487afcaca5ea29873",
+   "runs": 3
+  },
+  "xtensa-esp32/size-all/sieve-of-eratosthenes": {
+   "cycles": 65656,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "159d94412b465197e224f235e4eeda3cc72e09d7bd3bbafdeaf9da0db33763ce",
+   "runs": 3
+  },
+  "xtensa-esp32/size-auto/binary-search": {
+   "cycles": 9388,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "cb8807de4ba29a17d447de294f47351d83a45d95f38b2fae1cb1c00dcb73ffa8",
+   "runs": 3
+  },
+  "xtensa-esp32/size-auto/cmp-siphash-vectors": {
+   "cycles": 1950196,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "8e1ac97af34609f49c9e564cfb48d00f330b07b545b3cd086a869f9907e6022b",
+   "runs": 3
+  },
+  "xtensa-esp32/size-auto/fannkuch-redux": {
+   "cycles": 23790139,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "7aff645d12625515c29fd2b520b1dad880ead7c5f9e599afe7115f80c8fabec5",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/size-auto/mandelbrot": {
+   "cycles": 27211276,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "367ea2953a771a7074572af919b45aef8ed3b91f623b6d5836208d6a26ed5e58",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/size-auto/merge-sort": {
+   "cycles": 26405,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "6e267ab429b49173957fe6a091dc6f64f55e8eedabed79e487afcaca5ea29873",
+   "runs": 3
+  },
+  "xtensa-esp32/size-auto/sieve-of-eratosthenes": {
+   "cycles": 65656,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "159d94412b465197e224f235e4eeda3cc72e09d7bd3bbafdeaf9da0db33763ce",
+   "runs": 3
+  },
+  "xtensa-esp32/size-off/binary-search": {
+   "cycles": 9388,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "cb8807de4ba29a17d447de294f47351d83a45d95f38b2fae1cb1c00dcb73ffa8",
+   "runs": 3
+  },
+  "xtensa-esp32/size-off/cmp-siphash-vectors": {
+   "cycles": 1950196,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "8e1ac97af34609f49c9e564cfb48d00f330b07b545b3cd086a869f9907e6022b",
+   "runs": 3
+  },
+  "xtensa-esp32/size-off/fannkuch-redux": {
+   "cycles": 23790139,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "7aff645d12625515c29fd2b520b1dad880ead7c5f9e599afe7115f80c8fabec5",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/size-off/mandelbrot": {
+   "cycles": 27211276,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "367ea2953a771a7074572af919b45aef8ed3b91f623b6d5836208d6a26ed5e58",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/size-off/merge-sort": {
+   "cycles": 26405,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "6e267ab429b49173957fe6a091dc6f64f55e8eedabed79e487afcaca5ea29873",
+   "runs": 3
+  },
+  "xtensa-esp32/size-off/sieve-of-eratosthenes": {
+   "cycles": 65656,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "159d94412b465197e224f235e4eeda3cc72e09d7bd3bbafdeaf9da0db33763ce",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-all/binary-search": {
+   "cycles": 9065,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "321df56a5f0eff5f7de464ef5bd14582fbbb4ee143f98de547a03dd4fde6b758",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-all/cmp-siphash-vectors": {
+   "cycles": 1912492,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "be3e2f2ba3dd6132a9942a81d246025c21e19b698f94398188544b273e6d53e0",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-all/fannkuch-redux": {
+   "cycles": 23790139,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "7aff645d12625515c29fd2b520b1dad880ead7c5f9e599afe7115f80c8fabec5",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/speed-all/mandelbrot": {
+   "cycles": 27210812,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "1997709f4ec1320058ccf8fc7b1d3e3a50e8238e3778f096045e736f16757eea",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/speed-all/merge-sort": {
+   "cycles": 24191,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "88d48262d5f94b83e4237408474f5754801ef8e51c24a1d7fce05110e9031cb0",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-all/sieve-of-eratosthenes": {
+   "cycles": 53964,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "49f6873c61f668e99a6c9982d9f05f78006f656e7a7913d358c5e53aa27c0393",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-auto/binary-search": {
+   "cycles": 9065,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "321df56a5f0eff5f7de464ef5bd14582fbbb4ee143f98de547a03dd4fde6b758",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-auto/cmp-siphash-vectors": {
+   "cycles": 1912492,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "be3e2f2ba3dd6132a9942a81d246025c21e19b698f94398188544b273e6d53e0",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-auto/fannkuch-redux": {
+   "cycles": 23790139,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "7aff645d12625515c29fd2b520b1dad880ead7c5f9e599afe7115f80c8fabec5",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/speed-auto/mandelbrot": {
+   "cycles": 27210812,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "1997709f4ec1320058ccf8fc7b1d3e3a50e8238e3778f096045e736f16757eea",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/speed-auto/merge-sort": {
+   "cycles": 24191,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "88d48262d5f94b83e4237408474f5754801ef8e51c24a1d7fce05110e9031cb0",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-auto/sieve-of-eratosthenes": {
+   "cycles": 53964,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "49f6873c61f668e99a6c9982d9f05f78006f656e7a7913d358c5e53aa27c0393",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-off/binary-search": {
+   "cycles": 9065,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "321df56a5f0eff5f7de464ef5bd14582fbbb4ee143f98de547a03dd4fde6b758",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-off/cmp-siphash-vectors": {
+   "cycles": 1912528,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "b978f00aa96333b9015c381714509d77140c8b745fa924e5d301acaf0409f195",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-off/fannkuch-redux": {
+   "cycles": 23790139,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "7aff645d12625515c29fd2b520b1dad880ead7c5f9e599afe7115f80c8fabec5",
+   "runs": 3,
+   "checksum": "0x05b0c76f"
+  },
+  "xtensa-esp32/speed-off/mandelbrot": {
+   "cycles": 27210812,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "1997709f4ec1320058ccf8fc7b1d3e3a50e8238e3778f096045e736f16757eea",
+   "runs": 3,
+   "checksum": "0x6b603ccc"
+  },
+  "xtensa-esp32/speed-off/merge-sort": {
+   "cycles": 24191,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "88d48262d5f94b83e4237408474f5754801ef8e51c24a1d7fce05110e9031cb0",
+   "runs": 3
+  },
+  "xtensa-esp32/speed-off/sieve-of-eratosthenes": {
+   "cycles": 53964,
+   "unit": "cycles",
+   "counter": "CCOUNT",
+   "clock": "xtal-40000000hz",
+   "placement": "text:iram0,data:dram0,stack:dram0",
+   "image": "49f6873c61f668e99a6c9982d9f05f78006f656e7a7913d358c5e53aa27c0393",
+   "runs": 3
+  }
+ }
+}

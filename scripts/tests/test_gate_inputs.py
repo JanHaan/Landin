@@ -1117,6 +1117,28 @@ class Physical(unittest.TestCase):
                 changed = self.source.replace(command[1], " " + name + command[1], 1)
                 self.assertEqual(workflow_reuse_gaps(changed, called), (set(), {name}))
 
+    def test_the_boards_are_timed_by_the_timing_scope_alone(self):
+        """The timing images are built, run and compared only on an event
+        that times the boards, and the comparison only once every leg
+        passed: the legs give gate.py the timing bundle under the scope's
+        flag, and the aggregate reads the base's baselines from history."""
+        jobs = workflow_jobs(self.source)
+        bundles = "\n".join(jobs["board-bundles"])
+        step = bundles.split("- name: Build the timing runs' images", 1)[1].split("- name:", 1)[0]
+        self.assertIn("if: " + TIMING_IF + "\n", step)
+        self.assertIn('--output "$RUNNER_TEMP/board-bundles/timing"', step)
+        leg = "\n".join(jobs["board"])
+        self.assertIn("TIMING: ${{ needs.inputs.outputs.timing }}", leg)
+        self.assertIn('timing="--timing=$RUNNER_TEMP/board-bundles/timing"', leg)
+        aggregate = "\n".join(jobs["gate"])
+        self.assertIn("fetch-depth: 0", aggregate)
+        compared = aggregate.split("- name: Every port's cycles", 1)[1].split("- name:", 1)[0]
+        condition = " ".join(compared.split("run:", 1)[0].split())
+        for part in ("always()", TIMING_IF, BOARDS_IF, "needs.board.result == 'success'"):
+            self.assertIn(part, condition)
+        self.assertIn("timing.py figures --evidence", compared)
+        self.assertIn("timing.py compare", compared)
+
     def test_the_board_matrix_is_every_port_once(self):
         rows = matrix_rows(workflow_jobs(self.source)["board"])
         self.assertEqual(tuple(row["port"] for row in rows), gate_inputs.BOARD_PORTS)
@@ -1508,6 +1530,31 @@ class Bundles(unittest.TestCase):
         self.summary([])
         with self.assertRaisesRegex(ValueError, "one source identity"):
             self.provenance()
+
+    def timing(self, source="source", compiler=None):
+        timing = self.bundles / "timing"
+        timing.mkdir(exist_ok=True)
+        (timing / "timing.json").write_text(json.dumps({
+            "format": "landin-board-timing-1", "source_identity": source,
+            "compiler": {"name": "refine", "sha256": compiler or self.compiler},
+            "boards": {"esp32": {"images": [{"elf": "images/esp32/a.elf"}, {}]}}}))
+        return timing
+
+    def test_a_timing_bundle_is_listed_and_bound_to_the_same_compiler_and_source(self):
+        timing = self.timing()
+        self.provenance()
+        provenance = json.loads((self.bundles / "provenance.json").read_text())
+        self.assertEqual(provenance["timing"], {
+            "sha256": gate_inputs.sha256_file(timing / "timing.json"), "images": 2})
+        self.assertIn("timing/timing.json", (self.bundles / "files.sha256").read_text())
+        for source, compiler in (("other", None), ("source", "0" * 64)):
+            self.timing(source, compiler)
+            with self.assertRaisesRegex(ValueError, "another compiler or source"):
+                self.provenance()
+
+    def test_without_a_timing_bundle_the_provenance_names_none(self):
+        self.provenance()
+        self.assertNotIn("timing", json.loads((self.bundles / "provenance.json").read_text()))
 
 
 #  Every tracked file that names one of the four documents or reads
