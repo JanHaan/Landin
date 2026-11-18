@@ -211,7 +211,9 @@ candidate is compared with its base commit's baselines, never its own.
 
 The exit evidence is three runs of each class's comparison: one of an
 unchanged tree, which passes, and one each of two demonstration branches,
-which fail. Each branch is cut from the candidate, never promoted, and has
+which fail. Each branch is cut from `main` once the measurement and its
+baselines are there, so a difference fails as undeclared rather than
+unrecorded; it is never promoted, and has
 one commit in the target-neutral lowering: one adds to every routine a
 block reached only when a volatile load reads a value it never holds,
 making every image larger; the other adds at each routine's entry a loop

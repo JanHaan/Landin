@@ -395,9 +395,15 @@ def runner_class() -> dict:
         model = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
                                capture_output=True, text=True).stdout.strip()
     else:
-        model = next((line.split(":", 1)[1].strip() for line in
-                      Path("/proc/cpuinfo").read_text().splitlines()
-                      if line.startswith("model name")), "unknown")
+        lines = Path("/proc/cpuinfo").read_text().splitlines()
+        model = next((line.split(":", 1)[1].strip() for line in lines
+                      if line.startswith("model name")), None)
+        if model is None:
+            #  An arm64 kernel names no model; its implementer and part do.
+            fields = {line.split(":", 1)[0].strip(): line.split(":", 1)[1].strip()
+                      for line in lines if ":" in line}
+            model = ("implementer %s part %s" % (fields.get("CPU implementer", "?"),
+                                                 fields.get("CPU part", "?")))
     return {"label": os.environ.get("LANDIN_RUNNER_LABEL", "local"),
             "processor": model,
             "image": " ".join(filter(None, (os.environ.get("ImageOS"),

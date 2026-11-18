@@ -1,0 +1,34 @@
+{
+ "schema": 1,
+ "comment": "docs/measurement.md's pilot over the whole matrix: what each measuring job costs and adds, from the first runs that measured everything. Minutes are each job's wall time on its runner.",
+ "push": {
+  "runs": [44212200571],
+  "jobs_added": 3,
+  "jobs": {
+   "measure-size": {"runner": "ubuntu-24.04", "minutes": 3.8, "measures": "size of 1,350 Linux, RV64, Cortex-M, RV32 and Xtensa configurations, then RV64 instruction counts of 252"},
+   "freebsd-amd64-size": {"runner": "ubuntu-24.04", "measures": "size of 252 configurations, no guest"},
+   "freebsd-arm64-size": {"runner": "ubuntu-24.04", "measures": "size of 126 configurations, no guest"},
+   "darwin-host-release-2": {"runner": "macos-26", "added_step": "size of 126 configurations, within an existing job"},
+   "cortex-m-programs": {"runner": "ubuntu-24.04", "added_step": "instruction counts of 216 configurations on four machines, about 2.5 minutes, within an existing job"}
+  },
+  "concurrency": "three Ubuntu jobs added to a push run of 73, none on macOS; the 20-job account limit already queues a push run, and the size jobs start once the release compiler is built"
+ },
+ "schedule_and_dispatch": {
+  "runs": [44216106926],
+  "jobs_added": 3,
+  "jobs": {
+   "measure-time-linux-x86-64": {"runner": "ubuntu-24.04", "minutes": 19.9},
+   "measure-time-linux-arm64": {"runner": "ubuntu-24.04-arm", "minutes": 39.3},
+   "measure-time-darwin-arm64": {"runner": "macos-26", "minutes": 35.9},
+   "board-bundles": {"minutes": 10.4, "added": "the timing images, built with the bundles"},
+   "board legs": {"minutes": {"rp2040": 3.5, "pico2": 11.0, "stm32h753": 2.4, "esp32c3": 2.1, "esp32c5": 6.9, "esp32": 2.5, "esp32s3": 2.9}, "added": "each port's time step at three runs, one leg at a time on the rig's one runner"}
+  },
+  "concurrency": "three hosted jobs beside a boards run of eight, one of them macOS against the limit of five; the rig's legs stay one at a time"
+ },
+ "noise": {
+  "size": "none: emission is deterministic",
+  "instructions": "compiler/tests/measure/noise/instructions.json: no spread on RV64 with QEMU's reserved address space, nor on the Cortex-M machines",
+  "cycles": "compiler/tests/measure/noise/cycles.json: per port",
+  "wall": "compiler/tests/measure/noise/wall.json: per runner"
+ }
+}
