@@ -8090,16 +8090,11 @@ package body Landin.Tests.Backend_Suite is
                        = 2,
                      "none forms every element address");
                else
+                  --  D1404: size keeps the index in a register, which
+                  --  each word access scales itself.
                   Landin.Testing.Check
-                    (Item, Occurrences (Text, "ldr x9, [x11, x10, lsl #3]")
-                       = 2
-                     and then Occurrences
-                       (Text, "str x9, [x10, x13, lsl #3]") = 1
-                     and then Occurrences
-                       (Text, "ldr x9, [x10, x13, lsl #3]") = 1
-                     and then Occurrences (Text, "ldrb w9, [x10, x13]") = 1
-                     and then Occurrences (Text, "madd x9, x10, x11, x9")
-                       = 0,
+                    (Item, Occurrences (Text, ", lsl #3]") = 4
+                     and then Occurrences (Text, "madd ") = 0,
                      "size leaves scaled indexes to the accesses");
                end if;
             end;
@@ -11118,7 +11113,8 @@ package body Landin.Tests.Backend_Suite is
            (Speed_Report, 1).Frame_Bytes
            < Landin.Build_Reports.Nth_Routine
                (Reference_Report, 1).Frame_Bytes
-           and then Traffic (Speed_Text) < Traffic (Size_Text),
+           and then Traffic (Speed_Text) < Traffic (Reference_Text)
+           and then Traffic (Size_Text) < Traffic (Reference_Text),
          "saved registers lower scalar traffic and keep the frame smaller");
       Landin.Testing.Check
         (Item, Landin.Build_Reports.Nth_Routine

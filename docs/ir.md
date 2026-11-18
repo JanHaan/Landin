@@ -771,11 +771,13 @@ source debugger locations follow the allocation plan. Argument spills
 preserve left-to-right evaluation across later control-flow expressions.
 
 The shared arm64 backend gives every routine an x29/x30 frame record and
-keeps source slots in frame homes except at speed. Without optimization,
-scalar IR values also have homes of their own; size and speed reuse
-nonoverlapping scalar homes. At speed, slots and values whose interval no
-call or assembly crosses take x0-x7 or, for floats, d18-d31, neither of
-which costs a save; a parameter keeps the argument register it arrives in.
+keeps source slots in frame homes without optimization, where scalar IR
+values also have homes of their own. Size and speed reuse nonoverlapping
+scalar homes and run the same allocator; size counts each reference once
+rather than by the loops around it, and holds a source variable it gives a
+register there for the whole routine, as x86-64's size does. Slots and
+values whose interval no call or assembly crosses take x0-x7 or, for
+floats, d18-d31, neither of which costs a save; a parameter keeps the argument register it arrives in.
 Where enough scalar traffic pays for a save, the rest take callee-saved
 registers, which a call leaves alone: a slot over its interval takes one of
 x19-x24, a value or a slot's single-block span any of x19-x28, and a float

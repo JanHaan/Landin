@@ -69,6 +69,8 @@ package body Landin.Tests.Arm64_Selection_Suite is
    procedure Speed_Unrolls_Transfers
      (Item : in out Landin.Testing.Context);
    procedure Frames_Reach_Homes (Item : in out Landin.Testing.Context);
+   procedure Size_Keeps_Loops_In_Registers
+     (Item : in out Landin.Testing.Context);
    procedure Slice_Elements_Check_Once
      (Item : in out Landin.Testing.Context);
    procedure Counted_Flag_Adds (Item : in out Landin.Testing.Context);
@@ -812,9 +814,9 @@ package body Landin.Tests.Arm64_Selection_Suite is
    end Comparisons_Branch_On_Flags;
 
    --  Size and speed place no constant that only selection reads: an
-   --  f64 two or four is fmov's immediate, any other float goes through
-   --  x9 straight into its register, and a zero is stored from the zero
-   --  register.  None stores each to a frame home and reloads it.
+   --  f64 two or four is fmov's immediate and any other float goes
+   --  through x9 straight into its register.  None stores each to a frame
+   --  home and reloads it.
    procedure Constants_Live_Nowhere (Item : in out Landin.Testing.Context)
    is
       Work : Landin.Stages.Compilation :=
@@ -839,8 +841,6 @@ package body Landin.Tests.Arm64_Selection_Suite is
                  (Item, Contains (Text, HT & "fmov d17, #2.0" & LF)
                   and then Contains (Text, HT & "fmov d17, #4.0" & LF)
                   and then Contains (Text, HT & "fmov d17, x9" & LF)
-                  and then (Objective = Opt.Speed
-                            or else Contains (Text, HT & "stur xzr, "))
                   and then not Contains (Text, "movz x9, #0" & LF),
                   "size and speed put constants straight where they are"
                   & " used");
@@ -931,6 +931,43 @@ package body Landin.Tests.Arm64_Selection_Suite is
          end;
       end loop;
    end Frames_Reach_Homes;
+
+   --  D1404: size runs the allocator as speed does, so a loop's count
+   --  and running total stay in registers across its iterations, which
+   --  store nothing to the frame.  None keeps every one in its home.
+   procedure Size_Keeps_Loops_In_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_Arm64);
+   begin
+      Lower
+        (Item, Work,
+         "public sum: (values: []u64) -> (r: u64) = "
+         & "mut total: u64 = 0 first: usize = 0 "
+         & "for i in first..<lenof values do total = total + values[i] "
+         & "end for r = total end sum");
+      for Objective in Opt.Objective loop
+         declare
+            Text : constant String :=
+              Routine (Emitted (Work, Objective), "sum");
+            Head : constant Natural := Ada.Strings.Fixed.Index
+              (Text, LF & ".L1_2:" & LF);
+            Exit_Block : constant Natural :=
+              (if Head = 0 then 0
+               else Ada.Strings.Fixed.Index
+                 (Text (Head .. Text'Last), LF & ".L1_4:" & LF));
+            Body_Text : constant String :=
+              (if Exit_Block = 0 then "" else Text (Head .. Exit_Block));
+         begin
+            Landin.Testing.Check
+              (Item, Body_Text /= ""
+               and then Contains (Body_Text, "stur") = (Objective = Opt.None),
+               "the loop stores to its frame only without optimization at "
+               & Opt.Objective'Image (Objective));
+         end;
+      end loop;
+   end Size_Keeps_Loops_In_Registers;
 
    --  A slice element is the inclusive range from its index to itself:
    --  size and speed check the upper edge and leave out the lower one,
@@ -1107,6 +1144,9 @@ package body Landin.Tests.Arm64_Selection_Suite is
       Landin.Testing.Register
         (Into, "arm64 selection", "frames reach homes directly",
          Frames_Reach_Homes'Access);
+      Landin.Testing.Register
+        (Into, "arm64 selection", "size keeps a loop in registers",
+         Size_Keeps_Loops_In_Registers'Access);
       Landin.Testing.Register
         (Into, "arm64 selection", "slice elements check once",
          Slice_Elements_Check_Once'Access);
