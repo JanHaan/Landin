@@ -682,7 +682,7 @@ at [1230].
 
 ### R18.50 — The dispatcher
 
-Status: planned
+Status: active
 Depends on: R18.40
 
 `refine NAME` runs a built-in command; else, for a split command it was
