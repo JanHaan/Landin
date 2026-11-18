@@ -28,8 +28,8 @@ profiles to size-auto and speed-auto, and workloads to the target's set.
 A `--fixture` directory is measured as a workload named after it, with
 the firmware entry a firmware target's workloads take.  The stack-traffic
 share is the report's: a load or store through the stack or frame
-pointer, a push, a pop, and x86-64's call and return (compiler/ada/
-README.md, "The build report").  Standard library only.
+pointer, a push, a pop, and x86-64's call and return
+(compiler/ada/README.md, "The build report").  Standard library only.
 """
 from __future__ import annotations
 
@@ -311,6 +311,9 @@ def main(argv=None) -> int:
     kinds.add_argument("--target", required=True)
     kinds.add_argument("--symbol")
     args = parser.parse_args(argv)
+    if getattr(args, "refine", None):
+        import refine_revision
+        refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         if args.command == "routines":
             return routines(args)
