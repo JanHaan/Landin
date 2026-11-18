@@ -580,7 +580,7 @@ def add_commands(commands) -> None:
     one.add_argument("--level", required=True,
                      help="the image's level, as refine or the Cortex-M lanes name it")
     one.add_argument("image", type=Path)
-    one.add_argument("arguments", nargs="*", help="RV64: the program's arguments")
+    one.set_defaults(arguments=[])
     one.add_argument("--stdin", type=Path, help="RV64: the program's standard input")
     one.add_argument("--from", metavar="SYMBOL",
                      help="count from SYMBOL's first execution")
@@ -626,8 +626,26 @@ def parser() -> argparse.ArgumentParser:
     return top
 
 
+def parse(parser_, argv=None):
+    """PARSER_'s arguments from ARGV, with everything after a `--` taken as
+    the counted program's own arguments rather than given to argparse,
+    whose handling of `--` beside a list positional differs between Python
+    versions."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    program = []
+    if "--" in argv:
+        at = argv.index("--")
+        argv, program = argv[:at], argv[at + 1:]
+    args = parser_.parse_args(argv)
+    if program:
+        if not hasattr(args, "arguments"):
+            parser_.error("only `count` takes a program's arguments after --")
+        args.arguments = program
+    return args
+
+
 def main(argv=None) -> int:
-    args = parser().parse_args(argv)
+    args = parse(parser(), argv)
     if getattr(args, "refine", None):
         import refine_revision
         refine_revision.warn(args.refine)  # is it this checkout's?

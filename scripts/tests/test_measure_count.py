@@ -156,8 +156,9 @@ class RefusalTest(unittest.TestCase):
         import argparse
         top = argparse.ArgumentParser()
         measure_count.add_commands(top.add_subparsers(dest="command"))
-        args = top.parse_args(["count", "--target", "linux-rv64", "--level", "rv64gc",
-                               "image", "--from", "a", "--to", "b", "--", "7"])
+        args = measure_count.parse(top, ["count", "--target", "linux-rv64", "--level",
+                                         "rv64gc", "image", "--from", "a", "--to", "b",
+                                         "--", "7"])
         self.assertEqual((getattr(args, "from"), args.to, args.arguments), ("a", "b", ["7"]))
         self.assertIs(args.run, measure_count.run_count)
 

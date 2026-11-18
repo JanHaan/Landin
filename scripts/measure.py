@@ -858,7 +858,8 @@ def main(argv=None) -> int:
     wall.add_argument("--skip", action="append", default=[])
     wall.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     wall.set_defaults(run=measure_time)
-    args = parser.parse_args(argv)
+    import measure_count
+    args = measure_count.parse(parser, argv)
     if getattr(args, "refine", None):
         import refine_revision
         refine_revision.warn(args.refine)  # is it this checkout's?
