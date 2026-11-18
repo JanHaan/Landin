@@ -504,6 +504,13 @@ def measure_time(args) -> int:
     def timed(pair, workload, stdin, count):
         samples = {"candidate": [], "base": []}
         for index in range(count):
+            #  A candidate already past twice the tolerance after one
+            #  interleaved sample of each is judged on it: a gross slowdown
+            #  is a verdict at once, not a job that runs out its time.
+            if (index == 1 and tolerance is not None
+                    and samples["candidate"][0]
+                    > samples["base"][0] * (1 + 2 * tolerance)):
+                break
             order = (("candidate", 0), ("base", 1)) if index % 2 == 0 else (
                 ("base", 1), ("candidate", 0))
             for side, at in order:
@@ -514,7 +521,7 @@ def measure_time(args) -> int:
                         " differs from the other configurations'")
         candidate, base = median(samples["candidate"]), median(samples["base"])
         return {"candidate": round(candidate, 6), "base": round(base, 6),
-                "ratio": round(candidate / base, 4), "samples": count,
+                "ratio": round(candidate / base, 4), "samples": len(samples["base"]),
                 "spread": round((max(samples["candidate"]) - min(samples["candidate"]))
                                 / candidate, 4)}
 
@@ -525,7 +532,8 @@ def measure_time(args) -> int:
         #  A pair past the tolerance is timed again, three times as often,
         #  and judged on that: a slowdown survives it, one noisy draw of a
         #  hosted runner does not (the second A/A run's 1.085).
-        if tolerance is not None and figure["ratio"] > 1 + tolerance:
+        if (tolerance is not None and 1 + tolerance < figure["ratio"]
+                and figure["samples"] == args.samples):
             first = figure
             figure = timed(pair, workload, stdin, 3 * args.samples)
             figure["first"] = {k: first[k] for k in ("ratio", "samples")}
