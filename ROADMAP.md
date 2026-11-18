@@ -558,7 +558,7 @@ may regroup them.
 
 ### R18.10 — Decide the commands
 
-Status: planned
+Status: active
 Depends on: R17
 
 The maintainer answers the inventory's questions: lockstep linking of
