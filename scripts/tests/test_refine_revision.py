@@ -173,7 +173,8 @@ class Callers(unittest.TestCase):
         self.assertRegex(build, r'Incremental" = "yes" \]; then\n\s+python3'
                          r' "\$LANDIN_ROOT/scripts/refine_revision.py"')
         self.assertEqual(build.count("landin_built\n"), 3)
-        self.assertEqual(build.count('echo "built: '), 1)
+        self.assertEqual(
+            build.count('echo "built: $LANDIN_BUILD_DIR/bin/refine"'), 1)
 
 
 if __name__ == "__main__":
