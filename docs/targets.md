@@ -387,9 +387,10 @@ needs no mapping; showing its source does.
 
 LLDB canonicalizes scalar display names, such as `i32` to `int`. It does not evaluate Landin expressions. Source aliases from
 matches, named-result destructuring and loops remain inspectable in their
-live scopes. On arm64 source slots keep stack homes without optimization
-and at size; at speed a slot may hold a general or d register, and its
-location follows that register over its interval. Uninitialized
+live scopes. On arm64 source slots keep stack homes without optimization;
+at size a source variable may hold a general or d register for its whole
+routine, and at speed its location follows that register over its
+interval. Uninitialized
 or unavailable variables have no valid location, and ranges end before frame
 restoration. The complete parser, containers and hosted application run in the
 native LLDB matrix, using the existing Linux source/value oracles.

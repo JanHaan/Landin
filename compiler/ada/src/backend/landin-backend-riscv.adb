@@ -688,7 +688,11 @@ package body Landin.Backend.RiscV is
       --  routine is one input section in one of them, so where every
       --  region is at most 1 MiB a routine's jump is JAL's own and its
       --  branch the assembler's, which GNU as lengthens past 4 KiB with
-      --  a JAL around it.  RV64's text has no such bound.
+      --  a JAL around it.  RV64's text has no such bound, so there a
+      --  routine's own text bounds it: Emit_Routine has each jump written
+      --  near and its line's place kept in Provisional, and once the
+      --  routine is written settles them, near where the routine
+      --  assembles to less than JAL's reach and far otherwise.
       function Regions_Within_Reach return Boolean;
       function Regions_Within_Reach return Boolean is
          Profile : constant Landin.Targets.Firmware.Profile :=
@@ -705,6 +709,10 @@ package body Landin.Backend.RiscV is
          return True;
       end Regions_Within_Reach;
       Near : constant Boolean := Pairs and then Regions_Within_Reach;
+      Settling : Boolean := False;
+      package Position_Vectors is new Ada.Containers.Vectors
+        (Positive, Natural);
+      Provisional : Position_Vectors.Vector;
 
       procedure Put (Line : String);
       procedure Emit (Instruction : String);
@@ -774,6 +782,9 @@ package body Landin.Backend.RiscV is
             elsif Mnemonic = "bgtz" then "blez" else "");
       begin
          if Near and then (Mnemonic = "j" or else Inverse /= "") then
+            Put (Character'Val (9) & Instruction);
+         elsif Settling and then (Mnemonic = "j" or else Inverse /= "") then
+            Provisional.Append (Unbounded.Length (Output));
             Put (Character'Val (9) & Instruction);
          elsif Mnemonic = "j" then
             Put (Character'Val (9) & "lla x26, "
@@ -1809,6 +1820,18 @@ package body Landin.Backend.RiscV is
          --  Where this routine's text begins in the output.
          Routine_Start : constant Natural := Unbounded.Length (Output);
 
+         --  Where x26's save and each of its restores lie in the output,
+         --  from its first line's start to past its last line.
+         type Output_Span is record
+            From, To : Natural;
+         end record;
+         package Span_Vectors is new Ada.Containers.Vectors
+           (Positive, Output_Span);
+         Scratch_Saves : Span_Vectors.Vector;
+         Scratch_From : Natural := 0;
+         function Scratch_Save (Number : Natural) return Boolean
+           is (Settling and then Number = 26 and then Saves (Number));
+
          --  Counts, with the sites counted over the routine's final text.
          procedure Append_Statistics
            (Counts : Landin.Build_Reports.Routine_Statistics);
@@ -1958,6 +1981,73 @@ package body Landin.Backend.RiscV is
               (Output, Routine_Start + 1, Unbounded.Length (Output),
                Unbounded.To_String (Kept));
          end Prune_Saves;
+
+         --  The jumps Emit wrote near while Settling stay near where the
+         --  routine has no assembly block, whose text is its author's, and
+         --  its lines assemble to less than JAL's 1 MiB: every jump's
+         --  target is in the same routine, one input section, and linker
+         --  relaxation only shrinks it.  x26, which only a far jump names,
+         --  is then neither saved nor restored, nor described; its home
+         --  stays in the frame.  Any other routine's jumps are written far.
+         procedure Settle_Jumps;
+
+         procedure Settle_Jumps is
+            Text : constant String := Unbounded.Slice
+              (Output, Routine_Start + 1, Unbounded.Length (Output));
+            Within : constant Boolean :=
+              (for all Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item)
+                 => Landin.IR.Op_Of
+                      (Of_Unit, Item, Landin.IR.Value_Id (Index))
+                        /= Landin.IR.Assembly)
+              and then RiscV_Instructions.Assembles_Below (Text, 2 ** 20);
+            Jump : Positive := 1;
+            Span : Positive := 1;
+            Start : Positive := Text'First;
+         begin
+            if not Settling then
+               return;
+            end if;
+            Settling := False;
+            Unbounded.Delete
+              (Output, Routine_Start + 1, Unbounded.Length (Output));
+            for Index in Text'Range loop
+               if Text (Index) = LF then
+                  declare
+                     Line : constant String := Text (Start .. Index - 1);
+                     Place : constant Natural :=
+                       Routine_Start + (Start - Text'First);
+                  begin
+                     while Span <= Scratch_Saves.Last_Index
+                       and then Scratch_Saves (Span).To <= Place
+                     loop
+                        Span := Span + 1;
+                     end loop;
+                     if Within and then Span <= Scratch_Saves.Last_Index
+                       and then Scratch_Saves (Span).From <= Place
+                     then
+                        null;
+                     elsif Jump <= Provisional.Last_Index
+                       and then Provisional (Jump) = Place
+                     then
+                        Jump := Jump + 1;
+                        if Within then
+                           Put (Line);
+                        else
+                           Emit (Line (Line'First + 1 .. Line'Last));
+                        end if;
+                     else
+                        Put (Line);
+                     end if;
+                  end;
+                  Start := Index + 1;
+               end if;
+            end loop;
+            if Jump <= Provisional.Last_Index or else Start <= Text'Last then
+               raise Compiler_Defect with "a provisional jump is not a line";
+            end if;
+            Provisional.Clear;
+            Scratch_Saves.Clear;
+         end Settle_Jumps;
 
          --  D672: whether the body may call a libgcc helper at XLEN 32,
          --  which runs below the frame as any callee does, so the frame is
@@ -2298,6 +2388,7 @@ package body Landin.Backend.RiscV is
          procedure Restore_Saves is
          begin
             for Number in Saves'Range loop
+               Scratch_From := Unbounded.Length (Output);
                if Saves (Number) and then Pairs
                  and then Extent (Layout) - Save_Home (Number) <= 2047
                then
@@ -2318,6 +2409,10 @@ package body Landin.Backend.RiscV is
                      Emit (".cfi_restore "
                            & Trimmed (Natural'Image (Number)));
                   end if;
+               end if;
+               if Scratch_Save (Number) then
+                  Scratch_Saves.Append (Output_Span'
+                    (Scratch_From, Unbounded.Length (Output)));
                end if;
             end loop;
          end Restore_Saves;
@@ -5465,6 +5560,8 @@ package body Landin.Backend.RiscV is
          --  D672: the frame record is the caller's x8 and the return
          --  address in the two words just below the CFA, in a sixteen-byte
          --  header that keeps the stack's alignment at either XLEN.
+         Settling := not Pairs;
+         Provisional.Clear;
          Emit ("addi sp, sp, -16");
          Emit (Store_Word & " x8, " & Byte_Image (16 - 2 * Word)
                & "(sp)");
@@ -5503,6 +5600,7 @@ package body Landin.Backend.RiscV is
          end if;
          Reserve (Extent (Layout));
          for Number in Saves'Range loop
+            Scratch_From := Unbounded.Length (Output);
             if Saves (Number) and then Pairs
               and then Extent (Layout) - Save_Home (Number) <= 2047
             then
@@ -5523,6 +5621,10 @@ package body Landin.Backend.RiscV is
                         & ", -" & Trimmed (Landin.Targets.Byte_Count'Image
                           (Save_Home (Number) + 16)));
                end if;
+            end if;
+            if Scratch_Save (Number) then
+               Scratch_Saves.Append (Output_Span'
+                 (Scratch_From, Unbounded.Length (Output)));
             end if;
          end loop;
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
@@ -5795,6 +5897,7 @@ package body Landin.Backend.RiscV is
             Emit (".cfi_endproc");
          end if;
          Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
+         Settle_Jumps;
          Prune_Saves;
          --  No value or slot is held in a register: every one has its
          --  home, and the saved registers are selection's fixed scratch.

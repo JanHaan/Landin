@@ -194,6 +194,10 @@ def plugin_api(qemu: list[str], env: dict | None = None) -> int:
                               text=True, env=env, stdin=subprocess.DEVNULL, timeout=60)
     text = said.stdout + said.stderr
     found = re.search(r"supports only up to version (\d+)", text)
+    if found is None and "no user program specified" in text and len(qemu) == 1:
+        #  User emulation wants a program before it loads a plugin; the
+        #  probe's refusal comes first, so the program never runs.
+        return plugin_api([*qemu, sys.executable], env)
     if found is None:
         require("plugin interface not enabled" not in text,
                 f"{qemu[0]} is built without plugins: {text.strip()}")

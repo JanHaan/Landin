@@ -1719,6 +1719,20 @@ jobs:
       - name: LLDB source debugging
         if: matrix.shard == 2
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
+      #  A failed session says only which assertion failed; its transcripts,
+      #  images and dSYMs say why.  They go in one archive, since a source
+      #  the sessions read is named with a double quote, which an artifact's
+      #  file may not be.
+      - name: Archive a failed LLDB session's transcripts
+        if: failure() && matrix.shard == 2
+        run: tar -czf "$RUNNER_TEMP/lldb-evidence.tar.gz" -C "$RUNNER_TEMP" lldb
+      - name: Keep a failed LLDB session's transcripts
+        if: failure() && matrix.shard == 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: darwin-lldb-evidence
+          path: ${{ runner.temp }}/lldb-evidence.tar.gz
+          retention-days: 14
 
   #  The shared hosted corpus executed natively, every source verdict with
   #  Darwin selected, end-to-end fixtures among them, and the regenerated

@@ -394,6 +394,9 @@ package body Landin.Backend.Arm64 is
          --  Whether a callee-saved register pays for its save: below this
          --  much scalar traffic a routine leaves them alone.
          Saving : Boolean := False;
+         --  Size and speed both keep values and slots in registers.
+         --  Speed weights a slot's references by the loops around them;
+         --  size counts each once, as x86-64's size does.
          Speed : constant Boolean :=
            Options.Optimize = Landin.Optimization.Speed;
          C_Entry : constant Boolean :=
@@ -405,10 +408,8 @@ package body Landin.Backend.Arm64 is
          Depth : constant Landin.IR.Liveness.Count_Vectors.Vector :=
            (if Speed then Landin.IR.Liveness.Loop_Depths (Graph)
             else Landin.IR.Liveness.Count_Vectors.Empty_Vector);
-         Spans : constant Landin.IR.Liveness.Interval_Vectors.Vector :=
-           (if Speed
-            then Landin.IR.Liveness.Slot_Intervals (Of_Unit, Item, Graph)
-            else Landin.IR.Liveness.Interval_Vectors.Empty_Vector);
+         Spans : Landin.IR.Liveness.Interval_Vectors.Vector :=
+           Landin.IR.Liveness.Slot_Intervals (Of_Unit, Item, Graph);
          --  Registers x0-x7, x19-x24, d8-d15 and d18-d31 may hold slots,
          --  each over a run of disjoint intervals, and the next interval
          --  each has still to open.
@@ -464,7 +465,8 @@ package body Landin.Backend.Arm64 is
             At_Position : constant Positive := Starts (Positive (Value));
             Block : constant Positive :=
               Positive (Landin.IR.Block_Of (Of_Unit, Item, Value));
-            Step : constant Natural := 8 ** Natural'Min (Depth (Block), 4);
+            Step : constant Natural :=
+              (if Speed then 8 ** Natural'Min (Depth (Block), 4) else 1);
          begin
             if First_Use (Slot) = 0 or else At_Position < First_Use (Slot) then
                First_Use (Slot) := At_Position;
@@ -863,51 +865,49 @@ package body Landin.Backend.Arm64 is
             Parameter_Of (Positive
               (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) := Index;
          end loop;
-         --  Speed may hold a scalar slot in a register.  A C entry's
+         --  A scalar slot may be held in a register.  A C entry's
          --  parameters and result slot are reached by address, as is every
          --  slot a frame storage operand names.  A Landin routine's result
          --  slot is read by nothing but the leave's own operand.
-         if Speed then
-            for Index in 1 .. Slot_Count loop
-               declare
-                  Slot : constant Landin.IR.Slot_Id :=
-                    Landin.IR.Slot_Id (Index);
-               begin
-                  Eligible (Index) :=
-                    not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
-                    and then not Landin.IR.Is_Array (Of_Unit, Item, Slot);
-               end;
-            end loop;
-            if C_Entry then
-               for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item)
-               loop
-                  Eligible (Positive
-                    (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) :=
-                      False;
-               end loop;
-               if Landin.IR.Result_Slot (Of_Unit, Item) /= Landin.IR.No_Slot
-               then
-                  Eligible (Positive
-                    (Landin.IR.Result_Slot (Of_Unit, Item))) := False;
-               end if;
-            end if;
-            for Index in 1 .. Landin.IR.Source_Alias_Count (Of_Unit, Item)
+         for Index in 1 .. Slot_Count loop
+            declare
+               Slot : constant Landin.IR.Slot_Id :=
+                 Landin.IR.Slot_Id (Index);
+            begin
+               Eligible (Index) :=
+                 not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                 and then not Landin.IR.Is_Array (Of_Unit, Item, Slot);
+            end;
+         end loop;
+         if C_Entry then
+            for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item)
             loop
-               declare
-                  Place : constant Landin.IR.Storage :=
-                    Landin.IR.Nth_Source_Alias (Of_Unit, Item, Index).Place;
-               begin
-                  --  An alias is described through its storage throughout.
-                  case Place.Kind is
-                     when Landin.IR.Frame_Slot =>
-                        Eligible (Positive (Place.Slot)) := False;
-                     when Landin.IR.Runtime_Address =>
-                        Eligible (Positive (Place.Address)) := False;
-                     when Landin.IR.Module_Datum => null;
-                  end case;
-               end;
+               Eligible (Positive
+                 (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) :=
+                   False;
             end loop;
+            if Landin.IR.Result_Slot (Of_Unit, Item) /= Landin.IR.No_Slot
+            then
+               Eligible (Positive
+                 (Landin.IR.Result_Slot (Of_Unit, Item))) := False;
+            end if;
          end if;
+         for Index in 1 .. Landin.IR.Source_Alias_Count (Of_Unit, Item)
+         loop
+            declare
+               Place : constant Landin.IR.Storage :=
+                 Landin.IR.Nth_Source_Alias (Of_Unit, Item, Index).Place;
+            begin
+               --  An alias is described through its storage throughout.
+               case Place.Kind is
+                  when Landin.IR.Frame_Slot =>
+                     Eligible (Positive (Place.Slot)) := False;
+                  when Landin.IR.Runtime_Address =>
+                     Eligible (Positive (Place.Address)) := False;
+                  when Landin.IR.Module_Datum => null;
+               end case;
+            end;
+         end loop;
          for Index in 1 .. Value_Count loop
             declare
                Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id
@@ -978,61 +978,59 @@ package body Landin.Backend.Arm64 is
                          .Address_Required := True;
                   end loop;
                end if;
-               if Speed then
-                  case Op is
-                     when Landin.IR.Load | Landin.IR.Store =>
-                        Count_Use
-                          (Landin.IR.Slot_Of (Of_Unit, Item, Value), Value);
-                     when Landin.IR.Load_Field | Landin.IR.Store_Field
-                        | Landin.IR.Load_Element
-                        | Landin.IR.Store_Element =>
-                        if Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value)
-                        then
-                           Reach
-                             ((if Landin.IR.Is_Address
-                                 (Of_Unit, Item,
-                                  Landin.IR.Slot_Of (Of_Unit, Item, Value))
-                               then (Kind => Landin.IR.Runtime_Address,
-                                     Address => Landin.IR.Slot_Of
-                                       (Of_Unit, Item, Value))
-                               else (Kind => Landin.IR.Frame_Slot,
-                                     Slot => Landin.IR.Slot_Of
-                                       (Of_Unit, Item, Value))),
-                              Value);
-                        end if;
-                     when Landin.IR.Copy_Array | Landin.IR.Copy_Variant =>
-                        Reach (Landin.IR.Source_Of (Of_Unit, Item, Value),
-                               Value);
-                        Reach (Landin.IR.Destination_Of
-                                 (Of_Unit, Item, Value), Value);
-                     when Landin.IR.Load_Variant_Tag
-                        | Landin.IR.Load_Variant_Field =>
-                        Reach (Landin.IR.Source_Of (Of_Unit, Item, Value),
-                               Value);
-                     when Landin.IR.Storage_Address
-                        | Landin.IR.Place_Address
-                        | Landin.IR.Clear_Array | Landin.IR.Fill_Array
-                        | Landin.IR.Select_Variant
-                        | Landin.IR.Store_Variant_Field =>
-                        Reach (Landin.IR.Destination_Of
-                                 (Of_Unit, Item, Value), Value);
-                     when Landin.IR.Call | Landin.IR.Indirect_Call =>
-                        if Landin.IR.Failure_Slot_Of (Of_Unit, Item, Value)
-                          /= Landin.IR.No_Slot
-                        then
-                           Eligible (Positive (Landin.IR.Failure_Slot_Of
-                             (Of_Unit, Item, Value))) := False;
-                        end if;
-                     when Landin.IR.Assembly =>
-                        --  Assembly text may name any register.
-                        Has_Assembly := True;
-                     when others => null;
-                  end case;
-               end if;
+               case Op is
+                  when Landin.IR.Load | Landin.IR.Store =>
+                     Count_Use
+                       (Landin.IR.Slot_Of (Of_Unit, Item, Value), Value);
+                  when Landin.IR.Load_Field | Landin.IR.Store_Field
+                     | Landin.IR.Load_Element
+                     | Landin.IR.Store_Element =>
+                     if Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value)
+                     then
+                        Reach
+                          ((if Landin.IR.Is_Address
+                              (Of_Unit, Item,
+                               Landin.IR.Slot_Of (Of_Unit, Item, Value))
+                            then (Kind => Landin.IR.Runtime_Address,
+                                  Address => Landin.IR.Slot_Of
+                                    (Of_Unit, Item, Value))
+                            else (Kind => Landin.IR.Frame_Slot,
+                                  Slot => Landin.IR.Slot_Of
+                                    (Of_Unit, Item, Value))),
+                           Value);
+                     end if;
+                  when Landin.IR.Copy_Array | Landin.IR.Copy_Variant =>
+                     Reach (Landin.IR.Source_Of (Of_Unit, Item, Value),
+                            Value);
+                     Reach (Landin.IR.Destination_Of
+                              (Of_Unit, Item, Value), Value);
+                  when Landin.IR.Load_Variant_Tag
+                     | Landin.IR.Load_Variant_Field =>
+                     Reach (Landin.IR.Source_Of (Of_Unit, Item, Value),
+                            Value);
+                  when Landin.IR.Storage_Address
+                     | Landin.IR.Place_Address
+                     | Landin.IR.Clear_Array | Landin.IR.Fill_Array
+                     | Landin.IR.Select_Variant
+                     | Landin.IR.Store_Variant_Field =>
+                     Reach (Landin.IR.Destination_Of
+                              (Of_Unit, Item, Value), Value);
+                  when Landin.IR.Call | Landin.IR.Indirect_Call =>
+                     if Landin.IR.Failure_Slot_Of (Of_Unit, Item, Value)
+                       /= Landin.IR.No_Slot
+                     then
+                        Eligible (Positive (Landin.IR.Failure_Slot_Of
+                          (Of_Unit, Item, Value))) := False;
+                     end if;
+                  when Landin.IR.Assembly =>
+                     --  Assembly text may name any register.
+                     Has_Assembly := True;
+                  when others => null;
+               end case;
             end;
          end loop;
-         Saving := Speed and then Traffic >= 12;
-         if Speed and then not Has_Assembly then
+         Saving := Traffic >= 12;
+         if not Has_Assembly then
             declare
                Stamp_Data, Next_Data : Count_Buffers.Buffer (Slot_Count);
                Stamp : Counts renames Stamp_Data.Data.all;
@@ -1079,16 +1077,37 @@ package body Landin.Backend.Arm64 is
                Uses (Positive (Landin.IR.Result_Slot (Of_Unit, Item))) :=
                  Uses (Positive (Landin.IR.Result_Slot (Of_Unit, Item))) + 1;
             end if;
+            --  Size holds a source variable it gives a register there
+            --  throughout, as it holds one in its frame cell, so that a
+            --  debugger finds it anywhere in the routine, as x86-64's size
+            --  does.
+            if not Speed then
+               for Index in 1 .. Slot_Count loop
+                  if not Landin.IR.Liveness.Is_Empty (Spans (Index))
+                    and then Landin.IR.Declares
+                      (Of_Unit, Item, Landin.IR.Slot_Id (Index))
+                      /= Landin.IR.No_Declaration
+                  then
+                     Spans (Index) := (0, Value_Count);
+                  end if;
+               end loop;
+            end if;
             Place_Intervals;
             --  A slot loaded and stored in one block only, which stores it
             --  before reading it, and not placed over its interval, is
             --  dead before that store and after its last use there.  Like
             --  a value it needs a register only in between, which the scan
-            --  gives it at the store when it can.
+            --  gives it at the store when it can.  Size leaves a source
+            --  variable in its frame cell instead, for debuggers.
             for Index in 1 .. Slot_Count loop
                if Eligible (Index) and then Interval_Slots (Index) = 0
                  and then not Across_Blocks (Index)
                  and then Parameter_Of (Index) = 0
+                 and then
+                   (Speed
+                    or else Landin.IR.Declares
+                      (Of_Unit, Item, Landin.IR.Slot_Id (Index))
+                      = Landin.IR.No_Declaration)
                  and then First_Use (Index) /= 0
                  and then Landin.IR.Op_Of
                    (Of_Unit, Item,
@@ -1165,7 +1184,7 @@ package body Landin.Backend.Arm64 is
                      end Take;
                   begin
                      Place.Size := Size_Of (Kind, Facts);
-                     if Speed and then not Place.Address_Required
+                     if not Place.Address_Required
                        and then Last > Position
                      then
                         Share (Read_In_Place (Index));

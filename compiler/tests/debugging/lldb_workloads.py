@@ -32,10 +32,18 @@ def run(debugger, config_path):
         # D423: an atom set is an enumeration, read by its atom's name.
         if result.GetType().GetCanonicalType().GetTypeClass() == lldb.eTypeClassEnumeration:
             return result.GetValue()
+        # The value at its type's width, as LLDB prints it: an integer
+        # narrower than the register holding it is the register's low bytes,
+        # and GetValueAsSigned reads the whole register, so an i32 of -1
+        # held zero-extended in x19 came back as 4294967295.
         error = lldb.SBError()
-        actual = (result.GetValueAsSigned(error)
-                  if result.GetType().GetTypeFlags() & lldb.eTypeIsSigned
-                  else result.GetValueAsUnsigned(error))
+        data = result.GetData()
+        signed = result.GetType().GetTypeFlags() & lldb.eTypeIsSigned
+        reader = {1: (data.GetSignedInt8, data.GetUnsignedInt8),
+                  2: (data.GetSignedInt16, data.GetUnsignedInt16),
+                  4: (data.GetSignedInt32, data.GetUnsignedInt32),
+                  8: (data.GetSignedInt64, data.GetUnsignedInt64)}[result.GetByteSize()]
+        actual = reader[0 if signed else 1](error, 0)
         assert error.Success(), (path, str(result), str(error))
         return actual
 

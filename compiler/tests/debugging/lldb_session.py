@@ -8,6 +8,23 @@ if sys.flags.optimize:
     raise RuntimeError("LLDB assertions require Python optimization disabled")
 
 
+def integer(v, error, signed=None):
+    """V's integer at its type's width, as LLDB prints it.  An integer
+    narrower than the register holding it is the register's low bytes,
+    and GetValueAsSigned reads the whole register: an i32 of -1 held
+    zero-extended in an arm64 register came back as 4294967295."""
+    if signed is None:
+        signed = bool(v.GetType().GetCanonicalType().GetTypeFlags() & lldb.eTypeIsSigned)
+    data = v.GetData()
+    readers = {1: (data.GetSignedInt8, data.GetUnsignedInt8),
+               2: (data.GetSignedInt16, data.GetUnsignedInt16),
+               4: (data.GetSignedInt32, data.GetUnsignedInt32),
+               8: (data.GetSignedInt64, data.GetUnsignedInt64)}
+    if v.GetByteSize() not in readers:
+        return v.GetValueAsSigned(error) if signed else v.GetValueAsUnsigned(error)
+    return readers[v.GetByteSize()][0 if signed else 1](error, 0)
+
+
 def run(debugger, config_path):
     config = json.loads(Path(config_path).read_text())
     debugger.SetAsync(False)
@@ -52,7 +69,7 @@ def run(debugger, config_path):
                 v = v.GetChildMemberWithName(part)
         assert v.IsValid(), ('missing value', path)
         error = lldb.SBError()
-        result = v.GetValueAsSigned(error)
+        result = integer(v, error)
         assert error.Success(), (path, str(error), str(v))
         return result
 
@@ -235,8 +252,7 @@ def scalars(debugger, config_path):
             assert v.IsValid() and v.GetError().Success(), (name, str(v))
             error = lldb.SBError()
             actual = (float(v.GetValue()) if name.startswith('real_')
-                      else v.GetValueAsUnsigned(error) if name.startswith('unsigned_')
-                      else v.GetValueAsSigned(error))
+                      else integer(v, error, signed=not name.startswith('unsigned_')))
             print('SCALAR', name, actual, 'bytes', v.GetType().GetByteSize())
             assert error.Success() and actual == expected and v.GetType().GetByteSize() == width
         target.BreakpointDelete(bp.GetID())
@@ -270,7 +286,7 @@ def registers(debugger, config_path):
     def read(f, scope, name, expected):
         v = f.FindVariable(name)
         error = lldb.SBError()
-        actual = v.GetValueAsSigned(error) if v.IsValid() else 'missing'
+        actual = integer(v, error) if v.IsValid() else 'missing'
         print(scope + '.' + name, 'at', repr(v.GetLocation()))
         record(scope + '.' + name, actual if error.Success() else str(error), expected)
 

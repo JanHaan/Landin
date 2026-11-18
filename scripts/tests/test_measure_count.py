@@ -116,6 +116,19 @@ class PluginTest(unittest.TestCase):
             with self.assertRaisesRegex(measure_count.Failure, "built without plugins"):
                 measure_count.plugin_api([str(fake)])
 
+    @unittest.skipUnless(shutil.which("cc"), "no C compiler")
+    def test_user_emulation_named_alone_is_given_a_program(self):
+        #  qemu-aarch64 alone, as `measure_count.py plugin --qemu` takes it,
+        #  refuses to start without a program before it reads the plugin.
+        with tempfile.TemporaryDirectory() as directory:
+            fake = Path(directory) / "qemu"
+            fake.write_text("#!/bin/sh\nif [ $# -lt 3 ]; then echo 'qemu: no user"
+                            " program specified' >&2; exit 1; fi\necho 'qemu: plugin"
+                            " requires API version 9999, but this QEMU supports only"
+                            " up to version 5' >&2\nexit 1\n")
+            fake.chmod(0o755)
+            self.assertEqual(measure_count.plugin_api([str(fake)]), 5)
+
     def test_the_count_file_says_whether_its_bounds_were_met(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory) / "count.txt"

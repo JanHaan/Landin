@@ -11,10 +11,12 @@ each routine's bytes from the linked image's symbol table.
 
     measure_costs.py routines --refine R --target T [--level L ...]
                               [--profile OPT-SPEC ...] [--workload NAME ...]
-                              [--fixture DIR ...] --output DIR
+                              [--fixture DIR ...] [--library DIR] --output DIR
         build each configuration, write DIR/costs.json and print one line
         a configuration: its .text bytes, the report's instructions, its
-        stack loads and stores and their share of the instructions
+        stack loads and stores and their share of the instructions; a
+        refine copied out of its checkout, a base to compare with, finds no
+        library of its own and needs --library ROOT for a firmware target
     measure_costs.py top IMAGE [--report REPORT] [--count N]
         IMAGE's largest routines by bytes, with the report's counters for
         the routine of that name where REPORT is given
@@ -270,7 +272,7 @@ def routines(args) -> int:
             require(profile in measure.PROFILES, f"no profile {'-'.join(profile)}")
             for workload in workload_list(args.target, args.workload, args.fixture):
                 image, _, _ = measure.build(args.refine, args.target, level, profile,
-                                            workload, out, None)
+                                            workload, out, None, args.library)
                 report = json.loads(Path(f"{image}.json").read_text())
                 sections, _ = measure.image_sections(image)
                 one = {"key": measure.key(level, profile, workload["name"]),
@@ -302,6 +304,11 @@ def main(argv=None) -> int:
     built.add_argument("--workload", action="append", default=[])
     built.add_argument("--fixture", action="append", default=[])
     built.add_argument("--output", required=True)
+    built.add_argument("--library", type=lambda text: str(Path(text).resolve()),
+                       help="the directory holding core, hosted and platform that"
+                       " refine compiles against, a checkout's root: a refine copied"
+                       " out of its checkout finds no library of its own, and so no"
+                       " firmware reference profile")
     largest = commands.add_parser("top", help="an image's largest routines")
     largest.add_argument("image")
     largest.add_argument("--report")

@@ -249,7 +249,7 @@ def sources(arguments: list[str]) -> list[str]:
     return named
 
 
-def build(refine, target, level, profile, workload, out, toolchain):
+def build(refine, target, level, profile, workload, out, toolchain, library=None):
     fixture = ROOT / "compiler/tests/fixtures" / workload["fixture"]
     meta = fixture_meta.read(fixture)
     name = f"{target}-{level}-{profile[0]}-{profile[1]}-{workload['name']}"
@@ -262,6 +262,7 @@ def build(refine, target, level, profile, workload, out, toolchain):
     command = [str(refine), "compile", f"--target={target}", f"--level={level}",
                f"--optimize={profile[0]}", f"--specialize={profile[1]}",
                *firmware, *(["--toolchain=" + toolchain] if toolchain else []),
+               *([f"--library={library}"] if library else []),
                *meta.library_arguments(fixture),
                *(sources(meta.source_arguments(fixture)) + entry(target, level)
                  if firmware else meta.source_arguments(fixture)),
@@ -508,6 +509,12 @@ def measure_time(args) -> int:
 
     def timed(pair, workload, stdin, count):
         samples = {"candidate": [], "base": []}
+        #  Each image runs once untimed first.  macOS vets a newly linked
+        #  program on its first launch, and that run took 1.85 s of a
+        #  workload whose others took 0.2 to 0.36: judged on one sample, it
+        #  failed an image four times faster than its base as 1.88 slower.
+        for at in (0, 1):
+            timed_run(pair[at][0], workload, stdin, scratch)
         for index in range(count):
             #  A candidate already past twice the tolerance after one
             #  interleaved sample of each is judged on it: a gross slowdown
@@ -532,6 +539,19 @@ def measure_time(args) -> int:
 
     for identity, members in distinct.items():
         (level, profile, workload), pair = members[0]
+        first_key = key(level, profile, workload["name"])
+        #  A candidate image byte for byte the base's cannot be slower or
+        #  faster: timing it measures only the runner, which once judged an
+        #  image against itself 2.04 times slower on one sample.
+        if pair[0][1] == pair[1][1]:
+            figures[first_key] = {"identical": True}
+            print(f"  {first_key}: the base's image, not timed"
+                  + (f", {len(members) - 1} more the same" if len(members) > 1 else ""),
+                  flush=True)
+            for (other_level, other_profile, _), _ in members[1:]:
+                figures[key(other_level, other_profile, workload["name"])] = {
+                    "same_as": first_key}
+            continue
         stdin = timing_input(workload, out)
         figure = timed(pair, workload, stdin, args.samples)
         #  A pair past the tolerance is timed again, three times as often,
@@ -543,7 +563,6 @@ def measure_time(args) -> int:
             figure = timed(pair, workload, stdin, 3 * args.samples)
             figure["first"] = {k: first[k] for k in ("ratio", "samples")}
         candidate, base = figure["candidate"], figure["base"]
-        first_key = key(level, profile, workload["name"])
         figures[first_key] = figure
         print(f"  {first_key}: {candidate:.4f} s against {base:.4f} s,"
               f" ratio {figure['ratio']}, spread {figure['spread']:.2%}"
@@ -585,8 +604,12 @@ def judge_time(result: dict) -> int:
                               f" ratio {figure['ratio']}")
     ratios = [f["ratio"] for t in result["targets"].values()
               for f in t.values() if "ratio" in f]
-    print(f"wall: {len(ratios)} timed pairs, ratio median {median(ratios):.4f},"
-          f" range {min(ratios):.4f} to {max(ratios):.4f}; tolerance "
+    identical = sum(1 for t in result["targets"].values()
+                    for f in t.values() if f.get("identical"))
+    print(f"wall: {len(ratios)} timed pairs"
+          + (f", ratio median {median(ratios):.4f}, range {min(ratios):.4f}"
+             f" to {max(ratios):.4f}" if ratios else "")
+          + f", {identical} the base's own images; tolerance "
           + (f"{tolerance:.2%}" if tolerance is not None else
              "not yet set by a noise study, so nothing fails"))
     for line in slower:

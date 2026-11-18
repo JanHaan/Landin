@@ -82,7 +82,12 @@ seen on Darwin or FreeBSD is recorded from a Linux checkout. `--key` limits
 it to named keys.
 
 Configurations whose images are byte-identical are measured once, for size
-and for time; the others cite it by the image's digest.
+and for time; the others cite it by the image's digest. A wall pair whose
+candidate image is byte for byte the base's is recorded as identical and
+not timed: it can only measure the runner, which once judged an image
+against itself 2.04 times slower on a single sample. Every timed image runs
+once untimed before its samples, since macOS vets a newly linked program
+on its first launch.
 
 ## Time
 

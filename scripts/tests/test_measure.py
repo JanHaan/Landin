@@ -192,6 +192,32 @@ class Record(unittest.TestCase):
         self.assertEqual(written["environment"], "env")
 
 
+class Time(unittest.TestCase):
+    def judged(self, figures):
+        result = {"schema": 1, "class": "wall", "runner": {"label": "nowhere"},
+                  "targets": {"darwin-arm64": figures}}
+        with mock.patch.object(measure, "MEASURE", Path(self.directory)):
+            return measure.judge_time(result)
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.directory = temporary.name
+        (Path(self.directory) / "noise").mkdir()
+        (Path(self.directory) / "noise" / "wall.json").write_text(
+            json.dumps({"tolerance": {"nowhere": 0.4}}))
+
+    def test_the_base_s_own_image_is_never_judged(self):
+        #  A pair whose two images are the same bytes is recorded, not timed.
+        self.assertEqual(self.judged({"a": {"identical": True},
+                                      "b": {"same_as": "a"}}), 0)
+
+    def test_a_timed_pair_past_the_tolerance_fails(self):
+        self.assertEqual(self.judged({"a": {"identical": True},
+                                      "b": {"ratio": 2.04, "candidate": 0.4,
+                                            "base": 0.2}}), 1)
+
+
 class Levels(unittest.TestCase):
     def test_kernel_flag_spellings(self):
         cpuinfo = "flags\t: fpu cx16 lahf_lm pni avx2\n"

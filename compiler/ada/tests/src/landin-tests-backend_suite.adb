@@ -27,6 +27,7 @@ with Landin.Build_Reports;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Entry_Point;
 with Landin.Backend.RiscV;
+with Landin.Backend.RiscV_Instructions;
 with Landin.Backend.X86_64;
 with Landin.Debugging;
 with Landin.IR;
@@ -8089,16 +8090,11 @@ package body Landin.Tests.Backend_Suite is
                        = 2,
                      "none forms every element address");
                else
+                  --  D1404: size keeps the index in a register, which
+                  --  each word access scales itself.
                   Landin.Testing.Check
-                    (Item, Occurrences (Text, "ldr x9, [x11, x10, lsl #3]")
-                       = 2
-                     and then Occurrences
-                       (Text, "str x9, [x10, x13, lsl #3]") = 1
-                     and then Occurrences
-                       (Text, "ldr x9, [x10, x13, lsl #3]") = 1
-                     and then Occurrences (Text, "ldrb w9, [x10, x13]") = 1
-                     and then Occurrences (Text, "madd x9, x10, x11, x9")
-                       = 0,
+                    (Item, Occurrences (Text, ", lsl #3]") = 4
+                     and then Occurrences (Text, "madd ") = 0,
                      "size leaves scaled indexes to the accesses");
                end if;
             end;
@@ -9569,6 +9565,135 @@ package body Landin.Tests.Backend_Suite is
          "the ordinary language return keeps its native bit carrier");
    end RV64_Hosted_Main_Returns_A_Signed_C_Int;
 
+   --  RV64's text has no region bounding it, so a routine's own size
+   --  decides its jumps: one whose lines assemble to less than JAL's
+   --  1 MiB jumps and branches near and never saves x26; one past it, or
+   --  one with an assembly block, keeps the far form through x26 and
+   --  saves it.  `big` is past the bound by about a quarter: each of its
+   --  statements forms 64-bit constants and frame offsets with LI, which
+   --  the bound counts at 32 bytes.  Assembles_Below is checked directly
+   --  at a reach the test lowers.
+   procedure RV64_Jumps_Are_Near_Within_A_Routine
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV64_Jumps_Are_Near_Within_A_Routine
+     (Item : in out Landin.Testing.Context)
+   is
+      package U renames Ada.Strings.Unbounded;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_RV64);
+      Ran : Natural;
+      Source : U.Unbounded_String := U.To_Unbounded_String
+        ("small: (n: u64) -> (x: u64) =" & LF
+         & "    if n > 3 then" & LF
+         & "        x = n" & LF
+         & "    else" & LF
+         & "        x = 1" & LF
+         & "    end if" & LF
+         & "end small" & LF
+         & "bump: (n: u64) -> (r: u64) =" & LF
+         & "    r = assembler.block(""addi {r}, {r}, 1""," & LF
+         & "        inout r: u64 at general = n)" & LF
+         & "    if r > 3 then" & LF
+         & "        r = 3" & LF
+         & "    end if" & LF
+         & "end bump" & LF
+         & "big: (n: u64) -> (x: u64) =" & LF
+         & "    x = n" & LF
+         & "    if n > 3 then" & LF);
+      Assembly : U.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Info : aliased Landin.Debugging.Information
+        (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+
+      function Has (Text, Part : String) return Boolean
+        is (Index (Text, Part) /= 0);
+
+      --  The routine Name's text, from its label to its size directive.
+      function Routine (Text, Name : String) return String;
+      function Routine (Text, Name : String) return String is
+         First : constant Natural := Index (Text, LF & Name & ":" & LF);
+         Last : constant Natural :=
+           (if First = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Text, HT & ".size " & Name & ",", First));
+      begin
+         return (if Last = 0 then "" else Text (First .. Last));
+      end Routine;
+
+      function Below
+        (Text : String; Reach : Landin.Targets.Byte_Count) return Boolean
+        renames Landin.Backend.RiscV_Instructions.Assembles_Below;
+      Three : constant String :=
+        "f:" & LF & HT & ".loc 1 2 3" & LF & HT & "addi x5, x5, 1" & LF
+        & HT & "beqz x5, .L1" & LF & ".L1:" & LF & HT & "ret" & LF;
+   begin
+      for Statement in 1 .. 2_500 loop
+         U.Append
+           (Source, "        x = x ^ "
+            & Ada.Strings.Fixed.Trim (Long_Long_Integer'Image
+                (16#1234_5678_9abc_def0# + Long_Long_Integer (Statement)),
+                Ada.Strings.Both)
+            & LF);
+      end loop;
+      U.Append
+        (Source, "    end if" & LF
+         & "end big" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = i32((small(4) + bump(5) + big(6)) & 1)" & LF
+         & "end main" & LF);
+      Lower (Work, U.To_String (Source), Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+      Landin.Backend.RiscV.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all, Landin.Stages.Target (Work),
+         Landin.Optimization.Reference_Options, Assembly, Report,
+         Debug => Info'Access);
+      declare
+         Text : constant String := U.To_String (Assembly);
+         Small : constant String := Routine (Text, "small");
+         Bump : constant String := Routine (Text, "bump");
+         Big : constant String := Routine (Text, "big");
+      begin
+         Landin.Testing.Check
+           (Item, Has (Small, HT & "j .L") and then Has (Small, ", .L")
+              and then not Has (Small, "x26")
+              and then not Has (Small, ".cfi_offset 26,")
+              and then Has (Small, "sd x25, 0(x5)")
+              and then Has (Small, ".cfi_offset 25,"),
+            "a small routine jumps near and neither saves nor describes x26");
+         Landin.Testing.Check
+           (Item, Has (Bump, "lla x26, ") and then Has (Bump, "jr x26")
+              and then Has (Bump, "sd x26, 0(x5)")
+              and then Has (Bump, "ld x26, 0(x5)")
+              and then Has (Bump, ".cfi_offset 26,")
+              and then not Has (Bump, HT & "j "),
+            "a routine with an assembly block keeps the far form and x26");
+         Landin.Testing.Check
+           (Item, not Below (Big, 2 ** 20)
+              and then Has (Big, "lla x26, ") and then Has (Big, "jr x26")
+              and then Has (Big, "sd x26, 0(x5)")
+              and then Has (Big, ".cfi_restore 26")
+              and then not Has (Big, HT & "j "),
+            "a routine past JAL's reach keeps the far form and x26");
+      end;
+      Landin.Testing.Check
+        (Item, Below (Three, 25) and then not Below (Three, 24)
+           and then Below (HT & "li x5, 1" & LF, 33)
+           and then not Below (HT & "li x5, 1" & LF, 32)
+           and then Below (HT & ".p2align 2" & LF & "g:" & LF, 5)
+           and then not Below (HT & ".p2align 2" & LF, 4)
+           and then not Below (HT & ".zero 4" & LF, 2 ** 20)
+           and then not Below (HT & "nop; nop" & LF, 2 ** 20)
+           and then not Below (".L1: li x5, 1" & LF, 32),
+         "the bound counts an instruction at its most and refuses unknowns");
+   end RV64_Jumps_Are_Near_Within_A_Routine;
+
    --  D410: a scalar in a `layout(c, packed)` record may sit at any
    --  address, and RV64 moves it one byte at a time, because a misaligned
    --  RISC-V access may trap or be emulated by the kernel.  QEMU's user
@@ -10988,7 +11113,8 @@ package body Landin.Tests.Backend_Suite is
            (Speed_Report, 1).Frame_Bytes
            < Landin.Build_Reports.Nth_Routine
                (Reference_Report, 1).Frame_Bytes
-           and then Traffic (Speed_Text) < Traffic (Size_Text),
+           and then Traffic (Speed_Text) < Traffic (Reference_Text)
+           and then Traffic (Size_Text) < Traffic (Reference_Text),
          "saved registers lower scalar traffic and keep the frame smaller");
       Landin.Testing.Check
         (Item, Landin.Build_Reports.Nth_Routine
@@ -11269,6 +11395,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "RV64 packed fields move by byte",
          RV64_Packed_Fields_Move_By_Byte'Access);
+      Landin.Testing.Register
+        (Into, "backend", "RV64 jumps are near within a routine",
+         RV64_Jumps_Are_Near_Within_A_Routine'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);

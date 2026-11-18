@@ -83,4 +83,73 @@ package body Landin.Backend.RiscV_Instructions is
       end if;
    end Indexed_Address;
 
+   function Assembles_Below
+     (Text : String; Reach : Landin.Targets.Byte_Count) return Boolean
+   is
+      use type Landin.Targets.Byte_Count;
+      Total : Landin.Targets.Byte_Count := 0;
+      Start : Positive := Text'First;
+
+      function Is_Space (C : Character) return Boolean
+        is (C = ' ' or else C = Character'Val (9));
+
+      --  The most bytes Line, without its end, can assemble to, or Reach
+      --  where that is not bounded.
+      function Most (Line : String) return Landin.Targets.Byte_Count;
+      function Most (Line : String) return Landin.Targets.Byte_Count is
+         First : Positive := Line'First;
+         Last : Natural;
+      begin
+         while First <= Line'Last and then Is_Space (Line (First)) loop
+            First := First + 1;
+         end loop;
+         if First > Line'Last then
+            return 0;
+         end if;
+         Last := First;
+         while Last < Line'Last and then not Is_Space (Line (Last + 1)) loop
+            Last := Last + 1;
+         end loop;
+         declare
+            Word : constant String := Line (First .. Last);
+            Rest : constant String :=
+              Trimmed (Line (Last + 1 .. Line'Last));
+         begin
+            if Ada.Strings.Fixed.Index (Line, ";") /= 0 then
+               return Reach;
+            elsif Word (Word'Last) = ':' then
+               return Most (Rest);
+            elsif Word (Word'First) /= '.' then
+               return (if Word = "li" then 32 else 8);
+            elsif Word in ".loc" | ".file" | ".type" | ".size" | ".globl"
+              | ".global" | ".local" | ".hidden"
+              or else (Word'Length > 5
+                       and then Word (Word'First .. Word'First + 4) = ".cfi_")
+            then
+               return 0;
+            elsif Word = ".p2align" and then Rest'Length in 1 .. 2
+              and then (for all C of Rest => C in '0' .. '9')
+              and then Natural'Value (Rest) <= 20
+            then
+               return 2 ** Natural'Value (Rest);
+            else
+               return Reach;
+            end if;
+         end;
+      end Most;
+   begin
+      for Index in Text'Range loop
+         if Text (Index) = Character'Val (10) or else Index = Text'Last then
+            Total := Total + Most
+              (Text (Start .. (if Text (Index) = Character'Val (10)
+                               then Index - 1 else Index)));
+            if Total >= Reach then
+               return False;
+            end if;
+            Start := Index + 1;
+         end if;
+      end loop;
+      return True;
+   end Assembles_Below;
+
 end Landin.Backend.RiscV_Instructions;
