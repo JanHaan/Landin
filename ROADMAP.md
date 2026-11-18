@@ -319,8 +319,8 @@ binary-trees 0.66. RV64 jumps near within a routine provably inside JAL's
 reach (D1405): `.text` 19.9% smaller at `speed`, counted instructions 9.5%
 to 20% fewer. No firmware, x86-64 or arm64 `speed` image changed; the build
 modes agree and the scaling bound holds. The candidate passed its
-[gate](https://github.com/JanHaan/Landin/actions/runs/44390759378) and
-[boards](https://github.com/JanHaan/Landin/actions/runs/44397021416).
+[gate](https://github.com/JanHaan/Landin/actions/runs/44407003576) and
+[boards](https://github.com/JanHaan/Landin/actions/runs/44413857908).
 R16.21 to R16.24 took the other backends and their rows, SR-586 and
 SR-1302 among them. Findings fixed on the way: LLDB's `GetValueAsSigned`
 read a zero-extended `i32` in a register whole, so the Darwin sessions read
