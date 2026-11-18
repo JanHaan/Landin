@@ -976,10 +976,16 @@ process ignores SIGPIPE and gives its children the default back.
   does (D296, D1358, [Cortex-M firmware images](targets.md)).
 - **Measured code.** Every push measures the size of each allocated
   section of the image every measured workload links to, at every target,
-  level and of the nine optimization and specialization profiles, and fails
-  on any change its commit does not record in the committed baselines;
-  [measuring generated code](measurement.md) is the contract and
-  `scripts/measure.py` the tool.
+  level and of the nine optimization and specialization profiles, and the
+  instructions each executes under QEMU on RV64 and the Cortex-M machines,
+  and fails on any change its commit does not record in the committed
+  baselines. The weekly schedule and a dispatch also time the hosted
+  workloads natively, the candidate's images against its base's on one
+  processor, and the firmware workloads by each board's cycle counter on
+  the rig. [Measuring generated code](measurement.md) is the contract,
+  `scripts/measure.py` the tool, and its ranked findings the optimization work's starting
+  point; `scripts/measure.py count` counts one firmware or RV64 program's
+  instructions, whole or between two symbols.
 - `./scripts/quality.sh` measures the objects a built compiler produces, and
   [the Benchmark Game, measured](benchmarks.md) compares five ports, their
   running and their compile times, with seven other languages.
