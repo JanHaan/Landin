@@ -286,7 +286,7 @@ RV64 count no longer depends on its environment.
 
 ### R16.20 — Register allocation
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 Keep values in registers where R16.10's ranked costs show stack traffic
