@@ -209,12 +209,7 @@ package body Landin.Driver.Loading is
                            Note_Failure
                              (Context,
                               "source not found: " & Path
-                              & (if Path in "check" | "build" | "run"
-                                   | "test" | "version"
-                                 then "; `refine " & Path & "` is not a"
-                                      & " command: name the source to"
-                                      & " check it, as `refine FILE`"
-                                 elsif Is_Source_Name (Path)
+                              & (if Is_Source_Name (Path)
                                  then Sources_Beside (Host, Path)
                                  else ""));
 

@@ -10,7 +10,7 @@
 --  A file belongs where `refine` would compile it [1410]-[1420]: a `file:`
 --  URI's directory is its entry module, loaded under the server's roots.
 --  With no roots, or for a URI that names no file, the buffer is analysed
---  alone, as `refine FILE` would analyse it.
+--  alone, as `refine check FILE` would analyse it.
 
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Finalization;

@@ -518,9 +518,10 @@ package body Landin.Commands.Catalogue is
             US.Append (Text, LF & "Use 'refine COMMAND --help' or "
               & "'refine help COMMAND'." & LF
               & "--version is an alias for 'refine version'." & LF
-              & "Bare source requests and --identify remain compatibility"
-              & LF & "spellings; use check, compile, run, version and"
-              & LF & "targets."
+              & "A source follows its command:"
+              & LF & "  refine check SOURCE.ldn"
+              & LF & "--identify is a compatibility spelling; use 'version'"
+              & LF & "and 'targets'."
               & LF & "'build' is reserved for future project orchestration."
               & LF);
          when Check | Compile | Run =>

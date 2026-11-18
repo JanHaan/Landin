@@ -96,7 +96,7 @@ def build(run, args):
         elf, meta, names = common.consume_board(run, args, 'rp2350')
         return elf, bytes.fromhex(meta['head']), names
     elf = run.out / getattr(args, 'image_name', 'board.elf')
-    run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
+    run.command('compile', [args.refine, 'compile', '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
         '--root=' + str(SOURCE), '--target=cortex-m0', '--level=armv8-m.main',
         '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),

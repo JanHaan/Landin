@@ -177,7 +177,7 @@ def check_shape(refine: str, driver: str, target: str, name: str,
         with open(os.path.join(directory, "image.ldn"), "w") as out:
             out.write(program(target, declarations, read))
         result = subprocess.run(
-            [refine, *compile_args(target), "--emit=asm", "-o", "image.s", "image.ldn"],
+            [refine, "compile", *compile_args(target), "--emit=asm", "-o", "image.s", "image.ldn"],
             cwd=directory, capture_output=True, text=True)
         if result.returncode != 0:
             return ["%s: refine refused the in-budget image: %s" % (name, result.stderr.strip())]
@@ -232,7 +232,7 @@ def check_refusal(refine: str, target: str, work: str) -> list[str]:
         out.write(source)
     started = time.monotonic()
     result = subprocess.run(
-        [refine, *request, "--emit=exe", "--toolchain=/nonexistent/driver",
+        [refine, "compile", *request, "--emit=exe", "--toolchain=/nonexistent/driver",
          "-o", "image", "image.ldn"],
         cwd=directory, capture_output=True, text=True, timeout=REFUSAL_SECONDS * 6)
     seconds = time.monotonic() - started

@@ -149,7 +149,7 @@ def symbols(run, tool, elf):
 def build(run, refine, inputs, chip, optimize='none', specialize='off', memory_profile='chip'):
     tool = 'xtensa-' + chip + '-elf-'
     staged = stage(run, inputs, chip, memory_profile)
-    base = [refine, *staged, '--target=xtensa', '--level=xtensa-' + chip,
+    base = [refine, 'compile', *staged, '--target=xtensa', '--level=xtensa-' + chip,
             '--firmware-layout=ram', '--firmware-entry=landin_xtensa_fixture_start',
             '--optimize=' + optimize, '--specialize=' + specialize]
     assembly = run.out / 'program.s'

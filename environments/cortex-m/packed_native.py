@@ -37,7 +37,7 @@ def execute(run, refine):
     for optimization, specialization in PROFILES:
         name = 'packed-native-' + optimization + '-' + specialization
         assembly, executable = run.out / (name + '.s'), run.out / name
-        run.command(name + '-compile', [refine, '--target=linux-x86-64',
+        run.command(name + '-compile', [refine, 'compile', '--target=linux-x86-64',
                     '--optimize=' + optimization, '--specialize=' + specialization,
                     '--emit=asm', '-o', assembly, HERE / 'probes/packed-native.ldn'],
                     timeout=60)
@@ -104,7 +104,7 @@ def hole(run, refine, optimization, specialization):
     name = 'packed-native-hole-' + optimization + '-' + specialization
     assembly, executable = run.out / (name + '.s'), run.out / name
     source = HERE / 'probes/packed-native-hole.ldn'
-    run.command(name + '-compile', [refine, '--target=linux-x86-64',
+    run.command(name + '-compile', [refine, 'compile', '--target=linux-x86-64',
                 '--optimize=' + optimization, '--specialize=' + specialization,
                 '--emit=asm', '-o', assembly, source],
                 timeout=60)

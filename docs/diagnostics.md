@@ -32,7 +32,7 @@ options it needs, as one for a code only a Cortex-M build raises does:
 ```
 
 The line is a comment, so the example is still the whole program, and
-`refine --target=cortex-m0 example.ldn` reproduces the report. Each option
+`refine check --target=cortex-m0 example.ldn` reproduces the report. Each option
 begins `--`, with one space before it, and none names a file, since the
 example is the only one it is compiled with (D599); `check.py` and the test
 program refuse any other `-- refine:` line, naming it.
@@ -140,10 +140,18 @@ compiler's spelling means here: `-g` is `--debug=full`, `-g1`
 `--debug=lines` and `-g0` `--debug=none`.
 
 An option that belongs to a command is written after it. One written before
-its command, or with no command at all, is refused naming the commands it
-belongs to and where it goes, as it was written: `refine --root=lib compile
-main.ldn` is told `refine compile --root=lib ...`, and `refine -o x.s
-main.ldn` that `-o x.s` is an option of `compile` (D384).
+its command is refused naming the commands it belongs to and where it goes,
+as it was written: `refine --root=lib compile main.ldn` is told `refine
+compile --root=lib ...` (D384).
+
+Every request names its command. A source given without one is refused,
+and the refusal writes the whole request out after the command it belongs
+to: `check`, or, when an option `check` does not take was given, the
+command that takes it. `refine main.ldn` is told `refine check main.ldn`,
+and `refine -o x.s main.ldn` is told `refine compile -o x.s main.ldn`. A
+first word that is neither a `.ldn` file nor a path is more likely a
+mistyped command, so the refusal also says that `refine help` lists the
+commands (D1463).
 
 Give `--target=` only once. Repeating it is a misuse even when both names
 are the same; the driver does not choose between target selections.

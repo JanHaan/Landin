@@ -36,7 +36,7 @@ def assemblers(output, refine):
                               '    status = 0\nend main\n')
             assembly = run.out / 'program.s'
             staged = stage(run, [source], chip)
-            run.command('compile', [refine, *staged, '--target=xtensa',
+            run.command('compile', [refine, 'compile', *staged, '--target=xtensa',
                         *level, '--emit=asm', '-o', assembly])
             tool = 'xtensa-' + chip + '-elf-'
             run.command('assemble', [tool + 'as', '--abi-windowed',
@@ -57,7 +57,7 @@ def assemblers(output, refine):
                           'main: () -> (r: i32) =\n'
                           '    r = divide(42, 2) - 21\nend main\n')
         assembly = run.out / 'program.s'
-        run.command('compile', [refine, *stage(run, [source], chip), '--target=xtensa',
+        run.command('compile', [refine, 'compile', *stage(run, [source], chip), '--target=xtensa',
                     *level, '--emit=asm', '-o', assembly])
         if not re.search(r'^\s*quos ', assembly.read_text(), re.M):
             raise RuntimeError('generated integer division has no native QUOS instruction')

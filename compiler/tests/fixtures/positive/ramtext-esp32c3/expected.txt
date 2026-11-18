@@ -1,1 +1,0 @@
-refine: checked ../tests/fixtures/positive/ramtext-esp32c3 and wrote nothing; build it with `refine compile --target=rv32 --root=../tests/fixtures/positive/ramtext-esp32c3/../../../../.. --firmware-entry=NAME ../tests/fixtures/positive/ramtext-esp32c3 -o ramtext-esp32c3`

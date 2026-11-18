@@ -181,7 +181,7 @@ def build(run, args):
         elf, meta, names = common.consume_board(run, args, 'rp2350_hazard3')
         return elf, bytes.fromhex(meta['head']), names, meta['adds']
     elf = run.out / getattr(args, 'image_name', 'board.elf')
-    run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
+    run.command('compile', [args.refine, 'compile', '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
         '--root=' + str(SOURCE), '--root=' + str(SHARED_SOURCE), '--target=rv32', '--level=rv32imac',
         '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),

@@ -1402,6 +1402,8 @@ package body Landin.Tests.Fixture_Suite is
             end;
          elsif Key = "source-arguments" then
             return Joined (Source_Arguments (Fixture, Root));
+         elsif Key = "verdict-arguments" then
+            return Joined (Verdict_Arguments (Fixture, Root));
          elsif Key = "program-arguments" then
             declare
                Made : Landin.Platform.Path_List;

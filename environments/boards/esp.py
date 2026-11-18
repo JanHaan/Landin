@@ -176,7 +176,7 @@ def build(run, args, chip):
         return elf, image, json.loads(bundle.artifact(prepared, 'report').read_text())
     elf = run.out / getattr(args, 'image_name', 'board.elf')
     source = ROOT / 'compiler/tests/board' / chip.name
-    run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
+    run.command('compile', [args.refine, 'compile', '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
         '--root=' + str(source), '--target=' + chip.target, '--level=' + chip.level,
         '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),

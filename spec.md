@@ -26047,6 +26047,26 @@ interval to every figure.
 
 **Pinned by** fake-filesystem driver cases of a shipped command with another digest, a missing description and a contributed command claiming `L`, each refused.
 
+### D1463 — Every request names its command; the bare-source form is refused
+
+**D526 said** that bare `refine FILE` checks FILE and closes with a line naming `refine run` and `refine compile`, and D731 that the line repeats the options that chose the program. An unknown first word was therefore read as a source, so no word outside the built-in commands could ever name one, and the closing line named the target the request chose, so a recorded fixture that chose it held a line one host's default and another's differed on.
+
+**Chosen:** a request with an operand and no command is refused with L0002, status 2, before any source is read. The refusal names the first operand as an unknown command and writes the whole request again, each word as a POSIX shell reads it back, after `check`, or after the command of an option `check` does not take, so `refine -o x.s main.ldn` is told `refine compile -o x.s main.ldn`. When the first operand names no `.ldn` file and no path, the refusal says first that `refine help` lists the commands, since a mistyped command is the likelier reading, and offers the `check` request only if the word is a source. An option of a command given with no command and no operand is refused as D384 says. With the form goes its closing line: `refine check` stays silent, as D526 had it, and no request prints a command that depends on the host it ran on. `--identify` and `--version`, which name no source, keep their spellings. The break is promoted on its own rather than held for a breaking window, because the dispatcher (D1384) cannot read an unknown first word as a command while it means a source.
+
+**The alternatives:** keeping the form for a word that names an existing `.ldn` file, which makes what `refine NAME` does depend on the working directory, and is the ambiguity D1384 needs gone; moving the closing line to `refine check`, which D526 kept silent as the form tools call; and refusing with the bare "unknown command" alone, which leaves the reader to find the form that works.
+
+**Pinned by** the commands cases `the bare form is refused` and `options before their command`.
+
+### D1464 — A fixture's `args` are `check`'s unless they name a command
+
+**The tour said** nothing; `compiler/tests/README.md` said a fixture's `args` are the arguments `refine` is run with, which before D1463 needed no command.
+
+**Chosen:** a fixture's `args` are run after `check` unless their first word is one of `refine`'s commands, which they then keep, as the fixtures that record a `compile` already did, or `--version` or `--identify`, which name one. The six whose `args` emitted without a command now begin with `compile`. The test program's `Verdict_Arguments` and `fixture_meta.py`'s `verdict_arguments` add the command, `fixture-meta.cases` holds the two to each other, and a lane's target follows the command. `source_arguments` stays what follows the command, for the lanes that compile a fixture with `--emit`.
+
+**The alternatives:** writing `check` into every one of some eight hundred `fixture.meta` files, which a rooted fixture's `args`, options alone, would then contradict, and which the lanes that compile the same `args` would each strip again.
+
+**Pinned by** `fixture-meta.cases`' cases `a hosted program with every argument key`, `a recorded fixture is run with its args as written` and `recorded args that name their own command keep it`.
+
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 
 **The tour said** nothing of a second family. Prototype 1 drives a UART

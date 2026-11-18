@@ -158,7 +158,7 @@ def compile_firmware(run, refine, program, extra=(), name='core.elf', check=True
                      devices=ROOT / 'devices', rv32=False):
     (run.out / 'app').mkdir(exist_ok=True)
     (run.out / 'app/main.ldn').write_text(program)
-    argv = [refine, '--root=' + str(devices),
+    argv = [refine, 'compile', '--root=' + str(devices),
             '--target=' + ('rv32' if rv32 else 'cortex-m0'),
             '--firmware-entry=start', '--emit=exe',
             '--toolchain=' + str(run.riscv / 'riscv64-elf-gcc' if rv32

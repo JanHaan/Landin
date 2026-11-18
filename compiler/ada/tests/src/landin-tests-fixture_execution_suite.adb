@@ -82,11 +82,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return Total;
    end Recorded_Lane_Count;
 
-   --  A refine invocation for the lane: the target a cross run names, then
-   --  the rest.  A fixture's own `args` that name a target keep it, and so
-   --  do those of a command that takes none, `fmt` or `explain`, which
-   --  would refuse the lane's `--target` before reaching what the fixture
-   --  holds it to.
+   --  A refine invocation for the lane: its command, the target a cross
+   --  run names, then the rest.  A fixture's own `args` that name a target
+   --  keep it, and so do those of a command that takes none, `fmt` or
+   --  `explain`, which would refuse the lane's `--target` before reaching
+   --  what the fixture holds it to.
    function Lane_Arguments
      (Rest : Landin.Platform.Path_List) return Landin.Platform.Path_List;
 
@@ -94,10 +94,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
      (Rest : Landin.Platform.Path_List) return Landin.Platform.Path_List
    is
       package Commands renames Landin.Commands.Catalogue;
-      Result : Landin.Platform.Path_List := Lanes.Target_Arguments;
+      Result : Landin.Platform.Path_List;
+      --  The lane's target follows the command, which every request names
+      --  (D1463).
+      Commanded : constant Boolean :=
+        not Rest.Is_Empty and then Commands.Known (Rest.First_Element);
    begin
-      if not Rest.Is_Empty
-        and then Commands.Known (Rest.First_Element)
+      if Commanded
         and then not Commands.Accepts
           (Commands.Named (Rest.First_Element), Commands.Target)
       then
@@ -111,8 +114,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
             return Rest;
          end if;
       end loop;
-      for Argument of Rest loop
+      if Commanded then
+         Result.Append (Rest.First_Element);
+      end if;
+      for Argument of Lanes.Target_Arguments loop
          Result.Append (Argument);
+      end loop;
+      for Index in (if Commanded then 2 else 1) .. Natural (Rest.Length) loop
+         Result.Append (Rest.Element (Index));
       end loop;
       return Result;
    end Lane_Arguments;
@@ -499,13 +508,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
               then Path (Path'First .. Last) else "");
    end Output_Directory;
 
-   --  What refine is run with for a fixture's report: its `args`, and for
-   --  a rooted fixture the module arguments its `root` gives after them,
-   --  so a rooted fixture's `args` name only options such as its target.
+   --  What refine is run with for a fixture's report: `check`, unless its
+   --  `args` name a command (D1464), its `args`, and for a rooted fixture
+   --  the module arguments its `root` gives after them, so a rooted
+   --  fixture's `args` name only options such as its target.
    function Invocation (Case_Item : Fixture) return Landin.Platform.Path_List;
 
    function Invocation (Case_Item : Fixture) return Landin.Platform.Path_List
-     is (Source_Arguments (Case_Item, Fixture_Root));
+     is (Verdict_Arguments (Case_Item, Fixture_Root));
 
    function Label_Of (Item : Fixture) return String is
      (Class_Directory (Class (Item)) & "/" & Name (Item));
@@ -1320,6 +1330,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Said    : Unbounded.Unbounded_String;
       Args    : Landin.Platform.Path_List;
    begin
+      Args.Append ("compile");
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
       Landin.Platform.Add (Args, "--emit=asm");
       Landin.Platform.Add (Args, "-o");
@@ -1624,6 +1635,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             return;
          end if;
 
+         Args.Append ("compile");
          Args.Append (Source);
          Args.Append ("--emit=exe");
          --  These consumers call the C library, which a static Linux link
@@ -3008,6 +3020,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          end;
       end if;
 
+      Args.Append ("compile");
       if C_Archives (Case_Item) = "" then
          Append_Module_Arguments (Case_Item, Fixture_Root, Args);
       else
@@ -3201,6 +3214,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Expected  : Unbounded.Unbounded_String;
       Read      : Landin.Platform.Read_Status;
    begin
+      Refine_Arguments.Append ("compile");
       Append_Module_Arguments
         (Case_Item, Fixture_Root, Refine_Arguments);
 
@@ -3440,6 +3454,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Outcome : Landin.Platform.Tool_Result;
       begin
          Host.Remove_File (Built, Removed);
+         Args.Append ("compile");
          if At_Level /= "" then
             Args.Append ("--level=" & At_Level);
          end if;
@@ -3479,6 +3494,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Missing : Unbounded.Unbounded_String;
          Ran : Landin.Platform.Tool_Result;
       begin
+         Args.Append ("compile");
          Args.Append ("--level=" & Level);
          Args.Append ("--emit=exe");
          Args.Append ("-o");
@@ -4873,6 +4889,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Outcome : Landin.Platform.Tool_Result;
             Ended : Boolean;
          begin
+            Args.Append ("compile");
             Args.Append ("--target=" & Target);
             Args.Append ("--emit=asm");
             Args.Append ("-o");

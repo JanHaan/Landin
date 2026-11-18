@@ -713,7 +713,7 @@ On Linux x86-64, compile one of the status-42 tests from the repository
 root with:
 
 ```sh
-refine --root=. --target=linux-x86-64 --emit=exe \
+refine compile --root=. --target=linux-x86-64 \
   -o /tmp/landin-insertion-sort \
   compiler/tests/fixtures/runtime/insertion-sort
 /tmp/landin-insertion-sort
@@ -778,7 +778,7 @@ emits assembly text.
 | `link` | no, and runtime only | `static` or `libc`: how a hosted lane links the executable, passed as `--link=`; absent means the target's default, static on Linux. A program that calls the C library names `libc`. An ABI fixture is always emitted with `--link=libc`, because the C driver links its assembly with the C runtime |
 | `layout` | no, and positive, runtime or ABI only | `evidence`: the fixture's layout is what it shows, so `formatting/the corpus is formatted` does not hold its sources to `refine fmt`'s layout and `scripts/add_fixture.py` does not reformat them. A fixture whose `constructs` name [1750], the layout rule, is exempt without it |
 | `expect` | no | the file holding the expected bytes, which `fixture execution/recorded expectations hold` compares and `./scripts/test.sh --record=CLASS/NAME` rewrites |
-| `args` | no | the arguments `refine` is run with; for a rooted fixture, only the options before the module its `root` gives, such as `--target=darwin-arm64` |
+| `args` | no | the arguments `refine check` is run with, or `refine`'s own when the first word is a command, `--version` or `--identify` (D1464); for a rooted fixture, only the options before the module its `root` gives, such as `--target=darwin-arm64` |
 | `run_args` | no | words handed to a compiled runtime or ABI program as written, before its `run_files`; it names no file of the fixture's |
 | `run_files` | no, and runtime or ABI only | comma-separated files below the fixture directory, each handed to the program after `run_args` as a path to it wherever the lane put the fixture |
 | `stdin` | no | a file below the fixture directory whose bytes a compiled runtime or ABI program reads as its standard input; without it the program's standard input is empty |
@@ -957,7 +957,8 @@ and its entry module in `args` instead, each a path from `compiler/ada`, as
 
 A rooted fixture's `args` never name its module: the harness passes them
 first and then `--root` and the fixture's directory, and refuses an `args`
-word that does not begin with `-` or that is a `--root=`. So `args` is how a
+word that does not begin with `-` or that is a `--root=`, the first word
+excepted when it names a command. So `args` is how a
 rooted negative selects its target, and with `--target=` in it the fixture is
 that target's verdict on every lane, as a recorded one is; such a negative
 needs no `expect`, since its ordered `codes` are compared at that target, and

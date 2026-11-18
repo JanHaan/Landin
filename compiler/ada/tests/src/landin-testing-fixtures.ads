@@ -162,13 +162,21 @@ package Landin.Testing.Fixtures is
    --  fake filesystem holding its program alone.
    function Is_Rooted (Item : Fixture) return Boolean;
 
-   --  What `refine` is run with for the fixture's verdict, before a lane
-   --  adds its target: a rooted fixture's `args` and then its module; a
-   --  recorded fixture's `args` as written, which name their files from
-   --  compiler/ada, where the test program runs; otherwise its program and
-   --  `with` files.  compiler/tests/fixture_meta.py's `source_arguments`
-   --  is the same, and fixture-meta.cases holds the two to it.
+   --  What follows the command `refine` is run with for the fixture's
+   --  verdict, before a lane adds its target: a rooted fixture's `args` and
+   --  then its module; a recorded fixture's `args` as written, which name
+   --  their files from compiler/ada, where the test program runs;
+   --  otherwise its program and `with` files.  compiler/tests/
+   --  fixture_meta.py's `source_arguments` is the same, and
+   --  fixture-meta.cases holds the two to it.
    function Source_Arguments
+     (Item : Fixture; Fixture_Root : String) return Landin.Platform.Path_List;
+
+   --  D1464: what `refine` is run with for the fixture's verdict: its
+   --  Source_Arguments, after `check` unless they begin with a command of
+   --  their own or `--version` or `--identify`, which name one.
+   --  fixture_meta.py's `verdict_arguments` is the same.
+   function Verdict_Arguments
      (Item : Fixture; Fixture_Root : String) return Landin.Platform.Path_List;
 
    --  Append what a compiled runtime or ABI program is run with after its

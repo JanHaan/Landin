@@ -1,1 +1,0 @@
-refine: checked ../tests/fixtures/end-to-end/feature-level-x86-64-v3-has-bmi2/main.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

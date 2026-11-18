@@ -29,12 +29,22 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & LF
                & "An option that belongs to a command is written after it."
-               & " One written before its command, or with no command at a"
-               & "ll, is refused naming the commands it belongs to and whe"
-               & "re it goes, as it was written: `refine --root=lib compil"
-               & "e main.ldn` is told `refine compile --root=lib ...`, and"
-               & " `refine -o x.s main.ldn` that `-o x.s` is an option of "
-               & "`compile` (D384)."
+               & " One written before its command is refused naming the co"
+               & "mmands it belongs to and where it goes, as it was writte"
+               & "n: `refine --root=lib compile main.ldn` is told `refine "
+               & "compile --root=lib ...` (D384)."
+               & LF
+               & LF
+               & "Every request names its command. A source given without "
+               & "one is refused, and the refusal writes the whole request"
+               & " out after the command it belongs to: `check`, or, when "
+               & "an option `check` does not take was given, the command t"
+               & "hat takes it. `refine main.ldn` is told `refine check ma"
+               & "in.ldn`, and `refine -o x.s main.ldn` is told `refine co"
+               & "mpile -o x.s main.ldn`. A first word that is neither a `"
+               & ".ldn` file nor a path is more likely a mistyped command,"
+               & " so the refusal also says that `refine help` lists the c"
+               & "ommands (D1463)."
                & LF
                & LF
                & "Give `--target=` only once. Repeating it is a misuse eve"

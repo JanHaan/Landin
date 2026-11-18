@@ -156,7 +156,7 @@ def compile(refine: Path, source, output: Path, *, target: str,
             debug: str | None = None, root: Path | None = None,
             emit: str = "asm", environment: dict | None = None,
             panic_map: bool = False, keep_asm: bool = False):
-    args = [str(refine), str(source), "--emit=" + emit, "-o", str(output),
+    args = [str(refine), "compile", str(source), "--emit=" + emit, "-o", str(output),
             "--target=" + target, "--optimize=" + profile[0],
             "--specialize=" + profile[1]]
     if report is not None:

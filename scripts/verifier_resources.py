@@ -171,7 +171,7 @@ def main(argv=None):
                                         for sample in row["samples"])}
             for stack in STACK_KIB:
                 report = directory / f"stack-{stack}.json"
-                command = [launcher, str(refine), "--root=" + str(directory),
+                command = [launcher, str(refine), "compile", "--root=" + str(directory),
                            "--stage-report=" + str(report), "--emit=asm",
                            "-o", str(report) + ".s", str(directory)]
                 probe = stack_probe(command, stack, args.timeout)

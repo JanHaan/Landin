@@ -2,6 +2,7 @@ with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Strings.Fixed;
 with Ada.Strings.Maps;
 
+with Landin.Commands.Catalogue;
 with Landin.Targets.Levels;
 with Landin.Targets.Selection;
 
@@ -352,6 +353,25 @@ package body Landin.Testing.Fixtures is
       end if;
       return Result;
    end Source_Arguments;
+
+   function Verdict_Arguments
+     (Item : Fixture; Fixture_Root : String) return Landin.Platform.Path_List
+   is
+      Given : constant Landin.Platform.Path_List :=
+        Source_Arguments (Item, Fixture_Root);
+      Result : Landin.Platform.Path_List;
+   begin
+      if Given.Is_Empty
+        or else not (Landin.Commands.Catalogue.Known (Given.First_Element)
+          or else Given.First_Element in "--version" | "--identify")
+      then
+         Result.Append ("check");
+      end if;
+      for Word of Given loop
+         Result.Append (Word);
+      end loop;
+      return Result;
+   end Verdict_Arguments;
 
    procedure Append_Program_Arguments
      (Item      : Fixture;
@@ -1696,7 +1716,12 @@ package body Landin.Testing.Fixtures is
                      declare
                         Word : constant String := Value (First .. Index - 1);
                      begin
-                        if Word (Word'First) /= '-'
+                        --  The first word may name the command (D1464).
+                        if First = Value'First
+                          and then Landin.Commands.Catalogue.Known (Word)
+                        then
+                           null;
+                        elsif Word (Word'First) /= '-'
                           or else (Word'Length >= 7
                                    and then Word (Word'First
                                                   .. Word'First + 6)

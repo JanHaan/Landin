@@ -21,8 +21,9 @@
 # or `no`; `stream`; `profile-count`; `layout-evidence`, `yes` or `no`; `codes-normalized`; `levels@TARGET`,
 # the levels TARGET's lane builds at; `c-args@TARGET`, the `c-args` as
 # TARGET's lane passes them, spelled by compiler/tests/c-args.targets;
-# `source-arguments`, what refine is
-# run with, `module-arguments`, its source operands, and
+# `source-arguments`, what follows the command refine is run with,
+# `verdict-arguments`, what refine is run with (D1464),
+# `module-arguments`, its source operands, and
 # `program-arguments`, what the compiled program is run with -- each a
 # space-separated list, the fixture directory written F/CLASS/NAME.
 
@@ -49,6 +50,7 @@ field run_files = input.txt, data/more.txt
 field stdin = given.txt
 field module-arguments = F/runtime/reads-input/main.ldn
 field source-arguments = F/runtime/reads-input/main.ldn
+field verdict-arguments = check F/runtime/reads-input/main.ldn
 field program-arguments = --level INFO --out build/out.txt F/runtime/reads-input/input.txt F/runtime/reads-input/data/more.txt
 end
 
@@ -122,7 +124,23 @@ fixture negative/recorded
 | constructs: 0910
 | targets: linux-x86-64
 field source-arguments = ../tests/fixtures/negative/recorded/program.ldn
+field verdict-arguments = check ../tests/fixtures/negative/recorded/program.ldn
 field module-arguments = F/negative/recorded/program.ldn
+end
+
+case recorded args that name their own command keep it
+fixture negative/recorded-compile
+| class: negative
+| summary: a recorded report of a compile
+| program: program.ldn
+| expect: expected.txt
+| args: compile --emit=asm ../tests/fixtures/negative/recorded-compile/program.ldn
+| codes: L0302
+| status: 1
+| constructs: 0910
+| targets: linux-x86-64
+field source-arguments = compile --emit=asm ../tests/fixtures/negative/recorded-compile/program.ldn
+field verdict-arguments = compile --emit=asm ../tests/fixtures/negative/recorded-compile/program.ldn
 end
 
 case a module of several files
@@ -236,6 +254,32 @@ fixture end-to-end/unrecorded
 | args: --identify
 | targets: linux-x86-64
 problem args without expect: nothing would be compared
+end
+
+case a rooted negative's args may name its command first
+fixture negative/rooted-compile
+| class: negative
+| summary: refused when it is compiled
+| program: main.ldn
+| root: ../../../../..
+| args: compile --target=linux-x86-64 --emit=asm
+| codes: L0507
+| constructs: 0770
+| targets: linux-x86-64
+field module-arguments = --root=F/negative/rooted-compile/../../../../.. F/negative/rooted-compile
+field verdict-arguments = compile --target=linux-x86-64 --emit=asm --root=F/negative/rooted-compile/../../../../.. F/negative/rooted-compile
+end
+
+case a version query is its own command
+fixture end-to-end/identity
+| class: end-to-end
+| summary: the build identity
+| expect: expected.txt
+| targets: linux-x86-64
+| args: --identify
+| status: 0
+| stream: output
+field verdict-arguments = --identify
 end
 
 case a rooted fixture's args name no module

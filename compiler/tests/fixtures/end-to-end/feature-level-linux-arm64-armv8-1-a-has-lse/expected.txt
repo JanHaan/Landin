@@ -1,1 +1,0 @@
-refine: checked ../tests/fixtures/end-to-end/feature-level-linux-arm64-armv8-1-a-has-lse/main.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

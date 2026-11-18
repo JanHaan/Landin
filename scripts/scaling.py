@@ -402,7 +402,7 @@ def measure(refine: str, root: str, entry: str, report: str,
     """One compilation; the frontend's and emission's processor seconds, the
     peak resident set in KiB and the compilation's sizes, from the
     compiler's own report."""
-    command = [refine, "--root=" + root, "--stage-report=" + report,
+    command = [refine, "compile", "--root=" + root, "--stage-report=" + report,
                "--emit=asm", "--optimize=" + objective, "-o", report + ".s",
                entry]
     try:

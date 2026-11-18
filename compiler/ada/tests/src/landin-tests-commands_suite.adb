@@ -844,15 +844,20 @@ package body Landin.Tests.Commands_Suite is
          After : constant Landin.Driver.Outcome := Landin.Commands.Execute
            (["check", "--target=linux-x86-64", "main.ldn", "-v"],
             Host, Tools, Meter);
-         Legacy : constant Landin.Driver.Outcome := Landin.Commands.Execute
+         Plain : constant Landin.Driver.Outcome := Landin.Commands.Execute
+           (["check", "--target=linux-x86-64", "main.ldn"], Host, Tools,
+            Meter);
+         Bare : constant Landin.Driver.Outcome := Landin.Commands.Execute
            (["--target=linux-x86-64", "main.ldn"], Host, Tools, Meter);
       begin
          Landin.Testing.Check_Equal (Item, Before.Status, 0, "check succeeds");
          Landin.Testing.Check_Equal
            (Item, Before.Status, After.Status,
             "shared option placement agrees");
+         --  D1463: a source named without a command is refused.
          Landin.Testing.Check_Equal
-           (Item, Before.Status, Legacy.Status, "bare sources still check");
+           (Item, Bare.Status, Landin.Driver.Status_Misuse,
+            "a bare source is refused");
          Landin.Testing.Check_Equal
            (Item, US.To_String (Before.Trace), US.To_String (After.Trace),
             "equal requests give equal verbose output");
@@ -862,7 +867,7 @@ package body Landin.Tests.Commands_Suite is
             "-v names every source the request read: "
             & US.To_String (After.Trace));
          Landin.Testing.Check
-           (Item, US.Length (Legacy.Trace) = 0,
+           (Item, US.Length (Plain.Trace) = 0,
             "a request without -v names none");
       end;
       Landin.Testing.Check_Equal
@@ -1376,11 +1381,17 @@ package body Landin.Tests.Commands_Suite is
       Refused (["--target=linux-x86-64", "--version"],
                "--target=linux-x86-64 is an option of check, compile, run"
                & " and bindings, not of version");
+      --  D1463: with no command, the request is named again after the
+      --  command of the option `check` does not take.
       Refused (["-o", "x.s", "main.ldn"],
-               "-o x.s is an option of compile; name the command first:"
-               & " refine compile -o x.s ...");
+               "unknown command: main.ldn; name the command first:"
+               & " refine compile -o x.s main.ldn");
       Refused (["--library=/opt/lib", "--depfile=d", "main.ldn"],
-               "--depfile is an option of compile; name the command first");
+               "name the command first: refine compile --library=/opt/lib"
+               & " --depfile=d main.ldn");
+      Refused (["--root=lib"],
+               "--root=lib is an option of check, compile and run, and"
+               & " follows its command: refine check --root=lib ...");
       Landin.Testing.Check_Equal
         (Item, Host.Write_Count, 0, "misuse writes nothing");
    end Options_Before_Their_Command;
@@ -1825,87 +1836,78 @@ package body Landin.Tests.Commands_Suite is
       end;
    end Run_Refusals;
 
-   --  D526: bare `refine FILE` says it checked and wrote nothing, unless
-   --  -q; `refine check` stays silent.
-   procedure Bare_Form_Says_It_Only_Checked
+   --  D1463: a source named without a command is refused, naming the
+   --  whole request after the command that takes it, as a shell reads it
+   --  back; `refine check` stays silent (D526).
+   procedure Bare_Form_Is_Refused
      (Item : in out Landin.Testing.Context);
-   procedure Bare_Form_Says_It_Only_Checked
+   procedure Bare_Form_Is_Refused
      (Item : in out Landin.Testing.Context)
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Meter : Landin.Platform.Unmetered;
-      procedure Said (Args : Landin.Platform.Path_List; Expected : String);
-      procedure Said (Args : Landin.Platform.Path_List; Expected : String) is
+      procedure Refused (Args : Landin.Platform.Path_List; Says : String);
+      procedure Refused (Args : Landin.Platform.Path_List; Says : String) is
          Result : constant Landin.Driver.Outcome :=
            Landin.Commands.Execute
              (Args, Host, Tools, Meter, Built_For => Linux_Host);
       begin
          Landin.Testing.Check_Equal
-           (Item, Result.Status, 0,
-            "it checks: " & US.To_String (Result.Report));
+           (Item, Result.Status, Landin.Driver.Status_Misuse,
+            "a bare source is misuse: " & US.To_String (Result.Report));
          Landin.Testing.Check_Equal
-           (Item, US.To_String (Result.Report), Expected,
-            "what the check says on standard error");
-      end Said;
+           (Item, US.To_String (Result.Report),
+            "error[L0002]: " & Says & ASCII.LF,
+            "the refusal names the command");
+      end Refused;
    begin
-      Host.Add_File ("main.ldn", Source);
-      Said (["main.ldn"],
-            "refine: checked main.ldn and wrote nothing; run it with"
-            & " `refine run main.ldn`, or build it with"
-            & " `refine compile main.ldn -o main`" & ASCII.LF);
-      Said (["-q", "main.ldn"], "");
-      Said (["main.ldn", "--quiet"], "");
-      Said (["check", "main.ldn"], "");
+      Host.Raise_On_Read;
+      Refused (["main.ldn"],
+               "unknown command: main.ldn; name the command first:"
+               & " refine check main.ldn");
+      Refused (["-q", "main.ldn"],
+               "unknown command: main.ldn; name the command first:"
+               & " refine check -q main.ldn");
+      Refused (["--target=cortex-m0", "--firmware-entry=start",
+                "firmware.ldn"],
+               "unknown command: firmware.ldn; name the command first:"
+               & " refine check --target=cortex-m0 --firmware-entry=start"
+               & " firmware.ldn");
+      Refused (["--emit=asm", "main.ldn", "-o", "main.s"],
+               "unknown command: main.ldn; name the command first:"
+               & " refine compile --emit=asm main.ldn -o main.s");
+      Refused (["my game.ldn"],
+               "unknown command: my game.ldn; name the command first:"
+               & " refine check 'my game.ldn'");
+      Refused (["--", "-x.ldn"],
+               "unknown command: -x.ldn; name the command first:"
+               & " refine check -- -x.ldn");
+      --  A typo of a command is refused the same way, with no source
+      --  read.
+      Refused (["chek", "main.ldn"],
+               "unknown command: chek; refine help lists the commands; if"
+               & " chek is a source: refine check chek main.ldn");
+      Refused (["lib/"],
+               "unknown command: lib/; name the command first:"
+               & " refine check lib/");
       Landin.Testing.Check_Equal
-        (Item, Host.Write_Count, 0, "checking writes nothing");
-      --  D731: the commands it names repeat what chose the program, and
-      --  name only what the target can do, the same on every host.
-      Said (["--target=linux-x86-64", "--optimize=speed", "main.ldn",
-             "--build-report=report.json"],
-            "refine: checked main.ldn and wrote no program; run it with"
-            & " `refine run --target=linux-x86-64 --optimize=speed"
-            & " main.ldn`, or build it with `refine compile"
-            & " --target=linux-x86-64 --optimize=speed main.ldn -o main`"
-            & ASCII.LF);
-      Said (["--target=linux-arm64", "--level=armv8.1-a", "main.ldn"],
-            "refine: checked main.ldn and wrote nothing; run it with"
-            & " `refine run --target=linux-arm64 --level=armv8.1-a"
-            & " main.ldn`, or build it with `refine compile"
-            & " --target=linux-arm64 --level=armv8.1-a main.ldn -o main`"
-            & ASCII.LF);
-      Host.Add_Firmware_Library;
-      Host.Add_File ("firmware.ldn",
-        "public start: () -> noreturn = loop do end loop end start");
-      Said (["--target=cortex-m0", "firmware.ldn"],
-            "refine: checked firmware.ldn and wrote nothing; build it with"
-            & " `refine compile --target=cortex-m0 --firmware-entry=NAME"
-            & " firmware.ldn -o firmware`" & ASCII.LF);
-      Said (["--target=cortex-m0", "--firmware-entry=start",
-             "firmware.ldn"],
-            "refine: checked firmware.ldn and wrote nothing; build it with"
-            & " `refine compile --target=cortex-m0 --firmware-entry=start"
-            & " firmware.ldn -o firmware`" & ASCII.LF);
-      --  A module with no `main` is not offered to `run` or `compile`,
-      --  which would refuse it; the line says what it lacks.
-      Host.Add_File ("lib.ldn",
-        "public lib: () -> (n: u32) =" & ASCII.LF & "    n = 1"
-        & ASCII.LF & "end lib" & ASCII.LF);
-      Said (["lib.ldn"],
-            "refine: checked lib.ldn as a module and wrote nothing; a"
-            & " program to run or build needs `public main: () -> (code:"
-            & " i32)`" & ASCII.LF);
-      Said (["--target=linux-arm64", "lib.ldn",
-             "--build-report=report.json"],
-            "refine: checked lib.ldn as a module and wrote no program; a"
-            & " program to run or build needs `public main: () -> (code:"
-            & " i32)`" & ASCII.LF);
-      Host.Add_File ("my game.ldn", Source);
-      Said (["my game.ldn"],
-            "refine: checked 'my game.ldn' and wrote nothing; run it with"
-            & " `refine run 'my game.ldn'`, or build it with"
-            & " `refine compile 'my game.ldn' -o 'my game'`" & ASCII.LF);
-   end Bare_Form_Says_It_Only_Checked;
+        (Item, Host.Write_Count, 0, "a refusal writes nothing");
+      declare
+         Quiet_Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Result : Landin.Driver.Outcome;
+      begin
+         Quiet_Host.Add_File ("main.ldn", Source);
+         Result := Landin.Commands.Execute
+           (["check", "main.ldn"], Quiet_Host, Tools, Meter,
+            Built_For => Linux_Host);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "check checks");
+         Landin.Testing.Check_Equal
+           (Item, US.To_String (Result.Report), "",
+            "check says nothing of what it did not write");
+      end;
+   end Bare_Form_Is_Refused;
 
    --  D524: -L takes its directory as a C compiler's does, after a
    --  space, glued or after `=`, repeatably, on compile, run and check.
@@ -2014,8 +2016,8 @@ package body Landin.Tests.Commands_Suite is
         (Into, "commands", "option requirements are one",
          Option_Requirements_Are_One'Access);
       Landin.Testing.Register
-        (Into, "commands", "the bare form says it only checked",
-         Bare_Form_Says_It_Only_Checked'Access);
+        (Into, "commands", "the bare form is refused",
+         Bare_Form_Is_Refused'Access);
       Landin.Testing.Register
         (Into, "commands", "-L names a library directory",
          Library_Directory_Option'Access);

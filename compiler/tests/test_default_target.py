@@ -41,7 +41,7 @@ def main():
         root = Path(scratch)
         (root / "main.ldn").write_bytes(SOURCE)
         result = subprocess.run(
-            [str(refine), "main.ldn", "--emit=asm", "-o", "main.s",
+            [str(refine), "compile", "main.ldn", "--emit=asm", "-o", "main.s",
              "--build-report=build.json"],
             cwd=root, capture_output=True, timeout=60)
         if expected is None:

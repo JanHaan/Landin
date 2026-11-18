@@ -135,7 +135,7 @@ def measure(refine: Path, tools: dict[str, str], source: Path,
     assembly = destination.with_suffix(".s")
     report = destination.with_suffix(".json")
     obj = destination.with_suffix(".o")
-    args = [str(refine), "--target=linux-x86-64", str(source),
+    args = [str(refine), "compile", "--target=linux-x86-64", str(source),
             "--emit=asm", "-o", str(assembly),
             f"--optimize={profile[0]}", f"--specialize={profile[1]}",
             f"--build-report={report}"]

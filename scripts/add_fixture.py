@@ -103,7 +103,7 @@ def target_codes(meta, directory, refine, target, named):
     which a refusal calls NAMED, sorted; [] when it compiles."""
     with tempfile.TemporaryDirectory() as scratch:
         ran = subprocess.run(
-            [str(refine), *meta.module_arguments(str(directory)),
+            [str(refine), "compile", *meta.module_arguments(str(directory)),
              "--target=" + target, "--emit=asm", "-o",
              str(Path(scratch) / "refused.s")],
             capture_output=True, text=True, timeout=900)
@@ -211,7 +211,7 @@ def cortex_stack(meta, directory, refine):
     with tempfile.TemporaryDirectory() as scratch:
         report = Path(scratch) / "build.json"
         ran = subprocess.run(
-            [str(refine), *meta.module_arguments(str(directory)),
+            [str(refine), "compile", *meta.module_arguments(str(directory)),
              "--target=cortex-m0", "--emit=asm", "-o",
              str(Path(scratch) / "measured.s"),
              "--build-report=" + str(report)],

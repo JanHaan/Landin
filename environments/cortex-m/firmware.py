@@ -184,7 +184,7 @@ start: () -> none =
 end start
 ''')
     elf = run.out / 'firmware.elf'
-    run.command('compile', [refine, '--target=cortex-m0', '--level='+level,
+    run.command('compile', [refine, 'compile', '--target=cortex-m0', '--level='+level,
         *(['--root='+str(root)] if root is not None else []),
         *('--root=' + str(one) for one in roots), '--firmware-entry=start',
         '--emit=exe', '--debug='+debug, '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
@@ -1078,7 +1078,7 @@ def failures(parent, refine):
         source.write_text(program + ('\n' if name == 'invalid-entry' else
                           '\nstart: () -> none = end start\n'))
         try:
-            run.command('refusal', [refine, '--target=cortex-m0',
+            run.command('refusal', [refine, 'compile', '--target=cortex-m0',
                 '--firmware-entry=start', '--emit=exe',
                 '--toolchain='+str(run.arm / 'arm-eabi-gcc'),
                 '-o', 'refused.elf', source.name], timeout=60)

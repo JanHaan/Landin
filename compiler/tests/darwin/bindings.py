@@ -59,7 +59,7 @@ def main():
             label = 'bindings-' + optimize + '-' + specialize if args.parity else 'bindings'
             assembly = output / (label + '.s')
             executable = output / (label + '-native')
-            run.command([refine, "--target=darwin-arm64", "--root=" + str(ROOT),
+            run.command([refine, "compile", "--target=darwin-arm64", "--root=" + str(ROOT),
                          "--optimize=" + optimize, "--specialize=" + specialize,
                          "--emit=asm", "-o", assembly, generated], label + '-emit', ROOT)
             objects = []
@@ -104,7 +104,7 @@ def main():
                             + '\nexec /usr/bin/clang "$@"\n')
         recorder.chmod(0o755)
         linked = output / "archive-native"
-        run.command([refine, "--target=darwin-arm64", "--emit=exe", "-L", libraries, source,
+        run.command([refine, "compile", "--target=darwin-arm64", "--emit=exe", "-L", libraries, source,
                      "--toolchain=" + str(recorder), "-o", linked], "archive-link", output)
         run.command([linked], "archive-execute", output, expected=42)
         commands = [command.split("\n") for command in
@@ -119,7 +119,7 @@ def main():
         # The same program with no directory to look in: the link fails,
         # and refine names the library at its directive.
         missing = output / "missing-native"
-        _, _, diagnostic = run.command([refine, "--target=darwin-arm64", "--emit=exe",
+        _, _, diagnostic = run.command([refine, "compile", "--target=darwin-arm64", "--emit=exe",
                                        source, "-o", missing], "archive-missing", output, expected=1)
         require(b"error[L0509]" in diagnostic and b"r530_probe" in diagnostic
                 and not missing.exists(), "a missing library was not L0509")
@@ -143,7 +143,7 @@ def main():
                             'public main: () -> (code: i32) =\n'
                             '    code = r530_probe()\nend main\n')
         native = output / "directory-native"
-        run.command([refine, "--target=darwin-arm64", "--emit=exe", directed,
+        run.command([refine, "compile", "--target=darwin-arm64", "--emit=exe", directed,
                      "--toolchain=" + str(recorder), "-o", native], "directory-link", output)
         landin_status, _, _ = run.command([native], "directory-execute", output, expected=None)
         control = output / "control.c"
