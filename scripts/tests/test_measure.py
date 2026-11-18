@@ -149,6 +149,31 @@ class Instructions(Compare):
         self.assertIn("10 -> 12 (+2)", output)
 
 
+class Build(unittest.TestCase):
+    def test_each_configuration_publishes_into_a_directory_of_its_own(self):
+        """Builds run concurrently, and refine refuses an output whose
+        directory another compile's publication holds locked (D1049)."""
+        meta = mock.Mock()
+        meta.library_arguments.return_value = []
+        meta.source_arguments.return_value = ["main.ldn"]
+        done = mock.Mock(returncode=0, stdout="", stderr="")
+        workloads = [{"fixture": "runtime/x", "name": name} for name in ("a", "b")]
+        with tempfile.TemporaryDirectory() as temporary, \
+                mock.patch.object(measure.fixture_meta, "read", return_value=meta), \
+                mock.patch.object(measure.subprocess, "run", return_value=done) as run:
+            out = Path(temporary)
+            images = [measure.build("refine", "linux-x86-64", "x86-64-v1",
+                                    ("size", "all"), one, out, None)[0]
+                      for one in workloads]
+            outputs = [call.args[0][call.args[0].index("-o") + 1]
+                       for call in run.call_args_list]
+            for image in images:
+                self.assertTrue(image.parent.is_dir())
+        self.assertNotEqual(images[0].parent, images[1].parent)
+        self.assertEqual(images[0].parent.parent, out)
+        self.assertEqual(outputs, [str(image) for image in images])
+
+
 class Record(unittest.TestCase):
     def test_record_writes_the_named_keys_alone(self):
         measured = {"schema": 1, "environments": {"t": "env"}, "targets": {"t": {
