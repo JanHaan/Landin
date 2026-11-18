@@ -1102,9 +1102,10 @@ observations, not a comparison, and exclude failed jobs whose durations
 cover only part of their work.
 
 The gate keeps artifacts, never an acceptance record: among them a failed
-Cortex-M job's diagnostic output, when there is any, for 14 days, the
-determinism workflow's assembly manifests, and each board leg's evidence
-for 90 days. Same-run build archives are only inputs to later jobs.
+Cortex-M job's diagnostic output, when there is any, and a failed LLDB
+session's transcripts, images and dSYMs from `darwin-host-release-2`, as
+`darwin-lldb-evidence`, for 14 days, the determinism workflow's assembly
+manifests, and each board leg's evidence for 90 days. Same-run build archives are only inputs to later jobs.
 
 The gate calls `determinism.yml`, which
 requires every host in its matrix to emit the same bytes; it emits and hashes
