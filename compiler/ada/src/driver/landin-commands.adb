@@ -13,7 +13,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Text;
 with Landin.Diagnostics.Warning_Policy;
-with Landin.Driver.Library;
+with Landin.Library;
 with Landin.Json;
 with Landin.Source;
 with Landin.Source.Sets;
@@ -684,10 +684,10 @@ package body Landin.Commands is
          Named : constant String := Effective (C.Library, "");
          Library_Root : constant String :=
            (if Named /= "" then Named
-            else Landin.Driver.Library.Located (Host));
+            else Landin.Library.Located (Host));
       begin
          if Named /= ""
-           and then not Landin.Driver.Library.Holds_Library (Host, Named)
+           and then not Landin.Library.Holds_Library (Host, Named)
          then
             Refuse ("--library=" & Named & " holds no core, hosted or"
               & " platform directory; name the directory that holds"
@@ -1124,9 +1124,9 @@ package body Landin.Commands is
                     --  copied compiler finds none and says so here.
                     & "; library="
                     & Effective (C.Library,
-                        (if Landin.Driver.Library.Located (Host) = ""
+                        (if Landin.Library.Located (Host) = ""
                          then "none"
-                         else Landin.Driver.Library.Located (Host)))
+                         else Landin.Library.Located (Host)))
                     & LF);
                   for Text of Asked.Forwarded loop
                      US.Append (Transcript, "  " & J.Quoted (Text) & LF);

@@ -8,7 +8,7 @@ with Ada.Unchecked_Deallocation;
 
 with Landin.Configuration;
 with Landin.Diagnostics;
-with Landin.Driver.Library;
+with Landin.Library;
 with Landin.Formatting;
 with Landin.Json;
 with Landin.Modules;
@@ -1092,7 +1092,7 @@ package body Landin.Server.Sessions is
          --  The library beside this compiler follows them, found as
          --  `refine` finds it.
          Store.Library := Unbounded.To_Unbounded_String
-           (Landin.Driver.Library.Located (Host.all));
+           (Landin.Library.Located (Host.all));
 
          declare
             Target : constant J.Value :=

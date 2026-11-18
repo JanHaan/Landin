@@ -26037,6 +26037,16 @@ interval to every figure.
 
 **Pinned by** the measured closures.
 
+### D1423 — Finding the library is a unit of its own, outside `Landin.Driver`
+
+**The tour said** nothing.
+
+**Chosen:** D1386's cut takes two moves, not one. The two path helpers `Driver.Loading` lent, `Joined_Path` and `Is_Source_Name`, become `Landin.Paths`, a pure unit that asks the host nothing, and `Driver.Library` becomes `Landin.Library`, a unit of its own rather than a child of `Landin.Driver`. An Ada partition holds the body of every unit whose specification it holds, a parent's among them, and `Landin.Driver`'s body withs the whole compiler: a program that withed `Driver.Library` linked all of it whatever its own withs were. Linked alone, `Landin.Library` holds 29 units with the run-time, 0.36 MB of text, where `Driver.Library` held 176 and 24.35 MB. `explain`'s code closes over 12 units, 0.49 MB of the compiler's own text where it was 6.79 MB; `version`'s over 15, 0.71 MB where it was 7.01; and `fmt`'s over 25, 1.86 MB where it was 7.02, the parser it formats with. `Landin.Source_Maps` keeps the front end: it writes a map from a `Landin.Stages.Compilation` and its IR, and it withed `Driver.Library` only to ask whether a module is the library's. Its closure went from 7.26 to 6.55 MB, and no cut of the library's edges takes the rest away; a command that only reads a map needs a unit that does not take a compilation.
+
+**The alternatives:** cutting only the edge D1386 names, which leaves every split command that finds the library linking the compiler through the parent; and leaving `Driver.Library` where it was while `Landin.Driver`'s body is split, which is larger work than the item and is not needed for this.
+
+**Pinned by** `scripts/tests/test_unit_closure.py`, which holds `Landin.Library`'s closure to itself, `Landin.Paths`, `Landin.Platform` and `Landin`, measured by `scripts/unit_closure.py`.
+
 ### D1387 — `refine` refuses a `refine-NAME` that is not compatible with it
 
 **The tour said** nothing.

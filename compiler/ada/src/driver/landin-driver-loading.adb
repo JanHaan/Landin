@@ -14,9 +14,10 @@ with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Modules;
 with Landin.Diagnostics.Resolution;
 with Landin.Diagnostics.Suggestions;
-with Landin.Driver.Library;
+with Landin.Library;
 with Landin.Modules;
 with Landin.Modules.Availability;
+with Landin.Paths;
 with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
@@ -84,15 +85,11 @@ package body Landin.Driver.Loading is
             Message => Text));
    end Note_Failure;
 
-   function Joined_Path (Directory, Child : String) return String is
-     (if Directory'Length > 0
-          and then Directory (Directory'Last) = '/'
-      then Directory & Child
-      else Directory & "/" & Child);
+   function Joined_Path (Directory, Child : String) return String
+     renames Landin.Paths.Joined_Path;
 
-   function Is_Source_Name (Name : String) return Boolean is
-     (Name'Length > 4
-      and then Name (Name'Last - 3 .. Name'Last) = ".ldn");
+   function Is_Source_Name (Name : String) return Boolean
+     renames Landin.Paths.Is_Source_Name;
 
    --  "; the directory holds a.ldn and b.ldn" when the directory a
    --  missing source names holds sources, or nothing: a name written for
@@ -445,12 +442,12 @@ package body Landin.Driver.Loading is
       --  one, and the named roots for any other.
       function First_Root (Logical : String) return Natural
         is (if Library_At /= 0
-              and then Landin.Driver.Library.Is_Library_Import (Logical)
+              and then Landin.Library.Is_Library_Import (Logical)
             then Library_At else 1);
 
       function Last_Root (Logical : String) return Natural
         is (if Library_At /= 0
-              and then Landin.Driver.Library.Is_Library_Import (Logical)
+              and then Landin.Library.Is_Library_Import (Logical)
             then Library_At else Named_Roots);
 
       --  D384: an import's path names a directory under a root, and the
@@ -730,7 +727,7 @@ package body Landin.Driver.Loading is
                   end;
                end loop;
                if Position = 1 and then Library_At > Named_Roots
-                 and then not Landin.Driver.Library.Is_Library_Import
+                 and then not Landin.Library.Is_Library_Import
                    (Logical)
                then
                   Offer_Library (Offered, Written, "core");
@@ -767,7 +764,7 @@ package body Landin.Driver.Loading is
       begin
          if Library_At = 0 or else Library_At <= Named_Roots
            or else Selected_Root /= Library_At
-           or else not Landin.Driver.Library.Is_Library_Import (Logical)
+           or else not Landin.Library.Is_Library_Import (Logical)
          then
             return;
          end if;
@@ -1210,8 +1207,8 @@ package body Landin.Driver.Loading is
                            Target := Landin.Modules.No_Module;
                         elsif Named_Files
                           and then Named_Roots = 0
-                          and then not Landin.Driver.Library
-                            .Is_Library_Import (Logical)
+                          and then not Landin.Library.Is_Library_Import
+                                         (Logical)
                         then
                            Target := Landin.Modules.No_Module;
                            declare
@@ -1326,8 +1323,8 @@ package body Landin.Driver.Loading is
                                  end;
                               elsif Directory_Path = ""
                                 and then Library_At = 0
-                                and then Landin.Driver.Library
-                                  .Is_Library_Import (Logical)
+                                and then Landin.Library.Is_Library_Import
+                                           (Logical)
                               then
                                  --  D363: the library holds this, and
                                  --  none was found; say where refine
@@ -1345,7 +1342,7 @@ package body Landin.Driver.Loading is
                                        Message => "module `" & Logical
                                          & "` is in refine's library, and"
                                          & " no library was found: "
-                                         & Landin.Driver.Library.Looked_In
+                                         & Landin.Library.Looked_In
                                              (Host),
                                        Note    => "D275: name the directory"
                                          & " holding core, hosted and"
