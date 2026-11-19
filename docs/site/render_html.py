@@ -50,7 +50,7 @@ HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
 
 VERSION_LINE = "specification 0.2.10"
-REPO = "https://github.com/JanHaan/Landin"
+REPO = "https://github.com/701-dev/Landin"
 #  The canonical host.  The pages are served from GitHub Pages under
 #  the CNAME the publishing workflow writes; every page still says
 #  which of 701.dev and www.701.dev it wants to be found at, because a
@@ -2695,7 +2695,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 {trail}<footer>
 <a class="totop" href="#">↑ top</a>
 {note}
-The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>;
+The repository is at <a href="{REPO}">github.com/701-dev/Landin</a>;
 questions, bugs and ideas go to <a href="{REPO}/discussions">its discussions</a>.
 For a program reading the site, the same documents are plain text:
 <a href="llms.txt">llms.txt</a>, <a href="llms-primer.txt">the primer</a>

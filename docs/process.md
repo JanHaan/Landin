@@ -1057,7 +1057,9 @@ build job gives each source whose SHA-256 is the one recorded the recorded
 time, and leaves every other file newer than its objects.
 
 The Darwin jobs are arranged for GitHub's limit of five macOS jobs at once
-per account, which holds on every plan below Enterprise. In the runs of
+per account, which holds on every plan below Enterprise unless GitHub
+Support raises it; the repository's owner, the organisation `701-dev`, is
+on the Team plan and has asked for fifteen. In the runs of
 2026-11-15 and 11-16 the seven Darwin jobs took about 100 job-minutes:
 the debug build ended about 8 minutes after the run was created and the
 release build, twelve minutes of compilation, about 15; `darwin-host` ran
@@ -1145,14 +1147,14 @@ replaced. The archives record root as every member's owner.
 A release also rests on two repository settings and an attestation
 (D1337), which `gh api` reads back:
 
-- The ruleset `version tags`, `gh api repos/JanHaan/Landin/rulesets/27105000`,
+- The ruleset `version tags`, `gh api repos/701-dev/Landin/rulesets/27105000`,
   is active on `refs/tags/v*` and refuses creating, moving, deleting and
   force-moving such a tag to everyone but the repository's
   administrators, who bypass it. git.sr.ht has no tag protection, so a
   `v*` tag there proves nothing: a release tag is made on GitHub, by a
   push of it or with the release, and the mirror holds it only if it was
   pushed through both URLs.
-- The environment `release`, `gh api repos/JanHaan/Landin/environments/release`
+- The environment `release`, `gh api repos/701-dev/Landin/environments/release`
   and its `deployment-branch-policies`, deploys only from a tag matching
   `v*` and requires JanHaan's approval; it lets JanHaan approve his own
   run, and an administrator may bypass it. Only the publishing job runs
@@ -1170,10 +1172,15 @@ A release also rests on two repository settings and an attestation
   notes give the check:
 
 ```sh
-gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo JanHaan/Landin \
-  --signer-workflow JanHaan/Landin/.github/workflows/release.yml \
+gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo 701-dev/Landin \
+  --signer-workflow 701-dev/Landin/.github/workflows/release.yml \
   --source-ref refs/tags/vVERSION --deny-self-hosted-runners
 ```
+
+Releases up to 0.2.10 were built before the repository moved from the
+account `JanHaan` to the organisation `701-dev`, and their attestations
+name the old owner: for those, write `JanHaan` for `701-dev` in both
+options.
 
 A tag on a commit older than these steps runs that commit's workflow,
 which has neither the environment nor the attestation; the ruleset leaves
@@ -1188,7 +1195,7 @@ deleted on GitHub alone stays on it. A deletion reaches it only when
 `git push origin --delete` runs from a clone with both push URLs, and git
 refuses that whole push to sr.ht when any ref it names is missing there,
 while GitHub still accepts it. Compare `git ls-remote` of
-<https://github.com/JanHaan/Landin> and <https://git.sr.ht/~sinnfrei/landin>
+<https://github.com/701-dev/Landin> and <https://git.sr.ht/~sinnfrei/landin>
 before deleting, and delete what is only on one of them from that one by its
 URL. Nothing reports a disagreement between the two. `pages.yml` fetches the licensed code
 face from object storage because it is not in this repository; it renders and

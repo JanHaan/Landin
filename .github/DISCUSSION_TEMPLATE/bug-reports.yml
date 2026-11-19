@@ -6,7 +6,7 @@ body:
         first; a matching one is better with your details added to it.
 
         Do not report a security vulnerability here: report it privately,
-        through [GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new).
+        through [GitHub's private reporting](https://github.com/701-dev/Landin/security/advisories/new).
   - type: dropdown
     id: kind
     attributes:

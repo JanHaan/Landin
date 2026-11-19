@@ -7,7 +7,7 @@ body:
         **Language design**.
 
         Open work is planned in
-        [ROADMAP.md](https://github.com/JanHaan/Landin/blob/main/ROADMAP.md);
+        [ROADMAP.md](https://github.com/701-dev/Landin/blob/main/ROADMAP.md);
         a good idea here becomes an item or a register record there.
   - type: dropdown
     id: area
