@@ -27,28 +27,44 @@ procedure Refine_Dap is
    Usage : constant String :=
      "usage: refine dap" & ASCII.LF
      & ASCII.LF
-     & "Serves one editor's debugging session over standard input and"
+     & "A Debug Adapter Protocol server.  An editor starts it as"
+     & " its debug" & ASCII.LF
+     & "adapter and talks to it over standard input and output"
+     & " until the" & ASCII.LF
+     & "editor disconnects.  Nobody types at it." & ASCII.LF
      & ASCII.LF
-     & "output, in the Debug Adapter Protocol, until the editor"
-     & " disconnects." & ASCII.LF
-     & "An editor starts it as its debug adapter; nobody types at it."
+     & "A launch request names a program refine compile"
+     & " --debug=full wrote:" & ASCII.LF
+     & "  {""program"": ""PATH"", ""args"": [...], ""cwd"":"
+     & " ""DIR"", ""stopOnEntry"": false}" & ASCII.LF
      & ASCII.LF
+     & "An attach request adds ""remote"", where a debugger stub"
+     & " listens:" & ASCII.LF
+     & "HOST:PORT, or for GDB a socket's path.  The program and its"
+     & " sources" & ASCII.LF
+     & "must be at the same paths on both machines." & ASCII.LF
      & ASCII.LF
-     & "A launch request names the program refine compile --debug=full"
-     & " wrote:" & ASCII.LF
-     & "  {""program"": ""PATH"", ""args"": [...], ""cwd"": ""DIR"","
-     & " ""stopOnEntry"": false}" & ASCII.LF
-     & "An attach request adds ""remote"", where a debugger stub listens,"
+     & "A Linux program is debugged with GDB.  A macOS or FreeBSD"
+     & " program is" & ASCII.LF
+     & "debugged with lldb-dap, LLVM's own adapter, found on PATH"
+     & " or, on" & ASCII.LF
+     & "macOS, by xcrun --find lldb-dap." & ASCII.LF
+     & "  ""debugger"": ""gdb"" or ""lldb""  chooses the other"
+     & " debugger" & ASCII.LF
+     & "  ""debuggerPath"": ""PATH""       names the executable to"
+     & " start" & ASCII.LF
      & ASCII.LF
-     & "HOST:PORT or for GDB a socket's path.  Linux programs are debugged"
+     & "Library files are shown from the installed library.  What"
+     & " the program" & ASCII.LF
+     & "writes reaches the editor's console." & ASCII.LF
      & ASCII.LF
-     & "with GDB, macOS and FreeBSD ones with LLDB's adapter, lldb-dap;"
-     & ASCII.LF
-     & """debugger"": ""gdb"" or ""lldb"" chooses, and ""debuggerPath"""
-     & " names" & ASCII.LF
-     & "the executable to start.  A stop in panic_handler is shown with"
-     & " the" & ASCII.LF
-     & "source line its site names, from PROGRAM.sources.json." & ASCII.LF;
+     & "Compile with --panic-map, which writes"
+     & " PROGRAM.sources.json, and a" & ASCII.LF
+     & "stop in panic_handler is shown as an exception at the"
+     & " source line and" & ASCII.LF
+     & "column of its site:" & ASCII.LF
+     & "  panic: overflow at main.ldn:36:5" & ASCII.LF
+     & "Set a function breakpoint on panic_handler to stop there." & ASCII.LF;
 
    function Description return String;
    function Description return String is
