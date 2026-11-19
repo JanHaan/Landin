@@ -174,7 +174,7 @@ LANDIN_REFINE=/absolute/path/to/refine ./highlight/test.sh --lsp-emacs
 A smoke whose editor or tool is not on the host does not run, and `test.sh`
 then ends "clean in what ran; NOT run on this host:" with their names, not
 "highlight packages clean". `LANDIN_HIGHLIGHT_REQUIRE` names the smokes a
-caller will not have skipped, separated by spaces, or `all`: `textmate`,
+caller will not have skipped, separated by spaces, or `all`: `pygments`, `textmate`,
 `tree-sitter`, `vim`, `lua`, `nvim-preference`, `nvim-parser`, `emacs`,
 `emacs-treesit`, `visual-studio`, `nvim-lsp` and `emacs-lsp`. The gate's
 `editor-grammar` job has the pinned tree-sitter CLI and no editor, so the
