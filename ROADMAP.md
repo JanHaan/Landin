@@ -1331,10 +1331,10 @@ supported syntax.
 
 ### R22.61 — A finished `for` no longer holds its source
 
-Status: active
+Status: complete
 Depends on: none
 
-SR-1405, a checker defect met writing refine-build (its friction entry 3)
+`SR-1405`, a checker defect met writing refine-build (its friction entry 3)
 and scheduled by the maintainer on 2026-11-19 ahead of its phase: inside
 an outer loop, releasing a list after a `for` over it has ended is L0315,
 naming the `for`'s element as still viewing the list. D1084 holds a
@@ -1347,6 +1347,16 @@ Exit evidence: the release accepted after the `for` under `loop`,
 `loop ... break when` and `while`, with the list declared inside or
 outside the outer loop, by a runtime fixture; a negative fixture still
 refusing the release inside the `for`'s body.
+
+Done: D1623 makes a `for`'s element and index new bindings on every walk,
+and the reference check's back-edge scan stops at a `for` that binds the
+view asked about, reading only its traversal bounds (`SR-1405`).
+`runtime/for-finished-in-outer-loop` runs the release after the `for`
+under `loop` with its test first and last, `while`, a list declared
+outside and a deferred release; `negative/for-source-held-in-outer-loop`
+still refuses the release inside the body and one while a kept element
+views the list. Gate run 44525120865 (attempt 2; attempt 1's Darwin
+artifact upload failed on DNS) and boards run 44535495255 on f968ab7f3.
 
 ### R22 gate
 Each addition on every target its namespace admits, with its oracle; each
