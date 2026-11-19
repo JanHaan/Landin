@@ -2348,6 +2348,10 @@
           "mode": "limit",
           "reason": "D698: since D1503 holds RV32's values in registers its images fit this lane's 32 KiB at size and speed, and at size/off and size/auto its stack then overruns the 4 KiB reservation, in memory_under called from memory_component, with 4112 and 4128 bytes in use when the guard was written; speed/auto peaks at 4008 bytes, and none/off still overflows the 32 KiB by about 27 KiB. main's 2.5 KiB frame of aggregate temporaries is most of the stack."
         },
+        "mps2-an505": {
+          "mode": "limit",
+          "reason": "D698: as on the reference, since D1567 the image fits this lane's 32 KiB at every profile, and at none/off its stack overruns the 4 KiB reservation, in memory_refill under main, whose 2.9 KiB frame of aggregate temporaries makes most of the 4.9 KiB depth; size and speed peak below 2.8 KiB."
+        },
         "sifive-e": {
           "mode": "limit",
           "reason": "D698: since D1503 holds RV32's values in registers its images fit this lane's 32 KiB at size and speed, and at size/off and size/auto its stack then overruns the 4 KiB reservation, in memory_under called from memory_component, with 4112 and 4128 bytes in use when the guard was written; speed/auto peaks at 4008 bytes, and none/off still overflows the 32 KiB by about 27 KiB. main's 2.5 KiB frame of aggregate temporaries is most of the stack."

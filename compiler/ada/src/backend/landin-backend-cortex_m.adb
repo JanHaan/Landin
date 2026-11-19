@@ -5484,6 +5484,12 @@ package body Landin.Backend.Cortex_M is
                               return;
                            end if;
                            if Thumb2 then
+                              --  The block's three instructions stay
+                              --  together: a pool that would fall inside
+                              --  it comes first.
+                              if Pool_Distance + 8 >= 512 then
+                                 Flush_Literals;
+                              end if;
                               Emit ("ite " & Condition);
                               Emit ("mov" & Condition & " " & Into & ", #1");
                               Emit ("mov" & Inverse_Of (Condition) & " "
