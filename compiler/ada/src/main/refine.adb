@@ -71,6 +71,8 @@ procedure Refine is
       Removed : Landin.Platform.Remove_Status;
    begin
       if Unbounded.Length (Result.Launch_Directory) = 0 then
+         --  A dispatched command has no directory and is simply not run.
+         Result.Launch_Program := Unbounded.Null_Unbounded_String;
          return;
       end if;
       Host.Remove_Tree

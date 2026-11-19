@@ -441,6 +441,32 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   operands. `@FILE` expands a bounded response file with single and double
   quotes and backslash escapes, without shell expansion.
 
+### External commands
+
+- `refine NAME` runs an external command when NAME is not a built-in one.
+  A split command shipped with `refine` is `libexec/landin/refine-NAME`
+  under the directory that holds `bin/refine`, and is looked for nowhere
+  else. Any other NAME is a contributed `refine-NAME` on `PATH`, where the
+  first directory that has one wins (D1384, D1484). Every word after NAME
+  is passed to the command as written. No split command is shipped yet:
+  `compiler/ada/split-commands.json` lists them, and the release archive
+  and the flake carry an empty `libexec/landin` (D1483).
+- Before running one, `refine` asks it `refine-NAME --describe`. It
+  refuses a command whose answer it cannot accept, saying what came back
+  and what to do: a shipped one built from other compiler sources, a
+  contributed one that claims the `L` prefix, or any that does not answer
+  within ten seconds (L0695, D1387). A shipped one that the installation
+  lacks is refused with L0694.
+- A dispatched command finds the `refine` that ran it in `LANDIN_REFINE`,
+  so a tool that calls the compiler back uses the same one (D1486).
+- `refine help` lists the external commands under their own heading, and
+  `refine help NAME` shows the command's own help (D1488). The completion
+  scripts hand the words after NAME to `refine NAME --complete` (D1485).
+- `refine explain CODE` forwards a code with another prefix, two to eight
+  capital letters, to the one contributed command that claims that prefix,
+  after a line saying whose explanation it is. It refuses the code when no
+  command or more than one claims the prefix (D1385).
+
 ### Version and targets
 
 - `refine version` (also `--version`) prints `refine 0.2.10` for an exact
@@ -450,10 +476,13 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   independently of debug or release optimization. Tracked edits anywhere in
   the checkout and untracked compiler inputs count as dirty; generated build
   outputs do not. Without Git metadata, the banner identifies the source
-  digest instead.
+  digest instead. Below the library line it names the `citations.txt`
+  that `refine explain` reads and says whether it can be read, then lists
+  each split command `refine` was built with and where it is (D1487).
 - `refine version --json` retains the full revision, compiler-input digest,
   dirty state, build mode and host triplet, with `version` set to the
-  release name or `null` for development. The input digest covers compiler
+  release name or `null` for development. It gives the citations file and
+  the split commands as `citations` and `split_commands`. The input digest covers compiler
   sources and build policy, so a prose edit changes dirty state without
   changing that digest.
 - `refine targets` lists described targets, their CPU feature levels and

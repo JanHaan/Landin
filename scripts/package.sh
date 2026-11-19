@@ -4,10 +4,15 @@
 #
 #    scripts/package.sh [--debug DEBUG_ASSET] BINARY ASSET
 #
-#  The archive holds bin/refine, lib/landin/{core,hosted,platform}, the
+#  The archive holds bin/refine, libexec/landin/refine-NAME for each split
+#  command compiler/ada/split-commands.json lists (the directory even when
+#  it lists none), lib/landin/{core,hosted,platform}, the
 #  lib/landin/citations.txt `refine explain` reads a construct or a
 #  decision from (D1240), and the licences, which is what a consumer
-#  receives.  It is portable across GNU
+#  receives.  Each split command is taken from where the build published
+#  it beside BINARY, BINARY's ../libexec/landin/refine-NAME, and one that
+#  is missing there is refused: the dispatcher and its splits ship in
+#  lockstep or not at all.  It is portable across GNU
 #  tar and the bsdtar macOS ships, which has no --sort, no --mtime and no
 #  --owner: the members are listed in byte order, every timestamp is fixed
 #  at 1980, late enough that GNU tar does not call it implausibly old,
@@ -18,8 +23,9 @@
 #  --debug takes refine's debug information out of the packaged copy and
 #  writes it to DEBUG_ASSET, an archive of its own (D531): on Linux
 #  refine.debug, which the stripped refine names by its .gnu_debuglink, and
-#  on Darwin refine.dSYM.  The 0.2.8 compiler was 100 MB with it and 27.6
-#  MB without.  The BINARY given is never changed.
+#  on Darwin refine.dSYM; each split command's likewise, as
+#  refine-NAME.debug or refine-NAME.dSYM.  The 0.2.8 compiler was 100 MB
+#  with it and 27.6 MB without.  The BINARY given is never changed.
 #
 #  The archive is whatever BINARY is.  One that requests a program
 #  interpreter outside the system's own directories, as a compiler built in
@@ -46,6 +52,23 @@ asset=$2
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 test -x "$binary" || { echo "package: $binary is not an executable" >&2; exit 1; }
+
+#  The split commands, by the one list, and each one's built executable.
+command -v python3 > /dev/null || {
+    echo "package: python3 is needed to read compiler/ada/split-commands.json" >&2
+    exit 2
+}
+splits=$(python3 "$root/scripts/build_identity.py" --root "$root" \
+    --split-commands | cut -d' ' -f1)
+libexec=$(dirname "$binary")/../libexec/landin
+for name in $splits; do
+    test -x "$libexec/refine-$name" || {
+        echo "package: compiler/ada/split-commands.json lists $name, and" \
+            "$libexec/refine-$name is not an executable; scripts/build.sh" \
+            "publishes it beside bin/refine" >&2
+        exit 1
+    }
+done
 
 if command -v python3 > /dev/null; then
     inspected=0
@@ -104,9 +127,16 @@ archive() {
 }
 
 stage=$work/stage
-mkdir -p "$stage/bin" "$stage/lib/landin"
+mkdir -p "$stage/bin" "$stage/libexec/landin" "$stage/lib/landin"
 cp "$binary" "$stage/bin/refine"
 chmod 755 "$stage/bin/refine"
+#  The packaged executables, by their path in the archive.
+executables=bin/refine
+for name in $splits; do
+    cp "$libexec/refine-$name" "$stage/libexec/landin/refine-$name"
+    chmod 755 "$stage/libexec/landin/refine-$name"
+    executables="$executables libexec/landin/refine-$name"
+done
 for namespace in core hosted platform; do
     cp -R "$root/$namespace" "$stage/lib/landin/$namespace"
 done
@@ -124,17 +154,20 @@ cp "$root/LICENSE" "$root/LICENSE-MIT" "$root/LICENSE-APACHE" "$stage/"
 if [ -n "$debug_asset" ]; then
     debug=$work/debug
     mkdir -p "$debug"
-    if [ "$(uname -s)" = Darwin ]; then
-        #  The executable holds only a map to its objects' DWARF, which
-        #  dsymutil gathers while the objects are still where the link
-        #  left them.
-        dsymutil "$stage/bin/refine" -o "$debug/refine.dSYM"
-        strip -S "$stage/bin/refine"
-    else
-        objcopy --only-keep-debug "$stage/bin/refine" "$debug/refine.debug"
-        objcopy --strip-all --add-gnu-debuglink="$debug/refine.debug" \
-            "$stage/bin/refine"
-    fi
+    for executable in $executables; do
+        name=$(basename "$executable")
+        if [ "$(uname -s)" = Darwin ]; then
+            #  The executable holds only a map to its objects' DWARF, which
+            #  dsymutil gathers while the objects are still where the link
+            #  left them.
+            dsymutil "$stage/$executable" -o "$debug/$name.dSYM"
+            strip -S "$stage/$executable"
+        else
+            objcopy --only-keep-debug "$stage/$executable" "$debug/$name.debug"
+            objcopy --strip-all --add-gnu-debuglink="$debug/$name.debug" \
+                "$stage/$executable"
+        fi
+    done
     archive "$debug" "$debug_asset"
 fi
 

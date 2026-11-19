@@ -196,6 +196,93 @@ class CommandReference(unittest.TestCase):
         self.assertIn("lists no commands", said[0])
 
 
+class SplitCommands(unittest.TestCase):
+    """The list of split commands names projects that build them."""
+
+    COPIED = [checker.SPLIT_COMMANDS, checker.COMMAND_REFERENCE,
+              "scripts/build_identity.py"]
+    PROJECT = ('with "landin_common.gpr";\n'
+               'project Refine_Zap is\n'
+               '   for Source_Dirs use ("src/zap");\n'
+               '   for Main use ("refine_zap.adb");\n'
+               '   for Object_Dir use Landin_Common.Build_Dir'
+               ' & "/refine-zap-obj";\n'
+               '   for Exec_Dir use Landin_Common.Exec_Dir;\n'
+               '   package Builder is\n'
+               '      for Executable ("refine_zap.adb") use "refine-zap";\n'
+               '   end Builder;\n'
+               'end Refine_Zap;\n')
+    ENTRY = {"name": "zap", "project": "refine_zap.gpr",
+             "main": "refine_zap.adb"}
+
+    def said(self, commands=None, project=PROJECT, format=None):
+        import json
+        written = {checker.SPLIT_COMMANDS: json.dumps({
+            "format": format or "landin-split-commands-1",
+            "commands": [self.ENTRY] if commands is None else commands})}
+        if project is not None:
+            written["compiler/ada/refine_zap.gpr"] = project
+        return checked(checker.check_split_commands, copied=self.COPIED[1:],
+                       written=written)
+
+    def test_the_real_list_and_a_split_whose_project_builds_it(self):
+        self.assertEqual(checked(checker.check_split_commands,
+                                 copied=self.COPIED), [])
+        self.assertEqual(self.said(), [])
+
+    def test_a_missing_list_is_reported(self):
+        said = checked(checker.check_split_commands, copied=self.COPIED[1:])
+        self.assertEqual(len(said), 1, said)
+
+    def test_an_unreadable_list_is_reported(self):
+        for kwargs, words in (
+                ({"format": "landin-split-commands-0"}, 'does not say "format"'),
+                ({"commands": [dict(self.ENTRY, name="Zap")]},
+                 "'Zap' is not lower-case letters"),
+                ({"commands": [self.ENTRY, self.ENTRY]}, "lists zap twice")):
+            with self.subTest(words=words):
+                said = self.said(**kwargs)
+                self.assertEqual(len(said), 1, said)
+                self.assertIn(words, said[0])
+
+    def test_a_built_in_name_is_reported(self):
+        said = self.said(commands=[dict(self.ENTRY, name="check")],
+                         project=self.PROJECT.replace("refine-zap",
+                                                      "refine-check"))
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("check is a built-in command", said[0])
+
+    def test_a_missing_project_is_reported(self):
+        said = self.said(project=None)
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("project compiler/ada/refine_zap.gpr does not exist",
+                      said[0])
+
+    def test_a_project_that_does_not_build_the_split_is_reported(self):
+        for old, new, spelled in (
+                ('use ("refine_zap.adb")', 'use ("other.adb")',
+                 'for Main use ("refine_zap.adb");'),
+                ('use "refine-zap"', 'use "refine_zap"',
+                 'for Executable ("refine_zap.adb") use "refine-zap";'),
+                ("Exec_Dir use Landin_Common.Exec_Dir",
+                 'Exec_Dir use "bin"',
+                 "for Exec_Dir use Landin_Common.Exec_Dir;"),
+                ('"/refine-zap-obj"', '"/zap-obj"',
+                 'for Object_Dir use Landin_Common.Build_Dir'
+                 ' & "/refine-zap-obj";')):
+            with self.subTest(spelled=spelled):
+                said = self.said(project=self.PROJECT.replace(old, new))
+                self.assertEqual(len(said), 1, said)
+                self.assertIn("does not say `%s`" % spelled, said[0])
+                self.assertIn("the split command zap", said[0])
+
+    def test_a_statement_in_a_comment_does_not_count(self):
+        said = self.said(project=self.PROJECT.replace(
+            '   for Main use ("refine_zap.adb");\n',
+            '   --  for Main use ("refine_zap.adb");\n'))
+        self.assertEqual(len(said), 1, said)
+
+
 class FromCPage(unittest.TestCase):
     """docs/from-c.md shows the files of its fixture, and all of them."""
 

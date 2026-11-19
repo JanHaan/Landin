@@ -2,6 +2,7 @@
 """Generate compiler provenance without checkout paths or wall-clock time."""
 import argparse
 import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -14,11 +15,22 @@ BUILD_SCRIPTS = (
     'scripts/build_link.py', 'scripts/toolchain.sh', 'environments/pins.sh',
 )
 
-#  The projects scripts/build.sh builds.  Everything else that reaches an
-#  object is found from them, so a new kind of input -- a configuration
-#  pragmas file, a source directory -- is counted the moment a project names
-#  it, rather than when this script is taught it.
+#  The projects scripts/build.sh builds: these two and every split command's
+#  (SPLIT_COMMANDS).  Everything else that reaches an object is found from
+#  them, so a new kind of input -- a configuration pragmas file, a source
+#  directory -- is counted the moment a project names it, rather than when
+#  this script is taught it.
 PROJECTS = ('compiler/ada/refine.gpr', 'compiler/ada/landin_tests.gpr')
+
+#  The one list of split commands, `refine-NAME` executables the `refine`
+#  dispatcher runs, built, counted, packaged and installed in lockstep with
+#  it.  Every consumer reads it through split_commands(): build.sh and
+#  package.sh through --split-commands, the flake through builtins.fromJSON,
+#  check.py, which also holds each entry's project to it, through runpy.
+#  compiler/ada/README.md describes the format.
+SPLIT_COMMANDS = 'compiler/ada/split-commands.json'
+SPLIT_FORMAT = 'landin-split-commands-1'
+SPLIT_NAME = re.compile(r'[a-z][a-z0-9-]*')
 
 SUFFIXES = {'ada': ('.ads', '.adb'), 'c': ('.c', '.h')}
 
@@ -36,6 +48,69 @@ def _literals(text):
     return re.findall(r'"((?:[^"\n]|"")*)"', text)
 
 
+def split_commands(root):
+    """[(name, project, main)] of the split commands ROOT lists, in order.
+
+    PROJECT and MAIN are relative to compiler/ada.  A tree without the list
+    has none: the synthetic checkouts the build's tests make hold only the
+    files they exercise, and check.py refuses a repository without it.  A
+    list this cannot read is a ProjectError naming what is wrong with it.
+    """
+    path = Path(root) / SPLIT_COMMANDS
+    if not path.is_file():
+        return []
+    try:
+        listed = json.loads(path.read_text(encoding='utf-8'))
+    except (UnicodeDecodeError, ValueError) as error:
+        raise ProjectError(f'{SPLIT_COMMANDS} is not JSON: {error}')
+    if not isinstance(listed, dict) or listed.get('format') != SPLIT_FORMAT:
+        raise ProjectError(f'{SPLIT_COMMANDS} does not say "format":'
+                           f' "{SPLIT_FORMAT}"')
+    commands = listed.get('commands')
+    if not isinstance(commands, list):
+        raise ProjectError(f'{SPLIT_COMMANDS} has no "commands" list')
+    out, seen = [], set()
+    for index, entry in enumerate(commands):
+        fields = (entry.get(key) if isinstance(entry, dict) else None
+                  for key in ('name', 'project', 'main'))
+        name, project, main = fields
+        if not all(isinstance(field, str) and field
+                   for field in (name, project, main)) or set(entry) != {
+                       'name', 'project', 'main'}:
+            raise ProjectError(
+                f'{SPLIT_COMMANDS}: command {index + 1} is not an object'
+                ' with exactly the strings "name", "project" and "main"')
+        if not SPLIT_NAME.fullmatch(name):
+            raise ProjectError(
+                f'{SPLIT_COMMANDS}: command name {name!r} is not lower-case'
+                ' letters, digits and hyphens beginning with a letter')
+        if name in seen:
+            raise ProjectError(f'{SPLIT_COMMANDS} lists {name} twice')
+        seen.add(name)
+        for field in (project, main):
+            if (field.startswith('/') or '..' in field.split('/')
+                    or any(c.isspace() for c in field)):
+                raise ProjectError(
+                    f'{SPLIT_COMMANDS}: {name}\'s {field!r} is not a path'
+                    ' inside compiler/ada without spaces')
+        out.append((name, project, main))
+    return out
+
+
+def built_projects(root):
+    """The projects build.sh builds, relative to ROOT: PROJECTS and every
+    split command's, each of which must exist."""
+    out = list(PROJECTS)
+    for name, project, _ in split_commands(root):
+        relative = 'compiler/ada/' + project
+        if not (Path(root) / relative).is_file():
+            raise ProjectError(
+                f'{SPLIT_COMMANDS} lists the split command {name}, whose'
+                f' project {relative} does not exist')
+        out.append(relative)
+    return out
+
+
 def project_inputs(root):
     """(projects, sources, files) every built project reaches.
 
@@ -46,7 +121,9 @@ def project_inputs(root):
     beside it -- `landin.adc` -- is an input too.  Paths are relative to ROOT.
     """
     projects, sources, files = set(), set(), set()
-    pending = [root / name for name in PROJECTS]
+    pending = [root / name for name in built_projects(root)]
+    if (root / SPLIT_COMMANDS).is_file():
+        files.add(SPLIT_COMMANDS)
     while pending:
         path = pending.pop()
         relative = path.relative_to(root).as_posix()
@@ -163,6 +240,20 @@ def identity(root, mode):
 
 def render(root, mode, known=None):
     revision, digest, dirty, mode, version = known or identity(root, mode)
+    #  The names the dispatcher runs as `refine-NAME`, in list order, one
+    #  space apart: lockstep means `refine` knows exactly the splits built,
+    #  counted and shipped with it.
+    names = ' '.join(name for name, _, _ in split_commands(root))
+    #  Within the style check's 79 columns however many there are.
+    chunks, line = [], ''
+    for word in names.split(' '):
+        if line and len(line) + 1 + len(word) > 60:
+            chunks.append(line + ' ')
+            line = word
+        else:
+            line = f'{line} {word}' if line else word
+    chunks.append(line)
+    literal = ' &\n     '.join(f'"{chunk}"' for chunk in chunks)
     return ('--  Generated by scripts/build_identity.py; do not edit.\n'
             'with Landin.Targets.Selection;\n\n'
             'package Landin.Build_Identity is\n'
@@ -174,6 +265,8 @@ def render(root, mode, known=None):
             f'   Mode : constant String := "{mode}";\n'
             '   Host_Triplet : constant String :=\n'
             '     Landin.Targets.Selection.Build_Triplet;\n'
+            '   Split_Commands : constant String :=\n'
+            f'     {literal};\n'
             'end Landin.Build_Identity;\n')
 
 
@@ -345,6 +438,10 @@ def main():
     parser.add_argument('--mode', choices=('debug', 'release'))
     parser.add_argument('--output', type=Path)
     parser.add_argument('--manifest', action='store_true')
+    parser.add_argument('--split-commands', action='store_true',
+                        help='print each split command under --root as'
+                        ' NAME PROJECT MAIN, one a line, in list order;'
+                        ' PROJECT and MAIN are relative to compiler/ada')
     parser.add_argument('--changed', nargs=2, metavar=('BEFORE', 'AFTER'),
                         type=Path, help='say what differs between two'
                         ' manifest files')
@@ -372,6 +469,16 @@ def main():
     if args.changed:
         for line in changed(*(path.read_text() for path in args.changed)):
             print(line)
+        return
+    if args.split_commands:
+        if args.root is None:
+            parser.error('--split-commands needs --root')
+        try:
+            built_projects(args.root)
+            for row in split_commands(args.root):
+                print(' '.join(row))
+        except ProjectError as error:
+            parser.exit(2, f'landin: split commands: {error}\n')
         return
     if args.root is None or args.mode is None or args.output is None:
         parser.error('--root, --mode and --output are required')

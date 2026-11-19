@@ -303,6 +303,114 @@ class BuildIdentity(unittest.TestCase):
              ' `refine --version` reports covers'])
 
 
+class SplitCommands(unittest.TestCase):
+    """The split commands the list names are counted, and named to refine."""
+
+    ENTRY = {'name': 'svd', 'project': 'refine_svd.gpr',
+             'main': 'refine_svd.adb'}
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='landin splits ')
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        ada = self.root / 'compiler/ada'
+        for name in ('src/base/main.ads', 'svd/refine_svd.adb'):
+            (ada / name).parent.mkdir(parents=True, exist_ok=True)
+            (ada / name).write_text(name + '\n')
+        (ada / 'refine.gpr').write_text(
+            'project Refine is\n   for Source_Dirs use ("src/base");\n'
+            'end Refine;\n')
+        (ada / 'landin_tests.gpr').write_text(
+            'project Landin_Tests is\n   for Source_Dirs use ();\n'
+            'end Landin_Tests;\n')
+        (ada / 'refine_svd.gpr').write_text(
+            'project Refine_Svd is\n   for Source_Dirs use ("svd");\n'
+            'end Refine_Svd;\n')
+
+    def listing(self, *commands, format='landin-split-commands-1'):
+        import json
+        (self.root / IDENTITY.SPLIT_COMMANDS).write_text(json.dumps(
+            {'format': format, 'commands': list(commands)}))
+
+    def test_a_split_s_own_source_is_counted(self):
+        self.listing()
+        alone = IDENTITY.identity(self.root, 'debug')[1]
+        self.listing(self.ENTRY)
+        listed = IDENTITY.identity(self.root, 'debug')[1]
+        self.assertNotEqual(alone, listed)
+        self.assertIn('compiler/ada/svd/refine_svd.adb',
+                      IDENTITY.inputs(self.root))
+        self.assertIn(IDENTITY.SPLIT_COMMANDS, IDENTITY.inputs(self.root))
+        (self.root / 'compiler/ada/svd/refine_svd.adb').write_text('edited\n')
+        self.assertNotEqual(listed, IDENTITY.identity(self.root, 'debug')[1])
+
+    def test_the_names_reach_the_provenance_unit_in_list_order(self):
+        self.listing()
+        self.assertIn('   Split_Commands : constant String :=\n     "";\n',
+                      IDENTITY.render(self.root, 'debug'))
+        (self.root / 'compiler/ada/refine_bindings.gpr').write_text(
+            'project Refine_Bindings is\n   for Source_Dirs use ();\n'
+            'end Refine_Bindings;\n')
+        self.listing(self.ENTRY, {'name': 'bindings',
+                                  'project': 'refine_bindings.gpr',
+                                  'main': 'refine_bindings.adb'})
+        self.assertIn('   Split_Commands : constant String :=\n'
+                      '     "svd bindings";\n',
+                      IDENTITY.render(self.root, 'debug'))
+        listed = subprocess.run(
+            ['python3', str(ROOT / 'scripts/build_identity.py'), '--root',
+             str(self.root), '--split-commands'], check=True,
+            capture_output=True, text=True).stdout
+        self.assertEqual(listed, 'svd refine_svd.gpr refine_svd.adb\n'
+                         'bindings refine_bindings.gpr refine_bindings.adb\n')
+
+    def test_a_list_change_rebuilds_from_clean(self):
+        self.listing()
+        before = IDENTITY.manifest(self.root, 'debug', None)
+        self.listing(self.ENTRY)
+        after = IDENTITY.manifest(self.root, 'debug', None)
+        self.assertIn('project ', before)
+        self.assertFalse(IDENTITY.provenance_only(before, after))
+        said = IDENTITY.changed(before, after)
+        self.assertIn(f'{IDENTITY.SPLIT_COMMANDS} changed', said)
+        self.assertIn('compiler/ada/refine_svd.gpr appeared', said)
+
+    def test_a_split_whose_project_is_missing_is_refused(self):
+        (self.root / 'compiler/ada/refine_svd.gpr').unlink()
+        self.listing(self.ENTRY)
+        with self.assertRaisesRegex(
+                IDENTITY.ProjectError,
+                'lists the split command svd, whose project'
+                ' compiler/ada/refine_svd.gpr does not exist'):
+            IDENTITY.identity(self.root, 'debug')
+        ran = subprocess.run(
+            ['python3', str(ROOT / 'scripts/build_identity.py'), '--root',
+             str(self.root), '--split-commands'], capture_output=True,
+            text=True)
+        self.assertEqual(ran.returncode, 2)
+        self.assertIn('landin: split commands: compiler/ada/'
+                      'split-commands.json lists the split command svd,'
+                      ' whose project compiler/ada/refine_svd.gpr does not'
+                      ' exist', ran.stderr)
+
+    def test_an_unreadable_list_is_refused(self):
+        for write, said in (
+                (lambda: self.listing(format='other'), 'does not say'),
+                (lambda: self.listing({'name': 'Svd', 'project': 'p.gpr',
+                                       'main': 'm.adb'}), "'Svd' is not"),
+                (lambda: self.listing(self.ENTRY, self.ENTRY), 'svd twice'),
+                (lambda: self.listing({'name': 'svd'}), 'exactly the strings'),
+                (lambda: self.listing({**self.ENTRY,
+                                       'project': '../refine_svd.gpr'}),
+                 'not a path inside'),
+                (lambda: (self.root / IDENTITY.SPLIT_COMMANDS).write_text('{'),
+                 'is not JSON')):
+            with self.subTest(said=said):
+                write()
+                with self.assertRaisesRegex(IDENTITY.ProjectError, said):
+                    IDENTITY.split_commands(self.root)
+
+
 class CheckoutInputs(unittest.TestCase):
     """Every file of compiler/ada is an input of the build or named here."""
 

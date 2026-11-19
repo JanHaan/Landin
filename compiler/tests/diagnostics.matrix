@@ -147,3 +147,5 @@ L0587  Live     error   no-fix   false empty-ok    0..0 1     driver            
 L0688  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-commands_suite.adb
 L0689  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-commands_suite.adb
 L0690  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-commands_suite.adb
+L0694  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-commands_suite.adb
+L0695  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-commands_suite.adb

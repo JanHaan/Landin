@@ -1,5 +1,10 @@
 #!/bin/sh
 #  Build `refine` and the test program, or only `refine` with --compiler-only.
+#  Either way every split command compiler/ada/split-commands.json lists is
+#  built with refine, in lockstep: its executable is published as
+#  libexec/landin/refine-NAME beside bin/, where the `refine` dispatcher
+#  looks for it, and the directory is there even when the list is empty,
+#  so a build tree is laid out as a release is.
 #
 #  Staleness is decided by content, not by timestamps.  The ordinary build
 #  rebuilds from clean when content changes.  scripts/dev-build.sh selects
@@ -47,6 +52,8 @@ landin_usage() {
     echo
     echo "Builds refine and the test program, or with --compiler-only refine"
     echo "alone, in compiler/ada/build/TAG/MODE and publishes them into its bin/."
+    echo "The split commands compiler/ada/split-commands.json lists are built"
+    echo "either way and published into its libexec/landin/ as refine-NAME."
     echo "A GPRbuild switch such as -q, -jN, -k or -R passes through to GPRbuild;"
     echo "a long option is refused, GPRbuild's configuration among them."
     echo "LANDIN_BUILD_MODE (debug or release), LANDIN_BUILD_TAG and"
@@ -131,6 +138,21 @@ python3 "$LANDIN_ROOT/scripts/build_identity.py" \
     --root "$LANDIN_ROOT" --mode "$LANDIN_BUILD_MODE" \
     --output "$Identity_Source"
 
+#  The split commands, one `NAME PROJECT MAIN` line each, and where each is
+#  published: libexec/landin/refine-NAME, which scripts/build_lock.py and
+#  scripts/build_link.py take for a path under the build because it has a
+#  directory.  The list's names and paths hold no spaces, which
+#  scripts/build_identity.py refuses.
+Splits="$(python3 "$LANDIN_ROOT/scripts/build_identity.py" \
+    --root "$LANDIN_ROOT" --split-commands)" || exit
+Split_Published=''
+while read -r Split_Name _; do
+    [ -n "$Split_Name" ] || continue
+    Split_Published="${Split_Published:+$Split_Published }libexec/landin/refine-$Split_Name"
+done <<EOF
+$Splits
+EOF
+
 #  Everything that reaches an object: the project files and the files they
 #  name, the sources they find, the generated provenance unit, the switches
 #  GPRbuild is given, the mode and tag, and the compiler, builder and
@@ -179,12 +201,13 @@ landin_requested() {
     sed '/^linked /d' "$1"
 }
 
-#  Everything in the build tree but bin/: whoever is running the published
-#  compiler keeps it, and the next successful build replaces it in one step.
+#  Everything in the build tree but bin/ and libexec/: whoever is running
+#  the published compiler or a split command keeps it, and the next
+#  successful build replaces it in one step.
 landin_clean_objects() {
     for Entry in "$LANDIN_BUILD_DIR"/* "$LANDIN_BUILD_DIR"/.[!.]*; do
         case "$Entry" in
-            "$LANDIN_BUILD_DIR/bin") continue ;;
+            "$LANDIN_BUILD_DIR/bin" | "$LANDIN_BUILD_DIR/libexec") continue ;;
         esac
         if [ -e "$Entry" ] || [ -L "$Entry" ]; then
             rm -rf "$Entry"
@@ -202,7 +225,7 @@ import os, sys
 root, began = sys.argv[1], os.stat(sys.argv[2]).st_mtime_ns
 for directory, names, files in os.walk(root):
     if directory == root:
-        names[:] = [name for name in names if name != "bin"]
+        names[:] = [name for name in names if name not in ("bin", "libexec")]
     for name in files:
         path = os.path.join(directory, name)
         if os.lstat(path).st_mtime_ns >= began:
@@ -219,6 +242,10 @@ Incremental="${LANDIN_BUILD_INCREMENTAL:-no}"
 #  something other than this script can be; the answer never fails a build.
 landin_built() {
     echo "built: $LANDIN_BUILD_DIR/bin/refine"
+    #  shellcheck disable=SC2086 # split names without spaces
+    for Split in $Split_Published; do
+        echo "built: $LANDIN_BUILD_DIR/$Split"
+    done
     if [ "$Incremental" = "yes" ]; then
         python3 "$LANDIN_ROOT/scripts/refine_revision.py" \
             --refine "$LANDIN_BUILD_DIR/bin/refine" || true
@@ -256,10 +283,11 @@ if [ "$Reuse" = "yes" ]; then
         exit 1
     fi
     Imported="$(landin_requested "$Manifest")" || exit
+    #  shellcheck disable=SC2086 # split names without spaces
     if [ "$Current" != "$Imported" ] \
        || [ ! -x "$LANDIN_BUILD_DIR/bin/refine" ] \
        || ! python3 "$LANDIN_ROOT/scripts/build_link.py" published \
-            "$LANDIN_BUILD_DIR" "$Manifest" refine
+            "$LANDIN_BUILD_DIR" "$Manifest" refine $Split_Published
     then
         echo "landin: imported build does not match this source and toolchain" >&2
         exit 1
@@ -280,6 +308,7 @@ if [ "$Reuse" = "yes" ]; then
             exit 1
         fi
     fi
+    mkdir -p "$LANDIN_BUILD_DIR/libexec/landin"
     echo "landin: imported build matches source and toolchain"
     landin_built
     exit 0
@@ -380,13 +409,15 @@ for Argument do
     esac
 done
 
+#  shellcheck disable=SC2086 # split names without spaces
 if [ "$Incremental" = "yes" ] \
    && [ "$Noop_Arguments" = "yes" ] \
    && [ -f "$Manifest" ] \
    && [ "$Current" = "$Previous" ] \
    && [ -x "$LANDIN_BUILD_DIR/bin/refine" ] \
    && python3 "$LANDIN_ROOT/scripts/build_link.py" published \
-        "$LANDIN_BUILD_DIR" "$Manifest" refine \
+        "$LANDIN_BUILD_DIR" "$Manifest" refine $Split_Published \
+   && [ -d "$LANDIN_BUILD_DIR/libexec/landin" ] \
    && { [ "$Compiler_Only" = "yes" ] \
         || { [ -x "$LANDIN_BUILD_DIR/bin/landin_tests" ] \
              && [ -f "$Tests_Manifest" ] \
@@ -483,6 +514,18 @@ cd "$LANDIN_ADA_DIR"
 Executables=refine
 landin_link refine.gpr refine refine-obj "$@" || landin_failed
 Linked_Refine="$Linked_Row"
+#  Each split command's project links refine-NAME from its objects under
+#  refine-NAME-obj (check.py holds the project to both), and its row joins
+#  refine's in the source manifest: it is part of the compiler.
+while read -r Split_Name Split_Project _; do
+    [ -n "$Split_Name" ] || continue
+    landin_link "$Split_Project" "refine-$Split_Name" \
+        "refine-$Split_Name-obj" "$@" < /dev/null || landin_failed
+    Linked_Refine="$Linked_Refine
+$Linked_Row"
+done <<EOF
+$Splits
+EOF
 if [ "$Compiler_Only" = "no" ]; then
     landin_link landin_tests.gpr landin_tests tests-obj "$@" || landin_failed
     Linked_Tests="$Linked_Row"
@@ -519,9 +562,10 @@ if [ "$Finished" != "$Current" ]; then
     fi
 fi
 
-#  shellcheck disable=SC2086 # two fixed words
+mkdir -p "$LANDIN_BUILD_DIR/libexec/landin" || landin_failed
+#  shellcheck disable=SC2086 # fixed words and split names without spaces
 python3 "$LANDIN_ROOT/scripts/build_lock.py" --publish "$LANDIN_BUILD_DIR" \
-    $Executables || landin_failed
+    $Executables $Split_Published || landin_failed
 if [ "$Compiler_Only" = "no" ]; then
     printf '%s\n%s\n' "$Current" "$Linked_Tests" > "$Tests_Manifest.tmp"
     mv -f "$Tests_Manifest.tmp" "$Tests_Manifest"

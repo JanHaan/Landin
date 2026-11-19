@@ -1,4 +1,6 @@
+with Ada.Directories;
 with Ada.Environment_Variables;
+with Ada.IO_Exceptions;
 with Ada.Exceptions;
 with Ada.Real_Time;
 with Ada.Strings.Fixed;
@@ -254,6 +256,14 @@ package body Landin.Platform.Native.Tools is
       Child         : access Interfaces.C.int) return Interfaces.C.int
      with Import, Convention => C, External_Name => "landin_program_run";
 
+   function Start_Command
+     (Args          : C_Strings.chars_ptr_array;
+      Setting       : Interfaces.C.char_array;
+      Signal_Number : access Interfaces.C.int;
+      Status        : access Interfaces.C.int;
+      Child         : access Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_command_run";
+
    function Signal_Name (Number : Interfaces.C.int)
      return C_Strings.chars_ptr
      with Import, Convention => C, External_Name => "landin_signal_name";
@@ -310,6 +320,129 @@ package body Landin.Platform.Native.Tools is
       end if;
    end Run_Attached;
 
+   overriding procedure Run_Command
+     (Host      : Native_Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Setting   : String;
+      Result    : out Program_Result)
+   is
+      pragma Unreferenced (Host);
+      use type C_Strings.chars_ptr;
+      List : C_Strings.chars_ptr_array
+        (0 .. Interfaces.C.size_t (Arguments.Length) + 1) :=
+          [others => C_Strings.Null_Ptr];
+      Signal_Number : aliased Interfaces.C.int := 0;
+      Status : aliased Interfaces.C.int := 0;
+      Child : aliased Interfaces.C.int := 0;
+      Error : Interfaces.C.int;
+   begin
+      Result := (others => <>);
+      List (0) := C_Strings.New_String (Program);
+      for Index in 1 .. Natural (Arguments.Length) loop
+         List (Interfaces.C.size_t (Index)) :=
+           C_Strings.New_String (Arguments.Element (Index));
+      end loop;
+      Error := Start_Command
+        (List, Interfaces.C.To_C (Setting), Signal_Number'Access,
+         Status'Access, Child'Access);
+      for Item of List loop
+         C_Strings.Free (Item);
+      end loop;
+      if Error /= 0 then
+         Fail (Start_Failure
+                 (Error, (if Child = 0 then "cannot start "
+                          else "cannot wait for ") & Program));
+      elsif Signal_Number /= 0 then
+         Result.Ended := Signaled;
+         Result.Signal := Natural (Signal_Number);
+         declare
+            Name : constant C_Strings.chars_ptr := Signal_Name (Signal_Number);
+         begin
+            Result.Signal_Name := Unbounded.To_Unbounded_String
+              (if Name = C_Strings.Null_Ptr then "signal"
+               else C_Strings.Value (Name));
+         end;
+      else
+         Result.Exit_Code := Integer (Status);
+      end if;
+   end Run_Command;
+
+   --  An empty element of PATH, which a shell reads as the working
+   --  directory, is passed over: a command in whatever directory refine
+   --  was started from is not one it was given.
+   overriding function Programs_On_Path
+     (Host : Native_Tool_Runner; Prefix : String) return Path_List
+   is
+      pragma Unreferenced (Host);
+      package Sorting is new Path_Vectors.Generic_Sorting;
+      Search : constant String :=
+        (if Ada.Environment_Variables.Exists ("PATH")
+         then Ada.Environment_Variables.Value ("PATH") else "");
+      Names, Found : Path_List;
+      First : Positive := Search'First;
+      procedure Scan (Directory : String);
+      procedure Scan (Directory : String) is
+         use Ada.Directories;
+         Walk : Search_Type;
+         Item : Directory_Entry_Type;
+      begin
+         if Directory = "" or else not Exists (Directory)
+           or else Kind (Directory) /= Ada.Directories.Directory
+         then
+            return;
+         end if;
+         Start_Search (Walk, Directory, Prefix & "*");
+         while More_Entries (Walk) loop
+            Get_Next_Entry (Walk, Item);
+            declare
+               Name : constant String := Simple_Name (Item);
+               Path : constant String := Directory & "/" & Name;
+            begin
+               if Name'Length >= Prefix'Length
+                 and then not Names.Contains (Name)
+                 and then OS.Is_Executable_File (Path)
+                 and then not OS.Is_Directory (Path)
+               then
+                  Names.Append (Name);
+                  Found.Append (Path);
+               end if;
+            end;
+         end loop;
+         End_Search (Walk);
+      exception
+         when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error =>
+            null;
+      end Scan;
+   begin
+      for Index in Search'Range loop
+         if Search (Index) = ':' then
+            Scan (Search (First .. Index - 1));
+            First := Index + 1;
+         end if;
+      end loop;
+      if First <= Search'Last then
+         Scan (Search (First .. Search'Last));
+      end if;
+      declare
+         Sorted : Path_List;
+         function Base (Path : String) return String is
+           (Path (Ada.Strings.Fixed.Index (Path, "/", Ada.Strings.Backward)
+                  + 1 .. Path'Last));
+      begin
+         Sorting.Sort (Names);
+         for Name of Names loop
+            for Path of Found loop
+               if Base (Path) = Name then
+                  Sorted.Append (Path);
+                  exit;
+               end if;
+            end loop;
+         end loop;
+         return Sorted;
+      end;
+   end Programs_On_Path;
+
    procedure Set_Limit
      (Host : in out Native_Tool_Runner; Seconds : Duration) is
    begin
@@ -359,7 +492,8 @@ package body Landin.Platform.Native.Tools is
       Environment : Path_List;
       Isolated    : Boolean;
       Result      : out Tool_Result;
-      Capture     : Capture_Mode);
+      Capture     : Capture_Mode;
+      Limit       : Duration);
 
    procedure Run_Tool
      (Host        : Native_Tool_Runner;
@@ -368,7 +502,8 @@ package body Landin.Platform.Native.Tools is
       Environment : Path_List;
       Isolated    : Boolean;
       Result      : out Tool_Result;
-      Capture     : Capture_Mode)
+      Capture     : Capture_Mode;
+      Limit       : Duration)
    is
       List           : C_Strings.chars_ptr_array
         (0 .. Interfaces.C.size_t (Arguments.Length) + 1) :=
@@ -614,7 +749,7 @@ package body Landin.Platform.Native.Tools is
 
       declare
          Deadline : constant Ada.Real_Time.Time :=
-           Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Host.Limit);
+           Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Limit);
          Reaped : Interfaces.C.int := 0;
          Wait_Interval : Duration := 0.001;
       begin
@@ -687,7 +822,7 @@ package body Landin.Platform.Native.Tools is
          Unbounded.Append
            (Result.Output,
             "landin: " & Program & " ran longer than the limit of"
-            & Duration'Image (Host.Limit) & " seconds and was stopped"
+            & Duration'Image (Limit) & " seconds and was stopped"
             & ASCII.LF);
       end if;
       if Cancelled then
@@ -772,7 +907,7 @@ package body Landin.Platform.Native.Tools is
       Capture   : Capture_Mode := Merged) is
    begin
       Run_Tool (Host, Program, Arguments, No_Arguments, False, Result,
-                Capture);
+                Capture, Host.Limit);
    end Run;
 
    overriding procedure Run_In_Environment
@@ -784,8 +919,20 @@ package body Landin.Platform.Native.Tools is
       Capture     : Capture_Mode := Merged) is
    begin
       Run_Tool (Host, Program, Arguments, Environment, True, Result,
-                Capture);
+                Capture, Host.Limit);
    end Run_In_Environment;
+
+   overriding procedure Run_Within
+     (Host      : Native_Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Seconds   : Duration;
+      Result    : out Tool_Result;
+      Capture   : Capture_Mode := Merged) is
+   begin
+      Run_Tool (Host, Program, Arguments, No_Arguments, False, Result,
+                Capture, Seconds);
+   end Run_Within;
 
    overriding function Output_Produced
      (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)

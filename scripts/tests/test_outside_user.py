@@ -147,6 +147,9 @@ class Archive(unittest.TestCase):
                 names = archive.getnames()
                 self.assertEqual(names, sorted(names))
                 self.assertIn("bin/refine", names)
+                #  Where the dispatcher finds its split commands, there
+                #  when the list names none.
+                self.assertTrue(archive.getmember("libexec/landin").isdir())
                 for namespace in ("core", "hosted", "platform"):
                     self.assertIn("lib/landin/" + namespace, names)
                 self.assertIn("lib/landin/core/mem/mem.ldn", names)
@@ -228,6 +231,50 @@ class Archive(unittest.TestCase):
                                       ran.stderr)
                     else:
                         self.assertEqual(ran.stderr, "")
+
+    def test_each_listed_split_command_ships_in_libexec(self):
+        #  A checkout of its own, whose list names one split command;
+        #  package.sh reads the list of the tree it is in.
+        with TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            tree = directory / "tree"
+            for name in ("scripts/package.sh", "scripts/build_identity.py",
+                         "scripts/program_interpreter.py", "citations.txt",
+                         "LICENSE", "LICENSE-MIT", "LICENSE-APACHE"):
+                (tree / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / name, tree / name)
+            for namespace in ("core", "hosted", "platform"):
+                (tree / namespace).mkdir()
+            (tree / "compiler/ada").mkdir(parents=True)
+            (tree / "compiler/ada/refine_zap.gpr").write_text(
+                "project Refine_Zap is\nend Refine_Zap;\n")
+            (tree / "compiler/ada/split-commands.json").write_text(
+                '{"format": "landin-split-commands-1", "commands": [{"name":'
+                ' "zap", "project": "refine_zap.gpr", "main":'
+                ' "refine_zap.adb"}]}\n')
+            built = directory / "build"
+            (built / "bin").mkdir(parents=True)
+            binary = built / "bin/refine"
+            binary.write_text("#!/bin/sh\n")
+            binary.chmod(0o755)
+            asset = directory / "landin.tar.gz"
+            command = [str(tree / "scripts/package.sh"), str(binary),
+                       str(asset)]
+            refused = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn("lists zap, and", refused.stderr)
+            self.assertIn("libexec/landin/refine-zap is not an executable",
+                          refused.stderr)
+            self.assertFalse(asset.exists())
+            split = built / "libexec/landin/refine-zap"
+            split.parent.mkdir(parents=True)
+            split.write_text("#!/bin/sh\n")
+            split.chmod(0o700)
+            subprocess.run(command, check=True)
+            with tarfile.open(asset) as archive:
+                self.assertEqual(
+                    archive.getmember("libexec/landin/refine-zap").mode,
+                    0o755)
 
     def test_a_missing_binary_is_refused(self):
         with TemporaryDirectory() as scratch:

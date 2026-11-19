@@ -43,7 +43,7 @@ class NativeCLI(unittest.TestCase):
         info = json.loads(machine.stdout)
         self.assertEqual(set(info), {'schema', 'compiler', 'version', 'revision',
                                     'source_digest', 'dirty', 'mode', 'host_triplet',
-                                    'library'})
+                                    'library', 'citations', 'split_commands'})
         self.assertEqual(info['schema'], 1)
         self.assertEqual(info['compiler'], 'refine')
         self.assertIs(type(info['dirty']), bool)
@@ -68,7 +68,29 @@ class NativeCLI(unittest.TestCase):
         human = self.run_cli('version')
         self.assertEqual(human.stderr, '')
         library = info['library'] if info['library'] is not None else 'none'
-        self.assertEqual(human.stdout, banner + '\nlibrary: ' + library + '\n')
+        # D1487: the citations explain reads, and whether it can.
+        said = {'readable': 'readable',
+                'other-sources': 'readable, generated from other compiler sources',
+                'missing': 'not there', 'unreadable': 'cannot be read',
+                'other-format': 'written for another refine'}
+        citations = info['citations']
+        if info['library'] is None:
+            self.assertIsNone(citations)
+            cited = 'none'
+        else:
+            self.assertEqual(citations['path'],
+                             os.path.join(info['library'], 'citations.txt'))
+            cited = citations['path'] + ', ' + said[citations['state']]
+        # D1487: each split command this refine was built with.
+        splits = ''.join(
+            'split command ' + item['name'] + ': '
+            + ('missing' + (', ' + item['path'] if item['path'] else '')
+               if item['state'] == 'missing'
+               else item['path'] if item['state'] == 'compatible'
+               else item['path'] + ', incompatible: ' + item['reason'])
+            + '\n' for item in info['split_commands']) or 'split commands: none\n'
+        self.assertEqual(human.stdout, banner + '\nlibrary: ' + library + '\n'
+                         + 'citations: ' + cited + '\n' + splits)
         self.assertEqual(self.run_cli('--version').stdout, human.stdout)
         return info
 
@@ -392,6 +414,71 @@ class NativeCLI(unittest.TestCase):
         empty = self.run_cli('fmt', '--check', 'tree/empty', status=2)
         self.assertIn('fmt found no .ldn source under tree/empty',
                       empty.stderr)
+
+    def contributed_tool(self):
+        """A contributed refine-ltest on a directory put first on PATH."""
+        tools = self.root / 'tools'
+        tools.mkdir()
+        tool = tools / 'refine-ltest'
+        tool.write_text(
+            '#!/bin/sh\n'
+            'case "$1" in\n'
+            '--describe) printf \'%s\\n\' \'{"format":"landin-command-1",'
+            '"name":"ltest","summary":"a test tool","codes":["LTX"]}\';;\n'
+            'explain) printf \'LTX explains %s\\n\' "$2"; exit 4;;\n'
+            '--complete) shift 2; printf \'%s\\n\' "alpha$#" beta;;\n'
+            '*) printf \'[%s]\' "$@"; printf \'\\n%s\\n\' "$LANDIN_REFINE"; exit 3;;\n'
+            'esac\n')
+        tool.chmod(0o755)
+        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+                   LANDIN_REFINE='/elsewhere/refine')
+        return tool, env
+
+    def test_contributed_command_on_path(self):
+        """D1384-D1387, D1486: a contributed tool on PATH, run natively."""
+        tool, env = self.contributed_tool()
+
+        def run(*args):
+            return subprocess.run([self.refine, *args], cwd=self.root, env=env,
+                                  text=True, capture_output=True, timeout=60)
+
+        ran = run('ltest', '--json', '', 'two words', '@file')
+        self.assertEqual(ran.returncode, 3, ran.stderr)
+        # Its words exactly as written, and the refine that dispatched it,
+        # whatever LANDIN_REFINE said before.
+        self.assertEqual(ran.stdout, '[--json][][two words][@file]\n'
+                         + self.refine + '\n')
+        explained = run('explain', 'LTX0007')
+        self.assertEqual(explained.returncode, 4, explained.stderr)
+        self.assertEqual(explained.stdout,
+                         'LTX0007 is explained by refine-ltest at ' + str(tool)
+                         + ', not by Landin\nLTX explains LTX0007\n')
+        unclaimed = run('explain', 'QQX0007')
+        self.assertEqual(unclaimed.returncode, 2)
+        self.assertIn('no refine-NAME command on PATH claims it', unclaimed.stderr)
+        listed = run('help')
+        self.assertIn('\nExternal commands:\n  ltest       a test tool ('
+                      + str(tool) + ')\n', listed.stdout)
+        tool.write_text('#!/bin/sh\nprintf \'{"format":"landin-command-1",'
+                        '"name":"ltest","summary":"s","codes":["L"]}\'\n')
+        refused = run('ltest')
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn('error[L0695]: refine-ltest at ' + str(tool), refused.stderr)
+        self.assertIn('claims L', refused.stderr)
+
+    def test_bash_completion_delegates(self):
+        """D1485: an external command completes its own words."""
+        if not shutil.which('bash'):
+            self.skipTest('bash is unavailable')
+        _, env = self.contributed_tool()
+        env['PATH'] = str(Path(self.refine).parent) + os.pathsep + env['PATH']
+        completion = self.root / 'completion.bash'
+        completion.write_text(self.run_cli('completion', 'bash').stdout)
+        command = ('source "$1"; COMP_WORDS=(refine ltest x ""); COMP_CWORD=3; '
+                   '_refine_complete; printf "%s\\n" "${COMPREPLY[@]}"')
+        words = subprocess.check_output(['bash', '-c', command, 'test', str(completion)],
+                                        text=True, env=env).splitlines()
+        self.assertEqual(words, ['alpha2', 'beta'])
 
     def test_bash_completion_scope(self):
         if not shutil.which('bash'):

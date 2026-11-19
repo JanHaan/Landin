@@ -626,6 +626,12 @@
             '';
           };
 
+          #  The split commands, `refine-NAME` executables the `refine`
+          #  dispatcher finds in ../libexec/landin beside itself, by the one
+          #  list scripts/build.sh, scripts/package.sh and check.py read.
+          splitCommands =
+            (builtins.fromJSON (builtins.readFile ./compiler/ada/split-commands.json)).commands;
+
         in
         {
           #  The published compiler, fetched rather than built.
@@ -679,6 +685,15 @@
               else
                 install -Dm755 refine "$out/bin/refine"
               fi
+              #  The split commands the archive's release shipped, which
+              #  its own list named: this checkout's list may be newer.
+              #  An archive from before split commands has none.
+              mkdir -p "$out/libexec/landin"
+              for split in libexec/landin/refine-*; do
+                if [ -f "$split" ]; then
+                  install -m755 "$split" "$out/libexec/landin/"
+                fi
+              done
             ''
             + lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               #  refine names its driver by GNU triplet and deliberately
@@ -745,14 +760,27 @@
               python3 scripts/build_identity.py --root . --mode release \
                 --output compiler/ada/build/nix/release/generated/landin-build_identity.ads
               cd compiler/ada
-              LANDIN_BUILD_TAG=nix LANDIN_BUILD_MODE=release \
-                gprbuild -p -P refine.gpr -j''${NIX_BUILD_CORES:-1}
+              for project in refine.gpr ${
+                lib.concatMapStringsSep " " (split: split.project) splitCommands
+              }; do
+                LANDIN_BUILD_TAG=nix LANDIN_BUILD_MODE=release \
+                  gprbuild -p -P "$project" -j''${NIX_BUILD_CORES:-1}
+              done
               runHook postBuild
             '';
 
             installPhase = ''
               runHook preInstall
               install -Dm755 build/nix/release/bin/refine "$out/bin/refine"
+              #  Each split command where the dispatcher looks for it,
+              #  the directory there even when the list names none.
+              mkdir -p "$out/libexec/landin"
+            ''
+            + lib.concatMapStrings (split: ''
+              install -m755 build/nix/release/bin/refine-${split.name} \
+                "$out/libexec/landin/refine-${split.name}"
+            '') splitCommands
+            + ''
               #  The library ships beside the compiler, which finds it
               #  relative to its own executable.  The build ran in
               #  compiler/ada, so the source tree is two levels up.

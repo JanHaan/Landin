@@ -672,7 +672,7 @@ edge is cut first (D1386). On Q-11's condition `refine` refuses an
 incompatible `refine-NAME`, judged by a description each prints and, for a
 shipped one, its source digest (D1387). R18.20 measures `Source_Maps` too,
 R18.50 takes the check and the forwarding, and R18.60 is the split
-`refine-dap`; `SR-1277`, SR-1196 and SR-1224 with SR-1275 are scheduled on
+`refine-dap`; `SR-1277`, `SR-1196` and SR-1224 with SR-1275 are scheduled on
 R18.40, R18.50 and R18.70. Found on the way: the cut shrinks no executable
 shipped today, since `fmt`, `explain` and `version` stay inside `refine`;
 it matters for `refine-dap`, which reaches `Driver.Library` through
@@ -770,7 +770,7 @@ at [1230].
 
 ### R18.50 — The dispatcher
 
-Status: planned
+Status: complete
 Depends on: R18.40
 
 `refine NAME` runs a built-in command; else, for a split command it was
@@ -784,7 +784,7 @@ lists external commands under their own heading; completion delegates to
 catalogue to the one contributed tool claiming its prefix, and refuses
 when none or several do (D1385). `refine version`
 describes the installation it runs from: the split commands it finds, and
-the `citations.txt` `refine explain` reads and whether it can (SR-1196).
+the `citations.txt` `refine explain` reads and whether it can (`SR-1196`).
 The release archive, the flake and the release smoke test ship and run
 every split command.
 Exit evidence: the dispatch order pinned by fake-filesystem driver cases;
@@ -792,6 +792,33 @@ a shipped command of another digest, one without a description and a
 contributed one claiming `L` each refused; a contributed test tool found
 on PATH and its code forwarded in a native case; the archive and flake
 carry `libexec/landin`.
+Done: `refine NAME` dispatches its first word alone when it could name
+a command and names no built-in one, and passes every word after it as
+written (D1484). A split command is looked for at
+`libexec/landin/refine-NAME` under the executable's prefix and nowhere
+else, refused with L0694 when missing; any other name is the first
+`refine-NAME` on PATH. Each is asked `--describe` within ten seconds and
+refused with L0695 when its answer does not hold (D1387), and runs with
+`LANDIN_REFINE` naming the refine that dispatched it (D1486). `--describe`,
+`--help` and `--complete` are a split's whole contract (D1485): help lists
+external commands under their own heading and `refine help NAME` runs the
+command's own help (D1488), the bash, zsh and fish scripts hand an
+external command's words to it, and `refine explain` forwards a code of
+another prefix to the one contributed command claiming it (D1385).
+`refine version` names the citations file and whether it can be read and
+each split command (D1487), settling `SR-1196`. One list,
+`compiler/ada/split-commands.json`, names the split commands; the digest's
+inputs, the generated built-with list, `build.sh`, `package.sh`, the
+flake, the release smoke test and `check.py` read it, and a case holds
+that editing a split's own source changes the digest (D1483). It is
+empty: the archive and the flake carry an empty `libexec/landin` until
+R18.60 and R18.70 add to it. Lockstep is worded without the implementation
+language, D1383 and D1385 amended, on the maintainer's answer of
+2026-11-18, and Q-19 is answered. Pinned by the commands suite's `the
+dispatcher` on the fake host and `scripts/tests/test_cli_native.py`'s
+contributed tool on PATH. Found on the way: `item.py run` runs only in the
+item's worktree (SR-1353), and `unit_closure.py --cut` reports closures no
+link can have (SR-1354, scheduled on R18.70).
 
 ### R18.60 — `refine dap`
 
@@ -800,7 +827,7 @@ Depends on: R18.20, R18.50
 
 The first new command: a Debug Adapter Protocol server over the GDB and
 LLDB sessions the targets already script, the split command `refine-dap`
-(D1383), in lockstep with the compiler's library, shipped in the archive
+(D1383), in lockstep with `refine` (D1383), shipped in the archive
 and the flake and run as `refine dap`, written to the split's rules from
 its start.
 It reads source maps without `Landin.Source_Maps`, which writes them from
@@ -815,14 +842,28 @@ Status: planned
 Depends on: R18.50
 
 `svd`, `bindings` and `site` become `refine-svd`, `refine-bindings` and
-`refine-site`, each in lockstep with the compiler's library and each
+`refine-site`, each in lockstep with `refine` (D1383) and each
 keeping its suites and its black-box "destroys nothing" and determinism
 controls. Those controls take the command they test as an argument, so the
 lanes' shared `--refine` becomes one helper (SR-1224), and
 `compiler/tests/test_compile_publication.py` reports every selected
 control's failure rather than the first (SR-1275).
-Exit evidence: each split linked without the front end; its suites, and
-every invocation of the old form, pass through the dispatcher.
+Each moves out from under `Landin.Commands`, whose body withs the whole
+compiler, and stops withing `Landin.Driver` for `Outcome`. Its own main
+parses its own arguments and response files and answers `--help`,
+`--describe` and `--complete`, the process surface that is its whole
+contract with `refine`, and it enters `compiler/ada/split-commands.json`.
+A closure pin for each main in `scripts/tests/test_unit_closure.py` holds
+it without the front end, as D1423 pinned `Landin.Library`, and
+`scripts/unit_closure.py` refuses or reports a cut parent a real link
+would bring back (SR-1354). `svd` gains
+toy-SVD goldens that run offline through the executable: the output
+bytes, and the report and exit status of each fault code. The SR-1224
+helper takes an executable path, so one suite runs `refine svd` or
+`refine-svd`.
+Exit evidence: each split linked without the front end; its black-box
+suites, and every invocation of the old form, pass through the
+dispatcher.
 
 ### R18 gate
 Every existing invocation works or is refused with its new form; every

@@ -126,6 +126,9 @@ package body Landin.Platform.Overlays is
    overriding function Working_Directory (Host : Overlay) return String
      is (Host.Under.Working_Directory);
 
+   overriding function Executable_Path (Host : Overlay) return String
+     is (Host.Under.Executable_Path);
+
    overriding function Executable_Directory (Host : Overlay) return String
      is (Host.Under.Executable_Directory);
 

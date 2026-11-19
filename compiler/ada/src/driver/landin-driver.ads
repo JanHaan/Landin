@@ -62,6 +62,10 @@ package Landin.Driver is
       Launch_Program   : Ada.Strings.Unbounded.Unbounded_String;
       Launch_Arguments : Landin.Platform.Path_List;
       Launch_Directory : Ada.Strings.Unbounded.Unbounded_String;
+      --  D1384: when not empty, Launch_Program is a command `refine`
+      --  dispatched, in no private directory, run with this setting,
+      --  `NAME=VALUE`, in its environment (D1486).
+      Launch_Setting   : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    --  Host and Tools are the only ways this reaches a disk or a process,

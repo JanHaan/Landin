@@ -3157,3 +3157,27 @@ the caller's file number names no file, or the operand is no number. Site 0
 is the compiler's own guard and has no source line. Pass the `site` a
 `panic_handler` received, or the three numbers of a caller's coordinates,
 as the running program reported them.
+
+### L0694
+
+`refine NAME` named a split command this `refine` was built with, such as
+`refine dap`, and the installation does not hold it (D1384). A split
+command ships beside `refine` as `libexec/landin/refine-NAME`, under the
+directory that holds `bin/refine`. `refine` looks for it only there,
+because a copy on `PATH` may belong to another release. The report names
+the path it looked at. Reinstall the release, whose archive carries both,
+or build both from one checkout with `./scripts/build.sh`. `refine
+version` lists each split command and where it is. The status is 1.
+
+### L0695
+
+Before running an external command, `refine` asks it to describe itself
+with `refine-NAME --describe`. Here it could not accept the answer
+(D1387). The report names the command's path, what came back and what to
+do. A command shipped with `refine` is built from the same tree, so it
+must name the source digest `refine version --json` reports. One from
+another build is refused; reinstall the release, or rebuild both from one
+checkout. A contributed command, one found on `PATH`, must answer within
+ten seconds with one JSON object in the format `landin-command-1` that
+names it and claims no `L` prefix. Update or remove it, or run it by its
+own name, `refine-NAME`. The status is 1.

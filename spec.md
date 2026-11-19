@@ -26150,7 +26150,9 @@ sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
 
 **The tour said** nothing; [what refine does today] listed thirteen commands of one executable.
 
-**Chosen:** `check`, `compile`, `run`, `fmt`, `explain`, `lsp`, `version`, `help`, `completion` and `targets` are built into `refine`. `svd`, `bindings`, `site` and the new Debug Adapter Protocol server `dap` are split commands: each its own executable `refine-NAME`, run as `refine NAME`, built from the same tree as `refine`, linking the same Ada library and released in the same archive and flake, so nothing between them is a versioned interface. `lsp` stays built in because it links every backend through the handler-fit check (D572), so a split `refine-lsp` would carry the compiler a second time and save `refine` nothing; `dap` needs only the source maps and the target facts, and keeps GDB and LLDB handling out of the compiler's executable. A tool from outside that wants more than D1387's description starts from the JSON `refine` already prints.
+**Chosen:** `check`, `compile`, `run`, `fmt`, `explain`, `lsp`, `version`, `help`, `completion` and `targets` are built into `refine`. `svd`, `bindings`, `site` and the new Debug Adapter Protocol server `dap` are split commands: each its own executable `refine-NAME`, run as `refine NAME`, built from the same tree as `refine`, its sources counted in `refine`'s source digest, and released in the same archive and flake, so nothing between them is a versioned interface; one written in Ada also links the same library. `lsp` stays built in because it links every backend through the handler-fit check (D572), so a split `refine-lsp` would carry the compiler a second time and save `refine` nothing; `dap` needs only the source maps and the target facts, and keeps GDB and LLDB handling out of the compiler's executable. A tool from outside that wants more than D1387's description starts from the JSON `refine` already prints.
+
+**Amended on 2026-11-18:** lockstep was first worded as linking the same Ada library. The maintainer reworded it so that it does not depend on the language a split command is written in: one tree, counted in `refine`'s source digest, the same archive and flake. The digest's inputs are derived from the one list of split commands, `compiler/ada/split-commands.json`.
 
 **The alternatives:** a versioned JSON interface between `refine` and its own split commands from the start; keeping every existing command built in and splitting only new ones; `dap` built in; splitting `lsp`.
 
@@ -26170,9 +26172,11 @@ sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
 
 **The tour said** nothing.
 
-**Chosen:** a split command shipped in the archive keeps every requirement a built-in command has: its diagnostics are `L` codes in the one catalogue, explained by `refine explain`, and its black-box "destroys nothing it did not create" and determinism controls run in the gate. A contributed `refine-NAME` is held to nothing but D1387's description. Its codes never enter the catalogue or `docs/diagnostics.md`, which hold `L` codes alone; it claims a prefix of its own, two to eight capital ASCII letters, so never `L`, and answers `refine-NAME explain CODE` itself.
+**Chosen:** a split command shipped in the archive keeps every requirement of a built-in command that is visible from outside its process: its diagnostics are `L` codes in the one catalogue, explained by `refine explain`, and its black-box "destroys nothing it did not create" and determinism controls run in the gate. One written in Ada also keeps `Landin.Platform`, with its fake-filesystem cases, and the warning policy. A contributed `refine-NAME` is held to nothing but D1387's description. Its codes never enter the catalogue or `docs/diagnostics.md`, which hold `L` codes alone; it claims a prefix of its own, two to eight capital ASCII letters, so never `L`, and answers `refine-NAME explain CODE` itself.
 
 `refine explain CODE` explains a code in the catalogue as before, and calls an `L` code that is not there unknown. A code that is any other prefix followed by digits is forwarded. The prefix is the letters before the first digit, compared exactly. `refine` asks every compatible contributed command the scan of D1384 finds for the prefixes it claims (D1387). When exactly one claims it, `refine` runs `refine-NAME explain CODE` and passes its output and status through, after one line saying the explanation is `refine-NAME`'s, at its path, and not Landin's. When none claims it, the code is refused as unknown, naming the prefix and saying no installed command claims it. When several do, it is refused naming each with its path, and the user runs the one meant as `refine-NAME explain CODE`.
+
+**Amended on 2026-11-18:** the requirements were first every requirement of a built-in command, among them `Landin.Platform` and the Ada warning policy. The maintainer narrowed them to what is visible from outside the process, with the Ada ones kept for a split written in Ada, as for D1383's lockstep.
 
 **The alternatives:** `refine explain` explaining `L` codes alone; refusing to dispatch contributed tools at all; reserving catalogue ranges for them, which would make the closed catalogue open; mapping a prefix to a tool by its name, which would tie a tool's codes to its command's spelling and its renaming.
 
@@ -26207,6 +26211,66 @@ sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
 **The alternatives:** comparing release names, which a development build lacks, so two builds of one checkout would match whatever they hold; trusting what libexec holds, since one archive ships both, which an upgrade of one file or a build of `refine` alone breaks without a word; the tool checking its caller through an environment variable, which leaves the refusal to the tool it is meant to stop; and a cache of answers, which a replaced tool outlives.
 
 **Pinned by** fake-filesystem driver cases of a shipped command with another digest, a missing description and a contributed command claiming `L`, each refused.
+
+### D1483 — One list names the split commands, and every consumer reads it
+
+**The tour said** nothing.
+
+**Chosen:** `compiler/ada/split-commands.json` is the one list of split commands: for each, its name, its GPR project and its main, the project and main relative to `compiler/ada`, the executable always `refine-NAME`. `scripts/build_identity.py` reads it, and every project it reads it gets into the inputs of `refine`'s source digest beside `refine.gpr`'s and the test program's, so a split's own source counts as `refine`'s does (D1383, D1357). It also writes the names into the generated `Landin.Build_Identity` as `Split_Commands`, the built-with list the dispatcher looks beside itself for (D1384). `scripts/build.sh` builds each into `libexec/landin/`, `scripts/package.sh` and the flake ship each there, the release smoke test runs each through the dispatcher, and `check.py` holds each entry to its project. The list is empty until `dap` and the three moved commands enter it; the directory is built and shipped empty meanwhile.
+
+**The alternatives:** a list in each consumer, which an added split would update in some of them; the digest's inputs left at `refine.gpr` and the test program, which a split's own project would escape, so two builds would call each other compatible with different split sources; a GPR aggregate of the splits, which nix and the shell scripts cannot read without gprbuild.
+
+**Pinned by** `scripts/tests/test_build_identity.py`'s case that editing a listed split's own source changes the digest, its refusal of a listed project that is not there, and `check.py`'s controls for each entry it refuses.
+
+### D1484 — The first word alone is dispatched, and the words after it are the command's
+
+**The tour said** nothing; D1384 said where an external command is found, not which words are one.
+
+**Chosen:** `refine` dispatches only its first argument, and only one that could name a command: an ASCII letter, then letters, digits, `-` and `_`, never a built-in command's name nor the reserved `build`. A word with a `/` or a `.`, a `.ldn` source among them, an option and a response file never are. A name found neither beside `refine` nor on PATH is refused as the unknown command it was (D1463). A name that is found gets every word after it unread, in order, empty ones included: `refine` expands no response file and parses no option of its, so `refine NAME --help` and `refine NAME @args` are the command's own. An option written before the name keeps `refine`'s meaning and is refused as D384 says. On the search path an empty element, which a shell reads as the working directory, is passed over, and the first directory holding `refine-NAME` wins.
+
+**The alternatives:** dispatching any unknown word in the command position, after `refine`'s own options, which makes an option before a contributed command mean something to `refine` and to the tool both; parsing the words after the name, which makes every contributed tool's grammar `refine`'s; and the working directory as an empty PATH element, which runs a `refine-NAME` the user merely stands beside.
+
+**Pinned by** the commands suite's `the dispatcher`, whose cases hold the built-in command first, the words passed as written and the first directory on the path, and `scripts/tests/test_cli_native.py`'s contributed command.
+
+### D1485 — A split command's process is its whole contract with `refine`
+
+**The tour said** nothing.
+
+**Chosen:** what `refine` asks of an external command, shipped or contributed, is three arguments and nothing more: `--describe`, answered as D1387 says; `--help`, the command's own help, which `refine help NAME` shows (D1488); and `--complete -- WORD...`, where the words are those after its name up to the one being completed, that one last and possibly empty, answered with one candidate a line and status 0. `refine completion` writes, for bash, zsh and fish, a script that hands the words after a first word that names no built-in command to `refine NAME --complete -- ...`, so the dispatcher's lookup and compatibility check apply to completion as to a run. A command whose first word is being typed is completed from the built-in names alone. A split written in Ada keeps D1385's Ada requirements besides; none of them is part of this contract.
+
+**The alternatives:** a completion protocol through `refine completion` with a hidden operand, which adds a surface the documents would have to name; the shell scripts calling `refine-NAME` directly, which skips the lookup that keeps another release's copy out; and scanning for contributed names when a first word is completed, which runs every tool on PATH on each key press.
+
+**Pinned by** the commands suite's `the dispatcher`, that every shell's script delegates, and `scripts/tests/test_cli_native.py`'s bash completion through a contributed tool.
+
+### D1486 — A dispatched command is told which `refine` dispatched it, in `LANDIN_REFINE`
+
+**The tour said** nothing.
+
+**Chosen:** when `refine` runs an external command, for `refine NAME`, `refine help NAME` or a forwarded explanation, it sets `LANDIN_REFINE` in the command's environment to the absolute path of its own executable, every link resolved, replacing any value the caller had; when the host cannot name it the variable is set empty. A tool that calls back into the compiler runs that path rather than whichever `refine` comes first on PATH, and one run by its own name finds whatever its environment says, or nothing, and falls back on PATH. `refine` itself never reads the variable. It is not D275's second place to be wrong: D275 refuses a variable `refine` would consult to find its library, a setting a user makes once and which can go stale. This one is written by the dispatcher for one child, from the executable that is running, every time, and an inherited value never survives into it. `--describe` is run without it, since a description must not depend on its caller.
+
+**The alternatives:** an argument such as `--refine=PATH` before the command's own words, which breaks D1484's promise that those words are the command's and a contributed tool's own parsing with it; letting the tool look `refine` up on PATH, which can find another release's copy beside a dispatching one; and leaving an inherited value in place, which lets an outer `refine`, or a test harness's variable, speak for the one that ran.
+
+**Pinned by** the commands suite's `the dispatcher`, which holds the setting a dispatched command is given, and `scripts/tests/test_cli_native.py`'s contributed tool, which prints the variable it was given under a caller's other value.
+
+### D1487 — `refine version` describes the installation it runs from
+
+**The tour said** nothing; D363 had `refine version` name the library.
+
+**Chosen:** after the library line, `refine version` names the `citations.txt` `refine explain` reads there and whether it can: readable, readable but generated from other compiler sources (D1357), not there, cannot be read, or written for another refine; `none` when there is no library. Then one line for each split command this refine was built with: its path when it is there and compatible, `missing` with where it was looked for, or its path and why it is incompatible (D1387), each asked to describe itself; `split commands: none` when it was built with none. `--json` carries the same as `citations`, an object with `path` and `state`, or null, and `split_commands`, a list of objects with `name`, `path`, `state` and, for an incompatible one, `reason`. Contributed commands are `refine help`'s, not the installation's.
+
+**The alternatives:** a separate `refine doctor`, a command for what one more line of `version` says; leaving the split commands to `refine help`, which lists them for running them and does not say where one is missing.
+
+**Pinned by** the commands suite's `version identity` and `the dispatcher`, and `scripts/tests/test_cli_native.py`'s version identity.
+
+### D1488 — `refine help NAME` of an external command is the command's own help
+
+**The tour said** nothing.
+
+**Chosen:** `refine help NAME`, for a NAME no built-in command has, looks the command up as `refine NAME` would, and runs `refine-NAME --help` once it has described itself compatibly, passing its output and status through; a NAME found nowhere is an unknown command as before. `refine help` lists the external commands a scan finds under the heading `External commands:`, after the built-in ones: each shipped one with its summary, or `missing:` and where it was looked for; each contributed one with its summary and path; an incompatible one with its path and the reason. A program named for a built-in command is not listed, since it can never run.
+
+**The alternatives:** `refine help NAME` printing the summary line alone, which a tool's own help says better; and listing external commands without asking each to describe itself, which shows a summary `refine` cannot vouch for.
+
+**Pinned by** the commands suite's `the dispatcher` and `scripts/tests/test_cli_native.py`'s contributed command.
 
 ### D1463 — Every request names its command; the bare-source form is refused
 

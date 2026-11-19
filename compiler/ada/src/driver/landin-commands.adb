@@ -1,19 +1,21 @@
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
-with Landin.Build_Identity;
 with Landin.Commands.Bindings;
 with Landin.Commands.Catalogue;
 with Landin.Commands.Devices;
+with Landin.Commands.External;
 with Landin.Commands.Presentation;
 with Landin.Commands.Response_Files;
 with Landin.Commands.Sites;
 with Landin.Commands.Tracing;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
+with Landin.Diagnostics.Citations;
 with Landin.Diagnostics.Text;
 with Landin.Diagnostics.Warning_Policy;
 with Landin.Library;
+with Landin.Paths;
 with Landin.Json;
 with Landin.Source;
 with Landin.Source.Sets;
@@ -486,13 +488,137 @@ package body Landin.Commands is
         and then US.Length (Asked.Problem) = 0;
    end Is_Server;
 
-   function Execute
+   --  A refusal with no source, of Code, at Status.
+   function Refused
+     (Code    : Landin.Diagnostics.Catalogue.Code_Name;
+      Message : String;
+      Status  : Natural) return Landin.Driver.Outcome;
+
+   function Refused
+     (Code    : Landin.Diagnostics.Catalogue.Code_Name;
+      Message : String;
+      Status  : Natural) return Landin.Driver.Outcome
+   is
+      Result : Landin.Driver.Outcome;
+      None : Landin.Source.Sets.Source_Set;
+   begin
+      Result.Status := Status;
+      Result.Found.Append
+        (Landin.Diagnostics.Make
+           (Code => Landin.Diagnostics.Catalogue.Code (Code),
+            Level => Landin.Diagnostics.Error,
+            Source => Landin.Source.No_Source,
+            Where => Landin.Source.Empty_Span, Message => Message));
+      Result.Report := US.To_Unbounded_String
+        (Landin.Diagnostics.Text.Render (Result.Found, None));
+      return Result;
+   end Refused;
+
+   --  D1384, D1387, D1486: run the external command NAME found at Where
+   --  with Arguments, once it has described itself compatibly; refuse a
+   --  shipped one that is missing (L0694) or any incompatible one (L0695).
+   --  Output is written before it runs.
+   function Run_External
+     (Name      : String;
+      Where     : External.Location;
+      Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Output    : String := "") return Landin.Driver.Outcome;
+
+   function Run_External
+     (Name      : String;
+      Where     : External.Location;
+      Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Output    : String := "") return Landin.Driver.Outcome
+   is
+      use type External.Kind;
+      package DC renames Landin.Diagnostics.Catalogue;
+      Result : Landin.Driver.Outcome;
+   begin
+      if Where.Of_Kind = External.Shipped_Missing then
+         return Refused
+           (DC.External_Command_Missing,
+            External.Missing_Message (Name, Where),
+            Landin.Driver.Status_Reported);
+      end if;
+      declare
+         About : constant External.Description :=
+           External.Describe
+             (Name, US.To_String (Where.Path),
+              Where.Of_Kind = External.Shipped, Tools,
+              Landin.Build_Identity.Source_Digest);
+      begin
+         if not About.Compatible then
+            return Refused
+              (DC.External_Command_Incompatible,
+               External.Incompatible_Message (Name, Where, About),
+               Landin.Driver.Status_Reported);
+         end if;
+      end;
+      Result.Output := US.To_Unbounded_String (Output);
+      Result.Launch_Program := Where.Path;
+      Result.Launch_Arguments := Arguments;
+      Result.Launch_Setting := US.To_Unbounded_String
+        (External.Caller_Variable & "=" & Host.Executable_Path);
+      return Result;
+   end Run_External;
+
+   function Execute_Command
      (Arguments : Landin.Platform.Path_List;
       Host : Landin.Platform.Filesystem'Class;
       Tools : Landin.Platform.Tool_Runner'Class;
       Meter : Landin.Platform.Resource_Meter'Class;
+      Built_For : String;
+      Terminal_Color : Boolean;
+      Shipped : String) return Landin.Driver.Outcome;
+
+   function Execute
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Meter     : Landin.Platform.Resource_Meter'Class;
       Built_For : String := Landin.Targets.Selection.Build_Triplet;
-      Terminal_Color : Boolean := False) return Landin.Driver.Outcome
+      Terminal_Color : Boolean := False;
+      Shipped   : String := Landin.Build_Identity.Split_Commands)
+      return Landin.Driver.Outcome
+   is
+      use type External.Kind;
+      First : constant String :=
+        (if Arguments.Is_Empty then "" else Arguments.First_Element);
+   begin
+      --  D1484: a first word that names no built-in command, and could
+      --  name an external one, is looked for; the words after it are the
+      --  command's own, exactly as written.  One found nowhere is refused
+      --  as an unknown command, as before (D1463).
+      if External.Is_Command_Name (First) and then not C.Known (First)
+        and then First /= "build"
+      then
+         declare
+            Where : constant External.Location :=
+              External.Locate (First, Host, Tools, External.Names (Shipped));
+            Rest : Landin.Platform.Path_List := Arguments;
+         begin
+            if Where.Of_Kind /= External.Absent then
+               Rest.Delete_First;
+               return Run_External (First, Where, Rest, Host, Tools);
+            end if;
+         end;
+      end if;
+      return Execute_Command
+        (Arguments, Host, Tools, Meter, Built_For, Terminal_Color, Shipped);
+   end Execute;
+
+   function Execute_Command
+     (Arguments : Landin.Platform.Path_List;
+      Host : Landin.Platform.Filesystem'Class;
+      Tools : Landin.Platform.Tool_Runner'Class;
+      Meter : Landin.Platform.Resource_Meter'Class;
+      Built_For : String;
+      Terminal_Color : Boolean;
+      Shipped : String) return Landin.Driver.Outcome
    is
       Asked : constant Request := Parse (Arguments, Host);
       Result : Landin.Driver.Outcome;
@@ -685,6 +811,51 @@ package body Landin.Commands is
          Library_Root : constant String :=
            (if Named /= "" then Named
             else Landin.Library.Located (Host));
+         --  D1487: the citations `refine explain` would read there.
+         Citations_Path : constant String :=
+           (if Library_Root = "" then ""
+            else Landin.Paths.Joined_Path
+                   (Library_Root, Landin.Diagnostics.Citations.File_Name));
+         --  Whether it can be read: readable, other-sources, missing,
+         --  unreadable or other-format.
+         function Citations_State return String;
+         function Citations_State return String is
+            Content : US.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+            use type Landin.Platform.Read_Status;
+         begin
+            Host.Read_File (Citations_Path, Content, Read);
+            if Read = Landin.Platform.Not_Found then
+               return "missing";
+            elsif Read /= Landin.Platform.Read_Ok then
+               return "unreadable";
+            end if;
+            declare
+               Table : constant Landin.Diagnostics.Citations.Table :=
+                 Landin.Diagnostics.Citations.Read (Content);
+            begin
+               if not Landin.Diagnostics.Citations.Readable (Table) then
+                  return "other-format";
+               elsif Landin.Diagnostics.Citations.Source (Table)
+                 /= Landin.Build_Identity.Source_Digest
+               then
+                  return "other-sources";
+               end if;
+               return "readable";
+            end;
+         end Citations_State;
+         State : constant String :=
+           (if Citations_Path = "" then "" else Citations_State);
+         function Said (State : String) return String is
+           (if State = "readable" then "readable"
+            elsif State = "other-sources"
+            then "readable, generated from other compiler sources"
+            elsif State = "missing" then "not there"
+            elsif State = "unreadable" then "cannot be read"
+            else "written for another refine");
+         --  D1487: the split commands this refine was built with, each
+         --  where it is and whether it is compatible.
+         Splits : External.Found_Vectors.Vector;
       begin
          if Named /= ""
            and then not Landin.Library.Holds_Library (Host, Named)
@@ -694,6 +865,14 @@ package body Landin.Commands is
               & " them");
             return;
          end if;
+         for Item of External.Scan
+           (Host, Tools, External.Names (Shipped),
+            Landin.Build_Identity.Source_Digest)
+         loop
+            if Item.Is_Shipped then
+               Splits.Append (Item);
+            end if;
+         end loop;
          if Asked.Structured then
             J.Begin_Object (B);
             J.Name (B, "schema");
@@ -719,6 +898,41 @@ package body Landin.Commands is
             else
                J.Write_String (B, Library_Root);
             end if;
+            J.Name (B, "citations");
+            if Citations_Path = "" then
+               J.Write_Null (B);
+            else
+               J.Begin_Object (B);
+               J.Name (B, "path");
+               J.Write_String (B, Citations_Path);
+               J.Name (B, "state");
+               J.Write_String (B, State);
+               J.End_Object (B);
+            end if;
+            J.Name (B, "split_commands");
+            J.Begin_Array (B);
+            for Item of Splits loop
+               J.Begin_Object (B);
+               J.Name (B, "name");
+               J.Write_String (B, Item.Name);
+               J.Name (B, "path");
+               if Item.Path = "" then
+                  J.Write_Null (B);
+               else
+                  J.Write_String (B, Item.Path);
+               end if;
+               J.Name (B, "state");
+               J.Write_String
+                 (B, (if Item.Missing then "missing"
+                      elsif Item.About.Compatible then "compatible"
+                      else "incompatible"));
+               if not Item.Missing and then not Item.About.Compatible then
+                  J.Name (B, "reason");
+                  J.Write_String (B, US.To_String (Item.About.Reason));
+               end if;
+               J.End_Object (B);
+            end loop;
+            J.End_Array (B);
             J.End_Object (B);
             Result.Output := US.To_Unbounded_String (J.Result (B) & LF);
          else
@@ -729,7 +943,23 @@ package body Landin.Commands is
                   Landin.Build_Identity.Source_Digest,
                   Landin.Build_Identity.Dirty) & LF
                & "library: "
-               & (if Library_Root = "" then "none" else Library_Root) & LF);
+               & (if Library_Root = "" then "none" else Library_Root) & LF
+               & "citations: "
+               & (if Citations_Path = "" then "none"
+                  else Citations_Path & ", " & Said (State)) & LF);
+            if Splits.Is_Empty then
+               US.Append (Result.Output, "split commands: none" & LF);
+            end if;
+            for Item of Splits loop
+               US.Append (Result.Output, "split command " & Item.Name & ": "
+                 & (if Item.Missing
+                    then "missing" & (if Item.Path = "" then ""
+                                      else ", " & Item.Path)
+                    elsif Item.About.Compatible then Item.Path
+                    else Item.Path & ", incompatible: "
+                         & US.To_String (Item.About.Reason))
+                 & LF);
+            end loop;
          end if;
       end Identify;
       procedure List_Targets;
@@ -888,6 +1118,70 @@ package body Landin.Commands is
             Result.Output := US.To_Unbounded_String (J.Result (B) & LF);
          end if;
       end List_Targets;
+      --  D1384: the overview, with the external commands a scan finds
+      --  under their own heading.
+      function Overview return String;
+      function Overview return String is
+        (C.Usage
+           (External_Lines => External.Help_Lines
+              (External.Scan
+                 (Host, Tools, External.Names (Shipped),
+                  Landin.Build_Identity.Source_Digest))));
+
+      --  Whether Forward_Explanation left a command to run.
+      Forwarded_Run : Boolean := False;
+
+      --  D1385: a code of another prefix goes to the one contributed
+      --  command that claims the prefix; none or several are refused.
+      procedure Forward_Explanation (Code : String);
+      procedure Forward_Explanation (Code : String) is
+         Prefix : constant String := External.Forwarded_Prefix (Code);
+         Claimants : External.Found_Vectors.Vector;
+         Named : US.Unbounded_String;
+      begin
+         for Item of External.Scan
+           (Host, Tools, External.Names (Shipped),
+            Landin.Build_Identity.Source_Digest, Contributed => True)
+         loop
+            if Item.About.Compatible
+              and then Item.About.Codes.Contains (Prefix)
+            then
+               Claimants.Append (Item);
+            end if;
+         end loop;
+         if Claimants.Is_Empty then
+            Refuse ("no catalogue row holds the code: " & Code & "; "
+              & Prefix & " is not Landin's prefix, and no refine-NAME"
+              & " command on PATH claims it");
+         elsif Natural (Claimants.Length) > 1 then
+            for Item of Claimants loop
+               US.Append (Named,
+                 (if US.Length (Named) = 0 then "" else ", ")
+                 & "refine-" & Item.Name & " at " & Item.Path);
+            end loop;
+            Refuse ("more than one command on PATH claims the prefix "
+              & Prefix & " of " & Code & ": " & US.To_String (Named)
+              & "; run the one you mean directly, as refine-NAME explain "
+              & Code);
+         else
+            declare
+               Item : constant External.Found_Command :=
+                 Claimants.First_Element;
+               Arguments : Landin.Platform.Path_List;
+            begin
+               Arguments.Append ("explain");
+               Arguments.Append (Code);
+               Result := Run_External
+                 (Item.Name,
+                  (Of_Kind => External.Contributed,
+                   Path => US.To_Unbounded_String (Item.Path)),
+                  Arguments, Host, Tools,
+                  Output => Code & " is explained by refine-" & Item.Name
+                    & " at " & Item.Path & ", not by Landin" & LF);
+               Forwarded_Run := True;
+            end;
+         end if;
+      end Forward_Explanation;
    begin
       if US.Length (Asked.Problem) /= 0 then
          Refuse (US.To_String (Asked.Problem));
@@ -899,19 +1193,45 @@ package body Landin.Commands is
          Result.Output := US.To_Unbounded_String (C.Usage (Asked.Command));
       elsif Asked.Command = C.Help then
          if Asked.Operands.Is_Empty then
-            Result.Output := US.To_Unbounded_String (C.Usage);
+            Result.Output := US.To_Unbounded_String (Overview);
          elsif Asked.Operands.Element (1) = "reference" then
             Result.Output := US.To_Unbounded_String (C.Reference);
          elsif C.Known (Asked.Operands.Element (1)) then
             Result.Output := US.To_Unbounded_String
               (C.Usage (C.Named (Asked.Operands.Element (1))));
          else
-            Refuse ("unknown command: " & Asked.Operands.Element (1));
+            declare
+               use type External.Kind;
+               Name : constant String := Asked.Operands.Element (1);
+               Where : constant External.Location :=
+                 (if External.Is_Command_Name (Name) and then Name /= "build"
+                  then External.Locate
+                         (Name, Host, Tools, External.Names (Shipped))
+                  else (others => <>));
+            begin
+               if Where.Of_Kind = External.Absent then
+                  Refuse ("unknown command: " & Name);
+               else
+                  --  D1488: an external command's help is its own.
+                  return Run_External
+                    (Name, Where, Landin.Platform.Arguments ("--help"),
+                     Host, Tools);
+               end if;
+            end;
+         end if;
+      elsif Asked.Command = C.Explain
+        and then Natural (Asked.Operands.Length) = 1
+        and then External.Forwarded_Prefix (Asked.Operands.First_Element)
+                   /= ""
+      then
+         Forward_Explanation (Asked.Operands.First_Element);
+         if Forwarded_Run then
+            return Result;
          end if;
       else
          case Asked.Command is
             when C.Overview =>
-               Result.Output := US.To_Unbounded_String (C.Usage);
+               Result.Output := US.To_Unbounded_String (Overview);
             when C.Version => Identify;
             when C.Targets => List_Targets;
             when C.Svd =>
@@ -1201,7 +1521,7 @@ package body Landin.Commands is
          US.To_String (Asked.Color) = "always"
          or else (US.To_String (Asked.Color) = "auto" and Terminal_Color));
       return Result;
-   end Execute;
+   end Execute_Command;
 
    procedure Launch
      (Result : in out Landin.Driver.Outcome;
@@ -1212,6 +1532,7 @@ package body Landin.Commands is
       use type Landin.Platform.Remove_Status;
       Program : constant String := US.To_String (Result.Launch_Program);
       Directory : constant String := US.To_String (Result.Launch_Directory);
+      Setting : constant String := US.To_String (Result.Launch_Setting);
       Arguments : constant Landin.Platform.Path_List :=
         Result.Launch_Arguments;
       Ran : Landin.Platform.Program_Result;
@@ -1227,16 +1548,25 @@ package body Landin.Commands is
       Result.Trace := US.Null_Unbounded_String;
       Result.Launch_Program := US.Null_Unbounded_String;
       Result.Launch_Directory := US.Null_Unbounded_String;
+      Result.Launch_Setting := US.Null_Unbounded_String;
       Result.Launch_Arguments.Clear;
       begin
-         Tools.Run_Attached (Program, Arguments, Ran);
+         if Setting /= "" then
+            Tools.Run_Command (Program, Arguments, Setting, Ran);
+         else
+            Tools.Run_Attached (Program, Arguments, Ran);
+         end if;
       exception
          when Failure : Landin.External_Tool_Failed =>
             Started := False;
             Why := US.To_Unbounded_String
               (Landin.Platform.Tool_Failure_Reason (Tools, Failure));
          when Failure : others =>
-            Host.Remove_Tree (Directory, Removed);
+            if Directory /= "" then
+               Host.Remove_Tree (Directory, Removed);
+            else
+               Removed := Landin.Platform.Already_Absent;
+            end if;
             if Removed = Landin.Platform.Not_Removable then
                Ada.Exceptions.Raise_Exception
                  (Ada.Exceptions.Exception_Identity (Failure),
@@ -1245,7 +1575,11 @@ package body Landin.Commands is
             end if;
             raise;
       end;
-      Host.Remove_Tree (Directory, Removed);
+      if Directory /= "" then
+         Host.Remove_Tree (Directory, Removed);
+      else
+         Removed := Landin.Platform.Already_Absent;
+      end if;
       if not Started then
          Result.Status := Landin.Driver.Status_Reported;
          Result.Report := "refine: " & Why & LF;

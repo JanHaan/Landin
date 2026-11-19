@@ -90,7 +90,12 @@ package Landin.Commands.Catalogue is
    function Nearest_Option (Stem : String) return String;
    function Informational_Problem (Asked : String) return String;
 
-   function Usage (Command : Action := Overview) return String;
+   --  External_Lines, the overview's alone, are the external commands a
+   --  scan found, listed under their own heading after the built-in ones
+   --  (D1384); "" leaves the heading out.
+   function Usage
+     (Command : Action := Overview; External_Lines : String := "")
+      return String;
    function Reference return String;
    function Shell_Completion (Shell : String) return String;
 

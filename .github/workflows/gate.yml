@@ -197,7 +197,7 @@ jobs:
       - name: Package debug executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/linux-amd64-debug.tar.gz"
-          -C compiler/ada/build/linux-amd64/debug bin source-manifest.txt tests-manifest.txt
+          -C compiler/ada/build/linux-amd64/debug bin libexec source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -397,7 +397,7 @@ jobs:
       - name: Package release executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/linux-release.tar.gz"
-          -C compiler/ada/build/linux-amd64/release bin source-manifest.txt tests-manifest.txt
+          -C compiler/ada/build/linux-amd64/release bin libexec source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -444,7 +444,7 @@ jobs:
       - name: Package release executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/linux-release-clean.tar.gz"
-          -C compiler/ada/build/linux-amd64/release bin source-manifest.txt tests-manifest.txt
+          -C compiler/ada/build/linux-amd64/release bin libexec source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1294,7 +1294,7 @@ jobs:
       - name: Package release executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/darwin-release.tar.gz"
-          -C compiler/ada/build/darwin-arm64/release bin source-manifest.txt tests-manifest.txt
+          -C compiler/ada/build/darwin-arm64/release bin libexec source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1344,7 +1344,7 @@ jobs:
       - name: Package release executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/darwin-release-clean.tar.gz"
-          -C compiler/ada/build/darwin-arm64/release bin source-manifest.txt tests-manifest.txt
+          -C compiler/ada/build/darwin-arm64/release bin libexec source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1478,7 +1478,7 @@ jobs:
       - name: Package debug executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/darwin-arm64-debug.tar.gz"
-          -C compiler/ada/build/darwin-arm64/debug bin source-manifest.txt tests-manifest.txt
+          -C compiler/ada/build/darwin-arm64/debug bin libexec source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1830,7 +1830,7 @@ jobs:
       - name: Package debug executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/linux-arm64-debug.tar.gz"
-          -C compiler/ada/build/linux-arm64/debug bin source-manifest.txt tests-manifest.txt
+          -C compiler/ada/build/linux-arm64/debug bin libexec source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

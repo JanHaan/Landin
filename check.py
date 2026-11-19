@@ -9755,6 +9755,93 @@ FIRST_PROGRAM = "compiler/tests/fixtures/runtime/first-program"
 COMMAND_REFERENCE = "compiler/tests/commands.reference"
 
 
+def reference_commands(text):
+    """The commands a COMMAND_REFERENCE text lists, in order: the
+    built-in commands `refine help reference` prints."""
+    commands, block = [], None
+    for line in text.splitlines():
+        if line.endswith(":") and not line.startswith(" "):
+            block = line
+        elif not line.strip():
+            block = None
+        elif block == "Commands:":
+            found = re.match(r"^  ([a-z]+)  ", line)
+            if found:
+                commands.append(found.group(1))
+    return commands
+
+
+SPLIT_COMMANDS = "compiler/ada/split-commands.json"
+
+
+def check_split_commands(full_run):
+    """The one list of split commands names projects that build them.
+
+    compiler/ada/split-commands.json lists the `refine-NAME` executables
+    the `refine` dispatcher runs, and scripts/build_identity.py reads it
+    for the build, the package and the source digest, as the flake reads
+    it for its packages.  That script refuses a list it cannot read: the
+    wrong format, a name that is not lower-case letters, digits and
+    hyphens, or one listed twice.  Here each name must also be no built-in
+    command COMMAND_REFERENCE records, which the dispatcher would never
+    reach, and its project must build what scripts/build.sh publishes:
+    `for Main use` the entry's main, `for Executable` of that main
+    `refine-NAME`, linked into Landin_Common.Exec_Dir from objects in
+    Landin_Common.Build_Dir & "/refine-NAME-obj".
+    """
+    if not full_run:
+        return []
+    out = absent([os.path.join(ROOT, SPLIT_COMMANDS),
+                  os.path.join(ROOT, COMMAND_REFERENCE),
+                  os.path.join(ROOT, "scripts/build_identity.py")])
+    if out:
+        return out
+    import runpy
+    from pathlib import Path
+    identity = runpy.run_path(os.path.join(ROOT, "scripts/build_identity.py"),
+                              run_name="build_identity_split_commands")
+    try:
+        listed = identity["split_commands"](Path(ROOT))
+    except identity["ProjectError"] as error:
+        return [(SPLIT_COMMANDS, 1, str(error))]
+    builtins = set(reference_commands(read_file(
+        os.path.join(ROOT, COMMAND_REFERENCE), encoding="utf-8")))
+    for name, project, main in listed:
+        if name in builtins:
+            out.append((SPLIT_COMMANDS, 1,
+                        "%s is a built-in command %s records; a split"
+                        " command needs a name refine does not already"
+                        " answer" % (name, COMMAND_REFERENCE)))
+        relative = "compiler/ada/" + project
+        path = os.path.join(ROOT, relative)
+        if not os.path.isfile(path):
+            out.append((SPLIT_COMMANDS, 1,
+                        "%s's project %s does not exist" % (name, relative)))
+            continue
+        text = "\n".join(line.split("--", 1)[0] for line in
+                         read_file(path, encoding="utf-8").splitlines())
+        executable = "refine-" + name
+        wanted = (
+            (r'for\s+Main\s+use\s*\(\s*"%s"\s*\)\s*;' % re.escape(main),
+             'for Main use ("%s");' % main),
+            (r'for\s+Executable\s*\(\s*"%s"\s*\)\s+use\s+"%s"\s*;'
+             % (re.escape(main), re.escape(executable)),
+             'for Executable ("%s") use "%s";' % (main, executable)),
+            (r'for\s+Exec_Dir\s+use\s+Landin_Common\.Exec_Dir\s*;',
+             "for Exec_Dir use Landin_Common.Exec_Dir;"),
+            (r'for\s+Object_Dir\s+use\s+Landin_Common\.Build_Dir\s*&\s*'
+             r'"/%s-obj"\s*;' % re.escape(executable),
+             'for Object_Dir use Landin_Common.Build_Dir & "/%s-obj";'
+             % executable))
+        for pattern, spelled in wanted:
+            if not re.search(pattern, text, re.IGNORECASE):
+                out.append((relative, 1,
+                            "does not say `%s`, which scripts/build.sh needs"
+                            " to build and publish the split command %s that"
+                            " %s lists" % (spelled, name, SPLIT_COMMANDS)))
+    return out
+
+
 def check_command_reference(full_run):
     """Every command and option `refine help reference` prints is named.
 
@@ -9775,9 +9862,10 @@ def check_command_reference(full_run):
     if missing:
         return missing
 
-    commands, options = [], []
+    recorded = read_file(record, encoding="utf-8")
+    commands, options = reference_commands(recorded), []
     block = None
-    for line in read_file(record, encoding="utf-8").splitlines():
+    for line in recorded.splitlines():
         if line.endswith(":") and not line.startswith(" "):
             block = line
             continue
@@ -9785,11 +9873,7 @@ def check_command_reference(full_run):
             if block == "Commands:":
                 block = None
             continue
-        if block == "Commands:":
-            found = re.match(r"^  ([a-z]+)  ", line)
-            if found:
-                commands.append(found.group(1))
-        elif block == "Options:":
+        if block == "Options:":
             found = re.match(r"^  (-[A-Za-z]|--[a-z][a-z-]*)"
                              r"(?:, (--[a-z][a-z-]*))?(?:\s|$)", line)
             if found:
@@ -12279,6 +12363,7 @@ def main(argv):
     extra += check_running_examples(full_run)
     extra += check_first_program(full_run)
     extra += check_command_reference(full_run)
+    extra += check_split_commands(full_run)
     extra += check_from_c_page(full_run)
     extra += check_library_page(full_run)
     extra += check_library_documentation(full_run)

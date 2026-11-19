@@ -45,6 +45,8 @@ void landin_cancellation_hold(void);
 void landin_cancellation_release(void);
 int landin_program_run(char *const args[], int *signal_number,
                        int *status, int *child);
+int landin_command_run(char *const args[], const char *setting,
+                       int *signal_number, int *status, int *child);
 const char *landin_signal_name(int signal_number);
 
 /* A direct child reserves its PID/PGID only while its exit status remains
@@ -756,8 +758,45 @@ static void landin_program_catch(int number, struct sigaction *old)
    status, or with SIGNAL_NUMBER nonzero when a signal ended it; otherwise
    an errno value, CHILD nonzero when the program was started and could
    not be waited for. */
+static int landin_attached_run(char *const args[], char *const env[],
+                               int *signal_number, int *status, int *child);
+
 int landin_program_run(char *const args[], int *signal_number,
                        int *status, int *child)
+{
+    return landin_attached_run(args, environ, signal_number, status, child);
+}
+
+/* D1486: as landin_program_run, with SETTING, NAME=VALUE, in the program's
+   environment in place of every variable of that NAME the caller has. */
+int landin_command_run(char *const args[], const char *setting,
+                       int *signal_number, int *status, int *child)
+{
+    const char *equal = strchr(setting, '=');
+    size_t name_length, count = 0, kept = 0, index;
+    char **env;
+    int error;
+
+    *signal_number = 0;
+    *status = 0;
+    *child = 0;
+    if (equal == NULL || equal == setting) return EINVAL;
+    name_length = (size_t)(equal - setting) + 1;
+    while (environ[count] != NULL) count++;
+    env = calloc(count + 2, sizeof *env);
+    if (env == NULL) return ENOMEM;
+    for (index = 0; index < count; index++)
+        if (strncmp(environ[index], setting, name_length) != 0)
+            env[kept++] = environ[index];
+    env[kept++] = (char *)setting;
+    env[kept] = NULL;
+    error = landin_attached_run(args, env, signal_number, status, child);
+    free(env);
+    return error;
+}
+
+static int landin_attached_run(char *const args[], char *const env[],
+                               int *signal_number, int *status, int *child)
 {
     posix_spawnattr_t attributes;
     struct sigaction ignore, old_interrupt, old_quit, old_terminate,
@@ -827,7 +866,7 @@ int landin_program_run(char *const args[], int *signal_number,
     }
     landin_program_catch(SIGTERM, &old_terminate);
     landin_program_catch(SIGHUP, &old_hangup);
-    error = posix_spawn(&pid, args[0], NULL, &attributes, args, environ);
+    error = posix_spawn(&pid, args[0], NULL, &attributes, args, env);
     posix_spawnattr_destroy(&attributes);
     if (error != 0) {
         /* No program to pass them to: what was sent is refine's again. */

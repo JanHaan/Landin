@@ -52,6 +52,13 @@ package Landin.Platform is
    function Executable_Directory (Host : Filesystem) return String
      is abstract;
 
+   --  The running compiler's executable itself, with every link resolved,
+   --  or "" when the host cannot say: the path a command `refine`
+   --  dispatches is told to call back (D1486).  Executable_Directory is
+   --  the directory it is in.
+   function Executable_Path (Host : Filesystem) return String
+     is abstract;
+
    --  True for names of the same object, including links and relative paths,
    --  or when identity cannot safely be distinguished. Missing output leaves
    --  use actual parent identity and destination-filesystem name equivalence,
@@ -381,6 +388,35 @@ package Landin.Platform is
       Program   : String;
       Arguments : Path_List;
       Result    : out Program_Result) is abstract;
+
+   --  Run as Run does, stopped after Seconds rather than the runner's own
+   --  limit and reported as Timed_Out (D1387): how `refine` asks a
+   --  command it would dispatch to describe itself.
+   procedure Run_Within
+     (Host      : Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Seconds   : Duration;
+      Result    : out Tool_Result;
+      Capture   : Capture_Mode := Merged) is abstract;
+
+   --  D1384: run the command at Program, a path, as Run_Attached runs a
+   --  program, except that Program need not be in a private directory,
+   --  and with Setting, `NAME=VALUE`, in its environment in place of any
+   --  variable of that name the caller has (D1486).  A command that
+   --  cannot be started raises External_Tool_Failed.
+   procedure Run_Command
+     (Host      : Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Setting   : String;
+      Result    : out Program_Result) is abstract;
+
+   --  D1384: the programs on the search path whose names begin with
+   --  Prefix, each name once, as the first directory that has it gives
+   --  it, and sorted by name.  Each element is the program's path.
+   function Programs_On_Path (Host : Tool_Runner; Prefix : String)
+     return Path_List is abstract;
 
    --  The whole reason for the External_Tool_Failed a runner raised last.
    --  GNAT cuts an exception's message at 200 characters, and a reason
