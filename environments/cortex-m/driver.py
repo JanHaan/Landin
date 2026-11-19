@@ -568,16 +568,15 @@ def execute_suite(parent,refine,profiles=PROFILES,cases=None):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--refine',type=Path,required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(p)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--tools',type=Path,default=DEFAULT)
     p.add_argument('--all-profiles',action='store_true')
     p.add_argument('--case',action='append')
     p.add_argument('--profile', choices=[o+'-'+s for o,s in PROFILES])
     a=p.parse_args();supported_host(a.output);a.tools=installed_tools(a.tools);before=inventory(a.tools)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(a.refine)  # is it this checkout's?
     require(a.case is None or set(a.case) <= {'app','protocol','layout'},'unknown driver case')
     a.output.mkdir(parents=True,exist_ok=False)
     record={'status':'failed','tools':before,'scope':'development; not acceptance'}

@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from macos_environment import Capture
 import macho_identity
 import check as linux
+import lane_refine
 
 PROFILES = (('none', 'off'), ('size', 'auto'), ('size', 'all'))
 
@@ -26,16 +27,13 @@ def main():
     if sys.flags.optimize:
         raise RuntimeError("acceptance assertions require Python optimization disabled")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', type=Path, required=True)
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--profile', choices=('none-off', 'size-auto', 'size-all',
                                               *(key for key, _, _ in linux.REGISTER_PROFILES)))
     parser.add_argument('--parity', action='store_true')
     parser.add_argument('--workload', choices=linux.WORKLOADS, help='development only')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'native arm64 Mac required'
     import panic
     output = panic.fresh(args.output)
@@ -175,14 +173,15 @@ def main():
         assert not deployed, deployed
         #  D1292: `refine site` holds the stripped executable to the table
         #  by `__TEXT,__landin_id` and its dSYM to it by UUID.
-        lookup = [args.refine.resolve(), 'site', '--map=' + str(table_path), '--dsym=' + str(dsym),
+        site = lane_refine.command(args.refine.resolve(), 'site')
+        lookup = [*site, '--map=' + str(table_path), '--dsym=' + str(dsym),
                   stripped, '2', str(linux.CALLER_LINE), str(linux.CALLER_COLUMN)]
         resolved = run(key + '-lookup', lookup)
         assert resolved == str(linux.ODD_SOURCE.relative_to(ROOT)) + f':{linux.CALLER_LINE}:{linux.CALLER_COLUMN}\n'
         wrong = dict(table, build_id='0' * 64)
         mismatch = output / (key + '-wrong.sources.json')
         mismatch.write_text(json.dumps(wrong))
-        run(key + '-mismatch', [*lookup[:2], '--map=' + str(mismatch), *lookup[3:]], 1)
+        run(key + '-mismatch', [*site, '--map=' + str(mismatch), *lookup[len(site) + 1:]], 1)
         results.append({'optimize': opt, 'specialize': spec, 'status': 'passed',
                         'identity': identity, 'checks': len(session['checks'])})
         scalar_exe = output / (key + '-scalars')

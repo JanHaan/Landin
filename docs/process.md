@@ -257,8 +257,10 @@ commands, so an earlier failure stops the sequence.
 A `refine` from a sibling checkout or an older build is easy to pick up,
 and its refusals look like the current compiler's. After a developer
 build, `dev-build.sh` and `dev-test.sh` ask the binary what it was built
-from, and so does every lane that takes `--refine`;
-`python3 scripts/refine_revision.py --refine PATH` asks for any other.
+from, and so does every lane that takes `--refine`, as it reads the
+argument: each takes it from `scripts/lane_refine.py`, which a new lane
+uses too. `python3 scripts/refine_revision.py --refine PATH` asks for any
+other.
 `refine version --json` names the revision, whether that tree was dirty
 and the digest of the compiler sources the binary was built from, and the
 digest decides: a binary built from the checkout's compiler sources is
@@ -267,8 +269,16 @@ warning:` line on standard error saying how it parts from the checkout:
 older, when it was built from an ancestor of HEAD, or from HEAD with the
 tree's uncommitted edits made since; newer, from a descendant of HEAD;
 and from another line of history, or from a revision the checkout lacks,
-which is neither (D1307). The warning changes no status, and `refine`
-itself never reads git.
+which is neither (D1307). A split command, `refine-NAME`, is asked
+`--describe` and judged by the digest it names; its revision is the one
+of the `refine` installed beside it, when that has the same digest. The
+warning changes no status, and `refine` itself never reads git.
+
+A lane that runs `svd`, `bindings` or `site` takes either binary as its
+`--refine`: given `refine` it runs `refine svd ...`, given the split
+command's own `refine-svd` it runs that directly, and a case that needs a
+built-in command uses the `refine` installed beside the split
+(`lane_refine.command` and `lane_refine.dispatcher`).
 
 The test program's workers are another matter, and a brief names them.
 `LANDIN_TEST_JOBS` is one by default and reaches only the two corpus-wide

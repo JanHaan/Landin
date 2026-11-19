@@ -13,7 +13,8 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with GNAT.SHA256;
 
-with Landin.Commands;
+with Landin.Outcomes;
+with Landin.Splits.Svd;
 with Landin.Devices;
 with Landin.Devices.Projection;
 with Landin.Driver;
@@ -24,6 +25,27 @@ with Landin.Targets.Firmware;
 with Landin.Xml;
 
 package body Landin.Tests.Devices_Suite is
+
+   --  `refine svd WORDS` is `refine-svd WORDS` (D1383): the request
+   --  without its first word, the command's name.
+   function Run_Split
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class)
+      return Landin.Outcomes.Outcome;
+
+   function Run_Split
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class)
+      return Landin.Outcomes.Outcome
+   is
+      Rest : Landin.Platform.Path_List := Arguments;
+   begin
+      Rest.Delete_First;
+      return Landin.Splits.Svd.Execute
+        (Rest, Host, Tools);
+   end Run_Split;
 
    package US renames Ada.Strings.Unbounded;
    package Dev renames Landin.Devices;
@@ -997,7 +1019,6 @@ package body Landin.Tests.Devices_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-      Meter : Landin.Platform.Unmetered;
       Arguments : constant Landin.Platform.Path_List :=
         ["svd", "--policy=toy.json", "--out-dir=out", "toy.svd"];
 
@@ -1020,7 +1041,7 @@ package body Landin.Tests.Devices_Suite is
          Prepare (Host);
          declare
             First : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+              Run_Split (Arguments, Host, Tools);
          begin
             Landin.Testing.Check_Equal
               (Item, First.Status, 0, "written: " & Code_Of (First));
@@ -1043,7 +1064,7 @@ package body Landin.Tests.Devices_Suite is
          end;
          declare
             Again : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+              Run_Split (Arguments, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Again.Status = 0
@@ -1060,7 +1081,7 @@ package body Landin.Tests.Devices_Suite is
                       "}}"));
          declare
             Narrowed : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+              Run_Split (Arguments, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Narrowed.Status = 0
@@ -1088,7 +1109,7 @@ package body Landin.Tests.Devices_Suite is
             Arrange (Host);
             declare
                Result : constant Landin.Driver.Outcome :=
-                 Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+                 Run_Split (Arguments, Host, Tools);
             begin
                Landin.Testing.Check
                  (Item, Result.Status = Landin.Driver.Status_Reported
@@ -1268,7 +1289,7 @@ package body Landin.Tests.Devices_Suite is
             & GNAT.SHA256.Digest ("generated" & LF) & """}");
          declare
             Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+              Run_Split (Arguments, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Result.Status = Landin.Driver.Status_Reported
@@ -1286,7 +1307,7 @@ package body Landin.Tests.Devices_Suite is
             & GNAT.SHA256.Digest ("generated" & LF) & """}");
          declare
             Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+              Run_Split (Arguments, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Result.Status = 0
@@ -1306,7 +1327,6 @@ package body Landin.Tests.Devices_Suite is
    procedure Each_Fault_Has_Its_Code (Item : in out Landin.Testing.Context)
    is
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-      Meter : Landin.Platform.Unmetered;
 
       procedure Expect (Text, Policy, Code, Place : String);
 
@@ -1318,9 +1338,9 @@ package body Landin.Tests.Devices_Suite is
          Host.Add_Directory ("out");
          declare
             Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute
+              Run_Split
                 (["svd", "--policy=toy.json", "--out-dir=out", "toy.svd"],
-                 Host, Tools, Meter);
+                 Host, Tools);
             Report : constant String := US.To_String (Result.Report);
          begin
             Landin.Testing.Check

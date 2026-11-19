@@ -7,7 +7,7 @@ with Landin.Diagnostics.Catalogue;
 with Landin.Json;
 with Landin.Source;
 
-package body Landin.Commands.Presentation is
+package body Landin.Presentation is
    package US renames Ada.Strings.Unbounded;
    package D renames Landin.Diagnostics;
    package J renames Landin.Json;
@@ -18,7 +18,7 @@ package body Landin.Commands.Presentation is
    use type D.Applicability;
 
    procedure Render
-     (Result : in out Landin.Driver.Outcome;
+     (Result : in out Landin.Outcomes.Outcome;
       Format : Style;
       Color : Boolean)
    is
@@ -215,7 +215,7 @@ package body Landin.Commands.Presentation is
             end if;
          end;
       end loop;
-      if Result.Status >= Landin.Driver.Status_Defect
+      if Result.Status >= Landin.Outcomes.Status_Defect
         or else (D.Count (Result.Found) = 0 and then Original /= "")
       then
          if Format = JSON then
@@ -231,4 +231,4 @@ package body Landin.Commands.Presentation is
          Result.Trace := Text;
       end if;
    end Render;
-end Landin.Commands.Presentation;
+end Landin.Presentation;

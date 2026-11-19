@@ -575,7 +575,7 @@ class GeneratedReference(unittest.TestCase):
         self.assertIn('bindings.html',
                       (self.destination / 'llms.txt').read_text())
         self.assertIn('https://www.701.dev/bindings.html',
-                      (ROOT / 'compiler/ada/src/driver/landin-commands-catalogue.adb').read_text())
+                      (ROOT / 'compiler/ada/src/splits/landin-splits-bindings.adb').read_text())
 
     def test_every_export_is_searchable_with_a_stable_destination(self):
         index = json.loads((self.destination / 'library-index.json').read_text())

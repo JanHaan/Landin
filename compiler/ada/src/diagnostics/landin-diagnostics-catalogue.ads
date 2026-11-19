@@ -58,7 +58,7 @@
 --     whose Failure is derived from Code_Name and so names the code
 --     already; the scanner maps a Landin.Tokens.Fault_Kind in
 --     Landin.Diagnostics.Lexical.Code_For, and `refine svd` a device fault
---     in Landin.Commands.Devices.Code_For.  The driver and the backend build
+--     in Landin.Splits.Svd.Code_For.  The driver and the backend build
 --     theirs from the row.  Each reporting package holds what it builds to
 --     the row.
 --  4. The evidence the row's Shown_By names: a negative fixture whose

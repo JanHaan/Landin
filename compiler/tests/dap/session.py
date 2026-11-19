@@ -35,6 +35,8 @@ import sys
 import time
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[2] / 'scripts'))
+import lane_refine  # noqa: E402
 SOURCE = HERE / 'main.ldn'
 
 if sys.flags.optimize:
@@ -251,8 +253,8 @@ def run_session(adapter_argv, program, source, output, label, debugger=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('--refine', required=True,
-                        help='the refine whose `refine dap` is driven')
+    lane_refine.argument(parser,
+                         help='the refine whose `refine dap` is driven')
     parser.add_argument('--adapter', help='run this refine-dap directly'
                         ' rather than through `refine dap`')
     parser.add_argument('--target', help='the target to compile for;'
@@ -268,10 +270,8 @@ def main():
                         ' user emulator and attach GDB to its stub')
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
-    sys.path.insert(0, str(HERE.parents[2] / 'scripts'))
-    import refine_revision
     import build_lock
-    refine_revision.warn(args.refine)  # is it this checkout's?
+    args.refine = str(args.refine)
     #  A rebuild of this build waits for the session rather than replace
     #  refine-dap under it.
     build_lock.reading(args.refine)

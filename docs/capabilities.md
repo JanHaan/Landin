@@ -449,9 +449,17 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   under the directory that holds `bin/refine`, and is looked for nowhere
   else. Any other NAME is a contributed `refine-NAME` on `PATH`, where the
   first directory that has one wins (D1384, D1484). Every word after NAME
-  is passed to the command as written. No split command is shipped yet:
-  `compiler/ada/split-commands.json` lists them, and the release archive
-  and the flake carry an empty `libexec/landin` (D1483).
+  is passed to the command as written. `svd`, `bindings` and `site` are
+  split commands, `refine-svd`, `refine-bindings` and `refine-site`, each
+  built from the same tree as `refine` and linked from the same library
+  without its front end (D1383, D1543); `compiler/ada/split-commands.json`
+  lists them, and the release archive and the flake ship them in
+  `libexec/landin` (D1483). Each reads its own options and response files
+  and answers `--help`, `--describe` and `--complete`, and takes the
+  shared `--color`, `--diagnostics`, `--quiet` and `--verbose`, so a
+  request written before the split means what it did (D1544). An option
+  written before a split command's name is `refine`'s own, and the
+  request is refused with its form, the name first (D1545).
 - Before running one, `refine` asks it `refine-NAME --describe`. It
   refuses a command whose answer it cannot accept, saying what came back
   and what to do: a shipped one built from other compiler sources, a

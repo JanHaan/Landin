@@ -26272,6 +26272,97 @@ sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
 
 **Pinned by** the commands suite's `the dispatcher` and `scripts/tests/test_cli_native.py`'s contributed command.
 
+### D1543 — A split command links its own work and none of the front end
+
+**D1383 said** that `svd`, `bindings` and `site` are split commands, each
+its own executable linking the same library, and D1423 that a program
+withing a unit links the body of every unit whose specification it holds,
+a parent's among them; it did not say how much of the library a split may
+hold.
+
+**Chosen:** a split command's main withs nothing whose closure reaches the
+scanner, the parser, the checker, the IR, a backend, `Landin.Driver` or
+`Landin.Commands`. What a command produced, its status, output, report and
+the report as data, is `Landin.Outcomes.Outcome`, which `Landin.Driver`
+names as `Outcome`; its presentation is `Landin.Presentation` and response
+files are `Landin.Response_Files`, all three moved out from under
+`Landin.Driver` and `Landin.Commands`, whose bodies with the whole compiler.
+The three commands are `Landin.Splits.Svd`, `Landin.Splits.Bindings` and
+`Landin.Splits.Site`, children of `Landin.Splits`, each called by a main of
+three lines, `refine_svd.adb`, `refine_bindings.adb` or `refine_site.adb`,
+in a project of its own. Linked alone,
+`refine-svd` holds 35 of the compiler's units and 4.2 MB of their text in a
+debug build, `refine-bindings` 33 and 5.1 MB, `refine-site` 25 and 1.7 MB,
+where `refine` holds 155 and 42.8 MB. A closure pin for each main holds it
+to the exact set of units it links, and `scripts/unit_closure.py` refuses a
+cut that a link cannot honour, a parent of a unit the closure keeps, rather
+than measure a closure no executable has.
+
+**The alternatives:** a GPR base project for the splits, which the
+maintainer declined on 2026-11-18 and which bounds nothing an Ada `with`
+does not; keeping the commands under `Landin.Commands` and cutting the
+parent in the measurement, which reports 22 units for a program that links
+149; and a limit on the size of each split, which a growing command would
+keep moving.
+
+**Pinned by** `scripts/tests/test_unit_closure.py`'s `SplitClosures`,
+which also holds that every command in `compiler/ada/split-commands.json`
+has its pin.
+
+### D1544 — A split command keeps the request it answered as a built-in one
+
+**D1485 said** what `refine` asks of a split command, `--describe`,
+`--help` and `--complete`; it did not say what a split reads of the words
+a user writes after its name.
+
+**Chosen:** every split command reads its words through `Landin.Splits`:
+its own options, each written `--NAME=VALUE` or `--NAME VALUE` and given
+once unless it repeats, `--` before literal operands, and `@FILE` response
+files expanded and protected as `refine` expands them; the shared
+`--color`, `--diagnostics`, `--quiet`, `--verbose` and `-vv`, with the same
+values and the same refusal of `--quiet` beside `--verbose`; and `--help`,
+which prints `usage: refine NAME ...`, the options, and the command's own
+notes. A request that does not parse is refused with L0002 at status 2, as
+before, and the report is presented as `--diagnostics` and `--color` ask.
+`--describe` alone, and `--complete` as the first word, are D1485's
+answers: the description names `refine`'s source digest and no prefix,
+since the codes of a shipped command are `L` codes in the one catalogue,
+and completion offers the options a word begins, a shared option's values
+after it, and nothing for a path, which the shell completes. A run that ends
+in a defect, an exhausted host or a tool that could not start ends with
+`refine`'s statuses, 70, 71 and 72, its line naming `refine-NAME`.
+`refine help reference` is the reference of the built-in commands; a
+split's is its own help.
+
+**The alternatives:** a split taking only its own options, which breaks
+every `refine svd --diagnostics=json ...` written before the split; `refine`
+parsing a split's words for it, which D1484 refused; and each split writing
+its own parse, which lets three spellings of one option drift apart.
+
+**Pinned by** the commands suite's `a split answers its own surface`, the
+devices and bindings suites through each split's entry, and
+`devices/test.py`'s `ToyGoldens`, run through `refine svd` and `refine-svd`.
+
+### D1545 — An option before a split command's name is told its new form
+
+**D1484 said** that an option written before an external command's name
+keeps `refine`'s meaning and is refused as D384 says; D384 names the
+command an option belongs to, which for an option of a split `refine` no
+longer knows.
+
+**Chosen:** when the first word that is no option, before any `--` or
+response file, is the name of a split command `refine` was built with, the
+request is refused with L0002, status 2, before anything is read or run:
+the option before the name is `refine`'s own, the command takes its
+options after its name, and the request is written again with the name
+first, `refine --quiet svd x.svd` told `refine svd --quiet x.svd`.
+
+**The alternatives:** dispatching the name with the options before it,
+which makes an option mean something to `refine` and to the command both,
+as D1484 refused; and the unknown-command refusal of D1463, which offered
+`refine check` for a word that names a command.
+
+**Pinned by** the commands suite's `a split answers its own surface`.
 ### D1523 — `refine dap` speaks GDB/MI to GDB and relays LLDB's own adapter
 
 **The tour said** nothing; D1383 made `dap` a split command over the debuggers the targets script.
@@ -28832,6 +28923,14 @@ handed a binary by path, where the stale one was met.
 
 **Pinned by** `scripts/tests/test_refine_revision.py`, whose `Callers`
 holds every lane that takes `--refine` and the developer build to asking.
+
+**Amended on 2026-11-19:** every lane takes `--refine` from one
+helper, `scripts/lane_refine.py`, which asks as the argument is read. A
+lane may be handed a split command, `refine-NAME`, which answers
+`--describe` rather than `version --json` (D1387): its `source_digest`
+decides as above, and when it is not the checkout's the revision is that of
+the `refine` installed beside it with the same digest, or the warning says
+none is.
 
 ### D1308 — A runtime fixture may name the targets that do not emit it yet
 

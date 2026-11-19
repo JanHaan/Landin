@@ -1171,7 +1171,9 @@ def main():
                ' held. Repeat it to run several, and --level to run each at several'
                ' levels. --level takes the corpus\'s names, which are not all refine\'s:'
                ' see --level.')
-    parser.add_argument('--refine', type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case', action='append', default=[],
@@ -1200,9 +1202,6 @@ def main():
                              ' every row runs at armv6-m and each execute row at the levels'
                              ' its fixture\'s levels: names')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Native compiler publication controls; every input is in an owned root."""
+"""Native compiler publication controls; every input is in an owned root.
+
+Every selected control runs, whatever the ones before it did: a failing
+one is reported with its evidence as it fails, what it left in the scratch
+directories is cleared, and the failures are listed together at the end,
+with a nonzero status.  Each control's row is in OUTPUT/results.json."""
 import argparse
 import errno
 import fcntl
@@ -15,6 +20,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import traceback
 
 
 def entry_snapshot(path):
@@ -405,14 +411,13 @@ def host_controls(refine, root, env, source, driver):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--case', action='append', default=[],
                         help='select an exact control; repeat for a union')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     refine = args.refine.resolve(strict=True)
     root = (args.output.absolute() if args.output else
             Path(tempfile.mkdtemp(prefix='landin-compile-publication-')))
@@ -638,166 +643,194 @@ def main():
         cases = [case for case in cases if case[0] in args.case]
         host = [control for control in host if control[0] in args.case]
     results = []
+    failures = []
+
+    def failed(name, error):
+        """The row of a control that raised rather than reached its verdict."""
+        return dict(case=name, passed=False,
+                    error=''.join(traceback.format_exception(error)))
+
+    def settle(row):
+        """Record ROW and, when it failed, say why and clear what it left,
+        so the controls after it are judged on their own."""
+        results.append(row)
+        (root / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
+        print(('PASS ' if row['passed'] else 'FAIL ') + row['case'], flush=True)
+        if row['passed']:
+            return
+        failures.append(row['case'])
+        print(json.dumps(row, indent=2, default=str), file=sys.stderr, flush=True)
+        for path in [*temporary.iterdir(), *root.rglob('.refine-publication-*'),
+                     execution]:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path, ignore_errors=True)
+            elif path.exists() or path.is_symlink():
+                path.unlink()
+
     for name, operands, protected, succeeds in cases:
-        budget_artifacts = [root / 'budget-product', root / 'budget-product.s']
-        budget_before = [entry_snapshot(path) for path in budget_artifacts]
-        before = protected.read_bytes()
-        identity = protected.stat()
-        refused_report = None
-        report_before = None
-        if name.startswith('early-') and not name.startswith('early-safe-'):
-            refused_report = Path(next(value.split('=', 1)[1]
-                                       for value in operands
-                                       if value.startswith('--stage-report=')))
-            if not refused_report.is_absolute():
-                refused_report = root / refused_report
-            report_before = entry_snapshot(refused_report)
-        case_env = dict(env)
-        if name.startswith('early-'):
-            case_env['PATH'] = str(selected_tools) + os.pathsep + env['PATH']
-        limit = None
-        if name == 'file-size-limit':
-            def limit():
-                signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
-                hard = resource.getrlimit(resource.RLIMIT_FSIZE)[1]
-                resource.setrlimit(resource.RLIMIT_FSIZE, (0, hard))
-        result = subprocess.run([str(refine), 'compile', *operands], cwd=root,
-                                env=case_env, capture_output=True, timeout=45,
-                                preexec_fn=limit)
-        after = protected.stat()
-        expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
-        if name in missing_parent_tool_reports:
-            # The selected absent tool and report share a spelling, but the
-            # unavailable output parent now refuses before tool protection.
-            expected_failure = (result.returncode == 2 and b'L0005' in result.stderr
-                                and b'stage report parent is missing:' in result.stderr
-                                and b'create the parent directory' in result.stderr
-                                and b'path under an existing directory' in result.stderr
-                                and b'collid' not in result.stderr
-                                and not refused_report.parent.exists())
-        elif name in missing_outputs:
-            destination = missing_outputs[name]
-            expected_failure = (result.returncode != 0
-                                and b'parent is missing:' in result.stderr
-                                and b'create the parent directory' in result.stderr
-                                and b'collid' not in result.stderr
-                                and not destination.parent.exists())
-        elif name == 'output-parent-unavailable':
-            expected_failure = (result.returncode != 0
-                                and b'cannot establish stage report identity' in result.stderr
-                                and b'parent access' in result.stderr
-                                and b'collid' not in result.stderr)
-        report_after = (entry_snapshot(refused_report)
-                        if refused_report is not None else None)
-        if name == 'output-directory':
-            expected_failure = (result.returncode == 2 and b'L0005' in result.stderr
-                                and b'-o names the file to write' in result.stderr
-                                and (b'for example -o ' + str(output_directory / 'main').encode())
-                                in result.stderr
-                                and sorted(output_directory.iterdir()) == [directory_sentinel])
-        elif name == 'file-size-limit':
-            named = str(file_size_product).encode()
-            expected_failure = (result.returncode == 1 and b'L0005' in result.stderr
-                                and os.strerror(errno.EFBIG).encode() in result.stderr
-                                and b'no publication workspace remains' in result.stderr
-                                and result.stderr.count(b'cannot prepare') == 1
-                                and result.stderr.count(named) == 1
-                                and b'choose another output path' not in result.stderr
-                                and not file_size_product.exists())
-        if name == 'missing-parent-budget':
-            expected_failure = result.returncode == 1 and b'L0505' in result.stderr
-        elif name == 'missing-parent-tool':
-            expected_failure = result.returncode == 1 and b'L0500' in result.stderr
-        if name.startswith('early-safe-'):
-            safe_report = Path(next(value.split('=', 1)[1] for value in operands
-                                    if value.startswith('--stage-report=')))
-            expected_failure = (result.returncode == 1 and b'L0012' in result.stderr
-                                and safe_report.is_file()
-                                and json.loads(safe_report.read_text())['format']
-                                == 'landin-stage-report-1')
-        product_ok = True
-        if succeeds and '-o' in operands:
-            product = Path(operands[operands.index('-o') + 1])
-            product_ok = (product.is_file() and product.stat().st_size > 0
-                          and os.access(product, os.X_OK))
-            if sys.platform == 'darwin' and '--debug=full' in operands:
-                debug_object = product.with_name(product.name + '.o')
-                debug_bundle = product.with_name(product.name + '.dSYM')
-                dwarf = debug_bundle / 'Contents/Resources/DWARF' / product.name
-                product_ok = (product_ok and debug_object.is_file()
-                              and debug_object.stat().st_size > 0
-                              and dwarf.is_file() and dwarf.stat().st_size > 0)
-        passed = ((result.returncode == 0 if succeeds else expected_failure)
-                  and product_ok
-                  and budget_before == [entry_snapshot(path) for path in budget_artifacts]
-                  and protected.read_bytes() == before
-                  and (identity.st_dev, identity.st_ino, identity.st_mode)
-                  == (after.st_dev, after.st_ino, after.st_mode)
-                  and report_before == report_after
-                  and entry_snapshot(assembly_object) == assembly_object_before
-                  and not execution.exists()
-                  and not list(temporary.iterdir())
-                  and not list(root.rglob('.refine-publication-*')))
-        route_control = None
-        if name in missing_outputs:
-            destination.parent.mkdir()
-            route_control = subprocess.run(result.args, cwd=root, env=case_env,
-                                           capture_output=True, timeout=45)
-            passed = (passed and route_control.returncode == 0
-                      and destination.is_file()
+        try:
+            budget_artifacts = [root / 'budget-product', root / 'budget-product.s']
+            budget_before = [entry_snapshot(path) for path in budget_artifacts]
+            before = protected.read_bytes()
+            identity = protected.stat()
+            refused_report = None
+            report_before = None
+            if name.startswith('early-') and not name.startswith('early-safe-'):
+                refused_report = Path(next(value.split('=', 1)[1]
+                                           for value in operands
+                                           if value.startswith('--stage-report=')))
+                if not refused_report.is_absolute():
+                    refused_report = root / refused_report
+                report_before = entry_snapshot(refused_report)
+            case_env = dict(env)
+            if name.startswith('early-'):
+                case_env['PATH'] = str(selected_tools) + os.pathsep + env['PATH']
+            limit = None
+            if name == 'file-size-limit':
+                def limit():
+                    signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+                    hard = resource.getrlimit(resource.RLIMIT_FSIZE)[1]
+                    resource.setrlimit(resource.RLIMIT_FSIZE, (0, hard))
+            result = subprocess.run([str(refine), 'compile', *operands], cwd=root,
+                                    env=case_env, capture_output=True, timeout=45,
+                                    preexec_fn=limit)
+            after = protected.stat()
+            expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
+            if name in missing_parent_tool_reports:
+                # The selected absent tool and report share a spelling, but the
+                # unavailable output parent now refuses before tool protection.
+                expected_failure = (result.returncode == 2 and b'L0005' in result.stderr
+                                    and b'stage report parent is missing:' in result.stderr
+                                    and b'create the parent directory' in result.stderr
+                                    and b'path under an existing directory' in result.stderr
+                                    and b'collid' not in result.stderr
+                                    and not refused_report.parent.exists())
+            elif name in missing_outputs:
+                destination = missing_outputs[name]
+                expected_failure = (result.returncode != 0
+                                    and b'parent is missing:' in result.stderr
+                                    and b'create the parent directory' in result.stderr
+                                    and b'collid' not in result.stderr
+                                    and not destination.parent.exists())
+            elif name == 'output-parent-unavailable':
+                expected_failure = (result.returncode != 0
+                                    and b'cannot establish stage report identity' in result.stderr
+                                    and b'parent access' in result.stderr
+                                    and b'collid' not in result.stderr)
+            report_after = (entry_snapshot(refused_report)
+                            if refused_report is not None else None)
+            if name == 'output-directory':
+                expected_failure = (result.returncode == 2 and b'L0005' in result.stderr
+                                    and b'-o names the file to write' in result.stderr
+                                    and (b'for example -o ' + str(output_directory / 'main').encode())
+                                    in result.stderr
+                                    and sorted(output_directory.iterdir()) == [directory_sentinel])
+            elif name == 'file-size-limit':
+                named = str(file_size_product).encode()
+                expected_failure = (result.returncode == 1 and b'L0005' in result.stderr
+                                    and os.strerror(errno.EFBIG).encode() in result.stderr
+                                    and b'no publication workspace remains' in result.stderr
+                                    and result.stderr.count(b'cannot prepare') == 1
+                                    and result.stderr.count(named) == 1
+                                    and b'choose another output path' not in result.stderr
+                                    and not file_size_product.exists())
+            if name == 'missing-parent-budget':
+                expected_failure = result.returncode == 1 and b'L0505' in result.stderr
+            elif name == 'missing-parent-tool':
+                expected_failure = result.returncode == 1 and b'L0500' in result.stderr
+            if name.startswith('early-safe-'):
+                safe_report = Path(next(value.split('=', 1)[1] for value in operands
+                                        if value.startswith('--stage-report=')))
+                expected_failure = (result.returncode == 1 and b'L0012' in result.stderr
+                                    and safe_report.is_file()
+                                    and json.loads(safe_report.read_text())['format']
+                                    == 'landin-stage-report-1')
+            product_ok = True
+            if succeeds and '-o' in operands:
+                product = Path(operands[operands.index('-o') + 1])
+                product_ok = (product.is_file() and product.stat().st_size > 0
+                              and os.access(product, os.X_OK))
+                if sys.platform == 'darwin' and '--debug=full' in operands:
+                    debug_object = product.with_name(product.name + '.o')
+                    debug_bundle = product.with_name(product.name + '.dSYM')
+                    dwarf = debug_bundle / 'Contents/Resources/DWARF' / product.name
+                    product_ok = (product_ok and debug_object.is_file()
+                                  and debug_object.stat().st_size > 0
+                                  and dwarf.is_file() and dwarf.stat().st_size > 0)
+            passed = ((result.returncode == 0 if succeeds else expected_failure)
+                      and product_ok
+                      and budget_before == [entry_snapshot(path) for path in budget_artifacts]
                       and protected.read_bytes() == before
+                      and (identity.st_dev, identity.st_ino, identity.st_mode)
+                      == (after.st_dev, after.st_ino, after.st_mode)
+                      and report_before == report_after
+                      and entry_snapshot(assembly_object) == assembly_object_before
+                      and not execution.exists()
+                      and not list(temporary.iterdir())
                       and not list(root.rglob('.refine-publication-*')))
-        elif name == 'output-parent-unavailable':
-            repaired = [value.replace(str(unavailable_report),
-                                      str(root / 'available-stage.json'))
-                        for value in result.args]
-            route_control = subprocess.run(repaired, cwd=root, env=case_env,
-                                           capture_output=True, timeout=45)
-            passed = (passed and route_control.returncode == 0
-                      and (root / 'available-stage.json').is_file()
-                      and protected.read_bytes() == before
-                      and not list(root.rglob('.refine-publication-*')))
-        row = dict(case=name, command=result.args, exit_status=result.returncode,
-                   passed=passed, protected=str(protected),
-                   route_control=(None if route_control is None else
-                                  dict(command=route_control.args,
-                                       exit_status=route_control.returncode,
-                                       stdout=route_control.stdout.decode(errors='replace'),
-                                       stderr=route_control.stderr.decode(errors='replace'))),
-                   before_sha256=hashlib.sha256(before).hexdigest(),
-                   after_sha256=hashlib.sha256(protected.read_bytes()).hexdigest(),
-                   before_identity=[identity.st_dev, identity.st_ino, identity.st_mode],
-                   after_identity=[after.st_dev, after.st_ino, after.st_mode],
-                   tool_executed=execution.exists(),
-                   assembly_object_before=assembly_object_before,
-                   assembly_object_after=entry_snapshot(assembly_object),
-                   refused_report=str(refused_report) if refused_report else None,
-                   report_entry_before=report_before,
-                   report_entry_after=report_after,
-                   stdout=result.stdout.decode(errors='replace'),
-                   stderr=result.stderr.decode(errors='replace'))
-        results.append(row)
-        (root / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
-        print(('PASS ' if passed else 'FAIL ') + name, flush=True)
-        if not passed:
-            raise AssertionError(row)
+            route_control = None
+            if name in missing_outputs:
+                destination.parent.mkdir()
+                route_control = subprocess.run(result.args, cwd=root, env=case_env,
+                                               capture_output=True, timeout=45)
+                passed = (passed and route_control.returncode == 0
+                          and destination.is_file()
+                          and protected.read_bytes() == before
+                          and not list(root.rglob('.refine-publication-*')))
+            elif name == 'output-parent-unavailable':
+                repaired = [value.replace(str(unavailable_report),
+                                          str(root / 'available-stage.json'))
+                            for value in result.args]
+                route_control = subprocess.run(repaired, cwd=root, env=case_env,
+                                               capture_output=True, timeout=45)
+                passed = (passed and route_control.returncode == 0
+                          and (root / 'available-stage.json').is_file()
+                          and protected.read_bytes() == before
+                          and not list(root.rglob('.refine-publication-*')))
+            row = dict(case=name, command=result.args, exit_status=result.returncode,
+                       passed=passed, protected=str(protected),
+                       route_control=(None if route_control is None else
+                                      dict(command=route_control.args,
+                                           exit_status=route_control.returncode,
+                                           stdout=route_control.stdout.decode(errors='replace'),
+                                           stderr=route_control.stderr.decode(errors='replace'))),
+                       before_sha256=hashlib.sha256(before).hexdigest(),
+                       after_sha256=hashlib.sha256(protected.read_bytes()).hexdigest(),
+                       before_identity=[identity.st_dev, identity.st_ino, identity.st_mode],
+                       after_identity=[after.st_dev, after.st_ino, after.st_mode],
+                       tool_executed=execution.exists(),
+                       assembly_object_before=assembly_object_before,
+                       assembly_object_after=entry_snapshot(assembly_object),
+                       refused_report=str(refused_report) if refused_report else None,
+                       report_entry_before=report_before,
+                       report_entry_after=report_after,
+                       stdout=result.stdout.decode(errors='replace'),
+                       stderr=result.stderr.decode(errors='replace'))
+        except Exception as error:  # noqa: BLE001 - every control runs
+            row = failed(name, error)
+        settle(row)
     for name, control in host:
-        work = root / name
-        work.mkdir()
-        seen = control(work)
-        passed = (seen is None and not workspaces(work)
-                  and not list(temporary.iterdir()))
-        row = dict(case=name, passed=passed, seen=seen, left=workspaces(work),
-                   temporary=sorted(path.name for path in temporary.iterdir()))
-        results.append(row)
-        (root / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
-        print(('PASS ' if passed else 'FAIL ') + name, flush=True)
-        if not passed:
-            raise AssertionError(row)
+        try:
+            work = root / name
+            work.mkdir()
+            seen = control(work)
+            passed = (seen is None and not workspaces(work)
+                      and not list(temporary.iterdir()))
+            row = dict(case=name, passed=passed, seen=seen, left=workspaces(work),
+                       temporary=sorted(path.name for path in temporary.iterdir()))
+        except Exception as error:  # noqa: BLE001 - every control runs
+            row = failed(name, error)
+        settle(row)
     scope = ' FILTERED' if args.case else ''
+    if failures:
+        print('compile publication%s: %d of %d controls failed; evidence %s\n'
+              % (scope, len(failures), len(results), root)
+              + '\n'.join('  ' + name for name in failures), file=sys.stderr)
+        return 1
     print('compile publication%s: %d controls passed; evidence %s' %
           (scope, len(results), root))
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

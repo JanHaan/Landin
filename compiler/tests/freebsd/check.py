@@ -850,7 +850,9 @@ def main():
                         help='size: no guest; link every measured workload with the lane\'s'
                              ' cross driver and compare its sections with the baselines'
                              ' (docs/measurement.md)')
-    parser.add_argument('--refine', type=Path)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser, required=False)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cache', type=Path, default=Path.home() / '.cache/landin/freebsd')
     parser.add_argument('--clang', default='clang-19')
@@ -869,9 +871,6 @@ def main():
     parser.add_argument('--shard', type=shard, metavar='I/N',
                         help='fixtures I, I+N, ... of the selection; all N together are the lane')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))

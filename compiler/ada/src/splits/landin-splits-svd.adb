@@ -10,7 +10,7 @@ with Landin.Platform.Publication;
 with Landin.Source;
 with Landin.Source.Sets;
 
-package body Landin.Commands.Devices is
+package body Landin.Splits.Svd is
 
    package US renames Ada.Strings.Unbounded;
    package Dev renames Landin.Devices;
@@ -52,7 +52,7 @@ package body Landin.Commands.Devices is
    procedure Import
      (Svd_Path, Policy_Path, Out_Dir : String;
       Host   : Landin.Platform.Filesystem'Class;
-      Result : in out Landin.Driver.Outcome;
+      Result : in out Landin.Outcomes.Outcome;
       Protected_Inputs : Landin.Platform.Path_List :=
         Landin.Platform.Path_Vectors.Empty_Vector;
       Protected_Identities : Landin.Platform.Identity_List :=
@@ -82,7 +82,7 @@ package body Landin.Commands.Devices is
          Source : Landin.Source.Source_Id := Landin.Source.No_Source;
          Where : Landin.Source.Span := Landin.Source.Empty_Span) is
       begin
-         Result.Status := Landin.Driver.Status_Reported;
+         Result.Status := Landin.Outcomes.Status_Reported;
          Result.Found.Append
            (Landin.Diagnostics.Make
               (Code => Cat.Code (Code), Level => Landin.Diagnostics.Error,
@@ -443,4 +443,81 @@ package body Landin.Commands.Devices is
          raise;
    end Import;
 
-end Landin.Commands.Devices;
+   Policy  : constant := 1;
+   Out_Dir : constant := 2;
+
+   Options : constant Option_Array :=
+     [Policy => Valued
+        ("--policy", "VALUE",
+         "The policy that selects what is generated, and how"),
+      Out_Dir => Valued
+        ("--out-dir", "VALUE", "Directory the outputs are written under")];
+
+   Usage_Line : constant String :=
+     "--policy=POLICY.json --out-dir=DIR DEVICE.svd";
+
+   About : constant Command :=
+     (Name => US.To_Unbounded_String ("svd"),
+      Summary => US.To_Unbounded_String
+        ("Generate a device's register modules and interrupts from its SVD"),
+      Usage => US.To_Unbounded_String (Usage_Line),
+      Notes => US.To_Unbounded_String
+        ("Example: refine svd --policy=devices/policies/rp2040.json"
+         & ASCII.LF & "  --out-dir=devices RP2040.svd" & ASCII.LF
+         & "The SVD must be the file the policy was reviewed against,"
+         & ASCII.LF & "by its SHA-256. The policy selects the peripherals and"
+         & ASCII.LF & "registers to generate and says how each may be read"
+         & " and" & ASCII.LF & "written; devices/README.md describes it."
+         & " Every output is" & ASCII.LF & "written beside its destination"
+         & " and read back before any" & ASCII.LF & "is replaced, and a"
+         & " failure puts back what was replaced." & ASCII.LF
+         & "scripts/fetch_inputs.py fetches a pinned SVD by its hash."
+         & ASCII.LF));
+
+   function Perform
+     (Asked     : Request;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Built_For : String) return Landin.Outcomes.Outcome;
+
+   function Perform
+     (Asked     : Request;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Built_For : String) return Landin.Outcomes.Outcome
+   is
+      pragma Unreferenced (Tools, Built_For);
+      Result : Landin.Outcomes.Outcome;
+   begin
+      if Natural (Asked.Operands.Length) /= 1 then
+         return Refused
+           (Cat.Unknown_Option, "svd reads one SVD: refine svd " & Usage_Line,
+            Landin.Outcomes.Status_Misuse);
+      elsif not Given (Asked, Policy) or else not Given (Asked, Out_Dir) then
+         return Refused
+           (Cat.Unknown_Option,
+            "svd needs the policy the SVD was reviewed against and where to"
+            & " write: refine svd " & Usage_Line,
+            Landin.Outcomes.Status_Misuse);
+      end if;
+      Import
+        (Svd_Path => Asked.Operands.First_Element,
+         Policy_Path => Value (Asked, Policy),
+         Out_Dir => Value (Asked, Out_Dir),
+         Host => Host, Result => Result,
+         Protected_Inputs => Asked.Consumed_Response_Files,
+         Protected_Identities => Asked.Consumed_Response_Identities);
+      return Result;
+   end Perform;
+
+   function Execute
+     (Arguments      : Landin.Platform.Path_List;
+      Host           : Landin.Platform.Filesystem'Class;
+      Tools          : Landin.Platform.Tool_Runner'Class;
+      Built_For      : String := "";
+      Terminal_Color : Boolean := False) return Landin.Outcomes.Outcome is
+     (Landin.Splits.Execute
+        (About, Options, Perform'Access, Arguments, Host, Tools, Built_For,
+         Terminal_Color));
+
+end Landin.Splits.Svd;

@@ -1,0 +1,5 @@
+error[L0528]: UARTA.CR has dim, an array whose name has no %s, which is not expanded
+  --> toy.svd:19:26
+   |
+19 |           <name>CR</name><dim>2</dim>
+   |                          ^

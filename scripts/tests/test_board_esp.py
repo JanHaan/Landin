@@ -1153,7 +1153,7 @@ class RigSide(unittest.TestCase):
     def test_a_bundle_run_asks_nothing_of_scripts(self):
         args = SimpleNamespace(bundle=Path('/bundle'), refine=None, spacing=None, quiet=None,
                                probe_rs='probe-rs', nm=None, objdump=None)
-        with mock.patch.dict(sys.modules, {'refine_revision': None}), \
+        with mock.patch.dict(sys.modules, {'refine_revision': None, 'lane_refine': None}), \
                 mock.patch.object(ESP.common, 'Pace'):
             try:
                 ESP.required_tools(args)

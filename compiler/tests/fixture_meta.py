@@ -33,8 +33,8 @@ FIXTURES = HERE / "fixtures"
 NAME = "fixture.meta"
 
 #  `refine`'s commands, as `Landin.Commands.Catalogue.Name` spells them.
-COMMANDS = ("check", "compile", "run", "fmt", "svd", "bindings", "explain",
-            "site", "lsp", "version", "targets", "completion", "help")
+COMMANDS = ("check", "compile", "run", "fmt", "explain", "lsp", "version",
+            "targets", "completion", "help")
 
 #  Ordered as `Landin.Testing.Fixtures.Fixture_Class`, which is the order a
 #  run reports them in.

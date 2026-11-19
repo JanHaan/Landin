@@ -1,0 +1,5 @@
+error[L0526]: the policy is not JSON: a member needs a string name
+  --> toy.json:1:2
+  |
+1 | {
+  |  ^

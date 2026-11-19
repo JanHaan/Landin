@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import select
 import signal
 import socket
@@ -2352,16 +2353,19 @@ class StaleRefineOnTheRig(unittest.TestCase):
     bundle, with neither the compiler nor scripts/ beside it."""
     def test_a_bundle_run_asks_nothing_of_scripts(self):
         args = SimpleNamespace(bundle=Path('/bundle'), refine=None)
-        with mock.patch.dict(sys.modules, {'refine_revision': None}):
+        with mock.patch.dict(sys.modules, {'refine_revision': None, 'lane_refine': None}):
             COMMON.warn_stale_refine(args)
 
     def test_no_board_tool_imports_the_checkout_helper_itself(self):
         boards = Path(__file__).resolve().parents[2] / 'environments' / 'boards'
         local = {'run.py', 'build.py', 'common.py'}
         found = [str(path.relative_to(boards)) for path in boards.rglob('*.py')
-                 if path.name not in local and 'refine_revision' in path.read_text()]
-        self.assertEqual(found, [], 'a tool the rig runs imports scripts/refine_revision;'
-                                     ' call common.warn_stale_refine(args)')
+                 if path.name not in local
+                 and re.search(r'refine_revision|lane_refine', path.read_text())]
+        self.assertEqual(found, [], 'a tool the rig runs imports scripts/refine_revision'
+                                     ' or scripts/lane_refine; take --refine with'
+                                     ' common.refine_argument(parser) and call'
+                                     ' common.warn_stale_refine(args)')
 
 
 if __name__ == '__main__':
