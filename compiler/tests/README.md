@@ -1486,7 +1486,12 @@ the first thing it demanded.
 writes it by lowering every positive fixture and rendering the Unit with
 `Landin.IR.Dump`, at linux-x86-64, or, for a fixture whose `targets:`
 leaves that out, at the target and level its `args` name, which a
-`target` line after its `file` line records (D659). `compiler/tests/layout.targets` is written by the same
+`target` line after its `file` line records (D659). The recording reads
+only what a fixture imports: it does not add the Cortex-M0 reference
+description `refine` gives a firmware program that imports no description
+(D543), so a fixture with a `link(vector:)` handler imports
+`platform/cortex_m/reference` itself, or the recording fails with L0518.
+`compiler/tests/layout.targets` is written by the same
 command, and records what `Landin.Targets` says scalar and aggregate shapes
 measure, align to and offset their fields by on each described target. Its D74
 rows also work the tag-first variant part and one containing aggregate on each
