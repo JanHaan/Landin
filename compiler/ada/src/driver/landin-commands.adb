@@ -369,10 +369,6 @@ package body Landin.Commands is
                if Specific_Before then
                   Refuse (Placed (Result.Command));
                end if;
-            elsif not Literal and then not Result.Explicit_Command
-              and then Result.Operands.Is_Empty and then Text = "build"
-            then
-               Refuse ("build is reserved for future project orchestration");
             elsif Literal and then Result.Command = C.Run then
                --  D526: after `run`'s `--`, every word is the program's,
                --  an empty one too.
@@ -590,9 +586,7 @@ package body Landin.Commands is
       --  name an external one, is looked for; the words after it are the
       --  command's own, exactly as written.  One found nowhere is refused
       --  as an unknown command, as before (D1463).
-      if External.Is_Command_Name (First) and then not C.Known (First)
-        and then First /= "build"
-      then
+      if External.Is_Command_Name (First) and then not C.Known (First) then
          declare
             Where : constant External.Location :=
               External.Locate (First, Host, Tools, External.Names (Shipped));
@@ -601,6 +595,13 @@ package body Landin.Commands is
             if Where.Of_Kind /= External.Absent then
                Rest.Delete_First;
                return Run_External (First, Where, Rest, Host, Tools);
+            elsif First = External.Build_Name then
+               --  D1603: `build` is a contributed tool's, and without one
+               --  the refusal says so rather than calling it unknown.
+               return Refused
+                 (Landin.Diagnostics.Catalogue.Unknown_Option,
+                  External.Build_Absent_Message,
+                  Landin.Driver.Status_Misuse);
             end if;
          end;
       end if;
@@ -1202,12 +1203,16 @@ package body Landin.Commands is
                use type External.Kind;
                Name : constant String := Asked.Operands.Element (1);
                Where : constant External.Location :=
-                 (if External.Is_Command_Name (Name) and then Name /= "build"
+                 (if External.Is_Command_Name (Name)
                   then External.Locate
                          (Name, Host, Tools, External.Names (Shipped))
                   else (others => <>));
             begin
-               if Where.Of_Kind = External.Absent then
+               if Where.Of_Kind = External.Absent
+                 and then Name = External.Build_Name
+               then
+                  Refuse (External.Build_Absent_Message);
+               elsif Where.Of_Kind = External.Absent then
                   Refuse ("unknown command: " & Name);
                else
                   --  D1488: an external command's help is its own.

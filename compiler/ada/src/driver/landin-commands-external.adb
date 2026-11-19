@@ -258,7 +258,6 @@ package body Landin.Commands.External is
          begin
             if Is_Command_Name (Name)
               and then not Catalogue.Known (Name)
-              and then Name /= "build"
               and then not Shipped.Contains (Name)
             then
                Result.Append
@@ -311,6 +310,11 @@ package body Landin.Commands.External is
       end if;
       return Code (Code'First .. Last_Letter);
    end Forwarded_Prefix;
+
+   function Build_Absent_Message return String is
+     ("refine has no build command of its own: refine build runs a"
+      & " contributed " & Prefix & Build_Name & ", and none is on PATH;"
+      & " install one, or compile a program with refine compile");
 
    function Missing_Message (Name : String; Where : Location) return String
    is

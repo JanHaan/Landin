@@ -489,7 +489,8 @@ package body Landin.Commands.Catalogue is
               & LF & "  refine check SOURCE.ldn"
               & LF & "--identify is a compatibility spelling; use 'version'"
               & LF & "and 'targets'."
-              & LF & "'build' is reserved for future project orchestration."
+              & LF & "'build' runs a contributed refine-build; refine has"
+              & LF & "no build command of its own."
               & LF);
          when Check | Compile | Run =>
             US.Append (Text, LF
@@ -606,15 +607,19 @@ package body Landin.Commands.Catalogue is
          return US.To_String (Words);
       end Options;
       --  D1485: the words no external command can be: every built-in
-      --  command and the reserved `build`, as Separator joins them.
+      --  command, as Separator joins them.  `build` is not among them
+      --  (D1603): a contributed refine-build completes its own words.
       function Builtins (Separator : String) return String;
       function Builtins (Separator : String) return String is
          Words : US.Unbounded_String;
       begin
          for Command in Action range Check .. Help loop
-            US.Append (Words, Name (Command) & Separator);
+            if Command /= Check then
+               US.Append (Words, Separator);
+            end if;
+            US.Append (Words, Name (Command));
          end loop;
-         return US.To_String (Words) & "build";
+         return US.To_String (Words);
       end Builtins;
       Shape : constant String := "^[A-Za-z][A-Za-z0-9_-]*$";
    begin

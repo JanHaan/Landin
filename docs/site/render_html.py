@@ -1405,6 +1405,11 @@ GUIDES = [
          nav="what the language server answers",
          blurb="`refine lsp`: where a file belongs, what each request is "
                "answered with, and how far it reads past a syntax error."),
+    dict(key="commands", src="docs/commands.md", out="commands.html",
+         nav="writing a command for refine",
+         blurb="What a contributed `refine-NAME` answers: its description, "
+               "its words, help, completion and explanations, with a "
+               "complete example."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
          nav="the intermediate representation",
          blurb="How checked source becomes verified, target-neutral IR, "
@@ -2403,7 +2408,8 @@ NAV_GROUPS = [
                       "documents"]),
     ("the project", ["readme", "capabilities", "roadmap", "handoff"]),
     ("the compiler", ["compiler", "ir", "diagnostics", "format", "server",
-                      "targets", "core", "bindings", "toolchain", "editors"]),
+                      "commands", "targets", "core", "bindings", "toolchain",
+                      "editors"]),
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
                             "environments", "devices", "driver",
                             "cortex-m", "native-ci"]),

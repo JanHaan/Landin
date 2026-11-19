@@ -343,8 +343,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   a `.ldn` file nor a path, the refusal also says that `refine help` lists
   the commands.
 - The default target is the compiler's own host; cross-compilation names a
-  `--target`. `compile`'s `--emit=asm|exe` remain compatibility spellings,
-  and `build` is reserved for future project orchestration.
+  `--target`. `compile`'s `--emit=asm|exe` remain compatibility spellings.
+  `refine` has no `build` of its own: `refine build` runs a contributed
+  `refine-build` on PATH as any contributed command, and without one is
+  refused saying so.
 - `refine fmt source.ldn ...` rewrites each named source, or every `.ldn`
   file under a named directory, in the one layout
   [`docs/format.md`](format.md) shows, changing its space and nothing else.

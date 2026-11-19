@@ -30,7 +30,8 @@ A source follows its command:
   refine check SOURCE.ldn
 --identify is a compatibility spelling; use 'version'
 and 'targets'.
-'build' is reserved for future project orchestration.
+'build' runs a contributed refine-build; refine has
+no build command of its own.
 
 usage: refine check [options] source.ldn ...
 
