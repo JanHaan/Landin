@@ -1015,7 +1015,11 @@ process ignores SIGPIPE and gives its children the default back.
   caller-saved registers, floating-point values included. Both keep each
   routine's traps after its body, compute into a result's own register with
   immediate operands, fuse comparisons with their branches and fold indexed
-  accesses into scaled operands.
+  accesses into scaled operands. RISC-V, RV64 and RV32, places slots and
+  values with arm64's placement in the registers a routine's text, emitted
+  once with every value in a home, does not write over their intervals,
+  checking its second emission against the plan; RV32 holds eight-byte
+  values in register pairs (D1503).
 - **At speed** a direct call to a small routine becomes a copy of its body,
   which the debuggers show as an inlined frame of that routine (D339);
   slices and small structs split into scalars; and a branch whose arms only

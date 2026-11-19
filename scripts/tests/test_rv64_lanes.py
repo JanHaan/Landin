@@ -104,7 +104,7 @@ class RV64Controls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             args = SimpleNamespace(output=Path(tmp), gdb='gdb')
             result = {'label': 'debug-control', 'lines': {
-                'result = local + 1': 3, 'result = inner(local)': 8,
+                'result = local + 1': 3, 'result = step(local)': 8,
                 'result = ready': 10}}
             completed = SimpleNamespace(returncode=0, stdout=trace.encode(), stderr=b'')
             with patch.object(LANE.subprocess, 'run', return_value=completed):

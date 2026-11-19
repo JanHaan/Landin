@@ -1,14 +1,14 @@
 {
   "status": "passed",
-  "image_sha256": "920cea7db4d80900f4e82d8a3664fb28c7b5af2479faabee57de84713eac7809",
+  "image_sha256": "ed1f7a824788720831928f1f2ac93a8e924f43ed37279c530c3d9df15390e93a",
   "image_name": "board.elf",
   "amoadd": [
     {
-      "address": "10002570",
+      "address": "10002294",
       "function": "add_u32"
     }
   ],
-  "flashed_as": "RP235x",
+  "flashed_as": "RP235x_riscv",
   "flash_readback": "matches",
   "verdicts": {
     "boot": {
@@ -36,7 +36,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 1486,
+      "timer_events": 1250,
       "echoed": 11202,
       "sent": 11572
     },
@@ -64,22 +64,22 @@
     "reports": 7,
     "trans_count": 1094
   },
-  "uart_sha256": "f7d49cad168133c5cf1d16a373585e1231f33d7dade518e9e9e42bbbff10679d",
+  "uart_sha256": "59b08bb4d09748f4c12c338691fed4a286e06bc98a5c40898198fab3c5b0ab06",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
-    "sha256": "70de19d41ce6b27fc6e8b7c68ca1eaefbe3e97dbedfc926f4f99d506ccb0e50d",
+    "sha256": "7f60809077ba826a15b23e48252da09a3c0bf997c155b0216307c5617aa0b395",
     "marker": {
       "symbol": "_landin_fixed_ready",
       "address": 536870932,
       "value": 1279678513,
-      "elf_sha256": "70de19d41ce6b27fc6e8b7c68ca1eaefbe3e97dbedfc926f4f99d506ccb0e50d"
+      "elf_sha256": "7f60809077ba826a15b23e48252da09a3c0bf997c155b0216307c5617aa0b395"
     }
   },
-  "seconds": 39.115,
+  "seconds": 37.72,
   "kernel_usb": {
-    "since": 1794564894.251312,
-    "until": 1794564933.3477964,
+    "since": 1795054664.6952052,
+    "until": 1795054702.3975415,
     "lines": [],
     "status": "captured"
   },
@@ -97,7 +97,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "000005ce",
+      "m": "000004e2",
       "u": "00000001",
       "p": "8000000b",
       "n": "00000446",
@@ -114,14 +114,9 @@
     "probe-ping",
     "hub-before-attach",
     "attach-RP235x",
+    "attach-RP235x_riscv",
     "flash",
-    "hub-status",
-    "power-cycle",
     "hub-wait",
-    "probe-ping",
-    "hub-before-attach",
-    "reattach-RP235x",
-    "reattach-RP235x_riscv",
     "flash-readback",
     "hub-status",
     "power-cycle",

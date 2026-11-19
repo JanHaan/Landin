@@ -165,7 +165,7 @@ class Lane(SHARED.Lane):
     def build_debugger(self):
         source = HERE / 'debug.ldn'
         lines = {needle: next(i for i, line in enumerate(source.read_text().splitlines(), 1)
-                              if needle in line) for needle in ('result = local + 1', 'result = inner(local)', 'result = ready')}
+                              if needle in line) for needle in ('result = local + 1', 'result = step(local)', 'result = ready')}
         results = []
         for optimize, specialize in PROFILES:
             label = 'debug-' + optimize + '-' + specialize
@@ -428,7 +428,7 @@ def debugger(args, manifest):
                 label + ': GDB unwind markers missing or out of order')
         unwound = text[markers[0].end():markers[1].start()]
         require(re.search(r'^#0[ \t]+[^\r\n]*\bouter\b[^\r\n]*debug\.ldn:' +
-                          str(lines['result = inner(local)']) + r'\b', unwound, re.M),
+                          str(lines['result = step(local)']) + r'\b', unwound, re.M),
                 label + ': GDB finish did not unwind to caller source line')
         returned = text[markers[1].end():]
         require(re.search(r'\bouter\b[^\r\n]*debug\.ldn:' +
