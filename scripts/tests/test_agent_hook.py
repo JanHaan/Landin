@@ -4,6 +4,7 @@ other setting alone."""
 import contextlib
 import io
 import json
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -11,6 +12,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import agent_hook
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from temporary_git import environment  # noqa: E402
 
 OLDER = ('s="$CLAUDE_PROJECT_DIR/scripts/agent_env.sh"; [ -x "$s" ] && f=$("$s")'
          ' && cat "$f" >> "$CLAUDE_ENV_FILE"; exit 0')
@@ -70,6 +73,37 @@ class AgentHook(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("older    %s" % self.settings, said)
         self.assertIn("--install", said)
+
+    def test_checking_names_an_older_copy_in_any_worktree_of_the_clone(self):
+        clone = self.settings.parent.parent / "clone"
+        other = self.settings.parent.parent / "elsewhere" / "worktree"
+
+        def git(*arguments):
+            subprocess.run(["git", *arguments], cwd=clone, check=True,
+                           env=environment(), stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+
+        clone.mkdir()
+        git("init", "-q", "-b", "main")
+        git("commit", "-q", "--allow-empty", "-m", "base")
+        git("worktree", "add", "-q", "--detach", str(other))
+        stale = other / ".claude" / "settings.local.json"
+        stale.parent.mkdir()
+        stale.write_text(json.dumps({"hooks": {"SessionStart": [
+            {"matcher": "", "hooks": [{"type": "command", "command": OLDER}]}]}}))
+        self.run_main("--install")
+        saved = agent_hook.ROOT
+        agent_hook.ROOT = clone
+        try:
+            status, said = self.run_main("--check")
+        finally:
+            agent_hook.ROOT = saved
+        self.assertEqual(status, 1, said)
+        self.assertIn("current  %s" % self.settings, said)
+        self.assertIn("older    %s" % stale.resolve(), said)
+        self.assertNotIn("none     %s" % clone, said)
+        self.assertIn("of the 2 worktree(s)", said)
+        self.assertIn("not in other clones", said)
 
     def test_a_file_that_is_not_settings_is_left_as_it_is(self):
         self.settings.parent.mkdir(parents=True)

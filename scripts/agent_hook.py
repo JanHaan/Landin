@@ -15,15 +15,18 @@ command of the session could start.
 --settings, replacing a Landin hook already there and leaving every other
 setting as it is.  One copy there serves every checkout and worktree, and
 does nothing in a project without `scripts/agent_env.sh`.  `--check` reads
-that file and this checkout's `.claude/settings.local.json`, says of each
-whether it holds the current command, an older one or none, and exits 1
-when any copy is older or no copy is installed.
+that file and the `.claude/settings.json` and `.claude/settings.local.json`
+of every worktree of this clone, says of the first and of each file holding
+a Landin hook whether it holds the current command, an older one or none,
+names where it looked and where it did not, and exits 1 when any copy is
+older or no copy is installed.
 """
 import argparse
 import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +34,8 @@ RECIPE = ROOT / "docs" / "process.md"
 #  What tells a Landin hook from any other SessionStart hook.
 MARK = "scripts/agent_env.sh"
 USER_SETTINGS = Path.home() / ".claude" / "settings.json"
+#  A checkout's own settings files that can hold a hook.
+CHECKOUT_SETTINGS = ("settings.json", "settings.local.json")
 
 
 def recipe_hook(recipe=RECIPE):
@@ -73,6 +78,18 @@ def state(settings, current):
     return "current" if all(command == current for command in commands) else "older"
 
 
+def worktrees(root):
+    """Every worktree of ROOT's clone that exists, ROOT alone outside Git."""
+    listing = subprocess.run(["git", "worktree", "list", "--porcelain"],
+                             cwd=root, text=True, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL)
+    if listing.returncode != 0:
+        return [root]
+    found = [Path(line.split(" ", 1)[1]) for line in listing.stdout.splitlines()
+             if line.startswith("worktree ")]
+    return [path for path in found if path.is_dir()] or [root]
+
+
 def install(settings, entry):
     value = read(settings)
     groups = value.setdefault("hooks", {}).setdefault("SessionStart", [])
@@ -108,10 +125,18 @@ def main(argv=None):
         install(args.settings, entry)
         print("installed: %s" % args.settings)
         print("it takes effect in sessions started from now on")
-    places = [args.settings, ROOT / ".claude" / "settings.local.json"]
+    checkouts = worktrees(ROOT)
+    places = [args.settings] + [checkout / ".claude" / name
+                                for checkout in checkouts
+                                for name in CHECKOUT_SETTINGS]
     states = [(place, state(place, entry["command"])) for place in places]
-    for place, said in states:
-        print("%-8s %s" % (said, place))
+    for n, (place, said) in enumerate(states):
+        if n == 0 or said != "none":
+            print("%-8s %s" % (said, place))
+    print("looked in %s and the .claude/%s of the %d worktree(s) `git worktree"
+          " list` names; not in other clones" % (
+              args.settings, " and .claude/".join(CHECKOUT_SETTINGS),
+              len(checkouts)))
     if any(said == "older" for _, said in states):
         print("an older copy appends the environment on every resume of a session;"
               " replace it with `python3 scripts/agent_hook.py --install`, and remove"

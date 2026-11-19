@@ -198,13 +198,15 @@ def log_commands(run, job, active):
 
     `gh run view --log-failed` refuses while the run is ACTIVE, saying logs
     are available only when it completes; the job's own log endpoint
-    answers as soon as the job has ended.
+    answers as soon as the job has ended.  The pinned `gh` refuses to
+    print that log to a terminal, because it holds the job's colour escape
+    sequences, until told `--allow-escape-sequences`.
     """
     whole = "gh run view %s --job %s --log-failed" % (run, job["databaseId"])
     if not active:
         return ["log:    " + whole]
-    return ["log:    gh api repos/{owner}/{repo}/actions/jobs/%s/logs"
-            % job["databaseId"],
+    return ["log:    gh api --allow-escape-sequences "
+            "repos/{owner}/{repo}/actions/jobs/%s/logs" % job["databaseId"],
             "        (the job's whole log, readable while run %s is still "
             "active;" % run,
             "        once the run ends: %s)" % whole]

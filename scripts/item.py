@@ -4,7 +4,7 @@
     python3 scripts/item.py start ITEM          # worktree, branch, brief, identities
     python3 scripts/item.py resume [ITEM]       # where a reopened session stands
     python3 scripts/item.py note ITEM TEXT      # one line in the item's journal
-    python3 scripts/item.py run ITEM NAME --limit S -- COMMAND ...
+    python3 scripts/item.py run ITEM NAME --limit S [--cwd DIR] -- COMMAND ...
     python3 scripts/item.py gate ITEM [--watch] # the gate runs of the branch head
     python3 scripts/item.py boards ITEM [--watch]  # dispatch scope=boards
     python3 scripts/item.py promote ITEM        # check the evidence, push to main
@@ -366,8 +366,9 @@ def start(arguments):
     else:
         base = git("rev-parse", arguments.base or "origin/main", cwd=cwd)
         branch = arguments.branch or slug(item)
-        main_checkout = Path(git("rev-parse", "--show-toplevel", cwd=cwd))
-        worktree = Path(arguments.worktree or main_checkout.parent
+        #  Beside the clone's main checkout, whichever of its worktrees
+        #  runs this, so a checkout under /tmp does not put it there.
+        worktree = Path(arguments.worktree or main_checkout(cwd).parent
                         / ("Landin-" + slug(item))).resolve()
     items, _ = roadmap_items(roadmap_at(base, cwd))
     if item not in items:
@@ -448,6 +449,10 @@ def run(arguments):
     command = arguments.command
     if not command:
         raise Refused("name the command after --")
+    where = Path(getattr(arguments, "cwd", None) or state["worktree"])
+    if not where.is_dir():
+        raise Refused("--cwd %s is not a directory" % where)
+    where = where.resolve()
     directory = item_directory(item) / "runs" / arguments.name
     if directory.exists():
         raise Refused("%s exists: name the run anew, or `run_logged.py --wait"
@@ -456,11 +461,13 @@ def run(arguments):
     subprocess.run([sys.executable, str(ROOT / "scripts/run_logged.py"),
                     "--output", str(directory), "--detach", "--limit",
                     str(arguments.limit), "--", *command],
-                   cwd=state["worktree"], check=True)
+                   cwd=where, check=True)
     state["runs"].append({"name": arguments.name, "directory": str(directory),
-                          "command": shlex.join(command), "started": stamp()})
+                          "command": shlex.join(command), "cwd": str(where),
+                          "started": stamp()})
     save(state)
-    journal(item, "run %s started: %s" % (arguments.name, shlex.join(command)))
+    journal(item, "run %s started in %s: %s" % (arguments.name, where,
+                                                 shlex.join(command)))
     print("wait: python3 scripts/run_logged.py --wait %s" % directory)
     return 0
 
@@ -469,7 +476,7 @@ def runs_of(commit):
     return gh("run", "list", "--workflow=gate.yml", "--commit", commit,
               "--limit", "20", "--json",
               "databaseId,event,headBranch,status,conclusion,displayTitle,"
-              "createdAt") or []
+              "createdAt,attempt") or []
 
 
 def kind_of(run_entry):
@@ -493,6 +500,7 @@ def record_gates(state, commit):
             state["gates"].append(entry)
         entry["status"] = found["status"]
         entry["conclusion"] = found.get("conclusion") or ""
+        entry["attempt"] = found.get("attempt") or 1
     return state
 
 
@@ -539,21 +547,48 @@ def gate(arguments):
     if not shown:
         print("no gate run for %s yet" % commit[:12])
     if arguments.watch:
-        event, branch = (("push", "main") if arguments.main
-                         else ("push", state["branch"]))
-        name = "gate-%s-%s" % ("main" if arguments.main else "branch",
-                               commit[:12])
-        directory = item_directory(item) / "runs" / name
-        if directory.exists():
-            print("already watched: python3 scripts/run_logged.py --wait %s"
-                  % directory)
-            return 0
-        arguments.name, arguments.limit = name, 7200
-        arguments.command = ["python3", str(ROOT / "scripts/gate_watch.py"),
-                             "--all", "--commit", commit, "--event", event,
-                             "--branch", branch]
-        return run(arguments)
+        return watch_gate(arguments, state, commit, shown)
     return 0
+
+
+def watch_gate(arguments, state, commit, shown):
+    """Follow COMMIT's newest gate run of the kind asked for.
+
+    The watch is named by that run and its attempt, so a rerun on the same
+    commit, a newer attempt or a new run, is watched afresh rather than
+    answered with the finished watch of the old one.  Until GitHub lists a
+    run the watch is named by the commit and waits for one.
+    """
+    item = arguments.item
+    event, branch = (("push", "main") if arguments.main
+                     else ("push", state["branch"]))
+    prefix = "gate-%s-%s" % ("main" if arguments.main else "branch",
+                             commit[:12])
+    runs = item_directory(item) / "runs"
+    for going in sorted(runs.glob(prefix + "*")):
+        if run_state(going) == "running":
+            print("already watched: python3 scripts/run_logged.py --wait %s"
+                  % going)
+            return 0
+    kind = "main" if arguments.main else "software"
+    newest = max((entry for entry in shown if entry["kind"] == kind),
+                 key=lambda entry: entry["run"], default=None)
+    if newest is None:
+        name = prefix
+        command = ["--commit", commit, "--event", event, "--branch", branch]
+    else:
+        name = "%s-run%s-attempt%s" % (prefix, newest["run"],
+                                       newest.get("attempt", 1))
+        command = ["--run", str(newest["run"])]
+    directory = runs / name
+    if directory.exists():
+        print("already watched: python3 scripts/run_logged.py --wait %s"
+              % directory)
+        return 0
+    arguments.name, arguments.limit = name, 7200
+    arguments.command = ["python3", str(ROOT / "scripts/gate_watch.py"),
+                         "--all", *command]
+    return run(arguments)
 
 
 def advance(state, commit, main=False):
@@ -802,9 +837,10 @@ def describe(state, full=False):
     minutes = (time.time() - last_activity(state)) / 60
     out.append("  last activity %d min ago" % minutes)
     for entry in state["runs"]:
-        out.append("  run %s: %s (%s)" % (entry["name"],
-                                          run_state(entry["directory"]),
-                                          entry["directory"]))
+        out.append("  run %s: %s (%s)%s" % (
+            entry["name"], run_state(entry["directory"]), entry["directory"],
+            "" if entry.get("cwd", str(worktree)) == str(worktree)
+            else ", in " + entry["cwd"]))
     for entry in state["gates"]:
         out.append("  gate run %s %s on %s: %s %s" % (
             entry["run"], entry["kind"], entry["commit"][:12],
@@ -971,8 +1007,10 @@ def report(arguments):
             entry["run"], entry["kind"], entry["commit"][:12],
             entry.get("conclusion") or entry.get("status", "")))
     for entry in state["runs"]:
-        lines.append("  %s: %s, %s (log %s)" % (
-            entry["name"], entry["command"], run_state(entry["directory"]),
+        lines.append("  %s: %s%s, %s (log %s)" % (
+            entry["name"], entry["command"],
+            "" if entry.get("cwd", state["worktree"]) == state["worktree"]
+            else " in " + entry["cwd"], run_state(entry["directory"]),
             Path(entry["directory"]) / "command.log"))
     lines += ["  TODO what each shows; FILTERED or HOST-ONLY where it is.",
               "", "NOT DONE:", "  TODO, or nothing.", "", "STATE:",
@@ -1047,6 +1085,9 @@ def main(argv=None):
     sub.add_argument("name")
     sub.add_argument("--limit", type=int, required=True,
                      help="seconds after which the run is ended")
+    sub.add_argument("--cwd", metavar="DIR", help="the directory the command"
+                     " runs in, such as a stream's worktree (the item's"
+                     " worktree)")
     sub.set_defaults(handler=run)
 
     sub = commands.add_parser("gate", help="record and show the gate runs of"
