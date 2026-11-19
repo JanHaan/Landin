@@ -609,6 +609,15 @@ jobs:
           PATH="$LANDIN_GNAT_HOME/bin:$PATH"
           ./scripts/debug.sh
 
+      #  The scripted DAP session through `refine dap` over the same GDB
+      #  (D1523): compiler/tests/dap/session.py.
+      - name: A DAP session over GDB
+        run: |
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          python3 compiler/tests/dap/session.py --debugger=gdb \
+            --refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --output="$RUNNER_TEMP/dap"
+
   #  D364: the same outside user on a stock Ubuntu, with the release
   #  compiler as a downloaded archive and only the image's own GCC, its
   #  `x86_64-linux-gnu-gcc`: no pinned toolchain is installed, and the
@@ -1719,6 +1728,13 @@ jobs:
       - name: LLDB source debugging
         if: matrix.shard == 2
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
+      #  The DAP session through `refine dap` over Xcode's lldb-dap (D1523).
+      - name: A DAP session over LLDB
+        if: matrix.shard == 2
+        run: >-
+          python3 compiler/tests/dap/session.py --debugger=lldb
+          --refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
+          --output="$RUNNER_TEMP/lldb/dap"
       #  A failed session says only which assertion failed; its transcripts,
       #  images and dSYMs say why.  They go in one archive, since a source
       #  the sessions read is named with a double quote, which an artifact's
@@ -2019,6 +2035,13 @@ jobs:
           PATH="$LANDIN_GNAT_HOME/bin:$PATH"
           ./scripts/debug.sh
 
+      - name: A DAP session over GDB
+        run: |
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          python3 compiler/tests/dap/session.py --debugger=gdb \
+            --refine="$PWD/compiler/ada/build/linux-arm64/release/bin/refine" \
+            --output="$RUNNER_TEMP/dap"
+
       - name: Install the pinned Clang
         run: |
           set -eu
@@ -2094,7 +2117,8 @@ jobs:
           ./scripts/ci_packages.sh \
             "clang-19=$LANDIN_CLANG_UBUNTU" lld-19 llvm-19 libarchive-tools \
             qemu-utils ${{ matrix.arch == 'amd64' && 'qemu-system-x86'
-              || 'qemu-system-arm qemu-efi-aarch64 ipxe-qemu' }}
+              || 'qemu-system-arm qemu-efi-aarch64 ipxe-qemu' }} \
+            ${{ matrix.kind == 'debugger' && 'lldb-19' || '' }}
           test "$(dpkg-query -W -f='${Version}' clang-19)" = "$LANDIN_CLANG_UBUNTU"
           clang-19 --version
       - name: Let the job open KVM
@@ -2249,6 +2273,17 @@ jobs:
             --kind=debugger --prepared="$RUNNER_TEMP/rv64-debugger-payload" \
             --output="$RUNNER_TEMP/rv64-debugger" \
             --qemu=qemu-riscv64 --gdb=gdb-multiarch
+
+      #  The DAP session through `refine dap`, GDB attached to the same
+      #  emulator's stub (D1524); once, on the first shard.
+      - name: A DAP session over GDB under QEMU's GDB stub
+        if: matrix.shard == 1
+        run: >-
+          QEMU_CPU=max,xtheadba=true python3 compiler/tests/dap/session.py
+          --target=linux-rv64 --qemu=qemu-riscv64 --debugger=gdb
+          --debugger-path=gdb=gdb-multiarch
+          --refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine"
+          --output="$RUNNER_TEMP/dap"
 
   # Checked Linux compiler cross-emits; RISE runs the transferred payloads on
   # physical RV64. ISA execution probes hardware before extended code runs.

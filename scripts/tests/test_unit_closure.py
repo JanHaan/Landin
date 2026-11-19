@@ -34,7 +34,7 @@ class LibraryClosure(unittest.TestCase):
 
 
 class DapClosure(unittest.TestCase):
-    """R18.60: `refine-dap` links no front end (D1423, D1523).
+    """`refine-dap` links no front end (D1423, D1523).
 
     It reads source tables through Landin.Site_Tables, never
     Landin.Source_Maps, which writes them from a compilation; finds the

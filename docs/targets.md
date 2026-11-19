@@ -414,6 +414,39 @@ On either, GDB's backtrace ends at `main` by default; `set backtrace past-main
 on` shows the `_landin_start_main` and `_landin_start` frames below it, as
 the panic sessions do.
 
+### Debugging from an editor
+
+`refine dap` is a debug adapter: an editor that speaks the Debug Adapter
+Protocol starts it and talks to it over its standard input and output. Point
+the editor's adapter setting at `refine` with the argument `dap`, and give
+it a launch configuration naming the program `refine compile --debug=full`
+wrote:
+
+```json
+{"request": "launch", "program": "/path/to/program", "args": [],
+ "cwd": "/path/to", "stopOnEntry": false}
+```
+
+A Linux program is debugged with GDB, spoken to over GDB/MI; a macOS or
+FreeBSD program with LLDB's own adapter, `lldb-dap`, which `refine dap`
+starts and relays, from the search path or, on macOS, where `xcrun` finds
+it in Xcode. `"debugger": "gdb"` or `"lldb"` chooses the other, and
+`"debuggerPath"` names the executable to start. What the program writes
+reaches the editor's console.
+
+To debug a program that runs elsewhere, start a debugger stub beside it and
+attach with `"request": "attach"` and `"remote"`: `HOST:PORT`, or for GDB a
+socket's path. QEMU's `-g` opens one for an RV64 program; `lldb-server
+gdbserver HOST:PORT -- PROGRAM` serves one on FreeBSD. The program and its
+sources must be at the same paths on both machines.
+
+The library's files show from the library installed with `refine`, without
+a source mapping of your own. With `--panic-map`, or `--debug=full`, which
+writes the table too, a stop in `panic_handler` is shown as an exception at
+the source line and column its site names, and with the check that failed:
+`panic: overflow at main.ldn:36:5`. Set a function breakpoint on
+`panic_handler` to stop there.
+
 ### Exact identity and optional deployment
 
 The map's `build_id` is the full SHA-256 digest of the compiler assembly and

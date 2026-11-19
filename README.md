@@ -246,6 +246,7 @@ it names.
 | `refine site prog SITE` | name the source line and the failed check of the panic site a program's handler received, from the table `--panic-map` writes beside it |
 | `refine site prog FILE LINE COLUMN` | name the source position of a caller's three coordinates, from the same table |
 | `refine lsp` | the language server an editor starts |
+| `refine dap` | the debug adapter an editor starts: the Debug Adapter Protocol over GDB or LLDB, with a panic shown at its source line |
 | `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD (System View Description); see [devices](devices/README.md) |
 | `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
 | `refine version` | name the compiler, the library it uses and the commands shipped beside it |
@@ -311,8 +312,9 @@ run records and what the gate checks for each target.
   [The Benchmark Game, measured](docs/benchmarks.md) compares five ports
   with seven other languages.
 - **Tooling:** source debugging on every target, a formatter, a language
-  server, explained diagnostics with fixes, stack-depth reports, and
-  `refine site`, which turns a panic site into its source line.
+  server, a debug adapter over GDB and LLDB, explained diagnostics with
+  fixes, stack-depth reports, and `refine site`, which turns a panic site
+  into its source line.
 
 ## The roadmap
 
