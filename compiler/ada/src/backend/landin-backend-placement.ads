@@ -59,9 +59,12 @@ package Landin.Backend.Placement is
    end record;
 
    --  Fill Into, whose discriminants are the routine's value and slot
-   --  counts and one more than its value count.
+   --  counts and one more than its value count.  Debugger_Spans gives a
+   --  source variable's slot the whole routine at size; a backend whose
+   --  debug information describes no local passes False (D1567).
    procedure Measure
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
-      Speed : Boolean; Into : in out Usage);
+      Speed : Boolean; Into : in out Usage;
+      Debugger_Spans : Boolean := True);
 
 end Landin.Backend.Placement;

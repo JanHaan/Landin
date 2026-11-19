@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "f59b2e77f69b6f4fc3a52c407e45fb1039f6794a0f556827c0477eb65a41d9fe",
+  "image_sha256": "a47890a6be5469a113e76b0ca67d722dbba5a7a03701b8e7536e99c3fe50d106",
   "image_name": "board.elf",
   "verdicts": {
     "boot": {
@@ -30,7 +30,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 9336,
+      "timer_events": 9313,
       "echoed": 11202,
       "sent": 11572
     },
@@ -45,7 +45,7 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "e64372667d8b7cc22721691a999246d1a63f8dd37b83b6644c59384dc5c6f07f",
+  "uart_sha256": "59eb45c741b761e1e925a5ba612e340e474769e51cf0f6873af3d9cce99b48aa",
   "mode": "ram",
   "warm_load": {
     "board": "rp2040",
@@ -55,28 +55,28 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "f59b2e77f69b6f4fc3a52c407e45fb1039f6794a0f556827c0477eb65a41d9fe",
+    "elf_sha256": "a47890a6be5469a113e76b0ca67d722dbba5a7a03701b8e7536e99c3fe50d106",
     "entry": 536871105,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
+    "helper_source_sha256": "fc2f5b5081e7f4778195e621b04081bd05ac04dee304934a44bab3475aff0880",
     "mode": "warm",
     "previous_pc": 268436062,
     "segments": [
       {
         "address": 536870912,
-        "bytes": 28012,
-        "sha256": "18069056be01d99a2a41f0dababa065936729d4f6ddb63e371d03eeeadf243af"
+        "bytes": 13704,
+        "sha256": "0901efcfc0221ad77ba2ec78987e709f4a4edcf784e03d134cf9fcbabdafb3f5"
       }
     ],
     "stack": 537141248,
     "status": "passed",
     "vector": 536870912
   },
-  "seconds": 17.847,
+  "seconds": 46.46,
   "kernel_usb": {
-    "since": 1794564730.8136075,
-    "until": 1794564748.6409533,
+    "since": 1795075077.4324985,
+    "until": 1795075123.8763034,
     "lines": [],
     "status": "captured"
   },
@@ -93,7 +93,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00002478",
+      "m": "00002461",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",

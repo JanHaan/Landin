@@ -21,7 +21,8 @@ package body Landin.Backend.Placement is
 
    procedure Measure
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
-      Speed : Boolean; Into : in out Usage)
+      Speed : Boolean; Into : in out Usage;
+      Debugger_Spans : Boolean := True)
    is
       Value_Count : constant Natural := Into.Values;
       Slot_Count : constant Natural := Into.Slots;
@@ -321,7 +322,7 @@ package body Landin.Backend.Placement is
       --  Size holds a source variable it gives a register there
       --  throughout, as it holds one in its frame cell, so that a debugger
       --  finds it anywhere in the routine, as x86-64's size does.
-      if not Speed then
+      if not Speed and then Debugger_Spans then
          for Index in 1 .. Slot_Count loop
             if not Landin.IR.Liveness.Is_Empty (Into.Spans (Index))
               and then Landin.IR.Declares

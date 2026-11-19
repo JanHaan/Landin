@@ -614,6 +614,42 @@ def cache_sequence(parent, refine):
              'evidence': 'sequencing only: QEMU models no cache'}]
 
 
+def unused_import(parent, refine):
+    """D1569: a code label is assembler-local, so an image's bytes do not
+    move with the program's item count.  The lane's default program is
+    linked at armv6-m and armv7e-m, at none and size, and again with an
+    import it reaches nothing of, `core/cache`, as `platform/cortex_m` once
+    gained one (D972); each pair of images is the same file, and no symbol
+    of either names a block or the emitter's own label, as `L3_1` and
+    `Lcm_step_17` did, numbered by the program's items."""
+    controls = []
+    for level in ('armv6-m', 'armv7e-m'):
+        for optimize in ('none', 'size'):
+            images = []
+            for imported in (False, True):
+                out = parent.out / ('%s-%s-%s' % (level, optimize,
+                                                  'import' if imported else 'plain'))
+                out.mkdir()
+                run = Run(out, parent.tools)
+                program = None
+                if imported:
+                    program = 'import core/cache\n' + (out.parent / (
+                        '%s-%s-plain' % (level, optimize)) / 'boot.ldn').read_text()
+                elf = build(run, refine, program, optimize=optimize, level=level)
+                labels = [name for name in (line.split()[-1] for line in
+                          (out / 'symbols.log').read_text().splitlines() if line.split())
+                          if INNER.match(name)]
+                require(not labels, 'the %s %s image names its code labels %s'
+                        % (level, optimize, ', '.join(labels[:3])))
+                images.append(elf.read_bytes())
+            require(images[0] == images[1], 'an unused import moved the %s %s image'
+                    % (level, optimize))
+            controls.append({'kind': 'unused-import', 'level': level, 'optimize': optimize,
+                             'specialize': 'off', 'status': 'passed',
+                             'bytes': len(images[0])})
+    return controls
+
+
 SOFT_FLOAT = """mut values: [2]f64
 twice: (x: f64) -> (r: f64) =
     r = x * 2.0
@@ -1153,10 +1189,10 @@ def case(name):
         raise RuntimeError('compiler firmware ' + name + ': ' + str(error)) from error
 
 
-#  The lane's cases, in the order it runs them: eight once, the rest at
+#  The lane's cases, in the order it runs them: nine once, the rest at
 #  each profile.  `boot` is the cold-booted image built twice.
 ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images', 'float-unit',
-        'float-debug', 'cache-sequence', 'example')
+        'float-debug', 'cache-sequence', 'example', 'unused-import')
 KINDS = ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images',
          'hole', 'byte')
 CASES = ONCE + ('boot',) + KINDS
@@ -1199,6 +1235,11 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
         out.mkdir()
         with case('cache-sequence'):
             controls += cache_sequence(Run(out, parent.tools), refine)
+    if 'unused-import' in chosen:
+        out = root / 'unused-import'
+        out.mkdir()
+        with case('unused-import'):
+            controls += unused_import(Run(out, parent.tools), refine)
     if 'example' in chosen:
         out = root / 'example'
         out.mkdir()

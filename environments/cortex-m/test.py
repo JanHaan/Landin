@@ -2042,15 +2042,15 @@ class RV32Lanes(unittest.TestCase):
                                                   profile=dict(__import__('backend').LANE_PROFILES['esp32c3'], device='esp32c3')))
 
     def test_the_inventory_admits_a_lane_limit_on_an_execute_row_only(self):
+        from backend_corpus import LANES, inventory
         corpus = json.loads((HERE.parents[1] / 'compiler/tests/cortex-m/corpus.json').read_text())
         limits = [(name, lane) for name, row in corpus['fixtures'].items()
                   for lane, own in row.get('lanes', {}).items() if own['mode'] == 'limit']
         for name, lane in limits:
             row = corpus['fixtures'][name]
             self.assertEqual(row['mode'], 'execute', name)
-            self.assertIn(lane, ('esp32c3', 'sifive-e'), name)
+            self.assertIn(lane, LANES, name)
             self.assertTrue(row['lanes'][lane]['reason'].startswith('D698: '), name)
-        from backend_corpus import inventory
         inventory()
 
 

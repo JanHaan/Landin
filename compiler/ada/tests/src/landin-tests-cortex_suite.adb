@@ -206,13 +206,16 @@ package body Landin.Tests.Cortex_Suite is
                if Index = 1 then
                   Narrow_Frame := Stats.Frame_Bytes;
                end if;
+               --  D1563: a home is at least a word.
                Landin.Testing.Check
                  (Item, Stats.Spill_Count = 3
-                    and then Stats.Spill_Bytes = 3 * Bytes (Index)
+                    and then Stats.Spill_Bytes =
+                      3 * T.Byte_Count'Max (4, Bytes (Index))
                     and then Stats.Frame_Bytes =
                       Narrow_Frame + T.Align_Up
-                        (3 * Bytes (Index), 8) - 8,
-                  "three live homes use scalar widths and aligned frames");
+                        (3 * T.Byte_Count'Max (4, Bytes (Index)), 8) - 16,
+                  "three live homes use word or wider homes and aligned"
+                  & " frames");
             end;
          end;
       end loop;
@@ -265,8 +268,9 @@ package body Landin.Tests.Cortex_Suite is
          Assembly : constant String := Host.Written ("p.s");
 
          function Site (Previous, Branch : String) return String;
-         procedure Check_Call
-           (Previous, Branch, Load : String; Bytes : Positive);
+         procedure Check_Direct (Previous, Branch, Last : String);
+         procedure Check_Staged
+           (Previous, Branch : String; Bytes : Positive);
 
          function Site (Previous, Branch : String) return String is
             Marker : constant String :=
@@ -284,55 +288,65 @@ package body Landin.Tests.Cortex_Suite is
             return Assembly (Start_At .. End_At + Branch'Length);
          end Site;
 
-         procedure Check_Call
-           (Previous, Branch, Load : String; Bytes : Positive) is
+         --  D1565: scalar register arguments are loaded into their
+         --  registers, the last of them into Last, with no outgoing area.
+         procedure Check_Direct (Previous, Branch, Last : String) is
+            Text : constant String := Site (Previous, Branch);
+         begin
+            Landin.Testing.Check
+              (Item, Text'Length > 0
+                 and then Ada.Strings.Fixed.Index (Text, "sub sp") = 0
+                 and then Ada.Strings.Fixed.Index (Text, "ldmia") = 0,
+               Branch & " reserves no outgoing homes");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index (Text, HT & "mov " & Last & ", ")
+                 > 0,
+               Branch & " moves its last argument into " & Last);
+         end Check_Direct;
+
+         --  A stack argument is stored at sp in an area rounded to eight.
+         procedure Check_Staged
+           (Previous, Branch : String; Bytes : Positive) is
             Text : constant String := Site (Previous, Branch);
             Amount : constant String := Ada.Strings.Fixed.Trim
               (Bytes'Image, Ada.Strings.Both);
+            Reserved : constant Natural :=
+              Ada.Strings.Fixed.Index (Text, "sub sp, #" & Amount);
          begin
             Landin.Testing.Check
-              (Item, Ada.Strings.Fixed.Index
-                 (Text, "sub sp, #" & Amount) > 0,
-               Branch & " reserves aligned homes");
+              (Item, Reserved > 0, Branch & " reserves aligned homes");
+            Landin.Testing.Check
+              (Item, Reserved > 0
+                 and then Ada.Strings.Fixed.Index
+                   (Text, "str r0, [sp, #0]", From => Reserved) > 0,
+               Branch & " stores its stack argument at sp");
             Landin.Testing.Check
               (Item, Ada.Strings.Fixed.Index
-                 (Text, Load & LF & HT & Branch) > 0,
-               Branch & " loads only planned registers");
-            if Branch /= "bl fails" then
-               Landin.Testing.Check
-                 (Item, Ada.Strings.Fixed.Index
-                    (Assembly, Branch & LF & HT & "add sp, #" & Amount) > 0,
-                  Branch & " releases aligned homes");
-            end if;
-         end Check_Call;
+                 (Assembly, Branch & LF & HT & "add sp, #" & Amount) > 0,
+               Branch & " releases aligned homes");
+         end Check_Staged;
       begin
          --  The zero-argument call follows its block label directly.
          Landin.Testing.Check
            (Item, Ada.Strings.Fixed.Index
-              (Site ("main:", "bl f0"), "sub sp, #16") = 0,
+              (Assembly, ":" & LF & HT & "bl f0") > 0,
             "zero-register call reserves no outgoing homes");
-         Check_Call ("bl f0", "bl f1", "ldr r0, [r6]", 8);
-         Check_Call ("bl f1", "bl f2", "ldmia r6!, {r0, r1}", 8);
-         Check_Call ("bl f2", "bl f3", "ldmia r6!, {r0, r1, r2}", 16);
-         Check_Call
-           ("bl f3", "bl f4", "ldmia r6!, {r0, r1, r2, r3}", 16);
-         Check_Call
-           ("bl f4", "bl f5", "ldmia r6!, {r0, r1, r2, r3}", 24);
-         Check_Call
-           ("bl f5", "bl ret", "ldmia r6!, {r0, r1, r2, r3}", 24);
+         Check_Direct ("bl f0", "bl f1", "r0");
+         Check_Direct ("bl f1", "bl f2", "r1");
+         Check_Direct ("bl f2", "bl f3", "r2");
+         Check_Direct ("bl f3", "bl f4", "r3");
+         Check_Staged ("bl f4", "bl f5", 8);
+         Check_Staged ("bl f5", "bl ret", 8);
          Landin.Testing.Check
            (Item, Ada.Strings.Fixed.Index
-              (Site ("bl f5", "bl ret"),
-               "mov r6, sp" & LF & HT & "adds r6, #8" & LF & HT
-               & "str r0, [r6]") > 0,
-            "hidden result address occupies r0 above stack arguments");
-         Check_Call
-           ("bl ret", "blx r4", "ldmia r6!, {r0, r1}", 8);
+              (Site ("bl f5", "bl ret"), "ldr r0, [sp, #8]") > 0,
+            "hidden result address is loaded into r0 above the area");
+         Check_Direct ("bl ret", "blx r4", "r1");
          Landin.Testing.Check
            (Item, Ada.Strings.Fixed.Index
-              (Site ("bl ret", "blx r4"), "mov r4, r0") > 0,
+              (Site ("bl ret", "blx r4"), HT & "mov r4, ") > 0,
             "indirect target survives argument reload");
-         Check_Call ("blx r4", "bl fails", "ldr r0, [r6]", 8);
+         Check_Direct ("blx r4", "bl fails", "r0");
          Landin.Testing.Check
            (Item, Ada.Strings.Fixed.Index
               (Assembly, "bl fails" & LF & HT & "mov r4, r12") > 0,
@@ -553,7 +567,7 @@ package body Landin.Tests.Cortex_Suite is
       Live : constant T.Byte_Count := Frame_Bytes ("1 == 1");
    begin
       Landin.Testing.Check
-        (Item, Dead > 0 and then Dead < 256,
+        (Item, Dead < 256,
          "unreachable array reserves no Cortex-M0 frame home");
       Landin.Testing.Check
         (Item, Live >= 8192,
@@ -1315,9 +1329,9 @@ package body Landin.Tests.Cortex_Suite is
             Source : constant String :=
               (case Mode is
                  when 1 => "public simple: () -> (code: i32) = "
-                   & "code = 7 end simple" & LF
+                   & "b: u8 = 7 code = i32(b) end simple" & LF
                    & "public r5: () -> (code: i32) = "
-                   & "code = 7 end r5",
+                   & "b: u8 = 7 code = i32(b) end r5",
                  when 2 => "public fifth: (a: i32, b: i32, c: i32,"
                    & " d: i32, e: i32) -> (r: i32) = r = e end fifth"
                    & LF & "public caller: () -> (r: i32) = "
@@ -1335,6 +1349,11 @@ package body Landin.Tests.Cortex_Suite is
          begin
             Host.Add_File (Path, Source);
             Args.Append ("--target=cortex-m0");
+            --  D1563: a leaf saves the registers its homes' addresses and
+            --  conversions name, where every value has its home.
+            if Mode = 1 then
+               Args.Append ("--optimize=none");
+            end if;
             Args.Append ("--debug=lines");
             Args.Append ("--emit=asm");
             Args.Append ("--build-report=build.json");
@@ -1382,9 +1401,11 @@ package body Landin.Tests.Cortex_Suite is
                                  begin
                                     Landin.Testing.Check
                                       (Item, Ada.Strings.Fixed.Index
-                                        (First_Body, "push {r6}" & LF) > 0
+                                        (First_Body, "push {r4, r6}" & LF)
+                                        > 0
                                         and then Ada.Strings.Fixed.Index
-                                          (Second_Body, "push {r6}" & LF) > 0
+                                          (Second_Body, "push {r4, r6}"
+                                           & LF) > 0
                                         and then Ada.Strings.Fixed.Index
                                           (Second_Body, "push {r5") = 0,
                                        "symbol r5 does not change saves");
@@ -1403,8 +1424,8 @@ package body Landin.Tests.Cortex_Suite is
                                and then Ada.Strings.Fixed.Index
                                  (Text, ".cfi_offset lr") = 0
                                and then Ada.Strings.Fixed.Index
-                                 (Report, """save_bytes"":4") > 0,
-                              "leaf unwind and report use four save bytes");
+                                 (Report, """save_bytes"":8") > 0,
+                              "leaf unwind and report use eight save bytes");
                         when 2 =>
                            Landin.Testing.Check
                              (Item, Ada.Strings.Fixed.Index
@@ -1644,18 +1665,25 @@ package body Landin.Tests.Cortex_Suite is
                   declare
                      Assembly : constant String := Host.Written ("p.s");
                   begin
-                     Landin.Testing.Check
-                       (Item, Ada.Strings.Fixed.Index
-                          (Assembly, Character'Val (9) & "bne L1_2") > 0,
-                        "near conditional branch is direct");
-                     Landin.Testing.Check
-                       (Item, Ada.Strings.Fixed.Index
-                          (Assembly, Character'Val (9)
-                           & (if Long_Body then
-                                "bne L1_2" & LF & Character'Val (9)
-                                & "ldr r7, "
-                              else "b L1_3" & LF & "L1_2:")) > 0,
-                        "near edge is direct; distant edge uses long jump");
+                     --  D1566: the comparison's flags choose the edge, and
+                     --  the block laid out next is fallen into.
+                     if Long_Body then
+                        Landin.Testing.Check
+                          (Item, Ada.Strings.Fixed.Index
+                             (Assembly, Character'Val (9) & "beq .Lcm_step_")
+                           > 0
+                           and then Ada.Strings.Fixed.Index
+                             (Assembly, Character'Val (9) & "bx r7") > 0,
+                           "distant edge inverts its condition over a long"
+                           & " jump");
+                     else
+                        Landin.Testing.Check
+                          (Item, Ada.Strings.Fixed.Index
+                             (Assembly, Character'Val (9) & "bne .L1_3" & LF
+                              & ".L1_2:") > 0,
+                           "near conditional branch is direct and falls"
+                           & " through");
+                     end if;
                   end;
                end if;
             end;
@@ -3747,6 +3775,18 @@ package body Landin.Tests.Cortex_Suite is
         & "        seen[0] = f64(i32(seen[1]))" & LF_Text
         & "    end if" & LF_Text
         & "end start" & LF_Text;
+      --  D1570: with the unit, a block that declares d9 and d12.
+      Held_Program : constant String :=
+        Program
+        & "held: (x: u32) -> (r: u32) =" & LF_Text
+        & "    r = assembler.block(""vmov s18, {x}\nvmov s24, s18\n"
+        & "vmov {r}, s24"", out r: u32 at general, in x: u32 at general"
+        & " = x, out _ at d9, out _ at d12)" & LF_Text
+        & "end held" & LF_Text
+        & "link(vector: 15)" & LF_Text
+        & "extern(interrupt) keep: () -> none =" & LF_Text
+        & "    seen[1] = f64(held(u32(seen[0])))" & LF_Text
+        & "end keep" & LF_Text;
       Description : constant String :=
         "compiler.device(""dev"")" & LF_Text
         & "compiler.core(""cortex-m7"")" & LF_Text
@@ -3775,7 +3815,8 @@ package body Landin.Tests.Cortex_Suite is
          Host.Add_Directory ("/w/devices");
          Host.Add_Directory ("/w/devices/descriptions");
          Host.Add_Directory ("/w/devices/descriptions/dev");
-         Host.Add_File ("/w/app/main.ldn", Program);
+         Host.Add_File ("/w/app/main.ldn",
+           (if Unit then Held_Program else Program));
          Host.Add_File ("/w/devices/descriptions/dev/memory.ldn",
            (if Unit then "compiler.float_unit(""fpv5-d16"")" & LF_Text
             else "") & Description);
@@ -3805,6 +3846,7 @@ package body Landin.Tests.Cortex_Suite is
       Reset : constant Natural := Ada.Strings.Fixed.Index
         (Hard, "_landin_firmware_reset:");
       Kept_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "kept:");
+      Held_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "held:");
       Mix_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "mix:");
       Hard_Arguments : constant Landin.Platform.Path_List :=
         Landin.Backend.Toolchain.Assemble_Arguments
@@ -3849,17 +3891,22 @@ package body Landin.Tests.Cortex_Suite is
            and then Contains (Hard, "vldr s1, [r6]" & LF & HT & "bl mix"),
          "D616: a, b and c arrive in s0, d1 and the back-filled s1, and"
          & " the call loads them there");
+      --  D1570: a framed routine keeps the run of d8-d15 its blocks
+      --  declare: d9 to d12 for d9 and d12, none for a block declaring none.
       Landin.Testing.Check
-        (Item, Kept_At > 0
-           and then Contains (Hard (Kept_At .. Hard'Last),
-                              "vstmia r6, {d8-d15}")
-           and then Contains (Hard (Kept_At .. Hard'Last),
-                              "vldmia r6, {d8-d15}")
-           and then Contains (Hard (Kept_At .. Hard'Last), ".cfi_offset d8,")
-           and then Contains (Hard (Kept_At .. Hard'Last),
-                              ".cfi_restore d15")
-           and then Ada.Strings.Fixed.Count (Hard, "vstmia r6, {d8-d15}") = 1,
-         "the routine holding an assembly block keeps d8-d15, and no other");
+        (Item, Kept_At > 0 and then Held_At > 0
+           and then Contains (Hard (Held_At .. Hard'Last),
+                              "vstmia r6, {d9-d12}")
+           and then Contains (Hard (Held_At .. Hard'Last),
+                              "vldmia r6, {d9-d12}")
+           and then Contains (Hard (Held_At .. Hard'Last), ".cfi_offset d9,")
+           and then Contains (Hard (Held_At .. Hard'Last),
+                              ".cfi_restore d12")
+           and then not Contains (Hard (Held_At .. Hard'Last),
+                                  ".cfi_offset d8,")
+           and then Ada.Strings.Fixed.Count (Hard, "vstmia") = 1,
+         "a routine keeps the run of d8-d15 its block declares, and no"
+         & " other routine keeps any");
       Landin.Testing.Check
         (Item, Reset > 0
            and then Contains (Hard (Reset .. Hard'Last),

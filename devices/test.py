@@ -1335,6 +1335,25 @@ H753_HEADER_DISAGREEMENTS = {
 }
 
 
+def wide_constants(content):
+    """The constants Thumb-2 MOVW and MOVT pairs make in CONTENT, read at
+    every halfword: a MOVW's halfword, then a MOVT's to the same register
+    above it."""
+    import struct
+    halves = struct.unpack_from('<%dH' % (len(content) // 2), content)
+    low, found = {}, set()
+    for first, second in zip(halves, halves[1:]):
+        if first & 0xfbf0 in (0xf240, 0xf2c0) and not second & 0x8000:
+            value = ((first & 0xf) << 12 | (first >> 10 & 1) << 11
+                     | (second >> 12 & 7) << 8 | second & 0xff)
+            register = second >> 8 & 15
+            if first & 0xfbf0 == 0xf240:
+                low[register] = value
+            elif register in low:
+                found.add(value << 16 | low.pop(register))
+    return found
+
+
 class Stm32h753Oracles(unittest.TestCase):
     """The STM32H753's selection against ST's CMSIS header and reviewed
     literals, neither of them the SVD or the generator."""
@@ -1576,7 +1595,9 @@ class Stm32h753Oracles(unittest.TestCase):
         CSSELR and CCSIDR, which select and size the data cache, ICIALLU
         and DCISW, reset's invalidates, DCCISW, the return's clean, and
         the by-address operations the provider has, DCCMVAC among them
-        for the message's clean.  No other operation of 0xE000EF50 to
+        for the message's clean.  A literal is a word of the image or, as
+        Thumb-2 makes a constant without one (D1564), a MOVW and MOVT
+        pair's.  No other operation of 0xE000EF50 to
         0xE000EF78, ICIMVAU, DCCMVAU, DCCSW or BPIALL, is any of them."""
         import struct
         import thumb
@@ -1609,6 +1630,7 @@ class Stm32h753Oracles(unittest.TestCase):
         for address, content, _ in image.segments:
             if 0x08000000 <= address < 0x08200000:
                 words.update(struct.unpack_from('<%dI' % (len(content) // 4), content))
+                words.update(wide_constants(content))
         declared = {0xe000ed14, 0xe000ed80, 0xe000ed84, 0xe000ef50, 0xe000ef5c,
                     0xe000ef60, 0xe000ef68, 0xe000ef70, 0xe000ef74}
         for register in (0xe000ed88, 0xe000ed14, 0xe000ed80, 0xe000ed84,

@@ -825,10 +825,17 @@ emitter's five scratch words, x5-x7, x9 and x18, stay in a2-a6. Every operation 
 loads its operands from memory and stores its result there, and no value is
 allocated a register over an interval as on arm64 and x86-64.
 
-Cortex-M selection uses pinned source slots and reusable width-sized homes
-for block-local scalar temporaries. Last reads come from the verifier's
-explicit operand runs; live operands cannot share a home, and a call cannot
-destroy a live value. Selection uses low-register scratch. Routines with
+Cortex-M selection without optimization uses pinned source slots and
+reusable homes of at least a word for block-local scalar temporaries, which
+sp addresses directly where it can (D1563). Last reads come from the
+verifier's explicit operand runs; live operands cannot share a home, and a
+call cannot destroy a live value. Selection uses low-register scratch, so
+size and speed place slots and values as RISC-V does (D1567): the routine
+is emitted once with every value in a home while the registers each
+position writes are recorded, a location takes r4-r7, r3 or r1 only where
+that record writes none of them over its interval, and the second emission
+is checked against the plan. Eight-byte values, and floats where the float
+unit computes them, keep their homes. Routines with
 calls or transient stack changes construct the r11 frame record before
 publishing it; eligible leaves use SP-relative homes and preserve r11 and
 LR. The shared frame placer owns target-byte offsets and limits. Cortex-M
