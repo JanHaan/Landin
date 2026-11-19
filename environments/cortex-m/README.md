@@ -1504,8 +1504,9 @@ maps prototype 5's `firmware/tick`, `firmware/board` and `firmware/app` to
 their complete sources. `counterpart.py`, the `counterpart` lane of the
 `programs` part, builds the program at every profile against
 `lanes/descriptions/microbit`, the nRF51822's 256 KiB of flash and the
-reference's 16 KiB of RAM and 4 KiB stack (D1036), since at `size` it takes
-about 56 KB, and holds each image's derived profile to `descriptions.json`.
+reference's 16 KiB of RAM and 4 KiB stack (D1036), chosen when at `size` it
+took about 56 KB; it takes about 32 KB since D1567, within the reference's
+32 KiB. The lane holds each image's derived profile to `descriptions.json`.
 It runs on `machine.py`'s micro:bit with prototype 1's `DriverPeripheral`
 as its serial line, the same QEMU the driver lane uses: SysTick's interrupt
 is the emulator's own, and every access to the synthetic device stops it for

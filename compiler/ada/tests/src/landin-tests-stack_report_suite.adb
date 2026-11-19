@@ -163,8 +163,10 @@ package body Landin.Tests.Stack_Report_Suite is
       type Expected is record
          Leaf, Middle, Main : Natural;
       end record;
+      --  D1565: a Cortex-M call passing scalars in registers reserves
+      --  no area for them.
       Frames : constant array (Native'Range) of Expected :=
-        [(32, 48, 48), (32, 48, 48), (112, 128, 128), (28, 56, 48)];
+        [(32, 48, 48), (32, 48, 48), (112, 128, 128), (28, 48, 40)];
    begin
       for Index in Native'Range loop
          declare

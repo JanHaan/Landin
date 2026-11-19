@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "87f0364f80ee5c4ce5ea4003747f702567b751155752f5425e6c3e9dd76e0909",
+  "image_sha256": "2eddfa7953f018b68e62aa1423f07d5ecb5791ef06efd8e6c9f24ff138e07ba6",
   "image_name": "board.elf",
   "image": {
     "float_unit": "passed",
@@ -114,11 +114,11 @@
     "handled": 12014,
     "recoveries": 3,
     "dma_entries": 47,
-    "usart_entries": 142,
+    "usart_entries": 191,
     "s0ndtr": 229,
     "s0cr": 1049617
   },
-  "uart_sha256": "f91ddb6f7a016cfe2a3277966406ea763e310829885e08efaac8f841a559d218",
+  "uart_sha256": "b35f67501edc39922fa335e6bcdfb6825dbc6d744526a2e1210969b3707daef4",
   "mode": "ram",
   "warm_load": {
     "board": "stm32h753",
@@ -128,29 +128,54 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "87f0364f80ee5c4ce5ea4003747f702567b751155752f5425e6c3e9dd76e0909",
-    "entry": 603997673,
+    "elf_sha256": "2eddfa7953f018b68e62aa1423f07d5ecb5791ef06efd8e6c9f24ff138e07ba6",
+    "entry": 603989441,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
+    "helper_source_sha256": "fc2f5b5081e7f4778195e621b04081bd05ac04dee304934a44bab3475aff0880",
     "mode": "warm",
-    "previous_pc": 134218572,
+    "previous_pc": 32,
     "segments": [
       {
         "address": 603979776,
-        "bytes": 49492,
-        "sha256": "9241c7451137beafc371291354e67d0f9e4b9a262f60b5c68ba87e8ab78cf404"
+        "bytes": 26792,
+        "sha256": "31b82ff3aa381229a9c42cbe3dbfd805184bba6eec75f493c4a69f5d76d45322"
       }
     ],
     "stack": 604504064,
     "status": "passed",
     "vector": 603979776
   },
-  "seconds": 22.393,
+  "seconds": 64.075,
   "kernel_usb": {
-    "since": 1794564941.1970737,
-    "until": 1794564963.573114,
-    "lines": [],
+    "since": 1795075368.8130083,
+    "until": 1795075432.8682518,
+    "lines": [
+      {
+        "time": 1795075388.74503,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 84"
+      },
+      {
+        "time": 1795075391.688815,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 104 using xhci_hcd"
+      },
+      {
+        "time": 1795075391.796707,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
+      },
+      {
+        "time": 1795075407.856729,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 104"
+      },
+      {
+        "time": 1795075410.772686,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 105 using xhci_hcd"
+      },
+      {
+        "time": 1795075410.892689,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
+      }
+    ],
     "status": "captured"
   },
   "sent_sha256": "d071460daca7269b83f74ca3156015b61c697040b11e7b27bb6e9093768c4bc8",
@@ -172,8 +197,8 @@
       "d": "00000002",
       "w": "0000002f",
       "k": "0000002f",
-      "m": "00003e71",
-      "u": "0000008e",
+      "m": "00003f7e",
+      "u": "000000bf",
       "p": "00000037",
       "n": "000000e5",
       "e": "0000001b",

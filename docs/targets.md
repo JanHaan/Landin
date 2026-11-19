@@ -970,23 +970,31 @@ epilogue restores it before the frame record.
 ## Cortex-M assembly implementation
 
 `Backend.Cortex_M` consumes verified IR and `Backend.Arm32_ABI` entry/call plans.
-It does not change ordinary, C or optimal layout. Source slots remain pinned;
-verified block-local scalar temporaries reuse eight-byte stack homes only after
-their last operand read. Heap-owned work arrays keep allocation scratch off the
-Ada host stack. r0-r7 are selector scratch, with r4-r7 saved in framed routines and only used low registers saved in
-leaves, r8/r10 untouched,
-r9 reserved, and r11 the frame pointer in framed routines. Their prologue
-saves r4-r7,
-constructs the eight-byte previous-r11/lr record, publishes r11, then reserves
-aligned homes and incoming-register staging. Eligible leaves use SP-relative
-homes and preserve LR and r11 in registers. Epilogues restore only their own
-saved registers. Incoming stack arguments begin above the actual save area.
-Outgoing arguments use the planner's aligned stack area plus private r0-r3 staging.
+It does not change ordinary, C or optimal layout. Without optimization every
+source slot and scalar value has a home; verified block-local scalar
+temporaries reuse homes of at least a word, a narrower value written
+zero-extended, only after their last operand read (D1563). At `size` and
+`speed` slots and values are held in r4-r7, r3 or r1 where the routine's
+first emission, with every value in a home, writes none of them over their
+intervals, and the second emission is checked against that plan (D1567).
+Heap-owned work arrays keep allocation scratch off the Ada host stack. r0-r7
+are selector scratch, with r4-r7 saved in framed routines and only used low
+registers saved in leaves, r8/r10 untouched, r9 reserved, and r11 the frame
+pointer in framed routines. Their prologue saves r4-r7, constructs the
+eight-byte previous-r11/lr record, publishes r11, then reserves aligned homes
+and incoming-register staging. Eligible leaves use SP-relative homes and
+preserve LR and r11 in registers. Epilogues restore only their own saved
+registers. Incoming stack arguments begin above the actual save area. A
+call loads scalar register arguments from where their values are and
+reserves the planner's aligned area for its stack arguments alone; one
+passing a C record in core registers stages them at sp first (D1565).
+Code labels are assembler-local `.L` labels, outside the symbol table
+(D1569).
 
 | Selection | Implemented choice and boundary |
 |---|---|
-| Instructions and constants | ARMv6-M low-register forms are the baseline at every level; high-register MOV/BX where admitted. Higher levels add only what the levels table lists, and a float unit its VFP operations (below). Small constants use MOVS and shifts; other constants use aligned adjacent literal islands skipped in execution. No MOVW/MOVT, other Thumb-2 arithmetic or exclusive-access instructions. |
-| Addresses and branches | Frame offsets materialize into a low register; no narrow displacement is assumed. Conditional transfers invert a nearby condition over an absolute Thumb jump. Direct BL relocations permit GNU veneers; indirect calls use BLX. ELF function identity carries the Thumb bit, ordinary data identity does not. |
+| Instructions and constants | ARMv6-M low-register forms are the baseline at every level; high-register MOV/BX where admitted. Higher levels add only what the levels table lists, MOVW, MOVT, MOV.W's modified immediate and ITE for a kept comparison (D1564, D1568), and a float unit its VFP operations (below). At ARMv6-M small constants use MOVS and shifts and other constants aligned adjacent literal islands skipped in execution. No other Thumb-2 arithmetic, bitfield or exclusive-access instructions. |
+| Addresses and branches | A home sp's own offset form reaches is addressed from sp, Thumb-1's word form to 1020 bytes and Thumb-2's to 4095; any other frame offset materializes into a low register (D1563). A comparison only its branch reads sets that branch's flags, and an edge to the next block falls through (D1566). At ARMv6-M a conditional transfer B cannot reach inverts its condition over an absolute Thumb jump, or is a BL when it goes to a trap (D1571); at the Thumb-2 levels it is one B whose width the assembler chooses (D1564). Direct BL relocations permit GNU veneers; indirect calls use BLX. ELF function identity carries the Thumb bit, ordinary data identity does not. |
 | Frames and limits | Shared target-byte placement, no red zone. Preflight reserves selector and outgoing-call overhead inside the 32-bit address budget and reports L0504. The external test map's 32 KiB flash/16 KiB RAM/4 KiB stack limits are separate from that arithmetic bound. |
 | Integer operations | Enabled 8/16/32/64-bit values, explicit narrow extension and pair operations, width-bounded shifts, signed/unsigned comparisons, checked overflow, division-zero and signed minimum/-1 handling. D187 removes only its specified checks. |
 | Conversion and floating operations | Software IEEE arithmetic/comparison and integer-to-float/float-width helpers. Float-to-integer selection decodes the IEEE carrier and checks range before constructing the integer; bool accepts only its specified domain. Finite narrowing overflow traps. With a float unit (D617): VADD, VSUB, VMUL, VDIV and VNEG; VCMP or VCMPE, VMRS and a branch false when unordered; VCVT between the widths and from or to integers of at most 32 bits, a float-to-integer conversion widening to f64 and checking its open range first; operands moved by VLDR and VSTR through r6; no float helper. 64-bit integer conversions keep the base-PCS runtime conversion or the carrier decoding. |
@@ -1083,8 +1091,9 @@ a unit the assembly declares the same number model and `Tag_ABI_VFP_args`
 0, the base variant, as GCC's soft-float objects do, so it and a
 hard-float object refuse each other in either link order (D780). Only the
 64-bit integer conversions and divisions still call libgcc there. A framed
-routine holding an assembly block keeps d8-d15 in its frame with VSTM and
-VLDM, between its homes and its staging, where D471's check covers them. Inline assembly keeps the ordinary block's straight-line and
+routine holding an assembly block keeps the run of d8-d15 its blocks
+declare in its frame with VSTM and VLDM, between its homes and its staging,
+where D471's check covers them (D1570). Inline assembly keeps the ordinary block's straight-line and
 register restrictions, but the ARMv6-M instruction allowlist applies only
 at `armv6-m`; at higher levels the assembler checks instructions against
 the selected `.arch`.

@@ -10974,10 +10974,12 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "strb r0, [r6]" & LF
              & HT & "ldrb r0, [r6]" & LF),
             "adjacent accesses to one home reuse its address");
+         --  D1563: a value's home is a word sp's own offset reaches, and
+         --  a zero-extended byte is stored to it whole.
          Landin.Testing.Check
            (Item, Contains (Text, HT & "ldrb r0, [r6]" & LF
-             & HT & "adds r6, #1" & LF & HT & "strb r0, [r6]" & LF),
-            "a nearby home needs one address adjustment");
+             & HT & "str r0, [sp, #0]" & LF & HT & "ldr r0, [sp, #0]" & LF),
+            "a value's home is a word addressed from sp");
       end;
    end Cortex_Scalar_Homes_Reuse_Adjacent_Address;
 
